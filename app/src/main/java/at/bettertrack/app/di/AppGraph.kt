@@ -12,6 +12,11 @@ import at.bettertrack.app.data.auth.SecureStore
 import at.bettertrack.app.data.auth.TokenManager
 import at.bettertrack.app.data.db.AccountDataManager
 import at.bettertrack.app.data.db.BtDatabase
+import at.bettertrack.app.data.notifications.DefaultNotificationRepository
+import at.bettertrack.app.data.notifications.NotifDeepLink
+import at.bettertrack.app.data.notifications.NotificationRepository
+import at.bettertrack.app.data.notifications.NotificationSettingsStore
+import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
@@ -187,6 +192,25 @@ object AppGraph {
     val chatRepository: ChatRepository by lazy {
         StubChatRepository(context = appContext, gateway = StubChatGateway())
     }
+
+    // ── Step 16: notifications (§6.11) ───────────────────────────────────────
+
+    val notificationSettingsStore: NotificationSettingsStore by lazy {
+        NotificationSettingsStore(appContext)
+    }
+
+    val notificationRepository: NotificationRepository by lazy {
+        DefaultNotificationRepository(api = btApi, json = json, settings = notificationSettingsStore)
+    }
+
+    val pushTokenManager: PushTokenManager by lazy { PushTokenManager(appContext) }
+
+    /**
+     * A pending notification tap-through target: set by [MainActivity] from a
+     * tapped push intent, consumed once by the shell to navigate. StateFlow so a
+     * cold tap (set before the shell composes) is not lost.
+     */
+    val pendingDeepLink = kotlinx.coroutines.flow.MutableStateFlow<NotifDeepLink?>(null)
 
     /** Dev update notifier (Step V) — its own bare client (no auth, GitHub CDN). */
     val updateChecker: UpdateChecker by lazy {

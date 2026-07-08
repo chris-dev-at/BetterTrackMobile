@@ -41,6 +41,15 @@ securityCrypto = "1.1.0-alpha06"
 lifecycleViewmodelCompose = "2.11.0"
 kotlinxCoroutines = "1.10.2"
 
+# ── Step 16 (notifications: FCM push client) ───────────────────────────────
+# Firebase Cloud Messaging client. The google-services plugin reads the already-
+# placed app/google-services.json (project bettertrackapp-c6996). Versions come
+# from the Firebase BoM so the FCM artifact stays mutually consistent. Only the
+# CLIENT is wired here — device-token registration + real push SENDING are
+# platform-gated (no device-token endpoint exists yet; see docs/TODO.md).
+googleServices = "4.5.0"
+firebaseBom = "34.15.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -71,6 +80,11 @@ retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", n
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 
+# Step 16 — Firebase Cloud Messaging (FCM push client). Version-less: the BoM
+# platform below pins firebase-messaging so it stays consistent.
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+
 # Step 5 — Room (local DB) + WorkManager (sync worker) + process lifecycle.
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
@@ -91,3 +105,5 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 # KSP for the Room compiler — Kotlin half of the version must match `kotlin`.
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# Step 16 — google-services processes app/google-services.json for FCM.
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

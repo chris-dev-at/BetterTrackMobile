@@ -77,6 +77,7 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
+import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -398,15 +399,7 @@ private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Text("Messages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, modifier = Modifier.weight(1f))
             if (unread > 0) {
-                Surface(shape = BtShapes.pill, color = bt.gold) {
-                    Text(
-                        if (unread > 99) "99+" else unread.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = bt.onGold,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                    )
-                }
+                BtCountBadge(count = unread)
                 Spacer(Modifier.width(8.dp))
             }
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))

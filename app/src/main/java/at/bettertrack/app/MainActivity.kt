@@ -14,8 +14,11 @@ import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import at.bettertrack.app.data.auth.AuthRepository
+import at.bettertrack.app.data.notifications.resolveDeepLink
+import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.shell.BtRoot
+import kotlinx.serialization.json.Json
 import at.bettertrack.app.ui.theme.BetterTrackTheme
 
 class MainActivity : ComponentActivity() {
@@ -47,6 +50,8 @@ class MainActivity : ComponentActivity() {
         }
         // Cold-start OAuth callback (e.g. after process death while the tab was open).
         handleAuthDeepLink(intent)
+        // Cold-start notification tap (Step 16): park the deep-link target.
+        handleNotificationIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -54,6 +59,23 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         // Warm OAuth callback delivered to the singleTask activity.
         handleAuthDeepLink(intent)
+        // Warm notification tap.
+        handleNotificationIntent(intent)
+    }
+
+    /**
+     * A tapped push (from [BtMessagingService]) carries the notification type +
+     * payload as extras. Resolve them to a deep-link target and park it on the
+     * shared holder; the shell consumes it once (and only when logged in).
+     */
+    private fun handleNotificationIntent(intent: Intent?) {
+        val type = intent?.getStringExtra(BtMessagingService.EXTRA_TYPE) ?: return
+        val payloadRaw = intent.getStringExtra(BtMessagingService.EXTRA_PAYLOAD)
+        val payload = payloadRaw?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+        resolveDeepLink(type, payload)?.let { AppGraph.pendingDeepLink.value = it }
+        // Consume so a rotation/restart doesn't re-fire the deep link.
+        intent.removeExtra(BtMessagingService.EXTRA_TYPE)
+        intent.removeExtra(BtMessagingService.EXTRA_PAYLOAD)
     }
 
     override fun onResume() {

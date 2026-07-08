@@ -7,6 +7,10 @@ plugins {
     // KSP runs the Room annotation processor (Step 5). Applied after the
     // Android plugin so it picks up AGP 9's built-in Kotlin compilation.
     alias(libs.plugins.ksp)
+    // Step 16 — Firebase Cloud Messaging: the google-services plugin reads the
+    // already-placed app/google-services.json (project bettertrackapp-c6996) and
+    // generates the Firebase config resources the FCM SDK needs at runtime.
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -117,6 +121,12 @@ dependencies {
     // Logging interceptor referenced from shared network code but only installed
     // when BuildConfig.DEBUG, so it must be a full implementation dependency.
     implementation(libs.okhttp.logging.interceptor)
+
+    // Step 16 — Firebase Cloud Messaging (push client). BoM keeps the FCM
+    // artifact version consistent; only the client is wired (register/send are
+    // platform-gated — no device-token endpoint yet, see docs/TODO.md).
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // Step 5 — local database (Room) & sync engine core (WorkManager).
     implementation(libs.androidx.room.runtime)

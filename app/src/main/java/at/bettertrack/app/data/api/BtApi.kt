@@ -36,8 +36,13 @@ import at.bettertrack.app.data.api.dto.CreateCustomAssetResponse
 import at.bettertrack.app.data.api.dto.CreatePortfolioRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionsResponse
+import at.bettertrack.app.data.api.dto.MarkReadAllRequest
+import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.MeResponse
+import at.bettertrack.app.data.api.dto.NotificationListResponse
+import at.bettertrack.app.data.api.dto.NotificationSettingsResponse
 import at.bettertrack.app.data.api.dto.OAuthGrantListResponse
+import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
 import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.PortfolioHistoryResponse
 import at.bettertrack.app.data.api.dto.PortfolioListResponse
@@ -430,4 +435,39 @@ interface BtApi {
         @Path("id") id: String,
         @Body body: UpdateConglomerateRequest,
     ): Response<ConglomerateDetailResponse>
+
+    // ── Step 16: notifications (§6.11) ───────────────────────────────────────
+    // Runtime auth is the OAuth bearer (the OpenAPI sessionCookie annotation is
+    // the known docs bug); these additionally need a notifications read scope the
+    // mobile client is NOT yet granted → the repository falls back to a stub inbox
+    // + local mark-read, and lights up live the moment the scope lands. There is
+    // NO device-token endpoint yet (push send/register is platform-gated).
+
+    /** In-app inbox: newest-first cursor-paged notifications + unread count. */
+    @GET("notifications")
+    suspend fun notifications(
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int = 50,
+    ): Response<NotificationListResponse>
+
+    /** Mark specific notifications read (1–200 ids). */
+    @Headers("Content-Type: application/json")
+    @POST("notifications/mark-read")
+    suspend fun markNotificationsRead(@Body body: MarkReadIdsRequest): Response<Unit>
+
+    /** Mark ALL notifications read. */
+    @Headers("Content-Type: application/json")
+    @POST("notifications/mark-read")
+    suspend fun markAllNotificationsRead(@Body body: MarkReadAllRequest): Response<Unit>
+
+    /** The per-type × in-app/email notification preference matrix (mirrors web). */
+    @GET("settings/notifications")
+    suspend fun notificationSettings(): Response<NotificationSettingsResponse>
+
+    /** Update the in-app/email matrix (Push + Mute are app-local, never sent). */
+    @Headers("Content-Type: application/json")
+    @PATCH("settings/notifications")
+    suspend fun updateNotificationSettings(
+        @Body body: UpdateNotificationSettingsRequest,
+    ): Response<NotificationSettingsResponse>
 }

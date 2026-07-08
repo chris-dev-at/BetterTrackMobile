@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -45,6 +46,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
+import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.AppLockRoute
@@ -89,6 +91,9 @@ import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
 import at.bettertrack.app.ui.market.AssetPageScreen
 import at.bettertrack.app.ui.market.SearchScreen
+import at.bettertrack.app.ui.notifications.NotificationBell
+import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
+import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
 import at.bettertrack.app.ui.gallery.GalleryScreen
@@ -140,6 +145,35 @@ fun BtApp() {
         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
     }
 
+    // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
+    // system-push intents (surfaced via AppGraph.pendingDeepLink).
+    val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController) {
+        { link ->
+            when (link) {
+                NotifDeepLink.Social -> navController.navigate(SocialTabRoute) { launchSingleTop = true }
+                is NotifDeepLink.SharedPortfolio -> navController.navigate(SharedPortfolioViewRoute(link.portfolioId))
+                is NotifDeepLink.Chat -> navController.navigate(ChatListRoute)
+                is NotifDeepLink.Asset -> navController.navigate(AssetPageRoute(link.assetId))
+                is NotifDeepLink.Holding -> navController.navigate(HoldingDetailRoute(link.assetId))
+                NotifDeepLink.Settings -> navController.navigate(SettingsRoute)
+                NotifDeepLink.Security -> navController.navigate(SettingsSecurityRoute)
+            }
+        }
+    }
+    // A push tapped while the app was closed/backgrounded: MainActivity parked the
+    // target; consume it once here (StateFlow so a cold tap is never lost).
+    val pendingDeepLink by AppGraph.pendingDeepLink.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingDeepLink) {
+        pendingDeepLink?.let {
+            navigateDeepLink(it)
+            AppGraph.pendingDeepLink.value = null
+        }
+    }
+
+    // Bell unread badge: refresh the inbox once on entry so the count is live.
+    val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { AppGraph.notificationRepository.refresh() }
+
     Scaffold(
         containerColor = bt.bg,
         // The bars below consume their own system-bar insets; full-screen
@@ -149,10 +183,12 @@ fun BtApp() {
         topBar = {
             if (isTopLevel) {
                 BtTopBar(
+                    notifUnread = notifUnread,
                     onWordmarkLongPress = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
                     onSearch = { navController.navigate(SearchRoute) },
+                    onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                 )
             }
@@ -193,7 +229,7 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(navController)
+            BtNavHost(navController, navigateDeepLink)
         }
     }
 }
@@ -201,8 +237,10 @@ fun BtApp() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun BtTopBar(
+    notifUnread: Int,
     onWordmarkLongPress: () -> Unit,
     onSearch: () -> Unit,
+    onNotifications: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -229,14 +267,8 @@ private fun BtTopBar(
                     tint = bt.textSecondary,
                 )
             }
-            // Notification-bell slot — inert until Step 16.
-            IconButton(onClick = { /* TODO(step 16): notifications inbox */ }) {
-                Icon(
-                    Icons.Outlined.Notifications,
-                    contentDescription = stringResource(R.string.bt_top_notifications),
-                    tint = bt.textSecondary,
-                )
-            }
+            // Notification bell + unread badge → in-app inbox (Step 16, §6.11).
+            NotificationBell(unread = notifUnread, onClick = onNotifications)
             IconButton(onClick = onSettings) {
                 Icon(
                     Icons.Outlined.Settings,
@@ -283,7 +315,10 @@ private fun BtBottomBar(
 }
 
 @Composable
-private fun BtNavHost(navController: NavHostController) {
+private fun BtNavHost(
+    navController: NavHostController,
+    onDeepLink: (NotifDeepLink) -> Unit,
+) {
     val back: () -> Unit = { navController.popBackStack() }
     NavHost(
         navController = navController,
@@ -500,13 +535,20 @@ private fun BtNavHost(navController: NavHostController) {
                 onBack = back,
             )
         }
-        composable<NotificationsInboxRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_notifications), back) }
+        composable<NotificationsInboxRoute> {
+            NotificationsInboxScreen(onBack = back, onDeepLink = onDeepLink)
+        }
 
         // Settings — minimal Step-4 account + logout surface; grows in Step 18.
-        composable<SettingsRoute> { SettingsScreen(onBack = back) }
+        composable<SettingsRoute> {
+            SettingsScreen(
+                onBack = back,
+                onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
+            )
+        }
         composable<SettingsAccountRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_account), back) }
         composable<SettingsSecurityRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_security), back) }
-        composable<SettingsNotificationsRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_notifications), back) }
+        composable<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
         composable<SettingsLanguageRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_language), back) }
         composable<SettingsAboutRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_about), back) }
 

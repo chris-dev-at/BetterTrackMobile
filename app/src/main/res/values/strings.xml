@@ -427,4 +427,45 @@
     <string name="bt_conglo_remainder">Left over %1$s</string>
     <string name="bt_conglo_committed">Added to %1$s</string>
     <string name="bt_conglo_add_to_portfolio">Add to %1$s</string>
+
+    <!-- ── Step 16: notifications (§6.11) ─────────────────────────────────── -->
+    <string name="bt_settings_preferences_section">Preferences</string>
+    <string name="bt_settings_notifications_row">Notifications</string>
+    <string name="bt_settings_notifications_sub">Inbox, push and email preferences</string>
+    <string name="bt_notif_mark_all_read">Mark all read</string>
+    <string name="bt_notif_empty_title">You\'re all caught up</string>
+    <string name="bt_notif_empty_message">Friend requests, shares and alerts will show up here.</string>
+    <string name="bt_notif_enable_push_title">Turn on push notifications</string>
+    <string name="bt_notif_enable_push_message">Get alerts even when the app is closed.</string>
+    <string name="bt_notif_enable_push_action">Enable</string>
+
+    <!-- Notification settings matrix -->
+    <string name="bt_notif_matrix_section">Per type</string>
+    <string name="bt_notif_matrix_footer">In-app and email preferences sync with the web when available. Push and Mute are saved on this device.</string>
+    <string name="bt_notif_perm_on_title">Push notifications are on</string>
+    <string name="bt_notif_perm_on_message">Tap to manage channels in system settings.</string>
+    <string name="bt_notif_perm_off_title">Push notifications are off</string>
+    <string name="bt_notif_perm_off_message">Allow notifications to get alerts on this device.</string>
+    <string name="bt_notif_mute">Mute</string>
+    <string name="bt_notif_channel_inapp">In-app</string>
+    <string name="bt_notif_channel_email">Email</string>
+    <string name="bt_notif_channel_push">Push</string>
+
+    <!-- Notification types (mirroring the web matrix) -->
+    <string name="bt_notif_type_friend_request">Friend requests</string>
+    <string name="bt_notif_type_friend_request_sub">When someone asks to connect</string>
+    <string name="bt_notif_type_friend_accepted">Requests accepted</string>
+    <string name="bt_notif_type_friend_accepted_sub">When someone accepts your request</string>
+    <string name="bt_notif_type_portfolio_shared">Shared with me</string>
+    <string name="bt_notif_type_portfolio_shared_sub">When a friend shares a portfolio</string>
+    <string name="bt_notif_type_alert">Price alerts</string>
+    <string name="bt_notif_type_alert_sub">When an asset hits your target</string>
+    <string name="bt_notif_type_chat">Chat messages</string>
+    <string name="bt_notif_type_chat_sub">New messages from friends</string>
+    <string name="bt_notif_type_account_invite">Account &amp; invites</string>
+    <string name="bt_notif_type_account_invite_sub">Welcome and invitation notices</string>
+    <string name="bt_notif_type_security">Security codes</string>
+    <string name="bt_notif_type_security_sub">Temporary passwords and security notices</string>
+    <string name="bt_notif_type_system">System</string>
+    <string name="bt_notif_type_system_sub">General app notifications</string>
 </resources>

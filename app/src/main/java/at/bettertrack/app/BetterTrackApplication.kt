@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import at.bettertrack.app.data.push.PushChannels
 import at.bettertrack.app.di.AppGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,12 @@ class BetterTrackApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppGraph.init(this)
+
+        // Step 16: create the FCM notification channels (before any push) and
+        // obtain the device token (works without the platform; logs presence
+        // only — never the value). Device-token registration is stubbed.
+        PushChannels.ensure(this)
+        AppGraph.pushTokenManager.fetchToken()
 
         // Live connectivity for the offline banner + the reconnect trigger.
         AppGraph.connectivityMonitor.start()
