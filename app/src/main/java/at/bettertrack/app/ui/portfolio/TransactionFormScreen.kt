@@ -29,8 +29,6 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,7 +38,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -48,7 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,6 +82,7 @@ import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
 import at.bettertrack.app.sync.TxOpPayload
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
@@ -930,7 +927,7 @@ fun TransactionFormScreen(
     }
 
     if (datePickerOpen) {
-        TxDatePickerDialog(
+        BtDatePickerDialog(
             initial = date,
             onPick = { picked ->
                 vm.setDate(picked)
@@ -1533,46 +1530,6 @@ private fun AssetSheetRow(
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TxDatePickerDialog(
-    initial: LocalDate,
-    onPick: (LocalDate) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val bt = BtTheme.colors
-    val zone = remember { ZoneId.systemDefault() }
-    // No future dates (§6.2): selectable up to the end of today, UTC-keyed as
-    // the M3 date picker expects.
-    val todayEndUtc = remember {
-        LocalDate.now(zone).plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli() - 1
-    }
-    val state = rememberDatePickerState(
-        initialSelectedDateMillis = initial.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
-        selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= todayEndUtc
-        },
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val ms = state.selectedDateMillis ?: return@TextButton
-                    onPick(Instant.ofEpochMilli(ms).atZone(ZoneId.of("UTC")).toLocalDate())
-                },
-            ) { Text(stringResource(R.string.bt_txform_date_ok), color = bt.gold) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
-            }
-        },
-    ) {
-        DatePicker(state = state, showModeToggle = false)
     }
 }
 

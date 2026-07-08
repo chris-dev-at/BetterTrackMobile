@@ -306,7 +306,7 @@
     <string name="bt_custom_chart_empty">Record two values to draw the history</string>
     <string name="bt_custom_update_now">Update value now</string>
     <string name="bt_custom_update_title">Update value</string>
-    <string name="bt_custom_update_hint">Records today’s value. It replaces any value already set for today.</string>
+    <string name="bt_custom_update_hint">Records the value as of the selected date. It replaces any value already set for that day.</string>
     <string name="bt_custom_new_value">New value</string>
     <string name="bt_custom_record_value">Record value</string>
     <string name="bt_custom_points_section">Value history</string>

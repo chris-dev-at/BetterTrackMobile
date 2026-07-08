@@ -71,6 +71,8 @@ import at.bettertrack.app.ui.charts.BtStepLineChart
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtDateField
+import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
@@ -133,6 +135,18 @@ class CustomAssetDetailViewModel(
 
     init {
         refresh()
+        // Pull server truth back into Room when a queued value point for this
+        // asset finishes syncing (offline → reconnect drain, or a background
+        // drain) so the chart and history update without leaving the screen —
+        // the engine's afterDrain only refreshes portfolio-scoped data.
+        viewModelScope.launch {
+            var prev = emptySet<Long>()
+            pending.collect { list ->
+                val ids = list.map { it.opId }.toSet()
+                if ((prev - ids).isNotEmpty()) refresh()
+                prev = ids
+            }
+        }
     }
 
     fun refresh() {
@@ -165,6 +179,11 @@ class CustomAssetDetailViewModel(
             when (after?.status) {
                 OpStatus.NEEDS_ATTENTION.wire ->
                     _error.value = after.serverError ?: "BetterTrack rejected this value."
+
+                OpStatus.DONE.wire ->
+                    // Synced immediately (online): pull the persisted point into
+                    // Room so the chart + history reflect it right away.
+                    repo.refreshValuePoints(assetId)
 
                 else -> {
                     if (after?.status == OpStatus.PENDING.wire || after?.status == OpStatus.IN_FLIGHT.wire) {
@@ -554,6 +573,8 @@ private fun UpdateValueSheet(
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var valueText by rememberSaveable { mutableStateOf("") }
+    var date by rememberSaveable(stateSaver = LocalDateSaver) { mutableStateOf(LocalDate.now()) }
+    var pickerOpen by rememberSaveable { mutableStateOf(false) }
     val value = parseLocalizedDecimal(valueText)
 
     ModalBottomSheet(
@@ -596,19 +617,44 @@ private fun UpdateValueSheet(
                 modifier = Modifier.fillMaxWidth(),
                 colors = dialogFieldColors(),
             )
+            BtDateField(
+                date = date,
+                label = stringResource(R.string.bt_txform_date),
+                enabled = !busy,
+                locale = locale,
+                onClick = { pickerOpen = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
             if (error != null) {
                 Text(text = error, style = MaterialTheme.typography.bodySmall, color = bt.loss)
             }
             BtPrimaryButton(
                 text = stringResource(R.string.bt_custom_record_value),
-                onClick = { value?.let { onSubmit(LocalDate.now(), it) } },
+                onClick = { value?.let { onSubmit(date, it) } },
                 enabled = value != null && value >= 0.0 && !busy,
                 loading = busy,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             )
         }
     }
+
+    if (pickerOpen) {
+        BtDatePickerDialog(
+            initial = date,
+            onPick = {
+                date = it
+                pickerOpen = false
+            },
+            onDismiss = { pickerOpen = false },
+        )
+    }
 }
+
+/** Saver so the picked value-point date survives config change / process death. */
+private val LocalDateSaver = androidx.compose.runtime.saveable.Saver<LocalDate, String>(
+    save = { it.toString() },
+    restore = { LocalDate.parse(it) },
+)
 
 private fun formatPointDate(date: String, locale: Locale): String = try {
     val ld = LocalDate.parse(date)
