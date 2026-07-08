@@ -12,8 +12,10 @@ import at.bettertrack.app.data.auth.SecureStore
 import at.bettertrack.app.data.auth.TokenManager
 import at.bettertrack.app.data.db.AccountDataManager
 import at.bettertrack.app.data.db.BtDatabase
+import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.data.update.UpdatePrefs
 import at.bettertrack.app.debug.SyncDebugController
@@ -162,6 +164,10 @@ object AppGraph {
 
     val marketRepository: MarketRepository by lazy {
         MarketRepository(api = btApi, db = database, json = json)
+    }
+
+    val watchlistRepository: WatchlistRepository by lazy {
+        DefaultWatchlistRepository(db = database, market = marketRepository)
     }
 
     /** Dev update notifier (Step V) — its own bare client (no auth, GitHub CDN). */

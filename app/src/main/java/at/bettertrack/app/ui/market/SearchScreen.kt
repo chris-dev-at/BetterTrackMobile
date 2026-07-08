@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -190,6 +191,7 @@ fun SearchScreen(
 
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var pickerAsset by remember { androidx.compose.runtime.mutableStateOf<MarketAsset?>(null) }
 
     Scaffold(
         containerColor = bt.bg,
@@ -282,7 +284,7 @@ fun SearchScreen(
                             inWatchlist = asset.id in watchlistIds,
                             watchEnabled = isOnline,
                             onOpen = { onOpenAsset(asset.id) },
-                            onToggleWatchlist = { vm.toggleWatchlist(asset.id) },
+                            onToggleWatchlist = { pickerAsset = asset },
                             onBuy = { onTrade(asset.id, asset.symbol, asset.name, selectedPid) },
                         )
                     }
@@ -292,6 +294,10 @@ fun SearchScreen(
     }
 
     androidx.compose.runtime.LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    pickerAsset?.let { asset ->
+        at.bettertrack.app.ui.watchlist.BoardPickerSheet(asset = asset, onDismiss = { pickerAsset = null })
+    }
 }
 
 @Composable

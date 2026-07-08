@@ -376,4 +376,18 @@
     <string name="bt_update_badge_title">Update available</string>
     <string name="bt_update_badge_version">Version %1$s · tap to open GitHub</string>
     <string name="bt_update_badge_pill">New</string>
+
+    <!-- Step 12 — Watchlists (§6.6) -->
+    <string name="bt_watchlist_title">Watchlists</string>
+    <string name="bt_watchlist_new">New list</string>
+    <string name="bt_watchlist_rename">Rename list</string>
+    <string name="bt_watchlist_delete">Delete list</string>
+    <string name="bt_watchlist_delete_message">Delete “%1$s”? Its assets are removed from this list.</string>
+    <string name="bt_watchlist_stub">Sample list</string>
+    <string name="bt_watchlist_empty_title">No assets yet</string>
+    <string name="bt_watchlist_empty_message">Add stocks, ETFs or crypto to follow their prices here.</string>
+    <string name="bt_watchlist_add_asset">Add asset</string>
+    <string name="bt_watchlist_remove_item">Remove from list</string>
+    <string name="bt_watchlist_add_to">Add to watchlist</string>
+    <string name="bt_watchlist_default">Default</string>
 </resources>

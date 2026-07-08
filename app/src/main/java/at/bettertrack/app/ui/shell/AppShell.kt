@@ -299,6 +299,8 @@ private fun BtNavHost(navController: NavHostController) {
             AssetsTabScreen(
                 onOpenSearch = { navController.navigate(SearchRoute) },
                 onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                onAddToWatchlist = { navController.navigate(SearchRoute) },
             )
         }
         composable<SocialTabRoute> { SocialTabScreen() }

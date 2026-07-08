@@ -188,6 +188,7 @@ fun AssetPageScreen(
 
     val loaded = detail as? AssetDetailUiState.Loaded
     val asset = loaded?.snapshot?.asset
+    var pickerOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = bt.bg,
@@ -216,7 +217,7 @@ fun AssetPageScreen(
                         WatchlistStar(
                             inWatchlist = asset.id in watchlistIds,
                             enabled = isOnline,
-                            onToggle = { vm.toggleWatchlist() },
+                            onToggle = { pickerOpen = true },
                         )
                     }
                 },
@@ -256,6 +257,10 @@ fun AssetPageScreen(
                 )
             }
         }
+    }
+
+    if (pickerOpen && asset != null) {
+        at.bettertrack.app.ui.watchlist.BoardPickerSheet(asset = asset, onDismiss = { pickerOpen = false })
     }
 }
 

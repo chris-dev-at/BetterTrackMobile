@@ -164,6 +164,9 @@ class MarketRepository(
             is BtResult.Err -> r
         }
 
+    /** Latest quote for one asset (watchlist rows, §6.6). */
+    suspend fun quote(assetId: String): BtResult<AssetSnapshot> = assetDetail(assetId)
+
     // ── Workboard watchlist mutations (§6.6, online-only) ────────────────────
 
     /** Refresh the single workboard watchlist into Room (membership + rows). */

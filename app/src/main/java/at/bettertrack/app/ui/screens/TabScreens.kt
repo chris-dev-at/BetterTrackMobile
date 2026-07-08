@@ -102,28 +102,32 @@ private fun RefreshableTabScreen(
 fun AssetsTabScreen(
     onOpenSearch: () -> Unit = {},
     onOpenCustomAssets: () -> Unit = {},
+    onOpenAsset: (String) -> Unit = {},
+    onAddToWatchlist: () -> Unit = {},
 ) {
-    // Step 11: a search entry sits atop the Assets tab; the watchlist content
-    // fills the space below in Step 12 (§6.6). Custom-asset management (§6.4)
-    // stays reachable here.
+    // Step 12 (§6.6): the Assets tab is search + watchlists. Custom-asset
+    // management (§6.4) stays reachable via the link.
     val bt = BtTheme.colors
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
         SearchBarButton(onClick = onOpenSearch)
-        Spacer(Modifier.height(24.dp))
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            BtEmptyState(
-                icon = Icons.AutoMirrored.Outlined.ShowChart,
-                title = stringResource(R.string.bt_tab_assets_empty_title),
-                message = stringResource(R.string.bt_tab_assets_empty_message),
-                action = {
-                    BtSecondaryButton(
-                        text = stringResource(R.string.bt_custom_manage),
-                        onClick = onOpenCustomAssets,
-                    )
-                },
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.bt_watchlist_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+                modifier = Modifier.weight(1f),
             )
+            androidx.compose.material3.TextButton(onClick = onOpenCustomAssets) {
+                Text(stringResource(R.string.bt_custom_manage), color = bt.textSecondary)
+            }
         }
+        at.bettertrack.app.ui.watchlist.WatchlistPanel(
+            onOpenAsset = onOpenAsset,
+            onAddAsset = { onAddToWatchlist() },
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
