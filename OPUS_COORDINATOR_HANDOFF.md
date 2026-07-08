@@ -95,6 +95,7 @@ The owner is **Christian** (`chris-dev-at`, chrisiclemi@gmail.com). His mandate,
 - Offline behavior verified by actually going offline (WiFi toggle) — cache renders, banner shows data age, no blank screens/spinners, forbidden actions show "requires connection".
 - Unit tests: keep the whole suite green; add tests where cheap (pure logic: math, filters, state machines).
 - Design: screenshots inspected, defects fixed before finishing; the milestone's screens must hold the §5 bar.
+- **Screenshot token policy (owner, 2026-07-08)**: save full-res PNGs as evidence, but INSPECT a half-width copy (`sips --resampleWidth 540 shot.png --out shot_s.png`, ≈50% of the vision tokens). Full-res Reads only for exact numbers/fine text (money digits, axis labels, API-match checks) or defect diagnosis. Never verify exact digits on a downscaled image. Note: PNG→JPEG compression saves disk, NOT tokens — only pixel downscaling reduces vision cost.
 - TODO.md ticked with a concrete verification note per step. Anything unverified is listed as such in the report and in chat — never silently.
 
 ## 9. Remaining milestones and their gates
