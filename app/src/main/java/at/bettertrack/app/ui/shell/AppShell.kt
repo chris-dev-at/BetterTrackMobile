@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Settings
@@ -80,6 +81,8 @@ import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
+import at.bettertrack.app.ui.market.AssetPageScreen
+import at.bettertrack.app.ui.market.SearchScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
 import at.bettertrack.app.ui.gallery.GalleryScreen
@@ -138,6 +141,7 @@ fun BtApp() {
                     onWordmarkLongPress = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
+                    onSearch = { navController.navigate(SearchRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                 )
             }
@@ -187,6 +191,7 @@ fun BtApp() {
 @Composable
 private fun BtTopBar(
     onWordmarkLongPress: () -> Unit,
+    onSearch: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -205,6 +210,14 @@ private fun BtTopBar(
             )
         },
         actions = {
+            // App-wide search affordance (§6.5).
+            IconButton(onClick = onSearch) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = stringResource(R.string.bt_search_cd),
+                    tint = bt.textSecondary,
+                )
+            }
             // Notification-bell slot — inert until Step 16.
             IconButton(onClick = { /* TODO(step 16): notifications inbox */ }) {
                 Icon(
@@ -283,7 +296,10 @@ private fun BtNavHost(navController: NavHostController) {
             )
         }
         composable<AssetsTabRoute> {
-            AssetsTabScreen(onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) })
+            AssetsTabScreen(
+                onOpenSearch = { navController.navigate(SearchRoute) },
+                onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
+            )
         }
         composable<SocialTabRoute> { SocialTabScreen() }
         composable<WorkboardTabRoute> { WorkboardTabScreen() }
@@ -312,6 +328,9 @@ private fun BtNavHost(navController: NavHostController) {
                 onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
                 onOpenCustomAsset = { customAssetId ->
                     navController.navigate(CustomAssetDetailRoute(customAssetId))
+                },
+                onOpenAssetPage = { assetId ->
+                    navController.navigate(AssetPageRoute(assetId))
                 },
             )
         }
@@ -354,8 +373,40 @@ private fun BtNavHost(navController: NavHostController) {
         }
 
         // Market
-        composable<AssetPageRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_asset_page), back) }
-        composable<SearchRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_search), back) }
+        composable<AssetPageRoute> { entry ->
+            val route = entry.toRoute<AssetPageRoute>()
+            AssetPageScreen(
+                assetId = route.assetId,
+                onBack = back,
+                onTrade = { assetId, symbol, name, pid, sell ->
+                    navController.navigate(
+                        TransactionFormRoute(
+                            portfolioId = pid,
+                            assetId = assetId,
+                            assetSymbol = symbol,
+                            assetName = name,
+                            sell = sell,
+                        ),
+                    )
+                },
+            )
+        }
+        composable<SearchRoute> {
+            SearchScreen(
+                onBack = back,
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                onTrade = { assetId, symbol, name, pid ->
+                    navController.navigate(
+                        TransactionFormRoute(
+                            portfolioId = pid,
+                            assetId = assetId,
+                            assetSymbol = symbol,
+                            assetName = name,
+                        ),
+                    )
+                },
+            )
+        }
         composable<WatchlistRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_watchlists), back) }
 
         // Workboard

@@ -160,6 +160,7 @@ fun HoldingDetailScreen(
     onEditQueued: (Long) -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenCustomAsset: (String) -> Unit,
+    onOpenAssetPage: (String) -> Unit,
 ) {
     val vm: HoldingDetailViewModel = viewModel {
         HoldingDetailViewModel(
@@ -252,6 +253,7 @@ fun HoldingDetailScreen(
                         onEditSynced = onEditSynced,
                         onEditQueued = onEditQueued,
                         onOpenCustomAsset = onOpenCustomAsset,
+                        onOpenAssetPage = onOpenAssetPage,
                     )
 
                     refreshing -> HoldingSkeleton()
@@ -303,6 +305,7 @@ private fun HoldingContent(
     onEditSynced: (String) -> Unit,
     onEditQueued: (Long) -> Unit,
     onOpenCustomAsset: (String) -> Unit,
+    onOpenAssetPage: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     LazyColumn(
@@ -440,8 +443,8 @@ private fun HoldingContent(
         }
 
         // Custom holdings get the §6.4 "update value now" quick action opening
-        // the custom-asset detail; market holdings keep the reserved asset-page
-        // link-out. TODO(step 11): wire AssetPageRoute + drop "Coming soon".
+        // the custom-asset detail; market holdings link out to the §6.5 asset
+        // page (Step 11).
         item(key = "asset-link") {
             if (holding.assetIsCustom) {
                 BtCard(modifier = Modifier.fillMaxWidth(), onClick = { onOpenCustomAsset(holding.assetId) }) {
@@ -471,7 +474,7 @@ private fun HoldingContent(
                     }
                 }
             } else {
-                BtCard(modifier = Modifier.fillMaxWidth()) {
+                BtCard(modifier = Modifier.fillMaxWidth(), onClick = { onOpenAssetPage(holding.assetId) }) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -479,19 +482,21 @@ private fun HoldingContent(
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                             contentDescription = null,
-                            tint = bt.textMuted,
+                            tint = bt.gold,
                             modifier = Modifier.width(20.dp),
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             text = stringResource(R.string.bt_holding_asset_page_link),
                             style = MaterialTheme.typography.titleSmall,
-                            color = bt.textMuted,
+                            color = bt.textPrimary,
                             modifier = Modifier.weight(1f),
                         )
-                        BtBadge(
-                            text = stringResource(R.string.bt_holding_asset_page_soon),
-                            kind = BtBadgeKind.Neutral,
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = bt.textMuted,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }

@@ -376,13 +376,25 @@ class TransactionFormViewModel(
                 } else {
                     mode = FormMode.Create(pid)
                     _portfolioId.value = pid
+                    // Search/asset-page can preselect the Sell side (§6.5).
+                    _isBuy.value = !route.sell
                     // Sticky cash-coupling default (§6.2): local sticky value,
                     // else the portfolio's server-side default.
                     val sticky = repo.cashCouplingDefault(pid).first()
                     val server = repo.portfolios.first().firstOrNull { it.id == pid }?.defaultPayFromCash
                     _cashCoupled.value = resolveCashCouplingDefault(sticky, server ?: false)
-                    // Pre-fill the asset when opened from a holding.
-                    route.assetId?.let { prefillAsset(pid, it) }
+                    // Pre-fill the asset. Search-buy (Step 11) passes the identity
+                    // in the route so a NOT-yet-held asset binds instantly; a
+                    // holding entry passes only assetId and resolves from cache.
+                    val rid = route.assetId
+                    if (rid != null) {
+                        if (route.assetSymbol != null) {
+                            _asset.value = AssetPick(rid, route.assetSymbol, route.assetName ?: route.assetSymbol, null)
+                            refineAssetFromHoldings(rid)
+                        } else {
+                            prefillAsset(pid, rid)
+                        }
+                    }
                 }
             }
         }

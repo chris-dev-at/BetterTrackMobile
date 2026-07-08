@@ -35,6 +35,11 @@ import kotlinx.serialization.Serializable
     val portfolioId: String? = null,
     val assetId: String? = null,
     val opId: Long? = null,
+    /** Step 11 search-buy: asset identity passed through so a NOT-yet-held asset
+     *  binds instantly without a holdings lookup; [sell] preselects the side. */
+    val assetSymbol: String? = null,
+    val assetName: String? = null,
+    val sell: Boolean = false,
 )
 /**
  * Cash screen (Step 9, §6.3). [editOpId] deep-links straight into editing a

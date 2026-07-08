@@ -210,6 +210,14 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist_items WHERE watchlistId = :watchlistId")
     suspend fun deleteItems(watchlistId: String)
 
+    /** The cached item for one asset in a list, if any (watchlist toggle, §6.6). */
+    @Query("SELECT * FROM watchlist_items WHERE watchlistId = :watchlistId AND assetId = :assetId LIMIT 1")
+    suspend fun itemForAsset(watchlistId: String, assetId: String): WatchlistItemEntity?
+
+    /** Remove one cached item (optimistic un-watch). */
+    @Query("DELETE FROM watchlist_items WHERE id = :id")
+    suspend fun deleteItem(id: String)
+
     @Transaction
     suspend fun replaceList(list: WatchlistEntity, items: List<WatchlistItemEntity>) {
         upsertLists(listOf(list))

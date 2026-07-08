@@ -12,6 +12,7 @@ import at.bettertrack.app.data.auth.SecureStore
 import at.bettertrack.app.data.auth.TokenManager
 import at.bettertrack.app.data.db.AccountDataManager
 import at.bettertrack.app.data.db.BtDatabase
+import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.debug.SyncDebugController
 import at.bettertrack.app.sync.ApiOpExecutor
@@ -155,6 +156,10 @@ object AppGraph {
 
     val portfolioRepository: PortfolioRepository by lazy {
         PortfolioRepository(api = btApi, db = database, json = json)
+    }
+
+    val marketRepository: MarketRepository by lazy {
+        MarketRepository(api = btApi, db = database, json = json)
     }
 
     val connectivityMonitor: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }

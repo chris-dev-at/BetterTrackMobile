@@ -8,6 +8,9 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.AddToWorkboardRequest
+import at.bettertrack.app.data.api.dto.AssetDetailResponse
+import at.bettertrack.app.data.api.dto.AssetHistoryResponse
 import at.bettertrack.app.data.api.dto.ConglomerateListResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetRequest
 import at.bettertrack.app.data.api.dto.CreateCustomAssetResponse
@@ -21,6 +24,8 @@ import at.bettertrack.app.data.api.dto.PortfolioHistoryResponse
 import at.bettertrack.app.data.api.dto.PortfolioListResponse
 import at.bettertrack.app.data.api.dto.PortfolioMutationResponse
 import at.bettertrack.app.data.api.dto.PutValuePointsRequest
+import at.bettertrack.app.data.api.dto.QuoteResponse
+import at.bettertrack.app.data.api.dto.SearchResponse
 import at.bettertrack.app.data.api.dto.TokenExchangeRequest
 import at.bettertrack.app.data.api.dto.TokenRefreshRequest
 import at.bettertrack.app.data.api.dto.TokenResponse
@@ -31,6 +36,7 @@ import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionResponse
 import at.bettertrack.app.data.api.dto.ValuePointsResponse
+import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.dto.WorkboardListResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -134,8 +140,40 @@ interface BtApi {
     @DELETE("custom-assets/{id}")
     suspend fun deleteCustomAsset(@Path("id") id: String): Response<Unit>
 
+    // ── Step 11: market search + asset pages (§6.5, online-only) ─────────────
+
+    /** Fuzzy asset search; `enriching=true` ⇒ providers still resolving, refetch. */
+    @GET("search")
+    suspend fun search(@Query("q") q: String): Response<SearchResponse>
+
+    /** Asset identity + quote + server-converted EUR price. */
+    @GET("assets/{id}")
+    suspend fun assetDetail(@Path("id") id: String): Response<AssetDetailResponse>
+
+    /** Latest quote only (lighter than the full detail). */
+    @GET("assets/{id}/quote")
+    suspend fun assetQuote(@Path("id") id: String): Response<QuoteResponse>
+
+    /** Close-price series; ranges 1D|1W|1M|3M|6M|1Y|5Y|MAX (server picks interval). */
+    @GET("assets/{id}/history")
+    suspend fun assetHistory(
+        @Path("id") id: String,
+        @Query("range") range: String,
+    ): Response<AssetHistoryResponse>
+
+    // ── Step 11/12: the single unnamed workboard watchlist (§6.6) ────────────
+
     @GET("workboard")
     suspend fun workboard(): Response<WorkboardListResponse>
+
+    /** Add an asset to the workboard watchlist; returns the created item. */
+    @Headers("Content-Type: application/json")
+    @POST("workboard")
+    suspend fun addToWorkboard(@Body body: AddToWorkboardRequest): Response<WorkboardItemDto>
+
+    /** Remove a workboard item (by ITEM id, not asset id). */
+    @DELETE("workboard/{itemId}")
+    suspend fun removeFromWorkboard(@Path("itemId") itemId: String): Response<Unit>
 
     @GET("conglomerates")
     suspend fun conglomerates(): Response<ConglomerateListResponse>

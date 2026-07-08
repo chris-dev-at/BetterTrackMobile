@@ -320,4 +320,40 @@
     <string name="bt_custom_cat_cash">Cash</string>
     <string name="bt_custom_cat_unlisted">Unlisted stock</string>
     <string name="bt_custom_cat_other">Other</string>
+
+    <!-- Step 11 — Search & asset pages (§6.5) -->
+    <string name="bt_search_title">Search</string>
+    <string name="bt_search_hint">Search stocks, ETFs, crypto…</string>
+    <string name="bt_search_clear">Clear</string>
+    <string name="bt_search_cd">Search</string>
+    <string name="bt_search_prompt_title">Find an asset</string>
+    <string name="bt_search_prompt_message">Search by name or symbol — stocks, ETFs, crypto and more.</string>
+    <string name="bt_search_no_results_title">No matches</string>
+    <string name="bt_search_no_results_message">Try a different name or symbol.</string>
+    <string name="bt_search_enriching">Searching providers…</string>
+    <string name="bt_search_requires_connection_message">Search needs a connection. Reconnect to look up assets.</string>
+    <string name="bt_requires_connection_title">You\'re offline</string>
+    <string name="bt_requires_connection_inline">Requires a connection.</string>
+    <string name="bt_action_buy">Buy</string>
+    <string name="bt_action_sell">Sell</string>
+    <string name="bt_watchlist_add">Add to watchlist</string>
+    <string name="bt_watchlist_remove">Remove from watchlist</string>
+    <string name="bt_value_dash">—</string>
+    <string name="bt_asset_title">Asset</string>
+    <string name="bt_asset_price">Price</string>
+    <string name="bt_asset_stats">Key stats</string>
+    <string name="bt_asset_prev_close">Previous close</string>
+    <string name="bt_asset_day_change">Day change</string>
+    <string name="bt_asset_currency">Currency</string>
+    <string name="bt_asset_as_of">As of</string>
+    <string name="bt_asset_chart_empty">No price history for this range.</string>
+    <string name="bt_asset_requires_connection_message">Asset pages need a connection. Reconnect to see live prices.</string>
+    <string name="bt_asset_type_stock">Stock</string>
+    <string name="bt_asset_type_etf">ETF</string>
+    <string name="bt_asset_type_index">Index</string>
+    <string name="bt_asset_type_fx">FX</string>
+    <string name="bt_asset_type_commodity">Commodity</string>
+    <string name="bt_asset_type_crypto">Crypto</string>
+    <string name="bt_asset_type_custom">Custom</string>
+    <string name="bt_assets_search_bar">Search stocks, ETFs, crypto…</string>
 </resources>

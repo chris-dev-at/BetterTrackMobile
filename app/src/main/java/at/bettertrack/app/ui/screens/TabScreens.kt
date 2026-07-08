@@ -1,13 +1,30 @@
 package at.bettertrack.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.theme.BtShapes
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -82,20 +99,60 @@ private fun RefreshableTabScreen(
 }
 
 @Composable
-fun AssetsTabScreen(onOpenCustomAssets: () -> Unit = {}) {
-    // Interim entry to custom-asset management (§6.4) until search + watchlists
-    // fill this tab (Steps 11–12).
-    RefreshableTabScreen(
-        icon = Icons.AutoMirrored.Outlined.ShowChart,
-        title = stringResource(R.string.bt_tab_assets_empty_title),
-        message = stringResource(R.string.bt_tab_assets_empty_message),
-        action = {
-            BtSecondaryButton(
-                text = stringResource(R.string.bt_custom_manage),
-                onClick = onOpenCustomAssets,
+fun AssetsTabScreen(
+    onOpenSearch: () -> Unit = {},
+    onOpenCustomAssets: () -> Unit = {},
+) {
+    // Step 11: a search entry sits atop the Assets tab; the watchlist content
+    // fills the space below in Step 12 (§6.6). Custom-asset management (§6.4)
+    // stays reachable here.
+    val bt = BtTheme.colors
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(12.dp))
+        SearchBarButton(onClick = onOpenSearch)
+        Spacer(Modifier.height(24.dp))
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            BtEmptyState(
+                icon = Icons.AutoMirrored.Outlined.ShowChart,
+                title = stringResource(R.string.bt_tab_assets_empty_title),
+                message = stringResource(R.string.bt_tab_assets_empty_message),
+                action = {
+                    BtSecondaryButton(
+                        text = stringResource(R.string.bt_custom_manage),
+                        onClick = onOpenCustomAssets,
+                    )
+                },
             )
-        },
-    )
+        }
+    }
+}
+
+/** A tappable search "field" (looks like an input, opens the search screen). */
+@Composable
+private fun SearchBarButton(onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().btPressScale(interaction, pressedScale = 0.985f),
+        shape = BtShapes.control,
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        interactionSource = interaction,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Search, contentDescription = null, tint = bt.textMuted)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = stringResource(R.string.bt_assets_search_bar),
+                style = MaterialTheme.typography.bodyLarge,
+                color = bt.textMuted,
+            )
+        }
+    }
 }
 
 @Composable
