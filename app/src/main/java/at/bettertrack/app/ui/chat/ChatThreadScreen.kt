@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.AttachFile
@@ -50,18 +51,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.repo.ChatFlags
 import at.bettertrack.app.data.repo.ChatMessage
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.ShareChip
 import at.bettertrack.app.data.repo.ShareChipKind
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
+import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -152,23 +156,59 @@ fun ChatThreadScreen(
             )
         },
         bottomBar = {
-            MessageInputBar(
-                value = input,
-                onValueChange = { input = it },
-                onSend = { if (input.isNotBlank()) { vm.send(input); input = "" } },
-                onAttach = { showAttach = true },
-            )
+            if (ChatFlags.enabled) {
+                MessageInputBar(
+                    value = input,
+                    onValueChange = { input = it },
+                    onSend = { if (input.isNotBlank()) { vm.send(input); input = "" } },
+                    onAttach = { showAttach = true },
+                )
+            }
         },
     ) { pad ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(pad),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(messages, key = { it.id }) { m -> MessageBubble(m, onOpenChip = {
-                Toast.makeText(context, "Opens the shared item when chat goes live.", Toast.LENGTH_SHORT).show()
-            }) }
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            when {
+                // Release path: chat isn't live yet — a clear "coming soon" state
+                // (never an empty thread with a dead composer).
+                !ChatFlags.enabled -> BtEmptyState(
+                    icon = Icons.AutoMirrored.Outlined.Chat,
+                    title = "Chat is coming soon",
+                    message = "Messaging your friends — and sharing assets or portfolios right in the chat — is on its way.",
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                )
+                // Fresh conversation: a warm prompt instead of a blank screen.
+                messages.isEmpty() -> Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    BtAvatar(name = friendUsername, size = 64.dp)
+                    Spacer(Modifier.size(16.dp))
+                    Text(
+                        "Say hi to @$friendUsername",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = bt.textPrimary,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        "Start the conversation — you can share an asset or portfolio right here with the paperclip.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = bt.textMuted,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(messages, key = { it.id }) { m -> MessageBubble(m, onOpenChip = {
+                        Toast.makeText(context, "Opens the shared item when chat goes live.", Toast.LENGTH_SHORT).show()
+                    }) }
+                }
+            }
         }
     }
 

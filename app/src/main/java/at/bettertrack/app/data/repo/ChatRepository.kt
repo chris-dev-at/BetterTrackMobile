@@ -27,6 +27,16 @@ object ChatFlags {
     val enabled: Boolean = BuildConfig.DEBUG
 }
 
+/**
+ * Pure preview text for a conversation row: a share chip renders as "📎 Shared …"
+ * (chip takes precedence over any accompanying body), and my own messages are
+ * prefixed "You: ". Extracted top-level so it stays unit-testable without a Context.
+ */
+internal fun chatMessagePreview(fromMe: Boolean, body: String?, chipLabel: String?): String {
+    val base = if (chipLabel != null) "📎 Shared $chipLabel" else body.orEmpty()
+    return if (fromMe) "You: $base" else base
+}
+
 enum class ShareChipKind { Asset, Portfolio, Watchlist, Conglomerate }
 
 data class ShareChip(
@@ -208,13 +218,8 @@ class StubChatRepository(
         }
     }
 
-    private fun previewOf(m: ChatMessage): String {
-        val base = when {
-            m.chip != null -> "📎 Shared ${m.chip.label}"
-            else -> m.body.orEmpty()
-        }
-        return if (m.fromMe) "You: $base" else base
-    }
+    private fun previewOf(m: ChatMessage): String =
+        chatMessagePreview(fromMe = m.fromMe, body = m.body, chipLabel = m.chip?.label)
 
     private fun recomputeTotal() { _totalUnread.value = _conversations.value.sumOf { it.unread } }
 
@@ -227,9 +232,13 @@ class StubChatRepository(
 }
 
 /**
- * Debug gateway that simulates the realtime channel: once connected it delivers a
- * single incoming message after a short delay, proving the unread-badge + thread
- * plumbing without a server. The real gateway will bridge the `/ws` socket here.
+ * Debug gateway that simulates the realtime channel to prove the unread-badge +
+ * thread plumbing without a server. It delivers ONE incoming message shortly after
+ * the first connect of the process — on the already-read `c-lukas` thread, so that
+ * conversation visibly lights up as unread while the seeded-unread `c-anna` is left
+ * untouched (keeping the "unread survives restart" demo unambiguous). Firing only
+ * once per process means re-entering chat never piles up duplicate demo messages.
+ * The real gateway will bridge the authenticated `/ws` socket to [onMessage] here.
  */
 class StubChatGateway : ChatGateway {
     private var connected = false
@@ -237,15 +246,17 @@ class StubChatGateway : ChatGateway {
     override fun connect(scope: CoroutineScope, onMessage: (ChatMessage) -> Unit) {
         if (!ChatFlags.enabled || connected) return
         connected = true
+        if (deliveredThisProcess) return
         scope.launch {
-            delay(9_000)
-            if (!isActive || !connected) return@launch
+            delay(7_000)
+            if (!isActive || !connected || deliveredThisProcess) return@launch
+            deliveredThisProcess = true
             onMessage(
                 ChatMessage(
                     id = UUID.randomUUID().toString(),
-                    conversationId = "c-anna",
+                    conversationId = "c-lukas",
                     fromMe = false,
-                    body = "btw are you free to look at that basket later? 🙂",
+                    body = "Did you end up grabbing more? 👀",
                     sentAtMs = System.currentTimeMillis(),
                 ),
             )
@@ -253,4 +264,10 @@ class StubChatGateway : ChatGateway {
     }
 
     override fun disconnect() { connected = false }
+
+    private companion object {
+        /** Process-scoped: the one-time demo message fires once per app launch. */
+        @Volatile
+        var deliveredThisProcess = false
+    }
 }
