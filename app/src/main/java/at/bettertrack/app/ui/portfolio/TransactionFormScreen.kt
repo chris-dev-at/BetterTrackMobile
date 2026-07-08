@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -24,10 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -38,6 +43,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -72,6 +78,8 @@ import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.TransactionEntity
+import at.bettertrack.app.data.repo.MarketAsset
+import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.TransactionFormRoute
@@ -86,6 +94,7 @@ import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
+import androidx.compose.ui.text.font.FontWeight
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.shell.OfflineBanner
@@ -96,7 +105,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -145,7 +156,7 @@ sealed interface TxFormEvent {
     data object Close : TxFormEvent
 }
 
-/** The asset chosen in the picker (a held asset this step — TODO(step 11)). */
+/** The asset chosen in the picker (held or, via search, the full universe). */
 data class AssetPick(
     val assetId: String,
     val symbol: String,
@@ -153,9 +164,19 @@ data class AssetPick(
     val heldQuantity: Double?,
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
+/** State of the in-form asset search (§6.5), rendered below the held section. */
+sealed interface AssetSearchState {
+    data object Idle : AssetSearchState
+    data object Loading : AssetSearchState
+    data class Results(val assets: List<MarketAsset>) : AssetSearchState
+    data object Empty : AssetSearchState
+    data object Offline : AssetSearchState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
 class TransactionFormViewModel(
     private val repo: PortfolioRepository,
+    private val market: MarketRepository,
     connectivity: ConnectivityMonitor,
     private val db: BtDatabase,
     private val engine: SyncEngine,
@@ -165,6 +186,9 @@ class TransactionFormViewModel(
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
+
+    /** Device locale for formatting max/linked-price fills (matches the UI). */
+    private val formLocale: Locale = Locale.getDefault()
 
     val isEditSynced: Boolean get() = route.transactionId != null
     val isEditQueued: Boolean get() = route.opId != null
@@ -376,6 +400,11 @@ class TransactionFormViewModel(
                 } else {
                     mode = FormMode.Create(pid)
                     _portfolioId.value = pid
+                    // Cold-cache guard (§7.3): the FAB can open this form before
+                    // the overview has synced cash + holdings. Refresh the target
+                    // snapshot now (online) so the balance is KNOWN (never treated
+                    // as zero) and the sell picker / oversell check are populated.
+                    ensureFreshSnapshot(pid)
                     // Search/asset-page can preselect the Sell side (§6.5).
                     _isBuy.value = !route.sell
                     // Sticky cash-coupling default (§6.2): local sticky value,
@@ -389,7 +418,9 @@ class TransactionFormViewModel(
                     val rid = route.assetId
                     if (rid != null) {
                         if (route.assetSymbol != null) {
-                            _asset.value = AssetPick(rid, route.assetSymbol, route.assetName ?: route.assetSymbol, null)
+                            val pick = AssetPick(rid, route.assetSymbol, route.assetName ?: route.assetSymbol, null)
+                            _asset.value = pick
+                            loadDailyCloses(pick, autoLink = true)
                             refineAssetFromHoldings(rid)
                         } else {
                             prefillAsset(pid, rid)
@@ -406,7 +437,9 @@ class TransactionFormViewModel(
             repo.holdings(portfolioId).first { list -> list.any { it.assetId == assetId } }
         } ?: return
         rows.firstOrNull { it.assetId == assetId }?.let { h ->
-            _asset.value = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)
+            val pick = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)
+            _asset.value = pick
+            loadDailyCloses(pick, autoLink = true)
         }
     }
 
@@ -422,6 +455,133 @@ class TransactionFormViewModel(
         }
     }
 
+    // ── Cold-cache guard (§7.3) ─────────────────────────────────────────────
+
+    /** Refresh the target portfolio's detail (cash + holdings) when online so
+     *  the form never validates against a cold / never-synced cache. */
+    private fun ensureFreshSnapshot(portfolioId: String) {
+        if (!isOnline.value) return
+        viewModelScope.launch { repo.refreshPortfolioDetail(portfolioId) }
+    }
+
+    // ── Asset picker search (§6.5 — the full universe, not just held) ───────
+
+    private val _assetQuery = MutableStateFlow("")
+    val assetQuery: StateFlow<String> = _assetQuery.asStateFlow()
+
+    private val _assetSearch = MutableStateFlow<AssetSearchState>(AssetSearchState.Idle)
+    val assetSearch: StateFlow<AssetSearchState> = _assetSearch.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _assetQuery.debounce(260).collectLatest { raw ->
+                val q = raw.trim()
+                when {
+                    q.isEmpty() -> _assetSearch.value = AssetSearchState.Idle
+                    !isOnline.value -> _assetSearch.value = AssetSearchState.Offline
+                    else -> {
+                        _assetSearch.value = AssetSearchState.Loading
+                        _assetSearch.value = when (val r = market.search(q)) {
+                            is BtResult.Ok ->
+                                if (r.value.results.isEmpty()) AssetSearchState.Empty
+                                else AssetSearchState.Results(r.value.results)
+
+                            is BtResult.Err -> AssetSearchState.Offline
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun setAssetQuery(q: String) { _assetQuery.value = q }
+    fun clearAssetQuery() { _assetQuery.value = "" }
+
+    // ── Date ↔ price link (§6.2, mirrors the web reference) ─────────────────
+
+    private val _priceLinked = MutableStateFlow(false)
+    val priceLinked: StateFlow<Boolean> = _priceLinked.asStateFlow()
+
+    private val _priceLinkAvailable = MutableStateFlow(false)
+    /** Only market assets with a daily-close series can auto-fill by date. */
+    val priceLinkAvailable: StateFlow<Boolean> = _priceLinkAvailable.asStateFlow()
+
+    private var dailyCloses: List<Pair<LocalDate, Double>> = emptyList()
+    private var closesAssetId: String? = null
+
+    /** Load the asset's daily closes (Create only) so the date can drive price. */
+    private fun loadDailyCloses(pick: AssetPick, autoLink: Boolean) {
+        if (mode !is FormMode.Create || !isOnline.value || pick.assetId.isBlank()) return
+        if (closesAssetId == pick.assetId) {
+            if (autoLink && _priceLinkAvailable.value) enableLink()
+            return
+        }
+        closesAssetId = pick.assetId
+        dailyCloses = emptyList()
+        _priceLinkAvailable.value = false
+        viewModelScope.launch {
+            when (val r = market.assetDailyCloses(pick.assetId)) {
+                is BtResult.Ok -> {
+                    if (closesAssetId != pick.assetId) return@launch
+                    dailyCloses = r.value.map {
+                        Instant.ofEpochMilli(it.timeMs).atZone(ZoneId.systemDefault()).toLocalDate() to it.close
+                    }
+                    val available = dailyCloses.isNotEmpty()
+                    _priceLinkAvailable.value = available
+                    if (available && autoLink && _priceText.value.isBlank()) enableLink()
+                }
+
+                is BtResult.Err -> _priceLinkAvailable.value = false
+            }
+        }
+    }
+
+    private fun enableLink() {
+        _priceLinked.value = true
+        applyLinkedPrice()
+    }
+
+    private fun applyLinkedPrice() {
+        if (!_priceLinked.value) return
+        val price = closeOnOrBefore(dailyCloses, _date.value) ?: return
+        _priceText.value = formatDecimalForInput(price, formLocale, maxDecimals = 6)
+    }
+
+    /** Chain toggle: detach to type a custom price, or re-attach to the date. */
+    fun togglePriceLink() {
+        if (!_priceLinkAvailable.value) return
+        if (_priceLinked.value) _priceLinked.value = false else enableLink()
+    }
+
+    // ── Max-quantity chip (§6.2) ────────────────────────────────────────────
+
+    /** Whether a "Max" affordance is offerable now (known held qty / known cash). */
+    val maxAvailable: StateFlow<Boolean> = combine(
+        combine(_isBuy, _asset, _priceText) { buy, a, p -> Triple(buy, a, p) },
+        _cashCoupled, cachedCashEur, holdings,
+    ) { (buy, a, priceText), coupled, cash, held ->
+        when {
+            a == null -> false
+            !buy -> (held.firstOrNull { it.assetId == a.assetId }?.quantity ?: 0.0) > 0.0
+            else -> coupled && cash != null && (parseLocalizedDecimal(priceText) ?: 0.0) > 0.0
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** Fill the amount with the max: sell = full held qty; buy = max affordable. */
+    fun fillMaxQuantity() {
+        val a = _asset.value ?: return
+        if (_isBuy.value) {
+            val cash = cachedCashEur.value ?: return
+            val price = parseLocalizedDecimal(_priceText.value) ?: return
+            if (!_cashCoupled.value || price <= 0.0) return
+            val fee = parseLocalizedDecimal(_feeText.value) ?: 0.0
+            _quantityText.value = formatDecimalForInput(maxAffordableQuantity(cash, price, fee), formLocale)
+        } else {
+            val held = holdings.value.firstOrNull { it.assetId == a.assetId }?.quantity ?: return
+            _quantityText.value = formatDecimalForInput(held, formLocale)
+        }
+    }
+
     // ── Field mutations ─────────────────────────────────────────────────────
 
     fun setSide(isBuy: Boolean) {
@@ -429,7 +589,18 @@ class TransactionFormViewModel(
     }
 
     fun setAsset(pick: AssetPick) {
+        val changed = _asset.value?.assetId != pick.assetId
         _asset.value = pick
+        _assetQuery.value = ""
+        // A different asset's price is meaningless — drop it so the date→price
+        // link re-fills with the new asset's close (and re-enable the link).
+        if (changed) {
+            _priceText.value = ""
+            closesAssetId = null
+            dailyCloses = emptyList()
+            _priceLinkAvailable.value = false
+        }
+        loadDailyCloses(pick, autoLink = true)
     }
 
     fun setQuantity(text: String) {
@@ -437,6 +608,8 @@ class TransactionFormViewModel(
     }
 
     fun setPrice(text: String) {
+        // Manual edit detaches the date→price link (§6.2, matches the web).
+        _priceLinked.value = false
         _priceText.value = sanitizeDecimalInput(text, maxDecimals = 6)
     }
 
@@ -446,6 +619,7 @@ class TransactionFormViewModel(
 
     fun setDate(date: LocalDate) {
         _date.value = date
+        applyLinkedPrice()
     }
 
     fun setNote(text: String) {
@@ -658,6 +832,7 @@ fun TransactionFormScreen(
     val vm: TransactionFormViewModel = viewModel {
         TransactionFormViewModel(
             repo = AppGraph.portfolioRepository,
+            market = AppGraph.marketRepository,
             connectivity = AppGraph.connectivityMonitor,
             db = AppGraph.database,
             engine = AppGraph.syncEngine,
@@ -678,6 +853,9 @@ fun TransactionFormScreen(
     val asset by vm.asset.collectAsStateWithLifecycle()
     val quantityText by vm.quantityText.collectAsStateWithLifecycle()
     val priceText by vm.priceText.collectAsStateWithLifecycle()
+    val priceLinked by vm.priceLinked.collectAsStateWithLifecycle()
+    val priceLinkAvailable by vm.priceLinkAvailable.collectAsStateWithLifecycle()
+    val maxAvailable by vm.maxAvailable.collectAsStateWithLifecycle()
     val feeText by vm.feeText.collectAsStateWithLifecycle()
     val date by vm.date.collectAsStateWithLifecycle()
     val noteText by vm.noteText.collectAsStateWithLifecycle()
@@ -838,6 +1016,8 @@ fun TransactionFormScreen(
                 )
 
                 // Quantity + price — number-first (§3.4 tabular digits).
+                // Quantity carries a "Max" affordance (sell = full held qty; buy
+                // = max affordable from cash); price carries a date-link chain.
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     FormNumberField(
                         value = quantityText,
@@ -846,6 +1026,11 @@ fun TransactionFormScreen(
                         enabled = inputsEnabled,
                         error = validation.quantityError != null && quantityText.isNotEmpty(),
                         modifier = Modifier.weight(1f),
+                        trailingIcon = if (maxAvailable && inputsEnabled) {
+                            { MaxChip(onClick = { vm.fillMaxQuantity() }) }
+                        } else {
+                            null
+                        },
                     )
                     FormNumberField(
                         value = priceText,
@@ -855,6 +1040,19 @@ fun TransactionFormScreen(
                         error = validation.priceError != null && priceText.isNotEmpty(),
                         suffix = "€",
                         modifier = Modifier.weight(1f),
+                        trailingIcon = if (priceLinkAvailable && inputsEnabled) {
+                            { PriceLinkToggle(linked = priceLinked, onToggle = { vm.togglePriceLink() }) }
+                        } else {
+                            null
+                        },
+                    )
+                }
+                if (priceLinkAvailable && priceLinked && inputsEnabled) {
+                    Text(
+                        text = stringResource(R.string.bt_txform_price_linked_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BtTheme.colors.textMuted,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
 
@@ -924,17 +1122,25 @@ fun TransactionFormScreen(
     }
 
     val otherHeldAssets by vm.otherHeldAssets.collectAsStateWithLifecycle()
+    val assetQuery by vm.assetQuery.collectAsStateWithLifecycle()
+    val assetSearch by vm.assetSearch.collectAsStateWithLifecycle()
     if (assetSheetOpen && !vm.isEditSynced) {
         HeldAssetSheet(
             holdings = holdings,
             otherAssets = otherHeldAssets,
             selectedAssetId = asset?.assetId,
             locale = locale,
+            query = assetQuery,
+            searchState = assetSearch,
+            onQueryChange = vm::setAssetQuery,
             onSelect = { pick ->
-                vm.setAsset(pick)
+                vm.setAsset(pick) // clears the query internally
                 assetSheetOpen = false
             },
-            onDismiss = { assetSheetOpen = false },
+            onDismiss = {
+                vm.clearAssetQuery()
+                assetSheetOpen = false
+            },
         )
     }
 
@@ -1142,6 +1348,7 @@ private fun FormNumberField(
     error: Boolean,
     modifier: Modifier = Modifier,
     suffix: String? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     OutlinedTextField(
         value = value,
@@ -1155,10 +1362,51 @@ private fun FormNumberField(
             imeAction = androidx.compose.ui.text.input.ImeAction.Next,
         ),
         suffix = suffix?.let { { Text(it, color = BtTheme.colors.textMuted) } },
+        trailingIcon = trailingIcon,
         textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
         modifier = modifier,
         colors = btFieldColors(),
     )
+}
+
+/** Compact "Max" affordance inside the quantity field (§6.2 owner request). */
+@Composable
+private fun MaxChip(onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        shape = BtShapes.pill,
+        color = bt.gold.copy(alpha = 0.14f),
+        contentColor = bt.goldEmphasis,
+        interactionSource = interaction,
+        modifier = Modifier
+            .padding(end = 8.dp)
+            .btPressScale(interaction, pressedScale = 0.92f),
+    ) {
+        Text(
+            text = stringResource(R.string.bt_txform_max),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        )
+    }
+}
+
+/** Date→price link chain (§6.2) — gold + linked, muted + unlinked. */
+@Composable
+private fun PriceLinkToggle(linked: Boolean, onToggle: () -> Unit) {
+    val bt = BtTheme.colors
+    IconButton(onClick = onToggle) {
+        Icon(
+            imageVector = if (linked) Icons.Outlined.Link else Icons.Outlined.LinkOff,
+            contentDescription = stringResource(
+                if (linked) R.string.bt_txform_price_unlink else R.string.bt_txform_price_link,
+            ),
+            tint = if (linked) bt.gold else bt.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
+    }
 }
 
 @Composable
@@ -1417,90 +1665,148 @@ private fun HeldAssetSheet(
     otherAssets: List<HoldingEntity>,
     selectedAssetId: String?,
     locale: Locale,
+    query: String,
+    searchState: AssetSearchState,
+    onQueryChange: (String) -> Unit,
     onSelect: (AssetPick) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val q = query.trim()
+    val active = q.isNotEmpty()
+    fun matches(sym: String, name: String) = sym.contains(q, true) || name.contains(q, true)
+    val heldShown = if (active) holdings.filter { matches(it.assetSymbol, it.assetName) } else holdings
+    val otherShown = if (active) otherAssets.filter { matches(it.assetSymbol, it.assetName) } else otherAssets
+    val ownedIds = (holdings + otherAssets).map { it.assetId }.toSet()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = bt.surface,
         contentColor = bt.textPrimary,
     ) {
-        LazyColumn(
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                bottom = 28.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item(key = "title") {
-                Text(
-                    text = stringResource(R.string.bt_txform_asset_sheet_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = bt.textPrimary,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            if (holdings.isEmpty() && otherAssets.isEmpty()) {
-                item(key = "empty") {
-                    Text(
-                        text = stringResource(R.string.bt_txform_asset_sheet_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
-                        modifier = Modifier.padding(vertical = 8.dp),
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Text(
+                text = stringResource(R.string.bt_txform_asset_sheet_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.bt_txform_asset_search_hint), color = bt.textMuted) },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = bt.textMuted) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.bt_search_clear),
+                                tint = bt.textMuted,
+                            )
+                        }
+                    }
+                },
+                colors = btFieldColors(),
+            )
+            Spacer(Modifier.height(10.dp))
+            LazyColumn(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 460.dp),
+            ) {
+                // Your assets (held here + other portfolios), filtered live.
+                if (heldShown.isNotEmpty() || otherShown.isNotEmpty()) {
+                    item(key = "your-header") { SheetSectionLabel(stringResource(R.string.bt_txform_asset_your_section)) }
+                }
+                items(count = heldShown.size, key = { heldShown[it].assetId }) { index ->
+                    val h = heldShown[index]
+                    AssetSheetRow(
+                        symbol = h.assetSymbol,
+                        subtitle = h.assetName + " · " + stringResource(
+                            R.string.bt_txform_asset_held,
+                            formatQuantity(h.quantity, locale),
+                        ),
+                        selected = h.assetId == selectedAssetId,
+                        onClick = { onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)) },
                     )
                 }
-            }
-            items(count = holdings.size, key = { holdings[it].assetId }) { index ->
-                val h = holdings[index]
-                AssetSheetRow(
-                    symbol = h.assetSymbol,
-                    subtitle = h.assetName + " · " + stringResource(
-                        R.string.bt_txform_asset_held,
-                        formatQuantity(h.quantity, locale),
-                    ),
-                    selected = h.assetId == selectedAssetId,
-                    onClick = {
-                        onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity))
-                    },
-                )
-            }
-            // Fallback universe: assets held in the user's OTHER portfolios —
-            // a fresh portfolio can record its first buy. Held-here qty is 0.
-            if (otherAssets.isNotEmpty()) {
-                item(key = "other-header") {
-                    Text(
-                        text = stringResource(R.string.bt_txform_asset_other_section),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
-                    )
-                }
-                items(count = otherAssets.size, key = { "other-" + otherAssets[it].assetId }) { index ->
-                    val h = otherAssets[index]
+                items(count = otherShown.size, key = { "other-" + otherShown[it].assetId }) { index ->
+                    val h = otherShown[index]
                     AssetSheetRow(
                         symbol = h.assetSymbol,
                         subtitle = h.assetName,
                         selected = h.assetId == selectedAssetId,
-                        onClick = {
-                            onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, 0.0))
-                        },
+                        onClick = { onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, 0.0)) },
                     )
                 }
-            }
-            // TODO(step 11): search-buy opens the full asset universe here.
-            item(key = "search-soon") {
-                Text(
-                    text = stringResource(R.string.bt_txform_asset_search_soon),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                // All assets (server search) when a query is active (§6.5).
+                if (active) {
+                    item(key = "all-header") { SheetSectionLabel(stringResource(R.string.bt_txform_asset_all_section)) }
+                    when (val s = searchState) {
+                        AssetSearchState.Loading, AssetSearchState.Idle ->
+                            item(key = "s-load") { SheetLoadingRow() }
+
+                        AssetSearchState.Offline ->
+                            item(key = "s-off") { SheetNote(stringResource(R.string.bt_txform_asset_search_offline)) }
+
+                        AssetSearchState.Empty ->
+                            if (heldShown.isEmpty() && otherShown.isEmpty()) {
+                                item(key = "s-empty") { SheetNote(stringResource(R.string.bt_search_no_results_title)) }
+                            }
+
+                        is AssetSearchState.Results -> {
+                            val results = s.assets.filter { it.id !in ownedIds }
+                            items(count = results.size, key = { "sr-" + results[it].id }) { index ->
+                                val a = results[index]
+                                AssetSheetRow(
+                                    symbol = a.symbol,
+                                    subtitle = listOfNotNull(a.name, a.exchange).joinToString(" · "),
+                                    selected = a.id == selectedAssetId,
+                                    onClick = { onSelect(AssetPick(a.id, a.symbol, a.name, null)) },
+                                )
+                            }
+                        }
+                    }
+                } else if (holdings.isEmpty() && otherAssets.isEmpty()) {
+                    item(key = "prompt") { SheetNote(stringResource(R.string.bt_txform_asset_search_prompt)) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SheetSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        color = BtTheme.colors.textMuted,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun SheetNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = BtTheme.colors.textMuted,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun SheetLoadingRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(color = BtTheme.colors.gold, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
     }
 }
 

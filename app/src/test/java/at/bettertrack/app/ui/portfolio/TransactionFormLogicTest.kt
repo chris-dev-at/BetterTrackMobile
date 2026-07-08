@@ -253,4 +253,59 @@ class TransactionFormLogicTest {
         assertEquals(listOf(2L, 1L), filterPendingTxRows(rows, TxSideFilter.ALL, "asset-1").map { it.opId })
         assertTrue(filterPendingTxRows(rows, TxSideFilter.ALL, "nope").isEmpty())
     }
+
+    // ── Cold-cache validation guard (§7.3, owner hotfix) ─────────────────────
+
+    @Test
+    fun `unknown cash balance never hard-blocks a cash-coupled buy`() {
+        // Cold cache: cachedCashEur is null (UNKNOWN, not zero) → never a block.
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true, cachedCashEur = null, heldQuantity = null,
+        )
+        assertFalse(v.insufficientCash)
+        assertTrue(v.canSubmit)
+    }
+
+    @Test
+    fun `known insufficient cash still hard-blocks`() {
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true, cachedCashEur = 500.0, heldQuantity = null,
+        )
+        assertTrue(v.insufficientCash)
+        assertFalse(v.canSubmit)
+    }
+
+    // ── Max-quantity math + input formatting (§6.2, owner request) ───────────
+
+    @Test
+    fun `max affordable subtracts fee and floors at zero`() {
+        assertEquals(9.9, maxAffordableQuantity(1000.0, 100.0, 10.0), 1e-9)
+        assertEquals(0.0, maxAffordableQuantity(50.0, 100.0, 60.0), 1e-9) // fee exceeds cash
+        assertEquals(0.0, maxAffordableQuantity(1000.0, 0.0, 0.0), 1e-9) // non-positive price
+    }
+
+    @Test
+    fun `format decimal for input trims zeros and honours locale separator`() {
+        assertEquals("5", formatDecimalForInput(5.0, java.util.Locale.US))
+        assertEquals("100", formatDecimalForInput(100.0, java.util.Locale.US))
+        assertEquals("0.0333", formatDecimalForInput(0.0333, java.util.Locale.US))
+        assertEquals("0,0333", formatDecimalForInput(0.0333, java.util.Locale.GERMANY))
+    }
+
+    // ── Date→price link lookup (§6.2) ────────────────────────────────────────
+
+    @Test
+    fun `close on or before returns exact, prior, or earliest`() {
+        val series = listOf(
+            LocalDate.of(2026, 6, 29) to 100.0,
+            LocalDate.of(2026, 6, 30) to 101.0,
+            LocalDate.of(2026, 7, 2) to 103.0,
+        )
+        assertEquals(101.0, closeOnOrBefore(series, LocalDate.of(2026, 6, 30))!!, 1e-9) // exact
+        assertEquals(101.0, closeOnOrBefore(series, LocalDate.of(2026, 7, 1))!!, 1e-9) // prior trading day
+        assertEquals(100.0, closeOnOrBefore(series, LocalDate.of(2026, 6, 1))!!, 1e-9) // before all → earliest
+        assertNull(closeOnOrBefore(emptyList(), LocalDate.of(2026, 7, 1)))
+    }
 }

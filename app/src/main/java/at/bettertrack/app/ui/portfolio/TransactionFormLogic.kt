@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 
 /**
  * Pure logic behind the Step-8 transaction form and the pending-row display
@@ -152,6 +153,46 @@ fun validateTxForm(
         insufficientCash = insufficient,
         oversellWarning = oversell,
     )
+}
+
+// ── Max-quantity + date→price helpers (§6.2, owner requests) ─────────────────
+
+/**
+ * Max quantity affordable from a KNOWN cash balance buying at [price], after
+ * subtracting [fee]. Zero when the price is non-positive. Rounds are the
+ * caller's job (fill uses round-DOWN so the buy never exceeds cash).
+ */
+fun maxAffordableQuantity(cashEur: Double, price: Double, fee: Double): Double {
+    if (price <= 0.0) return 0.0
+    return ((cashEur - fee) / price).coerceAtLeast(0.0)
+}
+
+/**
+ * The close on / just-before [target] from an ASCENDING (date, close) series:
+ * the exact day if present, else the most recent prior trading day, else the
+ * earliest close (target precedes all data). Null only for an empty series.
+ */
+fun closeOnOrBefore(closes: List<Pair<LocalDate, Double>>, target: LocalDate): Double? {
+    if (closes.isEmpty()) return null
+    var result: Double? = null
+    for ((d, c) in closes) {
+        if (d <= target) result = c else break
+    }
+    return result ?: closes.first().second
+}
+
+/**
+ * Format a decimal for an input field (quantity or price): full precision
+ * (round-DOWN, no scientific notation), trailing zeros trimmed, locale decimal
+ * separator so it reads correctly in de-AT (the field parser tolerates '.'/',').
+ */
+fun formatDecimalForInput(value: Double, locale: Locale, maxDecimals: Int = 8): String {
+    val bd = java.math.BigDecimal(value)
+        .setScale(maxDecimals, java.math.RoundingMode.DOWN)
+        .stripTrailingZeros()
+    val plain = if (bd.scale() < 0) bd.setScale(0).toPlainString() else bd.toPlainString()
+    val sep = java.text.DecimalFormatSymbols.getInstance(locale).decimalSeparator
+    return if (sep != '.') plain.replace('.', sep) else plain
 }
 
 // ── Dates ────────────────────────────────────────────────────────────────────

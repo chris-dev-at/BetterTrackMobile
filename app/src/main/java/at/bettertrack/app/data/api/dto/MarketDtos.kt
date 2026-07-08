@@ -92,6 +92,14 @@ data class AssetHistoryPointDto(
     val close: Double,
 )
 
+// ── GET /assets/{id}/daily-closes (date↔price link, §6.2) ────────────────────
+@Serializable
+data class DailyClosesResponse(
+    val points: List<AssetHistoryPointDto> = emptyList(),
+    val stale: Boolean = false,
+    val asOf: String? = null,
+)
+
 // ── POST /workboard (add to the single watchlist, §6.6) ──────────────────────
 @Serializable
 data class AddToWorkboardRequest(

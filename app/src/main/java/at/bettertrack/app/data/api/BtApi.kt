@@ -13,6 +13,7 @@ import at.bettertrack.app.data.api.dto.AssetDetailResponse
 import at.bettertrack.app.data.api.dto.AssetHistoryResponse
 import at.bettertrack.app.data.api.dto.ConglomerateListResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetRequest
+import at.bettertrack.app.data.api.dto.DailyClosesResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetResponse
 import at.bettertrack.app.data.api.dto.CreatePortfolioRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
@@ -160,6 +161,10 @@ interface BtApi {
         @Path("id") id: String,
         @Query("range") range: String,
     ): Response<AssetHistoryResponse>
+
+    /** Daily closes — the date→price source for the buy/sell form's date link. */
+    @GET("assets/{id}/daily-closes")
+    suspend fun assetDailyCloses(@Path("id") id: String): Response<DailyClosesResponse>
 
     // ── Step 11/12: the single unnamed workboard watchlist (§6.6) ────────────
 

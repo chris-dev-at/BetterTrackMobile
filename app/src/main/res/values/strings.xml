@@ -176,6 +176,16 @@
     <string name="bt_txform_asset_sheet_empty">No held assets yet. Buying new assets arrives with Search.</string>
     <string name="bt_txform_asset_other_section">Held in other portfolios</string>
     <string name="bt_txform_asset_search_soon">Searching all assets arrives with Search.</string>
+    <!-- Step 11 form pass: searchable picker, date↔price link, Max chip -->
+    <string name="bt_txform_asset_search_hint">Search all assets…</string>
+    <string name="bt_txform_asset_your_section">Your assets</string>
+    <string name="bt_txform_asset_all_section">All assets</string>
+    <string name="bt_txform_asset_search_offline">Connect to search all assets.</string>
+    <string name="bt_txform_asset_search_prompt">Type to search stocks, ETFs, crypto and more.</string>
+    <string name="bt_txform_max">Max</string>
+    <string name="bt_txform_price_link">Link price to date</string>
+    <string name="bt_txform_price_unlink">Unlink price from date</string>
+    <string name="bt_txform_price_linked_hint">Price follows the selected date. Edit it to set your own.</string>
     <string name="bt_txform_side_cd">%1$s</string>
     <string name="bt_txform_side_selected_cd">%1$s, selected</string>
     <string name="bt_txform_quantity">Quantity</string>
@@ -356,4 +366,14 @@
     <string name="bt_asset_type_crypto">Crypto</string>
     <string name="bt_asset_type_custom">Custom</string>
     <string name="bt_assets_search_bar">Search stocks, ETFs, crypto…</string>
+
+    <!-- Step V — Dev update notifier -->
+    <string name="bt_update_dialog_title">New version available</string>
+    <string name="bt_update_dialog_message">Version %1$s is ready to install from GitHub.</string>
+    <string name="bt_update_go_github">Go to GitHub</string>
+    <string name="bt_update_remind_later">Remind me later</string>
+    <string name="bt_update_ignore">Ignore this version</string>
+    <string name="bt_update_badge_title">Update available</string>
+    <string name="bt_update_badge_version">Version %1$s · tap to open GitHub</string>
+    <string name="bt_update_badge_pill">New</string>
 </resources>

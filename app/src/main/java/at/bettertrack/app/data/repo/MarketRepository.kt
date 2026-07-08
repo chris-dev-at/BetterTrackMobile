@@ -140,6 +140,17 @@ class MarketRepository(
             is BtResult.Err -> r
         }
 
+    /** Daily closes (ascending by time) — feeds the form's date→price link. */
+    suspend fun assetDailyCloses(assetId: String): BtResult<List<PricePoint>> =
+        when (val r = apiCall(json) { api.assetDailyCloses(assetId) }) {
+            is BtResult.Ok -> BtResult.Ok(
+                r.value.points.mapNotNull { p -> parseIsoToMs(p.time)?.let { PricePoint(it, p.close) } }
+                    .sortedBy { it.timeMs },
+            )
+
+            is BtResult.Err -> r
+        }
+
     suspend fun assetHistory(assetId: String, range: AssetRange): BtResult<AssetPriceSeries> =
         when (val r = apiCall(json) { api.assetHistory(assetId, range.wire) }) {
             is BtResult.Ok -> {
