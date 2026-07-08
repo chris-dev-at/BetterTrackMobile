@@ -12,6 +12,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.auth.LoginScreen
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.update.UpdateNotifierHost
 
 /**
  * The auth-gated root (spec §4): logged out ⇒ the login screen ONLY; a forced
@@ -53,4 +54,8 @@ fun BtRoot(
 
         is AuthState.LoggedIn -> BtApp()
     }
+
+    // Dev update notifier (Step V) — an app-level overlay dialog, shown over any
+    // auth state when CI has published a newer debug build.
+    UpdateNotifierHost()
 }

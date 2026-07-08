@@ -14,6 +14,8 @@ import at.bettertrack.app.data.db.AccountDataManager
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.update.UpdateChecker
+import at.bettertrack.app.data.update.UpdatePrefs
 import at.bettertrack.app.debug.SyncDebugController
 import at.bettertrack.app.sync.ApiOpExecutor
 import at.bettertrack.app.sync.ConnectivityMonitor
@@ -160,6 +162,18 @@ object AppGraph {
 
     val marketRepository: MarketRepository by lazy {
         MarketRepository(api = btApi, db = database, json = json)
+    }
+
+    /** Dev update notifier (Step V) — its own bare client (no auth, GitHub CDN). */
+    val updateChecker: UpdateChecker by lazy {
+        UpdateChecker(
+            prefs = UpdatePrefs(appContext),
+            currentVersionCode = BuildConfig.VERSION_CODE,
+            client = OkHttpClient.Builder()
+                .callTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build(),
+            json = json,
+        )
     }
 
     val connectivityMonitor: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }

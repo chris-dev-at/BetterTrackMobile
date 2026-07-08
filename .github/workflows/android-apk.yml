@@ -43,15 +43,26 @@ jobs:
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # Inject a CI-aware version (Step V): versionCode = monotonically-increasing
+      # run_number, versionName = 0.<run_number>. Local AS builds keep 1/"dev".
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        run: >
+          ./gradlew :app:assembleDebug
+          -PbtVersionCode=${{ github.run_number }}
+          -PbtVersionName=0.${{ github.run_number }}
+          --no-daemon --stacktrace
 
-      - name: Rename APK
+      - name: Rename APK and write version.json
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk \
-             "dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          APK_NAME="BetterTrackApp-debug-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/$APK_NAME"
+          # Tiny manifest the app parses to detect a newer build (dev notifier).
+          cat > dist/version.json <<EOF
+          {"versionCode": ${{ github.run_number }}, "versionName": "0.${{ github.run_number }}", "apk": "$APK_NAME"}
+          EOF
           ls -l dist
+          cat dist/version.json
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -85,7 +96,7 @@ jobs:
           # absorb the brief tag-deletion propagation window.
           ok=false
           for i in 1 2 3 4 5; do
-            if gh release create latest-debug "$APK" \
+            if gh release create latest-debug "$APK" "dist/version.json" \
                  --prerelease \
                  --title "BetterTrack App — latest debug build" \
                  --notes "$NOTES" \

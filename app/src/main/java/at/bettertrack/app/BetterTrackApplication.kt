@@ -41,6 +41,8 @@ class BetterTrackApplication : Application() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 AppGraph.syncScheduler.scheduleDrain()
+                // Dev update notifier (Step V): rate-limited, silent on failure.
+                AppGraph.updateChecker.onForeground()
             }
         })
     }

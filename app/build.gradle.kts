@@ -38,12 +38,19 @@ android {
     val oauthRedirectScheme = "bettertrack"
     val oauthRedirectUri = "$oauthRedirectScheme://oauth/callback"
 
+    // CI-aware versioning (Step V, dev update notifier): CI injects
+    // -PbtVersionCode=<github.run_number> and -PbtVersionName=0.<run_number> so
+    // each rolling build is strictly newer; local Android Studio builds keep the
+    // dev defaults (versionCode 1 / "dev") so the notifier fires against CI.
+    val btVersionCode = providers.gradleProperty("btVersionCode").map { it.toInt() }.getOrElse(1)
+    val btVersionName = providers.gradleProperty("btVersionName").getOrElse("dev")
+
     defaultConfig {
         applicationId = "at.bettertrack.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = btVersionCode
+        versionName = btVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

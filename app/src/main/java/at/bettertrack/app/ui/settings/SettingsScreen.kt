@@ -40,6 +40,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.update.UpdateAvailableRow
 
 /**
  * Minimal Step-4 Settings surface: it shows the signed-in account (username +
@@ -98,6 +99,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // Dev update notifier badge (Step V) — only when a newer build exists.
+            val update by AppGraph.updateChecker.available.collectAsStateWithLifecycle()
+            update?.let { UpdateAvailableRow(it) }
+
             Text(
                 text = stringResource(R.string.bt_settings_account_section).uppercase(),
                 style = MaterialTheme.typography.labelMedium,
