@@ -8,6 +8,17 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.CreateFriendRequestRequest
+import at.bettertrack.app.data.api.dto.FriendRequestListResponse
+import at.bettertrack.app.data.api.dto.FriendsListResponse
+import at.bettertrack.app.data.api.dto.MySharedResponse
+import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
+import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
+import at.bettertrack.app.data.api.dto.SharedWatchlistDetailResponse
+import at.bettertrack.app.data.api.dto.SharedWithMeResponse
+import at.bettertrack.app.data.api.dto.UpdateConglomerateRequest
+import at.bettertrack.app.data.api.dto.UpdateWatchlistSharingRequest
+import at.bettertrack.app.data.api.dto.WatchlistSharingResponse
 import at.bettertrack.app.data.api.dto.AddToWorkboardRequest
 import at.bettertrack.app.data.api.dto.AllocateRequest
 import at.bettertrack.app.data.api.dto.AllocateResponse
@@ -337,4 +348,86 @@ interface BtApi {
         @Path("portfolioId") portfolioId: String,
         @Body body: CashTransferRequest,
     ): Response<CashTransferResponse>
+
+    // ── Step 14: friends & sharing (§6.8/§6.9) ───────────────────────────────
+    // READS gate on social:read (the mobile client HAS it → live).
+    // WRITES (request/accept/decline/cancel/unfriend) gate on social:write, NOT
+    // yet granted → SocialRepository routes them through a stub until it lands.
+    // Sharing-visibility mutations ride portfolio:write / workboard:write (held).
+
+    /** The caller's friends. */
+    @GET("social/friends")
+    suspend fun friends(): Response<FriendsListResponse>
+
+    /** Pending incoming + outgoing friend requests. */
+    @GET("social/requests")
+    suspend fun friendRequests(): Response<FriendRequestListResponse>
+
+    /** Request a friend by username or email (no enumeration). [social:write] */
+    @Headers("Content-Type: application/json")
+    @POST("social/requests")
+    suspend fun createFriendRequest(@Body body: CreateFriendRequestRequest): Response<Unit>
+
+    /** Accept an incoming request. [social:write] */
+    @POST("social/requests/{id}/accept")
+    suspend fun acceptFriendRequest(@Path("id") id: String): Response<Unit>
+
+    /** Decline an incoming request. [social:write] */
+    @POST("social/requests/{id}/decline")
+    suspend fun declineFriendRequest(@Path("id") id: String): Response<Unit>
+
+    /** Cancel an outgoing request. [social:write] */
+    @POST("social/requests/{id}/cancel")
+    suspend fun cancelFriendRequest(@Path("id") id: String): Response<Unit>
+
+    /** Remove a friendship. [social:write] */
+    @DELETE("social/friends/{userId}")
+    suspend fun removeFriend(@Path("userId") userId: String): Response<Unit>
+
+    /** Everything my friends share with me — portfolios, conglomerates, watchlists. */
+    @GET("social/shared")
+    suspend fun sharedWithMe(): Response<SharedWithMeResponse>
+
+    /** Everything I currently share with friends. */
+    @GET("social/my-shared")
+    suspend fun mySharedItems(): Response<MySharedResponse>
+
+    /** Read-only overview of a friend-shared portfolio. */
+    @GET("social/shared/{portfolioId}")
+    suspend fun sharedPortfolioDetail(
+        @Path("portfolioId") portfolioId: String,
+    ): Response<SharedPortfolioDetailResponse>
+
+    /** Read-only view of a friend's shared watchlist. */
+    @GET("social/shared/watchlists/{userId}")
+    suspend fun sharedWatchlistDetail(
+        @Path("userId") userId: String,
+    ): Response<SharedWatchlistDetailResponse>
+
+    /** Read-only view of a friend-shared conglomerate. */
+    @GET("social/shared/conglomerates/{conglomerateId}")
+    suspend fun sharedConglomerateDetail(
+        @Path("conglomerateId") conglomerateId: String,
+    ): Response<SharedConglomerateDetailResponse>
+
+    // ── Step 14: sharing-visibility mutations (audience = private | friends) ──
+
+    /** Current watchlist audience. */
+    @GET("workboard/sharing")
+    suspend fun watchlistSharing(): Response<WatchlistSharingResponse>
+
+    /** Set the single watchlist's audience. [workboard:write] */
+    @Headers("Content-Type: application/json")
+    @PATCH("workboard/sharing")
+    suspend fun updateWatchlistSharing(
+        @Body body: UpdateWatchlistSharingRequest,
+    ): Response<WatchlistSharingResponse>
+
+    /** Rename/describe and/or change a conglomerate's audience. [workboard:write] */
+    @Headers("Content-Type: application/json")
+    @PATCH("conglomerates/{id}")
+    suspend fun updateConglomerate(
+        @Path("id") id: String,
+        @Body body: UpdateConglomerateRequest,
+    ): Response<ConglomerateDetailResponse>
 }

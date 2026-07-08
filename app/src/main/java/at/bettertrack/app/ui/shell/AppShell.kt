@@ -71,6 +71,9 @@ import at.bettertrack.app.navigation.SettingsLanguageRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
 import at.bettertrack.app.navigation.SettingsRoute
 import at.bettertrack.app.navigation.SettingsSecurityRoute
+import at.bettertrack.app.navigation.SharedConglomerateViewRoute
+import at.bettertrack.app.navigation.SharedPortfolioViewRoute
+import at.bettertrack.app.navigation.SharedWatchlistViewRoute
 import at.bettertrack.app.navigation.SocialTabRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
@@ -96,8 +99,11 @@ import at.bettertrack.app.ui.portfolio.TransactionsScreen
 import at.bettertrack.app.ui.sync.PendingSyncScreen
 import at.bettertrack.app.ui.screens.AssetsTabScreen
 import at.bettertrack.app.ui.screens.PlaceholderScreen
-import at.bettertrack.app.ui.screens.SocialTabScreen
 import at.bettertrack.app.ui.screens.WorkboardTabScreen
+import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
+import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
+import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
+import at.bettertrack.app.ui.social.SocialScreen
 import at.bettertrack.app.ui.settings.SettingsScreen
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.reflect.KClass
@@ -306,7 +312,15 @@ private fun BtNavHost(navController: NavHostController) {
                 onAddToWatchlist = { navController.navigate(SearchRoute) },
             )
         }
-        composable<SocialTabRoute> { SocialTabScreen() }
+        composable<SocialTabRoute> {
+            SocialScreen(
+                onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
+                onOpenSharedWatchlist = { userId, ownerName ->
+                    navController.navigate(SharedWatchlistViewRoute(userId, ownerName))
+                },
+                onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
+            )
+        }
         composable<WorkboardTabRoute> {
             ConglomerateListScreen(
                 onOpen = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
@@ -447,7 +461,19 @@ private fun BtNavHost(navController: NavHostController) {
             )
         }
 
-        // Social
+        // Social — read-only friend-shared views (Step 14, §6.9)
+        composable<SharedPortfolioViewRoute> { entry ->
+            val route = entry.toRoute<SharedPortfolioViewRoute>()
+            SharedPortfolioViewScreen(portfolioId = route.portfolioId, onBack = back)
+        }
+        composable<SharedWatchlistViewRoute> { entry ->
+            val route = entry.toRoute<SharedWatchlistViewRoute>()
+            SharedWatchlistViewScreen(userId = route.userId, ownerName = route.ownerName, onBack = back)
+        }
+        composable<SharedConglomerateViewRoute> { entry ->
+            val route = entry.toRoute<SharedConglomerateViewRoute>()
+            SharedConglomerateViewScreen(conglomerateId = route.conglomerateId, onBack = back)
+        }
         composable<ChatListRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_chats), back) }
         composable<ChatThreadRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_chat_thread), back) }
         composable<NotificationsInboxRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_notifications), back) }

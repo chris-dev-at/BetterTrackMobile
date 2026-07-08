@@ -15,7 +15,9 @@ import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
+import at.bettertrack.app.data.repo.DefaultSocialRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.data.update.UpdatePrefs
@@ -173,6 +175,10 @@ object AppGraph {
 
     val conglomerateRepository: ConglomerateRepository by lazy {
         ConglomerateRepository(api = btApi, json = json)
+    }
+
+    val socialRepository: SocialRepository by lazy {
+        DefaultSocialRepository(api = btApi, json = json, webOrigin = BuildConfig.WEB_ORIGIN)
     }
 
     /** Dev update notifier (Step V) — its own bare client (no auth, GitHub CDN). */

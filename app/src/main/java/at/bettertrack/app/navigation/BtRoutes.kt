@@ -63,6 +63,10 @@ import kotlinx.serialization.Serializable
 @Serializable data class ConglomerateDetailRoute(val conglomerateId: String) // TODO(step 13)
 
 // ── Social ─────────────────────────────────────────────────────────────────
+/** Read-only friend-shared views (Step 14, §6.9). */
+@Serializable data class SharedPortfolioViewRoute(val portfolioId: String)
+@Serializable data class SharedWatchlistViewRoute(val userId: String, val ownerName: String)
+@Serializable data class SharedConglomerateViewRoute(val conglomerateId: String)
 @Serializable data object ChatListRoute                                     // TODO(step 15)
 @Serializable data class ChatThreadRoute(val conversationId: String)        // TODO(step 15)
 @Serializable data object NotificationsInboxRoute                           // TODO(step 16)
