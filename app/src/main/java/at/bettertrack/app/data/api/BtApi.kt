@@ -44,6 +44,7 @@ import at.bettertrack.app.data.api.dto.NotificationSettingsResponse
 import at.bettertrack.app.data.api.dto.OAuthGrantListResponse
 import at.bettertrack.app.data.api.dto.PinStatusResponse
 import at.bettertrack.app.data.api.dto.PinVerifyRequest
+import at.bettertrack.app.data.api.dto.PinVerifyResponse
 import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
 import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.PortfolioHistoryResponse
@@ -110,9 +111,14 @@ interface BtApi {
 
     /**
      * Verify the account's existing web PIN — the "use my BetterTrack PIN"
-     * app-lock option (§5). 200 = match (renews the session, returns MeResponse);
-     * 401 = wrong PIN; 400 = the account has no web PIN. This only REUSES the PIN
-     * (never sets/changes it).
+     * app-lock option (§5). 200 = match; 401 = wrong PIN; 400 = the account has no
+     * web PIN. This only REUSES the PIN (never sets/changes it).
+     *
+     * The 200 body is a small confirmation object (see [PinVerifyResponse]) — the
+     * app reads NOTHING from it; the 200 status alone is the "verified" signal — so
+     * it is decoded into a tolerant empty shape. (It is deliberately NOT [MeResponse]:
+     * the verify body lacks that DTO's required fields, so typing it as MeResponse
+     * made a correct PIN's 200 fail to parse and surface as a generic error.)
      *
      * `X-Bt-No-Reauth` tells [TokenAuthenticator] NOT to treat a 401 here as an
      * expired access token: a wrong PIN is a domain answer, and a refresh+retry
@@ -120,7 +126,7 @@ interface BtApi {
      */
     @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
     @POST("auth/pin/verify")
-    suspend fun pinVerify(@Body body: PinVerifyRequest): Response<MeResponse>
+    suspend fun pinVerify(@Body body: PinVerifyRequest): Response<PinVerifyResponse>
 
     /** Apps the user has authorized — used to find our grant for logout revocation. */
     @GET("settings/oauth-grants")

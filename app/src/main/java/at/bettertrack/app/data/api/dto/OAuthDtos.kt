@@ -72,6 +72,21 @@ data class PinVerifyRequest(
     val pin: String,
 )
 
+// ── POST /api/v1/auth/pin/verify — 200 response ───────────────────────────────
+// A correct PIN returns 200 with a SMALL confirmation body (observed on-device:
+// an ~11-byte object, e.g. {"ok":true} — NOT the full user object). The app needs
+// NOTHING from it: a 200 alone means "verified". So this is deliberately an empty,
+// tolerant shape — with the JSON instance's `ignoreUnknownKeys = true` it decodes
+// ANY 200 object body (whatever fields the server sends now or later) WITHOUT
+// throwing. Previously this endpoint was typed as `MeResponse`, whose required
+// id/email/username/role/status are absent from the tiny verify body, so a correct
+// PIN's 200 threw a MissingFieldException inside Retrofit; `apiCall` mapped that to
+// httpStatus -1 and the UI showed "Couldn't verify right now" instead of activating
+// (the 401 wrong-PIN path never parses a body, so it was unaffected). See
+// [at.bettertrack.app.data.applock.AccountPinService.verifyBetterTrackPin].
+@Serializable
+class PinVerifyResponse
+
 // ── GET /api/v1/auth/pin/status — does the account have a web PIN ─────────────
 // The dedicated, lightweight availability gate for the "use my BetterTrack PIN"
 // app-lock option: it reports ONLY whether a web PIN exists, so the option is
