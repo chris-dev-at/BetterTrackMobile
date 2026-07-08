@@ -51,6 +51,7 @@ The platform side is done. To actually use the scope-gated endpoints (`/auth/pin
 - [ ] scopes: `chat:read` / `chat:write` are defined (reserved) — see Scopes above.
 
 ### Notifications (spec §6.11 — app UI built, delivery stubbed)
+> 📄 **Full "how to send a push to the app via Firebase/FCM" contract → `docs/PUSH_NOTIFICATIONS_FOR_PLATFORM.md`** (device-token endpoint shape + the exact `data` payload: `type`/`title`/`body`/`payload` + the type→deep-link table). The two items below are the platform work it describes.
 - [ ] **P1-for-push — FCM device-token endpoints:** register / refresh / delete a device push token against the account. (The app already obtains a real FCM token from Firebase project `bettertrackapp-c6996`.)
 - [ ] **P1-for-push — Server push send:** FCM HTTP v1 send from the platform worker using the service-account key (**kept server-side only — the mobile repo never holds it**). Needed for "friend request pops a push with the app closed."
 
