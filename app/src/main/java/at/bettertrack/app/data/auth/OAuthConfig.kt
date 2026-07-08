@@ -15,7 +15,7 @@ object OAuthConfig {
 
     /** Space-separated coarse module scopes granted to the app client. */
     const val SCOPES: String =
-        "portfolio:read portfolio:write workboard:read workboard:write market:read social:read"
+        "portfolio:read portfolio:write workboard:read workboard:write market:read social:read account:security"
 
     /**
      * The authorize URL opened in a Custom Tab on the WEB origin:

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,7 +65,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private enum class SetupPhase { Choose, VerifyCurrent, Enter, Confirm }
+private enum class SetupPhase { Loading, Choose, VerifyCurrent, Enter, Confirm }
 
 /**
  * The set-up / change-PIN flow (spec §5), reached from Settings → Security.
@@ -107,13 +108,14 @@ fun AppLockSetupScreen(
     var pinSource by remember {
         mutableStateOf(if (change && betterTrackEnabled) controller.config.value.pinSource else PinSource.DEVICE)
     }
-    // Fresh set-up opens on the chooser only when the BetterTrack option exists;
-    // otherwise it's device-PIN-only and jumps straight to PIN entry.
+    // Fresh set-up with the option enabled opens in a brief Loading phase while
+    // GET /auth/pin/status resolves; that result then routes to the chooser (a
+    // usable web PIN) or straight to a device PIN. Option OFF => device PIN only.
     var phase by remember {
         mutableStateOf(
             when {
                 change -> SetupPhase.VerifyCurrent
-                betterTrackEnabled -> SetupPhase.Choose
+                betterTrackEnabled -> SetupPhase.Loading
                 else -> SetupPhase.Enter
             },
         )
@@ -135,7 +137,7 @@ fun AppLockSetupScreen(
     // The dot count shown: max slots while choosing a variable-length new PIN,
     // exact when the target length is known (verifying / BetterTrack / confirming).
     val totalDots = when (phase) {
-        SetupPhase.Choose -> 0
+        SetupPhase.Loading, SetupPhase.Choose -> 0
         SetupPhase.VerifyCurrent -> storedLength
         SetupPhase.Enter -> fixedLen ?: PIN_MAX_LENGTH
         SetupPhase.Confirm -> firstPin.length
@@ -155,20 +157,23 @@ fun AppLockSetupScreen(
         }
     }
 
-    // Gate the option on the account actually having a web PIN (owner's rule),
-    // via the dedicated GET /auth/pin/status (pinSet). Only a confirmed web PIN
-    // keeps the chooser; no PIN, forbidden, offline, or error ⇒ fall straight
-    // through to a device-only PIN. Runs only when the option is enabled.
+    // Resolve GET /auth/pin/status BEFORE choosing a path (owner's rule), so we
+    // never flash the chooser then jump, nor flash the web-PIN option then hide
+    // it. Runs once for a fresh set-up while the option is enabled:
+    //   pinSet == true                    -> stay on the CHOOSER (user picks).
+    //   pinSet == false / 403 / offline / -> no usable web PIN: go straight to a
+    //   any error                            DEVICE PIN (the intended default).
     LaunchedEffect(betterTrackEnabled, change) {
-        if (betterTrackEnabled && !change) {
+        if (betterTrackEnabled && !change && phase == SetupPhase.Loading) {
             val status = pinService.fetchPinStatus()
             accountStatus = status
-            // No web PIN to reuse (or we couldn't confirm one) ⇒ device-PIN-only.
-            if (!shouldOfferBetterTrackPin(status) && phase == SetupPhase.Choose) {
+            phase = if (shouldOfferBetterTrackPin(status)) {
+                SetupPhase.Choose
+            } else {
                 pinSource = PinSource.DEVICE
-                phase = SetupPhase.Enter
-                entered = ""
+                SetupPhase.Enter
             }
+            entered = ""
         }
     }
 
@@ -205,7 +210,7 @@ fun AppLockSetupScreen(
 
     fun onComplete(pin: String) {
         when (phase) {
-            SetupPhase.Choose -> Unit // no PIN entry in the chooser
+            SetupPhase.Loading, SetupPhase.Choose -> Unit // no PIN entry while loading/choosing
 
             SetupPhase.VerifyCurrent ->
                 if (controller.checkPin(pin)) {
@@ -240,7 +245,7 @@ fun AppLockSetupScreen(
 
     // In the fixed-length phases, auto-submit on reaching the target length.
     val autoSubmitLength = when (phase) {
-        SetupPhase.Choose -> null
+        SetupPhase.Loading, SetupPhase.Choose -> null
         SetupPhase.VerifyCurrent -> storedLength
         SetupPhase.Confirm -> firstPin.length
         SetupPhase.Enter -> fixedLen // null for a device PIN ⇒ explicit Continue
@@ -267,10 +272,14 @@ fun AppLockSetupScreen(
         }
     }
 
-    // Back within a fresh set-up returns to the chooser (only when the chooser
-    // exists); otherwise it exits.
+    // Back within a fresh set-up returns to the chooser — but ONLY when a chooser
+    // actually exists (the account had a usable web PIN). No-web-PIN set-ups went
+    // straight to a device PIN with no chooser, so back there simply exits.
     val onNavBack: () -> Unit = {
-        if (!change && betterTrackEnabled && (phase == SetupPhase.Enter || phase == SetupPhase.Confirm)) {
+        val chooserExists = accountStatus?.let { shouldOfferBetterTrackPin(it) } ?: false
+        if (!change && betterTrackEnabled && chooserExists &&
+            (phase == SetupPhase.Enter || phase == SetupPhase.Confirm)
+        ) {
             phase = SetupPhase.Choose
             entered = ""
             firstPin = ""
@@ -282,7 +291,7 @@ fun AppLockSetupScreen(
     }
 
     val titleRes = when (phase) {
-        SetupPhase.Choose -> R.string.bt_applock_setup_choose_title
+        SetupPhase.Loading, SetupPhase.Choose -> R.string.bt_applock_setup_choose_title
         SetupPhase.VerifyCurrent -> R.string.bt_applock_setup_current
         SetupPhase.Enter -> when {
             change -> R.string.bt_applock_setup_new
@@ -315,14 +324,23 @@ fun AppLockSetupScreen(
             )
         },
     ) { pad ->
+        if (phase == SetupPhase.Loading) {
+            // GET /auth/pin/status in flight — a brief loading state (never a
+            // chooser/option flash) until the resolved path is known.
+            Box(
+                modifier = Modifier.fillMaxSize().padding(pad),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = bt.gold)
+            }
+            return@Scaffold
+        }
+
         if (phase == SetupPhase.Choose) {
-            // While the status is still loading (null) offer optimistically; once it
-            // resolves, the gate decides (and a non-offer result has already jumped
-            // this flow to device-only PIN entry via the LaunchedEffect above).
-            val showBetterTrack = accountStatus?.let { shouldOfferBetterTrackPin(it) } ?: true
+            // Reached only once the status resolved to a usable web PIN, so BOTH
+            // options always show and the chooser STAYS until the user picks.
             ChooseSourceContent(
                 modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 24.dp),
-                showBetterTrack = showBetterTrack,
                 onPick = { source ->
                     pinSource = source
                     entered = ""
@@ -446,14 +464,14 @@ fun AppLockSetupScreen(
 
 /**
  * First-run PIN-source chooser: a fresh device PIN, or the user's existing
- * BetterTrack account PIN (server-verified on entry). The BetterTrack card is
- * shown only when [showBetterTrack] is true (the account has a web PIN, or we
- * couldn't read `pinEnabled` and let the verify call gate it).
+ * BetterTrack account PIN (server-verified on entry). Shown only once
+ * `GET /auth/pin/status` has confirmed the account HAS a web PIN, so both
+ * options are always offered here (no-web-PIN accounts skip straight to a
+ * device PIN and never reach this chooser).
  */
 @Composable
 private fun ChooseSourceContent(
     modifier: Modifier,
-    showBetterTrack: Boolean,
     onPick: (PinSource) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -483,15 +501,13 @@ private fun ChooseSourceContent(
             subtitle = stringResource(R.string.bt_applock_setup_choice_device_sub),
             onClick = { onPick(PinSource.DEVICE) },
         )
-        if (showBetterTrack) {
-            Spacer(Modifier.height(12.dp))
-            SetupChoiceCard(
-                icon = Icons.Outlined.Badge,
-                title = stringResource(R.string.bt_applock_setup_choice_bt_title),
-                subtitle = stringResource(R.string.bt_applock_setup_choice_bt_sub),
-                onClick = { onPick(PinSource.BETTERTRACK) },
-            )
-        }
+        Spacer(Modifier.height(12.dp))
+        SetupChoiceCard(
+            icon = Icons.Outlined.Badge,
+            title = stringResource(R.string.bt_applock_setup_choice_bt_title),
+            subtitle = stringResource(R.string.bt_applock_setup_choice_bt_sub),
+            onClick = { onPick(PinSource.BETTERTRACK) },
+        )
         Spacer(Modifier.weight(1.3f))
     }
 }
