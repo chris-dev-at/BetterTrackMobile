@@ -1,0 +1,256 @@
+package at.bettertrack.app.ui.portfolio
+
+import at.bettertrack.app.data.db.SyncOpEntity
+import at.bettertrack.app.sync.OpStatus
+import at.bettertrack.app.sync.OpType
+import at.bettertrack.app.sync.TxOpPayload
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+
+/**
+ * Step-8 pure-logic tests (spec §6.2/§7.4): decimal input parsing, the
+ * cash-after preview math, the sticky cash-coupling default, form validation
+ * (hard cash block vs soft oversell warning), synced-note marker preservation
+ * and the pending-row decoding/filtering.
+ */
+class TransactionFormLogicTest {
+
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
+
+    // ── Decimal input ────────────────────────────────────────────────────────
+
+    @Test
+    fun `parse accepts comma or dot decimals and grouping`() {
+        assertEquals(1234.56, parseLocalizedDecimal("1.234,56")!!, 1e-9) // de-AT
+        assertEquals(1234.56, parseLocalizedDecimal("1,234.56")!!, 1e-9) // en
+        assertEquals(0.5, parseLocalizedDecimal("0,5")!!, 1e-9)
+        assertEquals(0.5, parseLocalizedDecimal("0.5")!!, 1e-9)
+        assertEquals(7.0, parseLocalizedDecimal("7")!!, 1e-9)
+        assertNull(parseLocalizedDecimal(""))
+        assertNull(parseLocalizedDecimal("abc"))
+        assertNull(parseLocalizedDecimal("1.2.3,4,5"))
+    }
+
+    @Test
+    fun `sanitize keeps digits and a single separator`() {
+        assertEquals("12,34", sanitizeDecimalInput("12,34"))
+        assertEquals("12,34", sanitizeDecimalInput("1a2,3.4")) // second sep dropped
+        assertEquals("1234", sanitizeDecimalInput("12€34"))
+        assertEquals("0,12345678", sanitizeDecimalInput("0,123456789")) // 8-decimal cap
+    }
+
+    // ── Cash-after preview (§6.2) ────────────────────────────────────────────
+
+    @Test
+    fun `buy consumes gross plus fee and sell adds gross minus fee`() {
+        // Buy 2 × €100 + €5 fee from €1000 → €795.
+        assertEquals(795.0, cashAfterPreview(1000.0, true, 2.0, 100.0, 5.0), 1e-9)
+        // Sell 2 × €100 − €5 fee into €1000 → €1195.
+        assertEquals(1195.0, cashAfterPreview(1000.0, false, 2.0, 100.0, 5.0), 1e-9)
+    }
+
+    @Test
+    fun `order total mirrors the cash delta magnitude`() {
+        assertEquals(205.0, orderTotal(true, 2.0, 100.0, 5.0), 1e-9)
+        assertEquals(195.0, orderTotal(false, 2.0, 100.0, 5.0), 1e-9)
+    }
+
+    // ── Sticky default (§6.2) ────────────────────────────────────────────────
+
+    @Test
+    fun `sticky local value wins over the server default`() {
+        assertTrue(resolveCashCouplingDefault(localSticky = true, serverDefault = false))
+        assertFalse(resolveCashCouplingDefault(localSticky = false, serverDefault = true))
+        assertTrue(resolveCashCouplingDefault(localSticky = null, serverDefault = true))
+        assertFalse(resolveCashCouplingDefault(localSticky = null, serverDefault = false))
+    }
+
+    // ── Validation ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `insufficient cash on a coupled buy HARD-blocks submission`() {
+        val v = validateTxForm(
+            assetSelected = true,
+            quantity = 10.0,
+            price = 100.0,
+            fee = 0.0,
+            isBuy = true,
+            cashCoupled = true,
+            cachedCashEur = 500.0, // needs 1000
+            heldQuantity = null,
+        )
+        assertTrue(v.insufficientCash)
+        assertFalse(v.canSubmit)
+
+        // Toggle off ⇒ no cash involvement ⇒ submits.
+        val off = v.copy(insufficientCash = false)
+        assertTrue(off.canSubmit)
+    }
+
+    @Test
+    fun `coupled sell that would overdraw via fee also blocks`() {
+        // Sell proceeds 1×10 − fee 50 = −40 against balance 20 → after −20.
+        val v = validateTxForm(
+            assetSelected = true,
+            quantity = 1.0,
+            price = 10.0,
+            fee = 50.0,
+            isBuy = false,
+            cashCoupled = true,
+            cachedCashEur = 20.0,
+            heldQuantity = 5.0,
+        )
+        assertTrue(v.insufficientCash)
+        assertFalse(v.canSubmit)
+    }
+
+    @Test
+    fun `oversell only warns - the server stays the final validator`() {
+        val v = validateTxForm(
+            assetSelected = true,
+            quantity = 10.0,
+            price = 10.0,
+            fee = 0.0,
+            isBuy = false,
+            cashCoupled = false,
+            cachedCashEur = 0.0,
+            heldQuantity = 3.0,
+        )
+        assertTrue(v.oversellWarning)
+        assertTrue(v.canSubmit) // soft warning, not a block
+    }
+
+    @Test
+    fun `missing fields block submission`() {
+        val v = validateTxForm(
+            assetSelected = false,
+            quantity = null,
+            price = null,
+            fee = null,
+            isBuy = true,
+            cashCoupled = false,
+            cachedCashEur = null,
+            heldQuantity = null,
+        )
+        assertEquals(TxFieldError.MISSING, v.quantityError)
+        assertEquals(TxFieldError.MISSING, v.priceError)
+        assertTrue(v.assetMissing)
+        assertFalse(v.canSubmit)
+    }
+
+    // ── Dates ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `today keeps the current instant and past days stamp midday local`() {
+        val zone = ZoneId.of("Europe/Vienna")
+        val now = Instant.parse("2026-07-08T09:30:00Z")
+        val today = now.atZone(zone).toLocalDate()
+
+        assertEquals(now.toString(), executedAtIso(today, zone, now))
+
+        val past = LocalDate.of(2026, 7, 1)
+        assertEquals(
+            past.atTime(12, 0).atZone(zone).toInstant().toString(),
+            executedAtIso(past, zone, now),
+        )
+    }
+
+    // ── Synced-note marker preservation ─────────────────────────────────────
+
+    @Test
+    fun `editing a synced note keeps its invisible bt marker`() {
+        val original = "my note [bt:c963cc59-1111-2222-3333-444455556666]"
+        assertEquals(
+            "changed [bt:c963cc59-1111-2222-3333-444455556666]",
+            mergeNotePreservingMarker("changed", original),
+        )
+        // Clearing the note still keeps the marker (reconcile/cleanup key).
+        assertEquals(
+            "[bt:c963cc59-1111-2222-3333-444455556666]",
+            mergeNotePreservingMarker("", original),
+        )
+        // No marker on the original ⇒ plain note / null.
+        assertEquals("plain", mergeNotePreservingMarker("plain", "old"))
+        assertNull(mergeNotePreservingMarker("", "old"))
+    }
+
+    // ── Pending rows (§7.4) ──────────────────────────────────────────────────
+
+    private fun op(
+        id: Long,
+        type: OpType = OpType.TX_BUY,
+        status: OpStatus = OpStatus.PENDING,
+        portfolioId: String = "p1",
+        payload: TxOpPayload = TxOpPayload(
+            assetId = "asset-1",
+            side = if (type == OpType.TX_BUY) "buy" else "sell",
+            quantity = 2.0,
+            price = 50.0,
+            executedAt = "2026-07-08T10:00:00Z",
+            assetSymbol = "AMD",
+            assetName = "Advanced Micro Devices",
+        ),
+        error: String? = null,
+    ) = SyncOpEntity(
+        id = id,
+        clientId = "client-$id",
+        opType = type.wire,
+        portfolioId = portfolioId,
+        payloadJson = json.encodeToString(TxOpPayload.serializer(), payload),
+        status = status.wire,
+        attemptCount = 0,
+        nextAttemptAtMs = 0L,
+        serverError = error,
+        serverResultJson = null,
+        accountKey = "u1",
+        createdAtMs = 1L,
+        updatedAtMs = 1L,
+    )
+
+    @Test
+    fun `decode maps statuses and skips other portfolios, non-tx and done ops`() {
+        val ops = listOf(
+            op(1, status = OpStatus.PENDING),
+            op(2, status = OpStatus.IN_FLIGHT),
+            op(3, status = OpStatus.NEEDS_ATTENTION, error = "Sell exceeds holding."),
+            op(4, status = OpStatus.DONE),
+            op(5, portfolioId = "OTHER"),
+            SyncOpEntity(
+                id = 6, clientId = "c6", opType = OpType.CASH_DEPOSIT.wire, portfolioId = "p1",
+                payloadJson = "{}", status = OpStatus.PENDING.wire, attemptCount = 0,
+                nextAttemptAtMs = 0, serverError = null, serverResultJson = null,
+                accountKey = "u1", createdAtMs = 1, updatedAtMs = 1,
+            ),
+        )
+
+        val rows = decodePendingTxRows(ops, json, portfolioId = "p1")
+
+        assertEquals(listOf(3L, 2L, 1L), rows.map { it.opId }) // newest first, no done/other/cash
+        assertEquals(PendingUiStatus.NEEDS_ATTENTION, rows[0].status)
+        assertEquals("Sell exceeds holding.", rows[0].serverError)
+        assertEquals(PendingUiStatus.SYNCING, rows[1].status)
+        assertEquals(PendingUiStatus.PENDING, rows[2].status)
+        assertEquals("AMD", rows[2].assetSymbol)
+        assertEquals(100.0, transactionNotional(rows[2].quantity, rows[2].price), 1e-9)
+    }
+
+    @Test
+    fun `pending rows honor the ledger display filters`() {
+        val rows = decodePendingTxRows(
+            listOf(op(1, OpType.TX_BUY), op(2, OpType.TX_SELL)),
+            json,
+            portfolioId = "p1",
+        )
+
+        assertEquals(listOf(2L), filterPendingTxRows(rows, TxSideFilter.SELL, null).map { it.opId })
+        assertEquals(listOf(2L, 1L), filterPendingTxRows(rows, TxSideFilter.ALL, "asset-1").map { it.opId })
+        assertTrue(filterPendingTxRows(rows, TxSideFilter.ALL, "nope").isEmpty())
+    }
+}

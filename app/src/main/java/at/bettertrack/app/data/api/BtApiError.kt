@@ -1,0 +1,106 @@
+package at.bettertrack.app.data.api
+
+import at.bettertrack.app.data.api.dto.ApiErrorEnvelope
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import okhttp3.ResponseBody
+import retrofit2.Response
+import java.io.IOException
+
+/**
+ * A typed BetterTrack API error, mapped from the platform envelope
+ * `{ error: { code, message, details? } }` (spec §6.13). This is the single
+ * error currency the whole app speaks — every later milestone builds on it.
+ *
+ * [httpStatus] `0` means a transport/network failure (no HTTP response).
+ */
+class BtApiError(
+    val httpStatus: Int,
+    val code: String,
+    /** Human-readable, safe to surface (never a raw stack/string). */
+    val userMessage: String,
+    val details: JsonElement? = null,
+) : Exception("HTTP $httpStatus [$code] $userMessage") {
+
+    val isNetwork: Boolean get() = httpStatus == 0
+    val isUnauthorized: Boolean get() = httpStatus == 401
+    val isForbidden: Boolean get() = httpStatus == 403
+
+    /**
+     * A refresh/token call that fails this way means the refresh token is
+     * genuinely dead (invalid/expired/revoked) ⇒ wipe + re-login. A network
+     * failure (httpStatus 0) or a 5xx must NOT log the user out.
+     */
+    val isAuthHardFailure: Boolean get() = httpStatus == 400 || httpStatus == 401
+
+    val isPasswordChangeRequired: Boolean get() = code == Codes.PASSWORD_CHANGE_REQUIRED
+    val isInsufficientScope: Boolean get() = code == Codes.INSUFFICIENT_SCOPE
+    val isAccountDisabled: Boolean
+        get() = httpStatus == 403 && (code == Codes.ACCOUNT_DISABLED || code == Codes.USER_DISABLED)
+
+    object Codes {
+        const val NETWORK = "NETWORK_ERROR"
+        const val UNKNOWN = "UNKNOWN"
+        const val VALIDATION_ERROR = "VALIDATION_ERROR"
+        const val INSUFFICIENT_SCOPE = "INSUFFICIENT_SCOPE"
+        const val PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
+        const val ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
+        const val USER_DISABLED = "USER_DISABLED"
+    }
+}
+
+/** Minimal success/failure result so callers never see raw exceptions. */
+sealed interface BtResult<out T> {
+    data class Ok<T>(val value: T) : BtResult<T>
+    data class Err(val error: BtApiError) : BtResult<Nothing>
+}
+
+/** Parse the platform error envelope out of a non-2xx response body. */
+fun parseApiError(json: Json, httpStatus: Int, errorBody: ResponseBody?): BtApiError {
+    val raw = try {
+        errorBody?.string()
+    } catch (_: Exception) {
+        null
+    }
+    if (!raw.isNullOrBlank()) {
+        try {
+            val env = json.decodeFromString(ApiErrorEnvelope.serializer(), raw)
+            return BtApiError(httpStatus, env.error.code, env.error.message, env.error.details)
+        } catch (_: Exception) {
+            // Not the expected envelope — fall through to a generic mapping.
+        }
+    }
+    return BtApiError(httpStatus, BtApiError.Codes.UNKNOWN, "Request failed (HTTP $httpStatus).")
+}
+
+/**
+ * Runs a suspend Retrofit call and maps it into a [BtResult], translating
+ * transport failures and error envelopes into a [BtApiError]. Used for every
+ * body-returning endpoint.
+ */
+suspend fun <T : Any> apiCall(json: Json, call: suspend () -> Response<T>): BtResult<T> =
+    try {
+        val resp = call()
+        if (resp.isSuccessful) {
+            val body = resp.body()
+            if (body != null) {
+                BtResult.Ok(body)
+            } else {
+                BtResult.Err(
+                    BtApiError(resp.code(), BtApiError.Codes.UNKNOWN, "Empty response body."),
+                )
+            }
+        } else {
+            BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
+        }
+    } catch (_: IOException) {
+        BtResult.Err(
+            BtApiError(
+                0,
+                BtApiError.Codes.NETWORK,
+                "No connection. Check your network and try again.",
+            ),
+        )
+    } catch (e: Exception) {
+        BtResult.Err(BtApiError(-1, BtApiError.Codes.UNKNOWN, e.message ?: "Unexpected error."))
+    }

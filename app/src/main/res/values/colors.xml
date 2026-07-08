@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand tokens mirrored from the Compose theme (spec §3.3) for XML use
+         (window background, launcher icon, splash). -->
+    <color name="bt_bg">#FF0B0E14</color>
+    <color name="bt_surface">#FF171717</color>
+    <color name="bt_border">#FF262626</color>
+    <color name="bt_gold">#FFF6B82E</color>
+    <!-- Launcher-icon tile color, sampled exactly from BT_AppIcon.png so the
+         foreground's full-bleed tile blends invisibly into the background layer. -->
+    <color name="bt_icon_bg">#FF111315</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

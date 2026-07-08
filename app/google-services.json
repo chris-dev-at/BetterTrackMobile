@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "129150556580",
+    "project_id": "bettertrackapp-c6996",
+    "storage_bucket": "bettertrackapp-c6996.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129150556580:android:a4b184a6f5ea4b3e130931",
+        "android_client_info": {
+          "package_name": "at.bettertrack.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxLQ5fRVAQg2m1lSzvEDYnOTPRE88G0N0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

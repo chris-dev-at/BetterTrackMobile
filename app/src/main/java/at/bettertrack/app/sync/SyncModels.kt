@@ -1,0 +1,181 @@
+package at.bettertrack.app.sync
+
+import kotlinx.serialization.Serializable
+
+/**
+ * Core models of the outbound sync queue (spec §7.2/§7.3). Everything in this
+ * file is pure Kotlin — no Android/Room dependencies — so the queue state
+ * machine is unit-testable with plain JUnit.
+ */
+
+/** The §7.2 offline-writable ledger-event set. */
+enum class OpType(val wire: String) {
+    TX_BUY("tx_buy"),
+    TX_SELL("tx_sell"),
+    CASH_DEPOSIT("cash_deposit"),
+    CASH_WITHDRAW("cash_withdraw"),
+    /** Atomic source-to-source transfer (real endpoint since Step 9). */
+    CASH_TRANSFER("cash_transfer"),
+    CUSTOM_ASSET_VALUE_POINT("custom_asset_value_point"),
+    ;
+
+    companion object {
+        fun fromWire(wire: String): OpType? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/** Queue lifecycle states (§7.3). */
+enum class OpStatus(val wire: String) {
+    /** Waiting its FIFO turn (or backing off after a retryable failure). */
+    PENDING("pending"),
+    /**
+     * A send attempt started and its outcome is UNKNOWN (crash mid-drain, lost
+     * response, 5xx). Never re-sent blindly — the next drain first reconciles
+     * against the server to prove whether it landed (exactly-once).
+     */
+    IN_FLIGHT("in_flight"),
+    /** Server rejected it (business 4xx) — keeps the server's reason, never blocks the queue. */
+    NEEDS_ATTENTION("needs_attention"),
+    /** Proven landed; kept briefly for the debug/pending UI, then pruned. */
+    DONE("done"),
+    ;
+
+    companion object {
+        fun fromWire(wire: String): OpStatus? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/** A queued operation (pure mirror of the Room row). */
+data class SyncOp(
+    /** Monotonic enqueue sequence — the FIFO order. */
+    val id: Long,
+    /** Client-generated UUID (§7.3): future idempotency key + reconcile marker. */
+    val clientId: String,
+    val type: OpType,
+    val portfolioId: String?,
+    val payloadJson: String,
+    val status: OpStatus,
+    val attemptCount: Int,
+    val nextAttemptAtMs: Long,
+    val serverError: String?,
+    val serverResultJson: String?,
+    val accountKey: String,
+    val createdAtMs: Long,
+    val updatedAtMs: Long,
+)
+
+// ── Op payloads (kotlinx-serialized into SyncOp.payloadJson) ─────────────────
+
+/** Buy/sell ledger event (§6.2). Field names mirror the API request contract. */
+@Serializable
+data class TxOpPayload(
+    val assetId: String,
+    /** "buy" | "sell" — must agree with the op's [OpType]. */
+    val side: String,
+    val quantity: Double,
+    val price: Double,
+    val fee: Double = 0.0,
+    /** ISO timestamp chosen at enqueue time. */
+    val executedAt: String,
+    val note: String? = null,
+    val payFromCash: Boolean? = null,
+    val addProceedsToCash: Boolean? = null,
+    // Display-only snapshot of the asset identity (Step 8 pending rows render
+    // instantly from the queue, §7.4). NEVER sent to the API — the executor
+    // maps payload → request field-by-field.
+    val assetSymbol: String? = null,
+    val assetName: String? = null,
+)
+
+/** Cash deposit / withdrawal (§6.3). */
+@Serializable
+data class CashOpPayload(
+    val amountEur: Double,
+    val executedAt: String? = null,
+    val note: String? = null,
+    /** Target source; only the synthetic main source exists until §6.3 ships. */
+    val sourceId: String? = null,
+)
+
+/** Cash transfer between sources — queued shape ready; platform endpoint missing (§6.3 gap). */
+@Serializable
+data class CashTransferOpPayload(
+    val fromSourceId: String,
+    val toSourceId: String,
+    val amountEur: Double,
+    val executedAt: String? = null,
+    val note: String? = null,
+)
+
+/** Custom-asset value point (§6.4): merged into the point set by date (idempotent). */
+@Serializable
+data class ValuePointOpPayload(
+    val customAssetId: String,
+    /** Calendar date `yyyy-MM-dd`. */
+    val date: String,
+    val value: Double,
+)
+
+// ── Drain outcomes ───────────────────────────────────────────────────────────
+
+/** Result of one queue-drain pass. */
+sealed interface DrainResult {
+    /** Nothing to drain (empty queue / no session / session rejected). */
+    data object Idle : DrainResult
+
+    /** Every open op resolved; [completed] ops proven landed this pass. */
+    data class Drained(val completed: Int) : DrainResult
+
+    /** Head op is backing off — retry no earlier than [atMs]. */
+    data class RetryAt(val atMs: Long) : DrainResult
+
+    /** Network unreachable — wait for connectivity to return. */
+    data object Offline : DrainResult
+}
+
+/** Outcome of executing one op against the API. */
+sealed interface ExecResult {
+    /** 2xx — provably applied. */
+    data class Success(val serverResultJson: String?) : ExecResult
+
+    /** Business 4xx — provably NOT applied; the server's human-readable reason. */
+    data class Rejected(val message: String) : ExecResult
+
+    /** 408/429 — provably not applied, worth retrying with backoff. */
+    data class RetryableNotApplied(val message: String) : ExecResult
+
+    /**
+     * Outcome unknown: [reachable] = true for a 5xx (server reached, effect
+     * unclear), false for a transport failure. The op stays in-flight and the
+     * next drain reconciles before any resend.
+     */
+    data class Ambiguous(val reachable: Boolean) : ExecResult
+
+    /** 401 after the token machinery gave up — drain stops, op stays pending (§7.3). */
+    data object AuthFailure : ExecResult
+
+    /** The platform has no endpoint for this op yet — parked as needs-attention. */
+    data class Unsupported(val message: String) : ExecResult
+}
+
+/** Outcome of asking the server whether an ambiguous op actually landed. */
+sealed interface LookupResult {
+    data class Found(val serverResultJson: String?) : LookupResult
+    data object NotFound : LookupResult
+    data object Unreachable : LookupResult
+}
+
+// ── Backoff ─────────────────────────────────────────────────────────────────
+
+/**
+ * Exponential backoff (§7.3): 10s · 20s · 40s · … capped at 30 minutes.
+ * Deliberately jitter-free — a single-user client has no thundering herd.
+ */
+fun backoffDelayMs(attemptCount: Int): Long {
+    if (attemptCount <= 0) return 0L
+    val exponent = (attemptCount - 1).coerceAtMost(12)
+    return (BACKOFF_BASE_MS shl exponent).coerceAtMost(BACKOFF_CAP_MS)
+}
+
+const val BACKOFF_BASE_MS = 10_000L
+const val BACKOFF_CAP_MS = 30L * 60_000L

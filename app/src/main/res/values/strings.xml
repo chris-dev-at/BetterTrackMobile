@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BetterTrack</string>
+
+    <!-- Shared component strings -->
+    <string name="bt_error_generic_title">Something went wrong</string>
+    <string name="bt_error_generic_message">Please try again in a moment.</string>
+    <string name="bt_action_retry">Try again</string>
+    <string name="bt_action_back">Back</string>
+    <string name="bt_action_cancel">Cancel</string>
+    <string name="bt_edition_app">App</string>
+
+    <!-- Login (spec §4) -->
+    <string name="bt_login_tagline">BetterTrack — finances under your control</string>
+    <string name="bt_login_button">Login with BetterTrack</string>
+    <string name="bt_login_connecting">Connecting…</string>
+    <string name="bt_login_need_account">Need an account?</string>
+    <string name="bt_login_forgot_password">Forgot password?</string>
+    <string name="bt_login_error_generic">Login failed. Please try again.</string>
+    <string name="bt_login_error_network">No connection. Check your network and try again.</string>
+    <string name="bt_login_error_state">Login could not be verified. Please try again.</string>
+    <string name="bt_login_error_exchange">We couldn\'t complete sign-in. Please try again.</string>
+    <string name="bt_login_error_disabled">This account has been disabled. Contact BetterTrack support.</string>
+    <string name="bt_login_error_admin">BetterTrack App is for personal accounts only.</string>
+    <string name="bt_login_error_denied">Sign-in was cancelled. Please try again.</string>
+
+    <!-- Forced password change (spec §4 / §6.13) -->
+    <string name="bt_pwchange_title">Password change required</string>
+    <string name="bt_pwchange_message">For security, finish changing your password in BetterTrack on the web, then come back and sign in again.</string>
+    <string name="bt_pwchange_open_web">Finish on the web</string>
+
+    <!-- Account / logout (minimal Step-4 surface; full settings in Step 18) -->
+    <string name="bt_action_logout">Log out</string>
+    <string name="bt_settings_account_section">Account</string>
+    <string name="bt_settings_username">Username</string>
+    <string name="bt_settings_email">Email</string>
+    <string name="bt_settings_logout_confirm_title">Log out?</string>
+    <string name="bt_settings_logout_confirm_message">This signs you out and removes this account\'s data from the device.</string>
+
+    <!-- Shell -->
+    <string name="bt_tab_portfolio">Portfolio</string>
+    <string name="bt_tab_assets">Assets</string>
+    <string name="bt_tab_social">Social</string>
+    <string name="bt_tab_workboard">Workboard</string>
+    <string name="bt_top_notifications">Notifications</string>
+    <string name="bt_top_settings">Settings</string>
+    <string name="bt_offline_banner">Offline — showing data as of %1$s</string>
+    <string name="bt_offline_banner_no_data">Offline</string>
+
+    <!-- Tab placeholder states -->
+    <string name="bt_tab_portfolio_empty_title">Your portfolio lives here</string>
+    <string name="bt_tab_portfolio_empty_message">Your holdings, cash and net worth appear here.</string>
+    <string name="bt_tab_assets_empty_title">Watch the market</string>
+    <string name="bt_tab_assets_empty_message">Search assets and build watchlists here.</string>
+    <string name="bt_tab_social_empty_title">Invest together</string>
+    <string name="bt_tab_social_empty_message">Friends, shared portfolios and chat live here.</string>
+    <string name="bt_tab_workboard_empty_title">Build ideas</string>
+    <string name="bt_tab_workboard_empty_message">Compose conglomerates and plan budgets here.</string>
+
+    <!-- Placeholder destinations -->
+    <string name="bt_placeholder_message">Placeholder — this screen arrives in a later step.</string>
+    <string name="bt_dest_login">Login</string>
+    <string name="bt_dest_app_lock">App lock</string>
+    <string name="bt_dest_holding_detail">Holding</string>
+    <string name="bt_dest_transactions">Transactions</string>
+    <string name="bt_dest_transaction_form">New transaction</string>
+    <string name="bt_dest_cash">Cash</string>
+    <string name="bt_dest_custom_assets">Custom assets</string>
+    <string name="bt_dest_asset_page">Asset</string>
+    <string name="bt_dest_search">Search</string>
+    <string name="bt_dest_watchlists">Watchlists</string>
+    <string name="bt_dest_conglomerates">Conglomerates</string>
+    <string name="bt_dest_conglomerate_builder">Conglomerate builder</string>
+    <string name="bt_dest_conglomerate_detail">Conglomerate</string>
+    <string name="bt_dest_chats">Chats</string>
+    <string name="bt_dest_chat_thread">Chat</string>
+    <string name="bt_dest_notifications">Notifications</string>
+    <string name="bt_dest_settings">Settings</string>
+    <string name="bt_dest_settings_account">Account</string>
+    <string name="bt_dest_settings_security">Security</string>
+    <string name="bt_dest_settings_notifications">Notification settings</string>
+    <string name="bt_dest_settings_language">Language</string>
+    <string name="bt_dest_settings_about">About</string>
+    <string name="bt_dest_pending_sync">Pending sync</string>
+
+    <!-- Step 6 — Portfolio overview (spec §6.1) -->
+    <string name="bt_overview_net_worth">Net worth</string>
+    <string name="bt_overview_today">today</string>
+    <string name="bt_overview_holdings_value">Holdings</string>
+    <string name="bt_overview_cash">Cash</string>
+    <string name="bt_overview_invested">Invested</string>
+    <string name="bt_overview_value_over_time">Value over time</string>
+    <string name="bt_overview_holdings_section">Holdings</string>
+    <string name="bt_overview_allocation_section">Allocation</string>
+    <string name="bt_overview_alloc_by_asset">By asset</string>
+    <string name="bt_overview_alloc_by_category">By category</string>
+    <string name="bt_overview_alloc_other">Other</string>
+    <string name="bt_overview_alloc_cash">Cash</string>
+    <string name="bt_overview_no_holdings_title">No holdings yet</string>
+    <string name="bt_overview_no_holdings_message">Record your first buy and this portfolio\u2019s value, performance and allocation appear here.</string>
+    <string name="bt_overview_no_portfolio_title">Create your first portfolio</string>
+    <string name="bt_overview_no_portfolio_message">A portfolio tracks your holdings, cash and performance.</string>
+    <string name="bt_overview_create_portfolio">Create portfolio</string>
+    <string name="bt_overview_chart_empty">Not enough history to draw yet</string>
+    <string name="bt_overview_chart_cd">Portfolio value over time chart</string>
+    <string name="bt_overview_graph_range_cd">Show %1$s history</string>
+    <string name="bt_range_1m">1M</string>
+    <string name="bt_range_6m">6M</string>
+    <string name="bt_range_1y">1Y</string>
+    <string name="bt_range_max">Max</string>
+    <string name="bt_holding_weight">%1$s\u00a0%%</string>
+
+    <!-- Step 6 — Portfolio switcher (spec §6.1) -->
+    <string name="bt_switcher_title">Portfolios</string>
+    <string name="bt_switcher_open_cd">Switch portfolio</string>
+    <string name="bt_switcher_new">New portfolio</string>
+    <string name="bt_switcher_default_badge">Default</string>
+    <string name="bt_switcher_archived_section">Archived</string>
+    <string name="bt_switcher_selected_cd">Selected portfolio</string>
+    <string name="bt_switcher_actions_cd">Portfolio actions</string>
+    <string name="bt_switcher_rename">Rename</string>
+    <string name="bt_switcher_archive">Archive</string>
+    <string name="bt_switcher_restore">Restore</string>
+    <string name="bt_switcher_create_title">New portfolio</string>
+    <string name="bt_switcher_rename_title">Rename portfolio</string>
+    <string name="bt_switcher_name_label">Name</string>
+    <string name="bt_switcher_create_action">Create</string>
+    <string name="bt_switcher_rename_action">Save</string>
+    <string name="bt_switcher_archive_title">Archive portfolio?</string>
+    <string name="bt_switcher_archive_message">\u201c%1$s\u201d moves to Archived. You can restore it any time.</string>
+    <string name="bt_switcher_archive_action">Archive</string>
+    <string name="bt_switcher_requires_connection">Requires a connection \u2014 you\u2019re offline</string>
+    <string name="bt_switcher_value_pending">\u2014</string>
+
+    <!-- Step 7 — Transactions (spec §6.2 read) -->
+    <string name="bt_tx_title">Transactions</string>
+    <string name="bt_tx_filter_all">All</string>
+    <string name="bt_tx_filter_buys">Buys</string>
+    <string name="bt_tx_filter_sells">Sells</string>
+    <string name="bt_tx_filter_all_assets">All assets</string>
+    <string name="bt_tx_filter_asset_cd">Filter by asset</string>
+    <string name="bt_tx_filter_asset_title">Filter by asset</string>
+    <string name="bt_tx_side_buy">Buy</string>
+    <string name="bt_tx_side_sell">Sell</string>
+    <string name="bt_tx_fee">Fee %1$s</string>
+    <string name="bt_tx_empty_title">No transactions yet</string>
+    <string name="bt_tx_empty_message">Buys and sells you record appear here.</string>
+    <string name="bt_tx_no_matches_title">No matching transactions</string>
+    <string name="bt_tx_no_matches_message">Try clearing the filters.</string>
+    <string name="bt_tx_clear_filters">Clear filters</string>
+    <string name="bt_tx_load_more">Load older transactions</string>
+    <string name="bt_tx_count_shown">%1$d transactions</string>
+
+    <!-- Step 7 — Holding detail (spec §6.1/§6.2) -->
+    <string name="bt_holding_position_value">Position value</string>
+    <string name="bt_holding_amount">Amount</string>
+    <string name="bt_holding_avg_cost">Avg cost</string>
+    <string name="bt_holding_pl">Unrealized P/L</string>
+    <string name="bt_holding_day">Today</string>
+    <string name="bt_holding_transactions_section">Transactions</string>
+    <string name="bt_holding_no_tx">No transactions for this holding yet.</string>
+    <string name="bt_holding_asset_page_link">Asset page</string>
+    <string name="bt_holding_asset_page_soon">Coming soon</string>
+    <string name="bt_holding_not_found_title">Holding not found</string>
+    <string name="bt_holding_not_found_message">This position is no longer in the portfolio.</string>
+
+    <!-- Step 8 — Transaction form (spec §6.2) -->
+    <string name="bt_txform_title_new">New transaction</string>
+    <string name="bt_txform_title_edit">Edit transaction</string>
+    <string name="bt_txform_title_edit_queued">Edit queued entry</string>
+    <string name="bt_txform_asset">Asset</string>
+    <string name="bt_txform_asset_choose">Choose asset</string>
+    <string name="bt_txform_asset_locked_cd">Asset can\'t be changed on an edit</string>
+    <string name="bt_txform_asset_held">%1$s held</string>
+    <string name="bt_txform_asset_sheet_title">Choose asset</string>
+    <string name="bt_txform_asset_sheet_empty">No held assets yet. Buying new assets arrives with Search.</string>
+    <string name="bt_txform_asset_other_section">Held in other portfolios</string>
+    <string name="bt_txform_asset_search_soon">Searching all assets arrives with Search.</string>
+    <string name="bt_txform_side_cd">%1$s</string>
+    <string name="bt_txform_side_selected_cd">%1$s, selected</string>
+    <string name="bt_txform_quantity">Quantity</string>
+    <string name="bt_txform_price">Price</string>
+    <string name="bt_txform_fee">Fee</string>
+    <string name="bt_txform_date">Date</string>
+    <string name="bt_txform_date_cd">Pick a date</string>
+    <string name="bt_txform_date_ok">OK</string>
+    <string name="bt_txform_note">Note (optional)</string>
+    <string name="bt_txform_pay_from_cash">Pay from cash</string>
+    <string name="bt_txform_add_proceeds">Add proceeds to cash</string>
+    <string name="bt_txform_cash_after">Cash after: %1$s</string>
+    <string name="bt_txform_cash_balance">Cash balance: %1$s</string>
+    <string name="bt_txform_cash_off_hint">Cash stays untouched</string>
+    <string name="bt_txform_cash_unknown">Balance updates on next sync</string>
+    <string name="bt_txform_insufficient_cash">Not enough cash — %1$s available</string>
+    <string name="bt_txform_oversell_warning">More than you hold (%1$s %2$s) — BetterTrack validates on sync</string>
+    <string name="bt_txform_total">Total</string>
+    <string name="bt_txform_record_buy">Record buy</string>
+    <string name="bt_txform_record_sell">Record sell</string>
+    <string name="bt_txform_save">Save changes</string>
+    <string name="bt_txform_rejected_title">Rejected by BetterTrack</string>
+    <string name="bt_txform_rejected_hint">Fix the values and save — it retries as the same entry.</string>
+    <string name="bt_txform_synced_offline_title">Requires a connection</string>
+    <string name="bt_txform_synced_offline_message">Editing or deleting an already-synced transaction works online only.</string>
+    <string name="bt_txform_delete_cd">Delete transaction</string>
+    <string name="bt_txform_discard_cd">Discard queued entry</string>
+    <string name="bt_txform_delete_title">Delete transaction?</string>
+    <string name="bt_txform_delete_message">This removes the transaction from BetterTrack. Holdings and cash are recalculated.</string>
+    <string name="bt_txform_delete_action">Delete</string>
+    <string name="bt_txform_discard_title">Discard queued entry?</string>
+    <string name="bt_txform_discard_message">This entry hasn\'t reached BetterTrack yet. Discarding removes it from the sync queue.</string>
+    <string name="bt_txform_discard_action">Discard</string>
+    <string name="bt_overview_fab_cd">Record a transaction</string>
+    <string name="bt_holding_fab_cd">Record a transaction for this asset</string>
+
+    <!-- Step 8 — Pending sync (spec §7.4) -->
+    <string name="bt_pending_badge">Pending</string>
+    <string name="bt_pending_badge_syncing">Syncing…</string>
+    <string name="bt_pending_badge_attention">Needs attention</string>
+    <string name="bt_pending_badge_done">Synced</string>
+    <string name="bt_pending_section">Waiting to sync</string>
+    <string name="bt_pending_synced_section">Synced</string>
+    <string name="bt_pending_title">Pending sync</string>
+    <string name="bt_pending_summary">%1$d to sync</string>
+    <string name="bt_pending_sync_now">Sync now</string>
+    <string name="bt_pending_empty_title">All changes synced</string>
+    <string name="bt_pending_empty_message">Everything you recorded has reached BetterTrack.</string>
+    <string name="bt_pending_needs_attention_section">Needs attention</string>
+    <string name="bt_pending_done_section">Recently synced</string>
+    <string name="bt_pending_added_at">Added %1$s</string>
+    <string name="bt_pending_retry">Retry</string>
+    <string name="bt_pending_edit">Edit</string>
+    <string name="bt_pending_edit_retry">Edit &amp; retry</string>
+    <string name="bt_pending_discard">Discard</string>
+    <string name="bt_pending_offline_hint">Waiting for a connection — syncs automatically.</string>
+    <string name="bt_pending_op_cash_deposit">Cash deposit</string>
+    <string name="bt_pending_op_cash_withdraw">Cash withdrawal</string>
+    <string name="bt_pending_op_cash_transfer">Cash transfer</string>
+    <string name="bt_pending_op_value_point">Custom-asset value update</string>
+    <string name="bt_offline_banner_tap_cd">Open pending sync</string>
+    <plurals name="bt_pending_strip_waiting">
+        <item quantity="one">%1$d change waiting to sync</item>
+        <item quantity="other">%1$d changes waiting to sync</item>
+    </plurals>
+    <plurals name="bt_pending_strip_attention">
+        <item quantity="one">%1$d change needs attention</item>
+        <item quantity="other">%1$d changes need attention</item>
+    </plurals>
+
+    <!-- Step 9 — Cash & sources (spec §6.3) -->
+    <string name="bt_cash_title">Cash</string>
+    <string name="bt_cash_total">Total cash</string>
+    <string name="bt_cash_deposit">Deposit</string>
+    <string name="bt_cash_withdraw">Withdraw</string>
+    <string name="bt_cash_transfer">Transfer</string>
+    <string name="bt_cash_deposit_title">Deposit cash</string>
+    <string name="bt_cash_withdraw_title">Withdraw cash</string>
+    <string name="bt_cash_transfer_title">Transfer between sources</string>
+    <string name="bt_cash_deposit_action">Record deposit</string>
+    <string name="bt_cash_withdraw_action">Record withdrawal</string>
+    <string name="bt_cash_transfer_action">Record transfer</string>
+    <string name="bt_cash_amount">Amount</string>
+    <string name="bt_cash_source_picker">Source</string>
+    <string name="bt_cash_transfer_from">From</string>
+    <string name="bt_cash_transfer_to">To</string>
+    <string name="bt_cash_transfer_same_source">Pick two different sources.</string>
+    <string name="bt_cash_balance_after">%1$s after: %2$s</string>
+    <string name="bt_cash_sources_section">Sources</string>
+    <string name="bt_cash_new_source">New source</string>
+    <string name="bt_cash_new_source_title">New cash source</string>
+    <string name="bt_cash_rename_source_title">Edit cash source</string>
+    <string name="bt_cash_main_badge">Main</string>
+    <string name="bt_cash_source_actions_cd">Source actions</string>
+    <string name="bt_cash_archive_title">Archive source?</string>
+    <string name="bt_cash_archive_message">“%1$s” moves to Archived. Its balance must be zero.</string>
+    <string name="bt_cash_movements_section">Movements</string>
+    <string name="bt_cash_movements_for">Movements · %1$s</string>
+    <string name="bt_cash_empty_title">No cash movements yet</string>
+    <string name="bt_cash_empty_message">Deposits, withdrawals and transfers appear here.</string>
+    <string name="bt_cash_type_bank">Bank</string>
+    <string name="bt_cash_type_retirement">Retirement</string>
+    <string name="bt_cash_type_cash">Cash</string>
+    <string name="bt_cash_type_custom">Custom</string>
+    <string name="bt_cash_kind_deposit">Deposit</string>
+    <string name="bt_cash_kind_withdrawal">Withdrawal</string>
+    <string name="bt_cash_kind_buy">Buy (paid from cash)</string>
+    <string name="bt_cash_kind_sell">Sell proceeds</string>
+    <string name="bt_cash_kind_transfer_out">Transfer to %1$s</string>
+    <string name="bt_cash_kind_transfer_in">Transfer from %1$s</string>
+    <string name="bt_cash_pending_transfer">Transfer %1$s → %2$s</string>
+
+    <!-- Step 10 — Custom assets (spec §6.4) -->
+    <string name="bt_custom_title">Custom assets</string>
+    <string name="bt_custom_manage">Manage custom assets</string>
+    <string name="bt_custom_create">Create custom asset</string>
+    <string name="bt_custom_create_title">New custom asset</string>
+    <string name="bt_custom_edit">Edit asset</string>
+    <string name="bt_custom_edit_title">Edit custom asset</string>
+    <string name="bt_custom_delete">Delete asset</string>
+    <string name="bt_custom_delete_title">Delete custom asset?</string>
+    <string name="bt_custom_delete_message">This removes the asset and its value history from BetterTrack.</string>
+    <string name="bt_custom_category">Category</string>
+    <string name="bt_custom_empty_title">No custom assets yet</string>
+    <string name="bt_custom_empty_message">Track things like a watch collection, real estate or a private loan.</string>
+    <string name="bt_custom_current_value">Current value</string>
+    <string name="bt_custom_value_history">Value over time</string>
+    <string name="bt_custom_chart_empty">Record two values to draw the history</string>
+    <string name="bt_custom_update_now">Update value now</string>
+    <string name="bt_custom_update_title">Update value</string>
+    <string name="bt_custom_update_hint">Records today’s value. It replaces any value already set for today.</string>
+    <string name="bt_custom_new_value">New value</string>
+    <string name="bt_custom_record_value">Record value</string>
+    <string name="bt_custom_points_section">Value history</string>
+    <string name="bt_custom_no_points">No values recorded yet.</string>
+    <string name="bt_custom_delete_point">Delete value</string>
+    <string name="bt_custom_delete_point_title">Delete this value?</string>
+    <string name="bt_custom_delete_point_message">Removes this dated value from the history.</string>
+    <string name="bt_custom_cat_real_estate">Real estate</string>
+    <string name="bt_custom_cat_vehicle">Vehicle</string>
+    <string name="bt_custom_cat_collectible">Collectible</string>
+    <string name="bt_custom_cat_cash">Cash</string>
+    <string name="bt_custom_cat_unlisted">Unlisted stock</string>
+    <string name="bt_custom_cat_other">Other</string>
+</resources>
