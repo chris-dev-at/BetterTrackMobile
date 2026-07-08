@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Link
@@ -216,6 +218,8 @@ fun SocialScreen(
     onOpenSharedPortfolio: (String) -> Unit,
     onOpenSharedWatchlist: (userId: String, ownerName: String) -> Unit,
     onOpenSharedConglomerate: (String) -> Unit,
+    onOpenChats: () -> Unit,
+    onOpenChatWith: (friendUserId: String, username: String) -> Unit,
 ) {
     val vm: SocialViewModel = viewModel {
         SocialViewModel(AppGraph.socialRepository, AppGraph.connectivityMonitor)
@@ -223,6 +227,7 @@ fun SocialScreen(
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
+    val chatUnread by AppGraph.chatRepository.totalUnread.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var section by remember { mutableStateOf(SocialSection.Friends) }
     var showAdd by remember { mutableStateOf(false) }
@@ -235,6 +240,7 @@ fun SocialScreen(
     val refreshState = rememberPullToRefreshState()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
+            MessagesHeader(unread = chatUnread, onOpenChats = onOpenChats)
             SegmentedTabs(
                 selected = section,
                 onSelect = { section = it },
@@ -272,7 +278,7 @@ fun SocialScreen(
                         modifier = Modifier.fillMaxSize().wrapCenter(),
                     )
                     else -> when (section) {
-                        SocialSection.Friends -> FriendsSection(ui, vm, onAdd = { showAdd = true })
+                        SocialSection.Friends -> FriendsSection(ui, vm, onAdd = { showAdd = true }, onChatWith = onOpenChatWith)
                         SocialSection.SharedWithMe -> SharedWithMeSection(
                             ui.sharedWithMe,
                             onOpenSharedPortfolio,
@@ -372,7 +378,44 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
 // ── Friends section ──────────────────────────────────────────────────────────
 
 @Composable
-private fun FriendsSection(ui: SocialUiState, vm: SocialViewModel, onAdd: () -> Unit) {
+private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
+    val bt = BtTheme.colors
+    Surface(
+        onClick = onOpenChats,
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        shape = BtShapes.card,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Text("Messages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, modifier = Modifier.weight(1f))
+            if (unread > 0) {
+                Surface(shape = BtShapes.pill, color = bt.gold) {
+                    Text(
+                        if (unread > 99) "99+" else unread.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = bt.onGold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun FriendsSection(ui: SocialUiState, vm: SocialViewModel, onAdd: () -> Unit, onChatWith: (String, String) -> Unit) {
     val bt = BtTheme.colors
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -411,7 +454,9 @@ private fun FriendsSection(ui: SocialUiState, vm: SocialViewModel, onAdd: () -> 
                 )
             }
         } else {
-            items(ui.friends, key = { "f-" + it.userId }) { f -> FriendRow(f, onUnfriend = { vm.unfriend(f) }) }
+            items(ui.friends, key = { "f-" + it.userId }) { f ->
+                FriendRow(f, onUnfriend = { vm.unfriend(f) }, onChat = { onChatWith(f.userId, f.username) })
+            }
         }
     }
 }
@@ -430,7 +475,7 @@ private fun SectionHeader(title: String, count: Int) {
 }
 
 @Composable
-private fun FriendRow(f: Friend, onUnfriend: () -> Unit) {
+private fun FriendRow(f: Friend, onUnfriend: () -> Unit, onChat: () -> Unit) {
     val bt = BtTheme.colors
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
@@ -450,6 +495,9 @@ private fun FriendRow(f: Friend, onUnfriend: () -> Unit) {
                     }
                 }
                 Text("Friends since ${f.since.take(10)}", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            }
+            IconButton(onClick = onChat) {
+                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Message", tint = bt.textSecondary)
             }
             Box {
                 IconButton(onClick = { menu = true }) {

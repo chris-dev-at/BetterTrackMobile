@@ -15,8 +15,11 @@ import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
+import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.DefaultSocialRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.StubChatGateway
+import at.bettertrack.app.data.repo.StubChatRepository
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.update.UpdateChecker
@@ -179,6 +182,10 @@ object AppGraph {
 
     val socialRepository: SocialRepository by lazy {
         DefaultSocialRepository(api = btApi, json = json, webOrigin = BuildConfig.WEB_ORIGIN)
+    }
+
+    val chatRepository: ChatRepository by lazy {
+        StubChatRepository(context = appContext, gateway = StubChatGateway())
     }
 
     /** Dev update notifier (Step V) — its own bare client (no auth, GitHub CDN). */

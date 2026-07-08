@@ -100,6 +100,8 @@ import at.bettertrack.app.ui.sync.PendingSyncScreen
 import at.bettertrack.app.ui.screens.AssetsTabScreen
 import at.bettertrack.app.ui.screens.PlaceholderScreen
 import at.bettertrack.app.ui.screens.WorkboardTabScreen
+import at.bettertrack.app.ui.chat.ChatListScreen
+import at.bettertrack.app.ui.chat.ChatThreadScreen
 import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
 import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
@@ -319,6 +321,10 @@ private fun BtNavHost(navController: NavHostController) {
                     navController.navigate(SharedWatchlistViewRoute(userId, ownerName))
                 },
                 onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
+                onOpenChats = { navController.navigate(ChatListRoute) },
+                onOpenChatWith = { friendUserId, username ->
+                    navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
+                },
             )
         }
         composable<WorkboardTabRoute> {
@@ -474,8 +480,26 @@ private fun BtNavHost(navController: NavHostController) {
             val route = entry.toRoute<SharedConglomerateViewRoute>()
             SharedConglomerateViewScreen(conglomerateId = route.conglomerateId, onBack = back)
         }
-        composable<ChatListRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_chats), back) }
-        composable<ChatThreadRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_chat_thread), back) }
+        composable<ChatListRoute> {
+            ChatListScreen(
+                onBack = back,
+                onOpenConversation = { id, username ->
+                    navController.navigate(ChatThreadRoute(conversationId = id, friendUsername = username))
+                },
+                onStartWithFriend = { friendUserId, username ->
+                    navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
+                },
+            )
+        }
+        composable<ChatThreadRoute> { entry ->
+            val route = entry.toRoute<ChatThreadRoute>()
+            ChatThreadScreen(
+                conversationId = route.conversationId,
+                friendUserId = route.friendUserId,
+                friendUsername = route.friendUsername,
+                onBack = back,
+            )
+        }
         composable<NotificationsInboxRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_notifications), back) }
 
         // Settings — minimal Step-4 account + logout surface; grows in Step 18.

@@ -67,8 +67,16 @@ import kotlinx.serialization.Serializable
 @Serializable data class SharedPortfolioViewRoute(val portfolioId: String)
 @Serializable data class SharedWatchlistViewRoute(val userId: String, val ownerName: String)
 @Serializable data class SharedConglomerateViewRoute(val conglomerateId: String)
-@Serializable data object ChatListRoute                                     // TODO(step 15)
-@Serializable data class ChatThreadRoute(val conversationId: String)        // TODO(step 15)
+@Serializable data object ChatListRoute                                     // Step 15
+/**
+ * A 1:1 thread (Step 15, §6.10). Either [conversationId] (open existing) or
+ * [friendUserId]+[friendUsername] (open-or-create with a friend) is set.
+ */
+@Serializable data class ChatThreadRoute(
+    val conversationId: String? = null,
+    val friendUserId: String? = null,
+    val friendUsername: String = "",
+)
 @Serializable data object NotificationsInboxRoute                           // TODO(step 16)
 
 // ── Settings ───────────────────────────────────────────────────────────────
