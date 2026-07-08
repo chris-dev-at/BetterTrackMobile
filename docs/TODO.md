@@ -161,3 +161,28 @@ Full settings: **Account** (username/email display, change password, **delete ac
 
 Full **German localization** audit (every string externalized, EN + DE complete, locale-correct money/date formats), empty/error/loading sweep over every screen, accessibility pass (TalkBack labels, contrast, touch targets), reduced-motion audit, performance sanity (cold start, list scrolling), ProGuard/R8 release build, signing config placeholder, versioning, and a Play-listing asset checklist (icon, screenshots list, description draft) for the user.
 **Done when:** release build installs and runs clean in both languages; TODO.md fully checked; a final summary report lists anything still stubbed for the user to resolve.
+
+### [ ] Step 20 — Play Store release readiness (the publishing gate)
+
+*Added by the platform coordinator (Chief of Development on the main-repo side), 2026-07-08 — everything Google Play requires before the app can be accepted for production. Split into **app-side** (this repo) and **platform-side** (main api/web — tracked in `PLATFORM_ASKS.md`, the coordinator drives these through the factory). Requirements verified against Play Console policy as of July 2026; re-check before submitting, Play tightens these yearly.*
+
+**App-side (this repo):**
+- **Target API level** — new submissions must target **API 35 (Android 15)** minimum (Play policy since Aug 2025). We currently target SDK 36, which satisfies it; keep current with Play's rolling target-API policy and re-verify at build time.
+- **Release artifact** — signed **Android App Bundle (.aab)**, not APK; enroll in **Play App Signing**; real upload keystore + signing config (replace the Step 19 placeholder); R8/minify + resource shrink on; version code/name bumped.
+- **Permissions audit** — ship only what's used: `INTERNET`, `POST_NOTIFICATIONS` (Android 13+ runtime, asked in context), biometric (app-lock), FCM. **No location/contacts/SMS/restricted permissions** — this keeps the Data Safety form small and avoids the sensitive-permissions declaration + video review. Remove anything unused; declare foreground-service types only if actually used (the sync path is WorkManager background work, so likely none).
+- **Account deletion — in-app path** — the Step 18 type-to-confirm delete flow must call the **live** platform deletion endpoint (see platform-side). Play requires in-app deletion when an app has accounts.
+- **Store listing assets (EN + DE)** — 512×512 icon, 1024×500 feature graphic, ≥2 phone screenshots, short + full description, category **Finance**, contact email, and the **privacy-policy URL** (below).
+- **In-app declarations wiring** — nothing that contradicts the Data Safety form (e.g. don't collect data the form doesn't declare); crash/analytics SDKs (if Sentry etc. is ever added) must be declared.
+
+**Platform-side (main api/web — coordinator's factory work, mirrored in `PLATFORM_ASKS.md`):**
+- **Self-service account deletion — BOTH in-app *and* a public web URL** — Play mandates account deletion be reachable in-app **and** via a web resource, and that it deletes the associated user data. Needs: a bearer-callable delete-account endpoint (for the app) **and** a web-facing deletion page/flow on the site. *(This is the single hardest publishing blocker — schedule it deliberately.)*
+- **Privacy policy page** — a stable public URL (e.g. `https://bettertrack.at/privacy`) describing data collected, use, sharing, retention, and the deletion path. Required to complete Data Safety and shown in the listing.
+- Bearer identity + the rest of the built-but-stubbed Settings/Security/Notifications endpoints and scopes (see `PLATFORM_ASKS.md`) so Steps 16 & 18 go fully live before submission.
+
+**Owner / account actions (not code — flag to Christian):**
+- **Closed-testing gate** — if the Play Console account is a **personal** account created **after 2023-11-13**, production access requires a **closed test with ≥12 testers opted-in continuously for 14 days** (Google reduced this from 20 to 12 in 2026). This is a hard time-gate — stand up the closed track and recruit testers **early**, in parallel with Step 19, not after. Org accounts and pre-2023-11-13 personal accounts are exempt.
+- **Developer identity verification** complete on the Play Console (identity/address; D-U-N-S if an organization account).
+- **Content rating** — complete the IARC questionnaire (finance/utility, no objectionable content → expected "Everyone").
+- **App content declarations** — Data Safety form (declare account data, financial info = portfolio holdings/values, device/FCM push token, encryption-in-transit, deletion available — must match the privacy policy), **Financial features** declaration (portfolio tracker that does **not** execute trades or move money → declare accordingly, no money-transmission license implied), Ads = none, target audience = adults (not child-directed).
+
+**Done when:** a signed `.aab` is uploaded to a closed-testing track; Data Safety + content rating + all app-content declarations are complete and consistent with the published privacy policy; in-app **and** web account deletion both work against live endpoints; the 12-tester / 14-day closed test is running or complete; and a Play-Console release checklist (each item → green) is captured in this repo for Christian's final submit.
