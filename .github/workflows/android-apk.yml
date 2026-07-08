@@ -1,0 +1,103 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Overlapping pushes: keep only the newest run, cancel superseded ones.
+concurrency:
+  group: apk-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Installs cmdline-tools and exports ANDROID_HOME / ANDROID_SDK_ROOT.
+      # local.properties is gitignored (absent here), so Gradle resolves the
+      # SDK location from these env vars instead.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Accept all SDK licenses so AGP 9 can auto-download the components it
+      # needs (platform 37 + matching build-tools). Prefetching platform-37 is
+      # a best-effort speed-up; AGP downloads whatever is still missing.
+      - name: Accept licenses and prefetch SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37" >/dev/null 2>&1 || true
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          ls -l dist
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterTrackApp-debug-${{ github.run_number }}
+          path: dist/BetterTrackApp-debug-${{ github.run_number }}.apk
+          if-no-files-found: error
+
+      # Rolling prerelease on tag `latest-debug`. Delete-and-recreate guarantees
+      # exactly ONE apk asset (named per run number) is current at any time.
+      - name: Publish rolling prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          DATE="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          NOTES="$(printf '%s\n' \
+            "Rolling debug build produced by CI (run #${{ github.run_number }})." \
+            "" \
+            "Commit: ${SHORT_SHA}" \
+            "Built:  ${DATE}" \
+            "" \
+            "Debug build signed with a CI keystore — to install over a copy installed from Android Studio, uninstall that first. Points at production BetterTrack.")"
+
+          # Remove the previous release + its tag so no stale assets accumulate.
+          gh release delete latest-debug --yes --cleanup-tag || true
+
+          # Recreate the rolling prerelease at the current commit. Retry to
+          # absorb the brief tag-deletion propagation window.
+          ok=false
+          for i in 1 2 3 4 5; do
+            if gh release create latest-debug "$APK" \
+                 --prerelease \
+                 --title "BetterTrack App — latest debug build" \
+                 --notes "$NOTES" \
+                 --target "$GITHUB_SHA"; then
+              ok=true
+              break
+            fi
+            echo "release create attempt $i failed; retrying in 5s..."
+            sleep 5
+          done
+          if [ "$ok" != "true" ]; then
+            echo "Failed to publish rolling prerelease after 5 attempts." >&2
+            exit 1
+          fi
+          echo "Published latest-debug with asset: $(basename "$APK")"
