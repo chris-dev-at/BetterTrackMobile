@@ -22,7 +22,7 @@ The owner is **Christian** (`chris-dev-at`, chrisiclemi@gmail.com). His mandate,
 
 - **Every** report, finding, warning, or question goes in the **user-facing chat text**. Christian does not read tool status lines, subagent prompts/results, or logs — anything said only there is unsaid. When a subagent finishes, YOU summarize the outcome in chat.
 - **Never** add Co-Authored-By or any AI attribution to git commits, code, or docs. (Commits, if ever requested, are authored as Christian Wiesinger <chrisiclemi@gmail.com>.)
-- **No `git init` / commits / pushes unless Christian asks.** The project is deliberately not a git repo so far.
+- **Git (policy changed 2026-07-08 ~02:45, owner order)**: the project IS now a git repo → private GitHub remote `origin` = `chris-dev-at/BetterTrackMobile`. **Commit + push after every completed step**: `git add -A && git commit -m "Step N: <title> — built and device-verified" && git push` — only from a compiling tree; plus an honest "checkpoint" commit at the end of any work session. Identity is repo-local-configured (Christian Wiesinger <chrisiclemi@gmail.com>). **NEVER any Co-Authored-By / AI-attribution in commits.** Never commit secrets (creds stay out of the tree; the secret-scan habit before pushing anything new is mandatory).
 - Report outcomes faithfully: failed tests with output, skipped steps named, verified things stated plainly. Never mark a step done that isn't device-verified.
 - Christian is often away. Proceed autonomously on anything reversible within the mandate; stop only for genuine owner decisions (credentials, platform/production changes, scope pivots). Surface upcoming needs early so he can act in parallel.
 
