@@ -390,4 +390,41 @@
     <string name="bt_watchlist_remove_item">Remove from list</string>
     <string name="bt_watchlist_add_to">Add to watchlist</string>
     <string name="bt_watchlist_default">Default</string>
+
+    <!-- Step 13 — Conglomerates lite (§6.7) -->
+    <string name="bt_conglo_requires_connection">Conglomerates need a connection. Reconnect to view them.</string>
+    <string name="bt_conglo_empty_title">No conglomerates yet</string>
+    <string name="bt_conglo_empty_message">Build a weighted basket of assets, backtest it, and buy it into a portfolio.</string>
+    <string name="bt_conglo_create">New conglomerate</string>
+    <string name="bt_conglo_new">New conglomerate</string>
+    <string name="bt_conglo_edit">Edit</string>
+    <string name="bt_conglo_delete">Delete</string>
+    <string name="bt_conglo_delete_message">Delete this conglomerate? This can\'t be undone.</string>
+    <string name="bt_conglo_draft">Draft</string>
+    <string name="bt_conglo_assets_one">1 asset</string>
+    <string name="bt_conglo_assets_n">%1$d assets</string>
+    <string name="bt_conglo_name">Name</string>
+    <string name="bt_conglo_positions">Positions</string>
+    <string name="bt_conglo_total">Total %1$s%%</string>
+    <string name="bt_conglo_add_asset">Add asset</string>
+    <string name="bt_conglo_even">Even split</string>
+    <string name="bt_conglo_save">Save</string>
+    <string name="bt_conglo_remove">Remove</string>
+    <string name="bt_conglo_composition">Composition</string>
+    <string name="bt_conglo_performance">Past performance</string>
+    <string name="bt_conglo_no_backtest">Not enough history to backtest.</string>
+    <string name="bt_conglo_total_return">Total return</string>
+    <string name="bt_conglo_cagr">CAGR</string>
+    <string name="bt_conglo_drawdown">Max drawdown</string>
+    <string name="bt_conglo_budget">Budget calculator</string>
+    <string name="bt_conglo_budget_label">Budget</string>
+    <string name="bt_conglo_at_least_one">At least 1 share of each</string>
+    <string name="bt_conglo_calculate">Calculate</string>
+    <string name="bt_conglo_buy_list">Buy list</string>
+    <string name="bt_conglo_qty">%1$s shares · %2$s</string>
+    <string name="bt_conglo_unbuyable">Doesn\'t fit the budget</string>
+    <string name="bt_conglo_invested">Invested %1$s</string>
+    <string name="bt_conglo_remainder">Left over %1$s</string>
+    <string name="bt_conglo_committed">Added to %1$s</string>
+    <string name="bt_conglo_add_to_portfolio">Add to %1$s</string>
 </resources>

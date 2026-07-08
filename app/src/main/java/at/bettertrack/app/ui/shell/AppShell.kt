@@ -80,6 +80,9 @@ import at.bettertrack.app.navigation.WorkboardTabRoute
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
+import at.bettertrack.app.ui.conglomerate.ConglomerateBuilderScreen
+import at.bettertrack.app.ui.conglomerate.ConglomerateDetailScreen
+import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
 import at.bettertrack.app.ui.market.AssetPageScreen
 import at.bettertrack.app.ui.market.SearchScreen
@@ -304,7 +307,12 @@ private fun BtNavHost(navController: NavHostController) {
             )
         }
         composable<SocialTabRoute> { SocialTabScreen() }
-        composable<WorkboardTabRoute> { WorkboardTabScreen() }
+        composable<WorkboardTabRoute> {
+            ConglomerateListScreen(
+                onOpen = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
+                onCreate = { navController.navigate(ConglomerateBuilderRoute()) },
+            )
+        }
 
         // Auth & lock
         composable<LoginRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_login), back) }
@@ -412,9 +420,32 @@ private fun BtNavHost(navController: NavHostController) {
         composable<WatchlistRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_watchlists), back) }
 
         // Workboard
-        composable<ConglomerateListRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_conglomerates), back) }
-        composable<ConglomerateBuilderRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_conglomerate_builder), back) }
-        composable<ConglomerateDetailRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_conglomerate_detail), back) }
+        composable<ConglomerateListRoute> {
+            ConglomerateListScreen(
+                onOpen = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
+                onCreate = { navController.navigate(ConglomerateBuilderRoute()) },
+            )
+        }
+        composable<ConglomerateBuilderRoute> { entry ->
+            val route = entry.toRoute<ConglomerateBuilderRoute>()
+            ConglomerateBuilderScreen(
+                conglomerateId = route.conglomerateId,
+                onBack = back,
+                onSaved = { id ->
+                    navController.popBackStack()
+                    navController.navigate(ConglomerateDetailRoute(id))
+                },
+            )
+        }
+        composable<ConglomerateDetailRoute> { entry ->
+            val route = entry.toRoute<ConglomerateDetailRoute>()
+            ConglomerateDetailScreen(
+                conglomerateId = route.conglomerateId,
+                onBack = back,
+                onEdit = { id -> navController.navigate(ConglomerateBuilderRoute(id)) },
+                onDelete = { navController.popBackStack() },
+            )
+        }
 
         // Social
         composable<ChatListRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_chats), back) }

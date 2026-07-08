@@ -9,7 +9,14 @@ import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
 import at.bettertrack.app.data.api.dto.AddToWorkboardRequest
+import at.bettertrack.app.data.api.dto.AllocateRequest
+import at.bettertrack.app.data.api.dto.AllocateResponse
 import at.bettertrack.app.data.api.dto.AssetDetailResponse
+import at.bettertrack.app.data.api.dto.BacktestPreviewRequest
+import at.bettertrack.app.data.api.dto.BacktestResponse
+import at.bettertrack.app.data.api.dto.ConglomerateDetailResponse
+import at.bettertrack.app.data.api.dto.CreateConglomerateRequest
+import at.bettertrack.app.data.api.dto.ReplacePositionsRequest
 import at.bettertrack.app.data.api.dto.AssetHistoryResponse
 import at.bettertrack.app.data.api.dto.ConglomerateListResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetRequest
@@ -182,6 +189,39 @@ interface BtApi {
 
     @GET("conglomerates")
     suspend fun conglomerates(): Response<ConglomerateListResponse>
+
+    // ── Step 13: conglomerates lite (§6.7, online-only) ──────────────────────
+
+    @Headers("Content-Type: application/json")
+    @POST("conglomerates")
+    suspend fun createConglomerate(@Body body: CreateConglomerateRequest): Response<ConglomerateDetailResponse>
+
+    @GET("conglomerates/{id}")
+    suspend fun conglomerateDetail(@Path("id") id: String): Response<ConglomerateDetailResponse>
+
+    @DELETE("conglomerates/{id}")
+    suspend fun deleteConglomerate(@Path("id") id: String): Response<Unit>
+
+    /** Replace the weighted positions (builder save; server re-validates 100%). */
+    @Headers("Content-Type: application/json")
+    @PUT("conglomerates/{id}/positions")
+    suspend fun replaceConglomeratePositions(
+        @Path("id") id: String,
+        @Body body: ReplacePositionsRequest,
+    ): Response<ConglomerateDetailResponse>
+
+    /** Budget calculator: budget → weighted buy list (server-computed). */
+    @Headers("Content-Type: application/json")
+    @POST("conglomerates/{id}/allocate")
+    suspend fun allocateConglomerate(
+        @Path("id") id: String,
+        @Body body: AllocateRequest,
+    ): Response<AllocateResponse>
+
+    /** Past-performance backtest (single curve + stats, §6.7). */
+    @Headers("Content-Type: application/json")
+    @POST("backtest/preview")
+    suspend fun backtestPreview(@Body body: BacktestPreviewRequest): Response<BacktestResponse>
 
     // ── Step 5: queue-drain mutations (§7.2 ledger-event set) ────────────────
     // The forms that enqueue these arrive in Steps 8–10; the sync engine's
