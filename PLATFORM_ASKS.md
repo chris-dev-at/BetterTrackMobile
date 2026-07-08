@@ -20,6 +20,8 @@ Single source of truth for everything the **mobile app** (Android, this repo) ne
 - [ ] **P1 — Bearer coverage for user identity** (`/auth/me` under bearer, or a dedicated `/me`). Today `/auth/*` is session-cookie-only, so under an OAuth bearer the app can't read the logged-in username/email → Settings → Account shows "—". Want a bearer-callable endpoint returning `{ username, email, displayName, … }`.
 - [ ] **P2 — Bearer-accessible token/grant revocation.** `/oauth/*` and `/settings/oauth-grants` are session-only, so app logout is **local-wipe-only** — the server-side token/grant isn't revoked from the app. Want a bearer-callable "revoke this token/grant."
 
+- [ ] **P2 — Account-PIN verification under bearer** (e.g. `POST /auth/verify-pin { pin }` → 200 / 401). Lets the app-lock offer **"use my BetterTrack PIN"** as an unlock option: the user enters their existing platform 4-digit PIN once, the app verifies it against the account, then stores only a local Keystore **hash** (never the PIN). The app never sees the PIN during OAuth (it's entered in the web Custom Tab), so it needs this endpoint to validate it. A "has the PIN changed since?" signal would let the app prompt a re-enter.
+
 ### Scopes for the BetterTrackMobile client
 - [ ] **P1 — `social:write`.** Friends UI is fully built (add / accept / decline / cancel / unfriend) but can't perform writes (only `social:read` granted). Grant `social:write` → friend-graph mutations go live.
 - [ ] **P2 — `chat:read` + `chat:write`** (pairs with Chat endpoints below).
