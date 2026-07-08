@@ -211,11 +211,17 @@ class TransactionFormViewModel(
             all.firstOrNull { it.id == pid }?.name
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Cached cash balance of the target portfolio (server totals, §7.1). */
-    val cachedCashEur: StateFlow<Double?> =
-        combine(repo.portfolios, _portfolioId) { all, pid ->
-            all.firstOrNull { it.id == pid }?.totals?.cashEur
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /**
+     * The MAIN/default cash source balance of the target portfolio — the wallet
+     * a pay-from-cash buy actually deducts from (§6.2 owner fix). The coupling
+     * math, the cash-after preview and Max all size against THIS, not the summed
+     * `totals.cashEur`: sizing against the total over-estimates Max and the
+     * server then rejects "insufficient" because Main alone can't cover it.
+     */
+    val mainCashEur: StateFlow<Double?> = _portfolioId
+        .flatMapLatest { pid -> if (pid == null) flowOf(emptyList()) else repo.cashSources(pid) }
+        .map { mainCashSourceBalanceEur(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Held assets of the target portfolio — the Step-8 asset picker universe. */
     val holdings: StateFlow<List<HoldingEntity>> = _portfolioId
@@ -283,7 +289,7 @@ class TransactionFormViewModel(
         },
         _isBuy,
         _cashCoupled,
-        cachedCashEur,
+        mainCashEur,
         holdings,
     ) { (a, q, p, f), buy, coupled, cash, held ->
         validateTxForm(
@@ -307,10 +313,10 @@ class TransactionFormViewModel(
         if (qty == null || price == null) null else orderTotal(buy, qty, price, parseLocalizedDecimal(f) ?: 0.0)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Live "Cash after: €…" against the cached balance (§6.2). */
+    /** Live "Cash after: €…" against the MAIN source balance (§6.2 owner fix). */
     val cashAfterEur: StateFlow<Double?> = combine(
         _quantityText, _priceText, _feeText, _isBuy,
-        combine(_cashCoupled, cachedCashEur) { c, b -> c to b },
+        combine(_cashCoupled, mainCashEur) { c, b -> c to b },
     ) { q, p, f, buy, (coupled, balance) ->
         if (!coupled || balance == null) return@combine null
         val qty = parseLocalizedDecimal(q)
@@ -457,11 +463,13 @@ class TransactionFormViewModel(
 
     // ── Cold-cache guard (§7.3) ─────────────────────────────────────────────
 
-    /** Refresh the target portfolio's detail (cash + holdings) when online so
-     *  the form never validates against a cold / never-synced cache. */
+    /** Refresh the target portfolio's detail (totals + holdings) AND its cash
+     *  sources when online, so the form never validates against a cold cache and
+     *  the MAIN-source balance behind Max / cash-after is known (§6.2). */
     private fun ensureFreshSnapshot(portfolioId: String) {
         if (!isOnline.value) return
         viewModelScope.launch { repo.refreshPortfolioDetail(portfolioId) }
+        viewModelScope.launch { repo.refreshCash(portfolioId) }
     }
 
     // ── Asset picker search (§6.5 — the full universe, not just held) ───────
@@ -558,7 +566,7 @@ class TransactionFormViewModel(
     /** Whether a "Max" affordance is offerable now (known held qty / known cash). */
     val maxAvailable: StateFlow<Boolean> = combine(
         combine(_isBuy, _asset, _priceText) { buy, a, p -> Triple(buy, a, p) },
-        _cashCoupled, cachedCashEur, holdings,
+        _cashCoupled, mainCashEur, holdings,
     ) { (buy, a, priceText), coupled, cash, held ->
         when {
             a == null -> false
@@ -571,7 +579,7 @@ class TransactionFormViewModel(
     fun fillMaxQuantity() {
         val a = _asset.value ?: return
         if (_isBuy.value) {
-            val cash = cachedCashEur.value ?: return
+            val cash = mainCashEur.value ?: return
             val price = parseLocalizedDecimal(_priceText.value) ?: return
             if (!_cashCoupled.value || price <= 0.0) return
             val fee = parseLocalizedDecimal(_feeText.value) ?: 0.0
@@ -712,18 +720,33 @@ class TransactionFormViewModel(
         }
 
         val after = boundOpId?.let { db.syncOpDao().getById(it) }
-        when (after?.status) {
-            OpStatus.DONE.wire -> _events.value = TxFormEvent.Close
+        when {
+            // Op vanished (drained + pruned, or discarded elsewhere) — nothing
+            // left to fix here.
+            after == null -> _events.value = TxFormEvent.Close
 
-            OpStatus.NEEDS_ATTENTION.wire -> {
-                // Bind future submits to this op: edit-and-retry, same UUID.
+            // Recorded on the server — the ONLY reason to leave the form on a
+            // successful submit (§6.2 owner fix: only navigate away on success).
+            after.status == OpStatus.DONE.wire -> _events.value = TxFormEvent.Close
+
+            // The server declined it WHILE the user is here (e.g. insufficient):
+            // keep the form open, surface the reason inline, and let them edit +
+            // resubmit IN PLACE. The bound op keeps its client UUID, so the retry
+            // is the SAME entry (edit-and-retry, exactly-once — §7.3).
+            after.status == OpStatus.NEEDS_ATTENTION.wire ->
+                _serverError.value = after.serverError ?: DEFAULT_REJECTION_MESSAGE
+
+            // Online and still open but already carrying a server reason: never
+            // dump it into the needs-attention screen behind the user's back —
+            // show it here so they can fix it in place.
+            isOnline.value && after.serverError != null ->
                 _serverError.value = after.serverError
-                    ?: "BetterTrack rejected this entry."
-            }
 
+            // Offline enqueue, or an online outcome we couldn't confirm yet with
+            // no reason attached: the durable pending row IS the record. Park the
+            // connectivity-gated drain (it reconciles / escalates to needs-
+            // attention in the background, §7.3) and leave.
             else -> {
-                // Still open (offline / backoff / ambiguous): park the
-                // CONNECTED-gated drain and leave — the pending row shows.
                 scheduler.scheduleDrain()
                 _events.value = TxFormEvent.Close
             }
@@ -804,6 +827,10 @@ class TransactionFormViewModel(
         get() = isEditSynced || isEditQueued
 
     private companion object {
+        /** Fallback when the server rejects an op without a readable reason. */
+        // TODO(step 19 i18n): externalize to strings.xml.
+        const val DEFAULT_REJECTION_MESSAGE = "BetterTrack rejected this entry."
+
         /** Plain editable number: no grouping, up to 8 decimals, dot separator. */
         fun editNumber(value: Double): String =
             java.math.BigDecimal(value).setScale(8, java.math.RoundingMode.HALF_UP)
@@ -863,7 +890,7 @@ fun TransactionFormScreen(
     val validation by vm.validation.collectAsStateWithLifecycle()
     val orderTotalEur by vm.orderTotalEur.collectAsStateWithLifecycle()
     val cashAfterEur by vm.cashAfterEur.collectAsStateWithLifecycle()
-    val cachedCashEur by vm.cachedCashEur.collectAsStateWithLifecycle()
+    val mainCashEur by vm.mainCashEur.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val submitting by vm.submitting.collectAsStateWithLifecycle()
     val serverError by vm.serverError.collectAsStateWithLifecycle()
@@ -1083,7 +1110,7 @@ fun TransactionFormScreen(
                         coupled = cashCoupled,
                         enabled = inputsEnabled,
                         cashAfterEur = cashAfterEur,
-                        cachedCashEur = cachedCashEur,
+                        cachedCashEur = mainCashEur,
                         insufficient = validation.insufficientCash,
                         locale = locale,
                         onToggle = vm::setCashCoupled,

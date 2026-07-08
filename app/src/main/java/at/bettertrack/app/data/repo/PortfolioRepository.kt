@@ -93,6 +93,20 @@ class PortfolioRepository(
     suspend fun selectedPortfolioIdNow(): String? =
         db.metaDao().get(MetaEntity.KEY_SELECTED_PORTFOLIO)
 
+    /** One-shot snapshot of every cached portfolio (initial-load resolution). */
+    suspend fun portfoliosNow(): List<PortfolioEntity> = db.portfolioDao().getAll()
+
+    /**
+     * The portfolio that should govern right now, resolved from a ONE-SHOT read
+     * (§6.1 rule) — never the WhileSubscribed selection StateFlow, which may not
+     * have recomputed yet immediately after a list refresh writes Room. Used by
+     * the login/cold-start initial load and the overview's own refresh so the
+     * dependent cascade always targets a real portfolio instead of racing to
+     * null on a fresh login.
+     */
+    suspend fun defaultSelection(): PortfolioEntity? =
+        resolveSelection(portfoliosNow(), selectedPortfolioIdNow())
+
     // ── Sticky cash-coupling default (§6.2 — per portfolio) ─────────────────
     // Local sticky value in the account-scoped meta KV (works offline, wiped
     // with the account); when absent, the caller falls back to the portfolio's
@@ -626,6 +640,22 @@ class PortfolioRepository(
 
     companion object {
         private const val TAG = "BtPortfolioRepo"
+
+        /**
+         * Selection rule (§6.1): the stored choice while it exists and is active
+         * → the platform default → the first active portfolio → null (no active
+         * portfolios). The single source of truth for "which portfolio governs",
+         * shared by the overview VM and the initial-load path.
+         */
+        fun resolveSelection(
+            all: List<PortfolioEntity>,
+            storedId: String?,
+        ): PortfolioEntity? {
+            val active = all.filter { it.archivedAt == null }
+            return active.firstOrNull { it.id == storedId }
+                ?: active.firstOrNull { it.isDefault }
+                ?: active.firstOrNull()
+        }
 
         /** Parse an ISO timestamp to epoch ms; 0 when unparseable (sort key only). */
         fun parseIsoMs(iso: String): Long = try {

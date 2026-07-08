@@ -119,8 +119,18 @@ class PortfolioOverviewViewModel(
                 _loadError.value = null
                 lastRefreshAtMs = System.currentTimeMillis()
             }
-            // Selection may only resolve after the list landed.
-            selected.value?.let { refreshSelectedScope(it.id) }
+            // Resolve the governing portfolio from a ONE-SHOT read, not the
+            // `selected` StateFlow: right after the list write, that
+            // WhileSubscribed flow may not have recomputed yet, so reading it
+            // here races to null on a fresh login and the dependent cascade
+            // (detail/holdings/history/cash) never fires — the reported "stuck
+            // on skeletons until pull-to-refresh" bug. Persist the auto-pick so
+            // the selection sticks and every screen agrees on the default.
+            val chosen = repo.defaultSelection()
+            if (chosen != null) {
+                if (repo.selectedPortfolioIdNow() != chosen.id) repo.selectPortfolio(chosen.id)
+                refreshSelectedScope(chosen.id)
+            }
             _refreshing.value = false
         }
     }
@@ -209,17 +219,13 @@ class PortfolioOverviewViewModel(
         private const val FOCUS_REFRESH_MIN_INTERVAL_MS = 60_000L
 
         /**
-         * Selection rule (§6.1): stored choice while it exists and is active →
-         * platform default → first active → null (no active portfolios).
+         * Selection rule (§6.1) — delegates to the repository's canonical rule so
+         * the overview, the initial-load path and the transaction form all agree
+         * on which portfolio governs.
          */
         fun resolveSelection(
             all: List<PortfolioEntity>,
             storedId: String?,
-        ): PortfolioEntity? {
-            val active = all.filter { it.archivedAt == null }
-            return active.firstOrNull { it.id == storedId }
-                ?: active.firstOrNull { it.isDefault }
-                ?: active.firstOrNull()
-        }
+        ): PortfolioEntity? = PortfolioRepository.resolveSelection(all, storedId)
     }
 }

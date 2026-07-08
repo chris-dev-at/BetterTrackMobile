@@ -38,6 +38,10 @@ class BetterTrackApplication : Application() {
         // initial locked state (cold start) is set when the controller is built.
         AppGraph.appLockController.start()
 
+        // Fire the first-of-session data load on login-success / logged-in cold
+        // start so no screen sits on skeletons until a manual pull-to-refresh.
+        AppGraph.sessionInitializer.start()
+
         // Live connectivity for the offline banner + the reconnect trigger.
         AppGraph.connectivityMonitor.start()
         appScope.launch {

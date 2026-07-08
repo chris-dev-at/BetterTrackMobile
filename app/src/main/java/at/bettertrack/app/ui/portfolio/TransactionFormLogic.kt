@@ -168,6 +168,17 @@ fun maxAffordableQuantity(cashEur: Double, price: Double, fee: Double): Double {
 }
 
 /**
+ * The balance the pay-from-cash coupling actually draws on: the MAIN/default
+ * cash source, NOT the sum of every source (§6.2 owner fix). A buy paid "from
+ * cash" deducts from the default wallet server-side, so Max-buy and the
+ * cash-after preview must size against that wallet alone — sizing against the
+ * summed total over-estimates and the server then rejects "insufficient".
+ * Null when no main source is cached yet (balance treated as unknown, not zero).
+ */
+fun mainCashSourceBalanceEur(sources: List<at.bettertrack.app.data.db.CashSourceEntity>): Double? =
+    sources.firstOrNull { it.isMain }?.balanceEur
+
+/**
  * The close on / just-before [target] from an ASCENDING (date, close) series:
  * the exact day if present, else the most recent prior trading day, else the
  * earliest close (target precedes all data). Null only for an empty series.

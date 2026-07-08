@@ -286,6 +286,48 @@ class TransactionFormLogicTest {
         assertEquals(0.0, maxAffordableQuantity(1000.0, 0.0, 0.0), 1e-9) // non-positive price
     }
 
+    // ── Main-source cash for pay-from-cash (§6.2, owner fix) ─────────────────
+
+    private fun source(id: String, isMain: Boolean, balance: Double, archived: String? = null) =
+        at.bettertrack.app.data.db.CashSourceEntity(
+            id = id,
+            portfolioId = "p1",
+            name = id,
+            kind = "cash",
+            isMain = isMain,
+            balanceEur = balance,
+            archivedAt = archived,
+        )
+
+    @Test
+    fun `main-source balance picks the main wallet, not the summed total`() {
+        val sources = listOf(
+            source("main", isMain = true, balance = 300.0),
+            source("broker", isMain = false, balance = 700.0),
+            source("savings", isMain = false, balance = 1000.0),
+        )
+        // The default wallet holds €300 even though total cash is €2000.
+        assertEquals(300.0, mainCashSourceBalanceEur(sources)!!, 1e-9)
+    }
+
+    @Test
+    fun `main-source balance is null when no main source is cached yet`() {
+        assertNull(mainCashSourceBalanceEur(emptyList()))
+        assertNull(mainCashSourceBalanceEur(listOf(source("broker", isMain = false, balance = 500.0))))
+    }
+
+    @Test
+    fun `max buy sizes against the main wallet so the server never rejects insufficient`() {
+        val sources = listOf(
+            source("main", isMain = true, balance = 300.0),
+            source("broker", isMain = false, balance = 700.0),
+        )
+        val main = mainCashSourceBalanceEur(sources)!!
+        // Buying at €100 from the €300 Main wallet ⇒ 3 shares (not 10 from the
+        // €1000 total, which the server would decline).
+        assertEquals(3.0, maxAffordableQuantity(main, price = 100.0, fee = 0.0), 1e-9)
+    }
+
     @Test
     fun `format decimal for input trims zeros and honours locale separator`() {
         assertEquals("5", formatDecimalForInput(5.0, java.util.Locale.US))

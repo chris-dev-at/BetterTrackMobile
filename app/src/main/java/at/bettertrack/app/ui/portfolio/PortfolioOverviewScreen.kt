@@ -240,7 +240,9 @@ private fun OverviewContent(
             start = 16.dp,
             end = 16.dp,
             top = 4.dp,
-            bottom = 24.dp,
+            // Clear the buy/sell FAB (56dp + 20dp inset + margin) so the last
+            // holding row scrolls fully into view instead of under it.
+            bottom = 96.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

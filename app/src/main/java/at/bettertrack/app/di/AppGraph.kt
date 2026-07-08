@@ -30,6 +30,7 @@ import at.bettertrack.app.data.repo.StubChatGateway
 import at.bettertrack.app.data.repo.StubChatRepository
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
+import at.bettertrack.app.data.session.SessionInitializer
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.data.update.UpdatePrefs
 import at.bettertrack.app.debug.SyncDebugController
@@ -244,6 +245,21 @@ object AppGraph {
     }
 
     val connectivityMonitor: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
+
+    /**
+     * Fires the first-of-session data load on login-success / logged-in cold
+     * start so no screen sits on skeletons until a manual pull-to-refresh
+     * (owner-flagged priority bug). Started once from the Application.
+     */
+    val sessionInitializer: SessionInitializer by lazy {
+        SessionInitializer(
+            authState = authRepository.authState,
+            portfolios = portfolioRepository,
+            watchlists = watchlistRepository,
+            connectivity = connectivityMonitor,
+            scope = appScope,
+        )
+    }
 
     val syncScheduler: SyncScheduler by lazy { SyncScheduler(appContext) }
 

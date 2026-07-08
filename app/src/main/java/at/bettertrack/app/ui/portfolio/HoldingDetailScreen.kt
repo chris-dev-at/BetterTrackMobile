@@ -310,7 +310,9 @@ private fun HoldingContent(
     val bt = BtTheme.colors
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+        // bottom clears the buy/sell FAB (56dp + 20dp inset + margin) so the last
+        // transaction row scrolls fully into view instead of under it.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Position hero (server-computed market value + day change).
