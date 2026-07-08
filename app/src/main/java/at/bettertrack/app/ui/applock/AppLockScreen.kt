@@ -3,7 +3,6 @@ package at.bettertrack.app.ui.applock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -165,6 +164,9 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
         }
     }
 
+    // Bottom-weighted layout (Step-17 refinement): the wordmark + prompt sit in
+    // the upper third, and the keypad is anchored low in the comfortable
+    // one-handed thumb zone (roughly the lower ~55%) rather than mid-screen.
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -172,11 +174,10 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.weight(1f))
         Wordmark(fontSize = 30.sp, edition = stringResource(R.string.bt_edition_app))
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
         Text(
             text = if (lockedOut) {
@@ -210,7 +211,8 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
+        // Flexible gap that drops the keypad into the lower thumb zone.
+        Spacer(Modifier.weight(0.7f))
 
         PinKeypad(
             onDigit = onDigit,
@@ -223,11 +225,12 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
             },
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         TextButton(onClick = { showForgot = true }) {
             Text(stringResource(R.string.bt_applock_forgot_pin), color = bt.textSecondary)
         }
-        Spacer(Modifier.height(8.dp))
+        // A little breathing room above the nav bar (safeDrawing adds the inset).
+        Spacer(Modifier.height(12.dp))
     }
 
     if (showForgot) {

@@ -481,7 +481,8 @@
     <string name="bt_settings_applock_change_sub">Set a new unlock PIN</string>
     <string name="bt_settings_applock_biometric">Unlock with biometrics</string>
     <string name="bt_settings_applock_biometric_sub">Use fingerprint or face to unlock</string>
-    <string name="bt_settings_applock_biometric_none">Add a fingerprint in your phone settings — this turns on automatically</string>
+    <string name="bt_settings_applock_biometric_none">Set up a fingerprint in Android settings to enable</string>
+    <string name="bt_settings_applock_biometric_unavailable">Biometric unlock isn\'t available on this device</string>
     <string name="bt_settings_applock_threshold">Require unlock</string>
     <string name="bt_settings_applock_footnote">The app lock is stored only on this device and is separate from your BetterTrack account password. Forgetting the PIN signs you out.</string>
     <string name="bt_settings_applock_disable_title">Turn off app lock?</string>
@@ -513,6 +514,15 @@
     <string name="bt_applock_setup_new">Enter a new PIN</string>
     <string name="bt_applock_setup_confirm">Re-enter your PIN</string>
     <string name="bt_applock_setup_current">Enter your current PIN</string>
+    <!-- Step-17 refinement: PIN-source chooser (device PIN vs BetterTrack PIN). -->
+    <string name="bt_applock_setup_choose_title">How do you want to unlock?</string>
+    <string name="bt_applock_setup_choose_hint">Either way, your PIN is stored only on this device.</string>
+    <string name="bt_applock_setup_choice_device_title">Create a device PIN</string>
+    <string name="bt_applock_setup_choice_device_sub">A new 4–6 digit PIN just for opening this app</string>
+    <string name="bt_applock_setup_choice_bt_title">Use my BetterTrack PIN</string>
+    <string name="bt_applock_setup_choice_bt_sub">The same 4-digit PIN as your BetterTrack account, saved only on this device</string>
+    <string name="bt_applock_setup_bt_enter">Enter your BetterTrack PIN</string>
+    <string name="bt_applock_setup_bt_hint">Use the same 4-digit PIN as your BetterTrack account. It\'s saved only on this device — we don\'t send it anywhere.</string>
     <string name="bt_applock_mismatch">PINs didn\'t match, try again</string>
     <string name="bt_applock_continue">Continue</string>
     <string name="bt_applock_biometric_offer_title">Enable biometric unlock?</string>

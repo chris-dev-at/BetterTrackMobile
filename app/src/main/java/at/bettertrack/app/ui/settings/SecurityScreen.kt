@@ -43,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,7 +50,7 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.applock.AfkThreshold
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.BiometricAvailability
-import at.bettertrack.app.ui.applock.biometricAvailability
+import at.bettertrack.app.ui.applock.rememberBiometricAvailability
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -72,7 +71,6 @@ fun SecurityScreen(
     val bt = BtTheme.colors
     val controller = AppGraph.appLockController
     val config by controller.config.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     var showDisableConfirm by remember { mutableStateOf(false) }
     var showThresholdPicker by remember { mutableStateOf(false) }
@@ -128,29 +126,29 @@ fun SecurityScreen(
                     onClick = onChangePin,
                 )
 
-                // Biometric convenience. Hidden only when there's no hardware at
-                // all. When hardware exists but nothing is enrolled yet, the
-                // preference is still settable — it simply activates the moment a
-                // fingerprint/face is enrolled (the lock screen falls back to the
-                // PIN until then), so the user isn't forced to leave, enrol, and
-                // come back to flip a switch that was greyed out.
-                val biometricAvail = biometricAvailability(context)
-                if (biometricAvail != BiometricAvailability.UNAVAILABLE) {
-                    SecurityToggleRow(
-                        icon = Icons.Outlined.Fingerprint,
-                        title = stringResource(R.string.bt_settings_applock_biometric),
-                        subtitle = stringResource(
-                            if (biometricAvail == BiometricAvailability.AVAILABLE) {
-                                R.string.bt_settings_applock_biometric_sub
-                            } else {
-                                R.string.bt_settings_applock_biometric_none
-                            },
-                        ),
-                        checked = config.biometricEnabled,
-                        enabled = true,
-                        onCheckedChange = { controller.setBiometricEnabled(it) },
-                    )
-                }
+                // Biometric convenience — GATED on real availability (Step-17
+                // refinement). The toggle can only be turned ON when a biometric is
+                // actually enrolled + usable; otherwise it's greyed with a hint that
+                // says what to do. Availability re-reads on resume, so enrolling a
+                // fingerprint in Android settings and returning enables it live.
+                val biometricAvail = rememberBiometricAvailability()
+                val biometricReady = biometricAvail == BiometricAvailability.AVAILABLE
+                SecurityToggleRow(
+                    icon = Icons.Outlined.Fingerprint,
+                    title = stringResource(R.string.bt_settings_applock_biometric),
+                    subtitle = stringResource(
+                        when (biometricAvail) {
+                            BiometricAvailability.AVAILABLE -> R.string.bt_settings_applock_biometric_sub
+                            BiometricAvailability.NONE_ENROLLED -> R.string.bt_settings_applock_biometric_none
+                            BiometricAvailability.UNAVAILABLE -> R.string.bt_settings_applock_biometric_unavailable
+                        },
+                    ),
+                    // A greyed toggle always reads OFF — it cannot be turned on until
+                    // a biometric exists (guards against a stale stored "on").
+                    checked = config.biometricEnabled && biometricReady,
+                    enabled = biometricReady,
+                    onCheckedChange = { controller.setBiometricEnabled(it) },
+                )
 
                 SecurityNavRow(
                     icon = Icons.Outlined.Timer,

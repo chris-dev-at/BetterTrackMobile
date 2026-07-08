@@ -1,6 +1,11 @@
 package at.bettertrack.app.ui.applock
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,12 +26,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -42,6 +50,7 @@ fun PinDots(
     modifier: Modifier = Modifier,
 ) {
     val bt = BtTheme.colors
+    val reducedMotion = rememberReducedMotion()
     val filledColor by animateColorAsState(if (error) bt.loss else bt.gold, label = "pinDotFill")
     Row(
         modifier = modifier,
@@ -50,12 +59,36 @@ fun PinDots(
     ) {
         repeat(total) { i ->
             val on = i < filled
-            Box(
-                Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(if (on) filledColor else bt.border),
+            // The gold fill scales + fades in over the hollow base as each digit
+            // lands, so entry feels responsive (snapped under reduced motion).
+            val fill by animateFloatAsState(
+                targetValue = if (on) 1f else 0f,
+                animationSpec = if (reducedMotion) {
+                    snap()
+                } else {
+                    spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    )
+                },
+                label = "pinDotScale",
             )
+            Box(Modifier.size(15.dp), contentAlignment = Alignment.Center) {
+                // Hollow base dot — always present so the row never reflows.
+                Box(Modifier.matchParentSize().clip(CircleShape).background(bt.border))
+                // Gold fill overlay that pops in.
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            scaleX = fill
+                            scaleY = fill
+                            alpha = fill
+                        }
+                        .clip(CircleShape)
+                        .background(filledColor),
+                )
+            }
         }
     }
 }
@@ -109,7 +142,7 @@ private fun DigitKey(digit: Int, enabled: Boolean, onClick: () -> Unit) {
         Text(
             text = digit.toString(),
             color = if (enabled) bt.textPrimary else bt.textMuted,
-            fontSize = 27.sp,
+            fontSize = 29.sp,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -122,6 +155,7 @@ private fun KeyButton(
     content: @Composable () -> Unit,
 ) {
     val bt = BtTheme.colors
+    val view = LocalView.current
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -132,11 +166,20 @@ private fun KeyButton(
                 interactionSource = interaction,
                 indication = ripple(bounded = true, color = bt.gold),
                 enabled = enabled,
-                onClick = onClick,
+                onClick = {
+                    // Light per-keypress tick so entry feels organic. KEYBOARD_TAP
+                    // is NOT forced, so it honours the system haptic setting (silent
+                    // when the user has disabled touch feedback). The stronger
+                    // wrong-PIN LongPress buzz stays upstream in the lock screen.
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
         content = { content() },
     )
 }
 
-private val KEY_SIZE = 72.dp
+// Comfortable one-handed thumb target (spec §5 ≥48dp; enlarged in the Step-17
+// refinement for reachability).
+private val KEY_SIZE = 78.dp

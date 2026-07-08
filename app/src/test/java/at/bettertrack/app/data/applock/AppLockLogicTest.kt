@@ -93,4 +93,48 @@ class AppLockLogicTest {
     fun `fifteen minute threshold has the right budget`() {
         assertEquals(900_000L, AfkThreshold.FifteenMinutes.millis)
     }
+
+    // ── PIN source seam (Step-17 refinement: device vs BetterTrack) ────────────
+    @Test
+    fun `default pin source is device`() {
+        assertEquals(PinSource.DEVICE, PinSource.Default)
+    }
+
+    @Test
+    fun `pin source parses from storage and falls back to default`() {
+        assertEquals(PinSource.DEVICE, PinSource.fromStorage("DEVICE"))
+        assertEquals(PinSource.BETTERTRACK, PinSource.fromStorage("BETTERTRACK"))
+        // Null or an unrecognised value (older/newer build) ⇒ the safe default.
+        assertEquals(PinSource.Default, PinSource.fromStorage(null))
+        assertEquals(PinSource.Default, PinSource.fromStorage("garbage"))
+        assertEquals(PinSource.Default, PinSource.fromStorage(""))
+    }
+
+    @Test
+    fun `device pin has no fixed length but bettertrack pin is exactly four`() {
+        assertEquals(null, fixedPinLengthFor(PinSource.DEVICE))
+        assertEquals(4, fixedPinLengthFor(PinSource.BETTERTRACK))
+        assertEquals(4, BETTERTRACK_PIN_LENGTH)
+    }
+
+    @Test
+    fun `device pin accepts four to six digits`() {
+        assertTrue(isValidPinFor("1234", PinSource.DEVICE))
+        assertTrue(isValidPinFor("12345", PinSource.DEVICE))
+        assertTrue(isValidPinFor("123456", PinSource.DEVICE))
+        assertFalse(isValidPinFor("123", PinSource.DEVICE))
+        assertFalse(isValidPinFor("1234567", PinSource.DEVICE))
+        assertFalse(isValidPinFor("12a4", PinSource.DEVICE))
+    }
+
+    @Test
+    fun `bettertrack pin must be exactly four digits`() {
+        assertTrue(isValidPinFor("2046", PinSource.BETTERTRACK))
+        // A 4-digit account PIN only — 5–6 digits are valid for a device PIN but
+        // not for the BetterTrack path (it mirrors the 4-digit web login PIN).
+        assertFalse(isValidPinFor("12345", PinSource.BETTERTRACK))
+        assertFalse(isValidPinFor("123456", PinSource.BETTERTRACK))
+        assertFalse(isValidPinFor("123", PinSource.BETTERTRACK))
+        assertFalse(isValidPinFor("20a6", PinSource.BETTERTRACK))
+    }
 }

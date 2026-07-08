@@ -116,14 +116,27 @@ class AppLockController(private val store: AppLockStore) {
 
     // ── Setup / change / disable (Settings → Security) ────────────────────────
 
-    /** Set (or replace) the PIN and turn the lock on. Resets backoff. */
-    fun setupPin(pin: String) {
+    /**
+     * Set (or replace) the PIN and turn the lock on. Resets backoff.
+     *
+     * [source] records whether this is a fresh device PIN or the user's BetterTrack
+     * account PIN. Either way the PIN is only ever stored LOCALLY (Keystore-hashed);
+     * the BetterTrack path is not server-verified yet — see the TODO below.
+     */
+    fun setupPin(pin: String, source: PinSource = PinSource.Default) {
+        // TODO(platform verify-pin): once POST /auth/verify-pin ships, a
+        // source == BETTERTRACK PIN must be validated against the account HERE
+        // (before storing) and this call should become suspend/return a result so
+        // the setup screen can surface a "that's not your BetterTrack PIN" error;
+        // a "PIN changed since" signal would also drive a re-enter prompt. Until
+        // then we capture + hash it locally exactly like a device PIN and make no
+        // server-verified claim in the UI.
         val salt = AppLockCrypto.newSalt()
-        store.savePin(hash = AppLockCrypto.hashPin(pin, salt), salt = salt, length = pin.length)
+        store.savePin(hash = AppLockCrypto.hashPin(pin, salt), salt = salt, length = pin.length, source = source)
         store.enabled = true
         _attempts.value = AttemptState()
         refresh()
-        Log.i(TAG, "App lock enabled (pin length ${pin.length}).")
+        Log.i(TAG, "App lock enabled (pin length ${pin.length}, source $source).")
     }
 
     /** A non-mutating PIN check used by the change-PIN flow (no lock/backoff side effects). */
@@ -161,6 +174,7 @@ class AppLockController(private val store: AppLockStore) {
         biometricEnabled = store.biometricEnabled,
         afkThreshold = store.afkThreshold,
         pinLength = store.pinLength,
+        pinSource = store.pinSource,
     )
 
     private companion object {

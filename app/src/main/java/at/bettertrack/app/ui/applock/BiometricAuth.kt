@@ -5,8 +5,18 @@ import android.content.ContextWrapper
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
  * Thin BiometricPrompt wrapper for the app lock (spec §5). AndroidX
@@ -34,6 +44,28 @@ fun biometricAvailability(context: Context): BiometricAvailability =
         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAvailability.NONE_ENROLLED
         else -> BiometricAvailability.UNAVAILABLE
     }
+
+/**
+ * Live biometric availability that RE-EVALUATES on every ON_RESUME (spec §5,
+ * Step-17 refinement). Enrollment status changes outside the app (the user leaves
+ * to Android Settings, adds a fingerprint, returns), so the Security toggle must
+ * re-read it on return — that's how a greyed toggle enables itself the moment a
+ * biometric becomes usable, with no need to leave and re-enter the screen.
+ */
+@Composable
+fun rememberBiometricAvailability(): BiometricAvailability {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var availability by remember { mutableStateOf(biometricAvailability(context)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) availability = biometricAvailability(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    return availability
+}
 
 /** Walk the ContextWrapper chain to the hosting Activity (for BiometricPrompt). */
 fun Context.findFragmentActivity(): FragmentActivity? {

@@ -41,13 +41,22 @@ class AppLockStore(appContext: Context) {
 
     val hasPin: Boolean get() = prefs.getString(KEY_PIN_HASH, null) != null
 
+    /**
+     * Where the current lock PIN came from (device vs BetterTrack account). Stored
+     * by name so the seam survives across app versions; unknown/unset ⇒ DEVICE.
+     */
+    var pinSource: PinSource
+        get() = PinSource.fromStorage(prefs.getString(KEY_PIN_SOURCE, null))
+        set(v) = prefs.edit().putString(KEY_PIN_SOURCE, v.name).apply()
+
     // ── PIN ─────────────────────────────────────────────────────────────────
-    /** Persist a freshly hashed PIN (salt + HMAC + length). Resets backoff. */
-    fun savePin(hash: String, salt: String, length: Int) {
+    /** Persist a freshly hashed PIN (salt + HMAC + length + source). Resets backoff. */
+    fun savePin(hash: String, salt: String, length: Int, source: PinSource) {
         prefs.edit()
             .putString(KEY_PIN_HASH, hash)
             .putString(KEY_PIN_SALT, salt)
             .putInt(KEY_PIN_LEN, length)
+            .putString(KEY_PIN_SOURCE, source.name)
             .putInt(KEY_FAIL_COUNT, 0)
             .putLong(KEY_LOCKOUT_UNTIL, 0L)
             .apply()
@@ -92,6 +101,7 @@ class AppLockStore(appContext: Context) {
         const val KEY_PIN_HASH = "pin_hash"
         const val KEY_PIN_SALT = "pin_salt"
         const val KEY_PIN_LEN = "pin_len"
+        const val KEY_PIN_SOURCE = "pin_source"
         const val KEY_FAIL_COUNT = "fail_count"
         const val KEY_LOCKOUT_UNTIL = "lockout_until"
 
