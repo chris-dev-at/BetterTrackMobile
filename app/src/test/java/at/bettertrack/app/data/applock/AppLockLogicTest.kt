@@ -129,7 +129,7 @@ class AppLockLogicTest {
 
     @Test
     fun `bettertrack pin must be exactly four digits`() {
-        assertTrue(isValidPinFor("2046", PinSource.BETTERTRACK))
+        assertTrue(isValidPinFor("1379", PinSource.BETTERTRACK))
         // A 4-digit account PIN only — 5–6 digits are valid for a device PIN but
         // not for the BetterTrack path (it mirrors the 4-digit web login PIN).
         assertFalse(isValidPinFor("12345", PinSource.BETTERTRACK))

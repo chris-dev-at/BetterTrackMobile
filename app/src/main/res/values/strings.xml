@@ -520,11 +520,19 @@
     <string name="bt_applock_setup_choice_device_title">Create a device PIN</string>
     <string name="bt_applock_setup_choice_device_sub">A new 4–6 digit PIN just for opening this app</string>
     <string name="bt_applock_setup_choice_bt_title">Use my BetterTrack PIN</string>
-    <string name="bt_applock_setup_choice_bt_sub">The same 4-digit PIN as your BetterTrack account, saved only on this device</string>
+    <string name="bt_applock_setup_choice_bt_sub">The same 4-digit PIN as your BetterTrack account</string>
     <string name="bt_applock_setup_bt_enter">Enter your BetterTrack PIN</string>
-    <string name="bt_applock_setup_bt_hint">Use the same 4-digit PIN as your BetterTrack account. It\'s saved only on this device — we don\'t send it anywhere.</string>
+    <string name="bt_applock_setup_bt_hint">Use the same 4-digit PIN as your BetterTrack account. We check it once, then keep only a locked copy of it on this device.</string>
     <string name="bt_applock_mismatch">PINs didn\'t match, try again</string>
     <string name="bt_applock_continue">Continue</string>
+    <!-- BetterTrack-PIN verify path (server round-trip; gated off until the mobile OAuth bearer can reach /auth/pin/verify) -->
+    <string name="bt_applock_bt_verifying">Checking your BetterTrack PIN…</string>
+    <string name="bt_applock_bt_wrong">That\'s not your BetterTrack PIN</string>
+    <string name="bt_applock_bt_offline">Connect to the internet to verify your BetterTrack PIN</string>
+    <string name="bt_applock_bt_error">Couldn\'t verify right now. Please try again</string>
+    <string name="bt_applock_bt_nopin_title">No BetterTrack PIN yet</string>
+    <string name="bt_applock_bt_nopin_message">Your account doesn\'t have a web PIN set yet. Create a device PIN for this app instead, or set one on the BetterTrack website first.</string>
+    <string name="bt_applock_bt_nopin_device">Create a device PIN</string>
     <string name="bt_applock_biometric_offer_title">Enable biometric unlock?</string>
     <string name="bt_applock_biometric_offer_message">Use your fingerprint or face to unlock the app, with your PIN as a fallback.</string>
     <string name="bt_applock_biometric_offer_enable">Enable</string>

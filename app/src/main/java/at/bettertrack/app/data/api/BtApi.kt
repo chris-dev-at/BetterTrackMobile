@@ -42,6 +42,7 @@ import at.bettertrack.app.data.api.dto.MeResponse
 import at.bettertrack.app.data.api.dto.NotificationListResponse
 import at.bettertrack.app.data.api.dto.NotificationSettingsResponse
 import at.bettertrack.app.data.api.dto.OAuthGrantListResponse
+import at.bettertrack.app.data.api.dto.PinVerifyRequest
 import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
 import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.PortfolioHistoryResponse
@@ -97,6 +98,20 @@ interface BtApi {
     /** The signed-in user — username/email for display, role/status gating. */
     @GET("auth/me")
     suspend fun me(): Response<MeResponse>
+
+    /**
+     * Verify the account's existing web PIN — the "use my BetterTrack PIN"
+     * app-lock option (§5). 200 = match (renews the session, returns MeResponse);
+     * 401 = wrong PIN; 400 = the account has no web PIN. This only REUSES the PIN
+     * (never sets/changes it).
+     *
+     * `X-Bt-No-Reauth` tells [TokenAuthenticator] NOT to treat a 401 here as an
+     * expired access token: a wrong PIN is a domain answer, and a refresh+retry
+     * would silently double-submit the attempt against the server's PIN limiter.
+     */
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/pin/verify")
+    suspend fun pinVerify(@Body body: PinVerifyRequest): Response<MeResponse>
 
     /** Apps the user has authorized — used to find our grant for logout revocation. */
     @GET("settings/oauth-grants")

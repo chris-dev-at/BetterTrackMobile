@@ -8,6 +8,7 @@ import at.bettertrack.app.data.api.TokenApi
 import at.bettertrack.app.data.api.TokenAuthenticator
 import at.bettertrack.app.data.auth.AuthRepository
 import at.bettertrack.app.data.auth.OAuthConfig
+import at.bettertrack.app.data.applock.AccountPinService
 import at.bettertrack.app.data.applock.AppLockController
 import at.bettertrack.app.data.applock.AppLockStore
 import at.bettertrack.app.data.auth.SecureStore
@@ -212,6 +213,15 @@ object AppGraph {
     // into the UI by BtRoot and re-locked on cold start / AFK return.
     val appLockController: AppLockController by lazy {
         AppLockController(AppLockStore(appContext))
+    }
+
+    /**
+     * The account-PIN network seam for the "use my BetterTrack PIN" option (§5):
+     * reads `/auth/me` (pinEnabled) and verifies against `/auth/pin/verify` on the
+     * authenticated client. Never sets/changes the web PIN.
+     */
+    val accountPinService: AccountPinService by lazy {
+        AccountPinService(api = btApi, json = json)
     }
 
     /**

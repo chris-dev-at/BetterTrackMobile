@@ -61,6 +61,17 @@ data class MeResponse(
     val createdAt: String? = null,
 )
 
+// ── POST /api/v1/auth/pin/verify — verify the account's web PIN ───────────────
+// The "use my BetterTrack PIN" app-lock option REUSES the existing web PIN; it
+// never sets or changes it. The server answers 200 (match, renews session) /
+// 401 (wrong) / 400 (no PIN on the account). The PIN travels here over TLS and
+// is never persisted by the app — on success only a local Keystore hash is kept.
+@Serializable
+data class PinVerifyRequest(
+    // 4–10 digits, ^\d+$ (server-validated). The app only ever sends 4.
+    val pin: String,
+)
+
 // ── GET /api/v1/settings/oauth-grants (best-effort logout revocation) ────────
 @Serializable
 data class OAuthGrantListResponse(

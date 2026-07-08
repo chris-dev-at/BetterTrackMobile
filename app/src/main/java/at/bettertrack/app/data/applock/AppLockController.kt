@@ -120,17 +120,16 @@ class AppLockController(private val store: AppLockStore) {
      * Set (or replace) the PIN and turn the lock on. Resets backoff.
      *
      * [source] records whether this is a fresh device PIN or the user's BetterTrack
-     * account PIN. Either way the PIN is only ever stored LOCALLY (Keystore-hashed);
-     * the BetterTrack path is not server-verified yet — see the TODO below.
+     * account PIN. Either way the PIN is only ever stored LOCALLY (Keystore-hashed).
+     *
+     * A `source == BETTERTRACK` PIN is verified against the account BEFORE this
+     * call (the setup screen POSTs `/auth/pin/verify` and only reaches here on a
+     * 200 — see AppLockSetupScreen.verifyBetterTrackAndActivate). This method stays
+     * a plain local write; it never sees the network. NOTE: today the BETTERTRACK
+     * path is unreachable (AppLockFeatures.betterTrackPinLock is off — the mobile
+     * bearer is 403-forbidden on that endpoint), so every live call is a DEVICE PIN.
      */
     fun setupPin(pin: String, source: PinSource = PinSource.Default) {
-        // TODO(platform verify-pin): once POST /auth/verify-pin ships, a
-        // source == BETTERTRACK PIN must be validated against the account HERE
-        // (before storing) and this call should become suspend/return a result so
-        // the setup screen can surface a "that's not your BetterTrack PIN" error;
-        // a "PIN changed since" signal would also drive a re-enter prompt. Until
-        // then we capture + hash it locally exactly like a device PIN and make no
-        // server-verified claim in the UI.
         val salt = AppLockCrypto.newSalt()
         store.savePin(hash = AppLockCrypto.hashPin(pin, salt), salt = salt, length = pin.length, source = source)
         store.enabled = true

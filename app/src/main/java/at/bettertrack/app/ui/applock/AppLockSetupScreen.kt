@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.applock.AccountPinStatus
+import at.bettertrack.app.data.applock.AppLockFeatures
+import at.bettertrack.app.data.applock.BtPinVerifyOutcome
 import at.bettertrack.app.data.applock.PIN_MAX_LENGTH
 import at.bettertrack.app.data.applock.PIN_MIN_LENGTH
 import at.bettertrack.app.data.applock.PinSource
@@ -56,22 +60,25 @@ import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private enum class SetupPhase { Choose, VerifyCurrent, Enter, Confirm }
 
 /**
  * The set-up / change-PIN flow (spec §5), reached from Settings → Security.
- *  - **change = false** creates a first PIN (enabling the lock). It opens on a
- *    **source choice**: a fresh *device* PIN (4–6 digits, invented here) or the
- *    user's existing *BetterTrack account* PIN (exactly 4 digits). Either way the
- *    PIN is only stored LOCALLY (Keystore-hashed) — the BetterTrack path is NOT
- *    server-verified yet (there's no verify-PIN endpoint; see [PinSource] and the
- *    `// TODO(platform verify-pin)` in the controller). The choice is recorded as
- *    a [PinSource] so real verification drops in later without a redesign.
- *  - **change = true** first verifies the current PIN, then takes a new one,
- *    preserving the existing source.
- * A PIN is entered then re-entered to confirm (mismatch bounces back). After a
+ *  - **change = false** creates a first PIN (enabling the lock).
+ *    - When [AppLockFeatures.betterTrackPinLock] is ON it opens on a **source
+ *      choice**: a fresh *device* PIN (4–6 digits, invented here) or the user's
+ *      existing *BetterTrack account* PIN (exactly 4 digits, **verified live**
+ *      against `POST /auth/pin/verify` before the lock activates; on success only
+ *      a local Keystore hash is stored, never the PIN).
+ *    - When it is OFF (today — the mobile OAuth bearer is 403-forbidden on the PIN
+ *      endpoints) the chooser is skipped entirely: setup goes straight to a
+ *      **device PIN** (the only supported source). See [AppLockFeatures].
+ *  - **change = true** first verifies the current PIN, then takes a new one.
+ * A device PIN is entered then re-entered to confirm (mismatch bounces back); a
+ * BetterTrack PIN is entered once and the server is the confirmation. After a
  * first-time set-up, if a biometric is enrolled the user is offered fingerprint/
  * face unlock. On success we pop back to Security.
  */
@@ -84,18 +91,41 @@ fun AppLockSetupScreen(
 ) {
     val bt = BtTheme.colors
     val controller = AppGraph.appLockController
+    val pinService = AppGraph.accountPinService
     val context = LocalContext.current
     val reducedMotion = rememberReducedMotion()
+    val scope = rememberCoroutineScope()
+
+    // The BetterTrack-PIN option is gated behind a feature switch that is OFF while
+    // the mobile bearer can't reach /auth/pin/verify (see AppLockFeatures).
+    val betterTrackEnabled = AppLockFeatures.betterTrackPinLock
 
     val storedLength = remember { controller.config.value.pinLength.coerceIn(PIN_MIN_LENGTH, PIN_MAX_LENGTH) }
-    // Changing preserves the existing source; a fresh set-up starts on the chooser.
-    var pinSource by remember { mutableStateOf(if (change) controller.config.value.pinSource else PinSource.Default) }
-    var phase by remember { mutableStateOf(if (change) SetupPhase.VerifyCurrent else SetupPhase.Choose) }
+    // Changing preserves the existing source (only meaningful when the option is
+    // enabled); a fresh set-up starts as a device PIN unless the chooser changes it.
+    var pinSource by remember {
+        mutableStateOf(if (change && betterTrackEnabled) controller.config.value.pinSource else PinSource.DEVICE)
+    }
+    // Fresh set-up opens on the chooser only when the BetterTrack option exists;
+    // otherwise it's device-PIN-only and jumps straight to PIN entry.
+    var phase by remember {
+        mutableStateOf(
+            when {
+                change -> SetupPhase.VerifyCurrent
+                betterTrackEnabled -> SetupPhase.Choose
+                else -> SetupPhase.Enter
+            },
+        )
+    }
     var entered by remember { mutableStateOf("") }
     var firstPin by remember { mutableStateOf("") }
     var errorRes by remember { mutableStateOf<Int?>(null) }
     var shakeTrigger by remember { mutableIntStateOf(0) }
     var showBiometricOffer by remember { mutableStateOf(false) }
+    // BetterTrack path only: live-verify state + the "no web PIN on the account" dialog.
+    var verifying by remember { mutableStateOf(false) }
+    var showNoPinDialog by remember { mutableStateOf(false) }
+    var accountStatus by remember { mutableStateOf<AccountPinStatus?>(null) }
 
     // The fixed length this phase expects, or null when the user is free to pick
     // 4–6 (only a *device* PIN in the Enter phase).
@@ -124,9 +154,52 @@ fun AppLockSetupScreen(
         }
     }
 
+    // Gate the option on the account actually having a web PIN (owner's rule),
+    // when /auth/me is readable with the bearer. If it isn't (403), the option is
+    // still offered and the verify call becomes the gate. Runs only when the
+    // option is enabled — dormant today. Reads identity too (a separate owner ask).
+    LaunchedEffect(betterTrackEnabled, change) {
+        if (betterTrackEnabled && !change) {
+            val status = pinService.fetchAccountPin()
+            accountStatus = status
+            // Definitely no web PIN ⇒ device-PIN-only, no choice shown.
+            if (status is AccountPinStatus.Available && !status.pinEnabled && phase == SetupPhase.Choose) {
+                pinSource = PinSource.DEVICE
+                phase = SetupPhase.Enter
+                entered = ""
+            }
+        }
+    }
+
     fun finishAfterSave() {
         val available = biometricAvailability(context) == BiometricAvailability.AVAILABLE
         if (!change && available) showBiometricOffer = true else onDone()
+    }
+
+    // Verify an entered BetterTrack account PIN against the server, then activate
+    // the lock (storing ONLY a local Keystore hash) — the PIN is never persisted.
+    fun verifyBetterTrackAndActivate(pin: String) {
+        verifying = true
+        errorRes = null
+        scope.launch {
+            val outcome = pinService.verifyBetterTrackPin(pin)
+            verifying = false
+            when (outcome) {
+                BtPinVerifyOutcome.Correct -> {
+                    controller.setupPin(pin, PinSource.BETTERTRACK)
+                    finishAfterSave()
+                }
+                BtPinVerifyOutcome.WrongPin -> fail(R.string.bt_applock_bt_wrong)
+                BtPinVerifyOutcome.NoPinSet -> {
+                    entered = ""
+                    showNoPinDialog = true
+                }
+                BtPinVerifyOutcome.Offline -> fail(R.string.bt_applock_bt_offline)
+                // Forbidden shouldn't occur while the option is enabled (the probe
+                // gates that), but map it to a safe generic retry either way.
+                BtPinVerifyOutcome.Forbidden, BtPinVerifyOutcome.Error -> fail(R.string.bt_applock_bt_error)
+            }
+        }
     }
 
     fun onComplete(pin: String) {
@@ -141,17 +214,19 @@ fun AppLockSetupScreen(
                     fail(R.string.bt_applock_wrong_pin)
                 }
 
-            SetupPhase.Enter -> {
-                firstPin = pin
-                phase = SetupPhase.Confirm
-                entered = ""
-            }
+            SetupPhase.Enter ->
+                if (pinSource == PinSource.BETTERTRACK) {
+                    // The server is the confirmation — no local re-enter step.
+                    verifyBetterTrackAndActivate(pin)
+                } else {
+                    firstPin = pin
+                    phase = SetupPhase.Confirm
+                    entered = ""
+                }
 
             SetupPhase.Confirm ->
                 if (pin == firstPin) {
-                    // Stores the PIN locally (Keystore-hashed) tagged with its source.
-                    // BetterTrack verification against the account is a future drop-in
-                    // — see the TODO(platform verify-pin) in AppLockController.setupPin.
+                    // Device PIN: stored locally (Keystore-hashed), tagged DEVICE.
                     controller.setupPin(pin, pinSource)
                     finishAfterSave()
                 } else {
@@ -170,15 +245,16 @@ fun AppLockSetupScreen(
         SetupPhase.Enter -> fixedLen // null for a device PIN ⇒ explicit Continue
     }
 
+    val inputBlocked = errorRes != null || verifying
     val onDigit: (Int) -> Unit = onDigit@{ d ->
-        if (errorRes != null) return@onDigit
+        if (inputBlocked) return@onDigit
         val cap = if (phase == SetupPhase.Enter) (fixedLen ?: PIN_MAX_LENGTH) else (autoSubmitLength ?: PIN_MAX_LENGTH)
         if (entered.length >= cap) return@onDigit
         entered += d.toString()
         if (autoSubmitLength != null && entered.length == autoSubmitLength) onComplete(entered)
     }
     val onBackspace: () -> Unit = onBackspace@{
-        if (errorRes != null) return@onBackspace
+        if (inputBlocked) return@onBackspace
         if (entered.isNotEmpty()) entered = entered.dropLast(1)
     }
 
@@ -190,13 +266,15 @@ fun AppLockSetupScreen(
         }
     }
 
-    // Back within a fresh set-up returns to the chooser; otherwise it exits.
+    // Back within a fresh set-up returns to the chooser (only when the chooser
+    // exists); otherwise it exits.
     val onNavBack: () -> Unit = {
-        if (!change && (phase == SetupPhase.Enter || phase == SetupPhase.Confirm)) {
+        if (!change && betterTrackEnabled && (phase == SetupPhase.Enter || phase == SetupPhase.Confirm)) {
             phase = SetupPhase.Choose
             entered = ""
             firstPin = ""
             errorRes = null
+            verifying = false
         } else {
             onBack()
         }
@@ -237,8 +315,13 @@ fun AppLockSetupScreen(
         },
     ) { pad ->
         if (phase == SetupPhase.Choose) {
+            val showBetterTrack = when (val s = accountStatus) {
+                is AccountPinStatus.Available -> s.pinEnabled // offer only when a web PIN exists
+                else -> true // can't read pinEnabled (403 / offline / loading) ⇒ offer; verify gates
+            }
             ChooseSourceContent(
                 modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 24.dp),
+                showBetterTrack = showBetterTrack,
                 onPick = { source ->
                     pinSource = source
                     entered = ""
@@ -276,11 +359,22 @@ fun AppLockSetupScreen(
             }
 
             Box(Modifier.height(36.dp).padding(top = 12.dp), contentAlignment = Alignment.Center) {
-                errorRes?.let { Text(stringResource(it), color = bt.loss, style = MaterialTheme.typography.bodyMedium) }
+                when {
+                    verifying -> Text(
+                        stringResource(R.string.bt_applock_bt_verifying),
+                        color = bt.textMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    errorRes != null -> Text(
+                        stringResource(errorRes!!),
+                        color = bt.loss,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
             Spacer(Modifier.weight(0.55f))
 
-            PinKeypad(onDigit = onDigit, onBackspace = onBackspace, enabled = errorRes == null)
+            PinKeypad(onDigit = onDigit, onBackspace = onBackspace, enabled = !inputBlocked)
 
             Spacer(Modifier.height(20.dp))
             // Explicit Continue only in the variable-length device "choose a PIN"
@@ -289,7 +383,7 @@ fun AppLockSetupScreen(
                 BtPrimaryButton(
                     text = stringResource(R.string.bt_applock_continue),
                     onClick = { onComplete(entered) },
-                    enabled = entered.length in PIN_MIN_LENGTH..PIN_MAX_LENGTH && errorRes == null,
+                    enabled = entered.length in PIN_MIN_LENGTH..PIN_MAX_LENGTH && !inputBlocked,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                 )
             } else {
@@ -321,15 +415,44 @@ fun AppLockSetupScreen(
             },
         )
     }
+
+    // The account has no web PIN to reuse — offer a device PIN instead (spec §5).
+    if (showNoPinDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoPinDialog = false; phase = SetupPhase.Choose; entered = "" },
+            containerColor = bt.surface,
+            titleContentColor = bt.textPrimary,
+            textContentColor = bt.textSecondary,
+            title = { Text(stringResource(R.string.bt_applock_bt_nopin_title)) },
+            text = { Text(stringResource(R.string.bt_applock_bt_nopin_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNoPinDialog = false
+                    pinSource = PinSource.DEVICE
+                    phase = SetupPhase.Enter
+                    entered = ""
+                    errorRes = null
+                }) { Text(stringResource(R.string.bt_applock_bt_nopin_device), color = bt.gold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoPinDialog = false; phase = SetupPhase.Choose; entered = "" }) {
+                    Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+                }
+            },
+        )
+    }
 }
 
 /**
  * First-run PIN-source chooser: a fresh device PIN, or the user's existing
- * BetterTrack account PIN (stored locally, honestly labelled — no server claim).
+ * BetterTrack account PIN (server-verified on entry). The BetterTrack card is
+ * shown only when [showBetterTrack] is true (the account has a web PIN, or we
+ * couldn't read `pinEnabled` and let the verify call gate it).
  */
 @Composable
 private fun ChooseSourceContent(
     modifier: Modifier,
+    showBetterTrack: Boolean,
     onPick: (PinSource) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -359,13 +482,15 @@ private fun ChooseSourceContent(
             subtitle = stringResource(R.string.bt_applock_setup_choice_device_sub),
             onClick = { onPick(PinSource.DEVICE) },
         )
-        Spacer(Modifier.height(12.dp))
-        SetupChoiceCard(
-            icon = Icons.Outlined.Badge,
-            title = stringResource(R.string.bt_applock_setup_choice_bt_title),
-            subtitle = stringResource(R.string.bt_applock_setup_choice_bt_sub),
-            onClick = { onPick(PinSource.BETTERTRACK) },
-        )
+        if (showBetterTrack) {
+            Spacer(Modifier.height(12.dp))
+            SetupChoiceCard(
+                icon = Icons.Outlined.Badge,
+                title = stringResource(R.string.bt_applock_setup_choice_bt_title),
+                subtitle = stringResource(R.string.bt_applock_setup_choice_bt_sub),
+                onClick = { onPick(PinSource.BETTERTRACK) },
+            )
+        }
         Spacer(Modifier.weight(1.3f))
     }
 }
