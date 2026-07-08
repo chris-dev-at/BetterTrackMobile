@@ -48,9 +48,13 @@ Single source of truth for everything the **mobile app** (Android, this repo) ne
 
 ### Settings — account & security (spec §6.12 — app UI built, calls stubbed)
 - [ ] **P2 — Change password under bearer** (or a clear "manage on web" deep link the app can rely on).
-- [ ] **P2 — Delete account under bearer** (type-to-confirm flow is built app-side).
+- [ ] **P1 — Delete account under bearer** (type-to-confirm flow is built app-side). **Play publishing blocker** — see the Release section below.
 - [ ] **P2 — 2FA management under bearer:** TOTP enroll (QR/secret) + verify, email codes, recovery codes, disable.
 - [ ] **P2 — Active sessions under bearer:** list sessions + revoke one / revoke-all-others.
+
+### Release / Play Store publishing blockers (pairs with docs/TODO.md "Step 20")
+- [ ] **P1 — Self-service account deletion via a PUBLIC WEB URL** (in addition to the in-app path above). Google Play mandates account deletion be reachable **both** in-app **and** via a web resource, and that it deletes the user's data. Needs a web-facing deletion page/flow on the site. *(The single hardest publishing blocker — schedule deliberately.)*
+- [ ] **P1 — Public privacy-policy page** at a stable URL (e.g. `https://bettertrack.at/privacy`): data collected, use, sharing, retention, and the deletion path. Required to complete the Play **Data Safety** form and shown in the store listing.
 
 ### Lower priority / cosmetic
 - [ ] **P3 — Fix `openapi.json` per-route `security` metadata.** It declares `sessionCookie`-only on every route, which is misleading — the runtime middleware correctly accepts the OAuth bearer on module routes. Cosmetic docs bug; the app trusts the middleware, not the spec.
