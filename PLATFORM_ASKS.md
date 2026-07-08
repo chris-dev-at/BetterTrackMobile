@@ -14,6 +14,18 @@ Single source of truth for everything the **mobile app** (Android, this repo) ne
 
 ---
 
+## ⭐ Current top priorities (start here — biggest unblock first)
+1. **Bearer access to `GET /auth/me`** — unlocks BOTH the real username/email display in the app AND the `pinEnabled` flag needed for the "use my BetterTrack PIN" lock. (Today it's session-cookie-only → 403 under the app's bearer.)
+2. **Bearer access to `POST /auth/pin/verify`** — lets the app verify a typed PIN against the account for the "use my BetterTrack PIN" app-lock. (Same session-only concern; being probed live from the app now.)
+3. **`social:write` scope** for the BetterTrackMobile client — turns friend add/accept/decline/unfriend live and unblocks the Social v2 redesign.
+4. **FCM device-token endpoints + server push-send** — real push notifications with the app closed.
+5. **Idempotency key on transaction/cash mutations** — lets the app drop its `[bt:<uuid>]` note-marker exactly-once hack.
+6. **Play-Store publishing blockers** (web account-deletion page + privacy-policy URL) — needed before store submission (Step 20).
+
+*(1 and 2 are the immediate ones — they may be the same one change: "accept the mobile OAuth bearer on `/auth/me` and `/auth/pin/*`, with the right scope." Full details for every item below.)*
+
+---
+
 ## § OPEN — needed from the main dev
 
 ### Auth & identity
