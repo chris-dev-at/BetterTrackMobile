@@ -128,6 +128,12 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
 
+    // Step 17 — app lock: BiometricPrompt (fingerprint/face) + PIN. `fragment`
+    // is the FragmentActivity host BiometricPrompt requires; pinned modern so it
+    // aligns with lifecycle 2.11 instead of biometric 1.1.0's transitive 1.2.5.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
+
     // Step 5 — local database (Room) & sync engine core (WorkManager).
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

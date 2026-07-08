@@ -8,6 +8,8 @@ import at.bettertrack.app.data.api.TokenApi
 import at.bettertrack.app.data.api.TokenAuthenticator
 import at.bettertrack.app.data.auth.AuthRepository
 import at.bettertrack.app.data.auth.OAuthConfig
+import at.bettertrack.app.data.applock.AppLockController
+import at.bettertrack.app.data.applock.AppLockStore
 import at.bettertrack.app.data.auth.SecureStore
 import at.bettertrack.app.data.auth.TokenManager
 import at.bettertrack.app.data.db.AccountDataManager
@@ -204,6 +206,13 @@ object AppGraph {
     }
 
     val pushTokenManager: PushTokenManager by lazy { PushTokenManager(appContext) }
+
+    // ── Step 17: local app lock (PIN + biometrics, §5) ───────────────────────
+    // Login-independent: its own encrypted vault + Keystore-HMAC'd PIN, gated
+    // into the UI by BtRoot and re-locked on cold start / AFK return.
+    val appLockController: AppLockController by lazy {
+        AppLockController(AppLockStore(appContext))
+    }
 
     /**
      * A pending notification tap-through target: set by [MainActivity] from a

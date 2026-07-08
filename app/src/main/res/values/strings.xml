@@ -468,4 +468,55 @@
     <string name="bt_notif_type_security_sub">Temporary passwords and security notices</string>
     <string name="bt_notif_type_system">System</string>
     <string name="bt_notif_type_system_sub">General app notifications</string>
+
+    <!-- ── Step 17: app lock (local PIN + biometrics, §5) ─────────────────── -->
+    <string name="bt_action_done">Done</string>
+    <!-- Settings row into the Security section -->
+    <string name="bt_settings_security_sub">App lock, PIN and biometrics</string>
+    <!-- Security screen — app lock section -->
+    <string name="bt_settings_applock_section">App lock</string>
+    <string name="bt_settings_applock_title">App lock</string>
+    <string name="bt_settings_applock_sub">Require a PIN or biometrics to open the app</string>
+    <string name="bt_settings_applock_change">Change PIN</string>
+    <string name="bt_settings_applock_change_sub">Set a new unlock PIN</string>
+    <string name="bt_settings_applock_biometric">Unlock with biometrics</string>
+    <string name="bt_settings_applock_biometric_sub">Use fingerprint or face to unlock</string>
+    <string name="bt_settings_applock_biometric_none">Add a fingerprint in your phone settings — this turns on automatically</string>
+    <string name="bt_settings_applock_threshold">Require unlock</string>
+    <string name="bt_settings_applock_footnote">The app lock is stored only on this device and is separate from your BetterTrack account password. Forgetting the PIN signs you out.</string>
+    <string name="bt_settings_applock_disable_title">Turn off app lock?</string>
+    <string name="bt_settings_applock_disable_message">Your PIN will be removed and the app will no longer ask to unlock.</string>
+    <string name="bt_settings_applock_disable_confirm">Turn off</string>
+    <!-- AFK re-lock threshold options -->
+    <string name="bt_applock_afk_immediately">Immediately</string>
+    <string name="bt_applock_afk_1m">After 1 minute</string>
+    <string name="bt_applock_afk_5m">After 5 minutes</string>
+    <string name="bt_applock_afk_15m">After 15 minutes</string>
+    <!-- Lock screen -->
+    <string name="bt_applock_enter_pin">Enter your PIN</string>
+    <string name="bt_applock_wrong_pin">Wrong PIN, try again</string>
+    <string name="bt_applock_too_many">Too many attempts</string>
+    <string name="bt_applock_try_again_in">Try again in %1$s</string>
+    <string name="bt_applock_forgot_pin">Forgot PIN?</string>
+    <string name="bt_applock_forgot_title">Forgot your PIN?</string>
+    <string name="bt_applock_forgot_message">To reset it we\'ll sign you out and clear this device\'s local data. You can set a new PIN after signing in again.</string>
+    <string name="bt_applock_backspace">Delete</string>
+    <string name="bt_applock_biometric_cd">Unlock with biometrics</string>
+    <!-- Biometric prompt -->
+    <string name="bt_applock_biometric_title">Unlock BetterTrack</string>
+    <string name="bt_applock_biometric_subtitle">Use your fingerprint or face to unlock</string>
+    <string name="bt_applock_use_pin">Use PIN</string>
+    <!-- Setup / change flow -->
+    <string name="bt_applock_setup_bar">App lock</string>
+    <string name="bt_applock_setup_hint">Use 4 to 6 digits. This PIN is stored only on this device.</string>
+    <string name="bt_applock_setup_create">Create a PIN</string>
+    <string name="bt_applock_setup_new">Enter a new PIN</string>
+    <string name="bt_applock_setup_confirm">Re-enter your PIN</string>
+    <string name="bt_applock_setup_current">Enter your current PIN</string>
+    <string name="bt_applock_mismatch">PINs didn\'t match, try again</string>
+    <string name="bt_applock_continue">Continue</string>
+    <string name="bt_applock_biometric_offer_title">Enable biometric unlock?</string>
+    <string name="bt_applock_biometric_offer_message">Use your fingerprint or face to unlock the app, with your PIN as a fallback.</string>
+    <string name="bt_applock_biometric_offer_enable">Enable</string>
+    <string name="bt_applock_not_now">Not now</string>
 </resources>

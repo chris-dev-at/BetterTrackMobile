@@ -11,7 +11,9 @@ import kotlinx.serialization.Serializable
 
 // ── Auth & lock ────────────────────────────────────────────────────────────
 @Serializable data object LoginRoute            // TODO(step 4)
-@Serializable data object AppLockRoute          // TODO(step 17)
+@Serializable data object AppLockRoute          // reserved (lock is a BtRoot gate, not a nav route)
+/** Step 17 (§5): set-up / change-PIN flow. [change] gates verify-current-first. */
+@Serializable data class AppLockSetupRoute(val change: Boolean = false)
 
 // ── Tabs (top-level) ───────────────────────────────────────────────────────
 @Serializable data object PortfolioTabRoute     // portfolio overview — TODO(step 6)

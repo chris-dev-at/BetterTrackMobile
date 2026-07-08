@@ -41,6 +41,14 @@ securityCrypto = "1.1.0-alpha06"
 lifecycleViewmodelCompose = "2.11.0"
 kotlinxCoroutines = "1.10.2"
 
+# ── Step 17 (app lock: local PIN + biometrics, spec §5) ────────────────────
+# AndroidX BiometricPrompt smooths the API 28→33 biometric surface (fingerprint/
+# face) and gives one canAuthenticate() availability check. It hosts on a
+# FragmentActivity, so `fragment` is pinned to a modern version aligned with
+# lifecycle 2.11 (biometric 1.1.0 would otherwise drag in fragment 1.2.5).
+androidxBiometric = "1.1.0"
+androidxFragment = "1.8.5"
+
 # ── Step 16 (notifications: FCM push client) ───────────────────────────────
 # Firebase Cloud Messaging client. The google-services plugin reads the already-
 # placed app/google-services.json (project bettertrackapp-c6996). Versions come
@@ -79,6 +87,10 @@ retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = 
 retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+
+# Step 17 — app lock: BiometricPrompt + its FragmentActivity host.
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "androidxBiometric" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "androidxFragment" }
 
 # Step 16 — Firebase Cloud Messaging (FCM push client). Version-less: the BoM
 # platform below pins firebase-messaging so it stays consistent.

@@ -34,6 +34,10 @@ class BetterTrackApplication : Application() {
         PushChannels.ensure(this)
         AppGraph.pushTokenManager.fetchToken()
 
+        // Step 17 (§5): arm the app lock's AFK background/foreground trigger. The
+        // initial locked state (cold start) is set when the controller is built.
+        AppGraph.appLockController.start()
+
         // Live connectivity for the offline banner + the reconnect trigger.
         AppGraph.connectivityMonitor.start()
         appScope.launch {

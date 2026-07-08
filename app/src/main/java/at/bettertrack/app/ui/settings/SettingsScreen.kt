@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,6 +62,7 @@ import at.bettertrack.app.ui.update.UpdateAvailableRow
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenNotifications: () -> Unit = {},
+    onOpenSecurity: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val auth = AppGraph.authRepository
@@ -143,6 +145,12 @@ fun SettingsScreen(
                 text = stringResource(R.string.bt_settings_preferences_section).uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 color = bt.textMuted,
+            )
+            SettingsNavRow(
+                icon = Icons.Outlined.Lock,
+                title = stringResource(R.string.bt_dest_settings_security),
+                subtitle = stringResource(R.string.bt_settings_security_sub),
+                onClick = onOpenSecurity,
             )
             SettingsNavRow(
                 icon = Icons.Outlined.Notifications,

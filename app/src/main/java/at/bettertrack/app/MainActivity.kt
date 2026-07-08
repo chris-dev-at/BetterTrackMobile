@@ -6,7 +6,7 @@ import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,8 +20,17 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.shell.BtRoot
 import kotlinx.serialization.json.Json
 import at.bettertrack.app.ui.theme.BetterTrackTheme
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+/**
+ * A [FragmentActivity] (not a bare ComponentActivity) so the Step-17 app lock can
+ * host androidx BiometricPrompt, which requires a FragmentActivity. All the
+ * Compose/edge-to-edge/splash APIs used here are ComponentActivity extensions,
+ * which FragmentActivity still is — so nothing else changes.
+ */
+class MainActivity : FragmentActivity() {
 
     private val auth: AuthRepository by lazy { AppGraph.authRepository }
 
@@ -52,6 +61,32 @@ class MainActivity : ComponentActivity() {
         handleAuthDeepLink(intent)
         // Cold-start notification tap (Step 16): park the deep-link target.
         handleNotificationIntent(intent)
+
+        // Step 17 (§5): keep the recents/task-switcher mask in sync with the
+        // app-lock enabled state. Driven off the controller (not onPause) so the
+        // mask is armed on cold start AND the instant the user toggles the lock,
+        // closing the "enable then immediately background" snapshot race.
+        lifecycleScope.launch {
+            AppGraph.appLockController.config.collect { applyRecentsMasking(it.enabled) }
+        }
+    }
+
+    /**
+     * Hide app content in the recents preview when the lock is on (spec §5).
+     * On API 33+ we suppress the task snapshot entirely (`setRecentsScreenshotEnabled`),
+     * which shows the splash background in recents and — unlike FLAG_SECURE — does
+     * NOT blacken the live window, so legitimate in-app screenshots still work.
+     * Pre-33 falls back to FLAG_SECURE (also blocks screenshots, an accepted
+     * trade-off on those older devices).
+     */
+    private fun applyRecentsMasking(lockEnabled: Boolean) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            setRecentsScreenshotEnabled(!lockEnabled)
+        } else if (lockEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

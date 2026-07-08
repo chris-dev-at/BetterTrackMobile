@@ -50,6 +50,7 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.AppLockRoute
+import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.AssetsTabRoute
 import at.bettertrack.app.navigation.CashRoute
@@ -111,7 +112,9 @@ import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
 import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
 import at.bettertrack.app.ui.social.SocialScreen
+import at.bettertrack.app.ui.settings.SecurityScreen
 import at.bettertrack.app.ui.settings.SettingsScreen
+import at.bettertrack.app.ui.applock.AppLockSetupScreen
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.reflect.KClass
 
@@ -539,15 +542,27 @@ private fun BtNavHost(
             NotificationsInboxScreen(onBack = back, onDeepLink = onDeepLink)
         }
 
-        // Settings — minimal Step-4 account + logout surface; grows in Step 18.
+        // Settings — account + logout surface; Security section is Step 17, the
+        // rest grows in Step 18.
         composable<SettingsRoute> {
             SettingsScreen(
                 onBack = back,
                 onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
+                onOpenSecurity = { navController.navigate(SettingsSecurityRoute) },
             )
         }
         composable<SettingsAccountRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_account), back) }
-        composable<SettingsSecurityRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_security), back) }
+        composable<SettingsSecurityRoute> {
+            SecurityScreen(
+                onBack = back,
+                onSetupPin = { navController.navigate(AppLockSetupRoute(change = false)) },
+                onChangePin = { navController.navigate(AppLockSetupRoute(change = true)) },
+            )
+        }
+        composable<AppLockSetupRoute> { entry ->
+            val route = entry.toRoute<AppLockSetupRoute>()
+            AppLockSetupScreen(change = route.change, onDone = back, onBack = back)
+        }
         composable<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
         composable<SettingsLanguageRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_language), back) }
         composable<SettingsAboutRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_about), back) }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
 import at.bettertrack.app.ui.theme.BtTheme
@@ -52,7 +53,24 @@ fun BtRoot(
                 onLogout = { auth.requestLogout() },
             )
 
-        is AuthState.LoggedIn -> BtApp()
+        is AuthState.LoggedIn -> {
+            // Step 17 (§5): the app lock gates the logged-in UI. When enabled and
+            // currently locked (cold start / AFK return) the lock screen shows
+            // instead of any data. "Forgot PIN" wipes the lock + logs out so the
+            // user can sign in again and set a new PIN.
+            val lockConfig by AppGraph.appLockController.config.collectAsStateWithLifecycle()
+            val locked by AppGraph.appLockController.locked.collectAsStateWithLifecycle()
+            if (lockConfig.enabled && lockConfig.hasPin && locked) {
+                AppLockScreen(
+                    onForgotPin = {
+                        AppGraph.appLockController.disableLock()
+                        auth.requestLogout()
+                    },
+                )
+            } else {
+                BtApp()
+            }
+        }
     }
 
     // Dev update notifier (Step V) — an app-level overlay dialog, shown over any
