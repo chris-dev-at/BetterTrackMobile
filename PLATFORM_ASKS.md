@@ -20,7 +20,11 @@ Single source of truth for everything the **mobile app** (Android, this repo) ne
 - [ ] **P1 — Bearer coverage for user identity** (`/auth/me` under bearer, or a dedicated `/me`). Today `/auth/*` is session-cookie-only, so under an OAuth bearer the app can't read the logged-in username/email → Settings → Account shows "—". Want a bearer-callable endpoint returning `{ username, email, displayName, … }`.
 - [ ] **P2 — Bearer-accessible token/grant revocation.** `/oauth/*` and `/settings/oauth-grants` are session-only, so app logout is **local-wipe-only** — the server-side token/grant isn't revoked from the app. Want a bearer-callable "revoke this token/grant."
 
-- [ ] **P2 — Account-PIN verification under bearer** (e.g. `POST /auth/verify-pin { pin }` → 200 / 401). Lets the app-lock offer **"use my BetterTrack PIN"** as an unlock option: the user enters their existing platform 4-digit PIN once, the app verifies it against the account, then stores only a local Keystore **hash** (never the PIN). The app never sees the PIN during OAuth (it's entered in the web Custom Tab), so it needs this endpoint to validate it. A "has the PIN changed since?" signal would let the app prompt a re-enter.
+- [ ] **P1 — Web-PIN status + verification under bearer** (owner wants the app-lock's "Use my BetterTrack PIN" option to reuse the EXACT web login PIN, verified). Two small bearer endpoints:
+  - (a) **`GET /auth/pin-status`** → `{ "hasPin": bool }` — does the authenticated account have a web login PIN set? The app only OFFERS the "Use my BetterTrack PIN" option when `hasPin` is true; otherwise it shows device-PIN-only. (Could also be a field on a bearer `/auth/me`.)
+  - (b) **`POST /auth/verify-pin { pin }`** → `200` if it matches the account's web PIN, else `401`. The app verifies the entered PIN really is the web PIN before activating it as the app-lock, and stores only a local Keystore **hash** (never the PIN itself). The app never sees the PIN during OAuth (it's typed in the web Custom Tab), so it needs this to validate.
+  - Please **RATE-LIMIT** `verify-pin` (a 4-digit PIN is brute-forceable). A "pin changed" signal (or re-verify on token refresh) lets the app prompt a re-enter.
+  - Until BOTH exist, the app **hides** the BetterTrack-PIN option and offers device-only PINs.
 
 ### Scopes for the BetterTrackMobile client
 - [ ] **P1 — `social:write`.** Friends UI is fully built (add / accept / decline / cancel / unfriend) but can't perform writes (only `social:read` granted). Grant `social:write` → friend-graph mutations go live.
