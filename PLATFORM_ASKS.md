@@ -32,6 +32,8 @@ Single source of truth for everything the **mobile app** (Android, this repo) ne
 - [ ] **P2 — "Specific friends" per-item sharing (per-friend ACL).** Platform models only `private ↔ friends (all)`. The app's audience picker has a third tier "specific friends" → needs a per-friend share ACL on portfolios / watchlists / conglomerates.
 - [ ] **P2 — Public share links (revocable token).** The app's audience picker has a "public link" tier (blocking acknowledgment + Android share-sheet). Needs a revocable public-link token + a public read route. App mirrors the web's planned `/{kind}/shared/{token}` shape.
 
+- [ ] **P3 — Friend-activity event feed + notifications** (powers the Social-v2 per-shared-item alerts): so the app can notify "friend X bought on their shared portfolio Y" / "added a watchlist item," the platform needs to emit friend-activity events on shared items the user follows and deliver them via the notification channel. The app builds the per-item notification-preference UI now; the actual alerts light up on this. Nice-to-have.
+
 ### Chat (spec §6.10 — app UI built, 100% stubbed)
 - [ ] **P2 — Chat endpoints:** conversations list, message thread (cursor-paged), send message, and **share-in-chat resolution** (an item chip resolves only if the recipient is allowed → else a "not shared with you" state). No groups / reactions / read-receipts required.
 - [ ] **P2 — Realtime:** a `chat.message` room on the existing WS gateway (app has a polling fallback) + unread counts.
