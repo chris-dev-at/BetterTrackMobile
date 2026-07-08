@@ -54,6 +54,7 @@ import at.bettertrack.app.data.applock.PIN_MAX_LENGTH
 import at.bettertrack.app.data.applock.PIN_MIN_LENGTH
 import at.bettertrack.app.data.applock.PinSource
 import at.bettertrack.app.data.applock.fixedPinLengthFor
+import at.bettertrack.app.data.applock.shouldOfferBetterTrackPin
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.rememberReducedMotion
@@ -72,9 +73,9 @@ private enum class SetupPhase { Choose, VerifyCurrent, Enter, Confirm }
  *      choice**: a fresh *device* PIN (4–6 digits, invented here) or the user's
  *      existing *BetterTrack account* PIN (exactly 4 digits, **verified live**
  *      against `POST /auth/pin/verify` before the lock activates; on success only
- *      a local Keystore hash is stored, never the PIN).
- *    - When it is OFF (today — the mobile OAuth bearer is 403-forbidden on the PIN
- *      endpoints) the chooser is skipped entirely: setup goes straight to a
+ *      a local Keystore hash is stored, never the PIN). The account-PIN card is
+ *      offered only when `GET /auth/pin/status` reports the account has a web PIN.
+ *    - When it is OFF the chooser is skipped entirely: setup goes straight to a
  *      **device PIN** (the only supported source). See [AppLockFeatures].
  *  - **change = true** first verifies the current PIN, then takes a new one.
  * A device PIN is entered then re-entered to confirm (mismatch bounces back); a
@@ -96,8 +97,8 @@ fun AppLockSetupScreen(
     val reducedMotion = rememberReducedMotion()
     val scope = rememberCoroutineScope()
 
-    // The BetterTrack-PIN option is gated behind a feature switch that is OFF while
-    // the mobile bearer can't reach /auth/pin/verify (see AppLockFeatures).
+    // The BetterTrack-PIN option is gated behind a feature switch (now ON — the
+    // platform grants the mobile bearer access to the PIN endpoints).
     val betterTrackEnabled = AppLockFeatures.betterTrackPinLock
 
     val storedLength = remember { controller.config.value.pinLength.coerceIn(PIN_MIN_LENGTH, PIN_MAX_LENGTH) }
@@ -155,15 +156,15 @@ fun AppLockSetupScreen(
     }
 
     // Gate the option on the account actually having a web PIN (owner's rule),
-    // when /auth/me is readable with the bearer. If it isn't (403), the option is
-    // still offered and the verify call becomes the gate. Runs only when the
-    // option is enabled — dormant today. Reads identity too (a separate owner ask).
+    // via the dedicated GET /auth/pin/status (pinSet). Only a confirmed web PIN
+    // keeps the chooser; no PIN, forbidden, offline, or error ⇒ fall straight
+    // through to a device-only PIN. Runs only when the option is enabled.
     LaunchedEffect(betterTrackEnabled, change) {
         if (betterTrackEnabled && !change) {
-            val status = pinService.fetchAccountPin()
+            val status = pinService.fetchPinStatus()
             accountStatus = status
-            // Definitely no web PIN ⇒ device-PIN-only, no choice shown.
-            if (status is AccountPinStatus.Available && !status.pinEnabled && phase == SetupPhase.Choose) {
+            // No web PIN to reuse (or we couldn't confirm one) ⇒ device-PIN-only.
+            if (!shouldOfferBetterTrackPin(status) && phase == SetupPhase.Choose) {
                 pinSource = PinSource.DEVICE
                 phase = SetupPhase.Enter
                 entered = ""
@@ -315,10 +316,10 @@ fun AppLockSetupScreen(
         },
     ) { pad ->
         if (phase == SetupPhase.Choose) {
-            val showBetterTrack = when (val s = accountStatus) {
-                is AccountPinStatus.Available -> s.pinEnabled // offer only when a web PIN exists
-                else -> true // can't read pinEnabled (403 / offline / loading) ⇒ offer; verify gates
-            }
+            // While the status is still loading (null) offer optimistically; once it
+            // resolves, the gate decides (and a non-offer result has already jumped
+            // this flow to device-only PIN entry via the LaunchedEffect above).
+            val showBetterTrack = accountStatus?.let { shouldOfferBetterTrackPin(it) } ?: true
             ChooseSourceContent(
                 modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 24.dp),
                 showBetterTrack = showBetterTrack,

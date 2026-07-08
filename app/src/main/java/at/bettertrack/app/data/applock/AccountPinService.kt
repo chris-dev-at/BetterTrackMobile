@@ -8,31 +8,12 @@ import at.bettertrack.app.data.api.dto.PinVerifyRequest
 import kotlinx.serialization.json.Json
 
 /**
- * What the setup chooser can learn about the account's web PIN from `/auth/me`.
- *  - [Available] — `/auth/me` was readable with the bearer; [pinEnabled] tells
- *    whether a web PIN exists (so the option can be shown only when it does).
- *  - [Forbidden] — the bearer can't read `/auth/me` (session-only). We can't know
- *    `pinEnabled`, so the verify call becomes the gate instead.
- *  - [Offline]   — no connection; can't check right now.
- *  - [Error]     — any other failure.
- */
-sealed interface AccountPinStatus {
-    data class Available(
-        val pinEnabled: Boolean,
-        val username: String,
-        val email: String,
-    ) : AccountPinStatus
-
-    data object Forbidden : AccountPinStatus
-    data object Offline : AccountPinStatus
-    data class Error(val httpStatus: Int, val code: String) : AccountPinStatus
-}
-
-/**
  * The network seam for the "use my BetterTrack account PIN" app-lock option
  * (spec §5). It REUSES/verifies the user's existing web PIN — it NEVER sets or
  * changes it. Two calls, both on the authenticated [BtApi] (OAuth bearer):
- *  - [fetchAccountPin]     reads `/auth/me` for `pinEnabled` (+ identity),
+ *  - [fetchPinStatus]       reads `GET /auth/pin/status` for `pinSet` — the
+ *    dedicated, lightweight availability gate (offer the option only when the
+ *    account actually has a web PIN),
  *  - [verifyBetterTrackPin] POSTs `/auth/pin/verify` with the entered PIN.
  *
  * Observability rule: every call logs ONLY the HTTP status, the platform error
@@ -45,27 +26,23 @@ class AccountPinService(
     private val api: BtApi,
     private val json: Json,
 ) {
-    /** Read `/auth/me` and classify what it tells us about the account's web PIN. */
-    suspend fun fetchAccountPin(): AccountPinStatus {
-        val result = apiCall(json) { api.me() }
+    /** Read `GET /auth/pin/status` and classify whether the account has a web PIN. */
+    suspend fun fetchPinStatus(): AccountPinStatus {
+        val result = apiCall(json) { api.pinStatus() }
         val status: AccountPinStatus = when (result) {
-            is BtResult.Ok -> AccountPinStatus.Available(
-                pinEnabled = result.value.pinEnabled,
-                username = result.value.username,
-                email = result.value.email,
-            )
+            is BtResult.Ok -> AccountPinStatus.Known(pinSet = result.value.pinSet)
 
-            is BtResult.Err -> when (meAccessFor(result.error.httpStatus)) {
-                MeAccess.Forbidden -> AccountPinStatus.Forbidden
-                MeAccess.Offline -> AccountPinStatus.Offline
-                MeAccess.Ok, MeAccess.Error ->
+            is BtResult.Err -> when (pinGateAccessFor(result.error.httpStatus)) {
+                PinGateAccess.Forbidden -> AccountPinStatus.Forbidden
+                PinGateAccess.Offline -> AccountPinStatus.Offline
+                PinGateAccess.Ok, PinGateAccess.Error ->
                     AccountPinStatus.Error(result.error.httpStatus, result.error.code)
             }
         }
         val httpStatus = (result as? BtResult.Err)?.error?.httpStatus ?: 200
         val code = (result as? BtResult.Err)?.error?.code ?: "OK"
-        val pinEnabled = (status as? AccountPinStatus.Available)?.pinEnabled
-        Log.i(TAG, "auth/me -> HTTP $httpStatus [$code] pinEnabled=$pinEnabled")
+        val pinSet = (status as? AccountPinStatus.Known)?.pinSet
+        Log.i(TAG, "auth/pin/status -> HTTP $httpStatus [$code] pinSet=$pinSet")
         return status
     }
 

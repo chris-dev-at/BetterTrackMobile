@@ -42,6 +42,7 @@ import at.bettertrack.app.data.api.dto.MeResponse
 import at.bettertrack.app.data.api.dto.NotificationListResponse
 import at.bettertrack.app.data.api.dto.NotificationSettingsResponse
 import at.bettertrack.app.data.api.dto.OAuthGrantListResponse
+import at.bettertrack.app.data.api.dto.PinStatusResponse
 import at.bettertrack.app.data.api.dto.PinVerifyRequest
 import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
 import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
@@ -98,6 +99,14 @@ interface BtApi {
     /** The signed-in user — username/email for display, role/status gating. */
     @GET("auth/me")
     suspend fun me(): Response<MeResponse>
+
+    /**
+     * Does the signed-in account have a web PIN? The dedicated, lightweight gate
+     * for the "use my BetterTrack PIN" app-lock option (§5) — the option is
+     * offered only when `pinSet == true`. Read-only; never sets or changes the PIN.
+     */
+    @GET("auth/pin/status")
+    suspend fun pinStatus(): Response<PinStatusResponse>
 
     /**
      * Verify the account's existing web PIN — the "use my BetterTrack PIN"

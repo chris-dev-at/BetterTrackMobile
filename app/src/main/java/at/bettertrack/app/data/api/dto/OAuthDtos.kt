@@ -72,6 +72,15 @@ data class PinVerifyRequest(
     val pin: String,
 )
 
+// ── GET /api/v1/auth/pin/status — does the account have a web PIN ─────────────
+// The dedicated, lightweight availability gate for the "use my BetterTrack PIN"
+// app-lock option: it reports ONLY whether a web PIN exists, so the option is
+// offered exactly when the account has one. Read-only — never sets/changes a PIN.
+@Serializable
+data class PinStatusResponse(
+    val pinSet: Boolean = false,
+)
+
 // ── GET /api/v1/settings/oauth-grants (best-effort logout revocation) ────────
 @Serializable
 data class OAuthGrantListResponse(

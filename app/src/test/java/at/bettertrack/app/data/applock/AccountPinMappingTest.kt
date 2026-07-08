@@ -2,11 +2,13 @@ package at.bettertrack.app.data.applock
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Pure mapping coverage for the "use my BetterTrack PIN" network seam (spec §5):
- * how a `/auth/pin/verify` and `/auth/me` HTTP status becomes an app outcome.
+ * how a `/auth/pin/verify` and `/auth/pin/status` HTTP status becomes an app
+ * outcome, plus the availability gate (offer only when the account has a web PIN).
  * These are the load-bearing rules that decide whether the lock activates, so
  * they're proven without a network — [AccountPinService] just attaches the call.
  */
@@ -30,7 +32,6 @@ class AccountPinMappingTest {
 
     @Test
     fun `403 means the bearer is forbidden on the endpoint`() {
-        // The on-device truth today: the mobile OAuth bearer is session-only here.
         assertEquals(BtPinVerifyOutcome.Forbidden, pinVerifyOutcomeFor(403))
     }
 
@@ -46,27 +47,40 @@ class AccountPinMappingTest {
         assertEquals(BtPinVerifyOutcome.Error, pinVerifyOutcomeFor(-1))
     }
 
-    // ── /auth/me access classification ────────────────────────────────────────
+    // ── /auth/pin/status access classification ────────────────────────────────
     @Test
-    fun `me maps 200 to ok and 403 to forbidden`() {
-        assertEquals(MeAccess.Ok, meAccessFor(200))
-        assertEquals(MeAccess.Forbidden, meAccessFor(403))
+    fun `pin status maps 200 to ok and 403 to forbidden`() {
+        assertEquals(PinGateAccess.Ok, pinGateAccessFor(200))
+        assertEquals(PinGateAccess.Forbidden, pinGateAccessFor(403))
     }
 
     @Test
-    fun `me maps transport failure to offline and the rest to error`() {
-        assertEquals(MeAccess.Offline, meAccessFor(0))
-        assertEquals(MeAccess.Error, meAccessFor(401))
-        assertEquals(MeAccess.Error, meAccessFor(500))
+    fun `pin status maps transport failure to offline and the rest to error`() {
+        assertEquals(PinGateAccess.Offline, pinGateAccessFor(0))
+        assertEquals(PinGateAccess.Error, pinGateAccessFor(401))
+        assertEquals(PinGateAccess.Error, pinGateAccessFor(500))
     }
 
-    // ── Feature gate (tripwire) ───────────────────────────────────────────────
+    // ── Availability gate: offer only when the account has a web PIN ───────────
     @Test
-    fun `bettertrack pin option stays gated off until the API is fixed`() {
-        // On-device probing (2026-07-08) shows the mobile bearer gets 403
-        // API_KEY_FORBIDDEN on /auth/pin/verify, so the option is device-PIN-only.
-        // When the platform grants bearer access, flip AppLockFeatures.
-        // betterTrackPinLock AND update this test — after re-verifying on-device.
-        assertFalse(AppLockFeatures.betterTrackPinLock)
+    fun `offer the option only when a web pin is set`() {
+        assertTrue(shouldOfferBetterTrackPin(AccountPinStatus.Known(pinSet = true)))
+        assertFalse(shouldOfferBetterTrackPin(AccountPinStatus.Known(pinSet = false)))
+    }
+
+    @Test
+    fun `never offer when the status could not be confirmed`() {
+        assertFalse(shouldOfferBetterTrackPin(AccountPinStatus.Forbidden))
+        assertFalse(shouldOfferBetterTrackPin(AccountPinStatus.Offline))
+        assertFalse(shouldOfferBetterTrackPin(AccountPinStatus.Error(500, "X")))
+    }
+
+    // ── Feature gate ──────────────────────────────────────────────────────────
+    @Test
+    fun `bettertrack pin option is live now the platform grants bearer access`() {
+        // Platform #361 (2026-07-08) gave the mobile OAuth bearer access to
+        // GET /auth/pin/status + POST /auth/pin/verify, so the option is offered
+        // (gated on the account actually having a web PIN via pinSet).
+        assertTrue(AppLockFeatures.betterTrackPinLock)
     }
 }

@@ -38,13 +38,11 @@ const val BETTERTRACK_PIN_LENGTH = 4
  *
  *  - [DEVICE]      — a fresh 4–6 digit PIN the user invents just for this app.
  *  - [BETTERTRACK] — the user's existing 4-digit BetterTrack account (web) PIN.
- *    When the [AppLockFeatures.betterTrackPinLock] switch is on, it is entered
- *    once, **verified live** against `POST /auth/pin/verify` (see
- *    [AccountPinService]), and only on a match stored LOCALLY (Keystore-hashed)
- *    exactly like a device PIN — the PIN itself is never persisted. The switch is
- *    OFF today because the mobile OAuth bearer is 403-forbidden on that endpoint
- *    (see [AppLockFeatures]); until it flips, the app only ever creates DEVICE
- *    PINs and this value merely records intent for an already-migrated interim.
+ *    With the [AppLockFeatures.betterTrackPinLock] switch on, it is entered once,
+ *    **verified live** against `POST /auth/pin/verify` (see [AccountPinService]),
+ *    and only on a match stored LOCALLY (Keystore-hashed) exactly like a device
+ *    PIN — the PIN itself is never persisted. The option is offered only when the
+ *    account actually has a web PIN, gated on `GET /auth/pin/status` (`pinSet`).
  */
 enum class PinSource {
     DEVICE,
@@ -100,19 +98,47 @@ fun pinVerifyOutcomeFor(httpStatus: Int): BtPinVerifyOutcome = when (httpStatus)
     else -> BtPinVerifyOutcome.Error
 }
 
-/**
- * Whether the OAuth bearer can read `/auth/me` (which carries `pinEnabled`). Lets
- * the setup flow decide whether it can gate the "use my BetterTrack PIN" option
- * on the account actually having a web PIN, or must fall back to letting the
- * verify call be the gate. Pure status → category mapping (unit-tested).
- */
-enum class MeAccess { Ok, Forbidden, Offline, Error }
+// ── "Use my BetterTrack PIN" availability gate (GET /auth/pin/status) ─────────
 
-fun meAccessFor(httpStatus: Int): MeAccess = when (httpStatus) {
-    200 -> MeAccess.Ok
-    403 -> MeAccess.Forbidden
-    0 -> MeAccess.Offline
-    else -> MeAccess.Error
+/**
+ * What `GET /auth/pin/status` told us about the account's web PIN — the dedicated,
+ * lightweight gate for whether to OFFER the "use my BetterTrack PIN" option.
+ *  - [Known]     — the status was readable; [pinSet] says whether a web PIN exists.
+ *  - [Forbidden] — the bearer can't reach the endpoint (shouldn't happen now the
+ *                  platform grants bearer access; mapped defensively).
+ *  - [Offline]   — no connection; can't check right now.
+ *  - [Error]     — any other failure.
+ * [at.bettertrack.app.data.applock.AccountPinService.fetchPinStatus] attaches the
+ * real call.
+ */
+sealed interface AccountPinStatus {
+    data class Known(val pinSet: Boolean) : AccountPinStatus
+    data object Forbidden : AccountPinStatus
+    data object Offline : AccountPinStatus
+    data class Error(val httpStatus: Int, val code: String) : AccountPinStatus
+}
+
+/**
+ * The availability gate (owner's rule): OFFER "use my BetterTrack PIN" ONLY when
+ * the account definitely has a web PIN (`pinSet == true`). No PIN, forbidden,
+ * offline, or any error ⇒ device-PIN-only (the option is hidden). Pure + tested.
+ */
+fun shouldOfferBetterTrackPin(status: AccountPinStatus): Boolean =
+    status is AccountPinStatus.Known && status.pinSet
+
+/**
+ * How a `GET /auth/pin/status` HTTP status classifies for the availability gate.
+ * 403 shouldn't occur now the platform grants the mobile bearer access, but is
+ * mapped defensively; httpStatus `0` is the transport-failure sentinel. Pure
+ * status → category mapping (unit-tested).
+ */
+enum class PinGateAccess { Ok, Forbidden, Offline, Error }
+
+fun pinGateAccessFor(httpStatus: Int): PinGateAccess = when (httpStatus) {
+    200 -> PinGateAccess.Ok
+    403 -> PinGateAccess.Forbidden
+    0 -> PinGateAccess.Offline
+    else -> PinGateAccess.Error
 }
 
 /** Build-time feature switches for the app lock. */
@@ -120,18 +146,16 @@ object AppLockFeatures {
     /**
      * Whether the "use my BetterTrack account PIN" unlock option is OFFERED.
      *
-     * `false` today. On-device probing (2026-07-08, production api.bettertrack.at)
-     * shows the mobile OAuth bearer receives **403 API_KEY_FORBIDDEN** on BOTH
-     * `GET /auth/me` and `POST /auth/pin/verify` — the whole `/auth/` group is
-     * session-cookie-only for the bearer. Reusing the web PIN needs a live
-     * `/auth/pin/verify` round-trip, so the option is HIDDEN (device-PIN-only)
-     * until the platform lets the BetterTrackMobile OAuth bearer reach
-     * `/auth/pin/verify` (and ideally `/auth/me`, so the option can be gated on
-     * `pinEnabled`). The full verify flow + the [AccountPinService] network seam
-     * are already built behind this switch — flip to `true` once the API change
-     * ships, then RE-VERIFY on-device. See docs/TODO.md (Step 17c).
+     * `true` since platform change #361 (2026-07-08) granted the BetterTrackMobile
+     * OAuth bearer access to the PIN endpoints — both `GET /auth/pin/status` and
+     * `POST /auth/pin/verify` now advertise `apiKeyBearer`. The setup chooser
+     * offers a fresh device PIN or the user's existing web PIN; the web-PIN card
+     * appears only when `GET /auth/pin/status` reports `pinSet == true`, and the
+     * entered PIN is verified live against `POST /auth/pin/verify` before the lock
+     * activates (only a local Keystore hash is ever stored — never the PIN). See
+     * [at.bettertrack.app.data.applock.AccountPinService] and docs/TODO.md (17c).
      */
-    val betterTrackPinLock: Boolean = false
+    val betterTrackPinLock: Boolean = true
 }
 
 /** True when [pin] is a well-formed candidate PIN (4–6 ASCII digits). */
