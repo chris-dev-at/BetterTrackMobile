@@ -328,6 +328,82 @@ class TransactionFormLogicTest {
         assertEquals(3.0, maxAffordableQuantity(main, price = 100.0, fee = 0.0), 1e-9)
     }
 
+    // ── Point-in-time (as-of) cash for a BACKDATED pay-from-cash buy ──────────
+    // The server keeps cash non-negative at EVERY instant, so a backdated buy is
+    // sized against the balance ON ITS DATE, not today's (§6.2 owner fix — the
+    // false "Insufficient cash balance." on a €360 buy backdated ~15 months to a
+    // day the Main source still held €0).
+
+    private fun ms(iso: String): Long = Instant.parse(iso).toEpochMilli()
+
+    @Test
+    fun `as-of available is zero before the source was ever funded`() {
+        // Reproduces the owner's stuck op: Main first funded 2026-07-05; the failed
+        // buy was dated 2025-04-14.
+        val moves = listOf(
+            ms("2026-07-05T00:00:00Z") to 6042.0,
+            ms("2026-07-05T00:00:00Z") to -213.44,
+            ms("2026-07-06T00:00:00Z") to -5828.55,
+            ms("2026-07-06T00:00:00Z") to 5430.0,
+        )
+        val current = 5430.01 // 6042 − 213.44 − 5828.55 + 5430
+        val backdated = ms("2025-04-14T10:00:00Z")
+        val today = ms("2026-07-09T12:00:00Z")
+        // Backdated to before ANY movement ⇒ nothing was available yet.
+        assertEquals(0.0, availableMainCashAsOf(moves, current, backdated)!!, 1e-6)
+        // So a €360 buy is correctly unaffordable AS OF that date …
+        assertTrue(cashAfterPreview(availableMainCashAsOf(moves, current, backdated)!!, true, 2.0, 180.0, 0.0) < 0.0)
+        // … yet perfectly affordable TODAY (dated at/after the newest movement).
+        assertEquals(current, availableMainCashAsOf(moves, current, today)!!, 1e-6)
+        assertFalse(cashAfterPreview(availableMainCashAsOf(moves, current, today)!!, true, 2.0, 180.0, 0.0) < 0.0)
+    }
+
+    @Test
+    fun `as-of available is the running MINIMUM from the buy date onward`() {
+        // Balance dips to €0.01 mid-history even though it recovers later.
+        val moves = listOf(
+            ms("2026-07-05T00:00:00Z") to 6000.0,
+            ms("2026-07-06T00:00:00Z") to -5999.99, // trough: 0.01
+            ms("2026-07-07T00:00:00Z") to 4000.0, // recovers: 4000.01
+        )
+        val current = 4000.01
+        // A buy dated on/after the €6000 deposit still only clears the €0.01 trough.
+        assertEquals(0.01, availableMainCashAsOf(moves, current, ms("2026-07-05T12:00:00Z"))!!, 1e-6)
+        // A buy dated AFTER the trough sees the recovered balance.
+        assertEquals(4000.01, availableMainCashAsOf(moves, current, ms("2026-07-07T12:00:00Z"))!!, 1e-6)
+    }
+
+    @Test
+    fun `same-instant credits settle before debits so no phantom negative`() {
+        // A funding deposit and a buy share ONE timestamp, buy listed FIRST. Credits
+        // settle first, so a date before them still sees €0 held — not the buy's
+        // −€213,44 (the exact artifact the owner would otherwise have seen on screen).
+        val t = ms("2026-07-05T00:00:00Z")
+        val moves = listOf(t to -213.44, t to 6042.0)
+        assertEquals(0.0, availableMainCashAsOf(moves, 5828.56, ms("2025-04-14T00:00:00Z"))!!, 1e-6)
+    }
+
+    @Test
+    fun `as-of returns null when the cached ledger cannot be reconciled`() {
+        // Movements don't sum to the live balance (partial / unsynced ledger) → the
+        // reconstruction is untrusted, so the caller falls back to the current
+        // balance and never HARD-blocks on bad data.
+        val moves = listOf(ms("2026-07-05T00:00:00Z") to 100.0)
+        assertNull(availableMainCashAsOf(moves, currentBalanceEur = 5000.0, executedAtMs = ms("2026-07-06T00:00:00Z")))
+        // An empty ledger consistent with a zero balance reconciles fine.
+        assertEquals(0.0, availableMainCashAsOf(emptyList(), 0.0, ms("2026-07-06T00:00:00Z"))!!, 1e-9)
+    }
+
+    @Test
+    fun `executedAtMsFor mirrors executedAtIso - today is now, a past day is midday`() {
+        val zone = ZoneId.of("Europe/Vienna")
+        val now = Instant.parse("2026-07-09T08:30:00Z")
+        assertEquals(now.toEpochMilli(), executedAtMsFor(LocalDate.of(2026, 7, 9), zone, now))
+        val past = LocalDate.of(2025, 4, 14)
+        val expectedPast = past.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expectedPast, executedAtMsFor(past, zone, now))
+    }
+
     @Test
     fun `format decimal for input trims zeros and honours locale separator`() {
         assertEquals("5", formatDecimalForInput(5.0, java.util.Locale.US))

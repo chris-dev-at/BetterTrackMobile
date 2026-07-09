@@ -178,6 +178,63 @@ fun maxAffordableQuantity(cashEur: Double, price: Double, fee: Double): Double {
 fun mainCashSourceBalanceEur(sources: List<at.bettertrack.app.data.db.CashSourceEntity>): Double? =
     sources.firstOrNull { it.isMain }?.balanceEur
 
+/** Tolerance (one cent) for reconciling the cached Main ledger to the live balance. */
+const val CASH_LEDGER_RECONCILE_EPS = 0.01
+
+/**
+ * The Main cash a PAY-FROM-CASH buy dated [executedAtMs] may actually draw on.
+ *
+ * The platform keeps a cash source non-negative at EVERY instant of its ledger,
+ * so a buy backdated into the past can only spend the LOWEST the Main running
+ * balance ever dips from the buy's own date onward — NOT the (usually higher)
+ * balance today. Inserting a spend of C at time e shifts the whole balance curve
+ * at/after e down by C, so the ledger stays valid exactly when
+ * `C ≤ min(runningBalance(t) : t ≥ e)`. This returns that minimum: the cash
+ * "available as of" [executedAtMs].
+ *
+ * Without it the client sizes a backdated buy against TODAY's balance while the
+ * server sizes it against the balance ON THE TRANSACTION'S DATE — the exact
+ * mismatch behind the owner's false "Insufficient cash balance." (a €360 buy
+ * backdated to a day the Main source still held €0 looked affordable on the
+ * client, the server rejected it).
+ *
+ * [movements] are the MAIN source's movements as (executedAtMs, signedEur) in ANY
+ * order (deposits / sell-proceeds +, buys / withdrawals / transfers −). Their
+ * signed sum must reconcile to [currentBalanceEur]; when it does NOT (a partial
+ * or not-yet-synced ledger) this returns null, so the caller falls back to the
+ * current balance and never HARD-blocks on an untrustworthy reconstruction.
+ *
+ * A buy dated at/after the newest movement simply yields the current balance, so
+ * the everyday "record a buy now" path is unchanged.
+ */
+fun availableMainCashAsOf(
+    movements: List<Pair<Long, Double>>,
+    currentBalanceEur: Double,
+    executedAtMs: Long,
+): Double? {
+    val total = movements.sumOf { it.second }
+    if (kotlin.math.abs(total - currentBalanceEur) > CASH_LEDGER_RECONCILE_EPS) return null
+    // Time ascending; at the SAME instant settle credits before debits (a same-day
+    // funding deposit is available to that day's buy) so day-granular backdated
+    // entries sharing one timestamp don't reconstruct a phantom intra-instant
+    // negative the server never actually had.
+    val sorted = movements.sortedWith(compareBy({ it.first }, { -it.second }))
+    // Floor: everything strictly BEFORE the buy's instant (a buy can't lean on a
+    // same-instant-or-later deposit to fund itself).
+    var running = 0.0
+    for ((t, amt) in sorted) if (t < executedAtMs) running += amt
+    var minFromE = running
+    // Then the running balance dips from the buy's date to the end — the buy must
+    // clear the lowest of them all.
+    for ((t, amt) in sorted) {
+        if (t >= executedAtMs) {
+            running += amt
+            if (running < minFromE) minFromE = running
+        }
+    }
+    return minFromE
+}
+
 /**
  * The close on / just-before [target] from an ASCENDING (date, close) series:
  * the exact day if present, else the most recent prior trading day, else the
@@ -256,6 +313,18 @@ fun executedAtIso(date: LocalDate, zone: ZoneId = ZoneId.systemDefault(), now: I
     } else {
         date.atTime(12, 0).atZone(zone).toInstant().toString()
     }
+}
+
+/**
+ * The `executedAt` instant in epoch-ms a picked [date] will be stamped with —
+ * mirrors [executedAtIso] exactly (today/future → now; a past day → midday local)
+ * so the point-in-time cash check ([availableMainCashAsOf]) aligns with what is
+ * actually submitted to the server.
+ */
+fun executedAtMsFor(date: LocalDate, zone: ZoneId = ZoneId.systemDefault(), now: Instant = Instant.now()): Long {
+    val today = now.atZone(zone).toLocalDate()
+    return if (date >= today) now.toEpochMilli()
+    else date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
 }
 
 // ── Note marker preservation (synced edits) ─────────────────────────────────

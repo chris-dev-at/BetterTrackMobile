@@ -61,10 +61,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -231,6 +234,29 @@ class TransactionFormViewModel(
         .map { mainCashSourceBalanceEur(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * The MAIN source's cash movements as (executedAtMs, signed EUR), refreshed
+     * whole on every cash sync. Feeds the point-in-time affordability check so a
+     * BACKDATED pay-from-cash buy is sized against the cash available ON ITS DATE,
+     * exactly like the server (§6.2 owner fix — the false "insufficient cash").
+     */
+    private val mainCashMovements: StateFlow<List<Pair<Long, Double>>> = _portfolioId
+        .flatMapLatest { pid ->
+            if (pid == null) {
+                flowOf(emptyList())
+            } else {
+                combine(repo.cashMovements(pid), repo.cashSources(pid)) { moves, sources ->
+                    val mainId = sources.firstOrNull { it.isMain }?.id
+                    if (mainId == null) {
+                        emptyList()
+                    } else {
+                        moves.filter { it.sourceId == mainId }.map { it.executedAtMs to it.amountEur }
+                    }
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Held assets of the target portfolio — the Step-8 asset picker universe. */
     val holdings: StateFlow<List<HoldingEntity>> = _portfolioId
         .flatMapLatest { pid -> if (pid == null) flowOf(emptyList()) else repo.holdings(pid) }
@@ -291,13 +317,28 @@ class TransactionFormViewModel(
 
     // ── Derived state ───────────────────────────────────────────────────────
 
+    /**
+     * Cash the pay-from-cash coupling may actually draw on FOR THE CHOSEN DATE:
+     * the as-of running-minimum from the Main ledger (server-matching), or the
+     * current Main balance when the ledger can't be reconstructed or the date is
+     * current. THIS — not the raw current balance — is what the hard block, the
+     * cash-after preview and Max all size against (§6.2 owner fix: a backdated buy
+     * the client thought affordable but the server rejected as insufficient).
+     */
+    val availableCashEur: StateFlow<Double?> = combine(
+        _date, mainCashEur, mainCashMovements,
+    ) { date, current, moves ->
+        if (current == null) null
+        else availableMainCashAsOf(moves, current, executedAtMsFor(date)) ?: current
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val validation: StateFlow<TxFormValidation> = combine(
         combine(_asset, _quantityText, _priceText, _feeText) { a, q, p, f ->
             Quad(a, parseLocalizedDecimal(q), parseLocalizedDecimal(p), parseLocalizedDecimal(f))
         },
         _isBuy,
         _cashCoupled,
-        mainCashEur,
+        availableCashEur,
         holdings,
     ) { (a, q, p, f), buy, coupled, cash, held ->
         validateTxForm(
@@ -321,16 +362,36 @@ class TransactionFormViewModel(
         if (qty == null || price == null) null else orderTotal(buy, qty, price, parseLocalizedDecimal(f) ?: 0.0)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Live "Cash after: €…" against the MAIN source balance (§6.2 owner fix). */
+    /** Live "Cash after: €…" against the as-of available cash (§6.2 owner fix). */
     val cashAfterEur: StateFlow<Double?> = combine(
         _quantityText, _priceText, _feeText, _isBuy,
-        combine(_cashCoupled, mainCashEur) { c, b -> c to b },
+        combine(_cashCoupled, availableCashEur) { c, b -> c to b },
     ) { q, p, f, buy, (coupled, balance) ->
         if (!coupled || balance == null) return@combine null
         val qty = parseLocalizedDecimal(q)
         val price = parseLocalizedDecimal(p)
         if (qty == null || price == null) null
         else cashAfterPreview(balance, buy, qty, price, parseLocalizedDecimal(f) ?: 0.0)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * The chosen date when the hard block is specifically DATE-DRIVEN: a backdated
+     * pay-from-cash buy the Main source couldn't afford ON THAT DATE even though it
+     * can today (as-of available strictly below the current balance). Lets the card
+     * name the real reason instead of a bare "insufficient" — the owner's exact
+     * confusion (€360 buy, €4.8k in the bank, yet "insufficient").
+     */
+    val insufficientAsOfDate: StateFlow<LocalDate?> = combine(
+        validation, _cashCoupled, _isBuy, _date,
+        combine(mainCashEur, availableCashEur) { cur, avail -> cur to avail },
+    ) { v, coupled, buy, date, (cur, avail) ->
+        if (v.insufficientCash && coupled && buy && cur != null && avail != null &&
+            avail < cur - CASH_LEDGER_RECONCILE_EPS
+        ) {
+            date
+        } else {
+            null
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // ── Submission ──────────────────────────────────────────────────────────
@@ -389,6 +450,8 @@ class TransactionFormViewModel(
                         "BtTxForm",
                         "insufficient-block (cash-coupled buy): " +
                             "mainBalanceEur=${mainCashEur.value} " +
+                            "availableAsOfEur=${availableCashEur.value} " +
+                            "date=${_date.value} " +
                             "orderTotalEur=${orderTotalEur.value} " +
                             "priceEur=${parseLocalizedDecimal(_priceText.value)} " +
                             "cashSources=$cashState",
@@ -684,7 +747,7 @@ class TransactionFormViewModel(
     /** Whether a "Max" affordance is offerable now (known held qty / known cash). */
     val maxAvailable: StateFlow<Boolean> = combine(
         combine(_isBuy, _asset, _priceText) { buy, a, p -> Triple(buy, a, p) },
-        _cashCoupled, mainCashEur, holdings,
+        _cashCoupled, availableCashEur, holdings,
     ) { (buy, a, priceText), coupled, cash, held ->
         when {
             a == null -> false
@@ -697,7 +760,7 @@ class TransactionFormViewModel(
     fun fillMaxQuantity() {
         val a = _asset.value ?: return
         if (_isBuy.value) {
-            val cash = mainCashEur.value ?: return
+            val cash = availableCashEur.value ?: return
             val price = parseLocalizedDecimal(_priceText.value) ?: return
             if (!_cashCoupled.value || price <= 0.0) return
             val fee = parseLocalizedDecimal(_feeText.value) ?: 0.0
@@ -1016,6 +1079,8 @@ fun TransactionFormScreen(
     val orderTotalEur by vm.orderTotalEur.collectAsStateWithLifecycle()
     val cashAfterEur by vm.cashAfterEur.collectAsStateWithLifecycle()
     val mainCashEur by vm.mainCashEur.collectAsStateWithLifecycle()
+    val availableCashEur by vm.availableCashEur.collectAsStateWithLifecycle()
+    val insufficientAsOfDate by vm.insufficientAsOfDate.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val submitting by vm.submitting.collectAsStateWithLifecycle()
     val serverError by vm.serverError.collectAsStateWithLifecycle()
@@ -1177,6 +1242,7 @@ fun TransactionFormScreen(
                         label = stringResource(R.string.bt_txform_quantity),
                         enabled = inputsEnabled,
                         error = validation.quantityError != null && quantityText.isNotEmpty(),
+                        selectAllOnFocus = true,
                         modifier = Modifier.weight(1f),
                         trailingIcon = if (maxAvailable && inputsEnabled) {
                             { MaxChip(onClick = { vm.fillMaxQuantity() }) }
@@ -1191,6 +1257,7 @@ fun TransactionFormScreen(
                         enabled = inputsEnabled,
                         error = validation.priceError != null && priceText.isNotEmpty(),
                         suffix = "€",
+                        selectAllOnFocus = true,
                         modifier = Modifier.weight(1f),
                         trailingIcon = if (inputsEnabled && priceHistoryLoading) {
                             { PriceLinkLoading() }
@@ -1236,6 +1303,7 @@ fun TransactionFormScreen(
                         enabled = inputsEnabled,
                         error = validation.feeError != null && feeText.isNotEmpty(),
                         suffix = "€",
+                        selectAllOnFocus = true,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -1249,7 +1317,9 @@ fun TransactionFormScreen(
                         enabled = inputsEnabled,
                         cashAfterEur = cashAfterEur,
                         cachedCashEur = mainCashEur,
+                        availableAsOfEur = availableCashEur,
                         insufficient = validation.insufficientCash,
+                        insufficientAsOfDate = insufficientAsOfDate,
                         locale = locale,
                         onToggle = vm::setCashCoupled,
                     )
@@ -1513,11 +1583,41 @@ private fun FormNumberField(
     error: Boolean,
     modifier: Modifier = Modifier,
     suffix: String? = null,
+    selectAllOnFocus: Boolean = false,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
+    // A TextFieldValue mirror of the external [value] String, so focusing a filled
+    // field can SELECT-ALL for instant type-over (owner request) while the VM keeps
+    // its plain-String state (sanitization + the date↔price link stay untouched).
+    var tfv by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    // Re-sync when the source String changes from OUTSIDE the field (Max fill,
+    // date→price auto-link, queued-edit prefill): adopt it, caret to the end.
+    if (tfv.text != value) {
+        tfv = tfv.copy(text = value, selection = TextRange(value.length))
+    }
+    var wasFocused by remember { mutableStateOf(false) }
+    // On the rising edge of focus we select-all AND "arm": the tap that focused the
+    // field fires a caret-placing (text-unchanged) onValueChange right after
+    // onFocusChanged, which would otherwise collapse the selection — we override
+    // that single event back to a full selection so the value is type-over-ready.
+    // Real edits (text changed) and every later caret move pass straight through.
+    var selectAllArmed by remember { mutableStateOf(false) }
+
     OutlinedTextField(
-        value = value,
-        onValueChange = onValue,
+        value = tfv,
+        onValueChange = { next ->
+            if (selectAllArmed && next.text == tfv.text && next.text.isNotEmpty()) {
+                // The focusing tap's caret drop — swallow it, keep everything selected.
+                selectAllArmed = false
+                tfv = next.copy(selection = TextRange(0, next.text.length))
+            } else {
+                selectAllArmed = false
+                tfv = next
+                // Only push real text edits back to the VM; a selection-only change
+                // never fires this, so it can't perturb the date↔price link.
+                if (next.text != value) onValue(next.text)
+            }
+        },
         label = { Text(label) },
         enabled = enabled,
         isError = error,
@@ -1529,7 +1629,21 @@ private fun FormNumberField(
         suffix = suffix?.let { { Text(it, color = BtTheme.colors.textMuted) } },
         trailingIcon = trailingIcon,
         textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
-        modifier = modifier,
+        modifier = if (selectAllOnFocus) {
+            modifier.onFocusChanged { state ->
+                // Select the whole value only on the RISING edge of focus with
+                // content present — later taps inside keep normal caret placement.
+                if (state.isFocused && !wasFocused && tfv.text.isNotEmpty()) {
+                    tfv = tfv.copy(selection = TextRange(0, tfv.text.length))
+                    selectAllArmed = true
+                } else if (!state.isFocused) {
+                    selectAllArmed = false
+                }
+                wasFocused = state.isFocused
+            }
+        } else {
+            modifier
+        },
         colors = btFieldColors(),
     )
 }
@@ -1630,7 +1744,9 @@ private fun CashCouplingCard(
     enabled: Boolean,
     cashAfterEur: Double?,
     cachedCashEur: Double?,
+    availableAsOfEur: Double?,
     insufficient: Boolean,
+    insufficientAsOfDate: LocalDate?,
     locale: Locale,
     onToggle: (Boolean) -> Unit,
 ) {
@@ -1689,11 +1805,13 @@ private fun CashCouplingCard(
                     ),
                 )
             }
-            // The §6.2 hard stop: never silently-negative cash. Inline, clear,
-            // computed against the CACHED balance; the server stays final.
+            // The §6.2 hard stop: never silently-negative cash. Inline, clear, and
+            // sized against the cash available ON THE CHOSEN DATE (the server's own
+            // point-in-time rule); a backdated shortfall names the date so it never
+            // reads as a mysterious "insufficient" when the balance is fat today.
             if (insufficient && cachedCashEur != null) {
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.Top) {
                     Icon(
                         Icons.Outlined.ErrorOutline,
                         contentDescription = null,
@@ -1702,10 +1820,21 @@ private fun CashCouplingCard(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = stringResource(
-                            R.string.bt_txform_insufficient_cash,
-                            formatEur(cachedCashEur, locale),
-                        ),
+                        text = if (insufficientAsOfDate != null) {
+                            stringResource(
+                                R.string.bt_txform_insufficient_cash_asof,
+                                insufficientAsOfDate.format(
+                                    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale),
+                                ),
+                                formatEur(availableAsOfEur ?: 0.0, locale),
+                                formatEur(cachedCashEur, locale),
+                            )
+                        } else {
+                            stringResource(
+                                R.string.bt_txform_insufficient_cash,
+                                formatEur(cachedCashEur, locale),
+                            )
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.loss,
                     )
