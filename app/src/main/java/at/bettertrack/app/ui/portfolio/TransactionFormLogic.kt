@@ -193,6 +193,41 @@ fun closeOnOrBefore(closes: List<Pair<LocalDate, Double>>, target: LocalDate): D
 }
 
 /**
+ * The MOST RECENT day an ASCENDING (date, close) series was at [price] — the
+ * reverse of [closeOnOrBefore], mirroring the web app's `dateForPrice` (#226) so
+ * the two platforms pick the same day. With closes-only history (no intraday
+ * OHLC), a price is "at" a day when EITHER that day closed exactly at it, OR the
+ * close-to-close move CROSSED through it — i.e. [price] lies strictly between the
+ * previous close and that day's close, in which case the crossing is attributed
+ * to the later day. Scans newest-first and returns the first hit's day.
+ *
+ * The strict interior (`> lo && < hi`) is deliberate: a boundary value equals one
+ * of the two closes and so belongs to THAT day's own exact-close check, keeping an
+ * exact historical close on the day it closed at rather than the later day it was
+ * merely a starting point for.
+ *
+ * Returns null when the series never reached [price] in the available history (or
+ * [price] is non-finite), so the caller leaves the date unchanged and says so — it
+ * never guesses a date.
+ */
+fun mostRecentDateAtPrice(closes: List<Pair<LocalDate, Double>>, price: Double): LocalDate? {
+    if (!price.isFinite()) return null
+    for (i in closes.indices.reversed()) {
+        val (curDate, curClose) = closes[i]
+        // Exact close wins for its own day (also covers a single-point series,
+        // which has no pair to cross).
+        if (curClose == price) return curDate
+        if (i > 0) {
+            val prevClose = closes[i - 1].second
+            val lo = minOf(prevClose, curClose)
+            val hi = maxOf(prevClose, curClose)
+            if (price > lo && price < hi) return curDate
+        }
+    }
+    return null
+}
+
+/**
  * Format a decimal for an input field (quantity or price): full precision
  * (round-DOWN, no scientific notation), trailing zeros trimmed, locale decimal
  * separator so it reads correctly in de-AT (the field parser tolerates '.'/',').

@@ -185,7 +185,8 @@
     <string name="bt_txform_max">Max</string>
     <string name="bt_txform_price_link">Link price to date</string>
     <string name="bt_txform_price_unlink">Unlink price from date</string>
-    <string name="bt_txform_price_linked_hint">Price follows the selected date. Edit it to set your own.</string>
+    <string name="bt_txform_price_linked_hint">Date and price stay linked — set either to fill the other.</string>
+    <string name="bt_txform_price_never_reached">Not seen at that price in available history — date unchanged.</string>
     <string name="bt_txform_side_cd">%1$s</string>
     <string name="bt_txform_side_selected_cd">%1$s, selected</string>
     <string name="bt_txform_quantity">Quantity</string>

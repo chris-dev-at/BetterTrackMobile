@@ -174,6 +174,13 @@ sealed interface AssetSearchState {
     data object Offline : AssetSearchState
 }
 
+/**
+ * Non-blocking hint shown under the price field about the last date↔price link
+ * resolution. [PRICE_NEVER_REACHED] means a typed price never occurred in the
+ * available history, so the date was left unchanged (§6.2, mirrors the web).
+ */
+enum class PriceLinkHint { NONE, PRICE_NEVER_REACHED }
+
 @OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
 class TransactionFormViewModel(
     private val repo: PortfolioRepository,
@@ -553,7 +560,13 @@ class TransactionFormViewModel(
     fun setAssetQuery(q: String) { _assetQuery.value = q }
     fun clearAssetQuery() { _assetQuery.value = "" }
 
-    // ── Date ↔ price link (§6.2, mirrors the web reference) ─────────────────
+    // ── Date ↔ price link (§6.2, BIDIRECTIONAL — mirrors the web #226) ───────
+    // Linked, the two fields drive each other over the asset's daily-close series
+    // (fetched once): picking a DATE fills the price with that day's close
+    // (closeOnOrBefore), and typing a PRICE jumps the date to the MOST RECENT day
+    // the series was at that price (mostRecentDateAtPrice). The chain toggle
+    // detaches BOTH. Loop guard: each direction writes its partner field DIRECTLY
+    // (never through the other's public setter), so a fill never bounces back.
 
     private val _priceLinked = MutableStateFlow(false)
     val priceLinked: StateFlow<Boolean> = _priceLinked.asStateFlow()
@@ -562,10 +575,33 @@ class TransactionFormViewModel(
     /** Only market assets with a daily-close series can auto-fill by date. */
     val priceLinkAvailable: StateFlow<Boolean> = _priceLinkAvailable.asStateFlow()
 
+    private val _priceHistoryLoading = MutableStateFlow(false)
+    /** The daily-close series is being fetched — a subtle indicator, never a block. */
+    val priceHistoryLoading: StateFlow<Boolean> = _priceHistoryLoading.asStateFlow()
+
+    private val _priceLinkHint = MutableStateFlow(PriceLinkHint.NONE)
+    /** Non-blocking hint about the last link resolution (e.g. price never reached). */
+    val priceLinkHint: StateFlow<PriceLinkHint> = _priceLinkHint.asStateFlow()
+
     private var dailyCloses: List<Pair<LocalDate, Double>> = emptyList()
     private var closesAssetId: String? = null
 
-    /** Load the asset's daily closes (Create only) so the date can drive price. */
+    /**
+     * Debounced price→date signal, fed ONLY by a user-typed price ([setPrice]) and
+     * never by the date→price auto-fill — so an auto-filled price can't re-trigger
+     * the reverse lookup. Debounced so the date doesn't churn per keystroke (§5.3).
+     */
+    private val _priceReverseSignal = MutableStateFlow<String?>(null)
+
+    init {
+        viewModelScope.launch {
+            _priceReverseSignal.debounce(450).collectLatest { raw ->
+                if (raw != null) resolvePriceToDate(raw)
+            }
+        }
+    }
+
+    /** Load the asset's daily closes (Create only) so date↔price can auto-fill. */
     private fun loadDailyCloses(pick: AssetPick, autoLink: Boolean) {
         if (mode !is FormMode.Create || !isOnline.value || pick.assetId.isBlank()) return
         if (closesAssetId == pick.assetId) {
@@ -575,10 +611,13 @@ class TransactionFormViewModel(
         closesAssetId = pick.assetId
         dailyCloses = emptyList()
         _priceLinkAvailable.value = false
+        _priceLinkHint.value = PriceLinkHint.NONE
+        _priceHistoryLoading.value = true
         viewModelScope.launch {
-            when (val r = market.assetDailyCloses(pick.assetId)) {
+            val r = market.assetDailyCloses(pick.assetId)
+            if (closesAssetId != pick.assetId) return@launch // a newer asset pick won
+            when (r) {
                 is BtResult.Ok -> {
-                    if (closesAssetId != pick.assetId) return@launch
                     dailyCloses = r.value.map {
                         Instant.ofEpochMilli(it.timeMs).atZone(ZoneId.systemDefault()).toLocalDate() to it.close
                     }
@@ -589,24 +628,55 @@ class TransactionFormViewModel(
 
                 is BtResult.Err -> _priceLinkAvailable.value = false
             }
+            _priceHistoryLoading.value = false
         }
     }
 
     private fun enableLink() {
         _priceLinked.value = true
+        _priceLinkHint.value = PriceLinkHint.NONE
         applyLinkedPrice()
     }
 
+    /** DATE → price: fill the close for the selected day (or the prior trading day). */
     private fun applyLinkedPrice() {
         if (!_priceLinked.value) return
         val price = closeOnOrBefore(dailyCloses, _date.value) ?: return
+        // Write the price field DIRECTLY (not via setPrice), so this auto-fill does
+        // NOT feed the reverse signal and cannot bounce the date back (loop guard).
         _priceText.value = formatDecimalForInput(price, formLocale, maxDecimals = 6)
+        _priceLinkHint.value = PriceLinkHint.NONE
     }
 
-    /** Chain toggle: detach to type a custom price, or re-attach to the date. */
+    /** PRICE → date: jump to the most recent day the series was at the typed price. */
+    private fun resolvePriceToDate(raw: String) {
+        if (!_priceLinked.value || !_priceLinkAvailable.value || dailyCloses.isEmpty()) return
+        val price = parseLocalizedDecimal(raw)
+        if (price == null || price <= 0.0) {
+            _priceLinkHint.value = PriceLinkHint.NONE
+            return
+        }
+        val matched = mostRecentDateAtPrice(dailyCloses, price)
+        if (matched == null) {
+            // Never at this price in the available history — leave the date, say so.
+            _priceLinkHint.value = PriceLinkHint.PRICE_NEVER_REACHED
+            return
+        }
+        _priceLinkHint.value = PriceLinkHint.NONE
+        // Write the date field DIRECTLY (not via setDate), so this does NOT re-run
+        // the date→price fill and clobber the user's typed price (loop guard).
+        if (_date.value != matched) _date.value = matched
+    }
+
+    /** Chain toggle: detach BOTH directions, or re-attach and fill from the date. */
     fun togglePriceLink() {
         if (!_priceLinkAvailable.value) return
-        if (_priceLinked.value) _priceLinked.value = false else enableLink()
+        if (_priceLinked.value) {
+            _priceLinked.value = false
+            _priceLinkHint.value = PriceLinkHint.NONE
+        } else {
+            enableLink()
+        }
     }
 
     // ── Max-quantity chip (§6.2) ────────────────────────────────────────────
@@ -664,9 +734,14 @@ class TransactionFormViewModel(
     }
 
     fun setPrice(text: String) {
-        // Manual edit detaches the date→price link (§6.2, matches the web).
-        _priceLinked.value = false
-        _priceText.value = sanitizeDecimalInput(text, maxDecimals = 6)
+        val sanitized = sanitizeDecimalInput(text, maxDecimals = 6)
+        _priceText.value = sanitized
+        // Bidirectional (#226, matches the web): a typed price stays LINKED and
+        // drives the date (debounced via the reverse signal) instead of detaching.
+        // The chain toggle is the only way to unlink. Non-market assets have no
+        // series, so the reverse resolver simply no-ops there.
+        _priceLinkHint.value = PriceLinkHint.NONE
+        _priceReverseSignal.value = sanitized
     }
 
     fun setFee(text: String) {
@@ -930,6 +1005,8 @@ fun TransactionFormScreen(
     val priceText by vm.priceText.collectAsStateWithLifecycle()
     val priceLinked by vm.priceLinked.collectAsStateWithLifecycle()
     val priceLinkAvailable by vm.priceLinkAvailable.collectAsStateWithLifecycle()
+    val priceHistoryLoading by vm.priceHistoryLoading.collectAsStateWithLifecycle()
+    val priceLinkHint by vm.priceLinkHint.collectAsStateWithLifecycle()
     val maxAvailable by vm.maxAvailable.collectAsStateWithLifecycle()
     val feeText by vm.feeText.collectAsStateWithLifecycle()
     val date by vm.date.collectAsStateWithLifecycle()
@@ -1115,18 +1192,31 @@ fun TransactionFormScreen(
                         error = validation.priceError != null && priceText.isNotEmpty(),
                         suffix = "€",
                         modifier = Modifier.weight(1f),
-                        trailingIcon = if (priceLinkAvailable && inputsEnabled) {
+                        trailingIcon = if (inputsEnabled && priceHistoryLoading) {
+                            { PriceLinkLoading() }
+                        } else if (inputsEnabled && priceLinkAvailable) {
                             { PriceLinkToggle(linked = priceLinked, onToggle = { vm.togglePriceLink() }) }
                         } else {
                             null
                         },
                     )
                 }
-                if (priceLinkAvailable && priceLinked && inputsEnabled) {
+                // One subtle, non-blocking hint under the price/date row: a typed
+                // price that never occurred leaves the date and says so; otherwise,
+                // while linked, a reminder the two fields fill each other (§6.2).
+                val priceHint: Pair<String, androidx.compose.ui.graphics.Color>? = when {
+                    !inputsEnabled -> null
+                    priceLinkHint == PriceLinkHint.PRICE_NEVER_REACHED ->
+                        stringResource(R.string.bt_txform_price_never_reached) to bt.goldEmphasis
+                    priceLinkAvailable && priceLinked ->
+                        stringResource(R.string.bt_txform_price_linked_hint) to bt.textMuted
+                    else -> null
+                }
+                priceHint?.let { (text, color) ->
                     Text(
-                        text = stringResource(R.string.bt_txform_price_linked_hint),
+                        text = text,
                         style = MaterialTheme.typography.bodySmall,
-                        color = BtTheme.colors.textMuted,
+                        color = color,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
@@ -1468,7 +1558,7 @@ private fun MaxChip(onClick: () -> Unit) {
     }
 }
 
-/** Date→price link chain (§6.2) — gold + linked, muted + unlinked. */
+/** Date ↔ price link chain (§6.2) — gold + linked, muted + unlinked. */
 @Composable
 private fun PriceLinkToggle(linked: Boolean, onToggle: () -> Unit) {
     val bt = BtTheme.colors
@@ -1482,6 +1572,18 @@ private fun PriceLinkToggle(linked: Boolean, onToggle: () -> Unit) {
             modifier = Modifier.size(20.dp),
         )
     }
+}
+
+/** Subtle indeterminate spinner shown in the price field while the daily-close series loads. */
+@Composable
+private fun PriceLinkLoading() {
+    CircularProgressIndicator(
+        color = BtTheme.colors.textMuted,
+        strokeWidth = 2.dp,
+        modifier = Modifier
+            .padding(end = 12.dp)
+            .size(18.dp),
+    )
 }
 
 @Composable

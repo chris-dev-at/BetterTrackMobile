@@ -350,4 +350,61 @@ class TransactionFormLogicTest {
         assertEquals(100.0, closeOnOrBefore(series, LocalDate.of(2026, 6, 1))!!, 1e-9) // before all → earliest
         assertNull(closeOnOrBefore(emptyList(), LocalDate.of(2026, 7, 1)))
     }
+
+    // ── Reverse link: price→date lookup (§6.2, mirrors web `dateForPrice`) ────
+
+    // An ascending series with a weekend gap: Fri 2026-06-05 → Mon 2026-06-08,
+    // identical to the web app's priceDateLink.test.ts fixture so both platforms
+    // resolve a typed price to the same day.
+    private val reverseSeries = listOf(
+        LocalDate.of(2026, 6, 1) to 100.0,
+        LocalDate.of(2026, 6, 2) to 110.0,
+        LocalDate.of(2026, 6, 3) to 90.0,
+        LocalDate.of(2026, 6, 4) to 95.0,
+        LocalDate.of(2026, 6, 5) to 105.0, // Friday
+        LocalDate.of(2026, 6, 8) to 108.0, // Monday
+    )
+
+    @Test
+    fun `price to date returns the exact close on the most recent matching day`() {
+        assertEquals(LocalDate.of(2026, 6, 8), mostRecentDateAtPrice(reverseSeries, 108.0))
+    }
+
+    @Test
+    fun `a price crossed between two closes lands on the later day`() {
+        // 100 lies in the (95 → 105) 06-04→06-05 move; the crossing day is 06-05.
+        assertEquals(LocalDate.of(2026, 6, 5), mostRecentDateAtPrice(reverseSeries, 100.0))
+    }
+
+    @Test
+    fun `an exact historical close is attributed to its own day, not the later boundary`() {
+        // 105 is Friday 06-05's close AND the lower bound of the (105 → 108) move;
+        // the exact day wins over the boundary of the later segment.
+        assertEquals(LocalDate.of(2026, 6, 5), mostRecentDateAtPrice(reverseSeries, 105.0))
+    }
+
+    @Test
+    fun `price to date picks the MOST RECENT crossing when a price occurs more than once`() {
+        // 92 lies in (90,95) on 06-04 and also in (110,90) on 06-03 — newest wins.
+        assertEquals(LocalDate.of(2026, 6, 4), mostRecentDateAtPrice(reverseSeries, 92.0))
+    }
+
+    @Test
+    fun `a price never reached in history returns null`() {
+        assertNull(mostRecentDateAtPrice(reverseSeries, 5.0))
+        assertNull(mostRecentDateAtPrice(reverseSeries, 500.0))
+    }
+
+    @Test
+    fun `single-point series matches only its exact close`() {
+        val one = listOf(LocalDate.of(2026, 6, 1) to 100.0)
+        assertEquals(LocalDate.of(2026, 6, 1), mostRecentDateAtPrice(one, 100.0))
+        assertNull(mostRecentDateAtPrice(one, 99.0))
+    }
+
+    @Test
+    fun `price to date rejects a non-finite price and an empty series`() {
+        assertNull(mostRecentDateAtPrice(reverseSeries, Double.NaN))
+        assertNull(mostRecentDateAtPrice(emptyList(), 100.0))
+    }
 }
