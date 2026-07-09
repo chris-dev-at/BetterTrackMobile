@@ -61,6 +61,7 @@ import at.bettertrack.app.navigation.ConglomerateDetailRoute
 import at.bettertrack.app.navigation.ConglomerateListRoute
 import at.bettertrack.app.navigation.CustomAssetDetailRoute
 import at.bettertrack.app.navigation.CustomAssetsRoute
+import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
 import at.bettertrack.app.navigation.LoginRoute
@@ -108,6 +109,7 @@ import at.bettertrack.app.ui.screens.PlaceholderScreen
 import at.bettertrack.app.ui.screens.WorkboardTabScreen
 import at.bettertrack.app.ui.chat.ChatListScreen
 import at.bettertrack.app.ui.chat.ChatThreadScreen
+import at.bettertrack.app.ui.social.FriendOverviewScreen
 import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
 import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
@@ -354,11 +356,9 @@ private fun BtNavHost(
         }
         composable<SocialTabRoute> {
             SocialScreen(
-                onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
-                onOpenSharedWatchlist = { userId, ownerName ->
-                    navController.navigate(SharedWatchlistViewRoute(userId, ownerName))
+                onOpenFriend = { userId, username ->
+                    navController.navigate(FriendOverviewRoute(userId, username))
                 },
-                onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
                 onOpenChats = { navController.navigate(ChatListRoute) },
                 onOpenChatWith = { friendUserId, username ->
                     navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
@@ -505,14 +505,30 @@ private fun BtNavHost(
             )
         }
 
-        // Social — read-only friend-shared views (Step 14, §6.9)
+        // Social — per-friend overview (Social v2) + read-only friend-shared views (§6.9)
+        composable<FriendOverviewRoute> { entry ->
+            val route = entry.toRoute<FriendOverviewRoute>()
+            FriendOverviewScreen(
+                friendUserId = route.userId,
+                username = route.username,
+                onBack = back,
+                onOpenChat = { uid, un ->
+                    navController.navigate(ChatThreadRoute(friendUserId = uid, friendUsername = un))
+                },
+                onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
+                onOpenSharedWatchlist = { watchlistId, ownerName ->
+                    navController.navigate(SharedWatchlistViewRoute(watchlistId, ownerName))
+                },
+                onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
+            )
+        }
         composable<SharedPortfolioViewRoute> { entry ->
             val route = entry.toRoute<SharedPortfolioViewRoute>()
             SharedPortfolioViewScreen(portfolioId = route.portfolioId, onBack = back)
         }
         composable<SharedWatchlistViewRoute> { entry ->
             val route = entry.toRoute<SharedWatchlistViewRoute>()
-            SharedWatchlistViewScreen(userId = route.userId, ownerName = route.ownerName, onBack = back)
+            SharedWatchlistViewScreen(watchlistId = route.watchlistId, ownerName = route.ownerName, onBack = back)
         }
         composable<SharedConglomerateViewRoute> { entry ->
             val route = entry.toRoute<SharedConglomerateViewRoute>()

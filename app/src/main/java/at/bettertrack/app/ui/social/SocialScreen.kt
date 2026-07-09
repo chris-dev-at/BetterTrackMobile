@@ -1,5 +1,9 @@
 package at.bettertrack.app.ui.social
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +29,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PieChart
@@ -33,8 +36,6 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,15 +64,17 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.repo.AudienceState
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendRequest
 import at.bettertrack.app.data.repo.MyShared
 import at.bettertrack.app.data.repo.MySharedItem
+import at.bettertrack.app.data.repo.PersonShares
 import at.bettertrack.app.data.repo.ShareAudience
 import at.bettertrack.app.data.repo.ShareableKind
 import at.bettertrack.app.data.repo.SharedWithMe
-import at.bettertrack.app.data.repo.SocialFlags
 import at.bettertrack.app.data.repo.SocialRepository
+import at.bettertrack.app.data.repo.groupByPerson
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtAvatar
@@ -82,7 +85,6 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
-import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +106,11 @@ data class SocialUiState(
     val myShared: MyShared? = null,
     /** The item whose audience sheet is open (null = closed). */
     val sharingItem: MySharedItem? = null,
+    /** The item's live audience (friendIds + link state); null while loading. */
+    val sharingState: AudienceState? = null,
     val sharingBusy: Boolean = false,
+    /** A freshly-minted public link to reveal once (null = no dialog). */
+    val publicLinkToShow: String? = null,
 )
 
 class SocialViewModel(
@@ -116,7 +122,6 @@ class SocialViewModel(
     private val _state = MutableStateFlow(SocialUiState())
     val state: StateFlow<SocialUiState> = _state.asStateFlow()
 
-    /** One-shot user feedback (Toast). */
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
@@ -166,38 +171,55 @@ class SocialViewModel(
         if (r is BtResult.Ok) "Friend request sent to @${identifier.substringBefore('@')}" else (r as BtResult.Err).error.userMessage
     }
 
-    fun accept(req: FriendRequest) = write {
-        toastFor(repo.acceptRequest(req.id), "You're now friends with @${req.username}")
-    }
-
     fun decline(req: FriendRequest) = write { toastFor(repo.declineRequest(req.id), "Request declined") }
     fun cancel(req: FriendRequest) = write { toastFor(repo.cancelRequest(req.id), "Request cancelled") }
-    fun unfriend(f: Friend) = write { toastFor(repo.unfriend(f.userId), "Removed @${f.username}") }
+    fun accept(req: FriendRequest) = write { toastFor(repo.acceptRequest(req.id), "You're now friends with @${req.username}") }
 
-    fun openSharing(item: MySharedItem) { _state.value = _state.value.copy(sharingItem = item) }
-    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null) }
-
-    fun applyAudience(item: MySharedItem, audience: ShareAudience) {
+    fun openSharing(item: MySharedItem) {
+        _state.value = _state.value.copy(sharingItem = item, sharingState = null)
         viewModelScope.launch {
-            _state.value = _state.value.copy(sharingBusy = true)
-            val r = repo.setAudience(item.kind, item.id, audience)
-            _state.value = _state.value.copy(sharingBusy = false, sharingItem = null)
-            when (r) {
-                is BtResult.Ok -> {
-                    _toast.value = when (audience) {
-                        ShareAudience.Private -> "“${item.name}” is now private"
-                        ShareAudience.AllFriends -> "“${item.name}” shared with all friends"
-                        ShareAudience.SpecificFriends -> "“${item.name}” shared with selected friends"
-                        ShareAudience.PublicLink -> "Public link created for “${item.name}”"
-                    }
-                    load()
-                }
-                is BtResult.Err -> _toast.value = r.error.userMessage
+            val r = repo.getAudience(item.kind, item.id)
+            val resolved = (r as? BtResult.Ok)?.value
+                ?: AudienceState(item.kind, item.id, item.audience, emptySet(), linkActive = false, linkCreatedAt = null)
+            // Only apply if the sheet is still open for the same item.
+            if (_state.value.sharingItem?.id == item.id) {
+                _state.value = _state.value.copy(sharingState = resolved)
             }
         }
     }
 
-    fun publicLink(item: MySharedItem): String = repo.publicLink(item.kind, item.id)
+    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null) }
+    fun dismissLink() { _state.value = _state.value.copy(publicLinkToShow = null) }
+
+    fun applyAudience(item: MySharedItem, audience: ShareAudience, friendIds: Set<String>, acknowledge: Boolean) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(sharingBusy = true)
+            val r = repo.setAudience(item.kind, item.id, audience, friendIds, acknowledge)
+            when (r) {
+                is BtResult.Ok -> {
+                    _state.value = _state.value.copy(
+                        sharingBusy = false,
+                        sharingItem = null,
+                        sharingState = null,
+                        publicLinkToShow = r.value.publicUrl,
+                    )
+                    if (r.value.publicUrl == null) {
+                        _toast.value = when (audience) {
+                            ShareAudience.Private -> "“${item.name}” is now private"
+                            ShareAudience.AllFriends -> "“${item.name}” shared with all friends"
+                            ShareAudience.SpecificFriends -> "“${item.name}” shared with ${friendIds.size} friend${if (friendIds.size == 1) "" else "s"}"
+                            ShareAudience.PublicLink -> "Public link is active"
+                        }
+                    }
+                    load()
+                }
+                is BtResult.Err -> {
+                    _state.value = _state.value.copy(sharingBusy = false)
+                    _toast.value = r.error.userMessage
+                }
+            }
+        }
+    }
 
     fun consumeToast() { _toast.value = null }
 
@@ -216,9 +238,7 @@ class SocialViewModel(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialScreen(
-    onOpenSharedPortfolio: (String) -> Unit,
-    onOpenSharedWatchlist: (userId: String, ownerName: String) -> Unit,
-    onOpenSharedConglomerate: (String) -> Unit,
+    onOpenFriend: (userId: String, username: String) -> Unit,
     onOpenChats: () -> Unit,
     onOpenChatWith: (friendUserId: String, username: String) -> Unit,
 ) {
@@ -245,7 +265,7 @@ fun SocialScreen(
             SegmentedTabs(
                 selected = section,
                 onSelect = { section = it },
-                sharedCount = ui.sharedWithMe?.let { it.portfolios.size + it.conglomerates.size + it.watchlists.size } ?: 0,
+                sharedCount = ui.sharedWithMe?.count ?: 0,
                 requestCount = ui.incoming.size,
             )
             PullToRefreshBox(
@@ -271,21 +291,16 @@ fun SocialScreen(
                         icon = Icons.Outlined.People,
                         title = "You're offline",
                         message = "Friends and shares need a connection. Reconnect to see them.",
-                        modifier = Modifier.fillMaxSize().padding(24.dp).wrapCenter(),
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
                     )
                     ui.error != null && ui.friends.isEmpty() -> BtErrorState(
                         message = ui.error,
                         onRetry = { vm.load(initial = true) },
-                        modifier = Modifier.fillMaxSize().wrapCenter(),
+                        modifier = Modifier.fillMaxSize(),
                     )
                     else -> when (section) {
-                        SocialSection.Friends -> FriendsSection(ui, vm, onAdd = { showAdd = true }, onChatWith = onOpenChatWith)
-                        SocialSection.SharedWithMe -> SharedWithMeSection(
-                            ui.sharedWithMe,
-                            onOpenSharedPortfolio,
-                            onOpenSharedWatchlist,
-                            onOpenSharedConglomerate,
-                        )
+                        SocialSection.Friends -> FriendsSection(ui, vm, onAdd = { showAdd = true }, onOpenFriend = onOpenFriend, onChatWith = onOpenChatWith)
+                        SocialSection.SharedWithMe -> SharedWithMeSection(ui.sharedWithMe, onOpenPerson = onOpenFriend)
                         SocialSection.MyShares -> MySharesSection(ui.myShared, onShare = { vm.openSharing(it) })
                     }
                 }
@@ -300,22 +315,41 @@ fun SocialScreen(
         )
     }
 
-    ui.sharingItem?.let { item ->
+    val item = ui.sharingItem
+    val audienceState = ui.sharingState
+    if (item != null && audienceState != null) {
         AudiencePickerSheet(
             itemName = item.name,
             kind = item.kind,
-            currentAudience = item.audience,
+            currentAudience = audienceState.audience,
             friends = ui.friends,
-            advancedEnabled = SocialFlags.advancedSharing,
-            publicLink = vm.publicLink(item),
+            initialFriendIds = audienceState.friendIds,
+            linkActive = audienceState.linkActive,
             busy = ui.sharingBusy,
-            onApply = { audience -> vm.applyAudience(item, audience) },
+            onApply = { audience, friendIds, ack -> vm.applyAudience(item, audience, friendIds, ack) },
             onDismiss = { vm.closeSharing() },
         )
     }
-}
 
-private fun Modifier.wrapCenter(): Modifier = this
+    ui.publicLinkToShow?.let { url ->
+        PublicLinkDialog(
+            url = url,
+            onCopy = {
+                val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clip.setPrimaryClip(ClipData.newPlainText("BetterTrack link", url))
+                Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+            },
+            onShare = {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+                context.startActivity(Intent.createChooser(send, "Share link"))
+            },
+            onDismiss = { vm.dismissLink() },
+        )
+    }
+}
 
 // ── Segmented control ────────────────────────────────────────────────────────
 
@@ -326,7 +360,6 @@ private fun SegmentedTabs(
     sharedCount: Int,
     requestCount: Int,
 ) {
-    val bt = BtTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -358,10 +391,7 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
             Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
             if (badge > 0) {
                 Spacer(Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier.size(18.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Box(modifier = Modifier.size(18.dp), contentAlignment = Alignment.Center) {
                     Surface(shape = BtShapes.pill, color = bt.gold) {
                         Text(
                             badge.toString(),
@@ -375,8 +405,6 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
         }
     }
 }
-
-// ── Friends section ──────────────────────────────────────────────────────────
 
 @Composable
 private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
@@ -407,9 +435,16 @@ private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
     }
 }
 
+// ── Friends section ──────────────────────────────────────────────────────────
+
 @Composable
-private fun FriendsSection(ui: SocialUiState, vm: SocialViewModel, onAdd: () -> Unit, onChatWith: (String, String) -> Unit) {
-    val bt = BtTheme.colors
+private fun FriendsSection(
+    ui: SocialUiState,
+    vm: SocialViewModel,
+    onAdd: () -> Unit,
+    onOpenFriend: (String, String) -> Unit,
+    onChatWith: (String, String) -> Unit,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
@@ -448,7 +483,7 @@ private fun FriendsSection(ui: SocialUiState, vm: SocialViewModel, onAdd: () -> 
             }
         } else {
             items(ui.friends, key = { "f-" + it.userId }) { f ->
-                FriendRow(f, onUnfriend = { vm.unfriend(f) }, onChat = { onChatWith(f.userId, f.username) })
+                FriendRow(f, onOpen = { onOpenFriend(f.userId, f.username) }, onChat = { onChatWith(f.userId, f.username) })
             }
         }
     }
@@ -467,12 +502,11 @@ private fun SectionHeader(title: String, count: Int) {
     }
 }
 
+/** A friend row: whole card opens the overview; the chat quick-action stays here. */
 @Composable
-private fun FriendRow(f: Friend, onUnfriend: () -> Unit, onChat: () -> Unit) {
+private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
     val bt = BtTheme.colors
-    var menu by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    BtCard(modifier = Modifier.fillMaxWidth()) {
+    BtCard(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -480,44 +514,14 @@ private fun FriendRow(f: Friend, onUnfriend: () -> Unit, onChat: () -> Unit) {
             BtAvatar(name = f.username, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("@${f.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                    if (f.isSample) {
-                        Spacer(Modifier.width(8.dp))
-                        BtBadge(text = "Sample", kind = BtBadgeKind.Neutral)
-                    }
-                }
+                Text("@${f.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                 Text("Friends since ${f.since.take(10)}", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             IconButton(onClick = onChat) {
-                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Message", tint = bt.textSecondary)
+                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Message @${f.username}", tint = bt.textSecondary)
             }
-            Box {
-                IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = bt.textSecondary)
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = bt.surface) {
-                    DropdownMenuItem(
-                        text = { Text("Remove friend", color = bt.loss) },
-                        onClick = { menu = false; confirm = true },
-                    )
-                }
-            }
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
-    }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            containerColor = bt.surface,
-            titleContentColor = bt.textPrimary,
-            textContentColor = bt.textSecondary,
-            title = { Text("Remove @${f.username}?") },
-            text = { Text("You'll both stop seeing anything shared between you. This can't be undone.") },
-            confirmButton = {
-                TextButton(onClick = { confirm = false; onUnfriend() }) { Text("Remove", color = bt.loss) }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = bt.textSecondary) } },
-        )
     }
 }
 
@@ -566,97 +570,77 @@ private fun RequestRow(
     }
 }
 
-// ── Shared-with-me section ───────────────────────────────────────────────────
+// ── Shared-with-me section (grouped by PERSON) ───────────────────────────────
 
 @Composable
-private fun SharedWithMeSection(
-    shared: SharedWithMe?,
-    onOpenPortfolio: (String) -> Unit,
-    onOpenWatchlist: (String, String) -> Unit,
-    onOpenConglomerate: (String) -> Unit,
-) {
-    val bt = BtTheme.colors
+private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, String) -> Unit) {
     if (shared == null || shared.isEmpty) {
         BtEmptyState(
             icon = Icons.Outlined.People,
             title = "Nothing shared with you yet",
-            message = "When a friend shares a portfolio, watchlist or conglomerate with you, it shows up here.",
+            message = "When a friend shares a portfolio, watchlist or conglomerate with you, they'll show up here — grouped by friend.",
             modifier = Modifier.fillMaxSize().padding(24.dp),
         )
         return
     }
+    val people = remember(shared) { shared.groupByPerson() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (shared.portfolios.isNotEmpty()) {
-            item { SectionHeader("Portfolios", shared.portfolios.size) }
-            items(shared.portfolios, key = { "sp-" + it.portfolioId }) { p ->
-                SharedRow(
-                    icon = Icons.Outlined.PieChart,
-                    owner = p.ownerName,
-                    title = p.name,
-                    trailing = { MoneyText(value = p.totalValueEur, style = MaterialTheme.typography.titleSmall) },
-                    onClick = { onOpenPortfolio(p.portfolioId) },
-                )
-            }
-        }
-        if (shared.conglomerates.isNotEmpty()) {
-            item { SectionHeader("Conglomerates", shared.conglomerates.size) }
-            items(shared.conglomerates, key = { "sc-" + it.conglomerateId }) { c ->
-                SharedRow(
-                    icon = Icons.Outlined.Dashboard,
-                    owner = c.ownerName,
-                    title = c.name,
-                    trailing = { Text("${c.positionCount} pos", style = MaterialTheme.typography.bodySmall, color = bt.textMuted) },
-                    onClick = { onOpenConglomerate(c.conglomerateId) },
-                )
-            }
-        }
-        if (shared.watchlists.isNotEmpty()) {
-            item { SectionHeader("Watchlists", shared.watchlists.size) }
-            items(shared.watchlists, key = { "sw-" + it.ownerId }) { w ->
-                SharedRow(
-                    icon = Icons.AutoMirrored.Outlined.ShowChart,
-                    owner = w.ownerName,
-                    title = "${w.ownerName}'s watchlist",
-                    trailing = { Text("${w.itemCount} assets", style = MaterialTheme.typography.bodySmall, color = bt.textMuted) },
-                    onClick = { onOpenWatchlist(w.ownerId, w.ownerName) },
-                )
-            }
+        item { SectionHeader("People sharing with you", people.size) }
+        items(people, key = { "person-" + it.ownerId }) { p ->
+            PersonRow(p, onClick = { onOpenPerson(p.ownerId, p.ownerName) })
         }
     }
 }
 
 @Composable
-private fun SharedRow(
-    icon: ImageVector,
-    owner: String,
-    title: String,
-    trailing: @Composable () -> Unit,
-    onClick: () -> Unit,
-) {
+private fun PersonRow(p: PersonShares, onClick: () -> Unit) {
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BtAvatar(name = owner, size = 38.dp)
+            BtAvatar(name = p.ownerName, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, maxLines = 1)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Shared by @$owner", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-                }
+                Text("@${p.ownerName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+                Text(sharesSummary(p), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
-            trailing()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (p.portfolios.isNotEmpty()) MiniCount(Icons.Outlined.PieChart, p.portfolios.size)
+                if (p.conglomerates.isNotEmpty()) MiniCount(Icons.Outlined.Dashboard, p.conglomerates.size)
+                if (p.watchlists.isNotEmpty()) MiniCount(Icons.AutoMirrored.Outlined.ShowChart, p.watchlists.size)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
+
+@Composable
+private fun MiniCount(icon: ImageVector, count: Int) {
+    val bt = BtTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+        Icon(icon, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = bt.textSecondary)
+    }
+}
+
+private fun sharesSummary(p: PersonShares): String {
+    val parts = buildList {
+        if (p.portfolios.isNotEmpty()) add("${p.portfolios.size} portfolio${plural(p.portfolios.size)}")
+        if (p.conglomerates.isNotEmpty()) add("${p.conglomerates.size} conglomerate${plural(p.conglomerates.size)}")
+        if (p.watchlists.isNotEmpty()) add("${p.watchlists.size} watchlist${plural(p.watchlists.size)}")
+    }
+    return parts.joinToString(" · ")
+}
+
+private fun plural(n: Int): String = if (n == 1) "" else "s"
 
 // ── My-shares section ────────────────────────────────────────────────────────
 
@@ -695,7 +679,7 @@ private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
 @Composable
 private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
     val bt = BtTheme.colors
-    val (icon, aLabel, aKind) = audienceChrome(item.audience)
+    val chrome = audienceChrome(item.audience, item.friendCount)
     val typeIcon = when (item.kind) {
         ShareableKind.Portfolio -> Icons.Outlined.PieChart
         ShareableKind.Watchlist -> Icons.AutoMirrored.Outlined.ShowChart
@@ -713,9 +697,9 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
                 Text(item.detail, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, tint = if (aKind == BtBadgeKind.Gold) bt.goldEmphasis else bt.textMuted, modifier = Modifier.size(15.dp))
+                Icon(chrome.icon, contentDescription = null, tint = if (chrome.kind == BtBadgeKind.Gold) bt.goldEmphasis else bt.textMuted, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(5.dp))
-                BtBadge(text = aLabel, kind = aKind)
+                BtBadge(text = chrome.label, kind = chrome.kind)
             }
         }
     }
@@ -723,14 +707,59 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
 
 private data class AudienceChrome(val icon: ImageVector, val label: String, val kind: BtBadgeKind)
 
-private fun audienceChrome(a: ShareAudience): AudienceChrome = when (a) {
+private fun audienceChrome(a: ShareAudience, friendCount: Int): AudienceChrome = when (a) {
     ShareAudience.Private -> AudienceChrome(Icons.Outlined.Lock, "Private", BtBadgeKind.Neutral)
-    ShareAudience.SpecificFriends -> AudienceChrome(Icons.Outlined.People, "Some friends", BtBadgeKind.Gold)
+    ShareAudience.SpecificFriends -> AudienceChrome(Icons.Outlined.People, if (friendCount > 0) "$friendCount friend${plural(friendCount)}" else "Some friends", BtBadgeKind.Gold)
     ShareAudience.AllFriends -> AudienceChrome(Icons.Outlined.Group, "All friends", BtBadgeKind.Gold)
     ShareAudience.PublicLink -> AudienceChrome(Icons.Outlined.Link, "Public", BtBadgeKind.Gold)
 }
 
-// ── Add-friend dialog ────────────────────────────────────────────────────────
+// ── Dialogs ──────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PublicLinkDialog(url: String, onCopy: () -> Unit, onShare: () -> Unit, onDismiss: () -> Unit) {
+    val bt = BtTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = bt.surface,
+        titleContentColor = bt.textPrimary,
+        textContentColor = bt.textSecondary,
+        icon = { Icon(Icons.Outlined.Link, contentDescription = null, tint = bt.gold) },
+        title = { Text("Public link created") },
+        text = {
+            Column {
+                Text(
+                    "Anyone with this link can view it. It's shown only once — copy it now.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textSecondary,
+                )
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    shape = BtShapes.card,
+                    color = bt.bg,
+                    border = BorderStroke(1.dp, bt.border),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textPrimary,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onCopy() }) { Text("Copy", color = bt.gold) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onShare() }) { Text("Share", color = bt.textSecondary) }
+                TextButton(onClick = onDismiss) { Text("Done", color = bt.textSecondary) }
+            }
+        },
+    )
+}
 
 @Composable
 private fun AddFriendDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {

@@ -13,9 +13,19 @@ object OAuthConfig {
     val clientId: String = BuildConfig.OAUTH_CLIENT_ID
     val redirectUri: String = BuildConfig.OAUTH_REDIRECT_URI
 
-    /** Space-separated coarse module scopes granted to the app client. */
+    /**
+     * Space-separated coarse module scopes the app requests. This is the FULL
+     * allowed set for the BetterTrackMobile client (PLATFORM_ASKS ⚡ ACTIVATION
+     * blesses requesting the full set so future grants need no app change). A
+     * token carries a scope only if requested here AND granted to the client;
+     * a stale token still 403s scope-gated calls until the user re-logs in.
+     * chat:read/chat:write are requested now so the chat builder needs no
+     * extra re-login.
+     */
     const val SCOPES: String =
-        "portfolio:read portfolio:write workboard:read workboard:write market:read social:read account:security"
+        "portfolio:read portfolio:write workboard:read workboard:write market:read " +
+            "social:read social:write account:security " +
+            "notifications:read notifications:write chat:read chat:write"
 
     /**
      * The authorize URL opened in a Custom Tab on the WEB origin:

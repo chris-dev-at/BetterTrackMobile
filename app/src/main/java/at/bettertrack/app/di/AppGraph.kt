@@ -182,7 +182,7 @@ object AppGraph {
     }
 
     val watchlistRepository: WatchlistRepository by lazy {
-        DefaultWatchlistRepository(db = database, market = marketRepository)
+        DefaultWatchlistRepository(db = database, market = marketRepository, api = btApi, json = json)
     }
 
     val conglomerateRepository: ConglomerateRepository by lazy {

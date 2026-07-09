@@ -1,85 +1,65 @@
 package at.bettertrack.app.data.repo
 
-import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.CreateFriendRequestRequest
+import at.bettertrack.app.data.api.dto.SetActivityAlertRequest
+import at.bettertrack.app.data.api.dto.SetAudienceRequest
+import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.SharedWatchlistDetailResponse
-import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
-import at.bettertrack.app.data.api.dto.UpdateConglomerateRequest
-import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
-import at.bettertrack.app.data.api.dto.UpdateWatchlistSharingRequest
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import at.bettertrack.app.data.api.parseApiError
 import kotlinx.serialization.json.Json
-import java.util.UUID
+import retrofit2.Response
+import java.io.IOException
 
 /**
- * Friends & sharing (Steps 14, §6.8/§6.9). The clean seam between the app's full
- * social experience and the platform's current coverage.
+ * Friends & sharing (Steps 14 + Social v2, §6.9 / V3 sharing). The whole social
+ * system is now LIVE — the platform shipped friend writes (#341, `social:write`),
+ * the unified 4-rung audience model + public links (#332), and the per-shared-item
+ * activity-alert preference (V3-P6). This repository is a thin verbatim adapter:
  *
- * LIVE (wired for real — verified empirically):
- *  - reads: `GET /social/friends`, `/social/requests`, `/social/shared`,
- *    `/social/my-shared`, and the read-only detail views — all gate on the
- *    `social:read` scope the client HAS.
- *  - sharing-visibility mutations for the two audience tiers the platform models
- *    (`private` ↔ `friends`): `PATCH /portfolios/{id}`, `/workboard/sharing`,
- *    `/conglomerates/{id}` — these ride `portfolio:write` / `workboard:write`,
- *    both HELD, so "Private" and "All friends" genuinely persist server-side.
+ *  - READS (`social:read`): friends, requests, shared-with-me, my-shared, the
+ *    read-only detail views.
+ *  - FRIEND WRITES (`social:write`): send/accept/decline/cancel request, unfriend.
+ *  - AUDIENCE (`social:write`): `GET|PUT /social/audience/:kind/:subjectId` — the
+ *    full ladder private / specific_friends / all_friends / public_link, with the
+ *    hash-only public-link token surfaced ONCE at mint.
+ *  - ACTIVITY PREFS (`social:write`): `PUT /social/shared/activity/:kind/:subjectId`.
  *
- * STUB (behind [SocialFlags], debug-only sample data + optimistic flows; a clean
- * "coming soon" in release):
- *  - friend-graph WRITES (send/accept/decline/cancel request, unfriend) require a
- *    `social:write` scope the mobile client is NOT yet granted;
- *  - the richer audience tiers "Specific friends" and "Public link" are app-ahead
- *    of the platform (which has only `private`/`friends`, no per-friend ACL and no
- *    public-link token) — the friction ladder is built now; these two tiers apply
- *    to a local overlay in debug and are marked coming-soon in release.
+ * Enforcement note (§14): non-members get **404, never 403** on shared reads — the
+ * detail screens treat 404 as "not shared with you".
  *
- * When the platform grants `social:write` and ships per-friend / public-link
- * sharing, the stub overlay is deleted and the real calls slot into the same
- * methods — the UI never changes. Boundary documented in `docs/TODO.md`.
+ * The delivery of friend-activity alerts is still platform-gated (Notifications-v2
+ * #368) — the preference persists here; the bell lights up when #368 ships.
  */
 
-/** Feature flags for the not-yet-granted social write surface (§6.8/§6.9 gaps). */
-object SocialFlags {
-    /** Friend-graph writes: optimistic debug overlay until `social:write` lands. */
-    val friendWrites: Boolean = BuildConfig.DEBUG
-
-    /** "Specific friends" + "Public link" audience tiers (app-ahead of the platform). */
-    val advancedSharing: Boolean = BuildConfig.DEBUG
-}
-
-/** The §6.9 audience ladder. The platform models only [Private] and [AllFriends]. */
-enum class ShareAudience {
-    Private,
-    SpecificFriends,
-    AllFriends,
-    PublicLink,
+/** The §16 audience ladder — a single-select rung of increasing exposure. */
+enum class ShareAudience(val wire: String) {
+    Private("private"),
+    SpecificFriends("specific_friends"),
+    AllFriends("all_friends"),
+    PublicLink("public_link"),
     ;
 
-    /** The two tiers that persist to the platform today. */
-    val isLivePersistable: Boolean get() = this == Private || this == AllFriends
-
-    /** Maps to the platform `visibility` enum for the persistable tiers. */
-    val visibility: String? get() = when (this) {
-        Private -> "private"
-        AllFriends -> "friends"
-        else -> null
-    }
-
     companion object {
-        fun fromVisibility(v: String?): ShareAudience =
-            if (v == "friends") AllFriends else Private
+        fun fromWire(w: String?): ShareAudience = entries.firstOrNull { it.wire == w } ?: Private
     }
 }
 
-/** What kind of thing an audience applies to (for the picker + my-shared audit). */
-enum class ShareableKind { Portfolio, Watchlist, Conglomerate }
+/** What kind of thing an audience applies to (routes the unified endpoints). */
+enum class ShareableKind(val wire: String) {
+    Portfolio("portfolio"),
+    Watchlist("watchlist"),
+    Conglomerate("conglomerate"),
+    ;
+
+    companion object {
+        fun fromWire(w: String?): ShareableKind = entries.firstOrNull { it.wire == w } ?: Portfolio
+    }
+}
 
 // ── Domain models (clean; decoupled from the wire DTOs) ─────────────────────
 
@@ -87,8 +67,6 @@ data class Friend(
     val userId: String,
     val username: String,
     val since: String,
-    /** True for a debug sample friend (badged); false for a real live friend. */
-    val isSample: Boolean = false,
 )
 
 data class FriendRequest(
@@ -98,7 +76,6 @@ data class FriendRequest(
     /** `pending` | `accepted` | `declined` | `cancelled`. */
     val status: String,
     val createdAt: String,
-    val isSample: Boolean = false,
 )
 
 data class FriendRequests(
@@ -112,35 +89,45 @@ data class SharedWithMe(
     val watchlists: List<SharedWatchlistSummary>,
 ) {
     val isEmpty: Boolean get() = portfolios.isEmpty() && conglomerates.isEmpty() && watchlists.isEmpty()
+    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size
 }
 
 data class SharedPortfolioSummary(
     val portfolioId: String,
     val name: String,
+    val ownerId: String,
     val ownerName: String,
     val totalValueEur: Double,
+    val activityAlertsEnabled: Boolean,
 )
 
 data class SharedConglomerateSummary(
     val conglomerateId: String,
     val name: String,
+    val ownerId: String,
     val ownerName: String,
     val status: String,
     val positionCount: Int,
+    val activityAlertsEnabled: Boolean,
 )
 
 data class SharedWatchlistSummary(
+    val watchlistId: String,
+    val name: String,
     val ownerId: String,
     val ownerName: String,
     val itemCount: Int,
+    val activityAlertsEnabled: Boolean,
 )
 
-/** A single audited item I'm sharing (or could share). */
+/** A single subject I own that I can share — with its current audience. */
 data class MySharedItem(
     val id: String,
     val kind: ShareableKind,
     val name: String,
     val audience: ShareAudience,
+    /** Named friends for [ShareAudience.SpecificFriends] (0 otherwise). */
+    val friendCount: Int,
     val detail: String,
 )
 
@@ -150,29 +137,87 @@ data class MyShared(
     val sharedCount: Int get() = items.count { it.audience != ShareAudience.Private }
 }
 
+/** The owner's current audience for one item — seeds the picker with reality. */
+data class AudienceState(
+    val kind: ShareableKind,
+    val subjectId: String,
+    val audience: ShareAudience,
+    val friendIds: Set<String>,
+    val linkActive: Boolean,
+    val linkCreatedAt: String?,
+)
+
+/** Result of a [SocialRepository.setAudience] — the new audience + a freshly-minted link once. */
+data class ShareOutcome(
+    val audience: ShareAudience,
+    /** Absolute shareable web URL — present ONLY the first time a public link is minted. */
+    val publicUrl: String?,
+)
+
+// ── Per-person grouping (Social v2 point 4 — "shared with me" by person) ─────
+
+/** All items one friend shares with me, grouped under them (read-only). */
+data class PersonShares(
+    val ownerId: String,
+    val ownerName: String,
+    val portfolios: List<SharedPortfolioSummary>,
+    val conglomerates: List<SharedConglomerateSummary>,
+    val watchlists: List<SharedWatchlistSummary>,
+) {
+    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size
+}
+
+/**
+ * Group everything shared with me by the friend who shares it (pure — unit-tested).
+ * People are ordered by most-shared first, then name; each person's items keep
+ * portfolio → conglomerate → watchlist order.
+ */
+fun SharedWithMe.groupByPerson(): List<PersonShares> {
+    val ids = LinkedHashSet<String>()
+    portfolios.forEach { ids.add(it.ownerId) }
+    conglomerates.forEach { ids.add(it.ownerId) }
+    watchlists.forEach { ids.add(it.ownerId) }
+    return ids.map { ownerId ->
+        val ps = portfolios.filter { it.ownerId == ownerId }
+        val cs = conglomerates.filter { it.ownerId == ownerId }
+        val ws = watchlists.filter { it.ownerId == ownerId }
+        val name = ps.firstOrNull()?.ownerName
+            ?: cs.firstOrNull()?.ownerName
+            ?: ws.firstOrNull()?.ownerName
+            ?: ""
+        PersonShares(ownerId, name, ps, cs, ws)
+    }.sortedWith(compareByDescending<PersonShares> { it.count }.thenBy { it.ownerName.lowercase() })
+}
+
 interface SocialRepository {
-    // Reads (live).
+    // Reads.
     suspend fun friends(): BtResult<List<Friend>>
     suspend fun requests(): BtResult<FriendRequests>
     suspend fun sharedWithMe(): BtResult<SharedWithMe>
     suspend fun myShared(): BtResult<MyShared>
     suspend fun sharedPortfolio(portfolioId: String): BtResult<SharedPortfolioDetailResponse>
-    suspend fun sharedWatchlist(userId: String): BtResult<SharedWatchlistDetailResponse>
+    suspend fun sharedWatchlist(watchlistId: String): BtResult<SharedWatchlistDetailResponse>
     suspend fun sharedConglomerate(conglomerateId: String): BtResult<SharedConglomerateDetailResponse>
 
-    // Friend-graph writes (stub until social:write).
+    // Friend-graph writes (live under social:write).
     suspend fun sendRequest(identifier: String): BtResult<Unit>
     suspend fun acceptRequest(id: String): BtResult<Unit>
     suspend fun declineRequest(id: String): BtResult<Unit>
     suspend fun cancelRequest(id: String): BtResult<Unit>
     suspend fun unfriend(userId: String): BtResult<Unit>
 
-    // Sharing-visibility mutations.
-    suspend fun watchlistAudience(): BtResult<ShareAudience>
-    suspend fun setAudience(kind: ShareableKind, itemId: String, audience: ShareAudience): BtResult<Unit>
+    // Unified audience (live).
+    suspend fun getAudience(kind: ShareableKind, subjectId: String): BtResult<AudienceState>
+    suspend fun setAudience(
+        kind: ShareableKind,
+        subjectId: String,
+        audience: ShareAudience,
+        friendIds: Set<String>,
+        acknowledgePublic: Boolean,
+    ): BtResult<ShareOutcome>
 
-    /** Public share link for the [ShareAudience.PublicLink] tier (app-ahead → stub token). */
-    fun publicLink(kind: ShareableKind, itemId: String): String
+    // Per-shared-item activity-alert preference (live; delivery gated on #368).
+    suspend fun setActivityAlert(kind: ShareableKind, subjectId: String, enabled: Boolean): BtResult<Unit>
 }
 
 class DefaultSocialRepository(
@@ -181,83 +226,39 @@ class DefaultSocialRepository(
     private val webOrigin: String,
 ) : SocialRepository {
 
-    // ── Debug overlay (drives the demo without social:write) ─────────────────
+    // ── Reads ────────────────────────────────────────────────────────────────
 
-    private data class Overlay(
-        val friends: List<Friend>,
-        val incoming: List<FriendRequest>,
-        val outgoing: List<FriendRequest>,
-        /** itemId → chosen app-ahead audience (SpecificFriends / PublicLink). */
-        val advancedAudience: Map<String, ShareAudience> = emptyMap(),
-    )
-
-    private val overlay = MutableStateFlow(seedOverlay())
-
-    private fun seedOverlay(): Overlay = if (SocialFlags.friendWrites) {
-        Overlay(
-            friends = listOf(
-                Friend(sampleId(), "anna_m", "2026-05-02T10:00:00Z", isSample = true),
-                Friend(sampleId(), "lukas.k", "2026-06-14T18:30:00Z", isSample = true),
-            ),
-            incoming = listOf(
-                FriendRequest(sampleId(), "marie_w", sampleId(), "pending", "2026-07-07T09:12:00Z", isSample = true),
-            ),
-            outgoing = listOf(
-                FriendRequest(sampleId(), "thomas99", sampleId(), "pending", "2026-07-06T20:41:00Z", isSample = true),
-            ),
-        )
-    } else {
-        Overlay(emptyList(), emptyList(), emptyList())
-    }
-
-    // ── Reads (live + debug overlay merge) ───────────────────────────────────
-
-    override suspend fun friends(): BtResult<List<Friend>> {
-        val live = apiCall(json) { api.friends() }
-        return when (live) {
-            is BtResult.Ok -> {
-                val real = live.value.friends.map {
-                    Friend(it.user.id, it.user.username, it.createdAt, isSample = false)
-                }
-                BtResult.Ok(real + overlay.value.friends)
-            }
-            is BtResult.Err ->
-                // Reads shouldn't be scope-blocked (social:read is held); if the
-                // network is down we still surface the demo overlay in debug.
-                if (SocialFlags.friendWrites && live.error.isNetwork) BtResult.Ok(overlay.value.friends)
-                else live
+    override suspend fun friends(): BtResult<List<Friend>> =
+        when (val r = apiCall(json) { api.friends() }) {
+            is BtResult.Ok -> BtResult.Ok(
+                r.value.friends.map { Friend(it.user.id, it.user.username, it.createdAt) },
+            )
+            is BtResult.Err -> r
         }
-    }
 
-    override suspend fun requests(): BtResult<FriendRequests> {
-        val live = apiCall(json) { api.friendRequests() }
-        return when (live) {
-            is BtResult.Ok -> {
-                val incoming = live.value.incoming.map { it.toDomain() } + overlay.value.incoming
-                val outgoing = live.value.outgoing.map { it.toDomain() } + overlay.value.outgoing
-                BtResult.Ok(FriendRequests(incoming, outgoing))
-            }
-            is BtResult.Err ->
-                if (SocialFlags.friendWrites && live.error.isNetwork) {
-                    BtResult.Ok(FriendRequests(overlay.value.incoming, overlay.value.outgoing))
-                } else {
-                    live
-                }
+    override suspend fun requests(): BtResult<FriendRequests> =
+        when (val r = apiCall(json) { api.friendRequests() }) {
+            is BtResult.Ok -> BtResult.Ok(
+                FriendRequests(
+                    incoming = r.value.incoming.map { FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt) },
+                    outgoing = r.value.outgoing.map { FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt) },
+                ),
+            )
+            is BtResult.Err -> r
         }
-    }
 
     override suspend fun sharedWithMe(): BtResult<SharedWithMe> =
         when (val r = apiCall(json) { api.sharedWithMe() }) {
             is BtResult.Ok -> BtResult.Ok(
                 SharedWithMe(
                     portfolios = r.value.portfolios.map {
-                        SharedPortfolioSummary(it.portfolioId, it.name, it.owner.username, it.totalValueEur)
+                        SharedPortfolioSummary(it.portfolioId, it.name, it.owner.id, it.owner.username, it.totalValueEur, it.activityAlertsEnabled)
                     },
                     conglomerates = r.value.conglomerates.map {
-                        SharedConglomerateSummary(it.conglomerateId, it.name, it.owner.username, it.status, it.positionCount)
+                        SharedConglomerateSummary(it.conglomerateId, it.name, it.owner.id, it.owner.username, it.status, it.positionCount, it.activityAlertsEnabled)
                     },
                     watchlists = r.value.watchlists.map {
-                        SharedWatchlistSummary(it.owner.id, it.owner.username, it.itemCount)
+                        SharedWatchlistSummary(it.watchlistId, it.name, it.owner.id, it.owner.username, it.itemCount, it.activityAlertsEnabled)
                     },
                 ),
             )
@@ -268,37 +269,42 @@ class DefaultSocialRepository(
         when (val r = apiCall(json) { api.mySharedItems() }) {
             is BtResult.Ok -> {
                 val items = buildList {
-                    r.value.portfolios.filter { it.archivedAt == null }.forEach { p ->
+                    r.value.portfolios.forEach { p ->
                         add(
                             MySharedItem(
-                                id = p.id,
+                                id = p.portfolioId,
                                 kind = ShareableKind.Portfolio,
                                 name = p.name,
-                                audience = resolveAudience(p.id, p.visibility),
-                                detail = if (p.isDefault) "Default portfolio" else "Portfolio",
+                                audience = ShareAudience.fromWire(p.audience),
+                                friendCount = p.friendCount,
+                                detail = "Portfolio",
                             ),
                         )
                     }
                     r.value.conglomerates.forEach { c ->
                         add(
                             MySharedItem(
-                                id = c.id,
+                                id = c.conglomerateId,
                                 kind = ShareableKind.Conglomerate,
                                 name = c.name,
-                                audience = resolveAudience(c.id, c.visibility),
+                                audience = ShareAudience.fromWire(c.audience),
+                                friendCount = c.friendCount,
                                 detail = if (c.positionCount == 1) "1 position" else "${c.positionCount} positions",
                             ),
                         )
                     }
-                    add(
-                        MySharedItem(
-                            id = WATCHLIST_ITEM_ID,
-                            kind = ShareableKind.Watchlist,
-                            name = "General watchlist",
-                            audience = resolveAudience(WATCHLIST_ITEM_ID, r.value.watchlist.visibility),
-                            detail = if (r.value.watchlist.itemCount == 1) "1 asset" else "${r.value.watchlist.itemCount} assets",
-                        ),
-                    )
+                    r.value.watchlists.forEach { w ->
+                        add(
+                            MySharedItem(
+                                id = w.watchlistId,
+                                kind = ShareableKind.Watchlist,
+                                name = w.name,
+                                audience = ShareAudience.fromWire(w.audience),
+                                friendCount = w.friendCount,
+                                detail = if (w.itemCount == 1) "1 asset" else "${w.itemCount} assets",
+                            ),
+                        )
+                    }
                 }
                 BtResult.Ok(MyShared(items))
             }
@@ -308,141 +314,89 @@ class DefaultSocialRepository(
     override suspend fun sharedPortfolio(portfolioId: String): BtResult<SharedPortfolioDetailResponse> =
         apiCall(json) { api.sharedPortfolioDetail(portfolioId) }
 
-    override suspend fun sharedWatchlist(userId: String): BtResult<SharedWatchlistDetailResponse> =
-        apiCall(json) { api.sharedWatchlistDetail(userId) }
+    override suspend fun sharedWatchlist(watchlistId: String): BtResult<SharedWatchlistDetailResponse> =
+        apiCall(json) { api.sharedWatchlistDetail(watchlistId) }
 
     override suspend fun sharedConglomerate(conglomerateId: String): BtResult<SharedConglomerateDetailResponse> =
         apiCall(json) { api.sharedConglomerateDetail(conglomerateId) }
 
-    // ── Friend-graph writes (stub) ───────────────────────────────────────────
+    // ── Friend-graph writes (live) ───────────────────────────────────────────
 
-    override suspend fun sendRequest(identifier: String): BtResult<Unit> {
-        if (!SocialFlags.friendWrites) return comingSoon()
-        val handle = identifier.substringBefore('@').trim().ifBlank { identifier.trim() }
-        overlay.value = overlay.value.copy(
-            outgoing = overlay.value.outgoing + FriendRequest(
-                id = sampleId(),
-                username = handle,
-                userId = sampleId(),
-                status = "pending",
-                createdAt = nowIso(),
-                isSample = true,
-            ),
-        )
-        return BtResult.Ok(Unit)
-    }
+    override suspend fun sendRequest(identifier: String): BtResult<Unit> =
+        unitCall { api.createFriendRequest(CreateFriendRequestRequest(identifier.trim())) }
 
-    override suspend fun acceptRequest(id: String): BtResult<Unit> {
-        if (!SocialFlags.friendWrites) return comingSoon()
-        val req = overlay.value.incoming.firstOrNull { it.id == id }
-        overlay.value = overlay.value.copy(
-            incoming = overlay.value.incoming.filterNot { it.id == id },
-            friends = if (req != null) {
-                overlay.value.friends + Friend(req.userId, req.username, nowIso(), isSample = true)
-            } else {
-                overlay.value.friends
-            },
-        )
-        return BtResult.Ok(Unit)
-    }
+    override suspend fun acceptRequest(id: String): BtResult<Unit> = unitCall { api.acceptFriendRequest(id) }
+    override suspend fun declineRequest(id: String): BtResult<Unit> = unitCall { api.declineFriendRequest(id) }
+    override suspend fun cancelRequest(id: String): BtResult<Unit> = unitCall { api.cancelFriendRequest(id) }
+    override suspend fun unfriend(userId: String): BtResult<Unit> = unitCall { api.removeFriend(userId) }
 
-    override suspend fun declineRequest(id: String): BtResult<Unit> {
-        if (!SocialFlags.friendWrites) return comingSoon()
-        overlay.value = overlay.value.copy(incoming = overlay.value.incoming.filterNot { it.id == id })
-        return BtResult.Ok(Unit)
-    }
+    // ── Unified audience (live) ──────────────────────────────────────────────
 
-    override suspend fun cancelRequest(id: String): BtResult<Unit> {
-        if (!SocialFlags.friendWrites) return comingSoon()
-        overlay.value = overlay.value.copy(outgoing = overlay.value.outgoing.filterNot { it.id == id })
-        return BtResult.Ok(Unit)
-    }
-
-    override suspend fun unfriend(userId: String): BtResult<Unit> {
-        if (!SocialFlags.friendWrites) return comingSoon()
-        overlay.value = overlay.value.copy(friends = overlay.value.friends.filterNot { it.userId == userId })
-        return BtResult.Ok(Unit)
-    }
-
-    // ── Sharing-visibility mutations ─────────────────────────────────────────
-
-    override suspend fun watchlistAudience(): BtResult<ShareAudience> =
-        when (val r = apiCall(json) { api.watchlistSharing() }) {
-            is BtResult.Ok -> BtResult.Ok(resolveAudience(WATCHLIST_ITEM_ID, r.value.visibility))
+    override suspend fun getAudience(kind: ShareableKind, subjectId: String): BtResult<AudienceState> =
+        when (val r = apiCall(json) { api.audience(kind.wire, subjectId) }) {
+            is BtResult.Ok -> BtResult.Ok(
+                AudienceState(
+                    kind = ShareableKind.fromWire(r.value.kind),
+                    subjectId = r.value.subjectId,
+                    audience = ShareAudience.fromWire(r.value.audience),
+                    friendIds = r.value.friendIds.toSet(),
+                    linkActive = r.value.link.active,
+                    linkCreatedAt = r.value.link.createdAt,
+                ),
+            )
             is BtResult.Err -> r
         }
 
     override suspend fun setAudience(
         kind: ShareableKind,
-        itemId: String,
+        subjectId: String,
         audience: ShareAudience,
-    ): BtResult<Unit> {
-        // App-ahead tiers can't persist server-side (no per-friend ACL / link token).
-        if (!audience.isLivePersistable) {
-            if (!SocialFlags.advancedSharing) return comingSoon()
-            // Debug: remember the choice locally so the audit reflects it.
-            overlay.value = overlay.value.copy(
-                advancedAudience = overlay.value.advancedAudience + (itemId to audience),
-            )
-            return BtResult.Ok(Unit)
-        }
-        // Live persist for Private / All friends. Clear any prior app-ahead choice.
-        overlay.value = overlay.value.copy(
-            advancedAudience = overlay.value.advancedAudience - itemId,
+        friendIds: Set<String>,
+        acknowledgePublic: Boolean,
+    ): BtResult<ShareOutcome> {
+        val body = SetAudienceRequest(
+            audience = audience.wire,
+            friendIds = if (audience == ShareAudience.SpecificFriends) friendIds.toList() else null,
+            acknowledgePublic = if (audience == ShareAudience.PublicLink) acknowledgePublic else null,
         )
-        val visibility = audience.visibility!!
-        return when (kind) {
-            ShareableKind.Portfolio -> apiCall(json) {
-                api.updatePortfolio(itemId, UpdatePortfolioRequest(visibility = visibility))
-            }.map()
-            ShareableKind.Conglomerate -> apiCall(json) {
-                api.updateConglomerate(itemId, UpdateConglomerateRequest(visibility = visibility))
-            }.map()
-            ShareableKind.Watchlist -> apiCall(json) {
-                api.updateWatchlistSharing(UpdateWatchlistSharingRequest(visibility = visibility))
-            }.map()
+        return when (val r = apiCall(json) { api.setAudience(kind.wire, subjectId, body) }) {
+            is BtResult.Ok -> BtResult.Ok(
+                ShareOutcome(
+                    audience = ShareAudience.fromWire(r.value.state.audience),
+                    publicUrl = r.value.link?.token?.let { publicShareUrl(it) },
+                ),
+            )
+            is BtResult.Err -> r
         }
     }
 
-    override fun publicLink(kind: ShareableKind, itemId: String): String {
-        // App-ahead: the platform has no public-link token yet, so this is a
-        // representative URL for the share-sheet demo. Shape matches the web's
-        // planned `/{kind}/shared/{token}` route so the real token drops in later.
-        val seg = when (kind) {
-            ShareableKind.Portfolio -> "portfolio"
-            ShareableKind.Watchlist -> "watchlist"
-            ShareableKind.Conglomerate -> "conglomerate"
+    // ── Activity-alert preference (live; delivery gated on #368) ──────────────
+
+    override suspend fun setActivityAlert(
+        kind: ShareableKind,
+        subjectId: String,
+        enabled: Boolean,
+    ): BtResult<Unit> =
+        when (val r = apiCall(json) { api.setActivityAlert(kind.wire, subjectId, SetActivityAlertRequest(enabled)) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
         }
-        val token = "demo-" + itemId.take(8)
-        return "${webOrigin.trimEnd('/')}/$seg/shared/$token"
-    }
+
+    /** Compose the human, shareable web URL from a minted token (web route `/s/:token`). */
+    fun publicShareUrl(token: String): String = "${webOrigin.trimEnd('/')}/s/$token"
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private fun resolveAudience(itemId: String, visibility: String): ShareAudience =
-        overlay.value.advancedAudience[itemId] ?: ShareAudience.fromVisibility(visibility)
-
-    private fun at.bettertrack.app.data.api.dto.FriendRequestDto.toDomain() = FriendRequest(
-        id = id,
-        username = user.username,
-        userId = user.id,
-        status = status,
-        createdAt = createdAt,
-        isSample = false,
-    )
-
-    private fun <T> BtResult<T>.map(): BtResult<Unit> = when (this) {
-        is BtResult.Ok -> BtResult.Ok(Unit)
-        is BtResult.Err -> this
-    }
-
-    private fun comingSoon(): BtResult<Nothing> = BtResult.Err(
-        BtApiError(0, BtApiError.Codes.UNKNOWN, "This is coming soon — the platform is still adding it."),
-    )
-
-    private companion object {
-        const val WATCHLIST_ITEM_ID = "workboard"
-        fun sampleId(): String = UUID.randomUUID().toString()
-        fun nowIso(): String = java.time.Instant.now().toString()
-    }
+    /** For 200-with-empty-body writes (friend graph) that [apiCall] can't decode. */
+    private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> =
+        try {
+            val resp = call()
+            if (resp.isSuccessful) {
+                BtResult.Ok(Unit)
+            } else {
+                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
+            }
+        } catch (_: IOException) {
+            BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."))
+        }
 }

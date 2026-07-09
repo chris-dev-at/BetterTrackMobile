@@ -189,21 +189,20 @@ fun WatchlistPanel(
                     onClick = { vm.selectBoard(board.id) },
                 )
             }
-            if (at.bettertrack.app.data.repo.WatchlistFlags.multiList) {
+            if (true) { // named watchlists are LIVE (V3-P5)
                 IconButton(onClick = { createOpen = true }) {
                     Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.bt_watchlist_new), tint = bt.gold)
                 }
             }
         }
 
-        // Selected board header + management (stub boards only).
-        if (selectedBoard != null && !selectedBoard.isReal) {
+        // Selected-board management — rename/delete for any non-default named
+        // list (V3-P5 live). General (the default) is LOCKED: no row shown.
+        if (selectedBoard != null && !selectedBoard.isDefault) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Spacer(Modifier.width(2.dp))
-                BtBadge(text = stringResource(R.string.bt_watchlist_stub), kind = BtBadgeKind.Neutral)
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { renameBoard = selectedBoard }) {
                     Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.bt_watchlist_rename), tint = bt.textMuted, modifier = Modifier.size(20.dp))

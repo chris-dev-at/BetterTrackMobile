@@ -233,7 +233,6 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
                             BtAvatar(name = f.username, size = 38.dp)
                             Spacer(Modifier.width(12.dp))
                             Text("@${f.username}", style = MaterialTheme.typography.bodyLarge, color = bt.textPrimary, modifier = Modifier.weight(1f))
-                            if (f.isSample) BtBadge("Sample", kind = BtBadgeKind.Neutral)
                             Spacer(Modifier.width(8.dp))
                             IconButton(onClick = { onPick(f) }) {
                                 Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Chat", tint = bt.gold)

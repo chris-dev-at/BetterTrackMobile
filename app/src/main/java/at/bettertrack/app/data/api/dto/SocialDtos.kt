@@ -3,21 +3,26 @@ package at.bettertrack.app.data.api.dto
 import kotlinx.serialization.Serializable
 
 /**
- * Social DTOs (Steps 14–15, §6.8/§6.9). Mirrors the live platform contract
- * (the `/social` routes in `openapi.json`) EXACTLY so the repository's live paths are a
- * verbatim decode and the future write scopes plug in without shape churn.
+ * Social DTOs (Steps 14–15, §6.9 + V3 sharing). Mirrors the LIVE platform
+ * contract (`packages/contracts/src/social.ts` + `workboard.ts`, verified against
+ * `openapi.json` 2026-07-09) EXACTLY so the repository's live paths are a verbatim
+ * decode.
  *
- * Platform truth captured 2026-07-08:
- *  - a shareable item's audience is a single [visibility] enum: `private` | `friends`
- *    (there is NO per-friend ACL nor public-link token yet — those richer audience
- *    tiers in §6.9 are app-ahead and live behind [at.bettertrack.app.data.repo.SocialFlags]);
- *  - friend WRITE routes (request/accept/decline/cancel/unfriend) require a
- *    `social:write` scope the mobile client is not yet granted — the app models
- *    them here so the adapter is ready, but the repository routes them through a
- *    stub source until the scope lands.
+ * Platform truth (Sharing v3 #332 + friend writes #341 + activity prefs V3-P6):
+ *  - a shareable item's audience is the unified 4-rung ladder
+ *    (`private` | `specific_friends` | `all_friends` | `public_link`), governed by
+ *    ONE model across every portfolio / conglomerate / watchlist via
+ *    `GET|PUT /social/audience/:kind/:subjectId`;
+ *  - `public_link` mints a hash-only token ONCE (surfaced immediately, never
+ *    re-fetchable); unauthenticated resolve at `GET /social/links/:token`;
+ *  - friend WRITE routes (request/accept/decline/cancel/unfriend) are live under
+ *    `social:write`;
+ *  - a per-viewer activity-alert opt-in per shared item persists via
+ *    `PUT /social/shared/activity/:kind/:subjectId` (delivery is Notifications-v2
+ *    #368, still platform-gated).
  */
 
-/** A minimal public user reference — id + username (no email/avatar on the platform). */
+/** A minimal public user reference — id + username (no email/avatar, §6.9). */
 @Serializable
 data class SocialUserDto(
     val id: String,
@@ -80,6 +85,8 @@ data class SharedPortfolioSummaryDto(
     val name: String,
     val owner: SocialUserDto,
     val totalValueEur: Double,
+    /** Viewer's per-item activity-alert opt-in (V3-P6); delivery deferred to #368. */
+    val activityAlertsEnabled: Boolean = false,
 )
 
 @Serializable
@@ -90,54 +97,116 @@ data class SharedConglomerateSummaryDto(
     /** `draft` | `active`. */
     val status: String,
     val positionCount: Int,
+    val activityAlertsEnabled: Boolean = false,
 )
 
 @Serializable
 data class SharedWatchlistSummaryDto(
+    val watchlistId: String,
+    val name: String,
     val owner: SocialUserDto,
     val itemCount: Int,
+    val activityAlertsEnabled: Boolean = false,
 )
 
-// ── GET /social/my-shared — everything I currently share ─────────────────────
+// ── GET /social/my-shared — every shareable subject I own + its audience ─────
 
 @Serializable
 data class MySharedResponse(
     val portfolios: List<MySharedPortfolioDto> = emptyList(),
     val conglomerates: List<MySharedConglomerateDto> = emptyList(),
-    val watchlist: MySharedWatchlistDto,
+    val watchlists: List<MySharedWatchlistDto> = emptyList(),
 )
 
 @Serializable
 data class MySharedPortfolioDto(
-    val id: String,
+    val portfolioId: String,
     val name: String,
-    /** `private` | `friends`. */
-    val visibility: String,
-    val sortOrder: Int = 0,
-    val isDefault: Boolean = false,
-    val defaultPayFromCash: Boolean = false,
-    val archivedAt: String? = null,
+    /** `private` | `specific_friends` | `all_friends` | `public_link`. */
+    val audience: String,
+    /** Number of named friends — non-zero only for `specific_friends`. */
+    val friendCount: Int = 0,
 )
 
 @Serializable
 data class MySharedConglomerateDto(
-    val id: String,
+    val conglomerateId: String,
     val name: String,
-    val description: String? = null,
-    /** `draft` | `active`. */
-    val status: String,
-    /** `private` | `friends`. */
-    val visibility: String,
     val positionCount: Int = 0,
-    val createdAt: String,
-    val updatedAt: String,
+    val audience: String,
+    val friendCount: Int = 0,
 )
 
 @Serializable
 data class MySharedWatchlistDto(
-    /** `private` | `friends`. */
-    val visibility: String,
-    val itemCount: Int,
+    val watchlistId: String,
+    val name: String,
+    val itemCount: Int = 0,
+    val audience: String,
+    val friendCount: Int = 0,
+)
+
+// ── Unified audience model (V3-P5): GET|PUT /social/audience/:kind/:subjectId ─
+
+/** Live public-link status for one audience (hash-only storage → shown once at mint). */
+@Serializable
+data class ShareLinkStateDto(
+    val active: Boolean = false,
+    val createdAt: String? = null,
+)
+
+/** `GET /social/audience/:kind/:subjectId` — the owner's current audience for one item. */
+@Serializable
+data class AudienceStateDto(
+    /** `portfolio` | `conglomerate` | `watchlist`. */
+    val kind: String,
+    val subjectId: String,
+    /** `private` | `specific_friends` | `all_friends` | `public_link`. */
+    val audience: String,
+    /** Populated only for `specific_friends`. */
+    val friendIds: List<String> = emptyList(),
+    val link: ShareLinkStateDto = ShareLinkStateDto(),
+)
+
+/**
+ * `PUT /social/audience/:kind/:subjectId` body. `friendIds` honoured only for
+ * `specific_friends`; `acknowledgePublic` MUST be `true` to select `public_link`
+ * (the §16 explicit-acknowledgment gate, enforced server-side too).
+ */
+@Serializable
+data class SetAudienceRequest(
+    val audience: String,
+    val friendIds: List<String>? = null,
+    val acknowledgePublic: Boolean? = null,
+)
+
+/** The raw public link, returned EXACTLY ONCE when a `public_link` audience is minted. */
+@Serializable
+data class ShareLinkSecretDto(
+    val token: String,
+    /** Relative resolution path (`/api/v1/social/links/:token`); compose the shareable URL. */
+    val url: String,
+)
+
+/** `PUT /social/audience/:kind/:subjectId` response — new state + the link secret once on mint. */
+@Serializable
+data class AudienceMutationResponse(
+    val state: AudienceStateDto,
+    val link: ShareLinkSecretDto? = null,
+)
+
+// ── Per-shared-item activity alerts (V3-P6): PUT /social/shared/activity/... ──
+
+@Serializable
+data class SetActivityAlertRequest(
+    val enabled: Boolean,
+)
+
+@Serializable
+data class ActivityAlertStateDto(
+    val kind: String,
+    val subjectId: String,
+    val enabled: Boolean,
 )
 
 // ── GET /social/shared/{portfolioId} — read-only friend-shared portfolio ─────
@@ -205,10 +274,12 @@ data class SharedHistoryPointDto(
     val valueEur: Double,
 )
 
-// ── GET /social/shared/watchlists/{userId} ───────────────────────────────────
+// ── GET /social/shared/watchlists/{watchlistId} ──────────────────────────────
 
 @Serializable
 data class SharedWatchlistDetailResponse(
+    val watchlistId: String? = null,
+    val name: String? = null,
     val owner: SocialUserDto,
     val items: List<SharedWatchlistItemDto> = emptyList(),
 )
@@ -216,6 +287,7 @@ data class SharedWatchlistDetailResponse(
 @Serializable
 data class SharedWatchlistItemDto(
     val id: String,
+    val watchlistId: String? = null,
     val assetId: String,
     val sortOrder: Int = 0,
     val note: String? = null,
@@ -243,27 +315,56 @@ data class SharedConglomeratePositionDto(
     val asset: SharedAssetDto,
 )
 
-// ── Sharing mutations (visibility PATCH — portfolio:write / workboard:write) ──
+// ── Named watchlists (V3-P5): /workboard/watchlists ──────────────────────────
 
-/** PATCH /workboard/sharing — set the single watchlist's audience. */
+@Serializable
+data class WatchlistSummaryDto(
+    val id: String,
+    val name: String,
+    val isDefault: Boolean,
+    val itemCount: Int = 0,
+    /** This list's share setting via the unified audience model. */
+    val audience: String = "private",
+)
+
+@Serializable
+data class WatchlistListResponse(
+    val watchlists: List<WatchlistSummaryDto> = emptyList(),
+)
+
+/** `POST /workboard/watchlists` body — create a named list. */
+@Serializable
+data class CreateWatchlistRequest(
+    val name: String,
+)
+
+/** `PATCH /workboard/watchlists/:watchlistId` body — rename (never the default). */
+@Serializable
+data class RenameWatchlistRequest(
+    val name: String,
+)
+
+// ── Legacy watchlist sharing (superseded by the unified audience model) ──────
+// Kept for the still-live `GET|PATCH /workboard/sharing` binary endpoint; the app
+// now drives watchlist sharing through /social/audience/watchlist/:id instead.
+
 @Serializable
 data class UpdateWatchlistSharingRequest(
     /** `private` | `friends`. */
     val visibility: String,
 )
 
-/** GET /workboard/sharing. */
 @Serializable
 data class WatchlistSharingResponse(
     /** `private` | `friends`. */
     val visibility: String,
 )
 
-/** PATCH /conglomerates/{id} — rename/describe and/or change audience. */
+/** PATCH /conglomerates/{id} — rename/describe (audience now via /social/audience). */
 @Serializable
 data class UpdateConglomerateRequest(
     val name: String? = null,
     val description: String? = null,
-    /** `private` | `friends`. */
+    /** Legacy `private` | `friends`; audience now set via the unified endpoint. */
     val visibility: String? = null,
 )

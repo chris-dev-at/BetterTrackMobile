@@ -8,7 +8,16 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.ActivityAlertStateDto
+import at.bettertrack.app.data.api.dto.AudienceMutationResponse
+import at.bettertrack.app.data.api.dto.AudienceStateDto
 import at.bettertrack.app.data.api.dto.CreateFriendRequestRequest
+import at.bettertrack.app.data.api.dto.CreateWatchlistRequest
+import at.bettertrack.app.data.api.dto.RenameWatchlistRequest
+import at.bettertrack.app.data.api.dto.SetActivityAlertRequest
+import at.bettertrack.app.data.api.dto.SetAudienceRequest
+import at.bettertrack.app.data.api.dto.WatchlistListResponse
+import at.bettertrack.app.data.api.dto.WatchlistSummaryDto
 import at.bettertrack.app.data.api.dto.FriendRequestListResponse
 import at.bettertrack.app.data.api.dto.FriendsListResponse
 import at.bettertrack.app.data.api.dto.MySharedResponse
@@ -219,12 +228,15 @@ interface BtApi {
     @GET("assets/{id}/daily-closes")
     suspend fun assetDailyCloses(@Path("id") id: String): Response<DailyClosesResponse>
 
-    // ── Step 11/12: the single unnamed workboard watchlist (§6.6) ────────────
+    // ── Step 11/12 + V3-P5: named watchlists (§6.6) ──────────────────────────
 
+    /** Items in the caller's watchlist(s); scope to one named list via [watchlistId]. */
     @GET("workboard")
-    suspend fun workboard(): Response<WorkboardListResponse>
+    suspend fun workboard(
+        @Query("watchlistId") watchlistId: String? = null,
+    ): Response<WorkboardListResponse>
 
-    /** Add an asset to the workboard watchlist; returns the created item. */
+    /** Add an asset to a watchlist (default General when [AddToWorkboardRequest.watchlistId] is null). */
     @Headers("Content-Type: application/json")
     @POST("workboard")
     suspend fun addToWorkboard(@Body body: AddToWorkboardRequest): Response<WorkboardItemDto>
@@ -232,6 +244,27 @@ interface BtApi {
     /** Remove a workboard item (by ITEM id, not asset id). */
     @DELETE("workboard/{itemId}")
     suspend fun removeFromWorkboard(@Path("itemId") itemId: String): Response<Unit>
+
+    /** The caller's named watchlists (V3-P5), General first. [workboard:read] */
+    @GET("workboard/watchlists")
+    suspend fun watchlists(): Response<WatchlistListResponse>
+
+    /** Create a named watchlist. [workboard:write] */
+    @Headers("Content-Type: application/json")
+    @POST("workboard/watchlists")
+    suspend fun createWatchlist(@Body body: CreateWatchlistRequest): Response<WatchlistSummaryDto>
+
+    /** Rename a named watchlist (never the default General). [workboard:write] */
+    @Headers("Content-Type: application/json")
+    @PATCH("workboard/watchlists/{watchlistId}")
+    suspend fun renameWatchlist(
+        @Path("watchlistId") watchlistId: String,
+        @Body body: RenameWatchlistRequest,
+    ): Response<WatchlistSummaryDto>
+
+    /** Delete a named watchlist (never the default General). [workboard:write] */
+    @DELETE("workboard/watchlists/{watchlistId}")
+    suspend fun deleteWatchlist(@Path("watchlistId") watchlistId: String): Response<Unit>
 
     @GET("conglomerates")
     suspend fun conglomerates(): Response<ConglomerateListResponse>
@@ -433,10 +466,10 @@ interface BtApi {
         @Path("portfolioId") portfolioId: String,
     ): Response<SharedPortfolioDetailResponse>
 
-    /** Read-only view of a friend's shared watchlist. */
-    @GET("social/shared/watchlists/{userId}")
+    /** Read-only view of a friend's shared named watchlist (by list id). */
+    @GET("social/shared/watchlists/{watchlistId}")
     suspend fun sharedWatchlistDetail(
-        @Path("userId") userId: String,
+        @Path("watchlistId") watchlistId: String,
     ): Response<SharedWatchlistDetailResponse>
 
     /** Read-only view of a friend-shared conglomerate. */
@@ -458,13 +491,47 @@ interface BtApi {
         @Body body: UpdateWatchlistSharingRequest,
     ): Response<WatchlistSharingResponse>
 
-    /** Rename/describe and/or change a conglomerate's audience. [workboard:write] */
+    /** Rename/describe a conglomerate (audience now via the unified endpoint). [workboard:write] */
     @Headers("Content-Type: application/json")
     @PATCH("conglomerates/{id}")
     suspend fun updateConglomerate(
         @Path("id") id: String,
         @Body body: UpdateConglomerateRequest,
     ): Response<ConglomerateDetailResponse>
+
+    // ── V3-P5: unified audience model (private | specific_friends | all_friends
+    // | public_link) across every portfolio / conglomerate / watchlist. ───────
+
+    /** The owner's current audience for one shareable item ({kind}=portfolio|conglomerate|watchlist). */
+    @GET("social/audience/{kind}/{subjectId}")
+    suspend fun audience(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+    ): Response<AudienceStateDto>
+
+    /**
+     * Set the audience for one item. Mints a hash-only public-link token ONCE when
+     * moving to `public_link` (returned in `link` — never re-fetchable). [social:write]
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("social/audience/{kind}/{subjectId}")
+    suspend fun setAudience(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+        @Body body: SetAudienceRequest,
+    ): Response<AudienceMutationResponse>
+
+    /**
+     * The viewer's per-item activity-alert opt-in on a friend's shared item
+     * (V3-P6). Persist-only; delivery ships with Notifications-v2 (#368). [social:write]
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("social/shared/activity/{kind}/{subjectId}")
+    suspend fun setActivityAlert(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+        @Body body: SetActivityAlertRequest,
+    ): Response<ActivityAlertStateDto>
 
     // ── Step 16: notifications (§6.11) ───────────────────────────────────────
     // Runtime auth is the OAuth bearer (the OpenAPI sessionCookie annotation is

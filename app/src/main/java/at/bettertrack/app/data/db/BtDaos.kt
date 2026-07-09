@@ -210,6 +210,14 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist_items WHERE watchlistId = :watchlistId")
     suspend fun deleteItems(watchlistId: String)
 
+    /** All cached list ids — used to prune lists deleted server-side (V3-P5). */
+    @Query("SELECT id FROM watchlists")
+    suspend fun allListIds(): List<String>
+
+    /** Remove one cached list row (its items are cleared separately). */
+    @Query("DELETE FROM watchlists WHERE id = :id")
+    suspend fun deleteList(id: String)
+
     /** The cached item for one asset in a list, if any (watchlist toggle, §6.6). */
     @Query("SELECT * FROM watchlist_items WHERE watchlistId = :watchlistId AND assetId = :assetId LIMIT 1")
     suspend fun itemForAsset(watchlistId: String, assetId: String): WatchlistItemEntity?

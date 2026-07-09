@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.social
 
-import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -40,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,16 +52,18 @@ import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
- * The §6.9 sharing sheet with the friction ladder replicated EXACTLY:
+ * The §16 sharing sheet with the friction ladder — now fully LIVE against the
+ * unified audience model (`PUT /social/audience/:kind/:subjectId`):
  *  - **Private**: no friction.
- *  - **Specific friends** (multi-select): no friction (light).
+ *  - **Specific friends** (multi-select): pick exactly who; seeded from the item's
+ *    current `friendIds`.
  *  - **All friends**: a light, non-blocking confirm line.
- *  - **Public link**: a strong, BLOCKING acknowledgment — the action can't fire
- *    until the "I understand…" box is ticked — then the Android share-sheet opens
- *    with the link.
+ *  - **Public link**: a strong, BLOCKING acknowledgment (`acknowledgePublic`) — the
+ *    action can't fire until "I understand…" is ticked. The token is minted
+ *    server-side and surfaced ONCE by the caller after apply.
  *
- * [advancedEnabled] gates the two app-ahead tiers (Specific friends / Public
- * link): in release they render as calm "Coming soon" rows the user can't pick.
+ * The sheet only chooses; [onApply] hands the caller the audience + friendIds +
+ * ack so the repository call and the one-time link reveal live in the ViewModel.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,19 +72,18 @@ fun AudiencePickerSheet(
     kind: ShareableKind,
     currentAudience: ShareAudience,
     friends: List<Friend>,
-    advancedEnabled: Boolean,
-    publicLink: String,
+    initialFriendIds: Set<String>,
+    linkActive: Boolean,
     busy: Boolean,
-    onApply: (ShareAudience) -> Unit,
+    onApply: (audience: ShareAudience, friendIds: Set<String>, acknowledge: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selected by remember { mutableStateOf(currentAudience) }
     var ack by remember { mutableStateOf(false) }
-    var selectedFriends by remember { mutableStateOf(setOf<String>()) }
+    var selectedFriends by remember { mutableStateOf(initialFriendIds) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -101,11 +99,7 @@ fun AudiencePickerSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
         ) {
-            Text(
-                text = "Share",
-                style = MaterialTheme.typography.labelMedium,
-                color = bt.textMuted,
-            )
+            Text("Share", style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
             Text(
                 text = itemName,
                 style = MaterialTheme.typography.titleLarge,
@@ -125,7 +119,6 @@ fun AudiencePickerSheet(
                 title = "Private",
                 subtitle = "Only you",
                 selected = selected == ShareAudience.Private,
-                enabled = true,
                 onClick = { selected = ShareAudience.Private; ack = false },
             )
             Spacer(Modifier.height(8.dp))
@@ -134,20 +127,15 @@ fun AudiencePickerSheet(
                 title = "Specific friends",
                 subtitle = "Pick exactly who can see it",
                 selected = selected == ShareAudience.SpecificFriends,
-                enabled = advancedEnabled,
-                comingSoon = !advancedEnabled,
                 onClick = { selected = ShareAudience.SpecificFriends; ack = false },
             )
-            // Specific-friends multi-select appears inline when chosen.
-            if (selected == ShareAudience.SpecificFriends && advancedEnabled) {
+            if (selected == ShareAudience.SpecificFriends) {
                 Spacer(Modifier.height(8.dp))
                 if (friends.isEmpty()) {
                     HintCard("Add friends first — then you can pick exactly who sees this.")
                 } else {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         friends.forEach { f ->
@@ -172,10 +160,8 @@ fun AudiencePickerSheet(
                 title = "All friends",
                 subtitle = "Everyone you're friends with can view it",
                 selected = selected == ShareAudience.AllFriends,
-                enabled = true,
                 onClick = { selected = ShareAudience.AllFriends; ack = false },
             )
-            // Light, non-blocking confirm for all-friends.
             if (selected == ShareAudience.AllFriends) {
                 Spacer(Modifier.height(8.dp))
                 HintCard("Your friends will see this ${kind.label()} in “Shared with me”. You can revoke access any time.")
@@ -184,39 +170,35 @@ fun AudiencePickerSheet(
             AudienceOption(
                 icon = Icons.Outlined.Link,
                 title = "Public link",
-                subtitle = "Anyone with the link can view it",
+                subtitle = if (linkActive) "A public link is active" else "Anyone with the link can view it",
                 selected = selected == ShareAudience.PublicLink,
-                enabled = advancedEnabled,
-                comingSoon = !advancedEnabled,
                 onClick = { selected = ShareAudience.PublicLink; ack = false },
             )
-            // Strong BLOCKING acknowledgment for public.
-            if (selected == ShareAudience.PublicLink && advancedEnabled) {
+            if (selected == ShareAudience.PublicLink) {
                 Spacer(Modifier.height(10.dp))
-                PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
+                if (linkActive && currentAudience == ShareAudience.PublicLink) {
+                    HintCard("A public link is already active for this ${kind.label()}. To revoke it, choose a different audience — the link dies instantly.")
+                } else {
+                    PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
+                }
             }
 
             Spacer(Modifier.height(20.dp))
 
             val isPublic = selected == ShareAudience.PublicLink
+            val alreadyPublic = isPublic && linkActive && currentAudience == ShareAudience.PublicLink
             val canApply = when {
                 busy -> false
-                isPublic -> ack
+                isPublic && !alreadyPublic -> ack
+                selected == ShareAudience.SpecificFriends -> selectedFriends.isNotEmpty()
                 else -> true
             }
             BtPrimaryButton(
-                text = if (isPublic) "Create link & share" else "Apply",
-                onClick = {
-                    if (isPublic) {
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, publicLink)
-                            putExtra(Intent.EXTRA_SUBJECT, itemName)
-                        }
-                        context.startActivity(Intent.createChooser(send, "Share link"))
-                    }
-                    onApply(selected)
+                text = when {
+                    isPublic && !alreadyPublic -> "Create public link"
+                    else -> "Apply"
                 },
+                onClick = { onApply(selected, selectedFriends, ack) },
                 enabled = canApply,
                 loading = busy,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -231,16 +213,13 @@ private fun AudienceOption(
     title: String,
     subtitle: String,
     selected: Boolean,
-    enabled: Boolean,
-    comingSoon: Boolean = false,
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
     val container = if (selected) bt.gold.copy(alpha = 0.12f) else bt.bg
     val border = if (selected) bt.gold.copy(alpha = 0.5f) else bt.border
     Surface(
-        onClick = { if (enabled) onClick() },
-        enabled = enabled,
+        onClick = onClick,
         shape = BtShapes.card,
         color = container,
         border = BorderStroke(1.dp, border),
@@ -253,28 +232,18 @@ private fun AudienceOption(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (!enabled) bt.textMuted else if (selected) bt.goldEmphasis else bt.textSecondary,
+                tint = if (selected) bt.goldEmphasis else bt.textSecondary,
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (enabled) bt.textPrimary else bt.textMuted,
-                    )
-                    if (comingSoon) {
-                        Spacer(Modifier.width(8.dp))
-                        BtBadge(text = "Coming soon", kind = BtBadgeKind.Neutral)
-                    }
-                }
                 Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = bt.textPrimary,
                 )
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             if (selected) {
                 Icon(Icons.Outlined.Check, contentDescription = null, tint = bt.goldEmphasis, modifier = Modifier.size(20.dp))
@@ -312,10 +281,7 @@ private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
             .fillMaxWidth()
             .toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle() }),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = bt.loss, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

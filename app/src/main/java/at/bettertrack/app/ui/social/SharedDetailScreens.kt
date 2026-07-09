@@ -135,9 +135,9 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
 
 /** Read-only friend-shared watchlist. */
 @Composable
-fun SharedWatchlistViewScreen(userId: String, ownerName: String, onBack: () -> Unit) {
-    val state by produceState<BtResult<SharedWatchlistDetailResponse>?>(initialValue = null, userId) {
-        value = AppGraph.socialRepository.sharedWatchlist(userId)
+fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: () -> Unit) {
+    val state by produceState<BtResult<SharedWatchlistDetailResponse>?>(initialValue = null, watchlistId) {
+        value = AppGraph.socialRepository.sharedWatchlist(watchlistId)
     }
     SharedScaffold(title = "Shared watchlist", onBack = onBack) {
         Loaded(state, onRetry = null) { d ->

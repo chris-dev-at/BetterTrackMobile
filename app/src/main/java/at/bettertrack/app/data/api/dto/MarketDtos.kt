@@ -100,8 +100,13 @@ data class DailyClosesResponse(
     val asOf: String? = null,
 )
 
-// ── POST /workboard (add to the single watchlist, §6.6) ──────────────────────
+// ── POST /workboard (add to a watchlist, §6.6 / V3-P5 named lists) ────────────
 @Serializable
 data class AddToWorkboardRequest(
     val assetId: String,
+    /**
+     * Target a specific named list (V3-P5). When omitted the asset lands in the
+     * caller's default **General** list, so every legacy add keeps working.
+     */
+    val watchlistId: String? = null,
 )
