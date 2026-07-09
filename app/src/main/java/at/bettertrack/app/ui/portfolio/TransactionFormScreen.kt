@@ -105,6 +105,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -342,6 +343,53 @@ class TransactionFormViewModel(
 
     init {
         viewModelScope.launch { loadMode() }
+    }
+
+    // ── Diagnostic breadcrumb: transient false "insufficient" (§6.2) ──────────
+
+    /**
+     * Latest cash-sources snapshot behind the insufficient-block breadcrumb:
+     * null = not yet loaded (UNKNOWN), empty = loaded-but-none, non-empty =
+     * loaded. Kept live so the breadcrumb can report the cash load state exactly.
+     */
+    private var latestCashSources: List<at.bettertrack.app.data.db.CashSourceEntity>? = null
+
+    init {
+        viewModelScope.launch {
+            _portfolioId.flatMapLatest { pid ->
+                if (pid == null) flowOf<List<at.bettertrack.app.data.db.CashSourceEntity>?>(null)
+                else repo.cashSources(pid)
+            }.collect { latestCashSources = it }
+        }
+        // If the cash-coupled BUY ever SHOWS the HARD insufficient block, log the
+        // decision inputs ONCE per rising edge (no credentials) so the transient
+        // false positive the owner hit once (€400 buy vs €5.3k Main) can be
+        // diagnosed if it recurs. This is observation only — it does NOT change
+        // the block logic (§6.2).
+        viewModelScope.launch {
+            var wasBlocked = false
+            combine(validation, _isBuy, _cashCoupled) { v, buy, coupled ->
+                v.insufficientCash && buy && coupled
+            }.collect { blocked ->
+                if (blocked && !wasBlocked) {
+                    val sources = latestCashSources
+                    val cashState = when {
+                        sources == null -> "unknown"
+                        sources.isEmpty() -> "empty"
+                        else -> "loaded"
+                    }
+                    android.util.Log.i(
+                        "BtTxForm",
+                        "insufficient-block (cash-coupled buy): " +
+                            "mainBalanceEur=${mainCashEur.value} " +
+                            "orderTotalEur=${orderTotalEur.value} " +
+                            "priceEur=${parseLocalizedDecimal(_priceText.value)} " +
+                            "cashSources=$cashState",
+                    )
+                }
+                wasBlocked = blocked
+            }
+        }
     }
 
     private suspend fun loadMode() {
