@@ -8,6 +8,12 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.ChatConversationListResponse
+import at.bettertrack.app.data.api.dto.ChatThreadResponse
+import at.bettertrack.app.data.api.dto.ConversationResponse
+import at.bettertrack.app.data.api.dto.OpenConversationRequest
+import at.bettertrack.app.data.api.dto.SendChatMessageRequest
+import at.bettertrack.app.data.api.dto.SendChatMessageResponse
 import at.bettertrack.app.data.api.dto.ActivityAlertStateDto
 import at.bettertrack.app.data.api.dto.AudienceMutationResponse
 import at.bettertrack.app.data.api.dto.AudienceStateDto
@@ -567,4 +573,44 @@ interface BtApi {
     suspend fun updateNotificationSettings(
         @Body body: UpdateNotificationSettingsRequest,
     ): Response<NotificationSettingsResponse>
+
+    // ── Step 15: friend chat (§6.10 — LIVE on #349 + #386) ───────────────────
+    // 1:1 friend-only conversations (one per pair). Gate on chat:read (GET) /
+    // chat:write (POST) — granted, need the ACTIVATION re-login. Non-friend /
+    // never-participant → 404 (never data); unfriending closes new messages but
+    // history stays readable. Realtime is the /ws gateway (invalidation only) with
+    // a polling fallback — see DefaultChatRepository.
+
+    /** The caller's conversations, newest-active first, with per-thread + total unread. */
+    @GET("chat/conversations")
+    suspend fun chatConversations(): Response<ChatConversationListResponse>
+
+    /** Open (or resolve) the 1:1 conversation with a friend; non-friend → 404. [chat:write] */
+    @Headers("Content-Type: application/json")
+    @POST("chat/conversations")
+    suspend fun openChatConversation(
+        @Body body: OpenConversationRequest,
+    ): Response<ConversationResponse>
+
+    /** A page of a thread (newest-first, keyset by message id) + the conversation summary. */
+    @GET("chat/conversations/{conversationId}/messages")
+    suspend fun chatThread(
+        @Path("conversationId") conversationId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): Response<ChatThreadResponse>
+
+    /** Send a message (text, a share chip, or both; body ≤ CHAT_MESSAGE_MAX). [chat:write] */
+    @Headers("Content-Type: application/json")
+    @POST("chat/conversations/{conversationId}/messages")
+    suspend fun sendChatMessage(
+        @Path("conversationId") conversationId: String,
+        @Body body: SendChatMessageRequest,
+    ): Response<SendChatMessageResponse>
+
+    /** Mark the whole conversation read (drives the unread badges). [chat:write] */
+    @POST("chat/conversations/{conversationId}/read")
+    suspend fun markChatRead(
+        @Path("conversationId") conversationId: String,
+    ): Response<Unit>
 }

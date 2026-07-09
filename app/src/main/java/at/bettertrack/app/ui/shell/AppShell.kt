@@ -552,6 +552,14 @@ private fun BtNavHost(
                 friendUserId = route.friendUserId,
                 friendUsername = route.friendUsername,
                 onBack = back,
+                // Share-chip taps resolve through the EXISTING read paths: a viewable
+                // chip opens the friend-shared read-only view (or the asset page).
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
+                onOpenSharedWatchlist = { watchlistId, ownerName ->
+                    navController.navigate(SharedWatchlistViewRoute(watchlistId, ownerName))
+                },
+                onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
             )
         }
         composable<NotificationsInboxRoute> {

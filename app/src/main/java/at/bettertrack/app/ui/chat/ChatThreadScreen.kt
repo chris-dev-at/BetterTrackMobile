@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.chat
 
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +26,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PieChart
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,7 +45,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,56 +60,111 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.data.api.BtResult
-import at.bettertrack.app.data.repo.ChatFlags
-import at.bettertrack.app.data.repo.ChatMessage
+import at.bettertrack.app.data.api.dto.CHAT_MESSAGE_MAX
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.ShareChip
 import at.bettertrack.app.data.repo.ShareChipKind
+import at.bettertrack.app.data.repo.ThreadAvailability
+import at.bettertrack.app.data.repo.ThreadState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class ChatThreadViewModel(
     private val chat: ChatRepository,
-    private val convId: String?,
+    convId: String?,
     private val friendUserId: String?,
     val friendUsername: String,
 ) : ViewModel() {
 
-    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages
     private var conversationId: String? = convId
 
+    private val _state = MutableStateFlow(ThreadState(loading = true, friendUsername = friendUsername))
+    val state: StateFlow<ThreadState> = _state
+
+    private val _attachables = MutableStateFlow<List<ShareChip>>(emptyList())
+    val attachables: StateFlow<List<ShareChip>> = _attachables
+
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast
+
     init {
+        chat.connectRealtime()
         viewModelScope.launch {
-            if (conversationId == null && friendUserId != null) {
-                conversationId = (chat.conversationWith(friendUserId, friendUsername) as? BtResult.Ok)?.value
-            }
-            conversationId?.let { id ->
-                chat.markRead(id)
-                chat.messages(id).collect { msgs ->
-                    _messages.value = msgs
-                    chat.markRead(id) // keep the open thread read as new ones arrive
+            val id = resolveConversationId() ?: return@launch
+            conversationId = id
+            chat.setActiveConversation(id)
+            launch { chat.loadThread(id) }
+            chat.markRead(id)
+            var lastSeen: String? = null
+            chat.thread(id).collect { st ->
+                _state.value = st.copy(friendUsername = st.friendUsername.ifEmpty { friendUsername })
+                val newest = st.messages.lastOrNull()
+                if (newest != null && newest.id != lastSeen) {
+                    val firstBatch = lastSeen == null
+                    lastSeen = newest.id
+                    // A new incoming message while the thread is open stays "read".
+                    if (!firstBatch && !newest.fromMe) chat.markRead(id)
                 }
+            }
+        }
+        viewModelScope.launch {
+            (chat.attachables() as? BtResult.Ok)?.let { _attachables.value = it.value }
+        }
+    }
+
+    private suspend fun resolveConversationId(): String? {
+        conversationId?.let { return it }
+        val fid = friendUserId ?: run {
+            _state.value = _state.value.copy(loading = false, availability = ThreadAvailability.NotAvailable)
+            return null
+        }
+        return when (val r = chat.openConversationWith(fid, friendUsername)) {
+            is BtResult.Ok -> r.value
+            is BtResult.Err -> {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    availability = if (r.error.httpStatus == 404) ThreadAvailability.NotAvailable else ThreadAvailability.Available,
+                    error = if (r.error.httpStatus == 404) null else r.error.userMessage,
+                )
+                null
             }
         }
     }
 
-    fun send(body: String) {
+    fun send(text: String) {
         val id = conversationId ?: return
-        viewModelScope.launch { chat.send(id, body, null) }
+        val body = text.trim().take(CHAT_MESSAGE_MAX)
+        if (body.isBlank()) return
+        viewModelScope.launch {
+            (chat.send(id, body, null) as? BtResult.Err)?.let { _toast.value = it.error.userMessage }
+        }
     }
 
     fun sendChip(chip: ShareChip) {
         val id = conversationId ?: return
-        viewModelScope.launch { chat.send(id, null, chip) }
+        viewModelScope.launch {
+            (chat.send(id, null, chip) as? BtResult.Err)?.let { _toast.value = it.error.userMessage }
+        }
     }
 
-    fun attachables(): List<ShareChip> = chat.attachables()
+    fun loadOlder() {
+        val id = conversationId ?: return
+        viewModelScope.launch { chat.loadOlder(id) }
+    }
+
+    fun consumeToast() { _toast.value = null }
+
+    override fun onCleared() {
+        chat.setActiveConversation(null)
+        chat.disconnectRealtime()
+        super.onCleared()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,19 +174,61 @@ fun ChatThreadScreen(
     friendUserId: String?,
     friendUsername: String,
     onBack: () -> Unit,
+    onOpenAsset: (assetId: String) -> Unit,
+    onOpenSharedPortfolio: (portfolioId: String) -> Unit,
+    onOpenSharedWatchlist: (watchlistId: String, ownerName: String) -> Unit,
+    onOpenSharedConglomerate: (conglomerateId: String) -> Unit,
 ) {
     val vm: ChatThreadViewModel = viewModel {
         ChatThreadViewModel(AppGraph.chatRepository, conversationId, friendUserId, friendUsername)
     }
     val bt = BtTheme.colors
     val context = LocalContext.current
-    val messages by vm.messages.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val attachables by vm.attachables.collectAsStateWithLifecycle()
+    val toast by vm.toast.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
     var showAttach by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    val headerName = state.friendUsername.ifEmpty { friendUsername }
+
+    LaunchedEffect(toast) {
+        toast?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            vm.consumeToast()
+        }
+    }
+
+    // Auto-scroll to the newest message only when a NEW message lands at the bottom
+    // (not when older history is prepended by pagination).
+    var lastNewestId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.messages.lastOrNull()?.id) {
+        val newestId = state.messages.lastOrNull()?.id
+        if (newestId != null && newestId != lastNewestId) {
+            lastNewestId = newestId
+            if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.size - 1)
+        }
+    }
+
+    // Page older history when the user scrolls near the top.
+    val current = rememberUpdatedState(state)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { idx ->
+                val s = current.value
+                if (idx <= 2 && s.hasMore && !s.loadingOlder && s.messages.isNotEmpty()) vm.loadOlder()
+            }
+    }
+
+    val openChip: (ShareChip) -> Unit = { chip ->
+        when (chip.kind) {
+            ShareChipKind.Asset -> onOpenAsset(chip.refId)
+            ShareChipKind.Portfolio -> onOpenSharedPortfolio(chip.refId)
+            ShareChipKind.Watchlist -> onOpenSharedWatchlist(chip.refId, chip.ownerName ?: headerName)
+            ShareChipKind.Conglomerate -> onOpenSharedConglomerate(chip.refId)
+        }
     }
 
     Scaffold(
@@ -138,9 +237,9 @@ fun ChatThreadScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BtAvatar(name = friendUsername, size = 34.dp)
+                        BtAvatar(name = headerName, size = 34.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("@$friendUsername", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("@$headerName", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 navigationIcon = {
@@ -156,36 +255,43 @@ fun ChatThreadScreen(
             )
         },
         bottomBar = {
-            if (ChatFlags.enabled) {
-                MessageInputBar(
+            when (state.availability) {
+                ThreadAvailability.Available -> MessageInputBar(
                     value = input,
-                    onValueChange = { input = it },
+                    onValueChange = { input = it.take(CHAT_MESSAGE_MAX) },
                     onSend = { if (input.isNotBlank()) { vm.send(input); input = "" } },
                     onAttach = { showAttach = true },
                 )
+                ThreadAvailability.ReadOnly -> ClosedThreadNotice(
+                    "You can't send messages in this chat anymore.",
+                )
+                ThreadAvailability.NotAvailable -> Unit
             }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
-                // Release path: chat isn't live yet — a clear "coming soon" state
-                // (never an empty thread with a dead composer).
-                !ChatFlags.enabled -> BtEmptyState(
-                    icon = Icons.AutoMirrored.Outlined.Chat,
-                    title = "Chat is coming soon",
-                    message = "Messaging your friends — and sharing assets or portfolios right in the chat — is on its way.",
+                state.loading && state.messages.isEmpty() -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = bt.gold) }
+
+                state.availability == ThreadAvailability.NotAvailable -> BtEmptyState(
+                    icon = Icons.Outlined.Lock,
+                    title = "Conversation not available",
+                    message = "This chat isn't available. You may no longer be able to message this person.",
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
-                // Fresh conversation: a warm prompt instead of a blank screen.
-                messages.isEmpty() -> Column(
+
+                state.messages.isEmpty() -> Column(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    BtAvatar(name = friendUsername, size = 64.dp)
+                    BtAvatar(name = headerName, size = 64.dp)
                     Spacer(Modifier.size(16.dp))
                     Text(
-                        "Say hi to @$friendUsername",
+                        "Say hi to @$headerName",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = bt.textPrimary,
@@ -198,15 +304,21 @@ fun ChatThreadScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
+
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(messages, key = { it.id }) { m -> MessageBubble(m, onOpenChip = {
-                        Toast.makeText(context, "Opens the shared item when chat goes live.", Toast.LENGTH_SHORT).show()
-                    }) }
+                    if (state.loadingOlder) {
+                        item(key = "older-spinner") {
+                            Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = bt.gold, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            }
+                        }
+                    }
+                    items(state.messages, key = { it.id }) { m -> MessageBubble(m, onOpenChip = { openChip(m.chip!!) }) }
                 }
             }
         }
@@ -214,7 +326,7 @@ fun ChatThreadScreen(
 
     if (showAttach) {
         AttachSheet(
-            items = vm.attachables(),
+            items = attachables,
             onPick = { chip -> showAttach = false; vm.sendChip(chip) },
             onDismiss = { showAttach = false },
         )
@@ -222,7 +334,25 @@ fun ChatThreadScreen(
 }
 
 @Composable
-private fun MessageBubble(m: ChatMessage, onOpenChip: () -> Unit) {
+private fun ClosedThreadNotice(text: String) {
+    val bt = BtTheme.colors
+    Surface(color = bt.bg) {
+        Column {
+            androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = bt.border)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Lock, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(text, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(m: at.bettertrack.app.data.repo.ChatMessage, onOpenChip: () -> Unit) {
     val bt = BtTheme.colors
     val bubbleShape = if (m.fromMe) {
         RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 12.dp, bottomEnd = 3.dp)
@@ -314,6 +444,15 @@ private fun MessageInputBar(
     Surface(color = bt.bg) {
         Column {
             androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = bt.border)
+            // Show a character counter only as the 4000-char limit approaches.
+            if (value.length > CHAT_MESSAGE_MAX - 400) {
+                Text(
+                    "${value.length} / $CHAT_MESSAGE_MAX",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (value.length >= CHAT_MESSAGE_MAX) bt.loss else bt.textMuted,
+                    modifier = Modifier.align(Alignment.End).padding(end = 16.dp, top = 4.dp),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -367,20 +506,29 @@ private fun AttachSheet(items: List<ShareChip>, onPick: (ShareChip) -> Unit, onD
             Text("Share in chat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
             Text("Sending never widens access — friends only see it if it's already shared with them.", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             Spacer(Modifier.size(12.dp))
-            items.forEach { chip ->
-                Surface(
-                    onClick = { onPick(chip) },
-                    shape = at.bettertrack.app.ui.theme.BtShapes.card,
-                    color = bt.bg,
-                    border = BorderStroke(1.dp, bt.border),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(chip.kind.icon(), contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(chip.symbol ?: chip.label, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
-                            Text(chip.subtitle(), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+            if (items.isEmpty()) {
+                Text(
+                    "You don't have any portfolios, watchlists or baskets to share yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textMuted,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+            } else {
+                items.forEach { chip ->
+                    Surface(
+                        onClick = { onPick(chip) },
+                        shape = at.bettertrack.app.ui.theme.BtShapes.card,
+                        color = bt.bg,
+                        border = BorderStroke(1.dp, bt.border),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(chip.kind.icon(), contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(chip.symbol ?: chip.label, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+                                Text(chip.subtitle(), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                            }
                         }
                     }
                 }
@@ -405,5 +553,5 @@ private fun ShareChip.kindLabel(): String = when (kind) {
 
 private fun ShareChip.subtitle(): String {
     val k = kindLabel()
-    return ownerName?.let { "$k · $it" } ?: k
+    return ownerName?.takeIf { it.isNotBlank() }?.let { "$k · $it" } ?: k
 }

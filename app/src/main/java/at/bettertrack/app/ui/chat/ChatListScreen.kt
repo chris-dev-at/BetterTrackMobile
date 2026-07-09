@@ -44,7 +44,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.data.api.BtResult
-import at.bettertrack.app.data.repo.ChatFlags
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Conversation
 import at.bettertrack.app.data.repo.Friend
@@ -71,7 +70,8 @@ class ChatListViewModel(
     val friends: StateFlow<List<Friend>> = _friends
 
     init {
-        chat.connectRealtime(viewModelScope)
+        chat.connectRealtime()
+        viewModelScope.launch { chat.refreshConversations() }
         viewModelScope.launch {
             (social.friends() as? BtResult.Ok)?.let { _friends.value = it.value }
         }
@@ -116,24 +116,16 @@ fun ChatListScreen(
             )
         },
         floatingActionButton = {
-            if (ChatFlags.enabled) {
-                FloatingActionButton(
-                    onClick = { showPicker = true },
-                    containerColor = bt.gold,
-                    contentColor = bt.onGold,
-                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                ) { Icon(Icons.Outlined.Edit, contentDescription = "New message") }
-            }
+            FloatingActionButton(
+                onClick = { showPicker = true },
+                containerColor = bt.gold,
+                contentColor = bt.onGold,
+                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+            ) { Icon(Icons.Outlined.Edit, contentDescription = "New message") }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
-                !ChatFlags.enabled -> BtEmptyState(
-                    icon = Icons.AutoMirrored.Outlined.Chat,
-                    title = "Chat is coming soon",
-                    message = "Message your friends, and share assets or portfolios right in the chat. We're putting the finishing touches on it.",
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                )
                 conversations.isEmpty() -> BtEmptyState(
                     icon = Icons.AutoMirrored.Outlined.Chat,
                     title = "No messages yet",

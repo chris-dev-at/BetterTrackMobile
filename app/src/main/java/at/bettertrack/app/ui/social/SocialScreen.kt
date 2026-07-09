@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.AudienceState
+import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendRequest
 import at.bettertrack.app.data.repo.MyShared
@@ -248,12 +249,21 @@ fun SocialScreen(
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
-    val chatUnread by AppGraph.chatRepository.totalUnread.collectAsStateWithLifecycle()
+    val chatRepo: ChatRepository = AppGraph.chatRepository
+    val chatUnread by chatRepo.totalUnread.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var section by remember { mutableStateOf(SocialSection.Friends) }
     var showAdd by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(Unit) { vm.load() }
+    // Keep the Messages unread badge live while the Social tab is foregrounded:
+    // ref-counted realtime (socket + foreground poll). connectRealtime() starts the
+    // poll loop, whose first tick refetches the conversation list immediately, so the
+    // badge updates on entry without a separate refresh call.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        chatRepo.connectRealtime()
+        onDispose { chatRepo.disconnectRealtime() }
+    }
     androidx.compose.runtime.LaunchedEffect(toast) {
         toast?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeToast() }
     }

@@ -23,11 +23,13 @@ import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.data.repo.ChatRepository
+import at.bettertrack.app.data.repo.DefaultChatRepository
 import at.bettertrack.app.data.repo.DefaultSocialRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
-import at.bettertrack.app.data.repo.StubChatGateway
-import at.bettertrack.app.data.repo.StubChatRepository
+import at.bettertrack.app.data.repo.SocketIoChatGateway
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.session.SessionInitializer
@@ -193,8 +195,38 @@ object AppGraph {
         DefaultSocialRepository(api = btApi, json = json, webOrigin = BuildConfig.WEB_ORIGIN)
     }
 
+    /**
+     * A bare, long-lived OkHttp client for the realtime `/ws` WebSocket. No auth
+     * interceptor (the Socket.IO handshake carries the bearer best-effort itself);
+     * no read timeout so the socket stays open between Engine.IO pings.
+     */
+    private val wsClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
+    }
+
     val chatRepository: ChatRepository by lazy {
-        StubChatRepository(context = appContext, gateway = StubChatGateway())
+        DefaultChatRepository(
+            api = btApi,
+            json = json,
+            gateway = SocketIoChatGateway(
+                apiOrigin = BuildConfig.API_ORIGIN,
+                client = wsClient,
+                tokenProvider = { tokenManager.currentAccessToken() },
+                json = json,
+                onReconnectSleep = { ms -> kotlinx.coroutines.delay(ms) },
+            ),
+            currentUserId = {
+                (authRepository.authState.value as? AuthState.LoggedIn)?.user?.id
+                    ?: (authRepository.authState.value as? AuthState.PasswordChangeRequired)?.user?.id
+            },
+            friendIdsProvider = {
+                (socialRepository.friends() as? BtResult.Ok)?.value?.map { it.userId }?.toSet()
+            },
+        )
     }
 
     // ── Step 16: notifications (§6.11) ───────────────────────────────────────
