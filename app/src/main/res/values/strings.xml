@@ -421,6 +421,10 @@
     <string name="bt_conglo_budget">Budget calculator</string>
     <string name="bt_conglo_budget_label">Budget</string>
     <string name="bt_conglo_at_least_one">At least 1 share of each</string>
+    <string name="bt_conglo_mode_label">Buying mode</string>
+    <string name="bt_conglo_mode_whole">Whole shares</string>
+    <string name="bt_conglo_mode_fractional">Fractional</string>
+    <string name="bt_conglo_step_label">Step size (optional)</string>
     <string name="bt_conglo_calculate">Calculate</string>
     <string name="bt_conglo_buy_list">Buy list</string>
     <string name="bt_conglo_qty">%1$s shares · %2$s</string>
@@ -432,6 +436,12 @@
 
     <!-- ── Step 16: notifications (§6.11) ─────────────────────────────────── -->
     <string name="bt_settings_preferences_section">Preferences</string>
+    <string name="bt_settings_about_section">About</string>
+    <string name="bt_settings_version">Version</string>
+    <string name="bt_settings_whatsnew_row">New features</string>
+    <string name="bt_settings_whatsnew_sub">See what\'s new in this version</string>
+    <string name="bt_settings_whatsnew_title">New features</string>
+    <string name="bt_settings_whatsnew_version">Version %1$s</string>
     <string name="bt_settings_notifications_row">Notifications</string>
     <string name="bt_settings_notifications_sub">Inbox, push and email preferences</string>
     <string name="bt_notif_mark_all_read">Mark all read</string>
@@ -481,6 +491,7 @@
     <string name="bt_settings_applock_sub">Require a PIN or biometrics to open the app</string>
     <string name="bt_settings_applock_change">Change PIN</string>
     <string name="bt_settings_applock_change_sub">Set a new unlock PIN</string>
+    <string name="bt_settings_applock_change_managed">Managed by your BetterTrack account — change it on the web</string>
     <string name="bt_settings_applock_biometric">Unlock with biometrics</string>
     <string name="bt_settings_applock_biometric_sub">Use fingerprint or face to unlock</string>
     <string name="bt_settings_applock_biometric_none">Set up a fingerprint in Android settings to enable</string>

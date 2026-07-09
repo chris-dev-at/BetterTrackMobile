@@ -61,6 +61,12 @@ fun BtAreaChart(
     points: List<HistoryPoint>,
     modifier: Modifier = Modifier,
     lineColor: Color = BtTheme.colors.gold,
+    /**
+     * Hero/blend mode: drop ALL axis scaffolding (gridlines, y-labels, x-labels)
+     * so the chart reads as a clean full-bleed area that fades into the page.
+     * The scrub readout + the surrounding UI carry the exact numbers instead.
+     */
+    minimal: Boolean = false,
     onScrub: ((HistoryPoint?) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
@@ -119,7 +125,9 @@ fun BtAreaChart(
         if (series.size < 2) return@Canvas
 
         // Reserve a quiet strip for x labels; y labels overlay the plot right.
-        val xLabelStrip = 18.dp.toPx()
+        // In minimal/hero mode there is no scaffolding, so the plot uses the full
+        // height and the gradient fades all the way into the page background.
+        val xLabelStrip = if (minimal) 0f else 18.dp.toPx()
         val plotH = size.height - xLabelStrip
         val plotW = size.width
 
@@ -127,32 +135,34 @@ fun BtAreaChart(
         val morphing = progress.value < 1f && previousPoints.size >= 2
 
         // ── Gridlines + y labels (min / mid / max of the padded scale) ──────
-        val gridColor = bt.border.copy(alpha = 0.55f)
-        // One label format for the whole axis, driven by the scale's magnitude
-        // (mixing "15,0k" with "9 440" on one axis reads as two scales).
-        val compactAxis = scale.max >= 10_000
-        val fractions = listOf(0.0f, 0.5f, 1.0f)
-        fractions.forEach { f ->
-            val y = plotH * (1f - f)
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, y),
-                end = Offset(plotW, y),
-                strokeWidth = 1.dp.toPx(),
-            )
-            val value = scale.min + (scale.max - scale.min) * f
-            val text = axisMoney(value, locale, compactAxis)
-            val measured = textMeasurer.measure(text, labelStyle)
-            // Right-aligned, floated just above its gridline, inset 4dp.
-            drawText(
-                textMeasurer = textMeasurer,
-                text = text,
-                style = labelStyle,
-                topLeft = Offset(
-                    plotW - measured.size.width - 4.dp.toPx(),
-                    (y - measured.size.height - 2.dp.toPx()).coerceAtLeast(0f),
-                ),
-            )
+        if (!minimal) {
+            val gridColor = bt.border.copy(alpha = 0.55f)
+            // One label format for the whole axis, driven by the scale's magnitude
+            // (mixing "15,0k" with "9 440" on one axis reads as two scales).
+            val compactAxis = scale.max >= 10_000
+            val fractions = listOf(0.0f, 0.5f, 1.0f)
+            fractions.forEach { f ->
+                val y = plotH * (1f - f)
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, y),
+                    end = Offset(plotW, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+                val value = scale.min + (scale.max - scale.min) * f
+                val text = axisMoney(value, locale, compactAxis)
+                val measured = textMeasurer.measure(text, labelStyle)
+                // Right-aligned, floated just above its gridline, inset 4dp.
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = text,
+                    style = labelStyle,
+                    topLeft = Offset(
+                        plotW - measured.size.width - 4.dp.toPx(),
+                        (y - measured.size.height - 2.dp.toPx()).coerceAtLeast(0f),
+                    ),
+                )
+            }
         }
 
         // ── The series: line + gradient fill (morphed while transitioning) ──
@@ -204,19 +214,21 @@ fun BtAreaChart(
         )
 
         // ── x labels: first + last date, muted, in the reserved strip ──────
-        val spanDays = series.last().epochDay - series.first().epochDay
-        val startText = formatChartDate(series.first().epochDay, spanDays, locale)
-        val endText = formatChartDate(series.last().epochDay, spanDays, locale)
-        val startMeasured = textMeasurer.measure(startText, labelStyle)
-        val endMeasured = textMeasurer.measure(endText, labelStyle)
-        val labelY = size.height - startMeasured.size.height
-        drawText(textMeasurer, startText, style = labelStyle, topLeft = Offset(0f, labelY))
-        drawText(
-            textMeasurer,
-            endText,
-            style = labelStyle,
-            topLeft = Offset(plotW - endMeasured.size.width, labelY),
-        )
+        if (!minimal) {
+            val spanDays = series.last().epochDay - series.first().epochDay
+            val startText = formatChartDate(series.first().epochDay, spanDays, locale)
+            val endText = formatChartDate(series.last().epochDay, spanDays, locale)
+            val startMeasured = textMeasurer.measure(startText, labelStyle)
+            val endMeasured = textMeasurer.measure(endText, labelStyle)
+            val labelY = size.height - startMeasured.size.height
+            drawText(textMeasurer, startText, style = labelStyle, topLeft = Offset(0f, labelY))
+            drawText(
+                textMeasurer,
+                endText,
+                style = labelStyle,
+                topLeft = Offset(plotW - endMeasured.size.width, labelY),
+            )
+        }
 
         // ── Scrub guide + dot ───────────────────────────────────────────────
         val sx = scrubX

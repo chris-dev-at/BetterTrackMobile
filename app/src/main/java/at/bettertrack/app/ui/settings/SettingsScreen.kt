@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.data.auth.SessionUser
@@ -63,6 +65,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenNotifications: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
+    onOpenChangelog: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val auth = AppGraph.authRepository
@@ -159,6 +162,29 @@ fun SettingsScreen(
                 onClick = onOpenNotifications,
             )
 
+            Spacer(Modifier.height(4.dp))
+
+            // About: the installed app version (+ build) and a bundled in-app
+            // changelog. Account identity (username + email) is shown above.
+            Text(
+                text = stringResource(R.string.bt_settings_about_section).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = bt.textMuted,
+            )
+            BtCard(modifier = Modifier.fillMaxWidth()) {
+                AccountRow(
+                    label = stringResource(R.string.bt_settings_version),
+                    value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            SettingsNavRow(
+                icon = Icons.Outlined.NewReleases,
+                title = stringResource(R.string.bt_settings_whatsnew_row),
+                subtitle = stringResource(R.string.bt_settings_whatsnew_sub),
+                onClick = onOpenChangelog,
+            )
+
             Spacer(Modifier.height(8.dp))
 
             BtSecondaryButton(
@@ -234,10 +260,10 @@ private fun SettingsNavRow(
 }
 
 @Composable
-private fun AccountRow(label: String, value: String) {
+private fun AccountRow(label: String, value: String, modifier: Modifier = Modifier) {
     val bt = BtTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)

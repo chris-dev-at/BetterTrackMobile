@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.repo.AllocateMode
 import at.bettertrack.app.data.repo.Allocation
 import at.bettertrack.app.data.repo.Backtest
 import at.bettertrack.app.data.repo.BacktestRange
@@ -157,12 +158,12 @@ class ConglomerateDetailViewModel(
         _detail.value?.let(::runBacktest)
     }
 
-    fun calculate(budgetEur: Double, atLeastOneShare: Boolean) {
+    fun calculate(budgetEur: Double, mode: AllocateMode, atLeastOneShare: Boolean, step: Double?) {
         if (_calculating.value) return
         viewModelScope.launch {
             _calculating.value = true
             _message.value = null
-            when (val r = repo.allocate(conglomerateId, budgetEur, atLeastOneShare)) {
+            when (val r = repo.allocate(conglomerateId, budgetEur, mode, atLeastOneShare, step)) {
                 is BtResult.Ok -> _allocation.value = r.value
                 is BtResult.Err -> _message.value = r.error.userMessage
             }
@@ -251,7 +252,9 @@ fun ConglomerateDetailScreen(
     val portfolioName by vm.selectedPortfolioName.collectAsStateWithLifecycle()
 
     var budgetText by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(AllocateMode.DEFAULT) }
     var atLeastOne by remember { mutableStateOf(true) }
+    var stepText by remember { mutableStateOf("") }
     var committed by remember { mutableStateOf(false) }
     var deleteConfirm by remember { mutableStateOf(false) }
 
@@ -352,18 +355,65 @@ fun ConglomerateDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             colors = at.bettertrack.app.ui.customassets.dialogFieldColors(),
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.bt_conglo_at_least_one), style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary, modifier = Modifier.weight(1f))
-                            Switch(
-                                checked = atLeastOne, onCheckedChange = { atLeastOne = it },
-                                colors = SwitchDefaults.colors(checkedTrackColor = bt.gold, checkedThumbColor = bt.onGold, uncheckedTrackColor = bt.border, uncheckedThumbColor = bt.textMuted, uncheckedBorderColor = bt.borderStrong),
+                        Spacer(Modifier.height(12.dp))
+                        // Buying mode (§6.7) — whole vs fractional, mirroring the web
+                        // budget calculator (default = whole). Whole mode shows the
+                        // "at least one share" opt-in; fractional mode shows an
+                        // optional quantity step (server default when left empty).
+                        Text(
+                            stringResource(R.string.bt_conglo_mode_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = bt.textMuted,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BtChip(
+                                text = stringResource(R.string.bt_conglo_mode_whole),
+                                selected = mode == AllocateMode.WHOLE,
+                                onClick = { mode = AllocateMode.WHOLE },
+                            )
+                            BtChip(
+                                text = stringResource(R.string.bt_conglo_mode_fractional),
+                                selected = mode == AllocateMode.FRACTIONAL,
+                                onClick = { mode = AllocateMode.FRACTIONAL },
                             )
                         }
-                        Spacer(Modifier.height(10.dp))
+                        if (mode == AllocateMode.WHOLE) {
+                            Spacer(Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(stringResource(R.string.bt_conglo_at_least_one), style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary, modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = atLeastOne, onCheckedChange = { atLeastOne = it },
+                                    colors = SwitchDefaults.colors(checkedTrackColor = bt.gold, checkedThumbColor = bt.onGold, uncheckedTrackColor = bt.border, uncheckedThumbColor = bt.textMuted, uncheckedBorderColor = bt.borderStrong),
+                                )
+                            }
+                        } else {
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = stepText,
+                                onValueChange = { stepText = sanitizeDecimalInput(it, maxDecimals = 6) },
+                                label = { Text(stringResource(R.string.bt_conglo_step_label)) },
+                                placeholder = { Text("0.0001", color = bt.textMuted) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                                textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = at.bettertrack.app.ui.customassets.dialogFieldColors(),
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
                         BtPrimaryButton(
                             text = stringResource(R.string.bt_conglo_calculate),
-                            onClick = { parseLocalizedDecimal(budgetText)?.let { vm.calculate(it, atLeastOne) } },
+                            onClick = {
+                                parseLocalizedDecimal(budgetText)?.let { budget ->
+                                    val step = if (mode == AllocateMode.FRACTIONAL) {
+                                        parseLocalizedDecimal(stepText)?.takeIf { it > 0.0 }
+                                    } else {
+                                        null
+                                    }
+                                    vm.calculate(budget, mode, atLeastOne, step)
+                                }
+                            },
                             enabled = (parseLocalizedDecimal(budgetText) ?: 0.0) > 0.0 && !calculating,
                             loading = calculating,
                             modifier = Modifier.fillMaxWidth().height(46.dp),

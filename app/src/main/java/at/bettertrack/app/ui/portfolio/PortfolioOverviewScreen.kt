@@ -1,7 +1,6 @@
 package at.bettertrack.app.ui.portfolio
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,27 +12,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.db.HoldingEntity
@@ -70,19 +67,34 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
-import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.theme.BtTheme
 import java.util.Locale
 
 /**
- * The Portfolio tab overview (Step 6, spec §6.1) — the app's home: switcher
- * trigger, Net-Worth hero, §3.6 history graph with range chips, holdings/cash
- * line, allocation donut and the holdings list. Renders ONLY server-computed
- * numbers from Room (§7.1); offline shows the cache under the global as-of
- * banner. Step 8: the buy/sell FAB (≤2 taps rule) + the pending-changes strip
- * (§7.4) live here.
+ * Shared initializer for [PortfolioOverviewViewModel]. Both this screen and the
+ * app-shell top-bar portfolio selector resolve the VM through THIS initializer,
+ * scoped to the Portfolio nav-graph entry — so they share ONE instance (one
+ * source of truth for the selected portfolio + the switcher sheet's open state).
+ */
+internal val PortfolioOverviewVmInitializer: CreationExtras.() -> PortfolioOverviewViewModel = {
+    PortfolioOverviewViewModel(
+        AppGraph.portfolioRepository,
+        AppGraph.connectivityMonitor,
+        AppGraph.database,
+        AppGraph.json,
+    )
+}
+
+/**
+ * The Portfolio tab overview (Step 6, spec §6.1) — the app's home: Net-Worth
+ * hero, §3.6 history graph (blended full-bleed into the page) with range chips,
+ * holdings/cash line, allocation donut and the holdings list. The portfolio
+ * selector lives in the app-shell top bar beside the wordmark (it opens the
+ * switcher sheet hosted here). Renders ONLY server-computed numbers from Room
+ * (§7.1); offline shows the cache under the global as-of banner. The buy/sell
+ * FAB (≤2 taps) + the pending-changes strip (§7.4) live here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,14 +105,7 @@ fun PortfolioOverviewScreen(
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
 ) {
-    val vm: PortfolioOverviewViewModel = viewModel {
-        PortfolioOverviewViewModel(
-            AppGraph.portfolioRepository,
-            AppGraph.connectivityMonitor,
-            AppGraph.database,
-            AppGraph.json,
-        )
-    }
+    val vm: PortfolioOverviewViewModel = viewModel(initializer = PortfolioOverviewVmInitializer)
 
     val portfolios by vm.portfolios.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
@@ -115,7 +120,8 @@ fun PortfolioOverviewScreen(
     val switcherError by vm.switcherError.collectAsStateWithLifecycle()
     val pendingTx by vm.pendingTx.collectAsStateWithLifecycle()
 
-    var switcherOpen by rememberSaveable { mutableStateOf(false) }
+    // Sheet visibility lives in the VM so the shell top-bar selector can open it.
+    val switcherOpen by vm.switcherVisible.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
         vm.onScreenResumed()
@@ -164,7 +170,6 @@ fun PortfolioOverviewScreen(
                 range = range,
                 pendingTx = pendingTx,
                 onRange = vm::setRange,
-                onOpenSwitcher = { switcherOpen = true },
                 onOpenHolding = onOpenHolding,
                 onOpenTransactions = onOpenTransactions,
                 onOpenPendingSync = onOpenPendingSync,
@@ -198,13 +203,10 @@ fun PortfolioOverviewScreen(
             isOnline = isOnline,
             busy = switcherBusy,
             error = switcherError,
-            onDismiss = {
-                switcherOpen = false
-                vm.clearSwitcherError()
-            },
+            onDismiss = { vm.dismissSwitcher() },
             onSelect = { id ->
                 vm.selectPortfolio(id)
-                switcherOpen = false
+                vm.dismissSwitcher()
             },
             onCreate = { name, onDone -> vm.createPortfolio(name) { ok -> onDone(ok) } },
             onRename = { id, name, onDone -> vm.renamePortfolio(id, name) { ok -> onDone(ok) } },
@@ -224,7 +226,6 @@ private fun OverviewContent(
     range: HistoryRange,
     pendingTx: List<PendingTxRow>,
     onRange: (HistoryRange) -> Unit,
-    onOpenSwitcher: () -> Unit,
     onOpenHolding: (String) -> Unit,
     onOpenTransactions: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
@@ -234,54 +235,66 @@ private fun OverviewContent(
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val totals = portfolio.totals
 
+    // Scrub state is hoisted here so touching the hero chart updates the big
+    // Net-Worth readout (Robinhood-style). A fresh selection/range clears it.
+    var scrub by remember { mutableStateOf<HistoryPoint?>(null) }
+    LaunchedEffect(portfolio.id, range) { scrub = null }
+
+    // Content is inset 16dp — EXCEPT the hero chart, which bleeds edge-to-edge.
+    val inset = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             // Clear the buy/sell FAB (56dp + 20dp inset + margin) so the last
             // holding row scrolls fully into view instead of under it.
             bottom = 96.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Switcher trigger — persistent and obvious (§6.1).
-        item(key = "switcher") {
-            SwitcherTrigger(name = portfolio.name, onClick = onOpenSwitcher)
-        }
-
-        // Net-Worth hero (server totals only).
+        // Net-Worth hero (server totals only) — scrub-aware: while scrubbing the
+        // chart, the big number + label become the touched point's value + date.
         item(key = "hero") {
-            Column {
+            val s = scrub
+            Column(inset) {
                 Text(
-                    text = stringResource(R.string.bt_overview_net_worth),
+                    text = if (s != null) formatChartScrubDate(s.epochDay, locale)
+                    else stringResource(R.string.bt_overview_net_worth),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                 )
                 Spacer(Modifier.height(2.dp))
-                if (totals != null) {
-                    MoneyText(value = totals.totalValueEur, style = BtTheme.type.moneyLarge)
+                if (totals != null || s != null) {
+                    MoneyText(
+                        value = s?.valueEur ?: totals!!.totalValueEur,
+                        style = BtTheme.type.moneyLarge,
+                    )
                     Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MoneyText(
-                            value = totals.dayChangeEur,
-                            style = BtTheme.type.numberCaption,
-                            colorMode = MoneyColorMode.GainLoss,
-                            showSign = true,
-                        )
-                        totals.dayChangePct?.let { pct ->
-                            Text(
-                                text = " (${formatPercent(pct, locale)})",
-                                style = BtTheme.type.numberCaption,
-                                color = deltaColor(pct),
-                            )
+                    // Reserve the sub-line height so scrubbing never shifts layout.
+                    Box(Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                        if (s == null && totals != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                MoneyText(
+                                    value = totals.dayChangeEur,
+                                    style = BtTheme.type.numberCaption,
+                                    colorMode = MoneyColorMode.GainLoss,
+                                    showSign = true,
+                                )
+                                totals.dayChangePct?.let { pct ->
+                                    Text(
+                                        text = " (${formatPercent(pct, locale)})",
+                                        style = BtTheme.type.numberCaption,
+                                        color = deltaColor(pct),
+                                    )
+                                }
+                                Text(
+                                    text = " · " + stringResource(R.string.bt_overview_today),
+                                    style = BtTheme.type.numberCaption,
+                                    color = bt.textMuted,
+                                )
+                            }
                         }
-                        Text(
-                            text = " · " + stringResource(R.string.bt_overview_today),
-                            style = BtTheme.type.numberCaption,
-                            color = bt.textMuted,
-                        )
                     }
                 } else {
                     BtSkeleton(Modifier.width(220.dp).height(40.dp))
@@ -296,19 +309,28 @@ private fun OverviewContent(
         // screen — they are never folded into the totals above.
         if (pendingTx.isNotEmpty()) {
             item(key = "pending-strip") {
-                PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync)
+                Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
             }
         }
 
-        // History graph card (§3.6) with range chips + scrub readout.
+        // History graph (§3.6) — blended full-bleed hero: no card, gold gradient
+        // fading into the page, edge-to-edge, minimal axis. Header + range chips
+        // stay inset; only the canvas bleeds.
         item(key = "chart") {
-            HistoryCard(history = history, range = range, onRange = onRange, locale = locale)
+            HeroChart(
+                history = history,
+                range = range,
+                scrubbing = scrub != null,
+                onRange = onRange,
+                onScrub = { scrub = it },
+                locale = locale,
+            )
         }
 
         // The roll-up line: holdings value + cash (server totals). The cash
         // card opens the Step-9 cash screen (§6.3).
         item(key = "rollup") {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(inset, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 RollupCard(
                     label = stringResource(R.string.bt_overview_holdings_value),
                     value = totals?.marketValueEur,
@@ -326,14 +348,16 @@ private fun OverviewContent(
         // Allocation donut (by asset / by category).
         if (holdings.isNotEmpty() || (totals?.cashEur ?: 0.0) > 0.0) {
             item(key = "allocation") {
-                AllocationCard(holdings = holdings, cashEur = totals?.cashEur ?: 0.0, locale = locale)
+                Box(inset) {
+                    AllocationCard(holdings = holdings, cashEur = totals?.cashEur ?: 0.0, locale = locale)
+                }
             }
         }
 
         // Holdings list.
         item(key = "holdings-header") {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = inset.padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -350,11 +374,13 @@ private fun OverviewContent(
         }
         if (holdings.isEmpty()) {
             item(key = "holdings-empty") {
-                BtEmptyState(
-                    icon = Icons.Outlined.PieChart,
-                    title = stringResource(R.string.bt_overview_no_holdings_title),
-                    message = stringResource(R.string.bt_overview_no_holdings_message),
-                )
+                Box(inset) {
+                    BtEmptyState(
+                        icon = Icons.Outlined.PieChart,
+                        title = stringResource(R.string.bt_overview_no_holdings_title),
+                        message = stringResource(R.string.bt_overview_no_holdings_message),
+                    )
+                }
             }
         } else {
             items(
@@ -362,12 +388,14 @@ private fun OverviewContent(
                 key = { "holding-" + holdings[it].assetId },
             ) { index ->
                 val h = holdings[index]
-                HoldingRow(
-                    holding = h,
-                    weightOfPortfolioPct = weightPct(h.marketValueEur, portfolio.totals?.marketValueEur),
-                    locale = locale,
-                    onClick = { onOpenHolding(h.assetId) },
-                )
+                Box(inset) {
+                    HoldingRow(
+                        holding = h,
+                        weightOfPortfolioPct = weightPct(h.marketValueEur, portfolio.totals?.marketValueEur),
+                        locale = locale,
+                        onClick = { onOpenHolding(h.assetId) },
+                    )
+                }
             }
         }
     }
@@ -428,134 +456,95 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
     }
 }
 
+/**
+ * The blended hero history graph (§3.6, owner redesign 2026-07-09): the area
+ * chart sits directly on the page (no card), the gold gradient fades into the
+ * background, and the canvas bleeds edge-to-edge. Only the range-performance
+ * header line and the range chips stay inset; the chart itself is full-width
+ * with minimal scaffolding. Scrubbing is reported up so the Net-Worth hero
+ * shows the touched point.
+ */
 @Composable
-private fun SwitcherTrigger(name: String, onClick: () -> Unit) {
-    val bt = BtTheme.colors
-    val interaction = remember { MutableInteractionSource() }
-    val cd = stringResource(R.string.bt_switcher_open_cd)
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
-        color = androidx.compose.ui.graphics.Color.Transparent,
-        contentColor = bt.textPrimary,
-        interactionSource = interaction,
-        modifier = Modifier
-            .btPressScale(interaction, pressedScale = 0.97f)
-            .semantics { contentDescription = cd },
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 2.dp),
-        ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleLarge,
-                color = bt.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 280.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                imageVector = Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = bt.gold,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun HistoryCard(
+private fun HeroChart(
     history: PortfolioHistory?,
     range: HistoryRange,
+    scrubbing: Boolean,
     onRange: (HistoryRange) -> Unit,
+    onScrub: (HistoryPoint?) -> Unit,
     locale: Locale,
 ) {
     val bt = BtTheme.colors
-    var scrub by remember { mutableStateOf<HistoryPoint?>(null) }
     val chartCd = stringResource(R.string.bt_overview_chart_cd)
-
-    BtCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            // Header: scrub readout while touching, else range performance.
-            val s = scrub
-            Row(verticalAlignment = Alignment.Bottom) {
-                if (s != null) {
-                    MoneyText(value = s.valueEur, style = BtTheme.type.moneyMedium)
+    Column(Modifier.fillMaxWidth()) {
+        // Range performance (inset), reserved height, hidden while scrubbing so
+        // the hero's scrub readout is the single focus.
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .height(18.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val pct = history?.rangePerformancePct
+            if (!scrubbing && pct != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = formatPercent(pct, locale),
+                        style = BtTheme.type.numberCaption,
+                        color = deltaColor(pct),
+                    )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = formatChartScrubDate(s.epochDay, locale),
+                        text = rangeLabel(range),
                         style = BtTheme.type.numberCaption,
                         color = bt.textMuted,
-                        modifier = Modifier.padding(bottom = 2.dp),
                     )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+
+        val points = history?.points.orEmpty()
+        if (points.size >= 2) {
+            BtAreaChart(
+                points = points,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .semantics { contentDescription = chartCd },
+                lineColor = bt.gold,
+                minimal = true,
+                onScrub = onScrub,
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(200.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (history == null) {
+                    BtSkeleton(Modifier.fillMaxWidth().height(170.dp).padding(horizontal = 16.dp))
                 } else {
-                    val pct = history?.rangePerformancePct
-                    if (pct != null) {
-                        Text(
-                            text = formatPercent(pct, locale),
-                            style = BtTheme.type.moneyMedium,
-                            color = deltaColor(pct),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = rangeLabel(range),
-                            style = BtTheme.type.numberCaption,
-                            color = bt.textMuted,
-                            modifier = Modifier.padding(bottom = 2.dp),
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.bt_overview_value_over_time),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = bt.textSecondary,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            val points = history?.points.orEmpty()
-            if (points.size >= 2) {
-                BtAreaChart(
-                    points = points,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(190.dp)
-                        .semantics { contentDescription = chartCd },
-                    lineColor = bt.gold,
-                    onScrub = { scrub = it },
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(190.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (history == null) {
-                        BtSkeleton(Modifier.fillMaxWidth().height(160.dp))
-                    } else {
-                        Text(
-                            text = stringResource(R.string.bt_overview_chart_empty),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textMuted,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            // Range chips — the set the platform serves (1D/1W/3M need a
-            // server-side window that doesn't exist yet; platform gap).
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HistoryRange.entries.forEach { r ->
-                    BtChip(
-                        text = rangeLabel(r),
-                        selected = r == range,
-                        onClick = { onRange(r) },
+                    Text(
+                        text = stringResource(R.string.bt_overview_chart_empty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
                     )
                 }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // Range chips (inset) — the set the platform serves (1D/1W/3M need a
+        // server-side window that doesn't exist yet; platform gap).
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HistoryRange.entries.forEach { r ->
+                BtChip(
+                    text = rangeLabel(r),
+                    selected = r == range,
+                    onClick = { onRange(r) },
+                )
             }
         }
     }

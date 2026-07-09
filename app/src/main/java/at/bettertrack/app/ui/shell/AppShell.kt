@@ -1,7 +1,27 @@
 package at.bettertrack.app.ui.shell
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
+import at.bettertrack.app.ui.portfolio.PortfolioOverviewVmInitializer
+import at.bettertrack.app.ui.theme.BtShapes
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -53,6 +73,7 @@ import at.bettertrack.app.navigation.AppLockRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.AssetsTabRoute
+import at.bettertrack.app.navigation.ChangelogRoute
 import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.ChatListRoute
 import at.bettertrack.app.navigation.ChatThreadRoute
@@ -114,6 +135,7 @@ import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
 import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
 import at.bettertrack.app.ui.social.SocialScreen
+import at.bettertrack.app.ui.settings.ChangelogScreen
 import at.bettertrack.app.ui.settings.SecurityScreen
 import at.bettertrack.app.ui.settings.SettingsScreen
 import at.bettertrack.app.ui.applock.AppLockSetupScreen
@@ -187,8 +209,32 @@ fun BtApp() {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (isTopLevel) {
+                // Portfolio-tab: show the current-portfolio selector beside the
+                // wordmark (owner 2026-07-09). It shares the SAME nav-entry-scoped
+                // PortfolioOverviewViewModel the overview uses, so the name is live
+                // and tapping opens the switcher sheet the overview hosts.
+                val onPortfolioTab = currentDestination?.hierarchy
+                    ?.any { it.hasRoute(PortfolioTabRoute::class) } == true
+                var selectorName: String? = null
+                var openSwitcher: (() -> Unit)? = null
+                if (onPortfolioTab) {
+                    val portfolioEntry = remember(backStackEntry) {
+                        runCatching { navController.getBackStackEntry(PortfolioTabRoute) }.getOrNull()
+                    }
+                    if (portfolioEntry != null) {
+                        val pvm: PortfolioOverviewViewModel = viewModel(
+                            viewModelStoreOwner = portfolioEntry,
+                            initializer = PortfolioOverviewVmInitializer,
+                        )
+                        val selected by pvm.selected.collectAsStateWithLifecycle()
+                        selectorName = selected?.name
+                        openSwitcher = { pvm.openSwitcher() }
+                    }
+                }
                 BtTopBar(
                     notifUnread = notifUnread,
+                    portfolioName = selectorName,
+                    onOpenSwitcher = openSwitcher,
                     onWordmarkLongPress = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
@@ -243,6 +289,8 @@ fun BtApp() {
 @Composable
 private fun BtTopBar(
     notifUnread: Int,
+    portfolioName: String?,
+    onOpenSwitcher: (() -> Unit)?,
     onWordmarkLongPress: () -> Unit,
     onSearch: () -> Unit,
     onNotifications: () -> Unit,
@@ -251,17 +299,28 @@ private fun BtTopBar(
     val bt = BtTheme.colors
     TopAppBar(
         title = {
-            // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
-            // long-press (debug builds only).
-            Wordmark(
-                fontSize = 20.sp,
-                modifier = Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                    onLongClick = onWordmarkLongPress,
-                ),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
+                // long-press (debug builds only).
+                Wordmark(
+                    fontSize = 20.sp,
+                    modifier = Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                        onLongClick = onWordmarkLongPress,
+                    ),
+                )
+                // Portfolio selector (Portfolio tab only) — compact, shrinks to fit.
+                if (portfolioName != null && onOpenSwitcher != null) {
+                    Spacer(Modifier.width(10.dp))
+                    PortfolioSelectorChip(
+                        name = portfolioName,
+                        onClick = onOpenSwitcher,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
         },
         actions = {
             // App-wide search affordance (§6.5).
@@ -287,6 +346,58 @@ private fun BtTopBar(
             titleContentColor = bt.textPrimary,
         ),
     )
+}
+
+/**
+ * The current-portfolio selector that lives in the top bar next to the wordmark
+ * (owner 2026-07-09). A compact, tappable pill with a subtle gold chevron; the
+ * name ellipsizes and the whole pill shrinks to fit (weight from the caller) so
+ * the wordmark + action icons always stay visible. Tapping opens the switcher
+ * sheet (hosted by the overview via the shared VM).
+ */
+@Composable
+private fun PortfolioSelectorChip(
+    name: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bt = BtTheme.colors
+    val cd = stringResource(R.string.bt_switcher_open_cd)
+    val interaction = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        shape = BtShapes.pill,
+        color = bt.surface,
+        contentColor = bt.textPrimary,
+        border = BorderStroke(1.dp, bt.border),
+        interactionSource = interaction,
+        modifier = modifier
+            .btPressScale(interaction, pressedScale = 0.96f)
+            .heightIn(min = 34.dp)
+            .semantics { contentDescription = cd },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = bt.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 150.dp).weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = bt.gold,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -573,8 +684,10 @@ private fun BtNavHost(
                 onBack = back,
                 onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
                 onOpenSecurity = { navController.navigate(SettingsSecurityRoute) },
+                onOpenChangelog = { navController.navigate(ChangelogRoute) },
             )
         }
+        composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
         composable<SettingsAccountRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_account), back) }
         composable<SettingsSecurityRoute> {
             SecurityScreen(

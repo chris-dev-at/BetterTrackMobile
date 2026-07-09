@@ -84,6 +84,42 @@ enum class BacktestRange(val wire: String, val label: String) {
 }
 
 /**
+ * Budget-calculator buying mode (§6.7) — mirrors the web app's `AllocateRequest`
+ * `mode` enum exactly (contracts/conglomerate.ts, live openapi `AllocateRequest`):
+ *  - [WHOLE]      integer shares only; the "at least one share" opt-in applies.
+ *  - [FRACTIONAL] fractional quantities to hit the exact target weights; an
+ *                 optional `step` sets the quantity granularity (server default
+ *                 when omitted). `atLeastOneShare` is ignored server-side here.
+ * Default is [WHOLE], matching the web calculator's default.
+ */
+enum class AllocateMode(val wire: String) {
+    WHOLE("whole"),
+    FRACTIONAL("fractional");
+
+    companion object {
+        val DEFAULT = WHOLE
+    }
+}
+
+/**
+ * Build the `POST /conglomerates/:id/allocate` body, mirroring the web budget
+ * calculator's exact rules (BudgetCalculator.tsx): [step] is sent ONLY in
+ * fractional mode, [atLeastOneShare] ONLY in whole mode — the server ignores
+ * each in the other mode and the web omits them there. Pure + unit-tested.
+ */
+fun buildAllocateRequest(
+    budgetEur: Double,
+    mode: AllocateMode,
+    atLeastOneShare: Boolean,
+    step: Double?,
+): AllocateRequest = AllocateRequest(
+    budgetEur = budgetEur,
+    mode = mode.wire,
+    step = if (mode == AllocateMode.FRACTIONAL) step else null,
+    atLeastOneShare = mode == AllocateMode.WHOLE && atLeastOneShare,
+)
+
+/**
  * Conglomerates repository (Step 13, §6.7 — online-only). Weighted-basket
  * templates, their server-computed past-performance backtest, and the budget
  * allocator. Everything is the server's calculation (§7.1); the app renders it
@@ -120,17 +156,22 @@ class ConglomerateRepository(
             },
         )
 
+    /**
+     * Turn a budget into a server-computed buy list (§7.1 — never client math).
+     * The request mirrors the web calculator exactly: [step] only travels in
+     * fractional mode, [atLeastOneShare] only in whole mode (the server ignores
+     * each in the other mode, and the web omits them there too).
+     */
     suspend fun allocate(
         id: String,
         budgetEur: Double,
+        mode: AllocateMode,
         atLeastOneShare: Boolean,
+        step: Double? = null,
     ): BtResult<Allocation> =
         when (
             val r = apiCall(json) {
-                api.allocateConglomerate(
-                    id,
-                    AllocateRequest(budgetEur = budgetEur, mode = "whole", atLeastOneShare = atLeastOneShare),
-                )
+                api.allocateConglomerate(id, buildAllocateRequest(budgetEur, mode, atLeastOneShare, step))
             }
         ) {
             is BtResult.Ok -> BtResult.Ok(

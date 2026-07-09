@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.applock.AfkThreshold
+import at.bettertrack.app.data.applock.PinSource
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.BiometricAvailability
 import at.bettertrack.app.ui.applock.rememberBiometricAvailability
@@ -119,10 +120,20 @@ fun SecurityScreen(
             )
 
             if (lockOn) {
+                // Change PIN. When the active lock reuses the BetterTrack account
+                // (web) PIN, changing it is managed on the web — not bridged to the
+                // API (owner directive 2026-07-09). The row stays full-size but is
+                // disabled with a short explanation; a device PIN keeps the normal
+                // change flow.
+                val webPinLock = config.pinSource == PinSource.BETTERTRACK
                 SecurityNavRow(
                     icon = Icons.Outlined.Lock,
                     title = stringResource(R.string.bt_settings_applock_change),
-                    subtitle = stringResource(R.string.bt_settings_applock_change_sub),
+                    subtitle = stringResource(
+                        if (webPinLock) R.string.bt_settings_applock_change_managed
+                        else R.string.bt_settings_applock_change_sub,
+                    ),
+                    enabled = !webPinLock,
                     onClick = onChangePin,
                 )
 
@@ -302,20 +313,43 @@ private fun SecurityNavRow(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val bt = BtTheme.colors
-    Surface(onClick = onClick, color = bt.surface, border = BorderStroke(1.dp, bt.border), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        shape = BtShapes.card,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
+            // Height matches the enabled row so a disabled (managed) PIN row keeps
+            // the same 48dp+ target and layout rhythm.
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (enabled) bt.textSecondary else bt.textMuted,
+                modifier = Modifier.size(22.dp),
+            )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (enabled) bt.textPrimary else bt.textMuted,
+                )
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+            // A managed (disabled) row drops the chevron so it doesn't read as
+            // tappable; the muted text carries the "managed on the web" meaning.
+            if (enabled) {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

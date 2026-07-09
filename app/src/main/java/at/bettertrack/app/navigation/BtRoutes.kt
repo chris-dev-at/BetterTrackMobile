@@ -90,6 +90,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object SettingsNotificationsRoute                        // TODO(steps 16, 18)
 @Serializable data object SettingsLanguageRoute                             // TODO(step 18)
 @Serializable data object SettingsAboutRoute                                // TODO(step 18)
+/** In-app changelog / "New features" (owner 2026-07-09) — bundled per-version notes. */
+@Serializable data object ChangelogRoute
 
 // ── Sync & debug ───────────────────────────────────────────────────────────
 @Serializable data object PendingSyncRoute                                  // TODO(step 8, §7.4)

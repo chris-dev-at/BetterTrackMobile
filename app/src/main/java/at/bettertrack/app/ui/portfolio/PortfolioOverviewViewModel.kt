@@ -100,6 +100,22 @@ class PortfolioOverviewViewModel(
     private val _switcherError = MutableStateFlow<String?>(null)
     val switcherError: StateFlow<String?> = _switcherError.asStateFlow()
 
+    /**
+     * Whether the switcher sheet is open. Hoisted into the VM (not local screen
+     * state) so the shared top-bar selector — which lives in the app shell,
+     * outside this screen's composition — can open the same sheet the overview
+     * hosts. The overview observes this and renders the sheet.
+     */
+    private val _switcherVisible = MutableStateFlow(false)
+    val switcherVisible: StateFlow<Boolean> = _switcherVisible.asStateFlow()
+
+    fun openSwitcher() { _switcherVisible.value = true }
+
+    fun dismissSwitcher() {
+        _switcherVisible.value = false
+        _switcherError.value = null
+    }
+
     private var lastRefreshAtMs = 0L
 
     init {
