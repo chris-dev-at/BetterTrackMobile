@@ -338,9 +338,11 @@ class TransactionFormViewModel(
         },
         _isBuy,
         _cashCoupled,
-        availableCashEur,
+        // Both the CURRENT Main balance (affordability gate) and the as-of-date
+        // balance (backdated-shortfall warning) — the two-way cash split (#378).
+        combine(mainCashEur, availableCashEur) { cur, asof -> cur to asof },
         holdings,
-    ) { (a, q, p, f), buy, coupled, cash, held ->
+    ) { (a, q, p, f), buy, coupled, (currentCash, asOfCash), held ->
         validateTxForm(
             assetSelected = a != null,
             quantity = q,
@@ -348,7 +350,8 @@ class TransactionFormViewModel(
             fee = f,
             isBuy = buy,
             cashCoupled = coupled,
-            cachedCashEur = cash,
+            currentCashEur = currentCash,
+            asOfCashEur = asOfCash,
             heldQuantity = a?.let { pick -> held.firstOrNull { it.assetId == pick.assetId }?.quantity },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TxFormValidation(assetMissing = true))
@@ -362,36 +365,21 @@ class TransactionFormViewModel(
         if (qty == null || price == null) null else orderTotal(buy, qty, price, parseLocalizedDecimal(f) ?: 0.0)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Live "Cash after: €…" against the as-of available cash (§6.2 owner fix). */
+    /**
+     * Live "Cash after: €…" against the CURRENT Main balance. The cash leg settles
+     * at "now" — immediately for a today buy/sell, and today for a backdated buy
+     * that was short back then (#378 `settleCashAsOfToday`) — so the resulting
+     * wallet is always `current ∓ total`, never the (lower) as-of-date figure.
+     */
     val cashAfterEur: StateFlow<Double?> = combine(
         _quantityText, _priceText, _feeText, _isBuy,
-        combine(_cashCoupled, availableCashEur) { c, b -> c to b },
+        combine(_cashCoupled, mainCashEur) { c, b -> c to b },
     ) { q, p, f, buy, (coupled, balance) ->
         if (!coupled || balance == null) return@combine null
         val qty = parseLocalizedDecimal(q)
         val price = parseLocalizedDecimal(p)
         if (qty == null || price == null) null
         else cashAfterPreview(balance, buy, qty, price, parseLocalizedDecimal(f) ?: 0.0)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    /**
-     * The chosen date when the hard block is specifically DATE-DRIVEN: a backdated
-     * pay-from-cash buy the Main source couldn't afford ON THAT DATE even though it
-     * can today (as-of available strictly below the current balance). Lets the card
-     * name the real reason instead of a bare "insufficient" — the owner's exact
-     * confusion (€360 buy, €4.8k in the bank, yet "insufficient").
-     */
-    val insufficientAsOfDate: StateFlow<LocalDate?> = combine(
-        validation, _cashCoupled, _isBuy, _date,
-        combine(mainCashEur, availableCashEur) { cur, avail -> cur to avail },
-    ) { v, coupled, buy, date, (cur, avail) ->
-        if (v.insufficientCash && coupled && buy && cur != null && avail != null &&
-            avail < cur - CASH_LEDGER_RECONCILE_EPS
-        ) {
-            date
-        } else {
-            null
-        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // ── Submission ──────────────────────────────────────────────────────────
@@ -747,7 +735,7 @@ class TransactionFormViewModel(
     /** Whether a "Max" affordance is offerable now (known held qty / known cash). */
     val maxAvailable: StateFlow<Boolean> = combine(
         combine(_isBuy, _asset, _priceText) { buy, a, p -> Triple(buy, a, p) },
-        _cashCoupled, availableCashEur, holdings,
+        _cashCoupled, mainCashEur, holdings,
     ) { (buy, a, priceText), coupled, cash, held ->
         when {
             a == null -> false
@@ -760,7 +748,9 @@ class TransactionFormViewModel(
     fun fillMaxQuantity() {
         val a = _asset.value ?: return
         if (_isBuy.value) {
-            val cash = availableCashEur.value ?: return
+            // Size Max against the CURRENT wallet: a backdated pay-from-cash buy
+            // settles its cash leg today (#378), so today's balance is the ceiling.
+            val cash = mainCashEur.value ?: return
             val price = parseLocalizedDecimal(_priceText.value) ?: return
             if (!_cashCoupled.value || price <= 0.0) return
             val fee = parseLocalizedDecimal(_feeText.value) ?: 0.0
@@ -873,6 +863,12 @@ class TransactionFormViewModel(
             note = _noteText.value.trim().takeIf { it.isNotEmpty() },
             payFromCash = if (_isBuy.value && _cashCoupled.value) true else null,
             addProceedsToCash = if (!_isBuy.value && _cashCoupled.value) true else null,
+            // Always opt a pay-from-cash BUY into as-of-today cash settlement (#378):
+            // the server moves the cash leg to today ONLY when the wallet was short
+            // as of the backdated date, and ignores it otherwise — so a backdated buy
+            // affordable now is never falsely rejected, even when the client couldn't
+            // reconstruct the as-of ledger to show the warning.
+            settleCashAsOfToday = if (_isBuy.value && _cashCoupled.value) true else null,
             assetSymbol = pick.symbol,
             assetName = pick.name,
         )
@@ -1080,7 +1076,6 @@ fun TransactionFormScreen(
     val cashAfterEur by vm.cashAfterEur.collectAsStateWithLifecycle()
     val mainCashEur by vm.mainCashEur.collectAsStateWithLifecycle()
     val availableCashEur by vm.availableCashEur.collectAsStateWithLifecycle()
-    val insufficientAsOfDate by vm.insufficientAsOfDate.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val submitting by vm.submitting.collectAsStateWithLifecycle()
     val serverError by vm.serverError.collectAsStateWithLifecycle()
@@ -1318,8 +1313,10 @@ fun TransactionFormScreen(
                         cashAfterEur = cashAfterEur,
                         cachedCashEur = mainCashEur,
                         availableAsOfEur = availableCashEur,
+                        orderTotalEur = orderTotalEur,
                         insufficient = validation.insufficientCash,
-                        insufficientAsOfDate = insufficientAsOfDate,
+                        backdatedWarning = validation.backdatedCashWarning,
+                        backdatedDate = date,
                         locale = locale,
                         onToggle = vm::setCashCoupled,
                     )
@@ -1745,8 +1742,10 @@ private fun CashCouplingCard(
     cashAfterEur: Double?,
     cachedCashEur: Double?,
     availableAsOfEur: Double?,
+    orderTotalEur: Double?,
     insufficient: Boolean,
-    insufficientAsOfDate: LocalDate?,
+    backdatedWarning: Boolean,
+    backdatedDate: LocalDate,
     locale: Locale,
     onToggle: (Boolean) -> Unit,
 ) {
@@ -1805,10 +1804,8 @@ private fun CashCouplingCard(
                     ),
                 )
             }
-            // The §6.2 hard stop: never silently-negative cash. Inline, clear, and
-            // sized against the cash available ON THE CHOSEN DATE (the server's own
-            // point-in-time rule); a backdated shortfall names the date so it never
-            // reads as a mysterious "insufficient" when the balance is fat today.
+            // §6.2 case 1 — the hard stop: the buy can't be funded EVEN TODAY (it
+            // overdraws the current Main wallet). Inline, red, unambiguous.
             if (insufficient && cachedCashEur != null) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.Top) {
@@ -1820,23 +1817,40 @@ private fun CashCouplingCard(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (insufficientAsOfDate != null) {
-                            stringResource(
-                                R.string.bt_txform_insufficient_cash_asof,
-                                insufficientAsOfDate.format(
-                                    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale),
-                                ),
-                                formatEur(availableAsOfEur ?: 0.0, locale),
-                                formatEur(cachedCashEur, locale),
-                            )
-                        } else {
-                            stringResource(
-                                R.string.bt_txform_insufficient_cash,
-                                formatEur(cachedCashEur, locale),
-                            )
-                        },
+                        text = stringResource(
+                            R.string.bt_txform_insufficient_cash,
+                            formatEur(cachedCashEur, locale),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.loss,
+                    )
+                }
+            }
+            // §6.2 case 2 (#378) — affordable TODAY but the wallet was short as of
+            // the backdated date. NOT a block: an amber advisory that the cash is
+            // deducted now (as if bought today) while the stock trade keeps its
+            // backdated date. The user simply proceeds.
+            if (backdatedWarning) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(
+                        Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = bt.goldEmphasis,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.bt_txform_backdated_cash_warning,
+                            backdatedDate.format(
+                                DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale),
+                            ),
+                            formatEur(availableAsOfEur ?: 0.0, locale),
+                            formatEur(orderTotalEur ?: 0.0, locale),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.goldEmphasis,
                     )
                 }
             }

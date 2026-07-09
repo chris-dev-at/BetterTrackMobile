@@ -100,8 +100,20 @@ data class TxFormValidation(
     val priceError: TxFieldError? = null,
     val feeError: TxFieldError? = null,
     val assetMissing: Boolean = false,
-    /** Hard block (§6.2): cash-coupled write would drive cash below zero. */
+    /**
+     * Hard block (§6.2, case 1): the cash-coupled write can't be funded EVEN
+     * TODAY — it would drive the CURRENT Main balance below zero. This is the
+     * only cash state that keeps [canSubmit] false.
+     */
     val insufficientCash: Boolean = false,
+    /**
+     * Soft, NON-blocking warning (§6.2, case 2 / platform #378): a pay-from-cash
+     * BUY that the Main wallet covers TODAY but did NOT cover as of its own
+     * (backdated) date. The buy is allowed — the server settles the cash leg as
+     * of today (`settleCashAsOfToday`) while the stock trade keeps its backdated
+     * date. Never blocks submission; it only tells the user what will happen.
+     */
+    val backdatedCashWarning: Boolean = false,
     /** Soft warning only — the server re-validates oversell (§7.3). */
     val oversellWarning: Boolean = false,
 ) {
@@ -114,9 +126,21 @@ enum class TxFieldError { MISSING, NOT_POSITIVE, NEGATIVE }
 
 /**
  * Validate the form (§6.2): quantity > 0, price ≥ 0, fee ≥ 0, asset chosen;
- * cash coupling must never go silently negative against the cached balance
- * (hard block with a clear inline error); overselling is only warned about —
- * final validation is the server's.
+ * plus the three-way cash outcome for a pay-from-cash write (platform #378):
+ *
+ * 1. can't afford it EVEN TODAY (overdraws the CURRENT Main balance) →
+ *    [TxFormValidation.insufficientCash] HARD block.
+ * 2. a BUY affordable today but short AS OF its own backdated date →
+ *    [TxFormValidation.backdatedCashWarning] soft, non-blocking warning (the
+ *    server dates the cash leg today, the stock trade stays backdated).
+ * 3. covered as of the date → no cash flag at all.
+ *
+ * Overselling is only warned about — final validation is the server's.
+ *
+ * [currentCashEur] is the Main wallet balance NOW (the affordability gate);
+ * [asOfCashEur] is the Main cash spendable AS OF the buy's date (the running
+ * minimum from that instant on — see [availableMainCashAsOf]). Either may be
+ * null (unknown / cold cache); an unknown current balance never hard-blocks.
  */
 fun validateTxForm(
     assetSelected: Boolean,
@@ -125,7 +149,8 @@ fun validateTxForm(
     fee: Double?,
     isBuy: Boolean,
     cashCoupled: Boolean,
-    cachedCashEur: Double?,
+    currentCashEur: Double?,
+    asOfCashEur: Double?,
     heldQuantity: Double?,
 ): TxFormValidation {
     val quantityError = when {
@@ -141,8 +166,25 @@ fun validateTxForm(
     val feeError = if (fee != null && fee < 0.0) TxFieldError.NEGATIVE else null
 
     val fieldsOk = quantityError == null && priceError == null && feeError == null && assetSelected
-    val insufficient = fieldsOk && cashCoupled && cachedCashEur != null &&
-        cashAfterPreview(cachedCashEur, isBuy, quantity!!, price!!, fee ?: 0.0) < 0.0
+    val cashActive = fieldsOk && cashCoupled
+    // Resulting cash if the movement settled at "now" (the CURRENT-balance basis).
+    // The cash leg of a backdated buy settles today (#378), so this — not the
+    // as-of balance — is the true affordability gate.
+    val afterCurrent = if (cashActive && currentCashEur != null) {
+        cashAfterPreview(currentCashEur, isBuy, quantity!!, price!!, fee ?: 0.0)
+    } else {
+        null
+    }
+    // Case 1 — can't afford it even today: hard block.
+    val insufficient = afterCurrent != null && afterCurrent < 0.0
+    // Case 2 — a BUY fine today but short as of its backdated date: soft warning.
+    val afterAsOf = if (cashActive && isBuy && asOfCashEur != null) {
+        cashAfterPreview(asOfCashEur, true, quantity!!, price!!, fee ?: 0.0)
+    } else {
+        null
+    }
+    val backdatedShort = afterCurrent != null && afterCurrent >= 0.0 &&
+        afterAsOf != null && afterAsOf < 0.0
     val oversell = fieldsOk && !isBuy && heldQuantity != null && quantity!! > heldQuantity
 
     return TxFormValidation(
@@ -151,6 +193,7 @@ fun validateTxForm(
         feeError = feeError,
         assetMissing = !assetSelected,
         insufficientCash = insufficient,
+        backdatedCashWarning = backdatedShort,
         oversellWarning = oversell,
     )
 }

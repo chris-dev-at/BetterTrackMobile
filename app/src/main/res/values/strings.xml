@@ -203,7 +203,7 @@
     <string name="bt_txform_cash_off_hint">Cash stays untouched</string>
     <string name="bt_txform_cash_unknown">Balance updates on next sync</string>
     <string name="bt_txform_insufficient_cash">Not enough cash — %1$s available</string>
-    <string name="bt_txform_insufficient_cash_asof">On %1$s this cash source held only %2$s — not enough for this buy. You have %3$s today; pick a later date or turn off \"Pay from cash\".</string>
+    <string name="bt_txform_backdated_cash_warning">On %1$s this wallet held only %2$s — the %3$s will be deducted from your cash now, as if bought today. The buy keeps its %1$s date.</string>
     <string name="bt_txform_oversell_warning">More than you hold (%1$s %2$s) — BetterTrack validates on sync</string>
     <string name="bt_txform_total">Total</string>
     <string name="bt_txform_record_buy">Record buy</string>

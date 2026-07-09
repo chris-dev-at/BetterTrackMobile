@@ -154,6 +154,13 @@ data class CreateTransactionRequest(
     val note: String? = null,
     val payFromCash: Boolean? = null,
     val addProceedsToCash: Boolean? = null,
+    /**
+     * Backdated pay-from-cash settlement (contract #378): keep the stock trade on
+     * its past [executedAt] but date the linked cash-withdrawal leg TODAY when the
+     * Main wallet was short as of that date. Server ignores it when cash sufficed
+     * at the buy date; omitted (null) on sells / non-coupled writes.
+     */
+    val settleCashAsOfToday: Boolean? = null,
 )
 
 @Serializable

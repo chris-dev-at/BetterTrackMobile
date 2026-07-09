@@ -83,7 +83,8 @@ class TransactionFormLogicTest {
             fee = 0.0,
             isBuy = true,
             cashCoupled = true,
-            cachedCashEur = 500.0, // needs 1000
+            currentCashEur = 500.0, // needs 1000 — short today AND back then
+            asOfCashEur = 500.0,
             heldQuantity = null,
         )
         assertTrue(v.insufficientCash)
@@ -104,7 +105,8 @@ class TransactionFormLogicTest {
             fee = 50.0,
             isBuy = false,
             cashCoupled = true,
-            cachedCashEur = 20.0,
+            currentCashEur = 20.0,
+            asOfCashEur = 20.0,
             heldQuantity = 5.0,
         )
         assertTrue(v.insufficientCash)
@@ -120,7 +122,8 @@ class TransactionFormLogicTest {
             fee = 0.0,
             isBuy = false,
             cashCoupled = false,
-            cachedCashEur = 0.0,
+            currentCashEur = 0.0,
+            asOfCashEur = 0.0,
             heldQuantity = 3.0,
         )
         assertTrue(v.oversellWarning)
@@ -136,7 +139,8 @@ class TransactionFormLogicTest {
             fee = null,
             isBuy = true,
             cashCoupled = false,
-            cachedCashEur = null,
+            currentCashEur = null,
+            asOfCashEur = null,
             heldQuantity = null,
         )
         assertEquals(TxFieldError.MISSING, v.quantityError)
@@ -261,7 +265,7 @@ class TransactionFormLogicTest {
         // Cold cache: cachedCashEur is null (UNKNOWN, not zero) → never a block.
         val v = validateTxForm(
             assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
-            isBuy = true, cashCoupled = true, cachedCashEur = null, heldQuantity = null,
+            isBuy = true, cashCoupled = true, currentCashEur = null, asOfCashEur = null, heldQuantity = null,
         )
         assertFalse(v.insufficientCash)
         assertTrue(v.canSubmit)
@@ -271,10 +275,81 @@ class TransactionFormLogicTest {
     fun `known insufficient cash still hard-blocks`() {
         val v = validateTxForm(
             assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
-            isBuy = true, cashCoupled = true, cachedCashEur = 500.0, heldQuantity = null,
+            isBuy = true, cashCoupled = true, currentCashEur = 500.0, asOfCashEur = 500.0, heldQuantity = null,
         )
         assertTrue(v.insufficientCash)
         assertFalse(v.canSubmit)
+    }
+
+    // ── Three-way cash split: block today vs warn backdated vs clean (#378) ───
+    // A pay-from-cash buy the Main wallet covers TODAY but not AS OF its backdated
+    // date is now ALLOWED with an amber advisory (not blocked): the server settles
+    // the cash leg today (settleCashAsOfToday) while the stock trade keeps its date.
+
+    @Test
+    fun `case 1 - short even today HARD-blocks and never warns`() {
+        // Needs 1000; only 500 now (and 0 back then) → unaffordable today at all.
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true,
+            currentCashEur = 500.0, asOfCashEur = 0.0, heldQuantity = null,
+        )
+        assertTrue(v.insufficientCash)
+        assertFalse(v.backdatedCashWarning) // a hard block is never also a soft warning
+        assertFalse(v.canSubmit)
+    }
+
+    @Test
+    fun `case 2 - affordable today but short back then WARNS and still submits`() {
+        // Needs 1000; 5000 now covers it, but the wallet held 0 as of the buy date.
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true,
+            currentCashEur = 5000.0, asOfCashEur = 0.0, heldQuantity = null,
+        )
+        assertFalse(v.insufficientCash)
+        assertTrue(v.backdatedCashWarning)
+        assertTrue(v.canSubmit) // non-blocking — the owner's fix
+    }
+
+    @Test
+    fun `case 3 - covered as of the date is clean, no cash flags`() {
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true,
+            currentCashEur = 5000.0, asOfCashEur = 5000.0, heldQuantity = null,
+        )
+        assertFalse(v.insufficientCash)
+        assertFalse(v.backdatedCashWarning)
+        assertTrue(v.canSubmit)
+    }
+
+    @Test
+    fun `the backdated warning is buy-only - a coupled sell never warns`() {
+        // A sell adds proceeds; there is no as-of shortfall concept for it.
+        val v = validateTxForm(
+            assetSelected = true, quantity = 1.0, price = 100.0, fee = 0.0,
+            isBuy = false, cashCoupled = true,
+            currentCashEur = 5000.0, asOfCashEur = 0.0, heldQuantity = 10.0,
+        )
+        assertFalse(v.backdatedCashWarning)
+        assertFalse(v.insufficientCash)
+        assertTrue(v.canSubmit)
+    }
+
+    @Test
+    fun `an unknown as-of balance never warns but still submits (server settles)`() {
+        // Cold / unreconcilable ledger ⇒ as-of unknown ⇒ no client warning, yet it
+        // is affordable today so it still submits (the flag lets the server settle
+        // the cash leg as of today).
+        val v = validateTxForm(
+            assetSelected = true, quantity = 10.0, price = 100.0, fee = 0.0,
+            isBuy = true, cashCoupled = true,
+            currentCashEur = 5000.0, asOfCashEur = null, heldQuantity = null,
+        )
+        assertFalse(v.backdatedCashWarning)
+        assertFalse(v.insufficientCash)
+        assertTrue(v.canSubmit)
     }
 
     // ── Max-quantity math + input formatting (§6.2, owner request) ───────────

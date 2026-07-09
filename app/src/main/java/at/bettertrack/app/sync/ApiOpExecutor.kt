@@ -67,6 +67,7 @@ class ApiOpExecutor(
                     note = markedNote(payload.note, op.clientId),
                     payFromCash = payload.payFromCash,
                     addProceedsToCash = payload.addProceedsToCash,
+                    settleCashAsOfToday = payload.settleCashAsOfToday,
                 ),
             )
         }) { body ->

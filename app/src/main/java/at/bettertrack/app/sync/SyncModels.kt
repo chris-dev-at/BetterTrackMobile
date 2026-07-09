@@ -80,6 +80,15 @@ data class TxOpPayload(
     val note: String? = null,
     val payFromCash: Boolean? = null,
     val addProceedsToCash: Boolean? = null,
+    /**
+     * Backdated pay-from-cash settlement (platform #378). On a `payFromCash` BUY
+     * whose cash was short AS OF the (backdated) `executedAt`, the server keeps the
+     * stock trade on its past date but dates the linked cash-withdrawal leg TODAY —
+     * so a buy affordable now is no longer falsely rejected. Ignored server-side
+     * when the cash already sufficed at the buy date; harmless on non-backdated /
+     * sell ops. Sent for every pay-from-cash buy.
+     */
+    val settleCashAsOfToday: Boolean? = null,
     // Display-only snapshot of the asset identity (Step 8 pending rows render
     // instantly from the queue, §7.4). NEVER sent to the API — the executor
     // maps payload → request field-by-field.
