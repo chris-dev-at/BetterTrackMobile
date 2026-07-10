@@ -446,6 +446,67 @@
     <string name="bt_settings_whatsnew_sub">See what\'s new in this version</string>
     <string name="bt_settings_whatsnew_title">New features</string>
     <string name="bt_settings_whatsnew_version">Version %1$s</string>
+    <string name="bt_settings_whatsnew_show_more">Show more</string>
+    <string name="bt_settings_whatsnew_show_less">Show less</string>
+    <!-- What's new · 0.15 — personalization -->
+    <string name="bt_wn_0_15_switcher_name">Portfolio switcher up top</string>
+    <string name="bt_wn_0_15_switcher_desc">Switch between your portfolios straight from the top bar, next to the logo.</string>
+    <string name="bt_wn_0_15_chart_name">A bolder value chart</string>
+    <string name="bt_wn_0_15_chart_desc">Your portfolio graph now fills the screen edge to edge, like a hero image.</string>
+    <string name="bt_wn_0_15_smooth_name">Smoother value updates</string>
+    <string name="bt_wn_0_15_smooth_desc">Balances glide into place instead of jumping as prices move.</string>
+    <string name="bt_wn_0_15_orient_name">Screen orientation lock</string>
+    <string name="bt_wn_0_15_orient_desc">Keep the app in portrait, or let it rotate with your phone.</string>
+    <!-- What's new · 0.14 — conglomerates &amp; custom assets -->
+    <string name="bt_wn_0_14_conglo_name">Whole or fractional shares</string>
+    <string name="bt_wn_0_14_conglo_desc">The conglomerate budget calculator now lets you choose either.</string>
+    <string name="bt_wn_0_14_custom_name">Better custom assets</string>
+    <string name="bt_wn_0_14_custom_desc">Creating and updating your own assets is quicker and clearer.</string>
+    <string name="bt_wn_0_14_updates_name">Know what\'s new</string>
+    <string name="bt_wn_0_14_updates_desc">Update prompts, and this page, now explain what each version brings.</string>
+    <!-- What's new · 0.13 — smarter transaction form -->
+    <string name="bt_wn_0_13_datelink_name">Date and price, linked</string>
+    <string name="bt_wn_0_13_datelink_desc">Pick a date to fill that day\'s price, or type a price to find the day it traded there.</string>
+    <string name="bt_wn_0_13_selectall_name">Faster amount edits</string>
+    <string name="bt_wn_0_13_selectall_desc">Amount fields select everything on tap, so you can retype in an instant.</string>
+    <string name="bt_wn_0_13_backdate_name">Back-dated buys just warn</string>
+    <string name="bt_wn_0_13_backdate_desc">Recording an older purchase now warns you instead of blocking it.</string>
+    <!-- What's new · 0.12 — social, reimagined -->
+    <string name="bt_wn_0_12_friendpages_name">Friend pages</string>
+    <string name="bt_wn_0_12_friendpages_desc">Tap a friend to see their profile and everything they share with you.</string>
+    <string name="bt_wn_0_12_sharedby_name">Shared with me, by person</string>
+    <string name="bt_wn_0_12_sharedby_desc">See who shares with you, then open each person\'s portfolios and watchlists.</string>
+    <string name="bt_wn_0_12_sharing_name">Share with a link</string>
+    <string name="bt_wn_0_12_sharing_desc">Share with certain friends, all friends, or anyone through a private link you can revoke anytime.</string>
+    <string name="bt_wn_0_12_watchlists_name">Named watchlists</string>
+    <string name="bt_wn_0_12_watchlists_desc">Create as many watchlists as you like and give each one a name.</string>
+    <string name="bt_wn_0_12_messages_name">Messages</string>
+    <string name="bt_wn_0_12_messages_desc">Chat with friends right inside BetterTrack — rolling out now.</string>
+    <!-- What's new · 0.11 — account &amp; settings -->
+    <string name="bt_wn_0_11_password_name">Change your password</string>
+    <string name="bt_wn_0_11_password_desc">Update your account password without leaving the app.</string>
+    <string name="bt_wn_0_11_twofa_name">Two-factor authentication</string>
+    <string name="bt_wn_0_11_twofa_desc">Add a second step at login to keep your account safer.</string>
+    <string name="bt_wn_0_11_sessions_name">Active sessions</string>
+    <string name="bt_wn_0_11_sessions_desc">See where you\'re signed in and sign out other devices.</string>
+    <string name="bt_wn_0_11_delete_name">Delete your account</string>
+    <string name="bt_wn_0_11_delete_desc">Close your account and remove your data whenever you choose.</string>
+    <string name="bt_wn_0_11_german_name">Now in German</string>
+    <string name="bt_wn_0_11_german_desc">Switch BetterTrack between English and German in Settings.</string>
+    <!-- What's new · 0.10 — app lock -->
+    <string name="bt_wn_0_10_pin_name">Lock the app</string>
+    <string name="bt_wn_0_10_pin_desc">Protect BetterTrack with a PIN, on launch or after time away.</string>
+    <string name="bt_wn_0_10_biometric_name">Unlock with biometrics</string>
+    <string name="bt_wn_0_10_biometric_desc">Use your fingerprint or face instead of typing your PIN.</string>
+    <string name="bt_wn_0_10_btpin_name">Your BetterTrack PIN</string>
+    <string name="bt_wn_0_10_btpin_desc">Unlock with the same PIN as your BetterTrack account — no new one to remember.</string>
+    <!-- What's new · 0.09 — welcome to BetterTrack -->
+    <string name="bt_wn_0_09_overview_name">Your whole portfolio</string>
+    <string name="bt_wn_0_09_overview_desc">Net worth, holdings and allocation, all at a glance.</string>
+    <string name="bt_wn_0_09_offline_name">Works offline</string>
+    <string name="bt_wn_0_09_offline_desc">Buy and sell anytime — your changes sync as soon as you\'re back online.</string>
+    <string name="bt_wn_0_09_research_name">Search and plan</string>
+    <string name="bt_wn_0_09_research_desc">Explore assets, build watchlists and put conglomerates together in one place.</string>
     <string name="bt_settings_notifications_row">Notifications</string>
     <string name="bt_settings_notifications_sub">Inbox, push and email preferences</string>
     <string name="bt_notif_mark_all_read">Mark all read</string>

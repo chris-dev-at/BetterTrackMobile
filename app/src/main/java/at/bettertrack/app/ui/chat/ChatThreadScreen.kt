@@ -476,6 +476,11 @@ private fun MessageInputBar(
         // Pad the composer content above the keyboard AND the system navigation bar
         // (edge-to-edge draws behind both) — union takes the larger of the two, so
         // the input + send button are never hidden under a 3-button nav bar.
+        // This is the SINGLE source of bottom-inset compensation: the manifest
+        // declares windowSoftInputMode="adjustResize" so the window dispatches the
+        // IME inset (edge-to-edge = no pan/resize) rather than panning up — without
+        // that, the pan would stack with this padding and float the bar a whole
+        // keyboard-height above the keyboard. Keep the two in lockstep.
         Column(Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
             androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = bt.border)
             // Show a character counter only as the 4000-char limit approaches.

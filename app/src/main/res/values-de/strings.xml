@@ -445,6 +445,67 @@
     <string name="bt_settings_whatsnew_sub">Sieh, was in dieser Version neu ist</string>
     <string name="bt_settings_whatsnew_title">Neue Funktionen</string>
     <string name="bt_settings_whatsnew_version">Version %1$s</string>
+    <string name="bt_settings_whatsnew_show_more">Mehr anzeigen</string>
+    <string name="bt_settings_whatsnew_show_less">Weniger anzeigen</string>
+    <!-- Neue Funktionen · 0.15 — Personalisierung -->
+    <string name="bt_wn_0_15_switcher_name">Portfolio-Auswahl ganz oben</string>
+    <string name="bt_wn_0_15_switcher_desc">Wechsle direkt in der oberen Leiste zwischen deinen Portfolios, gleich neben dem Logo.</string>
+    <string name="bt_wn_0_15_chart_name">Ein markanteres Wertdiagramm</string>
+    <string name="bt_wn_0_15_chart_desc">Dein Portfolio-Graph füllt jetzt den ganzen Bildschirm, wie ein großes Titelbild.</string>
+    <string name="bt_wn_0_15_smooth_name">Weichere Wertänderungen</string>
+    <string name="bt_wn_0_15_smooth_desc">Beträge gleiten sanft an ihre Position, statt zu springen, wenn sich Kurse ändern.</string>
+    <string name="bt_wn_0_15_orient_name">Bildschirmausrichtung sperren</string>
+    <string name="bt_wn_0_15_orient_desc">Halte die App im Hochformat oder lass sie mit dem Handy mitdrehen.</string>
+    <!-- Neue Funktionen · 0.14 — Konglomerate &amp; eigene Werte -->
+    <string name="bt_wn_0_14_conglo_name">Ganze Anteile oder Bruchteile</string>
+    <string name="bt_wn_0_14_conglo_desc">Der Budgetrechner für Konglomerate lässt dich jetzt zwischen beidem wählen.</string>
+    <string name="bt_wn_0_14_custom_name">Bessere eigene Werte</string>
+    <string name="bt_wn_0_14_custom_desc">Eigene Werte anzulegen und zu aktualisieren geht jetzt schneller und übersichtlicher.</string>
+    <string name="bt_wn_0_14_updates_name">Sieh, was neu ist</string>
+    <string name="bt_wn_0_14_updates_desc">Update-Hinweise und diese Seite zeigen jetzt, was jede Version bringt.</string>
+    <!-- Neue Funktionen · 0.13 — smarteres Transaktionsformular -->
+    <string name="bt_wn_0_13_datelink_name">Datum und Preis verknüpft</string>
+    <string name="bt_wn_0_13_datelink_desc">Wähle ein Datum für den Kurs des Tages – oder tippe einen Preis ein, um den Tag zu finden, an dem er galt.</string>
+    <string name="bt_wn_0_13_selectall_name">Schnelleres Bearbeiten</string>
+    <string name="bt_wn_0_13_selectall_desc">Betragsfelder markieren beim Antippen alles, damit du sofort neu eintippen kannst.</string>
+    <string name="bt_wn_0_13_backdate_name">Rückdatierte Käufe warnen nur</string>
+    <string name="bt_wn_0_13_backdate_desc">Ein älterer Kauf wird jetzt mit einem Hinweis versehen, statt blockiert zu werden.</string>
+    <!-- Neue Funktionen · 0.12 — Soziales, neu gedacht -->
+    <string name="bt_wn_0_12_friendpages_name">Freunde-Seiten</string>
+    <string name="bt_wn_0_12_friendpages_desc">Tippe auf einen Freund, um sein Profil und alles zu sehen, was er mit dir teilt.</string>
+    <string name="bt_wn_0_12_sharedby_name">Mit mir geteilt, nach Person</string>
+    <string name="bt_wn_0_12_sharedby_desc">Sieh, wer mit dir teilt, und öffne je Person die Portfolios und Watchlists.</string>
+    <string name="bt_wn_0_12_sharing_name">Teilen per Link</string>
+    <string name="bt_wn_0_12_sharing_desc">Teile mit bestimmten Freunden, allen Freunden oder per privatem Link, den du jederzeit widerrufen kannst.</string>
+    <string name="bt_wn_0_12_watchlists_name">Benannte Watchlists</string>
+    <string name="bt_wn_0_12_watchlists_desc">Erstelle so viele Watchlists, wie du möchtest, und benenne jede einzeln.</string>
+    <string name="bt_wn_0_12_messages_name">Nachrichten</string>
+    <string name="bt_wn_0_12_messages_desc">Chatte mit Freunden direkt in BetterTrack – wird gerade ausgerollt.</string>
+    <!-- Neue Funktionen · 0.11 — Konto &amp; Einstellungen -->
+    <string name="bt_wn_0_11_password_name">Passwort ändern</string>
+    <string name="bt_wn_0_11_password_desc">Ändere dein Konto-Passwort, ohne die App zu verlassen.</string>
+    <string name="bt_wn_0_11_twofa_name">Zwei-Faktor-Authentifizierung</string>
+    <string name="bt_wn_0_11_twofa_desc">Füge beim Login einen zweiten Schritt hinzu, um dein Konto besser zu schützen.</string>
+    <string name="bt_wn_0_11_sessions_name">Aktive Sitzungen</string>
+    <string name="bt_wn_0_11_sessions_desc">Sieh, wo du angemeldet bist, und melde andere Geräte ab.</string>
+    <string name="bt_wn_0_11_delete_name">Konto löschen</string>
+    <string name="bt_wn_0_11_delete_desc">Schließe dein Konto und entferne deine Daten, wann immer du willst.</string>
+    <string name="bt_wn_0_11_german_name">Jetzt auf Deutsch</string>
+    <string name="bt_wn_0_11_german_desc">Wechsle BetterTrack in den Einstellungen zwischen Englisch und Deutsch.</string>
+    <!-- Neue Funktionen · 0.10 — App-Sperre -->
+    <string name="bt_wn_0_10_pin_name">App sperren</string>
+    <string name="bt_wn_0_10_pin_desc">Schütze BetterTrack mit einer PIN – beim Start oder nach einer Pause.</string>
+    <string name="bt_wn_0_10_biometric_name">Mit Biometrie entsperren</string>
+    <string name="bt_wn_0_10_biometric_desc">Nutze Fingerabdruck oder Gesicht, statt deine PIN einzutippen.</string>
+    <string name="bt_wn_0_10_btpin_name">Deine BetterTrack-PIN</string>
+    <string name="bt_wn_0_10_btpin_desc">Entsperre mit derselben PIN wie dein BetterTrack-Konto – du brauchst dir keine neue zu merken.</string>
+    <!-- Neue Funktionen · 0.09 — Willkommen bei BetterTrack -->
+    <string name="bt_wn_0_09_overview_name">Dein ganzes Portfolio</string>
+    <string name="bt_wn_0_09_overview_desc">Vermögen, Bestände und Aufteilung auf einen Blick.</string>
+    <string name="bt_wn_0_09_offline_name">Funktioniert offline</string>
+    <string name="bt_wn_0_09_offline_desc">Kaufe und verkaufe jederzeit – deine Änderungen synchronisieren, sobald du wieder online bist.</string>
+    <string name="bt_wn_0_09_research_name">Suchen und planen</string>
+    <string name="bt_wn_0_09_research_desc">Entdecke Werte, erstelle Watchlists und stelle Konglomerate zusammen – alles an einem Ort.</string>
     <string name="bt_settings_notifications_row">Mitteilungen</string>
     <string name="bt_settings_notifications_sub">Posteingang, Push und E-Mail-Einstellungen</string>
     <string name="bt_notif_mark_all_read">Alle als gelesen markieren</string>
