@@ -212,6 +212,27 @@ class PortfolioOverviewViewModel(
     fun restorePortfolio(portfolioId: String, onDone: (Boolean) -> Unit = {}) =
         switcherAction(onDone) { repo.restorePortfolio(portfolioId) }
 
+    /**
+     * Hard-delete a portfolio (platform #412). Reports a rich [PortfolioDeleteResult]
+     * so the type-to-confirm dialog can surface the LAST_ACTIVE_PORTFOLIO case
+     * inline (dialog stays open) versus closing on success. The repository already
+     * purged the cache + re-pulled the list; if the deleted portfolio was the
+     * current one we re-resolve selection to the server-promoted default.
+     */
+    fun deletePortfolio(portfolioId: String, onResult: (PortfolioDeleteResult) -> Unit = {}) {
+        if (_switcherBusy.value) return
+        viewModelScope.launch {
+            _switcherBusy.value = true
+            _switcherError.value = null
+            val r = repo.deletePortfolio(portfolioId)
+            if (r is BtResult.Ok && repo.selectedPortfolioIdNow() == portfolioId) {
+                repo.defaultSelection()?.let { repo.selectPortfolio(it.id) }
+            }
+            _switcherBusy.value = false
+            onResult(portfolioDeleteResult(r))
+        }
+    }
+
     fun clearSwitcherError() {
         _switcherError.value = null
     }

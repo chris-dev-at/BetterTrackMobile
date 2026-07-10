@@ -131,6 +131,14 @@
     <string name="bt_switcher_archive_action">Archivieren</string>
     <string name="bt_switcher_requires_connection">Verbindung nötig — du bist offline</string>
     <string name="bt_switcher_value_pending">—</string>
+    <string name="bt_switcher_archived_expand">Archivierte Portfolios anzeigen</string>
+    <string name="bt_switcher_archived_collapse">Archivierte Portfolios ausblenden</string>
+    <string name="bt_switcher_delete">Löschen</string>
+    <string name="bt_switcher_delete_title">Portfolio löschen?</string>
+    <string name="bt_switcher_delete_warning">Beim Löschen von „%1$s“ werden die gesamte Transaktionshistorie, Barbestände und Dividenden dauerhaft entfernt. Das lässt sich nicht rückgängig machen — deine historischen und steuerlichen Werte ändern sich.</string>
+    <string name="bt_switcher_delete_confirm_label">Zum Bestätigen den Portfolionamen eingeben</string>
+    <string name="bt_switcher_delete_action">Portfolio löschen</string>
+    <string name="bt_switcher_delete_last_active_error">Du kannst dein letztes aktives Portfolio nicht löschen. Lege zuerst ein weiteres an oder stelle eines wieder her.</string>
 
     <!-- Transaktionen (§6.2 lesen) -->
     <string name="bt_tx_title">Transaktionen</string>
@@ -710,6 +718,7 @@
     <!-- Über -->
     <string name="bt_about_edition_line">Die offizielle BetterTrack-App</string>
     <string name="bt_about_open_web">BetterTrack im Web öffnen</string>
+    <string name="bt_about_api_build">API-Build</string>
     <string name="bt_about_copyright">© BetterTrack</string>
 
     <!-- Konto löschen -->

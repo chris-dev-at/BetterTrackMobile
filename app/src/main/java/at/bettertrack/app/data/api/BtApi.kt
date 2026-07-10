@@ -95,6 +95,7 @@ import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionResponse
 import at.bettertrack.app.data.api.dto.ValuePointsResponse
+import at.bettertrack.app.data.api.dto.VersionResponse
 import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.dto.WorkboardListResponse
 import retrofit2.Response
@@ -416,6 +417,17 @@ interface BtApi {
     /** Restore an archived portfolio. */
     @POST("portfolios/{portfolioId}/restore")
     suspend fun restorePortfolio(@Path("portfolioId") portfolioId: String): Response<PortfolioMutationResponse>
+
+    /**
+     * Hard-delete a portfolio (platform #412, LIVE). 204 on success. Cascades
+     * everything server-side (transactions, cash + sources, dividends, share
+     * audiences + public links) and auto-promotes the derived default. Bearer
+     * `portfolio:write`. `400 { code: "LAST_ACTIVE_PORTFOLIO" }` when it is the
+     * account's only ACTIVE portfolio; archived portfolios are always deletable;
+     * 404 for a foreign/unknown id (and any second delete of the same id).
+     */
+    @DELETE("portfolios/{portfolioId}")
+    suspend fun deletePortfolio(@Path("portfolioId") portfolioId: String): Response<Unit>
 
     @DELETE("portfolios/{portfolioId}/transactions/{txId}")
     suspend fun deleteTransaction(
@@ -753,4 +765,12 @@ interface BtApi {
     @Headers("Content-Type: application/json")
     @HTTP(method = "DELETE", path = "account", hasBody = true)
     suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<Unit>
+
+    /**
+     * The running build of the live server (public, no auth). Cosmetic "API build"
+     * row on the About screen — loaded fail-soft. The authenticated client is used
+     * for convenience; the endpoint ignores the bearer.
+     */
+    @GET("version")
+    suspend fun version(): Response<VersionResponse>
 }

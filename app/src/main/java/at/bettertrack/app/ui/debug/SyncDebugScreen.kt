@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -47,6 +48,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.dto.VersionResponse
+import at.bettertrack.app.data.api.dto.formatApiBuiltAtDate
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.SyncOpEntity
 import at.bettertrack.app.di.AppGraph
@@ -136,6 +140,32 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
                     needsAttention = ops.count { it.status == OpStatus.NEEDS_ATTENTION.wire },
                     done = ops.count { it.status == OpStatus.DONE.wire },
                 )
+            }
+            item {
+                // Public GET /version — the running build of the live server (fail-soft).
+                val apiBuild by produceState<VersionResponse?>(initialValue = null) {
+                    value = (AppGraph.buildInfoRepository.apiBuild() as? BtResult.Ok)?.value
+                }
+                BtCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text("API build (live server)", style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
+                        val info = apiBuild
+                        val line = if (info == null) {
+                            "—"
+                        } else {
+                            val sc = info.shortCommit.ifBlank { info.commit.take(7) }
+                            val d = formatApiBuiltAtDate(info.builtAt)
+                            if (d.isBlank()) sc else "$sc · $d"
+                        }
+                        Text(line, style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary, fontFamily = FontFamily.Monospace)
+                        info?.commit?.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.labelSmall, color = bt.textMuted, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

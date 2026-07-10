@@ -1,5 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -38,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,9 +59,12 @@ import at.bettertrack.app.ui.theme.BtTheme
 /**
  * The portfolio switcher (spec §6.1) as a phone-shaped bottom sheet: active
  * portfolios with per-portfolio value (once their detail synced), the default
- * badge, per-row rename/archive, an archived section with restore, and create.
- * Selection works offline (it's local); create/rename/archive/restore are
- * online-only (§7.2) and show a clear requires-connection state when offline.
+ * badge, per-row rename/archive/delete, and create. Archived portfolios live in
+ * their own collapsible "Archived" sub-section (owner directive 2026-07-10),
+ * collapsed by default with a count badge; restore + hard-delete hang off each
+ * archived row's ⋮ menu. Selection works offline (it's local); create / rename /
+ * archive / restore / delete are online-only (§7.2) and show a clear
+ * requires-connection state when offline.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +80,7 @@ fun PortfolioSwitcherSheet(
     onRename: (String, String, onDone: (Boolean) -> Unit) -> Unit,
     onArchive: (String, onDone: (Boolean) -> Unit) -> Unit,
     onRestore: (String, onDone: (Boolean) -> Unit) -> Unit,
+    onDelete: (String, onResult: (PortfolioDeleteResult) -> Unit) -> Unit,
 ) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -83,14 +92,20 @@ fun PortfolioSwitcherSheet(
     // to the sheet's drag and oscillates forever once the list is long enough
     // to scroll. A clearly sub-max sheet is stable — the same regime as a short
     // list, which never wobbles. Short lists still wrap smaller than this cap.
+    // The archived group expanding just makes the same single scroll taller — it
+    // never introduces a nested scroll, so the fix holds.
     val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.7f).dp
 
     var createOpen by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
     var archiveTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
+    var archivedExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val active = portfolios.filter { it.archivedAt == null }
-    val archived = portfolios.filter { it.archivedAt != null }
+    val sections = switcherSections(portfolios)
+    val active = sections.active
+    val archived = sections.archived
+    val actionsEnabled = isOnline && !busy
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -142,10 +157,11 @@ fun PortfolioSwitcherSheet(
                 SwitcherRow(
                     portfolio = p,
                     selected = p.id == selectedId,
-                    actionsEnabled = isOnline && !busy,
+                    actionsEnabled = actionsEnabled,
                     onClick = { onSelect(p.id) },
                     onRename = { renameTarget = p },
                     onArchive = { archiveTarget = p },
+                    onDelete = { deleteTarget = p },
                 )
             }
 
@@ -179,18 +195,20 @@ fun PortfolioSwitcherSheet(
             }
 
             if (archived.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.bt_switcher_archived_section),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                ArchivedSectionHeader(
+                    count = archived.size,
+                    expanded = archivedExpanded,
+                    onToggle = { archivedExpanded = !archivedExpanded },
                 )
-                archived.forEach { p ->
-                    ArchivedRow(
-                        portfolio = p,
-                        restoreEnabled = isOnline && !busy,
-                        onRestore = { onRestore(p.id) { } },
-                    )
+                if (archivedExpanded) {
+                    archived.forEach { p ->
+                        ArchivedRow(
+                            portfolio = p,
+                            actionsEnabled = actionsEnabled,
+                            onRestore = { onRestore(p.id) { } },
+                            onDelete = { deleteTarget = p },
+                        )
+                    }
                 }
             }
         }
@@ -246,6 +264,15 @@ fun PortfolioSwitcherSheet(
             },
         )
     }
+
+    deleteTarget?.let { target ->
+        DeletePortfolioDialog(
+            portfolio = target,
+            busy = busy,
+            onDelete = onDelete,
+            onDismiss = { deleteTarget = null },
+        )
+    }
 }
 
 @Composable
@@ -256,6 +283,7 @@ private fun SwitcherRow(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onArchive: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -339,23 +367,78 @@ private fun SwitcherRow(
                         onArchive()
                     },
                 )
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = bt.loss,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    text = { Text(stringResource(R.string.bt_switcher_delete), color = bt.loss) },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
+                )
             }
         }
+    }
+}
+
+/** Collapsible "Archived" group header: label + count badge + rotating chevron. */
+@Composable
+private fun ArchivedSectionHeader(
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "archivedChevron")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onToggle)
+            .padding(top = 6.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.bt_switcher_archived_section),
+            style = MaterialTheme.typography.titleSmall,
+            color = bt.textSecondary,
+        )
+        Spacer(Modifier.width(8.dp))
+        BtBadge(text = count.toString(), kind = BtBadgeKind.Neutral)
+        Spacer(Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Outlined.ExpandMore,
+            contentDescription = stringResource(
+                if (expanded) R.string.bt_switcher_archived_collapse else R.string.bt_switcher_archived_expand,
+            ),
+            tint = bt.textSecondary,
+            modifier = Modifier
+                .size(22.dp)
+                .rotate(rotation),
+        )
     }
 }
 
 @Composable
 private fun ArchivedRow(
     portfolio: PortfolioEntity,
-    restoreEnabled: Boolean,
+    actionsEnabled: Boolean,
     onRestore: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    var menuOpen by remember { mutableStateOf(false) }
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -364,16 +447,136 @@ private fun ArchivedRow(
                 color = bt.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 12.dp),
             )
-            TextButton(onClick = onRestore, enabled = restoreEnabled) {
-                Text(
-                    text = stringResource(R.string.bt_switcher_restore),
-                    color = if (restoreEnabled) bt.goldEmphasis else bt.textMuted,
+            IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(R.string.bt_switcher_actions_cd),
+                    tint = if (actionsEnabled) bt.textSecondary else bt.border,
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                containerColor = bt.surface,
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_switcher_restore), color = bt.textPrimary) },
+                    onClick = {
+                        menuOpen = false
+                        onRestore()
+                    },
+                )
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = bt.loss,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    text = { Text(stringResource(R.string.bt_switcher_delete), color = bt.loss) },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
                 )
             }
         }
     }
+}
+
+/**
+ * Destructive type-to-confirm delete dialog (platform #412). The confirm button
+ * arms only once the typed text matches the portfolio name exactly (mirrors the
+ * web). Carries an explicit warning that transaction history is deleted and
+ * historical / tax figures will change. LAST_ACTIVE_PORTFOLIO (and any other
+ * failure) surfaces inline; the dialog stays open so the user can react.
+ */
+@Composable
+private fun DeletePortfolioDialog(
+    portfolio: PortfolioEntity,
+    busy: Boolean,
+    onDelete: (String, onResult: (PortfolioDeleteResult) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    var typed by rememberSaveable(portfolio.id) { mutableStateOf("") }
+    var inlineError by remember(portfolio.id) { mutableStateOf<String?>(null) }
+    val lastActiveMsg = stringResource(R.string.bt_switcher_delete_last_active_error)
+    val canConfirm = deleteConfirmationMatches(portfolio.name, typed) && !busy
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        containerColor = bt.surface,
+        titleContentColor = bt.textPrimary,
+        textContentColor = bt.textSecondary,
+        title = { Text(stringResource(R.string.bt_switcher_delete_title)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.bt_switcher_delete_warning, portfolio.name))
+                Spacer(Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = {
+                        typed = it
+                        inlineError = null
+                    },
+                    label = { Text(stringResource(R.string.bt_switcher_delete_confirm_label)) },
+                    singleLine = true,
+                    enabled = !busy,
+                    isError = inlineError != null,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = bt.gold,
+                        unfocusedBorderColor = bt.borderStrong,
+                        focusedLabelColor = bt.gold,
+                        unfocusedLabelColor = bt.textMuted,
+                        focusedTextColor = bt.textPrimary,
+                        unfocusedTextColor = bt.textPrimary,
+                        cursorColor = bt.gold,
+                        errorBorderColor = bt.loss,
+                        errorLabelColor = bt.loss,
+                    ),
+                )
+                if (inlineError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = inlineError!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.loss,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDelete(portfolio.id) { result ->
+                        when (result) {
+                            is PortfolioDeleteResult.Success -> onDismiss()
+                            is PortfolioDeleteResult.LastActive -> inlineError = lastActiveMsg
+                            is PortfolioDeleteResult.Failed -> inlineError = result.message
+                        }
+                    }
+                },
+                enabled = canConfirm,
+            ) {
+                Text(
+                    text = stringResource(R.string.bt_switcher_delete_action),
+                    color = if (canConfirm) bt.loss else bt.textMuted,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+            }
+        },
+    )
 }
 
 /** Shared name dialog for create + rename. */

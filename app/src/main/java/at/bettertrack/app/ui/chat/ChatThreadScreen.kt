@@ -55,8 +55,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -472,6 +475,15 @@ private fun MessageInputBar(
     onAttach: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Web parity (2026-07-10): autofocus the composer when the conversation opens
+    // so the keyboard is ready to type immediately (no first tap). Fires once —
+    // this branch keeps the same composition while the thread is Available.
+    LaunchedEffect(Unit) {
+        runCatching { focusRequester.requestFocus() }
+        keyboard?.show()
+    }
     Surface(color = bt.bg) {
         // Pad the composer content above the keyboard AND the system navigation bar
         // (edge-to-edge draws behind both) — union takes the larger of the two, so
@@ -502,7 +514,9 @@ private fun MessageInputBar(
                 TextField(
                     value = value,
                     onValueChange = onValueChange,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
                     placeholder = { Text("Message", color = bt.textMuted) },
                     maxLines = 4,
                     colors = TextFieldDefaults.colors(
@@ -519,7 +533,13 @@ private fun MessageInputBar(
                 Spacer(Modifier.width(6.dp))
                 val canSend = value.isNotBlank()
                 Surface(
-                    onClick = onSend,
+                    onClick = {
+                        onSend()
+                        // Keep the composer focused so the next message needs no
+                        // re-tap (web parity). Re-request in case the tap moved focus.
+                        runCatching { focusRequester.requestFocus() }
+                        keyboard?.show()
+                    },
                     enabled = canSend,
                     shape = androidx.compose.foundation.shape.CircleShape,
                     color = if (canSend) bt.gold else bt.border,

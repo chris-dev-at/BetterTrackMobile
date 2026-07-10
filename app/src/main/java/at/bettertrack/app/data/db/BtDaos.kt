@@ -30,6 +30,10 @@ interface PortfolioDao {
     @Query("DELETE FROM portfolios WHERE id NOT IN (:keepIds)")
     suspend fun deleteNotIn(keepIds: List<String>)
 
+    /** Purge one portfolio row after a hard-delete (platform #412). */
+    @Query("DELETE FROM portfolios WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     /**
      * Replace the portfolio LIST while preserving each row's detail-sync data
      * (totals/baseCurrency come from `GET /portfolios/{id}`, which the list
@@ -125,6 +129,10 @@ interface PortfolioHistoryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(history: PortfolioHistoryEntity)
+
+    /** Purge every cached range for one portfolio after a hard-delete (#412). */
+    @Query("DELETE FROM portfolio_history WHERE portfolioId = :portfolioId")
+    suspend fun deleteForPortfolio(portfolioId: String)
 }
 
 @Dao

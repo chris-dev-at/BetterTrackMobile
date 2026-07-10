@@ -584,6 +584,51 @@ class PortfolioRepository(
             is BtResult.Err -> r
         }
 
+    /**
+     * Hard-delete a portfolio (platform #412, online-only §7.2). 204 → purge the
+     * local cache for that portfolio, then re-pull the LIST so Room mirrors server
+     * truth (the server cascades everything and auto-promotes the derived default —
+     * no client bookkeeping). The server rejects the last ACTIVE portfolio with
+     * `400 LAST_ACTIVE_PORTFOLIO`; archived ones are always deletable. Selection
+     * re-resolution (if the deleted one was current) is handled by the caller.
+     */
+    suspend fun deletePortfolio(portfolioId: String): BtResult<Unit> {
+        val resp = try {
+            api.deletePortfolio(portfolioId)
+        } catch (_: java.io.IOException) {
+            return BtResult.Err(
+                at.bettertrack.app.data.api.BtApiError(
+                    0,
+                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
+                    "No connection. Check your network and try again.",
+                ),
+            )
+        }
+        return if (resp.isSuccessful) {
+            purgePortfolioCache(portfolioId)
+            // The list refresh reconciles the portfolios table (promoted default,
+            // the deleted row gone). Best-effort: a purged cache already reflects
+            // the delete even if this refresh can't reach the network.
+            refreshPortfolios()
+            BtResult.Ok(Unit)
+        } else {
+            val err = at.bettertrack.app.data.api.parseApiError(json, resp.code(), resp.errorBody())
+            Log.w(TAG, "deletePortfolio($portfolioId) failed: ${err.message}")
+            BtResult.Err(err)
+        }
+    }
+
+    /** Drop every cached row that belonged to a hard-deleted portfolio (no orphans). */
+    private suspend fun purgePortfolioCache(portfolioId: String) {
+        db.holdingDao().deleteForPortfolio(portfolioId)
+        db.transactionDao().deleteForPortfolio(portfolioId)
+        db.cashDao().deleteSourcesForPortfolio(portfolioId)
+        db.cashDao().deleteMovementsForPortfolio(portfolioId)
+        db.portfolioHistoryDao().deleteForPortfolio(portfolioId)
+        db.portfolioDao().deleteById(portfolioId)
+        db.metaDao().delete(MetaEntity.keyCashCouplingDefault(portfolioId))
+    }
+
     // ── Internals ────────────────────────────────────────────────────────────
 
     /** Mirror a mutation response row into Room, preserving synced totals. */

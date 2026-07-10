@@ -212,6 +212,7 @@ fun PortfolioOverviewScreen(
             onRename = { id, name, onDone -> vm.renamePortfolio(id, name) { ok -> onDone(ok) } },
             onArchive = { id, onDone -> vm.archivePortfolio(id) { ok -> onDone(ok) } },
             onRestore = { id, onDone -> vm.restorePortfolio(id) { ok -> onDone(ok) } },
+            onDelete = { id, onResult -> vm.deletePortfolio(id) { result -> onResult(result) } },
         )
     }
 }

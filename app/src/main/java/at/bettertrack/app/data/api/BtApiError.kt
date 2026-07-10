@@ -38,6 +38,13 @@ class BtApiError(
     val isAccountDisabled: Boolean
         get() = httpStatus == 403 && (code == Codes.ACCOUNT_DISABLED || code == Codes.USER_DISABLED)
 
+    /**
+     * The server refused a portfolio DELETE because it is the account's LAST
+     * ACTIVE portfolio (platform #412 → `400 { code: "LAST_ACTIVE_PORTFOLIO" }`).
+     * Surfaced inline as a friendly, app-authored message (never the raw string).
+     */
+    val isLastActivePortfolio: Boolean get() = code == Codes.LAST_ACTIVE_PORTFOLIO
+
     object Codes {
         const val NETWORK = "NETWORK_ERROR"
         const val UNKNOWN = "UNKNOWN"
@@ -46,6 +53,7 @@ class BtApiError(
         const val PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
         const val ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
         const val USER_DISABLED = "USER_DISABLED"
+        const val LAST_ACTIVE_PORTFOLIO = "LAST_ACTIVE_PORTFOLIO"
     }
 }
 

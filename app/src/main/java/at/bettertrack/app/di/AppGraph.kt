@@ -21,6 +21,7 @@ import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
 import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.repo.AlertsRepository
+import at.bettertrack.app.data.repo.BuildInfoRepository
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
@@ -194,6 +195,11 @@ object AppGraph {
 
     val alertsRepository: AlertsRepository by lazy {
         AlertsRepository(api = btApi, json = json)
+    }
+
+    /** Public server build-info for the About screen's cosmetic "API build" row. */
+    val buildInfoRepository: BuildInfoRepository by lazy {
+        BuildInfoRepository(api = btApi, json = json)
     }
 
     val socialRepository: SocialRepository by lazy {

@@ -28,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -37,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.dto.VersionResponse
+import at.bettertrack.app.data.api.dto.formatApiBuiltAtDate
+import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -63,6 +69,13 @@ fun AboutScreen(
                 android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)),
             )
         }
+    }
+
+    // Cosmetic: the live server's running build (public GET /version), loaded
+    // lazily + fail-soft. Null (not fetched / failed) simply hides the row — this
+    // is decorative build-info and must never show an error state.
+    val apiBuild by produceState<VersionResponse?>(initialValue = null) {
+        value = (AppGraph.buildInfoRepository.apiBuild() as? BtResult.Ok)?.value
     }
 
     Scaffold(
@@ -122,6 +135,24 @@ fun AboutScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = bt.textPrimary,
                     )
+                }
+            }
+
+            // API build (cosmetic; hidden until the public /version fetch returns).
+            apiBuild?.let { info ->
+                val shortCommit = info.shortCommit.ifBlank { info.commit.take(7) }
+                if (shortCommit.isNotBlank()) {
+                    val date = formatApiBuiltAtDate(info.builtAt)
+                    val value = if (date.isBlank()) shortCommit else "$shortCommit · $date"
+                    Surface(color = bt.surface, border = BorderStroke(1.dp, bt.border), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.bt_about_api_build), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
+                            Text(value, style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary)
+                        }
+                    }
                 }
             }
 

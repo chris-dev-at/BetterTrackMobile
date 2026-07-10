@@ -131,6 +131,14 @@
     <string name="bt_switcher_archive_action">Archive</string>
     <string name="bt_switcher_requires_connection">Requires a connection \u2014 you\u2019re offline</string>
     <string name="bt_switcher_value_pending">\u2014</string>
+    <string name="bt_switcher_archived_expand">Show archived portfolios</string>
+    <string name="bt_switcher_archived_collapse">Hide archived portfolios</string>
+    <string name="bt_switcher_delete">Delete</string>
+    <string name="bt_switcher_delete_title">Delete portfolio?</string>
+    <string name="bt_switcher_delete_warning">Deleting \u201c%1$s\u201d permanently removes its entire transaction history, cash and dividends. This can\u2019t be undone \u2014 your historical and tax figures will change.</string>
+    <string name="bt_switcher_delete_confirm_label">Type the portfolio name to confirm</string>
+    <string name="bt_switcher_delete_action">Delete portfolio</string>
+    <string name="bt_switcher_delete_last_active_error">You can\u2019t delete your last active portfolio. Create or restore another one first.</string>
 
     <!-- Step 7 — Transactions (spec §6.2 read) -->
     <string name="bt_tx_title">Transactions</string>
@@ -719,6 +727,7 @@
     <!-- About -->
     <string name="bt_about_edition_line">The official BetterTrack app</string>
     <string name="bt_about_open_web">Open BetterTrack on the web</string>
+    <string name="bt_about_api_build">API build</string>
     <string name="bt_about_copyright">© BetterTrack</string>
 
     <!-- Delete account -->
