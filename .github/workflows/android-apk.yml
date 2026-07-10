@@ -3,6 +3,19 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # Owner ask (2026-07-10): only burn CI minutes when the APK can actually
+    # change. Docs/markdown-only pushes (PLATFORM_ASKS, docs/, README, …) skip
+    # the build entirely. Keep this list in sync with anything that feeds the
+    # Gradle build.
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +32,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags: release notes are generated from the commit
+          # messages since the previous v0.* version tag.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
@@ -81,13 +99,28 @@ jobs:
           APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
           SHORT_SHA="${GITHUB_SHA::7}"
           DATE="$(date -u +'%Y-%m-%d %H:%M UTC')"
+
+          # "What's new" = every commit since the previous v0.* version tag
+          # (subject bolded, body indented below). First build ever: just HEAD.
+          PREV_TAG="$(git describe --tags --match 'v0.*' --abbrev=0 HEAD^ 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ]; then
+            WHATSNEW="$(git log --no-merges --pretty=format:'- **%s**%n%n%w(0,2,2)%b' "${PREV_TAG}..HEAD")"
+          else
+            WHATSNEW="$(git log -1 --no-merges --pretty=format:'- **%s**%n%n%w(0,2,2)%b' HEAD)"
+          fi
+          [ -n "$WHATSNEW" ] || WHATSNEW="- Maintenance build (no code-commit messages found in range)."
+          printf '%s\n' "$WHATSNEW" > dist/whatsnew.md
+
           NOTES="$(printf '%s\n' \
-            "Rolling debug build produced by CI (run #${{ github.run_number }})." \
+            "Rolling debug build produced by CI (run #${{ github.run_number }} · version 0.${{ github.run_number }})." \
             "" \
             "Commit: ${SHORT_SHA}" \
             "Built:  ${DATE}" \
             "" \
-            "Debug build signed with a CI keystore — to install over a copy installed from Android Studio, uninstall that first. Points at production BetterTrack.")"
+            "## What's new in 0.${{ github.run_number }}" \
+            "$WHATSNEW" \
+            "" \
+            "Full per-version history: see the v0.* releases below. Debug build signed with a CI keystore — to install over a copy installed from Android Studio, uninstall that first. Points at production BetterTrack.")"
 
           # Remove the previous release + its tag so no stale assets accumulate.
           gh release delete latest-debug --yes --cleanup-tag || true
@@ -112,3 +145,27 @@ jobs:
             exit 1
           fi
           echo "Published latest-debug with asset: $(basename "$APK")"
+
+      # Permanent per-version release (owner ask 2026-07-10): every shipped
+      # version keeps its APK + a real "features this version brought" text,
+      # generated from the commit messages since the previous version tag.
+      # The rolling `latest-debug` above stays untouched (the in-app dev
+      # update-notifier parses it) — this is the browsable history.
+      - name: Publish per-version release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VER="0.${{ github.run_number }}"
+          TAG="v${VER}"
+          APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; skipping."
+            exit 0
+          fi
+          gh release create "$TAG" "$APK" \
+            --prerelease \
+            --title "BetterTrack App ${VER}" \
+            --notes-file dist/whatsnew.md \
+            --target "$GITHUB_SHA"
+          echo "Published $TAG"
