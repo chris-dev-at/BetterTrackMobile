@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
@@ -36,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +76,15 @@ fun PortfolioSwitcherSheet(
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Cap the scrollable list's height so the sheet stays comfortably BELOW
+    // full expansion, with any overflow scrolling internally. This is the fix
+    // for the owner-reported infinite scroll wobble: a ModalBottomSheet whose
+    // content fills (near-)max height fights the inner scroll's fling hand-off
+    // to the sheet's drag and oscillates forever once the list is long enough
+    // to scroll. A clearly sub-max sheet is stable — the same regime as a short
+    // list, which never wobbles. Short lists still wrap smaller than this cap.
+    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.7f).dp
+
     var createOpen by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
     var archiveTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
@@ -86,55 +98,47 @@ fun PortfolioSwitcherSheet(
         containerColor = bt.surface,
         contentColor = bt.textPrimary,
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                bottom = 28.dp,
-            ),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxListHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "title") {
-                Text(
-                    text = stringResource(R.string.bt_switcher_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = bt.textPrimary,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
+            Text(
+                text = stringResource(R.string.bt_switcher_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
 
             if (!isOnline) {
-                item(key = "offline-hint") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.CloudOff,
-                            contentDescription = null,
-                            tint = bt.textMuted,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.bt_switcher_requires_connection),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textMuted,
-                        )
-                    }
-                }
-            }
-
-            if (error != null) {
-                item(key = "error") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudOff,
+                        contentDescription = null,
+                        tint = bt.textMuted,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        text = error,
+                        text = stringResource(R.string.bt_switcher_requires_connection),
                         style = MaterialTheme.typography.bodySmall,
-                        color = bt.loss,
+                        color = bt.textMuted,
                     )
                 }
             }
 
-            items(count = active.size, key = { "p-" + active[it].id }) { index ->
-                val p = active[index]
+            if (error != null) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
+            }
+
+            active.forEach { p ->
                 SwitcherRow(
                     portfolio = p,
                     selected = p.id == selectedId,
@@ -145,48 +149,43 @@ fun PortfolioSwitcherSheet(
                 )
             }
 
-            item(key = "create") {
-                BtCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = if (isOnline && !busy) {
-                        { createOpen = true }
-                    } else {
-                        null
-                    },
+            BtCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = if (isOnline && !busy) {
+                    { createOpen = true }
+                } else {
+                    null
+                },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = null,
-                            tint = if (isOnline) bt.gold else bt.textMuted,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = stringResource(R.string.bt_switcher_new),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (isOnline) bt.textPrimary else bt.textMuted,
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = null,
+                        tint = if (isOnline) bt.gold else bt.textMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(R.string.bt_switcher_new),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isOnline) bt.textPrimary else bt.textMuted,
+                    )
                 }
             }
 
             if (archived.isNotEmpty()) {
-                item(key = "archived-header") {
-                    Text(
-                        text = stringResource(R.string.bt_switcher_archived_section),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
-                    )
-                }
-                items(count = archived.size, key = { "a-" + archived[it].id }) { index ->
-                    val p = archived[index]
+                Text(
+                    text = stringResource(R.string.bt_switcher_archived_section),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                )
+                archived.forEach { p ->
                     ArchivedRow(
                         portfolio = p,
                         restoreEnabled = isOnline && !busy,
