@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
-import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -169,10 +168,16 @@ fun SocialTabScreen() {
 }
 
 @Composable
-fun WorkboardTabScreen() {
-    RefreshableTabScreen(
-        icon = Icons.Outlined.Dashboard,
-        title = stringResource(R.string.bt_tab_workboard_empty_title),
-        message = stringResource(R.string.bt_tab_workboard_empty_message),
+fun WorkboardTabScreen(
+    onOpenConglomerate: (String) -> Unit,
+    onCreateConglomerate: () -> Unit,
+    onOpenAsset: (String) -> Unit,
+) {
+    // Step-13 conglomerates + the new price-alerts manager, behind the Workboard
+    // segmented host (owner ask 2026-07-10).
+    at.bettertrack.app.ui.workboard.WorkboardScreen(
+        onOpenConglomerate = onOpenConglomerate,
+        onCreateConglomerate = onCreateConglomerate,
+        onOpenAsset = onOpenAsset,
     )
 }

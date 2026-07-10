@@ -487,9 +487,10 @@ private fun BtNavHost(
             )
         }
         composable<WorkboardTabRoute> {
-            ConglomerateListScreen(
-                onOpen = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
-                onCreate = { navController.navigate(ConglomerateBuilderRoute()) },
+            WorkboardTabScreen(
+                onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
+                onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
             )
         }
 

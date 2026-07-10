@@ -726,5 +726,56 @@
     <string name="bt_del_final_message">Damit werden dein Konto und alle seine Daten endgültig gelöscht. Das lässt sich nicht rückgängig machen.</string>
     <string name="bt_del_final_confirm">Endgültig löschen</string>
 
+    <!-- ══ Kursalarme (Workboard-Tab · Owner-Auftrag 2026-07-10) ══ -->
+    <string name="bt_workboard_seg_conglomerates">Konglomerate</string>
+    <string name="bt_workboard_seg_alerts">Kursalarme</string>
+
+    <!-- Alarmliste · leer / offline -->
+    <string name="bt_alerts_empty_title">Noch keine Kursalarme</string>
+    <string name="bt_alerts_empty_message">Lass dich benachrichtigen, wenn ein Wert deinen Zielkurs erreicht oder sich um einen bestimmten Prozentsatz bewegt.</string>
+    <string name="bt_alerts_requires_connection">Kursalarme benötigen eine Verbindung zum Laden.</string>
+
+    <!-- Alarmzeile -->
+    <string name="bt_alert_status_active">Aktiv</string>
+    <string name="bt_alert_status_triggered">Ausgelöst</string>
+    <string name="bt_alert_status_disabled">Deaktiviert</string>
+    <string name="bt_alert_repeat">Wiederholen</string>
+    <string name="bt_alert_actions_cd">Alarmaktionen</string>
+    <string name="bt_alert_cond_above">Über %1$s</string>
+    <string name="bt_alert_cond_below">Unter %1$s</string>
+    <string name="bt_alert_cond_up_from">%1$s %% Anstieg ab %2$s</string>
+    <string name="bt_alert_cond_down_from">%1$s %% Rückgang ab %2$s</string>
+    <string name="bt_alert_cond_day_up">%1$s %% Anstieg an einem Tag</string>
+    <string name="bt_alert_cond_day_down">%1$s %% Rückgang an einem Tag</string>
+
+    <!-- Zeilenaktionen -->
+    <string name="bt_alert_edit">Bearbeiten</string>
+    <string name="bt_alert_rearm">Reaktivieren</string>
+    <string name="bt_alert_delete">Löschen</string>
+    <string name="bt_alert_delete_title">Kursalarm löschen?</string>
+    <string name="bt_alert_delete_message">Dein Kursalarm für %1$s wird entfernt.</string>
+
+    <!-- Erstellen / Bearbeiten -->
+    <string name="bt_alert_create_action">Kursalarm erstellen</string>
+    <string name="bt_alert_create_title">Neuer Kursalarm</string>
+    <string name="bt_alert_edit_title">Kursalarm bearbeiten</string>
+    <string name="bt_alert_save_action">Änderungen speichern</string>
+    <string name="bt_alert_pick_asset">Nach einem Wert suchen</string>
+    <string name="bt_alert_change_asset">Wert ändern</string>
+    <string name="bt_alert_current_price">Aktuell %1$s</string>
+    <string name="bt_alert_condition">Bedingung</string>
+    <string name="bt_alert_threshold_pct_label">Prozentuale Änderung</string>
+    <string name="bt_alert_threshold_price_label">Zielkurs (%1$s)</string>
+    <string name="bt_alert_threshold_invalid">Gib einen gültigen Betrag ein.</string>
+    <string name="bt_alert_repeat_hint">Benachrichtigt nach dem Auslösen weiter, mit 24 Stunden Pause.</string>
+
+    <!-- Bedingungsarten (Chips + Untertitel beim Bearbeiten) -->
+    <string name="bt_alert_kind_price_above">Kurs über</string>
+    <string name="bt_alert_kind_price_below">Kurs unter</string>
+    <string name="bt_alert_kind_up_from_ref">Anstieg ab jetzt</string>
+    <string name="bt_alert_kind_down_from_ref">Rückgang ab jetzt</string>
+    <string name="bt_alert_kind_day_up">Anstieg an einem Tag</string>
+    <string name="bt_alert_kind_day_down">Rückgang an einem Tag</string>
+
     <string name="bt_action_copied">Kopiert</string>
 </resources>

@@ -27,6 +27,10 @@ import at.bettertrack.app.data.api.dto.OpenConversationRequest
 import at.bettertrack.app.data.api.dto.SendChatMessageRequest
 import at.bettertrack.app.data.api.dto.SendChatMessageResponse
 import at.bettertrack.app.data.api.dto.ActivityAlertStateDto
+import at.bettertrack.app.data.api.dto.AlertDto
+import at.bettertrack.app.data.api.dto.AlertsListResponse
+import at.bettertrack.app.data.api.dto.CreateAlertRequest
+import at.bettertrack.app.data.api.dto.UpdateAlertRequest
 import at.bettertrack.app.data.api.dto.AudienceMutationResponse
 import at.bettertrack.app.data.api.dto.AudienceStateDto
 import at.bettertrack.app.data.api.dto.CreateFriendRequestRequest
@@ -293,6 +297,33 @@ interface BtApi {
     /** Delete a named watchlist (never the default General). [workboard:write] */
     @DELETE("workboard/watchlists/{watchlistId}")
     suspend fun deleteWatchlist(@Path("watchlistId") watchlistId: String): Response<Unit>
+
+    // ── Price alerts (owner ask 2026-07-10, Workboard; online-only) ──────────
+
+    /** The caller's price alerts. */
+    @GET("alerts")
+    suspend fun alerts(): Response<AlertsListResponse>
+
+    /** Create a price alert (server captures refPrice for the from-ref kinds). */
+    @Headers("Content-Type: application/json")
+    @POST("alerts")
+    suspend fun createAlert(@Body body: CreateAlertRequest): Response<AlertDto>
+
+    /** Update an alert's threshold and/or repeat behaviour (delta PATCH). */
+    @Headers("Content-Type: application/json")
+    @PATCH("alerts/{id}")
+    suspend fun updateAlert(
+        @Path("id") id: String,
+        @Body body: UpdateAlertRequest,
+    ): Response<AlertDto>
+
+    /** Delete a price alert. */
+    @DELETE("alerts/{id}")
+    suspend fun deleteAlert(@Path("id") id: String): Response<Unit>
+
+    /** Re-arm a fired one-shot alert back to active. */
+    @POST("alerts/{id}/rearm")
+    suspend fun rearmAlert(@Path("id") id: String): Response<AlertDto>
 
     @GET("conglomerates")
     suspend fun conglomerates(): Response<ConglomerateListResponse>

@@ -20,6 +20,7 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
 import at.bettertrack.app.data.push.PushTokenManager
+import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
 import at.bettertrack.app.data.repo.MarketRepository
@@ -189,6 +190,10 @@ object AppGraph {
 
     val conglomerateRepository: ConglomerateRepository by lazy {
         ConglomerateRepository(api = btApi, json = json)
+    }
+
+    val alertsRepository: AlertsRepository by lazy {
+        AlertsRepository(api = btApi, json = json)
     }
 
     val socialRepository: SocialRepository by lazy {

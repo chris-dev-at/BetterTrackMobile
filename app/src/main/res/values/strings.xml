@@ -735,5 +735,56 @@
     <string name="bt_del_final_message">This permanently deletes your account and all its data. This can\'t be undone.</string>
     <string name="bt_del_final_confirm">Delete forever</string>
 
+    <!-- ══ Price alerts (Workboard tab · owner ask 2026-07-10) ══ -->
+    <string name="bt_workboard_seg_conglomerates">Conglomerates</string>
+    <string name="bt_workboard_seg_alerts">Alerts</string>
+
+    <!-- Alerts list · empty / offline -->
+    <string name="bt_alerts_empty_title">No price alerts yet</string>
+    <string name="bt_alerts_empty_message">Get notified when an asset reaches your target price or moves by a set percentage.</string>
+    <string name="bt_alerts_requires_connection">Price alerts need a connection to load.</string>
+
+    <!-- Alert row -->
+    <string name="bt_alert_status_active">Active</string>
+    <string name="bt_alert_status_triggered">Triggered</string>
+    <string name="bt_alert_status_disabled">Disabled</string>
+    <string name="bt_alert_repeat">Repeat</string>
+    <string name="bt_alert_actions_cd">Alert actions</string>
+    <string name="bt_alert_cond_above">Above %1$s</string>
+    <string name="bt_alert_cond_below">Below %1$s</string>
+    <string name="bt_alert_cond_up_from">Up %1$s %% from %2$s</string>
+    <string name="bt_alert_cond_down_from">Down %1$s %% from %2$s</string>
+    <string name="bt_alert_cond_day_up">Up %1$s %% in a day</string>
+    <string name="bt_alert_cond_day_down">Down %1$s %% in a day</string>
+
+    <!-- Row actions -->
+    <string name="bt_alert_edit">Edit</string>
+    <string name="bt_alert_rearm">Re-arm</string>
+    <string name="bt_alert_delete">Delete</string>
+    <string name="bt_alert_delete_title">Delete alert?</string>
+    <string name="bt_alert_delete_message">Your %1$s alert will be removed.</string>
+
+    <!-- Create / edit sheet -->
+    <string name="bt_alert_create_action">Create alert</string>
+    <string name="bt_alert_create_title">New price alert</string>
+    <string name="bt_alert_edit_title">Edit alert</string>
+    <string name="bt_alert_save_action">Save changes</string>
+    <string name="bt_alert_pick_asset">Search for an asset</string>
+    <string name="bt_alert_change_asset">Change asset</string>
+    <string name="bt_alert_current_price">Now %1$s</string>
+    <string name="bt_alert_condition">Condition</string>
+    <string name="bt_alert_threshold_pct_label">Percent change</string>
+    <string name="bt_alert_threshold_price_label">Target price (%1$s)</string>
+    <string name="bt_alert_threshold_invalid">Enter a valid amount.</string>
+    <string name="bt_alert_repeat_hint">Keeps alerting after it triggers, with a 24-hour cooldown.</string>
+
+    <!-- Condition kinds (chips + edit subtitle) -->
+    <string name="bt_alert_kind_price_above">Price above</string>
+    <string name="bt_alert_kind_price_below">Price below</string>
+    <string name="bt_alert_kind_up_from_ref">Rises from here</string>
+    <string name="bt_alert_kind_down_from_ref">Falls from here</string>
+    <string name="bt_alert_kind_day_up">Rises in a day</string>
+    <string name="bt_alert_kind_day_down">Falls in a day</string>
+
     <string name="bt_action_copied">Copied</string>
 </resources>
