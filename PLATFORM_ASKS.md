@@ -60,7 +60,7 @@ The platform side is done. To use the scope-gated endpoints (`/auth/pin/*`, `/no
 - [ ] **P2 — Data-safety-form readiness pass on the privacy page** (platform side, before store submit): name the FCM push token once #368 ships and link the web deletion path. Page itself is live (see § DONE).
 
 ### Lower priority / cosmetic
-- [ ] **P3 — Portfolio hard-DELETE** (optional; archive exists).
+- [x] **P3 — Portfolio hard-DELETE** — ✅ SHIPPED 2026-07-10 (platform #411 / PR #412, deploying): `DELETE /api/v1/portfolios/:portfolioId` → 204; 404 foreign/unknown/second-call; `400 LAST_ACTIVE_PORTFOLIO` when it's the only active one; archived portfolios always deletable. Bearer `portfolio:write` (read-only key → 403 INSUFFICIENT_SCOPE). Cascade kills transactions, cash + sources, dividends, share audiences + public links; deleting the current default auto-promotes the oldest remaining active portfolio (default is derived, not stored). No confirmation body at the API layer — type-to-confirm is client UX (web dialog does portfolio-name confirm; replicate on the app). Chat share-chips to a deleted portfolio resolve to `viewable:false`. In `openapi.json`.
 - [ ] **P3 — Portfolio history 1D / 1W / 3M windows** (optional parity).
 
 ### Not a platform code change — reminders for Christian
