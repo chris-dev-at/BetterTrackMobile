@@ -74,7 +74,9 @@ import at.bettertrack.app.data.repo.ThreadState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -98,9 +100,19 @@ class ChatThreadViewModel(
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast
 
+    private var loadJob: Job? = null
+
     init {
         chat.connectRealtime()
+        startLoad()
         viewModelScope.launch {
+            (chat.attachables() as? BtResult.Ok)?.let { _attachables.value = it.value }
+        }
+    }
+
+    private fun startLoad() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val id = resolveConversationId() ?: return@launch
             conversationId = id
             chat.setActiveConversation(id)
@@ -118,9 +130,12 @@ class ChatThreadViewModel(
                 }
             }
         }
-        viewModelScope.launch {
-            (chat.attachables() as? BtResult.Ok)?.let { _attachables.value = it.value }
-        }
+    }
+
+    /** Re-run the resolve+load after a failure (drives the full-screen error state's Retry). */
+    fun retry() {
+        _state.value = _state.value.copy(loading = true, error = null)
+        startLoad()
     }
 
     private suspend fun resolveConversationId(): String? {
@@ -260,17 +275,20 @@ fun ChatThreadScreen(
             )
         },
         bottomBar = {
-            when (state.availability) {
-                ThreadAvailability.Available -> MessageInputBar(
+            when {
+                // While the full-screen load error is up, a live composer would invite
+                // sends into a thread we couldn't even load — hide it until Retry works.
+                state.error != null && state.messages.isEmpty() -> Unit
+                state.availability == ThreadAvailability.Available -> MessageInputBar(
                     value = input,
                     onValueChange = { input = it.take(CHAT_MESSAGE_MAX) },
                     onSend = { if (input.isNotBlank()) { vm.send(input); input = "" } },
                     onAttach = { showAttach = true },
                 )
-                ThreadAvailability.ReadOnly -> ClosedThreadNotice(
+                state.availability == ThreadAvailability.ReadOnly -> ClosedThreadNotice(
                     "You can't send messages in this chat anymore.",
                 )
-                ThreadAvailability.NotAvailable -> Unit
+                else -> Unit
             }
         },
     ) { pad ->
@@ -285,6 +303,14 @@ fun ChatThreadScreen(
                     icon = Icons.Outlined.Lock,
                     title = "Conversation not available",
                     message = "This chat isn't available. You may no longer be able to message this person.",
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                )
+
+                // A failed load with nothing cached is an ERROR, not an empty thread —
+                // never render "Say hi" over a thread that may well have history.
+                state.error != null && state.messages.isEmpty() -> BtErrorState(
+                    message = state.error,
+                    onRetry = vm::retry,
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
 

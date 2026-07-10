@@ -54,6 +54,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,9 +70,19 @@ class ChatListViewModel(
     private val _friends = MutableStateFlow<List<Friend>>(emptyList())
     val friends: StateFlow<List<Friend>> = _friends
 
+    /** Last refresh failure (user message) — an errored empty list is NOT "no messages yet". */
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     init {
         chat.connectRealtime()
-        viewModelScope.launch { chat.refreshConversations() }
+        refresh()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _error.value = (chat.refreshConversations() as? BtResult.Err)?.error?.userMessage
+        }
         viewModelScope.launch {
             (social.friends() as? BtResult.Ok)?.let { _friends.value = it.value }
         }
@@ -96,6 +107,7 @@ fun ChatListScreen(
     val bt = BtTheme.colors
     val conversations by vm.conversations.collectAsStateWithLifecycle()
     val friends by vm.friends.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
     var showPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -126,6 +138,12 @@ fun ChatListScreen(
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
+                // A failed refresh with nothing cached is an ERROR, not an empty inbox.
+                error != null && conversations.isEmpty() -> BtErrorState(
+                    message = error,
+                    onRetry = vm::refresh,
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                )
                 conversations.isEmpty() -> BtEmptyState(
                     icon = Icons.AutoMirrored.Outlined.Chat,
                     title = "No messages yet",
