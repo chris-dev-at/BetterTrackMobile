@@ -8,6 +8,18 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.AccountSettingsResponse
+import at.bettertrack.app.data.api.dto.ChangePasswordRequest
+import at.bettertrack.app.data.api.dto.DeleteAccountRequest
+import at.bettertrack.app.data.api.dto.RevokeSessionsResponse
+import at.bettertrack.app.data.api.dto.SessionListResponse
+import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
+import at.bettertrack.app.data.api.dto.TwoFactorDisableRequest
+import at.bettertrack.app.data.api.dto.TwoFactorEnrollResponse
+import at.bettertrack.app.data.api.dto.TwoFactorMethodEnabledResponse
+import at.bettertrack.app.data.api.dto.TwoFactorRecoveryCodesResponse
+import at.bettertrack.app.data.api.dto.TwoFactorStatusResponse
+import at.bettertrack.app.data.api.dto.UpdateAccountSettingsRequest
 import at.bettertrack.app.data.api.dto.ChatConversationListResponse
 import at.bettertrack.app.data.api.dto.ChatThreadResponse
 import at.bettertrack.app.data.api.dto.ConversationResponse
@@ -84,6 +96,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -613,4 +626,91 @@ interface BtApi {
     suspend fun markChatRead(
         @Path("conversationId") conversationId: String,
     ): Response<Unit>
+
+    // ── Step 18: account & security management (§6.12) ───────────────────────
+    // Bearer-reachable via the `account:security` scope (#361, verified LIVE on
+    // production 2026-07-10). The OpenAPI + a stale inline comment on the sessions
+    // route say "cookie-only" — that is the known docs bug; the #361 bearer
+    // middleware carve-out (apps/api/.../bearerAuth.ts resolveAuthPolicy) is truth.
+
+    /**
+     * Change the account password (§6.12). Voluntary change: [currentPassword] is
+     * required and server-verified — a wrong one is 401 INVALID_CREDENTIALS. 200
+     * returns the refreshed user. [account:security]
+     */
+    @Headers("Content-Type: application/json")
+    @POST("auth/change-password")
+    suspend fun changePassword(@Body body: ChangePasswordRequest): Response<MeResponse>
+
+    /** The caller's current 2FA method state (TOTP / email / recovery). [account:security] */
+    @GET("auth/2fa/status")
+    suspend fun twoFactorStatus(): Response<TwoFactorStatusResponse>
+
+    /**
+     * Begin TOTP enrollment — provisional secret + otpauth URI; the method is NOT
+     * yet on and NO recovery codes issue until [twoFactorConfirm]. [account:security]
+     */
+    @POST("auth/2fa/enroll")
+    suspend fun twoFactorEnroll(): Response<TwoFactorEnrollResponse>
+
+    /** Confirm TOTP enrollment with a current code → enables it (+ first-method recovery codes). [account:security] */
+    @Headers("Content-Type: application/json")
+    @POST("auth/2fa/confirm")
+    suspend fun twoFactorConfirm(@Body body: TwoFactorCodeRequest): Response<TwoFactorMethodEnabledResponse>
+
+    /** Disable the TOTP method; authorized by a TOTP code or an unused recovery code. [account:security] */
+    @Headers("Content-Type: application/json")
+    @POST("auth/2fa/disable")
+    suspend fun twoFactorDisable(@Body body: TwoFactorDisableRequest): Response<Unit>
+
+    /** Begin email-method enrollment — sends a setup code to the account email. [account:security] */
+    @POST("auth/2fa/email/enroll")
+    suspend fun twoFactorEmailEnroll(): Response<Unit>
+
+    /** Confirm the email method with the emailed code → enables it. [account:security] */
+    @Headers("Content-Type: application/json")
+    @POST("auth/2fa/email/confirm")
+    suspend fun twoFactorEmailConfirm(@Body body: TwoFactorCodeRequest): Response<TwoFactorMethodEnabledResponse>
+
+    /** Disable the email method (authenticated session alone). [account:security] */
+    @POST("auth/2fa/email/disable")
+    suspend fun twoFactorEmailDisable(): Response<Unit>
+
+    /** Regenerate the recovery codes (voids the old set); requires a method on. [account:security] */
+    @POST("auth/2fa/recovery-codes")
+    suspend fun twoFactorRegenerateRecoveryCodes(): Response<TwoFactorRecoveryCodesResponse>
+
+    /** The account's active web/cookie sessions (browser + other logins). [account:security] */
+    @GET("auth/sessions")
+    suspend fun sessions(): Response<SessionListResponse>
+
+    /** Revoke ONE session by its opaque handle ("log out that device"). [account:security] */
+    @DELETE("auth/sessions/{id}")
+    suspend fun revokeSession(@Path("id") id: String): Response<Unit>
+
+    /** Log out every OTHER session, keeping the caller's. From a bearer (no session)
+     *  this revokes ALL web sessions — offered with a strong confirm. [account:security] */
+    @POST("auth/sessions/revoke-others")
+    suspend fun revokeOtherSessions(): Response<RevokeSessionsResponse>
+
+    /** The account defaults incl. the server-side UI `locale`. [social:read] */
+    @GET("settings/account")
+    suspend fun accountSettings(): Response<AccountSettingsResponse>
+
+    /** Mirror the in-app language choice to the account `locale`. [social:write] */
+    @Headers("Content-Type: application/json")
+    @PATCH("settings/account")
+    suspend fun updateAccountSettings(@Body body: UpdateAccountSettingsRequest): Response<AccountSettingsResponse>
+
+    /**
+     * Hard-delete the account (#362, spec §6.12; a Play publishing requirement).
+     * Irreversible: typed username confirmation + re-auth (password, or a TOTP /
+     * recovery code for 2FA accounts). DELETE with a body needs @HTTP. The app
+     * gates the actual call behind [at.bettertrack.app.data.account.DeleteAccountFeature]
+     * so it can never fire against the live production account during testing.
+     * [account:security]
+     */
+    @Headers("Content-Type: application/json")
+    @HTTP(method = "DELETE", path = "account", hasBody = true)
+    suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<Unit>
 }

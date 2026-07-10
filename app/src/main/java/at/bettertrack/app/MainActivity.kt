@@ -1,10 +1,12 @@
 package at.bettertrack.app
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
+import at.bettertrack.app.data.i18n.LocaleManager
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.SystemBarStyle
@@ -33,6 +35,16 @@ import kotlinx.coroutines.launch
 class MainActivity : FragmentActivity() {
 
     private val auth: AuthRepository by lazy { AppGraph.authRepository }
+
+    /**
+     * Step 18 (§6.12): apply the chosen per-app language to the activity's base
+     * context so strings/formatting resolve in it deterministically on every API
+     * level (the framework/appcompat persistence handles the store; this makes the
+     * apply robust for a plain FragmentActivity). A no-op for "System default".
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.wrap(newBase))
+    }
 
     /**
      * True while the OAuth Custom Tab is open and we're waiting to come back. If

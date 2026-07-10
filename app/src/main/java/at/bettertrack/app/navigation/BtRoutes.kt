@@ -83,13 +83,21 @@ import kotlinx.serialization.Serializable
 )
 @Serializable data object NotificationsInboxRoute                           // TODO(step 16)
 
-// ── Settings ───────────────────────────────────────────────────────────────
-@Serializable data object SettingsRoute                                     // TODO(step 18)
-@Serializable data object SettingsAccountRoute                              // TODO(step 18)
-@Serializable data object SettingsSecurityRoute                             // TODO(steps 17–18)
-@Serializable data object SettingsNotificationsRoute                        // TODO(steps 16, 18)
-@Serializable data object SettingsLanguageRoute                             // TODO(step 18)
-@Serializable data object SettingsAboutRoute                                // TODO(step 18)
+// ── Settings (spec §6.12) ────────────────────────────────────────────────────
+@Serializable data object SettingsRoute
+@Serializable data object SettingsAccountRoute
+@Serializable data object SettingsSecurityRoute
+@Serializable data object SettingsNotificationsRoute
+@Serializable data object SettingsLanguageRoute
+@Serializable data object SettingsAboutRoute
+/** Step 18: change the account password (current + new + confirm). */
+@Serializable data object ChangePasswordRoute
+/** Step 18: 2FA management (TOTP enroll/QR, email codes, recovery codes, disable). */
+@Serializable data object TwoFactorRoute
+/** Step 18: the account's active web/other-device sessions (list + revoke). */
+@Serializable data object ActiveSessionsRoute
+/** Step 18: type-to-confirm account deletion (destructive; submit safety-gated). */
+@Serializable data object DeleteAccountRoute
 /** In-app changelog / "New features" (owner 2026-07-09) — bundled per-version notes. */
 @Serializable data object ChangelogRoute
 

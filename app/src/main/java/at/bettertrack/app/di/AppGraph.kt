@@ -258,6 +258,14 @@ object AppGraph {
     }
 
     /**
+     * Step 18 — the Settings → Account & Security seam (change password, 2FA,
+     * active sessions, language mirror, delete account). Bearer + `account:security`.
+     */
+    val accountRepository: at.bettertrack.app.data.account.AccountRepository by lazy {
+        at.bettertrack.app.data.account.AccountRepository(api = btApi, json = json)
+    }
+
+    /**
      * A pending notification tap-through target: set by [MainActivity] from a
      * tapped push intent, consumed once by the shell to navigate. StateFlow so a
      * cold tap (set before the shell composes) is not lost.

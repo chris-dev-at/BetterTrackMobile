@@ -134,6 +134,12 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment)
 
+    // Step 18 — settings & account management: per-app language switch
+    // (AppCompatDelegate locales + autoStoreLocales service) and the offline
+    // ZXing QR encoder for 2FA authenticator (TOTP) enrollment.
+    implementation(libs.androidx.appcompat)
+    implementation(libs.zxing.core)
+
     // Step 5 — local database (Room) & sync engine core (WorkManager).
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

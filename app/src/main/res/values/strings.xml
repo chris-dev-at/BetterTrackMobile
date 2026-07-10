@@ -550,4 +550,125 @@
     <string name="bt_applock_biometric_offer_message">Use your fingerprint or face to unlock the app, with your PIN as a fallback.</string>
     <string name="bt_applock_biometric_offer_enable">Enable</string>
     <string name="bt_applock_not_now">Not now</string>
+
+    <!-- ══ Step 18 — Settings &amp; account management (spec §6.12) ══ -->
+
+    <!-- Settings hub -->
+    <string name="bt_settings_change_password_sub">Update your account password</string>
+    <string name="bt_settings_about_sub">Version, links and what\'s new</string>
+    <string name="bt_settings_danger_section">Danger zone</string>
+    <string name="bt_settings_delete_sub">Permanently delete your account and data</string>
+    <string name="bt_settings_developer_section">Developer</string>
+    <string name="bt_settings_dev_gallery">Component gallery</string>
+    <string name="bt_settings_dev_gallery_sub">Design system showcase</string>
+    <string name="bt_settings_dev_sync">Sync queue</string>
+    <string name="bt_settings_dev_sync_sub">Inspect the offline outbound queue</string>
+    <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
+    <string name="bt_settings_dev_hint">%1$d more taps to unlock developer options</string>
+
+    <!-- Change password -->
+    <string name="bt_dest_change_password">Change password</string>
+    <string name="bt_cp_intro">For your security, enter your current password, then choose a new one.</string>
+    <string name="bt_cp_current">Current password</string>
+    <string name="bt_cp_new">New password</string>
+    <string name="bt_cp_confirm">Confirm new password</string>
+    <string name="bt_cp_submit">Update password</string>
+    <string name="bt_cp_err_too_short">Use at least 8 characters.</string>
+    <string name="bt_cp_err_too_long">That password is too long.</string>
+    <string name="bt_cp_err_mismatch">The new passwords don\'t match.</string>
+    <string name="bt_cp_err_same">Choose a password different from your current one.</string>
+    <string name="bt_cp_success">Password updated.</string>
+    <string name="bt_cp_strength_label">Password strength: %1$s</string>
+    <string name="bt_cp_strength_weak">Weak</string>
+    <string name="bt_cp_strength_fair">Fair</string>
+    <string name="bt_cp_strength_good">Good</string>
+    <string name="bt_cp_strength_strong">Strong</string>
+
+    <!-- Account security (Security screen entries) -->
+    <string name="bt_settings_account_security_section">Account security</string>
+    <string name="bt_settings_2fa_sub">Add a second step at login</string>
+    <string name="bt_settings_sessions_sub">See where you\'re signed in</string>
+
+    <!-- Two-factor authentication -->
+    <string name="bt_dest_two_factor">Two-factor authentication</string>
+    <string name="bt_2fa_intro">Add a second step at login for extra security. Use an authenticator app, email codes, or both.</string>
+    <string name="bt_2fa_status_on">Two-factor authentication is on</string>
+    <string name="bt_2fa_status_off">Two-factor authentication is off</string>
+    <string name="bt_2fa_set_up">Set up</string>
+    <string name="bt_2fa_turn_off">Turn off</string>
+    <string name="bt_2fa_enable">Enable</string>
+    <string name="bt_2fa_verify">Verify</string>
+    <string name="bt_2fa_code">6-digit code</string>
+    <string name="bt_2fa_copy">Copy</string>
+    <string name="bt_2fa_totp_title">Authenticator app</string>
+    <string name="bt_2fa_totp_sub_on">On</string>
+    <string name="bt_2fa_totp_sub_off">Use an app like Google Authenticator or 1Password</string>
+    <string name="bt_2fa_totp_pending">Setup started — finish to turn it on</string>
+    <string name="bt_2fa_email_title">Email codes</string>
+    <string name="bt_2fa_email_sub_on">On</string>
+    <string name="bt_2fa_email_sub_off">Get a code by email at login</string>
+    <string name="bt_2fa_email_sent">We sent a code to your email. Enter it below to turn on email codes.</string>
+    <string name="bt_2fa_enroll_scan">Scan this QR code with your authenticator app, then enter the 6-digit code it shows.</string>
+    <string name="bt_2fa_enroll_secret">Or enter this key manually:</string>
+    <string name="bt_2fa_enroll_code">6-digit code</string>
+    <string name="bt_2fa_enroll_verify">Verify &amp; turn on</string>
+    <string name="bt_2fa_enroll_cancel">Cancel setup</string>
+    <string name="bt_2fa_disable_title">Turn off authenticator?</string>
+    <string name="bt_2fa_disable_message">Enter a current 6-digit code or a recovery code to turn it off.</string>
+    <string name="bt_2fa_disable_code">Code or recovery code</string>
+    <string name="bt_2fa_recovery_title">Recovery codes</string>
+    <string name="bt_2fa_recovery_remaining">%1$d recovery codes left</string>
+    <string name="bt_2fa_recovery_regenerate">Regenerate</string>
+    <string name="bt_2fa_recovery_shown_title">Save your recovery codes</string>
+    <string name="bt_2fa_recovery_shown_message">Store these somewhere safe. Each code works once. You won\'t see them again.</string>
+    <string name="bt_2fa_recovery_copy">Copy codes</string>
+    <string name="bt_2fa_recovery_done">I\'ve saved them</string>
+
+    <!-- Active sessions -->
+    <string name="bt_dest_active_sessions">Active sessions</string>
+    <string name="bt_sessions_intro">These are the places you\'re signed in to BetterTrack — on the web and other devices. Sign out any you don\'t recognise.</string>
+    <string name="bt_sessions_current">Current</string>
+    <string name="bt_sessions_revoke">Sign out</string>
+    <string name="bt_sessions_revoke_title">Sign out this session?</string>
+    <string name="bt_sessions_revoke_message">%1$s will be signed out of BetterTrack.</string>
+    <string name="bt_sessions_revoke_all">Sign out all other sessions</string>
+    <string name="bt_sessions_revoke_all_title">Sign out everywhere else?</string>
+    <string name="bt_sessions_revoke_all_message">This signs you out of BetterTrack on the web and every other device. This app stays signed in.</string>
+    <string name="bt_sessions_revoke_all_confirm">Sign out others</string>
+    <string name="bt_sessions_none">No active sessions found.</string>
+    <string name="bt_sessions_app_note">This app isn\'t listed here — it signs in with a secure token, not a web session.</string>
+    <string name="bt_sessions_just_now">Active just now</string>
+    <string name="bt_sessions_minutes">Active %1$d min ago</string>
+    <string name="bt_sessions_hours">Active %1$d h ago</string>
+    <string name="bt_sessions_days">Active %1$d days ago</string>
+    <string name="bt_sessions_on_date">Active %1$s</string>
+    <string name="bt_sessions_unknown">Active recently</string>
+
+    <!-- Language -->
+    <string name="bt_lang_intro">Choose the language for the app. Money and dates follow the same setting.</string>
+    <string name="bt_lang_system">System default</string>
+    <string name="bt_lang_system_sub">Follow your device language</string>
+    <string name="bt_lang_english">English</string>
+    <string name="bt_lang_german">German</string>
+
+    <!-- About -->
+    <string name="bt_about_edition_line">The official BetterTrack app</string>
+    <string name="bt_about_open_web">Open BetterTrack on the web</string>
+    <string name="bt_about_copyright">© BetterTrack</string>
+
+    <!-- Delete account -->
+    <string name="bt_dest_delete_account">Delete account</string>
+    <string name="bt_del_warning_title">This can\'t be undone</string>
+    <string name="bt_del_warning_body">Deleting your account permanently removes your portfolios, transactions, cash, custom assets, watchlists, conglomerates and social data. This can\'t be reversed.</string>
+    <string name="bt_del_confirm_label">Type your username to confirm</string>
+    <string name="bt_del_mismatch">That doesn\'t match your username.</string>
+    <string name="bt_del_password">Your password</string>
+    <string name="bt_del_reauth_note">Enter your password to confirm it\'s you.</string>
+    <string name="bt_del_disabled_note">Account deletion is disabled in this build for safety. In the release app this permanently deletes your account.</string>
+    <string name="bt_del_button">Delete my account permanently</string>
+    <string name="bt_del_final_title">Delete your account?</string>
+    <string name="bt_del_final_message">This permanently deletes your account and all its data. This can\'t be undone.</string>
+    <string name="bt_del_final_confirm">Delete forever</string>
+
+    <string name="bt_action_copied">Copied</string>
 </resources>

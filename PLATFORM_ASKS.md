@@ -41,6 +41,7 @@ The platform side is done. To use the scope-gated endpoints (`/auth/pin/*`, `/no
 
 ### Chat activation + realtime (found during the app's chat go-live, 2026-07-09)
 - [ ] **P3 — Bearer self-service grant management** *(side-finding from the scope hunt)*: `DELETE /settings/oauth-grants/{id}` is session-cookie-only, so the app can't self-heal a wonky grant from the device. Small bearer-coverage ask; park with the next bearer batch.
+- [ ] **P3 — Cancel-pending-2FA-enroll endpoint** *(Step-18 finding, 2026-07-10)*: `POST /auth/2fa/enroll` persists a provisional secret (`totpPending:true`) but there is no endpoint to abandon/cancel a pending enrollment — the flag can only be cleared by confirming (arms 2FA) or a fresh enroll overwriting it. Add e.g. `DELETE /auth/2fa/enroll` (pending-only). *(Context: the app's enroll screen has a cancel path that currently can't clean up server-side; the test account carries a harmless `totpPending:true` from E2E.)*
 
 ### Notifications (spec §6.11 — app UI built, delivery stubbed)
 > 📄 **Full FCM send contract → `docs/PUSH_NOTIFICATIONS_FOR_PLATFORM.md`.** *(Platform: unified Notifications-v2 = #368, absorbs #350/#351; owner wants ONE central dispatcher + presence-based suppression — don't notify for a chat you're actively viewing.)*

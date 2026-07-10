@@ -92,6 +92,10 @@ import at.bettertrack.app.navigation.PortfolioTabRoute
 import at.bettertrack.app.navigation.SearchRoute
 import at.bettertrack.app.navigation.SettingsAboutRoute
 import at.bettertrack.app.navigation.SettingsAccountRoute
+import at.bettertrack.app.navigation.ChangePasswordRoute
+import at.bettertrack.app.navigation.TwoFactorRoute
+import at.bettertrack.app.navigation.ActiveSessionsRoute
+import at.bettertrack.app.navigation.DeleteAccountRoute
 import at.bettertrack.app.navigation.SettingsLanguageRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
 import at.bettertrack.app.navigation.SettingsRoute
@@ -138,6 +142,12 @@ import at.bettertrack.app.ui.social.SocialScreen
 import at.bettertrack.app.ui.settings.ChangelogScreen
 import at.bettertrack.app.ui.settings.SecurityScreen
 import at.bettertrack.app.ui.settings.SettingsScreen
+import at.bettertrack.app.ui.settings.AboutScreen
+import at.bettertrack.app.ui.settings.ActiveSessionsScreen
+import at.bettertrack.app.ui.settings.ChangePasswordScreen
+import at.bettertrack.app.ui.settings.DeleteAccountScreen
+import at.bettertrack.app.ui.settings.LanguageScreen
+import at.bettertrack.app.ui.settings.TwoFactorScreen
 import at.bettertrack.app.ui.applock.AppLockSetupScreen
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.reflect.KClass
@@ -682,9 +692,15 @@ private fun BtNavHost(
         composable<SettingsRoute> {
             SettingsScreen(
                 onBack = back,
-                onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
                 onOpenSecurity = { navController.navigate(SettingsSecurityRoute) },
+                onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
+                onOpenChangePassword = { navController.navigate(ChangePasswordRoute) },
+                onOpenLanguage = { navController.navigate(SettingsLanguageRoute) },
+                onOpenAbout = { navController.navigate(SettingsAboutRoute) },
+                onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
                 onOpenChangelog = { navController.navigate(ChangelogRoute) },
+                onOpenGallery = { navController.navigate(GalleryRoute) },
+                onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
@@ -694,6 +710,8 @@ private fun BtNavHost(
                 onBack = back,
                 onSetupPin = { navController.navigate(AppLockSetupRoute(change = false)) },
                 onChangePin = { navController.navigate(AppLockSetupRoute(change = true)) },
+                onOpenTwoFactor = { navController.navigate(TwoFactorRoute) },
+                onOpenSessions = { navController.navigate(ActiveSessionsRoute) },
             )
         }
         composable<AppLockSetupRoute> { entry ->
@@ -701,8 +719,14 @@ private fun BtNavHost(
             AppLockSetupScreen(change = route.change, onDone = back, onBack = back)
         }
         composable<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
-        composable<SettingsLanguageRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_language), back) }
-        composable<SettingsAboutRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_about), back) }
+        composable<SettingsLanguageRoute> { LanguageScreen(onBack = back) }
+        composable<SettingsAboutRoute> {
+            AboutScreen(onBack = back, onOpenChangelog = { navController.navigate(ChangelogRoute) })
+        }
+        composable<ChangePasswordRoute> { ChangePasswordScreen(onBack = back) }
+        composable<TwoFactorRoute> { TwoFactorScreen(onBack = back) }
+        composable<ActiveSessionsRoute> { ActiveSessionsScreen(onBack = back) }
+        composable<DeleteAccountRoute> { DeleteAccountScreen(onBack = back) }
 
         // Sync & debug
         composable<PendingSyncRoute> {

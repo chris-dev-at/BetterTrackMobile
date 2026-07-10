@@ -17,8 +17,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +70,8 @@ fun SecurityScreen(
     onBack: () -> Unit,
     onSetupPin: () -> Unit,
     onChangePin: () -> Unit,
+    onOpenTwoFactor: () -> Unit = {},
+    onOpenSessions: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val controller = AppGraph.appLockController
@@ -104,6 +108,23 @@ fun SecurityScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // ── Account security (2FA + sessions) — bearer + account:security ──
+            SectionLabel(stringResource(R.string.bt_settings_account_security_section))
+            SecurityNavRow(
+                icon = Icons.Outlined.Shield,
+                title = stringResource(R.string.bt_dest_two_factor),
+                subtitle = stringResource(R.string.bt_settings_2fa_sub),
+                onClick = onOpenTwoFactor,
+            )
+            SecurityNavRow(
+                icon = Icons.Outlined.Devices,
+                title = stringResource(R.string.bt_dest_active_sessions),
+                subtitle = stringResource(R.string.bt_settings_sessions_sub),
+                onClick = onOpenSessions,
+            )
+
+            Spacer(Modifier.height(4.dp))
+
             SectionLabel(stringResource(R.string.bt_settings_applock_section))
 
             // Master enable/disable — turning ON opens the set-up flow; the lock
@@ -175,7 +196,6 @@ fun SecurityScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
             )
-            // TODO(step 18): 2FA management + active-sessions sections mount here.
         }
     }
 

@@ -1,0 +1,665 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BetterTrack</string>
+
+    <!-- Gemeinsame Komponenten-Strings -->
+    <string name="bt_error_generic_title">Etwas ist schiefgelaufen</string>
+    <string name="bt_error_generic_message">Bitte versuch es gleich noch einmal.</string>
+    <string name="bt_action_retry">Erneut versuchen</string>
+    <string name="bt_action_back">Zurück</string>
+    <string name="bt_action_cancel">Abbrechen</string>
+    <string name="bt_edition_app">App</string>
+
+    <!-- Login (§4) -->
+    <string name="bt_login_tagline">BetterTrack — deine Finanzen im Griff</string>
+    <string name="bt_login_button">Mit BetterTrack anmelden</string>
+    <string name="bt_login_connecting">Verbinde…</string>
+    <string name="bt_login_need_account">Noch kein Konto?</string>
+    <string name="bt_login_forgot_password">Passwort vergessen?</string>
+    <string name="bt_login_error_generic">Anmeldung fehlgeschlagen. Bitte versuch es noch einmal.</string>
+    <string name="bt_login_error_network">Keine Verbindung. Prüf dein Netzwerk und versuch es noch einmal.</string>
+    <string name="bt_login_error_state">Die Anmeldung konnte nicht bestätigt werden. Bitte versuch es noch einmal.</string>
+    <string name="bt_login_error_exchange">Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuch es noch einmal.</string>
+    <string name="bt_login_error_disabled">Dieses Konto wurde deaktiviert. Wende dich an den BetterTrack-Support.</string>
+    <string name="bt_login_error_admin">Die BetterTrack-App ist nur für persönliche Konten.</string>
+    <string name="bt_login_error_denied">Anmeldung abgebrochen. Bitte versuch es noch einmal.</string>
+
+    <!-- Erzwungene Passwortänderung (§4 / §6.13) -->
+    <string name="bt_pwchange_title">Passwortänderung erforderlich</string>
+    <string name="bt_pwchange_message">Aus Sicherheitsgründen: Ändere dein Passwort in BetterTrack im Web fertig, komm dann zurück und melde dich neu an.</string>
+    <string name="bt_pwchange_open_web">Im Web abschließen</string>
+
+    <!-- Konto / Abmelden -->
+    <string name="bt_action_logout">Abmelden</string>
+    <string name="bt_settings_account_section">Konto</string>
+    <string name="bt_settings_username">Benutzername</string>
+    <string name="bt_settings_email">E-Mail</string>
+    <string name="bt_settings_logout_confirm_title">Abmelden?</string>
+    <string name="bt_settings_logout_confirm_message">Damit meldest du dich ab und die Daten dieses Kontos werden vom Gerät entfernt.</string>
+
+    <!-- Shell -->
+    <string name="bt_tab_portfolio">Portfolio</string>
+    <string name="bt_tab_assets">Werte</string>
+    <string name="bt_tab_social">Social</string>
+    <string name="bt_tab_workboard">Workboard</string>
+    <string name="bt_top_notifications">Mitteilungen</string>
+    <string name="bt_top_settings">Einstellungen</string>
+    <string name="bt_offline_banner">Offline — Daten von %1$s</string>
+    <string name="bt_offline_banner_no_data">Offline</string>
+
+    <!-- Tab-Platzhalter -->
+    <string name="bt_tab_portfolio_empty_title">Hier lebt dein Portfolio</string>
+    <string name="bt_tab_portfolio_empty_message">Deine Bestände, dein Bargeld und dein Vermögen erscheinen hier.</string>
+    <string name="bt_tab_assets_empty_title">Behalt den Markt im Blick</string>
+    <string name="bt_tab_assets_empty_message">Such nach Werten und leg hier Watchlists an.</string>
+    <string name="bt_tab_social_empty_title">Gemeinsam investieren</string>
+    <string name="bt_tab_social_empty_message">Freunde, geteilte Portfolios und Chat findest du hier.</string>
+    <string name="bt_tab_workboard_empty_title">Ideen bauen</string>
+    <string name="bt_tab_workboard_empty_message">Stell Konglomerate zusammen und plan Budgets hier.</string>
+
+    <!-- Platzhalter-Ziele -->
+    <string name="bt_placeholder_message">Platzhalter — dieser Screen kommt in einem späteren Schritt.</string>
+    <string name="bt_dest_login">Anmelden</string>
+    <string name="bt_dest_app_lock">App-Sperre</string>
+    <string name="bt_dest_holding_detail">Position</string>
+    <string name="bt_dest_transactions">Transaktionen</string>
+    <string name="bt_dest_transaction_form">Neue Transaktion</string>
+    <string name="bt_dest_cash">Bargeld</string>
+    <string name="bt_dest_custom_assets">Eigene Werte</string>
+    <string name="bt_dest_asset_page">Wert</string>
+    <string name="bt_dest_search">Suche</string>
+    <string name="bt_dest_watchlists">Watchlists</string>
+    <string name="bt_dest_conglomerates">Konglomerate</string>
+    <string name="bt_dest_conglomerate_builder">Konglomerat-Baukasten</string>
+    <string name="bt_dest_conglomerate_detail">Konglomerat</string>
+    <string name="bt_dest_chats">Chats</string>
+    <string name="bt_dest_chat_thread">Chat</string>
+    <string name="bt_dest_notifications">Mitteilungen</string>
+    <string name="bt_dest_settings">Einstellungen</string>
+    <string name="bt_dest_settings_account">Konto</string>
+    <string name="bt_dest_settings_security">Sicherheit</string>
+    <string name="bt_dest_settings_notifications">Mitteilungs-Einstellungen</string>
+    <string name="bt_dest_settings_language">Sprache</string>
+    <string name="bt_dest_settings_about">Über</string>
+    <string name="bt_dest_pending_sync">Ausstehende Synchronisierung</string>
+
+    <!-- Portfolio-Übersicht (§6.1) -->
+    <string name="bt_overview_net_worth">Vermögen</string>
+    <string name="bt_overview_today">heute</string>
+    <string name="bt_overview_holdings_value">Bestände</string>
+    <string name="bt_overview_cash">Bargeld</string>
+    <string name="bt_overview_invested">Investiert</string>
+    <string name="bt_overview_value_over_time">Wertverlauf</string>
+    <string name="bt_overview_holdings_section">Bestände</string>
+    <string name="bt_overview_allocation_section">Aufteilung</string>
+    <string name="bt_overview_alloc_by_asset">Nach Wert</string>
+    <string name="bt_overview_alloc_by_category">Nach Kategorie</string>
+    <string name="bt_overview_alloc_other">Sonstige</string>
+    <string name="bt_overview_alloc_cash">Bargeld</string>
+    <string name="bt_overview_no_holdings_title">Noch keine Bestände</string>
+    <string name="bt_overview_no_holdings_message">Erfass deinen ersten Kauf, und Wert, Performance und Aufteilung dieses Portfolios erscheinen hier.</string>
+    <string name="bt_overview_no_portfolio_title">Leg dein erstes Portfolio an</string>
+    <string name="bt_overview_no_portfolio_message">Ein Portfolio verfolgt deine Bestände, dein Bargeld und deine Performance.</string>
+    <string name="bt_overview_create_portfolio">Portfolio anlegen</string>
+    <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
+    <string name="bt_overview_chart_cd">Diagramm des Portfoliowerts über die Zeit</string>
+    <string name="bt_overview_graph_range_cd">%1$s Verlauf anzeigen</string>
+    <string name="bt_range_1m">1M</string>
+    <string name="bt_range_6m">6M</string>
+    <string name="bt_range_1y">1J</string>
+    <string name="bt_range_max">Max</string>
+    <string name="bt_holding_weight">%1$s %%</string>
+
+    <!-- Portfolio-Wechsler (§6.1) -->
+    <string name="bt_switcher_title">Portfolios</string>
+    <string name="bt_switcher_open_cd">Portfolio wechseln</string>
+    <string name="bt_switcher_new">Neues Portfolio</string>
+    <string name="bt_switcher_default_badge">Standard</string>
+    <string name="bt_switcher_archived_section">Archiviert</string>
+    <string name="bt_switcher_selected_cd">Ausgewähltes Portfolio</string>
+    <string name="bt_switcher_actions_cd">Portfolio-Aktionen</string>
+    <string name="bt_switcher_rename">Umbenennen</string>
+    <string name="bt_switcher_archive">Archivieren</string>
+    <string name="bt_switcher_restore">Wiederherstellen</string>
+    <string name="bt_switcher_create_title">Neues Portfolio</string>
+    <string name="bt_switcher_rename_title">Portfolio umbenennen</string>
+    <string name="bt_switcher_name_label">Name</string>
+    <string name="bt_switcher_create_action">Anlegen</string>
+    <string name="bt_switcher_rename_action">Speichern</string>
+    <string name="bt_switcher_archive_title">Portfolio archivieren?</string>
+    <string name="bt_switcher_archive_message">„%1$s“ wird archiviert. Du kannst es jederzeit wiederherstellen.</string>
+    <string name="bt_switcher_archive_action">Archivieren</string>
+    <string name="bt_switcher_requires_connection">Verbindung nötig — du bist offline</string>
+    <string name="bt_switcher_value_pending">—</string>
+
+    <!-- Transaktionen (§6.2 lesen) -->
+    <string name="bt_tx_title">Transaktionen</string>
+    <string name="bt_tx_filter_all">Alle</string>
+    <string name="bt_tx_filter_buys">Käufe</string>
+    <string name="bt_tx_filter_sells">Verkäufe</string>
+    <string name="bt_tx_filter_all_assets">Alle Werte</string>
+    <string name="bt_tx_filter_asset_cd">Nach Wert filtern</string>
+    <string name="bt_tx_filter_asset_title">Nach Wert filtern</string>
+    <string name="bt_tx_side_buy">Kauf</string>
+    <string name="bt_tx_side_sell">Verkauf</string>
+    <string name="bt_tx_fee">Gebühr %1$s</string>
+    <string name="bt_tx_empty_title">Noch keine Transaktionen</string>
+    <string name="bt_tx_empty_message">Käufe und Verkäufe, die du erfasst, erscheinen hier.</string>
+    <string name="bt_tx_no_matches_title">Keine passenden Transaktionen</string>
+    <string name="bt_tx_no_matches_message">Versuch, die Filter zu entfernen.</string>
+    <string name="bt_tx_clear_filters">Filter entfernen</string>
+    <string name="bt_tx_load_more">Ältere Transaktionen laden</string>
+    <string name="bt_tx_count_shown">%1$d Transaktionen</string>
+
+    <!-- Positionsdetail (§6.1/§6.2) -->
+    <string name="bt_holding_position_value">Positionswert</string>
+    <string name="bt_holding_amount">Anzahl</string>
+    <string name="bt_holding_avg_cost">Ø Einstand</string>
+    <string name="bt_holding_pl">Buchgewinn/-verlust</string>
+    <string name="bt_holding_day">Heute</string>
+    <string name="bt_holding_transactions_section">Transaktionen</string>
+    <string name="bt_holding_no_tx">Noch keine Transaktionen für diese Position.</string>
+    <string name="bt_holding_asset_page_link">Wert-Seite</string>
+    <string name="bt_holding_asset_page_soon">Bald verfügbar</string>
+    <string name="bt_holding_not_found_title">Position nicht gefunden</string>
+    <string name="bt_holding_not_found_message">Diese Position ist nicht mehr im Portfolio.</string>
+
+    <!-- Transaktionsformular (§6.2) -->
+    <string name="bt_txform_title_new">Neue Transaktion</string>
+    <string name="bt_txform_title_edit">Transaktion bearbeiten</string>
+    <string name="bt_txform_title_edit_queued">Eintrag in Warteschlange bearbeiten</string>
+    <string name="bt_txform_asset">Wert</string>
+    <string name="bt_txform_asset_choose">Wert auswählen</string>
+    <string name="bt_txform_asset_locked_cd">Der Wert kann bei einer Bearbeitung nicht geändert werden</string>
+    <string name="bt_txform_asset_held">%1$s im Bestand</string>
+    <string name="bt_txform_asset_sheet_title">Wert auswählen</string>
+    <string name="bt_txform_asset_sheet_empty">Noch keine Werte im Bestand. Neue Werte kaufst du über die Suche.</string>
+    <string name="bt_txform_asset_other_section">In anderen Portfolios gehalten</string>
+    <string name="bt_txform_asset_search_soon">Die Suche über alle Werte kommt mit der Suche.</string>
+    <string name="bt_txform_asset_search_hint">Alle Werte durchsuchen…</string>
+    <string name="bt_txform_asset_your_section">Deine Werte</string>
+    <string name="bt_txform_asset_all_section">Alle Werte</string>
+    <string name="bt_txform_asset_search_offline">Verbinde dich, um alle Werte zu durchsuchen.</string>
+    <string name="bt_txform_asset_search_prompt">Tippe, um Aktien, ETFs, Krypto und mehr zu suchen.</string>
+    <string name="bt_txform_max">Max</string>
+    <string name="bt_txform_price_link">Kurs mit Datum verknüpfen</string>
+    <string name="bt_txform_price_unlink">Kurs vom Datum lösen</string>
+    <string name="bt_txform_price_linked_hint">Datum und Kurs bleiben verknüpft — setz eines, um das andere zu füllen.</string>
+    <string name="bt_txform_price_never_reached">Im verfügbaren Verlauf nie zu diesem Kurs — Datum unverändert.</string>
+    <string name="bt_txform_side_cd">%1$s</string>
+    <string name="bt_txform_side_selected_cd">%1$s, ausgewählt</string>
+    <string name="bt_txform_quantity">Anzahl</string>
+    <string name="bt_txform_price">Kurs</string>
+    <string name="bt_txform_fee">Gebühr</string>
+    <string name="bt_txform_date">Datum</string>
+    <string name="bt_txform_date_cd">Datum wählen</string>
+    <string name="bt_txform_date_ok">OK</string>
+    <string name="bt_txform_note">Notiz (optional)</string>
+    <string name="bt_txform_pay_from_cash">Aus Bargeld bezahlen</string>
+    <string name="bt_txform_add_proceeds">Erlös zum Bargeld hinzufügen</string>
+    <string name="bt_txform_cash_after">Bargeld danach: %1$s</string>
+    <string name="bt_txform_cash_balance">Bargeldbestand: %1$s</string>
+    <string name="bt_txform_cash_off_hint">Bargeld bleibt unberührt</string>
+    <string name="bt_txform_cash_unknown">Bestand aktualisiert sich beim nächsten Sync</string>
+    <string name="bt_txform_insufficient_cash">Nicht genug Bargeld — %1$s verfügbar</string>
+    <string name="bt_txform_backdated_cash_warning">Am %1$s hielt dieses Konto nur %2$s — die %3$s werden jetzt von deinem Bargeld abgezogen, als wäre heute gekauft worden. Der Kauf behält sein Datum vom %1$s.</string>
+    <string name="bt_txform_oversell_warning">Mehr als du hältst (%1$s %2$s) — BetterTrack prüft beim Sync</string>
+    <string name="bt_txform_total">Gesamt</string>
+    <string name="bt_txform_record_buy">Kauf erfassen</string>
+    <string name="bt_txform_record_sell">Verkauf erfassen</string>
+    <string name="bt_txform_save">Änderungen speichern</string>
+    <string name="bt_txform_rejected_title">Von BetterTrack abgelehnt</string>
+    <string name="bt_txform_rejected_hint">Korrigier die Werte und speichere — es wird als derselbe Eintrag erneut versucht.</string>
+    <string name="bt_txform_synced_offline_title">Verbindung nötig</string>
+    <string name="bt_txform_synced_offline_message">Eine bereits synchronisierte Transaktion kannst du nur online bearbeiten oder löschen.</string>
+    <string name="bt_txform_delete_cd">Transaktion löschen</string>
+    <string name="bt_txform_discard_cd">Eintrag in Warteschlange verwerfen</string>
+    <string name="bt_txform_delete_title">Transaktion löschen?</string>
+    <string name="bt_txform_delete_message">Damit wird die Transaktion aus BetterTrack entfernt. Bestände und Bargeld werden neu berechnet.</string>
+    <string name="bt_txform_delete_action">Löschen</string>
+    <string name="bt_txform_discard_title">Eintrag verwerfen?</string>
+    <string name="bt_txform_discard_message">Dieser Eintrag hat BetterTrack noch nicht erreicht. Verwerfen entfernt ihn aus der Warteschlange.</string>
+    <string name="bt_txform_discard_action">Verwerfen</string>
+    <string name="bt_overview_fab_cd">Transaktion erfassen</string>
+    <string name="bt_holding_fab_cd">Transaktion für diesen Wert erfassen</string>
+
+    <!-- Ausstehende Synchronisierung (§7.4) -->
+    <string name="bt_pending_badge">Ausstehend</string>
+    <string name="bt_pending_badge_syncing">Synchronisiere…</string>
+    <string name="bt_pending_badge_attention">Braucht Aufmerksamkeit</string>
+    <string name="bt_pending_badge_done">Synchronisiert</string>
+    <string name="bt_pending_section">Wartet auf Sync</string>
+    <string name="bt_pending_synced_section">Synchronisiert</string>
+    <string name="bt_pending_title">Ausstehende Synchronisierung</string>
+    <string name="bt_pending_summary">%1$d zu synchronisieren</string>
+    <string name="bt_pending_sync_now">Jetzt synchronisieren</string>
+    <string name="bt_pending_empty_title">Alle Änderungen synchronisiert</string>
+    <string name="bt_pending_empty_message">Alles, was du erfasst hast, ist bei BetterTrack angekommen.</string>
+    <string name="bt_pending_needs_attention_section">Braucht Aufmerksamkeit</string>
+    <string name="bt_pending_done_section">Kürzlich synchronisiert</string>
+    <string name="bt_pending_added_at">Hinzugefügt %1$s</string>
+    <string name="bt_pending_retry">Erneut versuchen</string>
+    <string name="bt_pending_edit">Bearbeiten</string>
+    <string name="bt_pending_edit_retry">Bearbeiten &amp; erneut</string>
+    <string name="bt_pending_discard">Verwerfen</string>
+    <string name="bt_pending_offline_hint">Wartet auf eine Verbindung — synchronisiert automatisch.</string>
+    <string name="bt_pending_op_cash_deposit">Bargeld-Einzahlung</string>
+    <string name="bt_pending_op_cash_withdraw">Bargeld-Auszahlung</string>
+    <string name="bt_pending_op_cash_transfer">Bargeld-Umbuchung</string>
+    <string name="bt_pending_op_value_point">Wertaktualisierung eigener Wert</string>
+    <string name="bt_offline_banner_tap_cd">Ausstehende Synchronisierung öffnen</string>
+    <plurals name="bt_pending_strip_waiting">
+        <item quantity="one">%1$d Änderung wartet auf Sync</item>
+        <item quantity="other">%1$d Änderungen warten auf Sync</item>
+    </plurals>
+    <plurals name="bt_pending_strip_attention">
+        <item quantity="one">%1$d Änderung braucht Aufmerksamkeit</item>
+        <item quantity="other">%1$d Änderungen brauchen Aufmerksamkeit</item>
+    </plurals>
+
+    <!-- Bargeld &amp; Quellen (§6.3) -->
+    <string name="bt_cash_title">Bargeld</string>
+    <string name="bt_cash_total">Gesamtes Bargeld</string>
+    <string name="bt_cash_deposit">Einzahlen</string>
+    <string name="bt_cash_withdraw">Auszahlen</string>
+    <string name="bt_cash_transfer">Umbuchen</string>
+    <string name="bt_cash_deposit_title">Bargeld einzahlen</string>
+    <string name="bt_cash_withdraw_title">Bargeld auszahlen</string>
+    <string name="bt_cash_transfer_title">Zwischen Quellen umbuchen</string>
+    <string name="bt_cash_deposit_action">Einzahlung erfassen</string>
+    <string name="bt_cash_withdraw_action">Auszahlung erfassen</string>
+    <string name="bt_cash_transfer_action">Umbuchung erfassen</string>
+    <string name="bt_cash_amount">Betrag</string>
+    <string name="bt_cash_source_picker">Quelle</string>
+    <string name="bt_cash_transfer_from">Von</string>
+    <string name="bt_cash_transfer_to">Nach</string>
+    <string name="bt_cash_transfer_same_source">Wähl zwei verschiedene Quellen.</string>
+    <string name="bt_cash_balance_after">%1$s danach: %2$s</string>
+    <string name="bt_cash_sources_section">Quellen</string>
+    <string name="bt_cash_new_source">Neue Quelle</string>
+    <string name="bt_cash_new_source_title">Neue Bargeldquelle</string>
+    <string name="bt_cash_rename_source_title">Bargeldquelle bearbeiten</string>
+    <string name="bt_cash_main_badge">Haupt</string>
+    <string name="bt_cash_source_actions_cd">Quellen-Aktionen</string>
+    <string name="bt_cash_archive_title">Quelle archivieren?</string>
+    <string name="bt_cash_archive_message">„%1$s“ wird archiviert. Der Saldo muss null sein.</string>
+    <string name="bt_cash_movements_section">Bewegungen</string>
+    <string name="bt_cash_movements_for">Bewegungen · %1$s</string>
+    <string name="bt_cash_empty_title">Noch keine Bargeldbewegungen</string>
+    <string name="bt_cash_empty_message">Einzahlungen, Auszahlungen und Umbuchungen erscheinen hier.</string>
+    <string name="bt_cash_type_bank">Bank</string>
+    <string name="bt_cash_type_retirement">Vorsorge</string>
+    <string name="bt_cash_type_cash">Bargeld</string>
+    <string name="bt_cash_type_custom">Eigene</string>
+    <string name="bt_cash_kind_deposit">Einzahlung</string>
+    <string name="bt_cash_kind_withdrawal">Auszahlung</string>
+    <string name="bt_cash_kind_buy">Kauf (aus Bargeld bezahlt)</string>
+    <string name="bt_cash_kind_sell">Verkaufserlös</string>
+    <string name="bt_cash_kind_transfer_out">Umbuchung an %1$s</string>
+    <string name="bt_cash_kind_transfer_in">Umbuchung von %1$s</string>
+    <string name="bt_cash_pending_transfer">Umbuchung %1$s → %2$s</string>
+
+    <!-- Eigene Werte (§6.4) -->
+    <string name="bt_custom_title">Eigene Werte</string>
+    <string name="bt_custom_manage">Eigene Werte verwalten</string>
+    <string name="bt_custom_create">Eigenen Wert anlegen</string>
+    <string name="bt_custom_create_title">Neuer eigener Wert</string>
+    <string name="bt_custom_edit">Wert bearbeiten</string>
+    <string name="bt_custom_edit_title">Eigenen Wert bearbeiten</string>
+    <string name="bt_custom_delete">Wert löschen</string>
+    <string name="bt_custom_delete_title">Eigenen Wert löschen?</string>
+    <string name="bt_custom_delete_message">Damit werden der Wert und sein Wertverlauf aus BetterTrack entfernt.</string>
+    <string name="bt_custom_category">Kategorie</string>
+    <string name="bt_custom_empty_title">Noch keine eigenen Werte</string>
+    <string name="bt_custom_empty_message">Verfolge Dinge wie eine Uhrensammlung, Immobilien oder ein privates Darlehen.</string>
+    <string name="bt_custom_current_value">Aktueller Wert</string>
+    <string name="bt_custom_value_history">Wertverlauf</string>
+    <string name="bt_custom_chart_empty">Erfass zwei Werte, um den Verlauf zu zeichnen</string>
+    <string name="bt_custom_update_now">Wert jetzt aktualisieren</string>
+    <string name="bt_custom_update_title">Wert aktualisieren</string>
+    <string name="bt_custom_update_hint">Erfasst den Wert zum gewählten Datum. Er ersetzt einen bereits für diesen Tag gesetzten Wert.</string>
+    <string name="bt_custom_new_value">Neuer Wert</string>
+    <string name="bt_custom_record_value">Wert erfassen</string>
+    <string name="bt_custom_points_section">Wertverlauf</string>
+    <string name="bt_custom_no_points">Noch keine Werte erfasst.</string>
+    <string name="bt_custom_delete_point">Wert löschen</string>
+    <string name="bt_custom_delete_point_title">Diesen Wert löschen?</string>
+    <string name="bt_custom_delete_point_message">Entfernt diesen datierten Wert aus dem Verlauf.</string>
+    <string name="bt_custom_cat_real_estate">Immobilie</string>
+    <string name="bt_custom_cat_vehicle">Fahrzeug</string>
+    <string name="bt_custom_cat_collectible">Sammlerstück</string>
+    <string name="bt_custom_cat_cash">Bargeld</string>
+    <string name="bt_custom_cat_unlisted">Nicht börsennotiert</string>
+    <string name="bt_custom_cat_other">Sonstiges</string>
+
+    <!-- Suche &amp; Wert-Seiten (§6.5) -->
+    <string name="bt_search_title">Suche</string>
+    <string name="bt_search_hint">Aktien, ETFs, Krypto suchen…</string>
+    <string name="bt_search_clear">Löschen</string>
+    <string name="bt_search_cd">Suchen</string>
+    <string name="bt_search_prompt_title">Finde einen Wert</string>
+    <string name="bt_search_prompt_message">Such nach Name oder Symbol — Aktien, ETFs, Krypto und mehr.</string>
+    <string name="bt_search_no_results_title">Keine Treffer</string>
+    <string name="bt_search_no_results_message">Versuch einen anderen Namen oder ein anderes Symbol.</string>
+    <string name="bt_search_enriching">Suche bei Anbietern…</string>
+    <string name="bt_search_requires_connection_message">Für die Suche brauchst du eine Verbindung. Verbinde dich, um Werte nachzuschlagen.</string>
+    <string name="bt_requires_connection_title">Du bist offline</string>
+    <string name="bt_requires_connection_inline">Verbindung nötig.</string>
+    <string name="bt_action_buy">Kaufen</string>
+    <string name="bt_action_sell">Verkaufen</string>
+    <string name="bt_watchlist_add">Zur Watchlist hinzufügen</string>
+    <string name="bt_watchlist_remove">Aus Watchlist entfernen</string>
+    <string name="bt_value_dash">—</string>
+    <string name="bt_asset_title">Wert</string>
+    <string name="bt_asset_price">Kurs</string>
+    <string name="bt_asset_stats">Kennzahlen</string>
+    <string name="bt_asset_prev_close">Vortagesschluss</string>
+    <string name="bt_asset_day_change">Tagesveränderung</string>
+    <string name="bt_asset_currency">Währung</string>
+    <string name="bt_asset_as_of">Stand</string>
+    <string name="bt_asset_chart_empty">Kein Kursverlauf für diesen Zeitraum.</string>
+    <string name="bt_asset_requires_connection_message">Für Wert-Seiten brauchst du eine Verbindung. Verbinde dich, um Live-Kurse zu sehen.</string>
+    <string name="bt_asset_type_stock">Aktie</string>
+    <string name="bt_asset_type_etf">ETF</string>
+    <string name="bt_asset_type_index">Index</string>
+    <string name="bt_asset_type_fx">Devisen</string>
+    <string name="bt_asset_type_commodity">Rohstoff</string>
+    <string name="bt_asset_type_crypto">Krypto</string>
+    <string name="bt_asset_type_custom">Eigener</string>
+    <string name="bt_assets_search_bar">Aktien, ETFs, Krypto suchen…</string>
+
+    <!-- Dev-Update-Hinweis -->
+    <string name="bt_update_dialog_title">Neue Version verfügbar</string>
+    <string name="bt_update_dialog_message">Version %1$s ist bereit zur Installation von GitHub.</string>
+    <string name="bt_update_go_github">Zu GitHub</string>
+    <string name="bt_update_remind_later">Später erinnern</string>
+    <string name="bt_update_ignore">Diese Version ignorieren</string>
+    <string name="bt_update_badge_title">Update verfügbar</string>
+    <string name="bt_update_badge_version">Version %1$s · tippen, um GitHub zu öffnen</string>
+    <string name="bt_update_badge_pill">Neu</string>
+
+    <!-- Watchlists (§6.6) -->
+    <string name="bt_watchlist_title">Watchlists</string>
+    <string name="bt_watchlist_new">Neue Liste</string>
+    <string name="bt_watchlist_rename">Liste umbenennen</string>
+    <string name="bt_watchlist_delete">Liste löschen</string>
+    <string name="bt_watchlist_delete_message">„%1$s“ löschen? Ihre Werte werden aus dieser Liste entfernt.</string>
+    <string name="bt_watchlist_stub">Beispiel-Liste</string>
+    <string name="bt_watchlist_empty_title">Noch keine Werte</string>
+    <string name="bt_watchlist_empty_message">Füg Aktien, ETFs oder Krypto hinzu, um ihre Kurse hier zu verfolgen.</string>
+    <string name="bt_watchlist_add_asset">Wert hinzufügen</string>
+    <string name="bt_watchlist_remove_item">Aus Liste entfernen</string>
+    <string name="bt_watchlist_add_to">Zur Watchlist hinzufügen</string>
+    <string name="bt_watchlist_default">Standard</string>
+
+    <!-- Konglomerate light (§6.7) -->
+    <string name="bt_conglo_requires_connection">Für Konglomerate brauchst du eine Verbindung. Verbinde dich, um sie zu sehen.</string>
+    <string name="bt_conglo_empty_title">Noch keine Konglomerate</string>
+    <string name="bt_conglo_empty_message">Bau einen gewichteten Korb aus Werten, teste ihn rückwirkend und kauf ihn in ein Portfolio.</string>
+    <string name="bt_conglo_create">Neues Konglomerat</string>
+    <string name="bt_conglo_new">Neues Konglomerat</string>
+    <string name="bt_conglo_edit">Bearbeiten</string>
+    <string name="bt_conglo_delete">Löschen</string>
+    <string name="bt_conglo_delete_message">Dieses Konglomerat löschen? Das lässt sich nicht rückgängig machen.</string>
+    <string name="bt_conglo_draft">Entwurf</string>
+    <string name="bt_conglo_assets_one">1 Wert</string>
+    <string name="bt_conglo_assets_n">%1$d Werte</string>
+    <string name="bt_conglo_name">Name</string>
+    <string name="bt_conglo_positions">Positionen</string>
+    <string name="bt_conglo_total">Gesamt %1$s%%</string>
+    <string name="bt_conglo_add_asset">Wert hinzufügen</string>
+    <string name="bt_conglo_even">Gleich aufteilen</string>
+    <string name="bt_conglo_save">Speichern</string>
+    <string name="bt_conglo_remove">Entfernen</string>
+    <string name="bt_conglo_composition">Zusammensetzung</string>
+    <string name="bt_conglo_performance">Bisherige Wertentwicklung</string>
+    <string name="bt_conglo_no_backtest">Nicht genug Verlauf für einen Rücktest.</string>
+    <string name="bt_conglo_total_return">Gesamtrendite</string>
+    <string name="bt_conglo_cagr">CAGR</string>
+    <string name="bt_conglo_drawdown">Max. Rückgang</string>
+    <string name="bt_conglo_budget">Budgetrechner</string>
+    <string name="bt_conglo_budget_label">Budget</string>
+    <string name="bt_conglo_at_least_one">Mindestens 1 Anteil je Wert</string>
+    <string name="bt_conglo_mode_label">Kaufmodus</string>
+    <string name="bt_conglo_mode_whole">Ganze Anteile</string>
+    <string name="bt_conglo_mode_fractional">Bruchteile</string>
+    <string name="bt_conglo_step_label">Schrittweite (optional)</string>
+    <string name="bt_conglo_calculate">Berechnen</string>
+    <string name="bt_conglo_buy_list">Kaufliste</string>
+    <string name="bt_conglo_qty">%1$s Anteile · %2$s</string>
+    <string name="bt_conglo_unbuyable">Passt nicht ins Budget</string>
+    <string name="bt_conglo_invested">Investiert %1$s</string>
+    <string name="bt_conglo_remainder">Übrig %1$s</string>
+    <string name="bt_conglo_committed">Zu %1$s hinzugefügt</string>
+    <string name="bt_conglo_add_to_portfolio">Zu %1$s hinzufügen</string>
+
+    <!-- Mitteilungen (§6.11) -->
+    <string name="bt_settings_preferences_section">Einstellungen</string>
+    <string name="bt_settings_about_section">Über</string>
+    <string name="bt_settings_version">Version</string>
+    <string name="bt_settings_whatsnew_row">Neue Funktionen</string>
+    <string name="bt_settings_whatsnew_sub">Sieh, was in dieser Version neu ist</string>
+    <string name="bt_settings_whatsnew_title">Neue Funktionen</string>
+    <string name="bt_settings_whatsnew_version">Version %1$s</string>
+    <string name="bt_settings_notifications_row">Mitteilungen</string>
+    <string name="bt_settings_notifications_sub">Posteingang, Push und E-Mail-Einstellungen</string>
+    <string name="bt_notif_mark_all_read">Alle als gelesen markieren</string>
+    <string name="bt_notif_empty_title">Alles erledigt</string>
+    <string name="bt_notif_empty_message">Freundschaftsanfragen, geteilte Inhalte und Alarme erscheinen hier.</string>
+    <string name="bt_notif_enable_push_title">Push-Mitteilungen aktivieren</string>
+    <string name="bt_notif_enable_push_message">Erhalte Hinweise, auch wenn die App geschlossen ist.</string>
+    <string name="bt_notif_enable_push_action">Aktivieren</string>
+
+    <!-- Mitteilungs-Matrix -->
+    <string name="bt_notif_matrix_section">Nach Typ</string>
+    <string name="bt_notif_matrix_footer">In-App- und E-Mail-Einstellungen werden mit dem Web abgeglichen, sofern verfügbar. Push und Stumm werden auf diesem Gerät gespeichert.</string>
+    <string name="bt_notif_perm_on_title">Push-Mitteilungen sind an</string>
+    <string name="bt_notif_perm_on_message">Tippen, um Kanäle in den Systemeinstellungen zu verwalten.</string>
+    <string name="bt_notif_perm_off_title">Push-Mitteilungen sind aus</string>
+    <string name="bt_notif_perm_off_message">Erlaub Mitteilungen, um Hinweise auf diesem Gerät zu erhalten.</string>
+    <string name="bt_notif_mute">Stumm</string>
+    <string name="bt_notif_channel_inapp">In-App</string>
+    <string name="bt_notif_channel_email">E-Mail</string>
+    <string name="bt_notif_channel_push">Push</string>
+
+    <!-- Mitteilungstypen -->
+    <string name="bt_notif_type_friend_request">Freundschaftsanfragen</string>
+    <string name="bt_notif_type_friend_request_sub">Wenn dich jemand vernetzen möchte</string>
+    <string name="bt_notif_type_friend_accepted">Anfragen angenommen</string>
+    <string name="bt_notif_type_friend_accepted_sub">Wenn jemand deine Anfrage annimmt</string>
+    <string name="bt_notif_type_portfolio_shared">Mit mir geteilt</string>
+    <string name="bt_notif_type_portfolio_shared_sub">Wenn ein Freund ein Portfolio teilt</string>
+    <string name="bt_notif_type_alert">Kursalarme</string>
+    <string name="bt_notif_type_alert_sub">Wenn ein Wert dein Ziel erreicht</string>
+    <string name="bt_notif_type_chat">Chat-Nachrichten</string>
+    <string name="bt_notif_type_chat_sub">Neue Nachrichten von Freunden</string>
+    <string name="bt_notif_type_account_invite">Konto &amp; Einladungen</string>
+    <string name="bt_notif_type_account_invite_sub">Willkommens- und Einladungshinweise</string>
+    <string name="bt_notif_type_security">Sicherheitscodes</string>
+    <string name="bt_notif_type_security_sub">Temporäre Passwörter und Sicherheitshinweise</string>
+    <string name="bt_notif_type_system">System</string>
+    <string name="bt_notif_type_system_sub">Allgemeine App-Mitteilungen</string>
+
+    <!-- App-Sperre (lokaler PIN + Biometrie, §5) -->
+    <string name="bt_action_done">Fertig</string>
+    <string name="bt_settings_security_sub">App-Sperre, PIN und Biometrie</string>
+    <string name="bt_settings_applock_section">App-Sperre</string>
+    <string name="bt_settings_applock_title">App-Sperre</string>
+    <string name="bt_settings_applock_sub">PIN oder Biometrie zum Öffnen der App verlangen</string>
+    <string name="bt_settings_applock_change">PIN ändern</string>
+    <string name="bt_settings_applock_change_sub">Einen neuen Entsperr-PIN festlegen</string>
+    <string name="bt_settings_applock_change_managed">Von deinem BetterTrack-Konto verwaltet — ändere ihn im Web</string>
+    <string name="bt_settings_applock_biometric">Mit Biometrie entsperren</string>
+    <string name="bt_settings_applock_biometric_sub">Fingerabdruck oder Gesicht zum Entsperren</string>
+    <string name="bt_settings_applock_biometric_none">Richte in den Android-Einstellungen einen Fingerabdruck ein, um dies zu aktivieren</string>
+    <string name="bt_settings_applock_biometric_unavailable">Biometrische Entsperrung ist auf diesem Gerät nicht verfügbar</string>
+    <string name="bt_settings_applock_threshold">Entsperrung verlangen</string>
+    <string name="bt_settings_applock_footnote">Die App-Sperre wird nur auf diesem Gerät gespeichert und ist von deinem BetterTrack-Konto-Passwort getrennt. Wenn du den PIN vergisst, wirst du abgemeldet.</string>
+    <string name="bt_settings_applock_disable_title">App-Sperre ausschalten?</string>
+    <string name="bt_settings_applock_disable_message">Dein PIN wird entfernt und die App fragt nicht mehr nach dem Entsperren.</string>
+    <string name="bt_settings_applock_disable_confirm">Ausschalten</string>
+    <string name="bt_applock_afk_immediately">Sofort</string>
+    <string name="bt_applock_afk_1m">Nach 1 Minute</string>
+    <string name="bt_applock_afk_5m">Nach 5 Minuten</string>
+    <string name="bt_applock_afk_15m">Nach 15 Minuten</string>
+    <string name="bt_applock_enter_pin">Gib deinen PIN ein</string>
+    <string name="bt_applock_wrong_pin">Falscher PIN, versuch es noch einmal</string>
+    <string name="bt_applock_too_many">Zu viele Versuche</string>
+    <string name="bt_applock_try_again_in">Erneut versuchen in %1$s</string>
+    <string name="bt_applock_forgot_pin">PIN vergessen?</string>
+    <string name="bt_applock_forgot_title">PIN vergessen?</string>
+    <string name="bt_applock_forgot_message">Zum Zurücksetzen melden wir dich ab und löschen die lokalen Daten dieses Geräts. Nach dem erneuten Anmelden kannst du einen neuen PIN festlegen.</string>
+    <string name="bt_applock_backspace">Löschen</string>
+    <string name="bt_applock_biometric_cd">Mit Biometrie entsperren</string>
+    <string name="bt_applock_biometric_title">BetterTrack entsperren</string>
+    <string name="bt_applock_biometric_subtitle">Fingerabdruck oder Gesicht zum Entsperren</string>
+    <string name="bt_applock_use_pin">PIN verwenden</string>
+    <string name="bt_applock_setup_bar">App-Sperre</string>
+    <string name="bt_applock_setup_hint">Verwende 4 bis 6 Ziffern. Dieser PIN wird nur auf diesem Gerät gespeichert.</string>
+    <string name="bt_applock_setup_create">PIN erstellen</string>
+    <string name="bt_applock_setup_new">Neuen PIN eingeben</string>
+    <string name="bt_applock_setup_confirm">PIN erneut eingeben</string>
+    <string name="bt_applock_setup_current">Aktuellen PIN eingeben</string>
+    <string name="bt_applock_setup_choose_title">Wie möchtest du entsperren?</string>
+    <string name="bt_applock_setup_choose_hint">So oder so wird dein PIN nur auf diesem Gerät gespeichert.</string>
+    <string name="bt_applock_setup_choice_device_title">Geräte-PIN erstellen</string>
+    <string name="bt_applock_setup_choice_device_sub">Ein neuer 4–6-stelliger PIN nur zum Öffnen dieser App</string>
+    <string name="bt_applock_setup_choice_bt_title">Meinen BetterTrack-PIN verwenden</string>
+    <string name="bt_applock_setup_choice_bt_sub">Derselbe 4-stellige PIN wie bei deinem BetterTrack-Konto</string>
+    <string name="bt_applock_setup_bt_enter">Gib deinen BetterTrack-PIN ein</string>
+    <string name="bt_applock_setup_bt_hint">Verwende denselben 4-stelligen PIN wie bei deinem BetterTrack-Konto. Wir prüfen ihn einmal und behalten dann nur eine gesperrte Kopie auf diesem Gerät.</string>
+    <string name="bt_applock_mismatch">PINs stimmten nicht überein, versuch es noch einmal</string>
+    <string name="bt_applock_continue">Weiter</string>
+    <string name="bt_applock_bt_verifying">Prüfe deinen BetterTrack-PIN…</string>
+    <string name="bt_applock_bt_wrong">Das ist nicht dein BetterTrack-PIN</string>
+    <string name="bt_applock_bt_offline">Verbinde dich mit dem Internet, um deinen BetterTrack-PIN zu prüfen</string>
+    <string name="bt_applock_bt_error">Konnte gerade nicht prüfen. Bitte versuch es noch einmal</string>
+    <string name="bt_applock_bt_nopin_title">Noch kein BetterTrack-PIN</string>
+    <string name="bt_applock_bt_nopin_message">Für dein Konto ist noch kein Web-PIN gesetzt. Erstell stattdessen einen Geräte-PIN für diese App oder leg zuerst auf der BetterTrack-Website einen fest.</string>
+    <string name="bt_applock_bt_nopin_device">Geräte-PIN erstellen</string>
+    <string name="bt_applock_biometric_offer_title">Biometrische Entsperrung aktivieren?</string>
+    <string name="bt_applock_biometric_offer_message">Entsperr die App mit Fingerabdruck oder Gesicht, mit deinem PIN als Rückfalloption.</string>
+    <string name="bt_applock_biometric_offer_enable">Aktivieren</string>
+    <string name="bt_applock_not_now">Nicht jetzt</string>
+
+    <!-- ══ Einstellungen &amp; Kontoverwaltung (§6.12) ══ -->
+
+    <!-- Einstellungen-Übersicht -->
+    <string name="bt_settings_change_password_sub">Ändere dein Konto-Passwort</string>
+    <string name="bt_settings_about_sub">Version, Links und Neuigkeiten</string>
+    <string name="bt_settings_danger_section">Gefahrenzone</string>
+    <string name="bt_settings_delete_sub">Konto und Daten endgültig löschen</string>
+    <string name="bt_settings_developer_section">Entwickler</string>
+    <string name="bt_settings_dev_gallery">Komponenten-Galerie</string>
+    <string name="bt_settings_dev_gallery_sub">Schaukasten des Designsystems</string>
+    <string name="bt_settings_dev_sync">Sync-Warteschlange</string>
+    <string name="bt_settings_dev_sync_sub">Die Offline-Warteschlange inspizieren</string>
+    <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
+    <string name="bt_settings_dev_hint">Noch %1$d Mal tippen, um Entwickleroptionen freizuschalten</string>
+
+    <!-- Passwort ändern -->
+    <string name="bt_dest_change_password">Passwort ändern</string>
+    <string name="bt_cp_intro">Zu deiner Sicherheit: Gib dein aktuelles Passwort ein und wähl dann ein neues.</string>
+    <string name="bt_cp_current">Aktuelles Passwort</string>
+    <string name="bt_cp_new">Neues Passwort</string>
+    <string name="bt_cp_confirm">Neues Passwort bestätigen</string>
+    <string name="bt_cp_submit">Passwort aktualisieren</string>
+    <string name="bt_cp_err_too_short">Verwende mindestens 8 Zeichen.</string>
+    <string name="bt_cp_err_too_long">Dieses Passwort ist zu lang.</string>
+    <string name="bt_cp_err_mismatch">Die neuen Passwörter stimmen nicht überein.</string>
+    <string name="bt_cp_err_same">Wähl ein anderes Passwort als dein aktuelles.</string>
+    <string name="bt_cp_success">Passwort aktualisiert.</string>
+    <string name="bt_cp_strength_label">Passwortstärke: %1$s</string>
+    <string name="bt_cp_strength_weak">Schwach</string>
+    <string name="bt_cp_strength_fair">Mittel</string>
+    <string name="bt_cp_strength_good">Gut</string>
+    <string name="bt_cp_strength_strong">Stark</string>
+
+    <!-- Kontosicherheit (Einträge im Sicherheits-Screen) -->
+    <string name="bt_settings_account_security_section">Kontosicherheit</string>
+    <string name="bt_settings_2fa_sub">Einen zweiten Schritt beim Login hinzufügen</string>
+    <string name="bt_settings_sessions_sub">Sieh, wo du angemeldet bist</string>
+
+    <!-- Zwei-Faktor-Authentifizierung -->
+    <string name="bt_dest_two_factor">Zwei-Faktor-Authentifizierung</string>
+    <string name="bt_2fa_intro">Füg für zusätzliche Sicherheit einen zweiten Schritt beim Login hinzu. Nutze eine Authenticator-App, E-Mail-Codes oder beides.</string>
+    <string name="bt_2fa_status_on">Zwei-Faktor-Authentifizierung ist an</string>
+    <string name="bt_2fa_status_off">Zwei-Faktor-Authentifizierung ist aus</string>
+    <string name="bt_2fa_set_up">Einrichten</string>
+    <string name="bt_2fa_turn_off">Deaktivieren</string>
+    <string name="bt_2fa_enable">Aktivieren</string>
+    <string name="bt_2fa_verify">Bestätigen</string>
+    <string name="bt_2fa_code">6-stelliger Code</string>
+    <string name="bt_2fa_copy">Kopieren</string>
+    <string name="bt_2fa_totp_title">Authenticator-App</string>
+    <string name="bt_2fa_totp_sub_on">An</string>
+    <string name="bt_2fa_totp_sub_off">Nutze eine App wie Google Authenticator oder 1Password</string>
+    <string name="bt_2fa_totp_pending">Einrichtung begonnen — abschließen, um sie zu aktivieren</string>
+    <string name="bt_2fa_email_title">E-Mail-Codes</string>
+    <string name="bt_2fa_email_sub_on">An</string>
+    <string name="bt_2fa_email_sub_off">Erhalte beim Login einen Code per E-Mail</string>
+    <string name="bt_2fa_email_sent">Wir haben einen Code an deine E-Mail geschickt. Gib ihn unten ein, um E-Mail-Codes zu aktivieren.</string>
+    <string name="bt_2fa_enroll_scan">Scan diesen QR-Code mit deiner Authenticator-App und gib dann den angezeigten 6-stelligen Code ein.</string>
+    <string name="bt_2fa_enroll_secret">Oder gib diesen Schlüssel manuell ein:</string>
+    <string name="bt_2fa_enroll_code">6-stelliger Code</string>
+    <string name="bt_2fa_enroll_verify">Bestätigen &amp; aktivieren</string>
+    <string name="bt_2fa_enroll_cancel">Einrichtung abbrechen</string>
+    <string name="bt_2fa_disable_title">Authenticator deaktivieren?</string>
+    <string name="bt_2fa_disable_message">Gib einen aktuellen 6-stelligen Code oder einen Wiederherstellungscode ein, um ihn zu deaktivieren.</string>
+    <string name="bt_2fa_disable_code">Code oder Wiederherstellungscode</string>
+    <string name="bt_2fa_recovery_title">Wiederherstellungscodes</string>
+    <string name="bt_2fa_recovery_remaining">Noch %1$d Wiederherstellungscodes</string>
+    <string name="bt_2fa_recovery_regenerate">Neu erzeugen</string>
+    <string name="bt_2fa_recovery_shown_title">Sichere deine Wiederherstellungscodes</string>
+    <string name="bt_2fa_recovery_shown_message">Bewahr sie an einem sicheren Ort auf. Jeder Code funktioniert einmal. Du siehst sie nicht noch einmal.</string>
+    <string name="bt_2fa_recovery_copy">Codes kopieren</string>
+    <string name="bt_2fa_recovery_done">Ich hab sie gesichert</string>
+
+    <!-- Aktive Sitzungen -->
+    <string name="bt_dest_active_sessions">Aktive Sitzungen</string>
+    <string name="bt_sessions_intro">Das sind die Orte, an denen du bei BetterTrack angemeldet bist — im Web und auf anderen Geräten. Meld alle ab, die du nicht kennst.</string>
+    <string name="bt_sessions_current">Aktuell</string>
+    <string name="bt_sessions_revoke">Abmelden</string>
+    <string name="bt_sessions_revoke_title">Diese Sitzung abmelden?</string>
+    <string name="bt_sessions_revoke_message">%1$s wird von BetterTrack abgemeldet.</string>
+    <string name="bt_sessions_revoke_all">Alle anderen Sitzungen abmelden</string>
+    <string name="bt_sessions_revoke_all_title">Überall sonst abmelden?</string>
+    <string name="bt_sessions_revoke_all_message">Damit meldest du dich bei BetterTrack im Web und auf jedem anderen Gerät ab. Diese App bleibt angemeldet.</string>
+    <string name="bt_sessions_revoke_all_confirm">Andere abmelden</string>
+    <string name="bt_sessions_none">Keine aktiven Sitzungen gefunden.</string>
+    <string name="bt_sessions_app_note">Diese App wird hier nicht aufgeführt — sie meldet sich mit einem sicheren Token an, nicht mit einer Web-Sitzung.</string>
+    <string name="bt_sessions_just_now">Gerade eben aktiv</string>
+    <string name="bt_sessions_minutes">Aktiv vor %1$d Min.</string>
+    <string name="bt_sessions_hours">Aktiv vor %1$d Std.</string>
+    <string name="bt_sessions_days">Aktiv vor %1$d Tagen</string>
+    <string name="bt_sessions_on_date">Aktiv am %1$s</string>
+    <string name="bt_sessions_unknown">Kürzlich aktiv</string>
+
+    <!-- Sprache -->
+    <string name="bt_lang_intro">Wähl die Sprache für die App. Beträge und Daten folgen derselben Einstellung.</string>
+    <string name="bt_lang_system">Systemstandard</string>
+    <string name="bt_lang_system_sub">Der Sprache deines Geräts folgen</string>
+    <string name="bt_lang_english">Englisch</string>
+    <string name="bt_lang_german">Deutsch</string>
+
+    <!-- Über -->
+    <string name="bt_about_edition_line">Die offizielle BetterTrack-App</string>
+    <string name="bt_about_open_web">BetterTrack im Web öffnen</string>
+    <string name="bt_about_copyright">© BetterTrack</string>
+
+    <!-- Konto löschen -->
+    <string name="bt_dest_delete_account">Konto löschen</string>
+    <string name="bt_del_warning_title">Das lässt sich nicht rückgängig machen</string>
+    <string name="bt_del_warning_body">Wenn du dein Konto löschst, werden deine Portfolios, Transaktionen, dein Bargeld, eigene Werte, Watchlists, Konglomerate und Social-Daten endgültig entfernt. Das lässt sich nicht rückgängig machen.</string>
+    <string name="bt_del_confirm_label">Gib zur Bestätigung deinen Benutzernamen ein</string>
+    <string name="bt_del_mismatch">Das stimmt nicht mit deinem Benutzernamen überein.</string>
+    <string name="bt_del_password">Dein Passwort</string>
+    <string name="bt_del_reauth_note">Gib dein Passwort ein, um zu bestätigen, dass du es bist.</string>
+    <string name="bt_del_disabled_note">Das Löschen des Kontos ist in diesem Build aus Sicherheitsgründen deaktiviert. In der Release-App löscht dies dein Konto endgültig.</string>
+    <string name="bt_del_button">Mein Konto endgültig löschen</string>
+    <string name="bt_del_final_title">Dein Konto löschen?</string>
+    <string name="bt_del_final_message">Damit werden dein Konto und alle seine Daten endgültig gelöscht. Das lässt sich nicht rückgängig machen.</string>
+    <string name="bt_del_final_confirm">Endgültig löschen</string>
+
+    <string name="bt_action_copied">Kopiert</string>
+</resources>

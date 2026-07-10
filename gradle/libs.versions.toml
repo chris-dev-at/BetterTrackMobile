@@ -58,6 +58,16 @@ androidxFragment = "1.8.5"
 googleServices = "4.5.0"
 firebaseBom = "34.15.0"
 
+# ── Step 18 (settings & account management, spec §6.12) ────────────────────
+# Per-app language switch (EN/DE) via AppCompatDelegate.setApplicationLocales +
+# the autoStoreLocales service (persists on API < 33; framework path on 33+).
+# appcompat is used ONLY for its locale delegate — MainActivity stays a
+# FragmentActivity (no AppCompatActivity/theme requirement is introduced).
+androidxAppcompat = "1.7.1"
+# ZXing core — pure-Java, offline QR encoder for the 2FA authenticator (TOTP)
+# enrollment QR. No network, no external assets (CSP/self-contained).
+zxingCore = "3.5.3"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -96,6 +106,10 @@ androidx-fragment = { group = "androidx.fragment", name = "fragment", version.re
 # platform below pins firebase-messaging so it stays consistent.
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+
+# Step 18 — per-app language switch + 2FA QR encoder.
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidxAppcompat" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
 
 # Step 5 — Room (local DB) + WorkManager (sync worker) + process lifecycle.
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
