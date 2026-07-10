@@ -61,6 +61,27 @@ jobs:
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # Stable dev signing (owner ask 2026-07-10): decode the shared keystore
+      # from the repo secret so every CI APK carries the SAME signature →
+      # Android's in-place "Update" works between builds. If the secret isn't
+      # set, fall back silently to the old per-run debug key.
+      - name: Set up stable dev signing (if configured)
+        env:
+          KS_B64: ${{ secrets.BT_SIGNING_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.BT_SIGNING_PASS }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/bt-dev-signing.keystore"
+            {
+              echo "BT_KEYSTORE=$RUNNER_TEMP/bt-dev-signing.keystore"
+              echo "BT_KEYSTORE_ALIAS=btdev"
+              echo "BT_KEYSTORE_PASS=$KS_PASS"
+            } >> "$GITHUB_ENV"
+            echo "Stable dev signing configured."
+          else
+            echo "BT_SIGNING_KEYSTORE_B64 secret not set — building with the runner's throwaway debug key (updates will need uninstall)."
+          fi
+
       # Inject a CI-aware version (Step V): versionCode = monotonically-increasing
       # run_number, versionName = 0.<run_number>. Local AS builds keep 1/"dev".
       - name: Build debug APK

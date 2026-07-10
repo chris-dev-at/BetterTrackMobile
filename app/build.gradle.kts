@@ -49,6 +49,46 @@ android {
     val btVersionCode = providers.gradleProperty("btVersionCode").map { it.toInt() }.getOrElse(1)
     val btVersionName = providers.gradleProperty("btVersionName").getOrElse("dev")
 
+    // Stable dev signing (owner ask 2026-07-10): sign DEBUG builds with ONE
+    // stable key everywhere so Android's in-place "Update" works between any
+    // two builds (CI↔CI, local↔CI). Runner-generated debug keystores differ
+    // per CI run, which forced uninstall+reinstall on every update.
+    // Source of the key, in priority order (never committed — repo is public):
+    //   1. env BT_KEYSTORE / BT_KEYSTORE_ALIAS / BT_KEYSTORE_PASS (CI decodes
+    //      it from the BT_SIGNING_KEYSTORE_B64 secret into RUNNER_TEMP), or
+    //   2. ~/.bettertrack/bt-dev-signing.keystore + signing.env on this Mac
+    //      (local Android Studio / builder installs share the CI identity), or
+    //   3. fallback: the default debug keystore (previous behavior).
+    val btSigning: Triple<File, String, String>? = run {
+        val envKs = System.getenv("BT_KEYSTORE")
+        if (envKs != null && file(envKs).exists()) {
+            val alias = System.getenv("BT_KEYSTORE_ALIAS") ?: "btdev"
+            val pass = System.getenv("BT_KEYSTORE_PASS") ?: return@run null
+            Triple(file(envKs), alias, pass)
+        } else {
+            val home = System.getProperty("user.home")
+            val ks = File(home, ".bettertrack/bt-dev-signing.keystore")
+            val envFile = File(home, ".bettertrack/signing.env")
+            if (ks.exists() && envFile.exists()) {
+                val kv = envFile.readLines().mapNotNull {
+                    val i = it.indexOf('='); if (i > 0) it.substring(0, i) to it.substring(i + 1) else null
+                }.toMap()
+                val pass = kv["BT_KEYSTORE_PASS"]
+                if (pass != null) Triple(ks, kv["BT_KEYSTORE_ALIAS"] ?: "btdev", pass) else null
+            } else null
+        }
+    }
+    if (btSigning != null) {
+        signingConfigs {
+            create("btDev") {
+                storeFile = btSigning.first
+                storePassword = btSigning.third
+                keyAlias = btSigning.second
+                keyPassword = btSigning.third
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "at.bettertrack.app"
         minSdk = 28
@@ -66,6 +106,8 @@ android {
 
     buildTypes {
         debug {
+            // Stable dev key when available (see btSigning above) → in-place updates.
+            if (btSigning != null) signingConfig = signingConfigs.getByName("btDev")
             buildConfigField("String", "API_ORIGIN", "\"$apiOriginDebug\"")
             buildConfigField("String", "WEB_ORIGIN", "\"$webOriginDebug\"")
             buildConfigField("String", "OAUTH_CLIENT_ID", "\"$oauthClientId\"")
