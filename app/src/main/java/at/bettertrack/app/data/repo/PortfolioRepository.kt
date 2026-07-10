@@ -361,21 +361,52 @@ class PortfolioRepository(
      * Create a custom asset (online-only §7.2); optionally with an initial buy
      * into [portfolioId]. Caches the identity (incl. category) immediately.
      */
+    /**
+     * The authoritative custom-asset list (#387) — replaces holdings inference so a
+     * custom asset with NO holding still appears. On success we upsert every entry
+     * and reconcile the cache to the server set; on failure the cache is untouched
+     * (offline shows the last-known list).
+     */
+    suspend fun refreshCustomAssets(): BtResult<Unit> =
+        when (val r = apiCall(json) { api.customAssets() }) {
+            is BtResult.Ok -> {
+                val assets = r.value.assets
+                db.customAssetDao().upsertAll(
+                    assets.map {
+                        CustomAssetEntity(it.id, it.symbol, it.name, it.category, it.currency, it.smoothing)
+                    },
+                )
+                val keep = assets.map { it.id }
+                if (keep.isEmpty()) db.customAssetDao().deleteAllCustomAssets()
+                else db.customAssetDao().deleteNotIn(keep)
+                touchSyncedAt()
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> {
+                Log.w(TAG, "refreshCustomAssets failed: ${r.error.message}")
+                r
+            }
+        }
+
     suspend fun createCustomAsset(
         name: String,
         category: String,
+        smoothing: Boolean,
         initial: CustomAssetInitialPurchase?,
         portfolioId: String?,
     ): BtResult<String> =
         when (
             val r = apiCall(json) {
-                api.createCustomAsset(CreateCustomAssetRequest(name.trim(), category, initialPurchase = initial))
+                api.createCustomAsset(
+                    CreateCustomAssetRequest(name.trim(), category, smoothing = smoothing, initialPurchase = initial),
+                )
             }
         ) {
             is BtResult.Ok -> {
                 val a = r.value.asset
                 db.customAssetDao().upsertAll(
-                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency)),
+                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency, a.smoothing)),
                 )
                 if (initial != null && portfolioId != null) afterDrain(setOf(portfolioId))
                 BtResult.Ok(a.id)
@@ -384,12 +415,21 @@ class PortfolioRepository(
             is BtResult.Err -> r
         }
 
-    suspend fun updateCustomAsset(id: String, name: String?, category: String?): BtResult<Unit> =
-        when (val r = apiCall(json) { api.updateCustomAsset(id, UpdateCustomAssetRequest(name?.trim(), category)) }) {
+    suspend fun updateCustomAsset(
+        id: String,
+        name: String?,
+        category: String?,
+        smoothing: Boolean?,
+    ): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.updateCustomAsset(id, UpdateCustomAssetRequest(name?.trim(), category, smoothing))
+            }
+        ) {
             is BtResult.Ok -> {
                 val a = r.value.asset
                 db.customAssetDao().upsertAll(
-                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency)),
+                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency, a.smoothing)),
                 )
                 BtResult.Ok(Unit)
             }
@@ -597,15 +637,18 @@ class PortfolioRepository(
         // category we already learned from a create/edit (holdings omit it).
         val customHoldings = detail.holdings.filter { it.asset.isCustom }
         for (h in customHoldings) {
-            val existingCategory = db.customAssetDao().getById(h.asset.id)?.category
+            // Preserve category + smoothing already learned from the list/create/edit
+            // (holdings omit them) so a portfolio refresh never wipes them.
+            val existing = db.customAssetDao().getById(h.asset.id)
             db.customAssetDao().upsertAll(
                 listOf(
                     CustomAssetEntity(
                         id = h.asset.id,
                         symbol = h.asset.symbol,
                         name = h.asset.name,
-                        category = existingCategory,
+                        category = existing?.category,
                         currency = h.asset.currency,
+                        smoothing = existing?.smoothing ?: false,
                     ),
                 ),
             )

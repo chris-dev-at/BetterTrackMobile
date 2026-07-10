@@ -210,12 +210,12 @@ class CustomAssetDetailViewModel(
         }
     }
 
-    fun editAsset(name: String, category: String, onDone: (Boolean) -> Unit) {
+    fun editAsset(name: String, category: String, smoothing: Boolean, onDone: (Boolean) -> Unit) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
             _error.value = null
-            val r = repo.updateCustomAsset(assetId, name, category)
+            val r = repo.updateCustomAsset(assetId, name, category, smoothing)
             if (r is BtResult.Err) _error.value = r.error.userMessage
             _busy.value = false
             onDone(r is BtResult.Ok)
@@ -506,9 +506,12 @@ fun CustomAssetDetailScreen(
             confirmLabel = stringResource(R.string.bt_switcher_rename_action),
             initialName = asset?.name ?: "",
             initialCategory = asset?.category ?: "other",
+            initialSmoothing = asset?.smoothing ?: false,
             busy = busy,
             error = error,
-            onConfirm = { name, cat -> vm.editAsset(name, cat) { ok -> if (ok) editOpen = false } },
+            onConfirm = { name, cat, smoothing ->
+                vm.editAsset(name, cat, smoothing) { ok -> if (ok) editOpen = false }
+            },
             onDismiss = {
                 editOpen = false
                 vm.clearError()

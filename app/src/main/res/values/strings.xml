@@ -326,12 +326,14 @@
     <string name="bt_custom_delete_point">Delete value</string>
     <string name="bt_custom_delete_point_title">Delete this value?</string>
     <string name="bt_custom_delete_point_message">Removes this dated value from the history.</string>
-    <string name="bt_custom_cat_real_estate">Real estate</string>
-    <string name="bt_custom_cat_vehicle">Vehicle</string>
-    <string name="bt_custom_cat_collectible">Collectible</string>
-    <string name="bt_custom_cat_cash">Cash</string>
-    <string name="bt_custom_cat_unlisted">Unlisted stock</string>
+    <string name="bt_custom_cat_stock">Stocks</string>
+    <string name="bt_custom_cat_etf">ETFs</string>
+    <string name="bt_custom_cat_crypto">Crypto</string>
+    <string name="bt_custom_cat_commodity">Commodities</string>
+    <string name="bt_custom_cat_cash_like">Cash-like</string>
     <string name="bt_custom_cat_other">Other</string>
+    <string name="bt_custom_smoothing_label">Smooth values between marks</string>
+    <string name="bt_custom_smoothing_help">Draw a straight line between value marks instead of holding each value until the next.</string>
 
     <!-- Step 11 — Search & asset pages (§6.5) -->
     <string name="bt_search_title">Search</string>
@@ -436,6 +438,8 @@
 
     <!-- ── Step 16: notifications (§6.11) ─────────────────────────────────── -->
     <string name="bt_settings_preferences_section">Preferences</string>
+    <string name="bt_settings_orientation_lock">Lock screen orientation</string>
+    <string name="bt_settings_orientation_lock_sub">Keep the app in portrait. Turn off to follow your device\'s rotation.</string>
     <string name="bt_settings_about_section">About</string>
     <string name="bt_settings_version">Version</string>
     <string name="bt_settings_whatsnew_row">New features</string>

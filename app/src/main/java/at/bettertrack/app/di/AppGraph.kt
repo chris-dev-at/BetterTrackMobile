@@ -286,6 +286,11 @@ object AppGraph {
 
     val connectivityMonitor: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
 
+    /** Device-scoped UI prefs (orientation lock, …) — survives logout, no secrets. */
+    val devicePrefs: at.bettertrack.app.data.prefs.DevicePrefs by lazy {
+        at.bettertrack.app.data.prefs.DevicePrefs(appContext)
+    }
+
     /**
      * Fires the first-of-session data load on login-success / logged-in cold
      * start so no screen sits on skeletons until a manual pull-to-refresh

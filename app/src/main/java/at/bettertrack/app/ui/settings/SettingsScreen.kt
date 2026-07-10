@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +34,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -172,6 +175,14 @@ fun SettingsScreen(
                 title = stringResource(R.string.bt_dest_settings_language),
                 subtitle = currentLanguageLabel(),
                 onClick = onOpenLanguage,
+            )
+            val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
+            SettingsToggleRow(
+                icon = Icons.Outlined.ScreenRotation,
+                title = stringResource(R.string.bt_settings_orientation_lock),
+                subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
+                checked = orientationLocked,
+                onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
             )
 
             Spacer(Modifier.height(4.dp))
@@ -318,6 +329,46 @@ private fun SettingsNavRow(icon: ImageVector, title: String, subtitle: String, o
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val bt = BtTheme.colors
+    Surface(
+        onClick = { onCheckedChange(!checked) },
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        shape = BtShapes.card,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = bt.onGold,
+                    checkedTrackColor = bt.gold,
+                    checkedBorderColor = bt.gold,
+                    uncheckedThumbColor = bt.textMuted,
+                    uncheckedTrackColor = bt.surface,
+                    uncheckedBorderColor = bt.borderStrong,
+                ),
+            )
         }
     }
 }

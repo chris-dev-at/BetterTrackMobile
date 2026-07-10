@@ -303,10 +303,12 @@ data class CustomAssetDto(
     val id: String,
     val symbol: String,
     val name: String,
-    /** "real_estate" | "vehicle" | "collectible" | "cash" | "unlisted_stock" | "other". */
+    /** V3-P2 catalog taxonomy: "stock" | "etf" | "crypto" | "commodity" | "cash_like" | "other". */
     val category: String? = null,
     val currency: String,
     val type: String = "custom",
+    /** Value-smoothing toggle (V3-P2): false = step/carry-forward, true = linear interpolation. */
+    val smoothing: Boolean = false,
 )
 
 /** POST /custom-assets — create (with an optional initial buy into a portfolio). */
@@ -315,6 +317,8 @@ data class CreateCustomAssetRequest(
     val name: String,
     val category: String,
     val currency: String = "EUR",
+    /** V3-P2 value smoothing; server default is false (honest step treatment of sparse data). */
+    val smoothing: Boolean = false,
     val initialPurchase: CustomAssetInitialPurchase? = null,
 )
 
@@ -333,16 +337,40 @@ data class CreateCustomAssetResponse(
     val transactionId: String? = null,
 )
 
-/** PATCH /custom-assets/{id} — edit name/category (currency immutable). */
+/** PATCH /custom-assets/{id} — edit name/category/smoothing (currency immutable). */
 @Serializable
 data class UpdateCustomAssetRequest(
     val name: String? = null,
     val category: String? = null,
+    /** Toggle value smoothing any time (V3-P2); null ⇒ leave unchanged (explicitNulls=false omits it). */
+    val smoothing: Boolean? = null,
 )
 
 @Serializable
 data class UpdateCustomAssetResponse(
     val asset: CustomAssetDto,
+)
+
+/**
+ * GET /custom-assets (#387) — one entry per custom asset the caller owns,
+ * INCLUDING zero-holding ones, with its most recent value point (or null). Lets
+ * the app list/manage custom assets even with no current holding.
+ */
+@Serializable
+data class CustomAssetListItemDto(
+    val id: String,
+    val symbol: String,
+    val name: String,
+    val category: String? = null,
+    val currency: String,
+    val type: String = "custom",
+    val smoothing: Boolean = false,
+    val latestValue: ValuePointDto? = null,
+)
+
+@Serializable
+data class CustomAssetListResponse(
+    val assets: List<CustomAssetListItemDto> = emptyList(),
 )
 
 // ── GET /workboard (the platform's single watchlist, §6.6) ───────────────────

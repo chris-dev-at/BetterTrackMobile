@@ -179,4 +179,50 @@ class ChatWiringTest {
         assertEquals(4000L, SocketIoChatGateway.backoffMs(2))
         assertEquals(30_000L, SocketIoChatGateway.backoffMs(10))
     }
+
+    // ── Contract-nullable decode hardening (#362 deleted accounts) ────────────────
+    // Regression pins for the owner-reported "thread history doesn't load" bug:
+    // one null `senderId` (or a deleted participant) must never fail a whole page.
+
+    private val wireJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun thread_page_with_deleted_sender_decodes_and_maps() {
+        val dto = wireJson.decodeFromString(
+            at.bettertrack.app.data.api.dto.ChatThreadResponse.serializer(),
+            """{
+              "conversation": {"id":"c1","user":{"id":"u2","username":"anna"},"unreadCount":0,
+                               "lastMessage":null,"lastMessageAt":null},
+              "messages": [
+                {"id":"m1","conversationId":"c1","senderId":null,"body":"hi","chip":null,
+                 "createdAt":"2026-07-01T10:00:00.000Z"},
+                {"id":"m2","conversationId":"c1","senderId":"u2","body":"hello","chip":null,
+                 "createdAt":"2026-07-01T10:01:00.000Z"}
+              ],
+              "nextCursor": null
+            }""",
+        )
+        assertEquals(2, dto.messages.size)
+        val anon = dto.messages[0].toDomain(myUserId = "me")
+        assertFalse(anon.fromMe)
+        assertEquals("hi", anon.body)
+    }
+
+    @Test
+    fun conversation_list_with_deleted_participant_decodes_read_only() {
+        val resp = wireJson.decodeFromString(
+            at.bettertrack.app.data.api.dto.ChatConversationListResponse.serializer(),
+            """{"conversations":[
+                 {"id":"c9","user":null,"unreadCount":1,
+                  "lastMessage":{"senderId":null,"body":"bye","chipKind":null,
+                                 "createdAt":"2026-06-30T09:00:00.000Z"},
+                  "lastMessageAt":"2026-06-30T09:00:00.000Z"}
+               ],"unreadTotal":1}""",
+        )
+        val conv = resp.conversations.single().toDomain(myUserId = "me")
+        assertEquals("c9", conv.id)
+        assertEquals("", conv.friendUserId) // empty id ⇒ read-only computation kicks in
+        assertEquals("deleted", conv.friendUsername)
+        assertEquals(1, conv.unread)
+    }
 }

@@ -3,6 +3,7 @@ package at.bettertrack.app
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -56,6 +57,12 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Screen-orientation lock (owner ask): apply the persisted preference before
+        // the first frame — ON (default) = portrait-locked; OFF = follow the sensor.
+        applyOrientation(AppGraph.devicePrefs.orientationLockedNow())
+        lifecycleScope.launch {
+            AppGraph.devicePrefs.orientationLocked.collect { applyOrientation(it) }
+        }
         // Dark-only app ⇒ force dark system bars regardless of system setting.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -80,6 +87,21 @@ class MainActivity : FragmentActivity() {
         // closing the "enable then immediately background" snapshot race.
         lifecycleScope.launch {
             AppGraph.appLockController.config.collect { applyRecentsMasking(it.enabled) }
+        }
+    }
+
+    /**
+     * Apply the orientation preference. Locked ⇒ pinned PORTRAIT (exactly as
+     * before). Unlocked ⇒ FULL_USER: follow the device sensor when the user's
+     * auto-rotate is on (a tablet can go landscape), while still honoring an
+     * explicit rotation lock — the well-behaved Android choice.
+     */
+    private fun applyOrientation(locked: Boolean) {
+        requestedOrientation = when (at.bettertrack.app.data.prefs.orientationModeFor(locked)) {
+            at.bettertrack.app.data.prefs.ScreenOrientationMode.LOCKED_PORTRAIT ->
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            at.bettertrack.app.data.prefs.ScreenOrientationMode.FOLLOW_SENSOR ->
+                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         }
     }
 

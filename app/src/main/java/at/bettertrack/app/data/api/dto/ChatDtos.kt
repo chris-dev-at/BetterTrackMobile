@@ -62,7 +62,8 @@ data class ChatChipDto(
 data class ChatMessageDto(
     val id: String,
     val conversationId: String,
-    val senderId: String,
+    /** Nullable per contract: `null` when the sender's account was deleted (#362). */
+    val senderId: String? = null,
     val body: String? = null,
     val chip: ChatChipDto? = null,
     val createdAt: String,
@@ -75,7 +76,8 @@ data class ChatMessageDto(
  */
 @Serializable
 data class ChatMessagePreviewDto(
-    val senderId: String,
+    /** Nullable per contract: `null` when the sender's account was deleted (#362). */
+    val senderId: String? = null,
     val body: String? = null,
     val chipKind: String? = null,
     val createdAt: String,
@@ -89,7 +91,8 @@ data class ChatMessagePreviewDto(
 @Serializable
 data class ChatConversationDto(
     val id: String,
-    val user: SocialUserDto,
+    /** Nullable per contract: `null` when the other participant deleted their account (#362). */
+    val user: SocialUserDto? = null,
     val unreadCount: Int = 0,
     val lastMessage: ChatMessagePreviewDto? = null,
     val lastMessageAt: String? = null,

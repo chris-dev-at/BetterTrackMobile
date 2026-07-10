@@ -177,6 +177,13 @@ interface CustomAssetDao {
     @Query("DELETE FROM custom_assets WHERE id = :id")
     suspend fun delete(id: String)
 
+    /** Reconcile the cache to the authoritative GET /custom-assets set (#387). */
+    @Query("DELETE FROM custom_assets WHERE id NOT IN (:keepIds)")
+    suspend fun deleteNotIn(keepIds: List<String>)
+
+    @Query("DELETE FROM custom_assets")
+    suspend fun deleteAllCustomAssets()
+
     @Query("SELECT * FROM custom_asset_value_points WHERE assetId = :assetId ORDER BY date")
     fun observeValuePoints(assetId: String): Flow<List<ValuePointEntity>>
 

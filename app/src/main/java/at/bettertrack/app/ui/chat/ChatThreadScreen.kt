@@ -9,7 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -337,7 +342,7 @@ fun ChatThreadScreen(
 private fun ClosedThreadNotice(text: String) {
     val bt = BtTheme.colors
     Surface(color = bt.bg) {
-        Column {
+        Column(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
             androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = bt.border)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -442,7 +447,10 @@ private fun MessageInputBar(
 ) {
     val bt = BtTheme.colors
     Surface(color = bt.bg) {
-        Column {
+        // Pad the composer content above the keyboard AND the system navigation bar
+        // (edge-to-edge draws behind both) — union takes the larger of the two, so
+        // the input + send button are never hidden under a 3-button nav bar.
+        Column(Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
             androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = bt.border)
             // Show a character counter only as the 4000-char limit approaches.
             if (value.length > CHAT_MESSAGE_MAX - 400) {

@@ -325,12 +325,14 @@
     <string name="bt_custom_delete_point">Wert löschen</string>
     <string name="bt_custom_delete_point_title">Diesen Wert löschen?</string>
     <string name="bt_custom_delete_point_message">Entfernt diesen datierten Wert aus dem Verlauf.</string>
-    <string name="bt_custom_cat_real_estate">Immobilie</string>
-    <string name="bt_custom_cat_vehicle">Fahrzeug</string>
-    <string name="bt_custom_cat_collectible">Sammlerstück</string>
-    <string name="bt_custom_cat_cash">Bargeld</string>
-    <string name="bt_custom_cat_unlisted">Nicht börsennotiert</string>
+    <string name="bt_custom_cat_stock">Aktien</string>
+    <string name="bt_custom_cat_etf">ETFs</string>
+    <string name="bt_custom_cat_crypto">Krypto</string>
+    <string name="bt_custom_cat_commodity">Rohstoffe</string>
+    <string name="bt_custom_cat_cash_like">Bargeldnah</string>
     <string name="bt_custom_cat_other">Sonstiges</string>
+    <string name="bt_custom_smoothing_label">Werte zwischen Punkten glätten</string>
+    <string name="bt_custom_smoothing_help">Zwischen den Wertpunkten eine gerade Linie ziehen, statt jeden Wert bis zum nächsten zu halten.</string>
 
     <!-- Suche &amp; Wert-Seiten (§6.5) -->
     <string name="bt_search_title">Suche</string>
@@ -435,6 +437,8 @@
 
     <!-- Mitteilungen (§6.11) -->
     <string name="bt_settings_preferences_section">Einstellungen</string>
+    <string name="bt_settings_orientation_lock">Bildschirmausrichtung sperren</string>
+    <string name="bt_settings_orientation_lock_sub">Die App im Hochformat halten. Ausschalten, um der Geräteausrichtung zu folgen.</string>
     <string name="bt_settings_about_section">Über</string>
     <string name="bt_settings_version">Version</string>
     <string name="bt_settings_whatsnew_row">Neue Funktionen</string>

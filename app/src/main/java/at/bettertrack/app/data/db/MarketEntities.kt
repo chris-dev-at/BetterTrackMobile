@@ -19,9 +19,11 @@ data class CustomAssetEntity(
     @PrimaryKey val id: String,
     val symbol: String,
     val name: String,
-    /** "real_estate" | "vehicle" | "collectible" | "cash" | "unlisted_stock" | "other". */
+    /** V3-P2 catalog taxonomy: "stock" | "etf" | "crypto" | "commodity" | "cash_like" | "other". */
     val category: String?,
     val currency: String,
+    /** Value-smoothing toggle (V3-P2): false = step/carry-forward, true = linear interpolation. */
+    val smoothing: Boolean = false,
 )
 
 /** One value point of a custom asset (step-line chart data, §6.4). */

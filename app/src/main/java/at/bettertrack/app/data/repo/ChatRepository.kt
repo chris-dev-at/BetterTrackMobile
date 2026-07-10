@@ -187,10 +187,12 @@ internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
     }.orEmpty()
     // A freshly-opened, empty thread (null lastMessageAt) sorts as "just now".
     val at = lastMessageAt?.let { isoToEpochMs(it) }?.takeIf { it > 0L } ?: System.currentTimeMillis()
+    // `user` is null when the other participant deleted their account (#362):
+    // history stays readable, anonymized; the empty id makes the thread read-only.
     return Conversation(
         id = id,
-        friendUserId = user.id,
-        friendUsername = user.username,
+        friendUserId = user?.id.orEmpty(),
+        friendUsername = user?.username ?: "deleted",
         lastPreview = preview,
         lastAtMs = at,
         unread = unreadCount,
@@ -335,8 +337,10 @@ class DefaultChatRepository(
                 val dto = r.value
                 val myId = currentUserId()
                 val merged = mergeMessages(store.value.messages, dto.messages.map { it.toDomain(myId) })
-                val friendId = dto.conversation.user.id
-                val readOnly = computeReadOnly(friendId)
+                // Deleted-account participant (#362): user is null → thread is
+                // readable history, closed to new messages (read-only).
+                val friendId = dto.conversation.user?.id
+                val readOnly = friendId == null || computeReadOnly(friendId)
                 threadCursors[conversationId] = dto.nextCursor
                 store.value = ThreadState(
                     messages = merged,
@@ -345,7 +349,7 @@ class DefaultChatRepository(
                     hasMore = dto.nextCursor != null,
                     availability = if (readOnly) ThreadAvailability.ReadOnly else ThreadAvailability.Available,
                     friendUserId = friendId,
-                    friendUsername = dto.conversation.user.username,
+                    friendUsername = dto.conversation.user?.username ?: "deleted",
                     error = null,
                 )
                 upsertConversation(dto.conversation)

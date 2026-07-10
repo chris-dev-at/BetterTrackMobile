@@ -58,6 +58,7 @@ import at.bettertrack.app.data.api.dto.ReplacePositionsRequest
 import at.bettertrack.app.data.api.dto.AssetHistoryResponse
 import at.bettertrack.app.data.api.dto.ConglomerateListResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetRequest
+import at.bettertrack.app.data.api.dto.CustomAssetListResponse
 import at.bettertrack.app.data.api.dto.DailyClosesResponse
 import at.bettertrack.app.data.api.dto.CreateCustomAssetResponse
 import at.bettertrack.app.data.api.dto.CreatePortfolioRequest
@@ -205,6 +206,14 @@ interface BtApi {
 
     @GET("custom-assets/{id}/value-points")
     suspend fun valuePoints(@Path("id") assetId: String): Response<ValuePointsResponse>
+
+    /**
+     * ALL custom assets the caller owns (#387) — INCLUDING zero-holding ones,
+     * each with its latest value point. Real list source (replaces holdings
+     * inference). Bearer scope portfolio:read.
+     */
+    @GET("custom-assets")
+    suspend fun customAssets(): Response<CustomAssetListResponse>
 
     // ── Step 10: custom asset management (§6.4, online-only per §7.2) ─────────
 

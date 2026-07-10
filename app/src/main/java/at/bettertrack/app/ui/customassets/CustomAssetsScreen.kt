@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.customassets
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -41,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -81,17 +86,30 @@ class CustomAssetsViewModel(
     val assets: StateFlow<List<CustomAssetEntity>> = repo.customAssets
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun createAsset(name: String, category: String, onDone: (Boolean) -> Unit) {
+    init { refresh() }
+
+    /** Pull the authoritative custom-asset list (#387) so zero-holding assets appear. */
+    fun refresh() {
+        viewModelScope.launch {
+            _refreshing.value = true
+            repo.refreshCustomAssets()
+            _refreshing.value = false
+        }
+    }
+
+    fun createAsset(name: String, category: String, smoothing: Boolean, onDone: (Boolean) -> Unit) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
             _error.value = null
-            val r = repo.createCustomAsset(name, category, initial = null, portfolioId = null)
+            val r = repo.createCustomAsset(name, category, smoothing, initial = null, portfolioId = null)
             if (r is BtResult.Err) _error.value = r.error.userMessage
             _busy.value = false
             onDone(r is BtResult.Ok)
@@ -203,9 +221,12 @@ fun CustomAssetsScreen(
             confirmLabel = stringResource(R.string.bt_switcher_create_action),
             initialName = "",
             initialCategory = "other",
+            initialSmoothing = false,
             busy = busy,
             error = error,
-            onConfirm = { name, cat -> vm.createAsset(name, cat) { ok -> if (ok) createOpen = false } },
+            onConfirm = { name, cat, smoothing ->
+                vm.createAsset(name, cat, smoothing) { ok -> if (ok) createOpen = false }
+            },
             onDismiss = {
                 createOpen = false
                 vm.clearError()
@@ -248,14 +269,16 @@ fun CustomAssetDialog(
     confirmLabel: String,
     initialName: String,
     initialCategory: String,
+    initialSmoothing: Boolean,
     busy: Boolean,
     error: String?,
-    onConfirm: (name: String, category: String) -> Unit,
+    onConfirm: (name: String, category: String, smoothing: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val bt = BtTheme.colors
     var name by rememberSaveable { mutableStateOf(initialName) }
     var category by rememberSaveable { mutableStateOf(initialCategory) }
+    var smoothing by rememberSaveable { mutableStateOf(initialSmoothing) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = bt.surface,
@@ -289,6 +312,39 @@ fun CustomAssetDialog(
                         )
                     }
                 }
+                // Value-smoothing toggle (V3-P2) — mirrors the web CustomInvestmentDialog.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = !busy) { smoothing = !smoothing }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = smoothing,
+                        onCheckedChange = { smoothing = it },
+                        enabled = !busy,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = bt.gold,
+                            uncheckedColor = bt.borderStrong,
+                            checkmarkColor = bt.onGold,
+                        ),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.bt_custom_smoothing_label),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = bt.textPrimary,
+                        )
+                        Text(
+                            text = stringResource(R.string.bt_custom_smoothing_help),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = bt.textMuted,
+                        )
+                    }
+                }
                 if (error != null) {
                     Text(text = error, style = MaterialTheme.typography.bodySmall, color = bt.loss)
                 }
@@ -297,7 +353,7 @@ fun CustomAssetDialog(
         confirmButton = {
             BtPrimaryButton(
                 text = confirmLabel,
-                onClick = { onConfirm(name, category) },
+                onClick = { onConfirm(name, category, smoothing) },
                 enabled = name.trim().isNotEmpty() && !busy,
                 loading = busy,
             )
@@ -312,11 +368,11 @@ fun CustomAssetDialog(
 
 @Composable
 fun categoryLabel(category: String?): String = when (category) {
-    "real_estate" -> stringResource(R.string.bt_custom_cat_real_estate)
-    "vehicle" -> stringResource(R.string.bt_custom_cat_vehicle)
-    "collectible" -> stringResource(R.string.bt_custom_cat_collectible)
-    "cash" -> stringResource(R.string.bt_custom_cat_cash)
-    "unlisted_stock" -> stringResource(R.string.bt_custom_cat_unlisted)
+    "stock" -> stringResource(R.string.bt_custom_cat_stock)
+    "etf" -> stringResource(R.string.bt_custom_cat_etf)
+    "crypto" -> stringResource(R.string.bt_custom_cat_crypto)
+    "commodity" -> stringResource(R.string.bt_custom_cat_commodity)
+    "cash_like" -> stringResource(R.string.bt_custom_cat_cash_like)
     "other", null -> stringResource(R.string.bt_custom_cat_other)
     else -> category.replaceFirstChar { it.uppercase() }
 }

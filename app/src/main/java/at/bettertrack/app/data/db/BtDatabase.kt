@@ -33,7 +33,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOpEntity::class,
         MetaEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -73,9 +73,16 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4 (catch-up): the custom-asset value-smoothing toggle (V3-P2). */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `custom_assets` ADD COLUMN `smoothing` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

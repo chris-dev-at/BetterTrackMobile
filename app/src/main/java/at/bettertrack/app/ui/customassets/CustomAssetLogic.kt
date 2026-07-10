@@ -16,9 +16,13 @@ import java.time.LocalDate
  * merging, step-chart mapping, and pending value-point decoding. Unit-tested.
  */
 
-/** The categories the platform accepts. */
+/**
+ * The categories the platform accepts (V3-P2 catalog taxonomy). A custom asset
+ * takes a REAL category so a custom "stock" groups under Stocks in donuts/analytics
+ * (the old real_estate/vehicle/… set is gone). Order mirrors the web dialog.
+ */
 val CUSTOM_ASSET_CATEGORIES = listOf(
-    "real_estate", "vehicle", "collectible", "cash", "unlisted_stock", "other",
+    "stock", "etf", "crypto", "commodity", "cash_like", "other",
 )
 
 /**
