@@ -5,6 +5,7 @@ import at.bettertrack.app.data.db.ValuePointEntity
 import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.ValuePointOpPayload
+import at.bettertrack.app.ui.charts.BtLineInterpolation
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -52,6 +53,12 @@ class CustomAssetLogicTest {
         assertEquals(2, steps.size)
         assertEquals(1.0, steps[0].value, 1e-9)
         assertEquals(steps[0].epochDay + 1, steps[1].epochDay)
+    }
+
+    @Test
+    fun `smoothed asset draws a linear line, raw asset a step`() {
+        assertEquals(BtLineInterpolation.Linear, chartInterpolation(true))
+        assertEquals(BtLineInterpolation.Step, chartInterpolation(false))
     }
 
     @Test

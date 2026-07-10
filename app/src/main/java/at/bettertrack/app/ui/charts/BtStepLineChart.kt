@@ -17,17 +17,32 @@ import at.bettertrack.app.ui.theme.BtTheme
 data class StepPoint(val epochDay: Long, val value: Double)
 
 /**
- * The BetterTrack step-line chart (spec §3.6): custom-asset value points are
- * discrete observations, not a continuous price — so the line holds each value
- * flat until the next point (a step), with a soft gradient fill beneath. Same
- * visual family as [BtAreaChart] (gold 2dp line, recessive fill), different
- * interpolation. Values are the user's recorded points, drawn verbatim.
+ * How the line connects the recorded value points:
+ *  - [Step] holds each value flat until the next point (a staircase) — the right
+ *    read for discrete observations that don't move between entries.
+ *  - [Linear] draws a straight line from point to point (the same simple-line
+ *    form the gold hero [BtAreaChart] uses) — the "smoothed" read for assets
+ *    whose value is assumed to drift continuously between entries.
+ * Only the interpolation changes; the points, dots, gridlines, fill and scale
+ * are identical in both modes.
+ */
+enum class BtLineInterpolation { Step, Linear }
+
+/**
+ * The BetterTrack value-line chart (spec §3.6): custom-asset value points are
+ * discrete observations, not a continuous price — so by default the line holds
+ * each value flat until the next point (a [BtLineInterpolation.Step]), with a
+ * soft gradient fill beneath. Assets flagged as smoothed request
+ * [BtLineInterpolation.Linear] instead, connecting the same points with straight
+ * lines. Same visual family as [BtAreaChart] (gold 2dp line, recessive fill);
+ * values are the user's recorded points, drawn verbatim.
  */
 @Composable
 fun BtStepLineChart(
     points: List<StepPoint>,
     modifier: Modifier = Modifier,
     lineColor: Color = BtTheme.colors.gold,
+    interpolation: BtLineInterpolation = BtLineInterpolation.Step,
 ) {
     val fillTop = lineColor.copy(alpha = 0.22f)
     val gridColor = BtTheme.colors.border
@@ -59,8 +74,10 @@ fun BtStepLineChart(
             drawLine(gridColor, Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
         }
 
-        // Build the step path: horizontal to the next x at the current y, then
-        // vertical to the next value.
+        // Build the line + fill path. Step interpolation holds the previous value
+        // (horizontal) then jumps (vertical) at each new point; linear draws a
+        // straight segment directly to the new point. The fill mirrors the line
+        // and closes down to the baseline.
         val line = Path()
         val fill = Path()
         val firstX = x(points.first().epochDay)
@@ -72,9 +89,11 @@ fun BtStepLineChart(
         for (i in 1 until points.size) {
             val px = x(points[i].epochDay)
             val py = y(points[i].value)
-            line.lineTo(px, prevY)   // hold previous value (the step)
-            line.lineTo(px, py)      // jump to new value
-            fill.lineTo(px, prevY)
+            if (interpolation == BtLineInterpolation.Step) {
+                line.lineTo(px, prevY)   // hold previous value (the step)
+                fill.lineTo(px, prevY)
+            }
+            line.lineTo(px, py)          // move to the new value
             fill.lineTo(px, py)
             prevY = py
         }

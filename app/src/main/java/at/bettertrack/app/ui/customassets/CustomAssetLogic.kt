@@ -5,6 +5,7 @@ import at.bettertrack.app.data.db.ValuePointEntity
 import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.ValuePointOpPayload
+import at.bettertrack.app.ui.charts.BtLineInterpolation
 import at.bettertrack.app.ui.charts.StepPoint
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.pendingUiStatus
@@ -42,6 +43,16 @@ fun mergeValuePoint(
 /** Latest recorded value (by date); null when there are no points. */
 fun latestValue(points: List<ValuePointEntity>): Double? =
     points.maxByOrNull { it.date }?.value
+
+/**
+ * The line interpolation a custom asset's "value over time" chart uses (design
+ * decision, approved): a smoothed asset draws a continuous straight line between
+ * recorded points ([BtLineInterpolation.Linear], the gold hero chart's simple
+ * line form); a raw asset holds each value flat until the next entry
+ * ([BtLineInterpolation.Step]). The plotted points are identical either way.
+ */
+fun chartInterpolation(smoothing: Boolean): BtLineInterpolation =
+    if (smoothing) BtLineInterpolation.Linear else BtLineInterpolation.Step
 
 /** Map value points to step-chart points (epoch-day x axis). */
 fun toStepPoints(points: List<ValuePointEntity>): List<StepPoint> =

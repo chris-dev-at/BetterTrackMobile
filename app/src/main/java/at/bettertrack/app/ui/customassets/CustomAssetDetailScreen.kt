@@ -372,6 +372,7 @@ fun CustomAssetDetailScreen(
                                     points = stepPoints,
                                     modifier = Modifier.fillMaxWidth().height(180.dp),
                                     lineColor = bt.gold,
+                                    interpolation = chartInterpolation(asset?.smoothing == true),
                                 )
                             } else {
                                 Box(
