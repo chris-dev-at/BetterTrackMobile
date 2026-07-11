@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
@@ -44,6 +46,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -64,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -99,7 +104,9 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import androidx.compose.ui.text.font.FontWeight
 import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -166,6 +173,8 @@ data class AssetPick(
     val symbol: String,
     val name: String,
     val heldQuantity: Double?,
+    /** Native currency code for price/fee labels (Step 19); EUR when unknown. */
+    val currency: String = "EUR",
 )
 
 /** State of the in-form asset search (§6.5), rendered below the held section. */
@@ -301,6 +310,14 @@ class TransactionFormViewModel(
     private val _cashCoupled = MutableStateFlow(false)
     val cashCoupled: StateFlow<Boolean> = _cashCoupled.asStateFlow()
 
+    /** Uncovered-sell (PR #429): the required "sell anyway" acknowledgment. */
+    private val _uncoveredAck = MutableStateFlow(false)
+    val uncoveredAck: StateFlow<Boolean> = _uncoveredAck.asStateFlow()
+
+    /** Uncovered-sell: OPTIONAL buy-in price for the uncovered part (native currency). */
+    private val _uncoveredEntryPriceText = MutableStateFlow("")
+    val uncoveredEntryPriceText: StateFlow<String> = _uncoveredEntryPriceText.asStateFlow()
+
     /** Original server note of a synced edit — its `[bt:…]` marker is preserved. */
     private var originalSyncedNote: String? = null
 
@@ -355,6 +372,30 @@ class TransactionFormViewModel(
             heldQuantity = a?.let { pick -> held.firstOrNull { it.assetId == pick.assetId }?.quantity },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TxFormValidation(assetMissing = true))
+
+    /**
+     * Uncovered (over-)sell state (PR #429): a SELL for more than is held (a
+     * not-held asset counts as 0). Drives the inline warning + the required
+     * "sell anyway" acknowledgment + the optional buy-in-price field.
+     */
+    val uncoveredSell: StateFlow<UncoveredSell> = combine(
+        _isBuy, _quantityText, _asset, holdings,
+    ) { buy, qtyText, a, held ->
+        val heldQty = a?.let { pick ->
+            held.firstOrNull { it.assetId == pick.assetId }?.quantity ?: pick.heldQuantity
+        }
+        uncoveredSellState(isBuy = buy, quantity = parseLocalizedDecimal(qtyText), heldQuantity = heldQty)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UncoveredSell(false, 0.0, 0.0))
+
+    /**
+     * Final submit gate: the field/cash validation AND — for an uncovered sell —
+     * the acknowledgment. Non-uncovered writes are governed by [validation] alone.
+     */
+    val submitEnabled: StateFlow<Boolean> = combine(
+        validation, uncoveredSell, _uncoveredAck,
+    ) { v, uncovered, ack ->
+        v.canSubmit && uncoveredSellSubmitOk(uncovered, ack)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** Total order value for the summary line; null until amounts parse. */
     val orderTotalEur: StateFlow<Double?> = combine(
@@ -467,7 +508,10 @@ class TransactionFormViewModel(
                     mode = FormMode.EditQueued(opId, op.portfolioId)
                     _portfolioId.value = op.portfolioId
                     _isBuy.value = row.isBuy
-                    _asset.value = AssetPick(row.assetId, row.assetSymbol, row.assetName ?: row.assetSymbol, null)
+                    _asset.value = AssetPick(
+                        row.assetId, row.assetSymbol, row.assetName ?: row.assetSymbol, null,
+                        currency = row.payload.assetCurrency ?: "EUR",
+                    )
                     _quantityText.value = editNumber(row.quantity)
                     _priceText.value = editNumber(row.price)
                     _feeText.value = if (row.fee > 0.0) editNumber(row.fee) else ""
@@ -489,7 +533,7 @@ class TransactionFormViewModel(
                     origSynced = tx
                     _portfolioId.value = tx.portfolioId
                     _isBuy.value = tx.side == "buy"
-                    _asset.value = AssetPick(tx.assetId, tx.assetSymbol, tx.assetName, null)
+                    _asset.value = AssetPick(tx.assetId, tx.assetSymbol, tx.assetName, null, currency = tx.assetCurrency)
                     _quantityText.value = editNumber(tx.quantity)
                     _priceText.value = editNumber(tx.price)
                     _feeText.value = if (tx.fee > 0.0) editNumber(tx.fee) else ""
@@ -530,7 +574,10 @@ class TransactionFormViewModel(
                     val rid = route.assetId
                     if (rid != null) {
                         if (route.assetSymbol != null) {
-                            val pick = AssetPick(rid, route.assetSymbol, route.assetName ?: route.assetSymbol, null)
+                            val pick = AssetPick(
+                                rid, route.assetSymbol, route.assetName ?: route.assetSymbol, null,
+                                currency = route.assetCurrency ?: "EUR",
+                            )
                             _asset.value = pick
                             loadDailyCloses(pick, autoLink = true)
                             refineAssetFromHoldings(rid)
@@ -549,7 +596,7 @@ class TransactionFormViewModel(
             repo.holdings(portfolioId).first { list -> list.any { it.assetId == assetId } }
         } ?: return
         rows.firstOrNull { it.assetId == assetId }?.let { h ->
-            val pick = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)
+            val pick = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity, currency = h.assetCurrency)
             _asset.value = pick
             loadDailyCloses(pick, autoLink = true)
         }
@@ -562,7 +609,7 @@ class TransactionFormViewModel(
                 holdings.first { list -> list.any { it.assetId == assetId } }
             } ?: return@launch
             rows.firstOrNull { it.assetId == assetId }?.let { h ->
-                _asset.value = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)
+                _asset.value = AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity, currency = h.assetCurrency)
             }
         }
     }
@@ -765,6 +812,11 @@ class TransactionFormViewModel(
 
     fun setSide(isBuy: Boolean) {
         _isBuy.value = isBuy
+        // A buy is never uncovered — drop any stale sell acknowledgment.
+        if (isBuy) {
+            _uncoveredAck.value = false
+            _uncoveredEntryPriceText.value = ""
+        }
     }
 
     fun setAsset(pick: AssetPick) {
@@ -772,12 +824,15 @@ class TransactionFormViewModel(
         _asset.value = pick
         _assetQuery.value = ""
         // A different asset's price is meaningless — drop it so the date→price
-        // link re-fills with the new asset's close (and re-enable the link).
+        // link re-fills with the new asset's close (and re-enable the link); also
+        // reset the uncovered-sell context (new asset, new held position).
         if (changed) {
             _priceText.value = ""
             closesAssetId = null
             dailyCloses = emptyList()
             _priceLinkAvailable.value = false
+            _uncoveredAck.value = false
+            _uncoveredEntryPriceText.value = ""
         }
         loadDailyCloses(pick, autoLink = true)
     }
@@ -823,12 +878,22 @@ class TransactionFormViewModel(
         }
     }
 
+    /** Uncovered-sell acknowledgment ("sell anyway"). */
+    fun setUncoveredAck(value: Boolean) {
+        _uncoveredAck.value = value
+    }
+
+    /** Uncovered-sell OPTIONAL buy-in price (native currency, comma/dot tolerant). */
+    fun setUncoveredEntryPrice(text: String) {
+        _uncoveredEntryPriceText.value = sanitizeDecimalInput(text, maxDecimals = 6)
+    }
+
     // ── Submit / delete ─────────────────────────────────────────────────────
 
     fun submit() {
         val m = mode ?: return
         if (_submitting.value) return
-        if (!validation.value.canSubmit) return
+        if (!submitEnabled.value) return
         viewModelScope.launch {
             _submitting.value = true
             _serverError.value = null
@@ -869,8 +934,19 @@ class TransactionFormViewModel(
             // affordable now is never falsely rejected, even when the client couldn't
             // reconstruct the as-of ledger to show the warning.
             settleCashAsOfToday = if (_isBuy.value && _cashCoupled.value) true else null,
+            // Uncovered (over-)sell (PR #429): send the flag ONLY when the sell
+            // exceeds the held amount and the user acknowledged it; the optional
+            // buy-in price rides along when filled. Persisted in the queued op so
+            // an offline uncovered sell is still accepted when it drains.
+            allowUncovered = if (uncoveredSell.value.active) true else null,
+            uncoveredEntryPrice = if (uncoveredSell.value.active) {
+                parseUncoveredEntryPrice(_uncoveredEntryPriceText.value)
+            } else {
+                null
+            },
             assetSymbol = pick.symbol,
             assetName = pick.name,
+            assetCurrency = pick.currency,
         )
         val payloadJson = json.encodeToString(TxOpPayload.serializer(), payload)
 
@@ -949,6 +1025,10 @@ class TransactionFormViewModel(
         val newNote = mergeNotePreservingMarker(_noteText.value, originalSyncedNote)
         val dateChanged = _date.value != epochMsToLocalDate(orig.executedAtMs)
 
+        // Uncovered (over-)sell (PR #429): a synced edit that raises the sold
+        // quantity past the held amount must carry the flag or the PATCH 400s
+        // OVERSELL. Only sent when the edit is actually uncovered + acknowledged.
+        val uncovered = uncoveredSell.value
         val body = UpdateTransactionRequest(
             side = newSide.takeIf { it != orig.side },
             quantity = newQty.takeIf { it != orig.quantity },
@@ -956,6 +1036,8 @@ class TransactionFormViewModel(
             fee = newFee.takeIf { it != orig.fee },
             executedAt = if (dateChanged) executedAtIso(_date.value) else null,
             note = newNote.takeIf { it != orig.note },
+            allowUncovered = if (uncovered.active) true else null,
+            uncoveredEntryPrice = if (uncovered.active) parseUncoveredEntryPrice(_uncoveredEntryPriceText.value) else null,
         )
         if (body == UpdateTransactionRequest()) {
             // Nothing changed — nothing to send.
@@ -1072,6 +1154,10 @@ fun TransactionFormScreen(
     val noteText by vm.noteText.collectAsStateWithLifecycle()
     val cashCoupled by vm.cashCoupled.collectAsStateWithLifecycle()
     val validation by vm.validation.collectAsStateWithLifecycle()
+    val uncoveredSell by vm.uncoveredSell.collectAsStateWithLifecycle()
+    val uncoveredAck by vm.uncoveredAck.collectAsStateWithLifecycle()
+    val uncoveredEntryPriceText by vm.uncoveredEntryPriceText.collectAsStateWithLifecycle()
+    val submitEnabled by vm.submitEnabled.collectAsStateWithLifecycle()
     val orderTotalEur by vm.orderTotalEur.collectAsStateWithLifecycle()
     val cashAfterEur by vm.cashAfterEur.collectAsStateWithLifecycle()
     val mainCashEur by vm.mainCashEur.collectAsStateWithLifecycle()
@@ -1169,7 +1255,9 @@ fun TransactionFormScreen(
                     isBuy = isBuy,
                     isEdit = vm.isEditSynced || vm.isEditQueued,
                     totalEur = orderTotalEur,
-                    canSubmit = validation.canSubmit && inputsEnabled &&
+                    // Per-asset prices are native (§6.13) — the order total is too.
+                    currency = asset?.currency ?: "EUR",
+                    canSubmit = submitEnabled && inputsEnabled &&
                         !(vm.isEditSynced && !isOnline),
                     submitting = submitting,
                     locale = locale,
@@ -1227,6 +1315,11 @@ fun TransactionFormScreen(
                     onClick = { assetSheetOpen = true },
                 )
 
+                // Per-asset prices are entered in the asset's NATIVE currency
+                // (§6.13) — the server converts to EUR. Label price + fee with
+                // that currency's symbol ("$" for a USD asset), EUR by default.
+                val priceSymbol = currencySymbol(asset?.currency ?: "EUR", locale)
+
                 // Quantity + price — number-first (§3.4 tabular digits).
                 // Quantity carries a "Max" affordance (sell = full held qty; buy
                 // = max affordable from cash); price carries a date-link chain.
@@ -1251,7 +1344,7 @@ fun TransactionFormScreen(
                         label = stringResource(R.string.bt_txform_price),
                         enabled = inputsEnabled,
                         error = validation.priceError != null && priceText.isNotEmpty(),
-                        suffix = "€",
+                        suffix = priceSymbol,
                         selectAllOnFocus = true,
                         modifier = Modifier.weight(1f),
                         trailingIcon = if (inputsEnabled && priceHistoryLoading) {
@@ -1297,7 +1390,7 @@ fun TransactionFormScreen(
                         label = stringResource(R.string.bt_txform_fee),
                         enabled = inputsEnabled,
                         error = validation.feeError != null && feeText.isNotEmpty(),
-                        suffix = "€",
+                        suffix = priceSymbol,
                         selectAllOnFocus = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -1322,18 +1415,20 @@ fun TransactionFormScreen(
                     )
                 }
 
-                // Oversell — soft warning only; the server is the final
-                // validator (§7.3).
-                if (validation.oversellWarning) {
-                    val held = asset?.heldQuantity
-                    Text(
-                        text = stringResource(
-                            R.string.bt_txform_oversell_warning,
-                            held?.let { formatQuantity(it, locale) } ?: "0",
-                            asset?.symbol ?: "",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.goldEmphasis,
+                // Uncovered (over-)sell (PR #429): selling more than is held is
+                // no longer a hard block — it needs an explicit acknowledgment,
+                // with an optional buy-in price so the realized % can be accurate.
+                if (uncoveredSell.active && inputsEnabled) {
+                    UncoveredSellCard(
+                        symbol = asset?.symbol ?: "",
+                        held = uncoveredSell.heldQuantity,
+                        uncovered = uncoveredSell.uncoveredQuantity,
+                        acknowledged = uncoveredAck,
+                        onAck = vm::setUncoveredAck,
+                        entryPriceText = uncoveredEntryPriceText,
+                        onEntryPrice = vm::setUncoveredEntryPrice,
+                        currencySymbol = currencySymbol(asset?.currency ?: "EUR", locale),
+                        locale = locale,
                     )
                 }
 
@@ -1858,6 +1953,109 @@ private fun CashCouplingCard(
     }
 }
 
+/**
+ * Uncovered (over-)sell acknowledgment card (PR #429, Step 19). Shown when a
+ * sell exceeds the held quantity (incl. a not-held asset). An amber warning +
+ * an explanation of the 0 %-basis consequence, a REQUIRED "sell anyway" tick,
+ * and an OPTIONAL native-currency buy-in price so the realized % is accurate.
+ */
+@Composable
+private fun UncoveredSellCard(
+    symbol: String,
+    held: Double,
+    uncovered: Double,
+    acknowledged: Boolean,
+    onAck: (Boolean) -> Unit,
+    entryPriceText: String,
+    onEntryPrice: (String) -> Unit,
+    currencySymbol: String,
+    locale: Locale,
+) {
+    val bt = BtTheme.colors
+    Surface(
+        shape = BtShapes.card,
+        color = bt.goldSurface,
+        contentColor = bt.textPrimary,
+        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.35f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    Icons.Outlined.WarningAmber,
+                    contentDescription = null,
+                    tint = bt.goldEmphasis,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.bt_txform_uncovered_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = bt.goldSoft,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.bt_txform_uncovered_body,
+                            formatQuantity(held, locale),
+                            symbol,
+                            formatQuantity(uncovered, locale),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            // Required acknowledgment — the whole row toggles (≥48dp target).
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .toggleable(value = acknowledged, role = Role.Checkbox, onValueChange = onAck),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = acknowledged,
+                    onCheckedChange = null,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = bt.gold,
+                        uncheckedColor = bt.gold.copy(alpha = 0.6f),
+                        checkmarkColor = bt.bg,
+                    ),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.bt_txform_uncovered_ack),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textPrimary,
+                )
+            }
+
+            // Optional buy-in price for the uncovered part (native currency).
+            FormNumberField(
+                value = entryPriceText,
+                onValue = onEntryPrice,
+                label = stringResource(R.string.bt_txform_uncovered_entry_price),
+                enabled = true,
+                error = false,
+                suffix = currencySymbol,
+                selectAllOnFocus = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.bt_txform_uncovered_entry_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+        }
+    }
+}
+
 @Composable
 private fun RejectionCard(message: String, isQueuedRetry: Boolean) {
     val bt = BtTheme.colors
@@ -1927,6 +2125,7 @@ private fun SubmitBar(
     isBuy: Boolean,
     isEdit: Boolean,
     totalEur: Double?,
+    currency: String,
     canSubmit: Boolean,
     submitting: Boolean,
     locale: Locale,
@@ -1949,7 +2148,13 @@ private fun SubmitBar(
                     modifier = Modifier.weight(1f),
                 )
                 if (totalEur != null) {
-                    MoneyText(value = totalEur, style = BtTheme.type.moneyMedium)
+                    // The order total is a per-asset NATIVE amount (§6.13) — label
+                    // it in the asset's currency, not always EUR.
+                    Text(
+                        text = formatMoney(totalEur, currency, locale),
+                        style = BtTheme.type.moneyMedium,
+                        color = bt.textPrimary,
+                    )
                 } else {
                     Text(
                         text = stringResource(R.string.bt_switcher_value_pending),
@@ -2052,7 +2257,9 @@ private fun HeldAssetSheet(
                             formatQuantity(h.quantity, locale),
                         ),
                         selected = h.assetId == selectedAssetId,
-                        onClick = { onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity)) },
+                        onClick = {
+                            onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, h.quantity, currency = h.assetCurrency))
+                        },
                     )
                 }
                 items(count = otherShown.size, key = { "other-" + otherShown[it].assetId }) { index ->
@@ -2061,7 +2268,9 @@ private fun HeldAssetSheet(
                         symbol = h.assetSymbol,
                         subtitle = h.assetName,
                         selected = h.assetId == selectedAssetId,
-                        onClick = { onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, 0.0)) },
+                        onClick = {
+                            onSelect(AssetPick(h.assetId, h.assetSymbol, h.assetName, 0.0, currency = h.assetCurrency))
+                        },
                     )
                 }
                 // All assets (server search) when a query is active (§6.5).
@@ -2087,7 +2296,7 @@ private fun HeldAssetSheet(
                                     symbol = a.symbol,
                                     subtitle = listOfNotNull(a.name, a.exchange).joinToString(" · "),
                                     selected = a.id == selectedAssetId,
-                                    onClick = { onSelect(AssetPick(a.id, a.symbol, a.name, null)) },
+                                    onClick = { onSelect(AssetPick(a.id, a.symbol, a.name, null, currency = a.currency)) },
                                 )
                             }
                         }

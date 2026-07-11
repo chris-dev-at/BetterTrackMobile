@@ -114,9 +114,26 @@ android {
             buildConfigField("String", "OAUTH_REDIRECT_URI", "\"$oauthRedirectUri\"")
         }
         release {
-            // TODO(step 19): enable R8 / resource shrinking for the release build.
-            optimization {
-                enable = false
+            // Step 19: R8 code shrink/optimize + resource shrinking. Keep rules
+            // live in proguard-rules.pro (kept minimal — libraries ship their own
+            // consumer rules; we only protect our kotlinx-serialization models +
+            // the sync worker). proguard-android-optimize.txt is the optimizing
+            // default variant.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // Sign the release so the R8 build installs + RUNS on the device for
+            // QA. Prefer the stable BT dev key when present (~/.bettertrack or CI
+            // env, same source as debug), else fall back to the debug keystore.
+            // NO release secret is committed (repo is PUBLIC); the real Play upload
+            // key is wired in Step 20 once the owner provides one.
+            signingConfig = if (btSigning != null) {
+                signingConfigs.getByName("btDev")
+            } else {
+                signingConfigs.getByName("debug")
             }
             buildConfigField("String", "API_ORIGIN", "\"https://api.bettertrack.at\"")
             buildConfigField("String", "WEB_ORIGIN", "\"https://web.bettertrack.at\"")

@@ -68,6 +68,8 @@ class ApiOpExecutor(
                     payFromCash = payload.payFromCash,
                     addProceedsToCash = payload.addProceedsToCash,
                     settleCashAsOfToday = payload.settleCashAsOfToday,
+                    allowUncovered = payload.allowUncovered,
+                    uncoveredEntryPrice = payload.uncoveredEntryPrice,
                 ),
             )
         }) { body ->

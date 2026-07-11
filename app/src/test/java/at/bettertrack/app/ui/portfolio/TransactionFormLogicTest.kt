@@ -558,4 +558,75 @@ class TransactionFormLogicTest {
         assertNull(mostRecentDateAtPrice(reverseSeries, Double.NaN))
         assertNull(mostRecentDateAtPrice(emptyList(), 100.0))
     }
+
+    // ── Uncovered (over-)sell gating (PR #429, Step 19) ──────────────────────
+
+    @Test
+    fun `a buy is never an uncovered sell`() {
+        assertFalse(uncoveredSellState(isBuy = true, quantity = 999.0, heldQuantity = 1.0).active)
+    }
+
+    @Test
+    fun `selling within the held amount is not uncovered`() {
+        val s = uncoveredSellState(isBuy = false, quantity = 3.0, heldQuantity = 5.0)
+        assertFalse(s.active)
+        assertEquals(0.0, s.uncoveredQuantity, 1e-9)
+    }
+
+    @Test
+    fun `selling exactly the held amount is covered (not uncovered)`() {
+        assertFalse(uncoveredSellState(isBuy = false, quantity = 5.0, heldQuantity = 5.0).active)
+    }
+
+    @Test
+    fun `selling more than held is uncovered by the excess`() {
+        val s = uncoveredSellState(isBuy = false, quantity = 8.0, heldQuantity = 5.0)
+        assertTrue(s.active)
+        assertEquals(3.0, s.uncoveredQuantity, 1e-9)
+        assertEquals(5.0, s.heldQuantity, 1e-9)
+    }
+
+    @Test
+    fun `selling a not-held asset (null held) is fully uncovered`() {
+        val s = uncoveredSellState(isBuy = false, quantity = 2.0, heldQuantity = null)
+        assertTrue(s.active)
+        assertEquals(2.0, s.uncoveredQuantity, 1e-9)
+        assertEquals(0.0, s.heldQuantity, 1e-9)
+    }
+
+    @Test
+    fun `a null or non-positive quantity is never uncovered`() {
+        assertFalse(uncoveredSellState(isBuy = false, quantity = null, heldQuantity = 0.0).active)
+        assertFalse(uncoveredSellState(isBuy = false, quantity = 0.0, heldQuantity = 0.0).active)
+    }
+
+    @Test
+    fun `a tiny fractional overage within epsilon is treated as covered`() {
+        // Float noise on fractional shares must not spuriously demand the ack.
+        val s = uncoveredSellState(isBuy = false, quantity = 5.0 + 1e-12, heldQuantity = 5.0)
+        assertFalse(s.active)
+    }
+
+    @Test
+    fun `uncovered submit is gated on the acknowledgment`() {
+        val uncovered = uncoveredSellState(isBuy = false, quantity = 8.0, heldQuantity = 5.0)
+        assertFalse(uncoveredSellSubmitOk(uncovered, acknowledged = false))
+        assertTrue(uncoveredSellSubmitOk(uncovered, acknowledged = true))
+    }
+
+    @Test
+    fun `a covered sell submits regardless of the acknowledgment flag`() {
+        val covered = uncoveredSellState(isBuy = false, quantity = 3.0, heldQuantity = 5.0)
+        assertTrue(uncoveredSellSubmitOk(covered, acknowledged = false))
+    }
+
+    @Test
+    fun `optional buy-in price parses positive, else null`() {
+        assertEquals(150.0, parseUncoveredEntryPrice("150"))
+        assertEquals(80.5, parseUncoveredEntryPrice("80,5")) // comma-tolerant
+        assertNull(parseUncoveredEntryPrice(""))
+        assertNull(parseUncoveredEntryPrice("0"))
+        assertNull(parseUncoveredEntryPrice("-3"))
+        assertNull(parseUncoveredEntryPrice("abc"))
+    }
 }

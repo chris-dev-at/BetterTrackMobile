@@ -60,6 +60,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.CHAT_MESSAGE_MAX
 import at.bettertrack.app.data.repo.ChatRepository
@@ -267,7 +269,7 @@ fun ChatThreadScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -289,7 +291,7 @@ fun ChatThreadScreen(
                     onAttach = { showAttach = true },
                 )
                 state.availability == ThreadAvailability.ReadOnly -> ClosedThreadNotice(
-                    "You can't send messages in this chat anymore.",
+                    stringResource(R.string.bt_chat_readonly),
                 )
                 else -> Unit
             }
@@ -304,8 +306,8 @@ fun ChatThreadScreen(
 
                 state.availability == ThreadAvailability.NotAvailable -> BtEmptyState(
                     icon = Icons.Outlined.Lock,
-                    title = "Conversation not available",
-                    message = "This chat isn't available. You may no longer be able to message this person.",
+                    title = stringResource(R.string.bt_chat_unavailable_title),
+                    message = stringResource(R.string.bt_chat_unavailable_body),
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
 
@@ -325,14 +327,14 @@ fun ChatThreadScreen(
                     BtAvatar(name = headerName, size = 64.dp)
                     Spacer(Modifier.size(16.dp))
                     Text(
-                        "Say hi to @$headerName",
+                        stringResource(R.string.bt_chat_say_hi, headerName),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = bt.textPrimary,
                     )
                     Spacer(Modifier.size(6.dp))
                     Text(
-                        "Start the conversation — you can share an asset or portfolio right here with the paperclip.",
+                        stringResource(R.string.bt_chat_empty_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = bt.textMuted,
                         textAlign = TextAlign.Center,
@@ -444,7 +446,7 @@ private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
                     Text(chip.symbol ?: chip.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, maxLines = 1)
                     Text(chip.subtitle(), style = MaterialTheme.typography.labelSmall, color = bt.textMuted, maxLines = 1)
                 }
-                Text("View", style = MaterialTheme.typography.labelMedium, color = bt.goldEmphasis, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.bt_chat_chip_view), style = MaterialTheme.typography.labelMedium, color = bt.goldEmphasis, fontWeight = FontWeight.SemiBold)
             }
         }
     } else {
@@ -460,7 +462,7 @@ private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(chip.kindLabel(), style = MaterialTheme.typography.titleSmall, color = bt.textSecondary, maxLines = 1)
-                    Text("Not shared with you", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    Text(stringResource(R.string.bt_chat_chip_not_shared), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
                 }
             }
         }
@@ -509,7 +511,7 @@ private fun MessageInputBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onAttach) {
-                    Icon(Icons.Outlined.AttachFile, contentDescription = "Share an item", tint = bt.textSecondary)
+                    Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.bt_chat_share_item_cd), tint = bt.textSecondary)
                 }
                 TextField(
                     value = value,
@@ -517,7 +519,7 @@ private fun MessageInputBar(
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester),
-                    placeholder = { Text("Message", color = bt.textMuted) },
+                    placeholder = { Text(stringResource(R.string.bt_chat_message_placeholder), color = bt.textMuted) },
                     maxLines = 4,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = bt.surface,
@@ -547,7 +549,7 @@ private fun MessageInputBar(
                     modifier = Modifier.size(44.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                        Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = stringResource(R.string.bt_chat_send_cd), modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -562,12 +564,12 @@ private fun AttachSheet(items: List<ShareChip>, onPick: (ShareChip) -> Unit, onD
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-            Text("Share in chat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-            Text("Sending never widens access — friends only see it if it's already shared with them.", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            Text(stringResource(R.string.bt_chat_share_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+            Text(stringResource(R.string.bt_chat_share_subtitle), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             Spacer(Modifier.size(12.dp))
             if (items.isEmpty()) {
                 Text(
-                    "You don't have any portfolios, watchlists or baskets to share yet.",
+                    stringResource(R.string.bt_chat_share_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = bt.textMuted,
                     modifier = Modifier.padding(vertical = 16.dp),
@@ -603,13 +605,17 @@ private fun ShareChipKind.icon(): ImageVector = when (this) {
     ShareChipKind.Conglomerate -> Icons.Outlined.Dashboard
 }
 
-private fun ShareChip.kindLabel(): String = when (kind) {
-    ShareChipKind.Asset -> "Asset"
-    ShareChipKind.Portfolio -> "Portfolio"
-    ShareChipKind.Watchlist -> "Watchlist"
-    ShareChipKind.Conglomerate -> "Conglomerate"
-}
+@Composable
+private fun ShareChip.kindLabel(): String = stringResource(
+    when (kind) {
+        ShareChipKind.Asset -> R.string.bt_chat_kind_asset
+        ShareChipKind.Portfolio -> R.string.bt_chat_kind_portfolio
+        ShareChipKind.Watchlist -> R.string.bt_chat_kind_watchlist
+        ShareChipKind.Conglomerate -> R.string.bt_chat_kind_conglomerate
+    },
+)
 
+@Composable
 private fun ShareChip.subtitle(): String {
     val k = kindLabel()
     return ownerName?.takeIf { it.isNotBlank() }?.let { "$k · $it" } ?: k

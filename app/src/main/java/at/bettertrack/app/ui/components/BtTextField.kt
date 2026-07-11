@@ -16,10 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import at.bettertrack.app.R
 import at.bettertrack.app.ui.theme.BtTheme
 
 /** Brand colors for an [OutlinedTextField] (gold focus, red error) — the app-wide field look. */
@@ -80,7 +82,9 @@ fun BtTextField(
                 IconButton(onClick = { revealed = !revealed }) {
                     Icon(
                         imageVector = if (revealed) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                        contentDescription = null,
+                        contentDescription = stringResource(
+                            if (revealed) R.string.bt_action_hide_password else R.string.bt_action_show_password,
+                        ),
                         tint = bt.textMuted,
                     )
                 }

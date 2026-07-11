@@ -41,6 +41,8 @@ import kotlinx.serialization.Serializable
      *  binds instantly without a holdings lookup; [sell] preselects the side. */
     val assetSymbol: String? = null,
     val assetName: String? = null,
+    /** Native currency (Step 19) so a not-yet-held asset labels its price correctly. */
+    val assetCurrency: String? = null,
     val sell: Boolean = false,
 )
 /**

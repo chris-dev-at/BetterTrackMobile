@@ -67,6 +67,42 @@ fun formatEur(value: Double, locale: Locale, showSign: Boolean = false): String 
 }
 
 /**
+ * The locale-aware symbol for a currency code ("USD"→"$", "EUR"→"€", "GBP"→"£"),
+ * falling back to the raw code for anything the JVM can't resolve. Shared by the
+ * transaction form's per-asset native-price labels (Step 19) — mirrors the
+ * `currencySymbol()` pattern in `ui/workboard/AlertFormLogic.kt`.
+ */
+fun currencySymbol(code: String, locale: Locale = Locale.getDefault()): String =
+    try {
+        Currency.getInstance(code.uppercase(Locale.ROOT)).getSymbol(locale)
+    } catch (_: Exception) {
+        code
+    }
+
+/**
+ * Formats an amount in the asset's NATIVE currency (per-asset prices/order totals
+ * are native — only portfolio-level totals are EUR, §6.13). EUR routes through
+ * [formatEur] so de-AT styling is identical; any other code uses that currency's
+ * locale-aware format, falling back to a symbol-prefixed number if the JVM has
+ * no format for it.
+ */
+fun formatMoney(value: Double, currencyCode: String, locale: Locale, showSign: Boolean = false): String {
+    val code = currencyCode.uppercase(Locale.ROOT)
+    if (code == "EUR") return formatEur(value, locale, showSign)
+    val formatted = try {
+        val nf = NumberFormat.getCurrencyInstance(locale)
+        nf.currency = Currency.getInstance(code)
+        nf.format(value)
+    } catch (_: Exception) {
+        val nf = NumberFormat.getNumberInstance(locale)
+        nf.minimumFractionDigits = 2
+        nf.maximumFractionDigits = 2
+        currencySymbol(code, locale) + nf.format(value)
+    }
+    return if (showSign && value > 0.0) "+$formatted" else formatted
+}
+
+/**
  * Formats a percentage given in percent units (e.g. 3.42 → "+3.42%" / "+3,42 %"),
  * locale-aware decimal separator, explicit sign for positives when [showSign].
  */

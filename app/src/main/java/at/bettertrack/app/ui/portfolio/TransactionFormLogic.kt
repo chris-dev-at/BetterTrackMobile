@@ -198,6 +198,51 @@ fun validateTxForm(
     )
 }
 
+// ── Uncovered (over-)sell (platform PR #429, Step 19) ────────────────────────
+
+/** Quantities below this are treated as equal (float noise on fractional shares). */
+const val UNCOVERED_QTY_EPS = 1e-9
+
+/**
+ * State of a possible uncovered sell: a SELL whose quantity exceeds the held
+ * amount (a null held count means the asset isn't held ⇒ zero, matching the
+ * platform's "incl. zero holding"). Buys and covered sells are never active.
+ */
+data class UncoveredSell(
+    /** True ⇒ this write needs the explicit "sell anyway" acknowledgment. */
+    val active: Boolean,
+    /** Shares sold beyond the held amount (0 when not active). */
+    val uncoveredQuantity: Double,
+    /** Held amount used for the calc (null held → 0). */
+    val heldQuantity: Double,
+)
+
+fun uncoveredSellState(
+    isBuy: Boolean,
+    quantity: Double?,
+    heldQuantity: Double?,
+): UncoveredSell {
+    val held = (heldQuantity ?: 0.0).coerceAtLeast(0.0)
+    if (isBuy || quantity == null || quantity <= 0.0) return UncoveredSell(false, 0.0, held)
+    val over = quantity - held
+    return if (over > UNCOVERED_QTY_EPS) UncoveredSell(true, over, held) else UncoveredSell(false, 0.0, held)
+}
+
+/**
+ * Whether an uncovered sell may be submitted: only once the user ticked the
+ * acknowledgment. Every non-uncovered write is unaffected (returns true).
+ */
+fun uncoveredSellSubmitOk(uncovered: UncoveredSell, acknowledged: Boolean): Boolean =
+    !uncovered.active || acknowledged
+
+/**
+ * Parse the OPTIONAL buy-in price for the uncovered part: a positive number in
+ * the asset's native currency, else null (the server then bases it on the sale
+ * price). Blank / non-positive input yields null, never an error.
+ */
+fun parseUncoveredEntryPrice(raw: String): Double? =
+    parseLocalizedDecimal(raw)?.takeIf { it > 0.0 && it.isFinite() }
+
 // ── Max-quantity + date→price helpers (§6.2, owner requests) ─────────────────
 
 /**

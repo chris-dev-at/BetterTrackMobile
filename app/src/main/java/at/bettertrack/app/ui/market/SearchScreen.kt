@@ -177,7 +177,7 @@ class SearchViewModel(
 fun SearchScreen(
     onBack: () -> Unit,
     onOpenAsset: (String) -> Unit,
-    onTrade: (assetId: String, symbol: String, name: String, portfolioId: String?) -> Unit,
+    onTrade: (assetId: String, symbol: String, name: String, currency: String, portfolioId: String?) -> Unit,
 ) {
     val vm: SearchViewModel = viewModel {
         SearchViewModel(AppGraph.marketRepository, AppGraph.portfolioRepository, AppGraph.connectivityMonitor)
@@ -285,7 +285,7 @@ fun SearchScreen(
                             watchEnabled = isOnline,
                             onOpen = { onOpenAsset(asset.id) },
                             onToggleWatchlist = { pickerAsset = asset },
-                            onBuy = { onTrade(asset.id, asset.symbol, asset.name, selectedPid) },
+                            onBuy = { onTrade(asset.id, asset.symbol, asset.name, asset.currency, selectedPid) },
                         )
                     }
                 }

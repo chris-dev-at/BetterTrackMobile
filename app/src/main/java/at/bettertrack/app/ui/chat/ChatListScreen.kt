@@ -37,12 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Conversation
@@ -114,10 +116,10 @@ fun ChatListScreen(
         containerColor = bt.bg,
         topBar = {
             TopAppBar(
-                title = { Text("Messages", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.bt_chat_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -133,7 +135,7 @@ fun ChatListScreen(
                 containerColor = bt.gold,
                 contentColor = bt.onGold,
                 elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-            ) { Icon(Icons.Outlined.Edit, contentDescription = "New message") }
+            ) { Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.bt_chat_new_message_cd)) }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
@@ -146,8 +148,8 @@ fun ChatListScreen(
                 )
                 conversations.isEmpty() -> BtEmptyState(
                     icon = Icons.AutoMirrored.Outlined.Chat,
-                    title = "No messages yet",
-                    message = "Start a conversation with a friend to chat and share ideas.",
+                    title = stringResource(R.string.bt_chat_empty_title),
+                    message = stringResource(R.string.bt_chat_empty_body),
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
                 else -> LazyColumn(
@@ -228,11 +230,11 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-            Text("New message", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-            Text("Pick a friend to chat with.", style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
+            Text(stringResource(R.string.bt_chat_new_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+            Text(stringResource(R.string.bt_chat_new_subtitle), style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
             Spacer(Modifier.size(12.dp))
             if (friends.isEmpty()) {
-                Text("Add friends first to start chatting.", style = MaterialTheme.typography.bodyMedium, color = bt.textMuted, modifier = Modifier.padding(vertical = 16.dp))
+                Text(stringResource(R.string.bt_chat_new_no_friends), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted, modifier = Modifier.padding(vertical = 16.dp))
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(friends, key = { it.userId }) { f ->
@@ -245,7 +247,7 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
                             Text("@${f.username}", style = MaterialTheme.typography.bodyLarge, color = bt.textPrimary, modifier = Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))
                             IconButton(onClick = { onPick(f) }) {
-                                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Chat", tint = bt.gold)
+                                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = stringResource(R.string.bt_chat_open_cd), tint = bt.gold)
                             }
                         }
                     }

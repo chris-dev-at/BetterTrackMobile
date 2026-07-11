@@ -212,7 +212,12 @@
     <string name="bt_txform_cash_unknown">Balance updates on next sync</string>
     <string name="bt_txform_insufficient_cash">Not enough cash — %1$s available</string>
     <string name="bt_txform_backdated_cash_warning">On %1$s this wallet held only %2$s — the %3$s will be deducted from your cash now, as if bought today. The buy keeps its %1$s date.</string>
-    <string name="bt_txform_oversell_warning">More than you hold (%1$s %2$s) — BetterTrack validates on sync</string>
+    <!-- Uncovered (over-)sell (PR #429, Step 19) -->
+    <string name="bt_txform_uncovered_title">Selling more than you hold</string>
+    <string name="bt_txform_uncovered_body">You hold %1$s %2$s. This sell closes the position and leaves %3$s uncovered — with no matching buy, that part shows 0%% return.</string>
+    <string name="bt_txform_uncovered_ack">Sell anyway</string>
+    <string name="bt_txform_uncovered_entry_price">Buy-in price (optional)</string>
+    <string name="bt_txform_uncovered_entry_hint">Add your original buy-in price to track the uncovered part accurately. Leave blank to show 0%%.</string>
     <string name="bt_txform_total">Total</string>
     <string name="bt_txform_record_buy">Record buy</string>
     <string name="bt_txform_record_sell">Record sell</string>
@@ -796,4 +801,33 @@
     <string name="bt_alert_kind_day_down">Falls in a day</string>
 
     <string name="bt_action_copied">Copied</string>
+    <string name="bt_action_show_password">Show password</string>
+    <string name="bt_action_hide_password">Hide password</string>
+
+    <!-- Chat (§6.10) — externalized in the Step-19 i18n audit -->
+    <string name="bt_chat_title">Messages</string>
+    <string name="bt_chat_new_message_cd">New message</string>
+    <string name="bt_chat_empty_title">No messages yet</string>
+    <string name="bt_chat_empty_body">Start a conversation with a friend to chat and share ideas.</string>
+    <string name="bt_chat_new_title">New message</string>
+    <string name="bt_chat_new_subtitle">Pick a friend to chat with.</string>
+    <string name="bt_chat_new_no_friends">Add friends first to start chatting.</string>
+    <string name="bt_chat_open_cd">Chat</string>
+    <string name="bt_chat_readonly">You can\'t send messages in this chat anymore.</string>
+    <string name="bt_chat_unavailable_title">Conversation not available</string>
+    <string name="bt_chat_unavailable_body">This chat isn\'t available. You may no longer be able to message this person.</string>
+    <string name="bt_chat_say_hi">Say hi to @%1$s</string>
+    <string name="bt_chat_empty_hint">Start the conversation — you can share an asset or portfolio right here with the paperclip.</string>
+    <string name="bt_chat_chip_view">View</string>
+    <string name="bt_chat_chip_not_shared">Not shared with you</string>
+    <string name="bt_chat_share_item_cd">Share an item</string>
+    <string name="bt_chat_message_placeholder">Message</string>
+    <string name="bt_chat_send_cd">Send</string>
+    <string name="bt_chat_share_title">Share in chat</string>
+    <string name="bt_chat_share_subtitle">Sending never widens access — friends only see it if it\'s already shared with them.</string>
+    <string name="bt_chat_share_empty">You don\'t have any portfolios, watchlists or conglomerates to share yet.</string>
+    <string name="bt_chat_kind_asset">Asset</string>
+    <string name="bt_chat_kind_portfolio">Portfolio</string>
+    <string name="bt_chat_kind_watchlist">Watchlist</string>
+    <string name="bt_chat_kind_conglomerate">Conglomerate</string>
 </resources>

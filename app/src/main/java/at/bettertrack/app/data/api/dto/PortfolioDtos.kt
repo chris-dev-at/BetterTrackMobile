@@ -161,6 +161,18 @@ data class CreateTransactionRequest(
      * at the buy date; omitted (null) on sells / non-coupled writes.
      */
     val settleCashAsOfToday: Boolean? = null,
+    /**
+     * Uncovered (over-)sell (contract PR #429): a SELL with quantity > held
+     * (incl. zero holding) 400s `OVERSELL` unless this is `true`; then the
+     * position closes at exactly 0 and full proceeds go to cash. Omitted (null)
+     * on buys / covered sells.
+     */
+    val allowUncovered: Boolean? = null,
+    /**
+     * Optional native per-unit cost basis for the uncovered part; null ⇒ the
+     * server bases it on the sale price (0 % realized on the uncovered part).
+     */
+    val uncoveredEntryPrice: Double? = null,
 )
 
 @Serializable
@@ -182,6 +194,14 @@ data class UpdateTransactionRequest(
     val fee: Double? = null,
     val executedAt: String? = null,
     val note: String? = null,
+    /**
+     * Uncovered (over-)sell on the EDIT endpoint (contract PR #429): re-sending
+     * an edit that raises the sold quantity past the held amount 400s `OVERSELL`
+     * unless this is `true`. Sent when the edited sell is uncovered.
+     */
+    val allowUncovered: Boolean? = null,
+    /** Optional native per-unit cost basis for the uncovered part (see create). */
+    val uncoveredEntryPrice: Double? = null,
 )
 
 @Serializable

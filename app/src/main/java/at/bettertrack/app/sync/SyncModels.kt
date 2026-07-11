@@ -89,11 +89,29 @@ data class TxOpPayload(
      * sell ops. Sent for every pay-from-cash buy.
      */
     val settleCashAsOfToday: Boolean? = null,
+    /**
+     * Uncovered (over-)sell (platform PR #429, Step 19). A SELL whose quantity
+     * exceeds the held amount (incl. zero holding) is rejected `400 OVERSELL`
+     * UNLESS this flag is `true`; then the position closes at exactly 0 (no
+     * shorts) and full proceeds go to cash. Sent only when the user ticked the
+     * "sell anyway" acknowledgment. Persisted in the queued mutation so an
+     * offline uncovered sell stays accepted when it finally drains.
+     */
+    val allowUncovered: Boolean? = null,
+    /**
+     * Optional cost basis for the uncovered part (native per-unit). `null`/omitted
+     * ⇒ the server uses the sale price as basis (0 % realized on the uncovered
+     * part); set it for an accurate realized figure. Ignored unless
+     * [allowUncovered] is true.
+     */
+    val uncoveredEntryPrice: Double? = null,
     // Display-only snapshot of the asset identity (Step 8 pending rows render
     // instantly from the queue, §7.4). NEVER sent to the API — the executor
     // maps payload → request field-by-field.
     val assetSymbol: String? = null,
     val assetName: String? = null,
+    /** Native currency code (e.g. "USD") for pending-row / edit price labels. */
+    val assetCurrency: String? = null,
 )
 
 /** Cash deposit / withdrawal (§6.3). */

@@ -211,7 +211,12 @@
     <string name="bt_txform_cash_unknown">Bestand aktualisiert sich beim nächsten Sync</string>
     <string name="bt_txform_insufficient_cash">Nicht genug Bargeld — %1$s verfügbar</string>
     <string name="bt_txform_backdated_cash_warning">Am %1$s hielt dieses Konto nur %2$s — die %3$s werden jetzt von deinem Bargeld abgezogen, als wäre heute gekauft worden. Der Kauf behält sein Datum vom %1$s.</string>
-    <string name="bt_txform_oversell_warning">Mehr als du hältst (%1$s %2$s) — BetterTrack prüft beim Sync</string>
+    <!-- Ungedeckter (Über-)Verkauf (PR #429, Step 19) -->
+    <string name="bt_txform_uncovered_title">Mehr verkaufen, als du hältst</string>
+    <string name="bt_txform_uncovered_body">Du hältst %1$s %2$s. Dieser Verkauf schließt die Position und lässt %3$s ungedeckt — ohne passenden Kauf zeigt dieser Teil 0%% Rendite.</string>
+    <string name="bt_txform_uncovered_ack">Trotzdem verkaufen</string>
+    <string name="bt_txform_uncovered_entry_price">Einstandspreis (optional)</string>
+    <string name="bt_txform_uncovered_entry_hint">Gib deinen ursprünglichen Einstandspreis an, um den ungedeckten Teil genau zu erfassen. Leer lassen zeigt 0%%.</string>
     <string name="bt_txform_total">Gesamt</string>
     <string name="bt_txform_record_buy">Kauf erfassen</string>
     <string name="bt_txform_record_sell">Verkauf erfassen</string>
@@ -787,4 +792,33 @@
     <string name="bt_alert_kind_day_down">Rückgang an einem Tag</string>
 
     <string name="bt_action_copied">Kopiert</string>
+    <string name="bt_action_show_password">Passwort anzeigen</string>
+    <string name="bt_action_hide_password">Passwort verbergen</string>
+
+    <!-- Chat (§6.10) — externalisiert im Step-19-i18n-Audit -->
+    <string name="bt_chat_title">Nachrichten</string>
+    <string name="bt_chat_new_message_cd">Neue Nachricht</string>
+    <string name="bt_chat_empty_title">Noch keine Nachrichten</string>
+    <string name="bt_chat_empty_body">Beginne ein Gespräch mit einem Freund, um zu chatten und Ideen zu teilen.</string>
+    <string name="bt_chat_new_title">Neue Nachricht</string>
+    <string name="bt_chat_new_subtitle">Wähle einen Freund zum Chatten.</string>
+    <string name="bt_chat_new_no_friends">Füge zuerst Freunde hinzu, um zu chatten.</string>
+    <string name="bt_chat_open_cd">Chat</string>
+    <string name="bt_chat_readonly">Du kannst in diesem Chat keine Nachrichten mehr senden.</string>
+    <string name="bt_chat_unavailable_title">Unterhaltung nicht verfügbar</string>
+    <string name="bt_chat_unavailable_body">Dieser Chat ist nicht verfügbar. Möglicherweise kannst du dieser Person nicht mehr schreiben.</string>
+    <string name="bt_chat_say_hi">Sag @%1$s Hallo</string>
+    <string name="bt_chat_empty_hint">Beginne die Unterhaltung — mit der Büroklammer kannst du hier direkt ein Asset oder Portfolio teilen.</string>
+    <string name="bt_chat_chip_view">Ansehen</string>
+    <string name="bt_chat_chip_not_shared">Nicht mit dir geteilt</string>
+    <string name="bt_chat_share_item_cd">Element teilen</string>
+    <string name="bt_chat_message_placeholder">Nachricht</string>
+    <string name="bt_chat_send_cd">Senden</string>
+    <string name="bt_chat_share_title">Im Chat teilen</string>
+    <string name="bt_chat_share_subtitle">Das Senden erweitert nie den Zugriff — Freunde sehen es nur, wenn es bereits mit ihnen geteilt ist.</string>
+    <string name="bt_chat_share_empty">Du hast noch keine Portfolios, Watchlists oder Konglomerate zum Teilen.</string>
+    <string name="bt_chat_kind_asset">Asset</string>
+    <string name="bt_chat_kind_portfolio">Portfolio</string>
+    <string name="bt_chat_kind_watchlist">Watchlist</string>
+    <string name="bt_chat_kind_conglomerate">Konglomerat</string>
 </resources>

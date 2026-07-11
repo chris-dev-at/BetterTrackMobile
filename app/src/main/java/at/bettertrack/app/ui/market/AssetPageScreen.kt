@@ -167,7 +167,7 @@ class AssetPageViewModel(
 fun AssetPageScreen(
     assetId: String,
     onBack: () -> Unit,
-    onTrade: (assetId: String, symbol: String, name: String, portfolioId: String?, sell: Boolean) -> Unit,
+    onTrade: (assetId: String, symbol: String, name: String, currency: String, portfolioId: String?, sell: Boolean) -> Unit,
 ) {
     val vm: AssetPageViewModel = viewModel {
         AssetPageViewModel(
@@ -252,8 +252,12 @@ fun AssetPageScreen(
                     isOnline = isOnline,
                     locale = locale,
                     onRange = { vm.setRange(it) },
-                    onBuy = { onTrade(d.snapshot.asset.id, d.snapshot.asset.symbol, d.snapshot.asset.name, selectedPid, false) },
-                    onSell = { onTrade(d.snapshot.asset.id, d.snapshot.asset.symbol, d.snapshot.asset.name, selectedPid, true) },
+                    onBuy = {
+                        onTrade(d.snapshot.asset.id, d.snapshot.asset.symbol, d.snapshot.asset.name, d.snapshot.asset.currency, selectedPid, false)
+                    },
+                    onSell = {
+                        onTrade(d.snapshot.asset.id, d.snapshot.asset.symbol, d.snapshot.asset.name, d.snapshot.asset.currency, selectedPid, true)
+                    },
                 )
             }
         }

@@ -568,13 +568,14 @@ private fun BtNavHost(
             AssetPageScreen(
                 assetId = route.assetId,
                 onBack = back,
-                onTrade = { assetId, symbol, name, pid, sell ->
+                onTrade = { assetId, symbol, name, currency, pid, sell ->
                     navController.navigate(
                         TransactionFormRoute(
                             portfolioId = pid,
                             assetId = assetId,
                             assetSymbol = symbol,
                             assetName = name,
+                            assetCurrency = currency,
                             sell = sell,
                         ),
                     )
@@ -585,13 +586,14 @@ private fun BtNavHost(
             SearchScreen(
                 onBack = back,
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                onTrade = { assetId, symbol, name, pid ->
+                onTrade = { assetId, symbol, name, currency, pid ->
                     navController.navigate(
                         TransactionFormRoute(
                             portfolioId = pid,
                             assetId = assetId,
                             assetSymbol = symbol,
                             assetName = name,
+                            assetCurrency = currency,
                         ),
                     )
                 },
