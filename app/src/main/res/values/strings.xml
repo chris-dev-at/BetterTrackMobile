@@ -830,4 +830,149 @@
     <string name="bt_chat_kind_portfolio">Portfolio</string>
     <string name="bt_chat_kind_watchlist">Watchlist</string>
     <string name="bt_chat_kind_conglomerate">Conglomerate</string>
+
+    <!-- Social (§6.9–§6.12) — externalized in the Step-19 i18n audit -->
+    <!-- Messages header + tabs -->
+    <string name="bt_social_messages">Messages</string>
+    <string name="bt_social_tab_friends">Friends</string>
+    <string name="bt_social_tab_shared">Shared</string>
+    <string name="bt_social_tab_my_shares">My shares</string>
+
+    <!-- Friends section -->
+    <string name="bt_social_add_friend">Add a friend</string>
+    <string name="bt_social_requests_to_you">Requests to you</string>
+    <string name="bt_social_sent_requests">Sent requests</string>
+    <string name="bt_social_no_friends_title">No friends yet</string>
+    <string name="bt_social_no_friends_body">Add friends by username or email to share portfolios and see what they share with you.</string>
+    <string name="bt_social_offline_title">You\'re offline</string>
+    <string name="bt_social_offline_body">Friends and shares need a connection. Reconnect to see them.</string>
+    <string name="bt_social_friends_since">Friends since %1$s</string>
+    <string name="bt_social_message_friend_cd">Message @%1$s</string>
+    <string name="bt_social_request_wants">Wants to be your friend</string>
+    <string name="bt_social_request_waiting">Waiting to accept</string>
+    <string name="bt_social_decline_cd">Decline</string>
+    <string name="bt_social_accept">Accept</string>
+    <string name="bt_social_pending">Pending</string>
+
+    <!-- Shared-with-me section -->
+    <string name="bt_social_swm_empty_title">Nothing shared with you yet</string>
+    <string name="bt_social_swm_empty_body">When a friend shares a portfolio, watchlist or conglomerate with you, they\'ll show up here — grouped by friend.</string>
+    <string name="bt_social_people_sharing">People sharing with you</string>
+    <plurals name="bt_social_count_portfolios">
+        <item quantity="one">%1$d portfolio</item>
+        <item quantity="other">%1$d portfolios</item>
+    </plurals>
+    <plurals name="bt_social_count_conglomerates">
+        <item quantity="one">%1$d conglomerate</item>
+        <item quantity="other">%1$d conglomerates</item>
+    </plurals>
+    <plurals name="bt_social_count_watchlists">
+        <item quantity="one">%1$d watchlist</item>
+        <item quantity="other">%1$d watchlists</item>
+    </plurals>
+
+    <!-- My-shares section -->
+    <string name="bt_social_not_sharing">You\'re not sharing anything yet</string>
+    <string name="bt_social_sharing_count">You\'re sharing %1$d of %2$d items</string>
+    <string name="bt_social_my_shares_hint">Tap any item to change who can see it, or revoke access.</string>
+    <string name="bt_social_kind_portfolio">Portfolio</string>
+    <plurals name="bt_social_positions">
+        <item quantity="one">%1$d position</item>
+        <item quantity="other">%1$d positions</item>
+    </plurals>
+    <plurals name="bt_social_assets">
+        <item quantity="one">%1$d asset</item>
+        <item quantity="other">%1$d assets</item>
+    </plurals>
+    <string name="bt_social_audience_private">Private</string>
+    <string name="bt_social_audience_all_friends">All friends</string>
+    <string name="bt_social_audience_public">Public</string>
+    <string name="bt_social_audience_some_friends">Some friends</string>
+    <plurals name="bt_social_audience_friend_count">
+        <item quantity="one">%1$d friend</item>
+        <item quantity="other">%1$d friends</item>
+    </plurals>
+
+    <!-- Public-link dialog -->
+    <string name="bt_social_link_created_title">Public link created</string>
+    <string name="bt_social_link_created_body">Anyone with this link can view it. It\'s shown only once — copy it now.</string>
+    <string name="bt_social_link_copy">Copy</string>
+    <string name="bt_social_link_share">Share</string>
+    <string name="bt_social_link_copied_toast">Link copied</string>
+    <string name="bt_social_link_chooser_title">Share link</string>
+    <string name="bt_social_link_clip_label">BetterTrack link</string>
+
+    <!-- Add-friend dialog -->
+    <string name="bt_social_add_friend_body">Enter their username or email. They\'ll get a request to accept.</string>
+    <string name="bt_social_add_friend_placeholder">username or email</string>
+    <string name="bt_social_send_request">Send request</string>
+
+    <!-- Social toasts (emitted by the ViewModel, resolved in the UI) -->
+    <string name="bt_social_toast_request_sent">Friend request sent to @%1$s</string>
+    <string name="bt_social_toast_request_declined">Request declined</string>
+    <string name="bt_social_toast_request_cancelled">Request cancelled</string>
+    <string name="bt_social_toast_now_friends">You\'re now friends with @%1$s</string>
+    <string name="bt_social_toast_now_private">“%1$s” is now private</string>
+    <string name="bt_social_toast_shared_all">“%1$s” shared with all friends</string>
+    <plurals name="bt_social_toast_shared_specific">
+        <item quantity="one">“%1$s” shared with %2$d friend</item>
+        <item quantity="other">“%1$s” shared with %2$d friends</item>
+    </plurals>
+    <string name="bt_social_toast_public_active">Public link is active</string>
+
+    <!-- Friend overview -->
+    <string name="bt_social_go_to_chat">Go to chat</string>
+    <string name="bt_social_shares_with_you">SHARES WITH YOU</string>
+    <string name="bt_social_fo_empty_title">Nothing shared with you</string>
+    <string name="bt_social_fo_empty_body">@%1$s hasn\'t shared any portfolios, watchlists or conglomerates with you yet.</string>
+    <string name="bt_social_remove_friend">Remove friend</string>
+    <string name="bt_social_remove_confirm_title">Remove @%1$s?</string>
+    <string name="bt_social_remove_confirm_body">You\'ll both stop seeing anything shared between you. This can\'t be undone.</string>
+    <string name="bt_social_remove">Remove</string>
+    <string name="bt_social_alert_activity">Alert me about activity</string>
+    <string name="bt_social_coming_soon">Coming soon</string>
+    <string name="bt_social_toast_alerts_on">You\'ll be alerted about activity here</string>
+    <string name="bt_social_toast_alerts_off">Alerts off for this item</string>
+
+    <!-- Shared read-only detail screens -->
+    <string name="bt_social_shared_portfolio_title">Shared portfolio</string>
+    <string name="bt_social_shared_watchlist_title">Shared watchlist</string>
+    <string name="bt_social_shared_conglomerate_title">Shared conglomerate</string>
+    <string name="bt_social_read_only_named">%1$s · read-only</string>
+    <string name="bt_social_read_only_watchlist">Watchlist · read-only</string>
+    <string name="bt_social_net_worth">Net worth</string>
+    <string name="bt_social_today">"  today"</string>
+    <string name="bt_social_invested">Invested</string>
+    <string name="bt_social_unrealized_pl">Unrealized P/L</string>
+    <string name="bt_social_cash">Cash</string>
+    <string name="bt_social_holdings">Holdings</string>
+    <string name="bt_social_composition">Composition</string>
+    <string name="bt_social_not_shared_anymore">This isn\'t shared with you anymore.</string>
+    <string name="bt_social_read_only_badge">Read-only</string>
+    <string name="bt_social_shared_by_footer">Shared by @%1$s · you can view but not change it</string>
+
+    <!-- Audience picker sheet -->
+    <string name="bt_social_share_label">Share</string>
+    <string name="bt_social_share_choose_portfolio">Choose who can see this portfolio.</string>
+    <string name="bt_social_share_choose_watchlist">Choose who can see this watchlist.</string>
+    <string name="bt_social_share_choose_conglomerate">Choose who can see this conglomerate.</string>
+    <string name="bt_social_audience_private_sub">Only you</string>
+    <string name="bt_social_audience_specific_title">Specific friends</string>
+    <string name="bt_social_audience_specific_sub">Pick exactly who can see it</string>
+    <string name="bt_social_hint_add_friends_first">Add friends first — then you can pick exactly who sees this.</string>
+    <string name="bt_social_audience_all_friends_sub">Everyone you\'re friends with can view it</string>
+    <string name="bt_social_hint_all_friends_portfolio">Your friends will see this portfolio in “Shared with me”. You can revoke access any time.</string>
+    <string name="bt_social_hint_all_friends_watchlist">Your friends will see this watchlist in “Shared with me”. You can revoke access any time.</string>
+    <string name="bt_social_hint_all_friends_conglomerate">Your friends will see this conglomerate in “Shared with me”. You can revoke access any time.</string>
+    <string name="bt_social_audience_public_link_title">Public link</string>
+    <string name="bt_social_audience_public_link_sub_active">A public link is active</string>
+    <string name="bt_social_audience_public_link_sub_inactive">Anyone with the link can view it</string>
+    <string name="bt_social_hint_public_active_portfolio">A public link is already active for this portfolio. To revoke it, choose a different audience — the link dies instantly.</string>
+    <string name="bt_social_hint_public_active_watchlist">A public link is already active for this watchlist. To revoke it, choose a different audience — the link dies instantly.</string>
+    <string name="bt_social_hint_public_active_conglomerate">A public link is already active for this conglomerate. To revoke it, choose a different audience — the link dies instantly.</string>
+    <string name="bt_social_public_ack_title">This becomes public</string>
+    <string name="bt_social_public_ack_body">Anyone with the link can see your holdings and net worth — even people who aren\'t your friends. You can revoke the link any time.</string>
+    <string name="bt_social_public_ack_checkbox">I understand and want a public link</string>
+    <string name="bt_social_create_public_link">Create public link</string>
+    <string name="bt_social_apply">Apply</string>
 </resources>

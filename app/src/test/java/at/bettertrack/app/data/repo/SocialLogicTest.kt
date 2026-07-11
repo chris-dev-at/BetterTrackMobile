@@ -108,7 +108,7 @@ class SocialLogicTest {
     // ── MyShared counts ──────────────────────────────────────────────────────
 
     private fun mine(name: String, audience: ShareAudience) =
-        MySharedItem(id = name, kind = ShareableKind.Portfolio, name = name, audience = audience, friendCount = 0, detail = "")
+        MySharedItem(id = name, kind = ShareableKind.Portfolio, name = name, audience = audience, friendCount = 0, count = 0)
 
     @Test fun `sharedCount ignores private items`() {
         val my = MyShared(

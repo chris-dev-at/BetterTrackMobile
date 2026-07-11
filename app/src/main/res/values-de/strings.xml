@@ -821,4 +821,149 @@
     <string name="bt_chat_kind_portfolio">Portfolio</string>
     <string name="bt_chat_kind_watchlist">Watchlist</string>
     <string name="bt_chat_kind_conglomerate">Konglomerat</string>
+
+    <!-- Social (§6.9–§6.12) — externalisiert im Step-19-i18n-Audit -->
+    <!-- Nachrichten-Kopf + Tabs -->
+    <string name="bt_social_messages">Nachrichten</string>
+    <string name="bt_social_tab_friends">Freunde</string>
+    <string name="bt_social_tab_shared">Geteilt</string>
+    <string name="bt_social_tab_my_shares">Meine Freigaben</string>
+
+    <!-- Freunde-Bereich -->
+    <string name="bt_social_add_friend">Freund hinzufügen</string>
+    <string name="bt_social_requests_to_you">Anfragen an dich</string>
+    <string name="bt_social_sent_requests">Gesendete Anfragen</string>
+    <string name="bt_social_no_friends_title">Noch keine Freunde</string>
+    <string name="bt_social_no_friends_body">Füge Freunde per Benutzername oder E-Mail hinzu, um Portfolios zu teilen und zu sehen, was sie mit dir teilen.</string>
+    <string name="bt_social_offline_title">Du bist offline</string>
+    <string name="bt_social_offline_body">Freunde und Freigaben brauchen eine Verbindung. Stelle die Verbindung wieder her, um sie zu sehen.</string>
+    <string name="bt_social_friends_since">Befreundet seit %1$s</string>
+    <string name="bt_social_message_friend_cd">@%1$s eine Nachricht schreiben</string>
+    <string name="bt_social_request_wants">Möchte mit dir befreundet sein</string>
+    <string name="bt_social_request_waiting">Wartet auf Annahme</string>
+    <string name="bt_social_decline_cd">Ablehnen</string>
+    <string name="bt_social_accept">Annehmen</string>
+    <string name="bt_social_pending">Ausstehend</string>
+
+    <!-- Mit-mir-geteilt-Bereich -->
+    <string name="bt_social_swm_empty_title">Noch nichts mit dir geteilt</string>
+    <string name="bt_social_swm_empty_body">Wenn ein Freund ein Portfolio, eine Watchlist oder ein Konglomerat mit dir teilt, erscheint es hier — nach Freund gruppiert.</string>
+    <string name="bt_social_people_sharing">Personen, die mit dir teilen</string>
+    <plurals name="bt_social_count_portfolios">
+        <item quantity="one">%1$d Portfolio</item>
+        <item quantity="other">%1$d Portfolios</item>
+    </plurals>
+    <plurals name="bt_social_count_conglomerates">
+        <item quantity="one">%1$d Konglomerat</item>
+        <item quantity="other">%1$d Konglomerate</item>
+    </plurals>
+    <plurals name="bt_social_count_watchlists">
+        <item quantity="one">%1$d Watchlist</item>
+        <item quantity="other">%1$d Watchlists</item>
+    </plurals>
+
+    <!-- Meine-Freigaben-Bereich -->
+    <string name="bt_social_not_sharing">Du teilst noch nichts</string>
+    <string name="bt_social_sharing_count">Du teilst %1$d von %2$d Elementen</string>
+    <string name="bt_social_my_shares_hint">Tippe auf einen Eintrag, um zu ändern, wer ihn sehen kann, oder den Zugriff zu entziehen.</string>
+    <string name="bt_social_kind_portfolio">Portfolio</string>
+    <plurals name="bt_social_positions">
+        <item quantity="one">%1$d Position</item>
+        <item quantity="other">%1$d Positionen</item>
+    </plurals>
+    <plurals name="bt_social_assets">
+        <item quantity="one">%1$d Asset</item>
+        <item quantity="other">%1$d Assets</item>
+    </plurals>
+    <string name="bt_social_audience_private">Privat</string>
+    <string name="bt_social_audience_all_friends">Alle Freunde</string>
+    <string name="bt_social_audience_public">Öffentlich</string>
+    <string name="bt_social_audience_some_friends">Einige Freunde</string>
+    <plurals name="bt_social_audience_friend_count">
+        <item quantity="one">%1$d Freund</item>
+        <item quantity="other">%1$d Freunde</item>
+    </plurals>
+
+    <!-- Dialog: Öffentlicher Link -->
+    <string name="bt_social_link_created_title">Öffentlicher Link erstellt</string>
+    <string name="bt_social_link_created_body">Jeder mit diesem Link kann es ansehen. Er wird nur einmal angezeigt — kopiere ihn jetzt.</string>
+    <string name="bt_social_link_copy">Kopieren</string>
+    <string name="bt_social_link_share">Teilen</string>
+    <string name="bt_social_link_copied_toast">Link kopiert</string>
+    <string name="bt_social_link_chooser_title">Link teilen</string>
+    <string name="bt_social_link_clip_label">BetterTrack-Link</string>
+
+    <!-- Dialog: Freund hinzufügen -->
+    <string name="bt_social_add_friend_body">Gib den Benutzernamen oder die E-Mail-Adresse ein. Die Person erhält eine Anfrage zum Annehmen.</string>
+    <string name="bt_social_add_friend_placeholder">Benutzername oder E-Mail</string>
+    <string name="bt_social_send_request">Anfrage senden</string>
+
+    <!-- Social-Toasts (im ViewModel erzeugt, in der UI aufgelöst) -->
+    <string name="bt_social_toast_request_sent">Freundschaftsanfrage an @%1$s gesendet</string>
+    <string name="bt_social_toast_request_declined">Anfrage abgelehnt</string>
+    <string name="bt_social_toast_request_cancelled">Anfrage zurückgezogen</string>
+    <string name="bt_social_toast_now_friends">Du bist jetzt mit @%1$s befreundet</string>
+    <string name="bt_social_toast_now_private">„%1$s“ ist jetzt privat</string>
+    <string name="bt_social_toast_shared_all">„%1$s“ mit allen Freunden geteilt</string>
+    <plurals name="bt_social_toast_shared_specific">
+        <item quantity="one">„%1$s“ mit %2$d Freund geteilt</item>
+        <item quantity="other">„%1$s“ mit %2$d Freunden geteilt</item>
+    </plurals>
+    <string name="bt_social_toast_public_active">Öffentlicher Link ist aktiv</string>
+
+    <!-- Freund-Übersicht -->
+    <string name="bt_social_go_to_chat">Zum Chat</string>
+    <string name="bt_social_shares_with_you">TEILT MIT DIR</string>
+    <string name="bt_social_fo_empty_title">Nichts mit dir geteilt</string>
+    <string name="bt_social_fo_empty_body">@%1$s hat noch keine Portfolios, Watchlists oder Konglomerate mit dir geteilt.</string>
+    <string name="bt_social_remove_friend">Freund entfernen</string>
+    <string name="bt_social_remove_confirm_title">@%1$s entfernen?</string>
+    <string name="bt_social_remove_confirm_body">Ihr beide seht dann nichts mehr, was ihr geteilt habt. Das kann nicht rückgängig gemacht werden.</string>
+    <string name="bt_social_remove">Entfernen</string>
+    <string name="bt_social_alert_activity">Bei Aktivität benachrichtigen</string>
+    <string name="bt_social_coming_soon">Bald verfügbar</string>
+    <string name="bt_social_toast_alerts_on">Du wirst hier über Aktivität benachrichtigt</string>
+    <string name="bt_social_toast_alerts_off">Benachrichtigungen für diesen Eintrag aus</string>
+
+    <!-- Geteilte, schreibgeschützte Detail-Screens -->
+    <string name="bt_social_shared_portfolio_title">Geteiltes Portfolio</string>
+    <string name="bt_social_shared_watchlist_title">Geteilte Watchlist</string>
+    <string name="bt_social_shared_conglomerate_title">Geteiltes Konglomerat</string>
+    <string name="bt_social_read_only_named">%1$s · schreibgeschützt</string>
+    <string name="bt_social_read_only_watchlist">Watchlist · schreibgeschützt</string>
+    <string name="bt_social_net_worth">Vermögen</string>
+    <string name="bt_social_today">"  heute"</string>
+    <string name="bt_social_invested">Investiert</string>
+    <string name="bt_social_unrealized_pl">Buchg. G/V</string>
+    <string name="bt_social_cash">Bargeld</string>
+    <string name="bt_social_holdings">Bestände</string>
+    <string name="bt_social_composition">Zusammensetzung</string>
+    <string name="bt_social_not_shared_anymore">Das ist nicht mehr mit dir geteilt.</string>
+    <string name="bt_social_read_only_badge">Schreibgeschützt</string>
+    <string name="bt_social_shared_by_footer">Geteilt von @%1$s · du kannst es ansehen, aber nicht ändern</string>
+
+    <!-- Sichtbarkeits-Auswahl (Bottom-Sheet) -->
+    <string name="bt_social_share_label">Teilen</string>
+    <string name="bt_social_share_choose_portfolio">Wähle, wer dieses Portfolio sehen kann.</string>
+    <string name="bt_social_share_choose_watchlist">Wähle, wer diese Watchlist sehen kann.</string>
+    <string name="bt_social_share_choose_conglomerate">Wähle, wer dieses Konglomerat sehen kann.</string>
+    <string name="bt_social_audience_private_sub">Nur du</string>
+    <string name="bt_social_audience_specific_title">Bestimmte Freunde</string>
+    <string name="bt_social_audience_specific_sub">Wähle genau aus, wer es sehen kann</string>
+    <string name="bt_social_hint_add_friends_first">Füge zuerst Freunde hinzu — dann kannst du genau auswählen, wer das sieht.</string>
+    <string name="bt_social_audience_all_friends_sub">Alle, mit denen du befreundet bist, können es sehen</string>
+    <string name="bt_social_hint_all_friends_portfolio">Deine Freunde sehen dieses Portfolio unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
+    <string name="bt_social_hint_all_friends_watchlist">Deine Freunde sehen diese Watchlist unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
+    <string name="bt_social_hint_all_friends_conglomerate">Deine Freunde sehen dieses Konglomerat unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
+    <string name="bt_social_audience_public_link_title">Öffentlicher Link</string>
+    <string name="bt_social_audience_public_link_sub_active">Ein öffentlicher Link ist aktiv</string>
+    <string name="bt_social_audience_public_link_sub_inactive">Jeder mit dem Link kann es ansehen</string>
+    <string name="bt_social_hint_public_active_portfolio">Für dieses Portfolio ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
+    <string name="bt_social_hint_public_active_watchlist">Für diese Watchlist ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
+    <string name="bt_social_hint_public_active_conglomerate">Für dieses Konglomerat ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
+    <string name="bt_social_public_ack_title">Das wird öffentlich</string>
+    <string name="bt_social_public_ack_body">Jeder mit dem Link kann deine Bestände und dein Vermögen sehen — auch Leute, die nicht mit dir befreundet sind. Du kannst den Link jederzeit widerrufen.</string>
+    <string name="bt_social_public_ack_checkbox">Ich verstehe das und möchte einen öffentlichen Link</string>
+    <string name="bt_social_create_public_link">Öffentlichen Link erstellen</string>
+    <string name="bt_social_apply">Übernehmen</string>
 </resources>

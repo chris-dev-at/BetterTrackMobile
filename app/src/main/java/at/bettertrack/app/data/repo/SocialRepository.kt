@@ -128,7 +128,8 @@ data class MySharedItem(
     val audience: ShareAudience,
     /** Named friends for [ShareAudience.SpecificFriends] (0 otherwise). */
     val friendCount: Int,
-    val detail: String,
+    /** Subtitle count: unused for portfolios, position count for conglomerates, item count for watchlists. */
+    val count: Int,
 )
 
 data class MyShared(
@@ -277,7 +278,7 @@ class DefaultSocialRepository(
                                 name = p.name,
                                 audience = ShareAudience.fromWire(p.audience),
                                 friendCount = p.friendCount,
-                                detail = "Portfolio",
+                                count = 0,
                             ),
                         )
                     }
@@ -289,7 +290,7 @@ class DefaultSocialRepository(
                                 name = c.name,
                                 audience = ShareAudience.fromWire(c.audience),
                                 friendCount = c.friendCount,
-                                detail = if (c.positionCount == 1) "1 position" else "${c.positionCount} positions",
+                                count = c.positionCount,
                             ),
                         )
                     }
@@ -301,7 +302,7 @@ class DefaultSocialRepository(
                                 name = w.name,
                                 audience = ShareAudience.fromWire(w.audience),
                                 friendCount = w.friendCount,
-                                detail = if (w.itemCount == 1) "1 asset" else "${w.itemCount} assets",
+                                count = w.itemCount,
                             ),
                         )
                     }

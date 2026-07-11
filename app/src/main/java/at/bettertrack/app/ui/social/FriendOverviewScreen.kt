@@ -46,11 +46,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.SharedConglomerateSummary
 import at.bettertrack.app.data.repo.SharedPortfolioSummary
@@ -98,8 +101,8 @@ class FriendOverviewViewModel(
     private val _state = MutableStateFlow(FriendOverviewUi())
     val state: StateFlow<FriendOverviewUi> = _state.asStateFlow()
 
-    private val _toast = MutableStateFlow<String?>(null)
-    val toast: StateFlow<String?> = _toast.asStateFlow()
+    private val _toast = MutableStateFlow<SocialToast?>(null)
+    val toast: StateFlow<SocialToast?> = _toast.asStateFlow()
 
     init { load() }
 
@@ -144,10 +147,10 @@ class FriendOverviewViewModel(
         _state.value = _state.value.copy(activity = _state.value.activity + (subjectId to next))
         viewModelScope.launch {
             when (val r = repo.setActivityAlert(kind, subjectId, next)) {
-                is BtResult.Ok -> _toast.value = if (next) "You'll be alerted about activity here" else "Alerts off for this item"
+                is BtResult.Ok -> _toast.value = SocialToast.Res(if (next) R.string.bt_social_toast_alerts_on else R.string.bt_social_toast_alerts_off)
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(activity = _state.value.activity + (subjectId to current))
-                    _toast.value = r.error.userMessage
+                    _toast.value = SocialToast.Raw(r.error.userMessage)
                 }
             }
         }
@@ -160,7 +163,7 @@ class FriendOverviewViewModel(
                 is BtResult.Ok -> _state.value = _state.value.copy(removing = false, removed = true)
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(removing = false)
-                    _toast.value = r.error.userMessage
+                    _toast.value = SocialToast.Raw(r.error.userMessage)
                 }
             }
         }
@@ -190,8 +193,9 @@ fun FriendOverviewScreen(
     var confirmRemove by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(ui.removed) { if (ui.removed) onBack() }
+    val toastText = toast?.let { it.resolve() }
     androidx.compose.runtime.LaunchedEffect(toast) {
-        toast?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.consumeToast() }
+        toastText?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.consumeToast() }
     }
 
     Scaffold(
@@ -201,7 +205,7 @@ fun FriendOverviewScreen(
                 title = { Text("@$username", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -230,7 +234,7 @@ fun FriendOverviewScreen(
                     Spacer(Modifier.height(10.dp))
                     Text("@$username", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight_SemiBold(), color = bt.textPrimary)
                     ui.since?.let {
-                        Text("Friends since ${it.take(10)}", style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
+                        Text(stringResource(R.string.bt_social_friends_since, it.take(10)), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
                     }
                 }
             }
@@ -250,7 +254,7 @@ fun FriendOverviewScreen(
                     ) {
                         Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, tint = bt.gold, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Go to chat", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight_SemiBold(), color = bt.textPrimary, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.bt_social_go_to_chat), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight_SemiBold(), color = bt.textPrimary, modifier = Modifier.weight(1f))
                         Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -259,7 +263,7 @@ fun FriendOverviewScreen(
             // Shares-with-you.
             item {
                 Text(
-                    "SHARES WITH YOU",
+                    stringResource(R.string.bt_social_shares_with_you),
                     style = MaterialTheme.typography.labelMedium,
                     color = bt.textMuted,
                     modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
@@ -269,8 +273,8 @@ fun FriendOverviewScreen(
                 item {
                     BtEmptyState(
                         icon = Icons.Outlined.PieChart,
-                        title = "Nothing shared with you",
-                        message = "@$username hasn't shared any portfolios, watchlists or conglomerates with you yet.",
+                        title = stringResource(R.string.bt_social_fo_empty_title),
+                        message = stringResource(R.string.bt_social_fo_empty_body, username),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     )
                 }
@@ -279,7 +283,7 @@ fun FriendOverviewScreen(
                 SharedItemRow(
                     icon = Icons.Outlined.PieChart,
                     title = p.name,
-                    subtitle = "Portfolio",
+                    subtitle = stringResource(R.string.bt_social_kind_portfolio),
                     alertsOn = ui.activity[p.portfolioId] ?: false,
                     onToggleAlerts = { vm.toggleActivity(ShareableKind.Portfolio, p.portfolioId) },
                     onOpen = { onOpenSharedPortfolio(p.portfolioId) },
@@ -290,7 +294,7 @@ fun FriendOverviewScreen(
                 SharedItemRow(
                     icon = Icons.Outlined.Dashboard,
                     title = c.name,
-                    subtitle = if (c.positionCount == 1) "1 position" else "${c.positionCount} positions",
+                    subtitle = pluralStringResource(R.plurals.bt_social_positions, c.positionCount, c.positionCount),
                     alertsOn = ui.activity[c.conglomerateId] ?: false,
                     onToggleAlerts = { vm.toggleActivity(ShareableKind.Conglomerate, c.conglomerateId) },
                     onOpen = { onOpenSharedConglomerate(c.conglomerateId) },
@@ -301,7 +305,7 @@ fun FriendOverviewScreen(
                 SharedItemRow(
                     icon = Icons.AutoMirrored.Outlined.ShowChart,
                     title = w.name,
-                    subtitle = if (w.itemCount == 1) "1 asset" else "${w.itemCount} assets",
+                    subtitle = pluralStringResource(R.plurals.bt_social_assets, w.itemCount, w.itemCount),
                     alertsOn = ui.activity[w.watchlistId] ?: false,
                     onToggleAlerts = { vm.toggleActivity(ShareableKind.Watchlist, w.watchlistId) },
                     onOpen = { onOpenSharedWatchlist(w.watchlistId, w.ownerName) },
@@ -325,7 +329,7 @@ fun FriendOverviewScreen(
                     ) {
                         Icon(Icons.Outlined.PersonRemove, contentDescription = null, tint = bt.loss, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Remove friend", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight_SemiBold(), color = bt.loss)
+                        Text(stringResource(R.string.bt_social_remove_friend), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight_SemiBold(), color = bt.loss)
                     }
                 }
             }
@@ -338,12 +342,12 @@ fun FriendOverviewScreen(
             containerColor = bt.surface,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
-            title = { Text("Remove @$username?") },
-            text = { Text("You'll both stop seeing anything shared between you. This can't be undone.") },
+            title = { Text(stringResource(R.string.bt_social_remove_confirm_title, username)) },
+            text = { Text(stringResource(R.string.bt_social_remove_confirm_body)) },
             confirmButton = {
-                TextButton(onClick = { confirmRemove = false; vm.removeFriend() }) { Text("Remove", color = bt.loss) }
+                TextButton(onClick = { confirmRemove = false; vm.removeFriend() }) { Text(stringResource(R.string.bt_social_remove), color = bt.loss) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel", color = bt.textSecondary) } },
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) } },
         )
     }
 }
@@ -377,13 +381,13 @@ private fun SharedItemRow(
                 Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = if (alertsOn) bt.goldEmphasis else bt.textMuted, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Alert me about activity",
+                    stringResource(R.string.bt_social_alert_activity),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
                 if (alertsOn) {
-                    BtBadge(text = "Coming soon", kind = BtBadgeKind.Neutral)
+                    BtBadge(text = stringResource(R.string.bt_social_coming_soon), kind = BtBadgeKind.Neutral)
                     Spacer(Modifier.width(8.dp))
                 }
                 Switch(

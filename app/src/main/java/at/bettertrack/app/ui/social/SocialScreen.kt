@@ -56,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.AudienceState
 import at.bettertrack.app.data.repo.ChatRepository
@@ -123,8 +126,8 @@ class SocialViewModel(
     private val _state = MutableStateFlow(SocialUiState())
     val state: StateFlow<SocialUiState> = _state.asStateFlow()
 
-    private val _toast = MutableStateFlow<String?>(null)
-    val toast: StateFlow<String?> = _toast.asStateFlow()
+    private val _toast = MutableStateFlow<SocialToast?>(null)
+    val toast: StateFlow<SocialToast?> = _toast.asStateFlow()
 
     init { load(initial = true) }
 
@@ -169,12 +172,13 @@ class SocialViewModel(
     fun sendRequest(identifier: String) = write {
         val r = repo.sendRequest(identifier)
         // No enumeration: identical message whether or not the target exists.
-        if (r is BtResult.Ok) "Friend request sent to @${identifier.substringBefore('@')}" else (r as BtResult.Err).error.userMessage
+        if (r is BtResult.Ok) SocialToast.Res(R.string.bt_social_toast_request_sent, listOf(identifier.substringBefore('@')))
+        else SocialToast.Raw((r as BtResult.Err).error.userMessage)
     }
 
-    fun decline(req: FriendRequest) = write { toastFor(repo.declineRequest(req.id), "Request declined") }
-    fun cancel(req: FriendRequest) = write { toastFor(repo.cancelRequest(req.id), "Request cancelled") }
-    fun accept(req: FriendRequest) = write { toastFor(repo.acceptRequest(req.id), "You're now friends with @${req.username}") }
+    fun decline(req: FriendRequest) = write { toastFor(repo.declineRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_declined)) }
+    fun cancel(req: FriendRequest) = write { toastFor(repo.cancelRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_cancelled)) }
+    fun accept(req: FriendRequest) = write { toastFor(repo.acceptRequest(req.id), SocialToast.Res(R.string.bt_social_toast_now_friends, listOf(req.username))) }
 
     fun openSharing(item: MySharedItem) {
         _state.value = _state.value.copy(sharingItem = item, sharingState = null)
@@ -206,17 +210,17 @@ class SocialViewModel(
                     )
                     if (r.value.publicUrl == null) {
                         _toast.value = when (audience) {
-                            ShareAudience.Private -> "“${item.name}” is now private"
-                            ShareAudience.AllFriends -> "“${item.name}” shared with all friends"
-                            ShareAudience.SpecificFriends -> "“${item.name}” shared with ${friendIds.size} friend${if (friendIds.size == 1) "" else "s"}"
-                            ShareAudience.PublicLink -> "Public link is active"
+                            ShareAudience.Private -> SocialToast.Res(R.string.bt_social_toast_now_private, listOf(item.name))
+                            ShareAudience.AllFriends -> SocialToast.Res(R.string.bt_social_toast_shared_all, listOf(item.name))
+                            ShareAudience.SpecificFriends -> SocialToast.Quantity(R.plurals.bt_social_toast_shared_specific, friendIds.size, listOf(item.name, friendIds.size))
+                            ShareAudience.PublicLink -> SocialToast.Res(R.string.bt_social_toast_public_active)
                         }
                     }
                     load()
                 }
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(sharingBusy = false)
-                    _toast.value = r.error.userMessage
+                    _toast.value = SocialToast.Raw(r.error.userMessage)
                 }
             }
         }
@@ -224,16 +228,15 @@ class SocialViewModel(
 
     fun consumeToast() { _toast.value = null }
 
-    private fun write(block: suspend () -> String) {
+    private fun write(block: suspend () -> SocialToast) {
         viewModelScope.launch {
-            val msg = block()
-            _toast.value = msg
+            _toast.value = block()
             load()
         }
     }
 
-    private fun toastFor(r: BtResult<Unit>, ok: String): String =
-        if (r is BtResult.Ok) ok else (r as BtResult.Err).error.userMessage
+    private fun toastFor(r: BtResult<Unit>, ok: SocialToast): SocialToast =
+        if (r is BtResult.Ok) ok else SocialToast.Raw((r as BtResult.Err).error.userMessage)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -264,8 +267,9 @@ fun SocialScreen(
         chatRepo.connectRealtime()
         onDispose { chatRepo.disconnectRealtime() }
     }
+    val toastText = toast?.let { it.resolve() }
     androidx.compose.runtime.LaunchedEffect(toast) {
-        toast?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeToast() }
+        toastText?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeToast() }
     }
 
     val refreshState = rememberPullToRefreshState()
@@ -299,8 +303,8 @@ fun SocialScreen(
                     }
                     !ui.online && ui.friends.isEmpty() && ui.sharedWithMe == null -> BtEmptyState(
                         icon = Icons.Outlined.People,
-                        title = "You're offline",
-                        message = "Friends and shares need a connection. Reconnect to see them.",
+                        title = stringResource(R.string.bt_social_offline_title),
+                        message = stringResource(R.string.bt_social_offline_body),
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                     )
                     ui.error != null && ui.friends.isEmpty() -> BtErrorState(
@@ -346,15 +350,15 @@ fun SocialScreen(
             url = url,
             onCopy = {
                 val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clip.setPrimaryClip(ClipData.newPlainText("BetterTrack link", url))
-                Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+                clip.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.bt_social_link_clip_label), url))
+                Toast.makeText(context, context.getString(R.string.bt_social_link_copied_toast), Toast.LENGTH_SHORT).show()
             },
             onShare = {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, url)
                 }
-                context.startActivity(Intent.createChooser(send, "Share link"))
+                context.startActivity(Intent.createChooser(send, context.getString(R.string.bt_social_link_chooser_title)))
             },
             onDismiss = { vm.dismissLink() },
         )
@@ -376,9 +380,9 @@ private fun SegmentedTabs(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Segment("Friends", requestCount, selected == SocialSection.Friends, Modifier.weight(1f)) { onSelect(SocialSection.Friends) }
-        Segment("Shared", sharedCount, selected == SocialSection.SharedWithMe, Modifier.weight(1f)) { onSelect(SocialSection.SharedWithMe) }
-        Segment("My shares", 0, selected == SocialSection.MyShares, Modifier.weight(1f)) { onSelect(SocialSection.MyShares) }
+        Segment(stringResource(R.string.bt_social_tab_friends), requestCount, selected == SocialSection.Friends, Modifier.weight(1f)) { onSelect(SocialSection.Friends) }
+        Segment(stringResource(R.string.bt_social_tab_shared), sharedCount, selected == SocialSection.SharedWithMe, Modifier.weight(1f)) { onSelect(SocialSection.SharedWithMe) }
+        Segment(stringResource(R.string.bt_social_tab_my_shares), 0, selected == SocialSection.MyShares, Modifier.weight(1f)) { onSelect(SocialSection.MyShares) }
     }
 }
 
@@ -435,7 +439,7 @@ private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
         ) {
             Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
-            Text("Messages", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.bt_social_messages), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, modifier = Modifier.weight(1f))
             if (unread > 0) {
                 BtCountBadge(count = unread)
                 Spacer(Modifier.width(8.dp))
@@ -462,32 +466,32 @@ private fun FriendsSection(
     ) {
         item {
             BtPrimaryButton(
-                text = "Add a friend",
+                text = stringResource(R.string.bt_social_add_friend),
                 onClick = onAdd,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             )
         }
 
         if (ui.incoming.isNotEmpty()) {
-            item { SectionHeader("Requests to you", ui.incoming.size) }
+            item { SectionHeader(stringResource(R.string.bt_social_requests_to_you), ui.incoming.size) }
             items(ui.incoming, key = { "in-" + it.id }) { req ->
                 RequestRow(req, incoming = true, onAccept = { vm.accept(req) }, onDecline = { vm.decline(req) }, onCancel = {})
             }
         }
         if (ui.outgoing.isNotEmpty()) {
-            item { SectionHeader("Sent requests", ui.outgoing.size) }
+            item { SectionHeader(stringResource(R.string.bt_social_sent_requests), ui.outgoing.size) }
             items(ui.outgoing, key = { "out-" + it.id }) { req ->
                 RequestRow(req, incoming = false, onAccept = {}, onDecline = {}, onCancel = { vm.cancel(req) })
             }
         }
 
-        item { SectionHeader("Friends", ui.friends.size) }
+        item { SectionHeader(stringResource(R.string.bt_social_tab_friends), ui.friends.size) }
         if (ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty()) {
             item {
                 BtEmptyState(
                     icon = Icons.Outlined.Group,
-                    title = "No friends yet",
-                    message = "Add friends by username or email to share portfolios and see what they share with you.",
+                    title = stringResource(R.string.bt_social_no_friends_title),
+                    message = stringResource(R.string.bt_social_no_friends_body),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                 )
             }
@@ -525,10 +529,10 @@ private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("@${f.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                Text("Friends since ${f.since.take(10)}", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                Text(stringResource(R.string.bt_social_friends_since, f.since.take(10)), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             IconButton(onClick = onChat) {
-                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Message @${f.username}", tint = bt.textSecondary)
+                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = stringResource(R.string.bt_social_message_friend_cd, f.username), tint = bt.textSecondary)
             }
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
@@ -554,27 +558,27 @@ private fun RequestRow(
             Column(Modifier.weight(1f)) {
                 Text("@${req.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                 Text(
-                    if (incoming) "Wants to be your friend" else "Waiting to accept",
+                    if (incoming) stringResource(R.string.bt_social_request_wants) else stringResource(R.string.bt_social_request_waiting),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                 )
             }
             if (incoming) {
                 IconButton(onClick = onDecline) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Decline", tint = bt.textSecondary)
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.bt_social_decline_cd), tint = bt.textSecondary)
                 }
                 Spacer(Modifier.width(2.dp))
                 Surface(onClick = onAccept, shape = BtShapes.pill, color = bt.gold, contentColor = bt.onGold) {
                     Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Accept", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.bt_social_accept), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     }
                 }
             } else {
-                BtBadge(text = "Pending", kind = BtBadgeKind.Gold)
+                BtBadge(text = stringResource(R.string.bt_social_pending), kind = BtBadgeKind.Gold)
                 Spacer(Modifier.width(4.dp))
-                TextButton(onClick = onCancel) { Text("Cancel", color = bt.textSecondary) }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) }
             }
         }
     }
@@ -587,8 +591,8 @@ private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, St
     if (shared == null || shared.isEmpty) {
         BtEmptyState(
             icon = Icons.Outlined.People,
-            title = "Nothing shared with you yet",
-            message = "When a friend shares a portfolio, watchlist or conglomerate with you, they'll show up here — grouped by friend.",
+            title = stringResource(R.string.bt_social_swm_empty_title),
+            message = stringResource(R.string.bt_social_swm_empty_body),
             modifier = Modifier.fillMaxSize().padding(24.dp),
         )
         return
@@ -599,7 +603,7 @@ private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, St
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { SectionHeader("People sharing with you", people.size) }
+        item { SectionHeader(stringResource(R.string.bt_social_people_sharing), people.size) }
         items(people, key = { "person-" + it.ownerId }) { p ->
             PersonRow(p, onClick = { onOpenPerson(p.ownerId, p.ownerName) })
         }
@@ -641,16 +645,15 @@ private fun MiniCount(icon: ImageVector, count: Int) {
     }
 }
 
+@Composable
 private fun sharesSummary(p: PersonShares): String {
     val parts = buildList {
-        if (p.portfolios.isNotEmpty()) add("${p.portfolios.size} portfolio${plural(p.portfolios.size)}")
-        if (p.conglomerates.isNotEmpty()) add("${p.conglomerates.size} conglomerate${plural(p.conglomerates.size)}")
-        if (p.watchlists.isNotEmpty()) add("${p.watchlists.size} watchlist${plural(p.watchlists.size)}")
+        if (p.portfolios.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_portfolios, p.portfolios.size, p.portfolios.size))
+        if (p.conglomerates.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_conglomerates, p.conglomerates.size, p.conglomerates.size))
+        if (p.watchlists.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_watchlists, p.watchlists.size, p.watchlists.size))
     }
     return parts.joinToString(" · ")
 }
-
-private fun plural(n: Int): String = if (n == 1) "" else "s"
 
 // ── My-shares section ────────────────────────────────────────────────────────
 
@@ -668,7 +671,7 @@ private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
     ) {
         item {
             Text(
-                if (mine.sharedCount == 0) "You're not sharing anything yet" else "You're sharing ${mine.sharedCount} of ${mine.items.size} items",
+                if (mine.sharedCount == 0) stringResource(R.string.bt_social_not_sharing) else stringResource(R.string.bt_social_sharing_count, mine.sharedCount, mine.items.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = bt.textSecondary,
                 modifier = Modifier.padding(vertical = 6.dp),
@@ -677,7 +680,7 @@ private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
         items(mine.items, key = { it.kind.name + "-" + it.id }) { item -> MySharedRow(item, onShare = { onShare(item) }) }
         item {
             Text(
-                "Tap any item to change who can see it, or revoke access.",
+                stringResource(R.string.bt_social_my_shares_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
                 modifier = Modifier.padding(top = 8.dp),
@@ -704,7 +707,12 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, maxLines = 1)
-                Text(item.detail, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                val subtitle = when (item.kind) {
+                    ShareableKind.Portfolio -> stringResource(R.string.bt_social_kind_portfolio)
+                    ShareableKind.Conglomerate -> pluralStringResource(R.plurals.bt_social_positions, item.count, item.count)
+                    ShareableKind.Watchlist -> pluralStringResource(R.plurals.bt_social_assets, item.count, item.count)
+                }
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(chrome.icon, contentDescription = null, tint = if (chrome.kind == BtBadgeKind.Gold) bt.goldEmphasis else bt.textMuted, modifier = Modifier.size(15.dp))
@@ -717,11 +725,16 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
 
 private data class AudienceChrome(val icon: ImageVector, val label: String, val kind: BtBadgeKind)
 
+@Composable
 private fun audienceChrome(a: ShareAudience, friendCount: Int): AudienceChrome = when (a) {
-    ShareAudience.Private -> AudienceChrome(Icons.Outlined.Lock, "Private", BtBadgeKind.Neutral)
-    ShareAudience.SpecificFriends -> AudienceChrome(Icons.Outlined.People, if (friendCount > 0) "$friendCount friend${plural(friendCount)}" else "Some friends", BtBadgeKind.Gold)
-    ShareAudience.AllFriends -> AudienceChrome(Icons.Outlined.Group, "All friends", BtBadgeKind.Gold)
-    ShareAudience.PublicLink -> AudienceChrome(Icons.Outlined.Link, "Public", BtBadgeKind.Gold)
+    ShareAudience.Private -> AudienceChrome(Icons.Outlined.Lock, stringResource(R.string.bt_social_audience_private), BtBadgeKind.Neutral)
+    ShareAudience.SpecificFriends -> AudienceChrome(
+        Icons.Outlined.People,
+        if (friendCount > 0) pluralStringResource(R.plurals.bt_social_audience_friend_count, friendCount, friendCount) else stringResource(R.string.bt_social_audience_some_friends),
+        BtBadgeKind.Gold,
+    )
+    ShareAudience.AllFriends -> AudienceChrome(Icons.Outlined.Group, stringResource(R.string.bt_social_audience_all_friends), BtBadgeKind.Gold)
+    ShareAudience.PublicLink -> AudienceChrome(Icons.Outlined.Link, stringResource(R.string.bt_social_audience_public), BtBadgeKind.Gold)
 }
 
 // ── Dialogs ──────────────────────────────────────────────────────────────────
@@ -735,11 +748,11 @@ private fun PublicLinkDialog(url: String, onCopy: () -> Unit, onShare: () -> Uni
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         icon = { Icon(Icons.Outlined.Link, contentDescription = null, tint = bt.gold) },
-        title = { Text("Public link created") },
+        title = { Text(stringResource(R.string.bt_social_link_created_title)) },
         text = {
             Column {
                 Text(
-                    "Anyone with this link can view it. It's shown only once — copy it now.",
+                    stringResource(R.string.bt_social_link_created_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = bt.textSecondary,
                 )
@@ -760,12 +773,12 @@ private fun PublicLinkDialog(url: String, onCopy: () -> Unit, onShare: () -> Uni
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCopy() }) { Text("Copy", color = bt.gold) }
+            TextButton(onClick = { onCopy() }) { Text(stringResource(R.string.bt_social_link_copy), color = bt.gold) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { onShare() }) { Text("Share", color = bt.textSecondary) }
-                TextButton(onClick = onDismiss) { Text("Done", color = bt.textSecondary) }
+                TextButton(onClick = { onShare() }) { Text(stringResource(R.string.bt_social_link_share), color = bt.textSecondary) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_action_done), color = bt.textSecondary) }
             }
         },
     )
@@ -781,16 +794,16 @@ private fun AddFriendDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         icon = { Icon(Icons.Outlined.PersonAdd, contentDescription = null, tint = bt.gold) },
-        title = { Text("Add a friend") },
+        title = { Text(stringResource(R.string.bt_social_add_friend)) },
         text = {
             Column {
-                Text("Enter their username or email. They'll get a request to accept.", style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
+                Text(stringResource(R.string.bt_social_add_friend_body), style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
                     singleLine = true,
-                    placeholder = { Text("username or email", color = bt.textMuted) },
+                    placeholder = { Text(stringResource(R.string.bt_social_add_friend_placeholder), color = bt.textMuted) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -798,9 +811,9 @@ private fun AddFriendDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = { if (text.isNotBlank()) onSend(text.trim()) }, enabled = text.isNotBlank()) {
-                Text("Send request", color = if (text.isNotBlank()) bt.gold else bt.textMuted)
+                Text(stringResource(R.string.bt_social_send_request), color = if (text.isNotBlank()) bt.gold else bt.textMuted)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = bt.textSecondary) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) } },
     )
 }

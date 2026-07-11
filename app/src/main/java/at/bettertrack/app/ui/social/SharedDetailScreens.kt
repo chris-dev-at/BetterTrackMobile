@@ -29,8 +29,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
@@ -53,19 +55,19 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
     val state by produceState<BtResult<SharedPortfolioDetailResponse>?>(initialValue = null, portfolioId) {
         value = AppGraph.socialRepository.sharedPortfolio(portfolioId)
     }
-    SharedScaffold(title = "Shared portfolio", onBack = onBack) {
+    SharedScaffold(title = stringResource(R.string.bt_social_shared_portfolio_title), onBack = onBack) {
         Loaded(state, onRetry = null) { d ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, "${d.name} · read-only") }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name)) }
                 item {
                     val bt = BtTheme.colors
                     BtCard(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text("Net worth", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                            Text(stringResource(R.string.bt_social_net_worth), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
                             MoneyText(value = d.totals.totalValueEur, style = BtTheme.type.moneyLarge)
                             Spacer(Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -83,21 +85,21 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
                                         color = if (it >= 0) bt.gain else bt.loss,
                                     )
                                 }
-                                Text("  today", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                                Text(stringResource(R.string.bt_social_today), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
                             }
                         }
                     }
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        MiniStat("Invested", d.totals.investedEur, Modifier.weight(1f))
-                        MiniStat("Unrealized P/L", d.totals.unrealizedPnlEur, Modifier.weight(1f), gainLoss = true)
-                        MiniStat("Cash", d.totals.cashEur, Modifier.weight(1f))
+                        MiniStat(stringResource(R.string.bt_social_invested), d.totals.investedEur, Modifier.weight(1f))
+                        MiniStat(stringResource(R.string.bt_social_unrealized_pl), d.totals.unrealizedPnlEur, Modifier.weight(1f), gainLoss = true)
+                        MiniStat(stringResource(R.string.bt_social_cash), d.totals.cashEur, Modifier.weight(1f))
                     }
                 }
                 item {
                     Text(
-                        "Holdings",
+                        stringResource(R.string.bt_social_holdings),
                         style = MaterialTheme.typography.titleSmall,
                         color = BtTheme.colors.textPrimary,
                         modifier = Modifier.padding(top = 4.dp),
@@ -139,14 +141,14 @@ fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: ()
     val state by produceState<BtResult<SharedWatchlistDetailResponse>?>(initialValue = null, watchlistId) {
         value = AppGraph.socialRepository.sharedWatchlist(watchlistId)
     }
-    SharedScaffold(title = "Shared watchlist", onBack = onBack) {
+    SharedScaffold(title = stringResource(R.string.bt_social_shared_watchlist_title), onBack = onBack) {
         Loaded(state, onRetry = null) { d ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, "Watchlist · read-only") }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_watchlist)) }
                 items(d.items, key = { it.id }) { it2 ->
                     val bt = BtTheme.colors
                     BtCard(modifier = Modifier.fillMaxWidth()) {
@@ -174,21 +176,21 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
     val state by produceState<BtResult<SharedConglomerateDetailResponse>?>(initialValue = null, conglomerateId) {
         value = AppGraph.socialRepository.sharedConglomerate(conglomerateId)
     }
-    SharedScaffold(title = "Shared conglomerate", onBack = onBack) {
+    SharedScaffold(title = stringResource(R.string.bt_social_shared_conglomerate_title), onBack = onBack) {
         Loaded(state, onRetry = null) { d ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, "${d.name} · read-only") }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name)) }
                 d.description?.takeIf { it.isNotBlank() }?.let { desc ->
                     item {
                         Text(desc, style = MaterialTheme.typography.bodyMedium, color = BtTheme.colors.textSecondary)
                     }
                 }
                 item {
-                    Text("Composition", style = MaterialTheme.typography.titleSmall, color = BtTheme.colors.textPrimary)
+                    Text(stringResource(R.string.bt_social_composition), style = MaterialTheme.typography.titleSmall, color = BtTheme.colors.textPrimary)
                 }
                 items(d.positions, key = { it.assetId }) { p ->
                     val bt = BtTheme.colors
@@ -229,7 +231,7 @@ private fun SharedScaffold(title: String, onBack: () -> Unit, content: @Composab
                 title = { Text(title, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -254,7 +256,7 @@ private fun <T> Loaded(
             CircularProgressIndicator(color = bt.gold)
         }
         is BtResult.Err -> BtErrorState(
-            message = if (s.error.httpStatus == 404) "This isn't shared with you anymore." else s.error.userMessage,
+            message = if (s.error.httpStatus == 404) stringResource(R.string.bt_social_not_shared_anymore) else s.error.userMessage,
             onRetry = onRetry,
         )
         is BtResult.Ok -> content(s.value)
@@ -271,7 +273,7 @@ private fun OwnerHeader(username: String, subtitle: String) {
             Text("@$username", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
         }
-        BtBadge(text = "Read-only", kind = BtBadgeKind.Neutral)
+        BtBadge(text = stringResource(R.string.bt_social_read_only_badge), kind = BtBadgeKind.Neutral)
     }
 }
 
@@ -302,7 +304,7 @@ private fun ReadOnlyFooter(username: String) {
     ) {
         Icon(Icons.Outlined.Lock, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(14.dp))
         Spacer(Modifier.size(6.dp))
-        Text("Shared by @$username · you can view but not change it", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+        Text(stringResource(R.string.bt_social_shared_by_footer, username), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
     }
 }
 

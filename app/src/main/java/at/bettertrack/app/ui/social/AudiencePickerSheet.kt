@@ -38,9 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import at.bettertrack.app.R
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.ShareAudience
 import at.bettertrack.app.data.repo.ShareableKind
@@ -99,7 +101,7 @@ fun AudiencePickerSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
         ) {
-            Text("Share", style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
+            Text(stringResource(R.string.bt_social_share_label), style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
             Text(
                 text = itemName,
                 style = MaterialTheme.typography.titleLarge,
@@ -108,7 +110,13 @@ fun AudiencePickerSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Choose who can see this ${kind.label()}.",
+                text = stringResource(
+                    when (kind) {
+                        ShareableKind.Portfolio -> R.string.bt_social_share_choose_portfolio
+                        ShareableKind.Watchlist -> R.string.bt_social_share_choose_watchlist
+                        ShareableKind.Conglomerate -> R.string.bt_social_share_choose_conglomerate
+                    },
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = bt.textSecondary,
             )
@@ -116,23 +124,23 @@ fun AudiencePickerSheet(
 
             AudienceOption(
                 icon = Icons.Outlined.Lock,
-                title = "Private",
-                subtitle = "Only you",
+                title = stringResource(R.string.bt_social_audience_private),
+                subtitle = stringResource(R.string.bt_social_audience_private_sub),
                 selected = selected == ShareAudience.Private,
                 onClick = { selected = ShareAudience.Private; ack = false },
             )
             Spacer(Modifier.height(8.dp))
             AudienceOption(
                 icon = Icons.Outlined.People,
-                title = "Specific friends",
-                subtitle = "Pick exactly who can see it",
+                title = stringResource(R.string.bt_social_audience_specific_title),
+                subtitle = stringResource(R.string.bt_social_audience_specific_sub),
                 selected = selected == ShareAudience.SpecificFriends,
                 onClick = { selected = ShareAudience.SpecificFriends; ack = false },
             )
             if (selected == ShareAudience.SpecificFriends) {
                 Spacer(Modifier.height(8.dp))
                 if (friends.isEmpty()) {
-                    HintCard("Add friends first — then you can pick exactly who sees this.")
+                    HintCard(stringResource(R.string.bt_social_hint_add_friends_first))
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
@@ -157,27 +165,43 @@ fun AudiencePickerSheet(
             Spacer(Modifier.height(8.dp))
             AudienceOption(
                 icon = Icons.Outlined.Group,
-                title = "All friends",
-                subtitle = "Everyone you're friends with can view it",
+                title = stringResource(R.string.bt_social_audience_all_friends),
+                subtitle = stringResource(R.string.bt_social_audience_all_friends_sub),
                 selected = selected == ShareAudience.AllFriends,
                 onClick = { selected = ShareAudience.AllFriends; ack = false },
             )
             if (selected == ShareAudience.AllFriends) {
                 Spacer(Modifier.height(8.dp))
-                HintCard("Your friends will see this ${kind.label()} in “Shared with me”. You can revoke access any time.")
+                HintCard(
+                    stringResource(
+                        when (kind) {
+                            ShareableKind.Portfolio -> R.string.bt_social_hint_all_friends_portfolio
+                            ShareableKind.Watchlist -> R.string.bt_social_hint_all_friends_watchlist
+                            ShareableKind.Conglomerate -> R.string.bt_social_hint_all_friends_conglomerate
+                        },
+                    ),
+                )
             }
             Spacer(Modifier.height(8.dp))
             AudienceOption(
                 icon = Icons.Outlined.Link,
-                title = "Public link",
-                subtitle = if (linkActive) "A public link is active" else "Anyone with the link can view it",
+                title = stringResource(R.string.bt_social_audience_public_link_title),
+                subtitle = if (linkActive) stringResource(R.string.bt_social_audience_public_link_sub_active) else stringResource(R.string.bt_social_audience_public_link_sub_inactive),
                 selected = selected == ShareAudience.PublicLink,
                 onClick = { selected = ShareAudience.PublicLink; ack = false },
             )
             if (selected == ShareAudience.PublicLink) {
                 Spacer(Modifier.height(10.dp))
                 if (linkActive && currentAudience == ShareAudience.PublicLink) {
-                    HintCard("A public link is already active for this ${kind.label()}. To revoke it, choose a different audience — the link dies instantly.")
+                    HintCard(
+                        stringResource(
+                            when (kind) {
+                                ShareableKind.Portfolio -> R.string.bt_social_hint_public_active_portfolio
+                                ShareableKind.Watchlist -> R.string.bt_social_hint_public_active_watchlist
+                                ShareableKind.Conglomerate -> R.string.bt_social_hint_public_active_conglomerate
+                            },
+                        ),
+                    )
                 } else {
                     PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
                 }
@@ -195,8 +219,8 @@ fun AudiencePickerSheet(
             }
             BtPrimaryButton(
                 text = when {
-                    isPublic && !alreadyPublic -> "Create public link"
-                    else -> "Apply"
+                    isPublic && !alreadyPublic -> stringResource(R.string.bt_social_create_public_link)
+                    else -> stringResource(R.string.bt_social_apply)
                 },
                 onClick = { onApply(selected, selectedFriends, ack) },
                 enabled = canApply,
@@ -286,14 +310,14 @@ private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "This becomes public",
+                    stringResource(R.string.bt_social_public_ack_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = bt.lossSoft,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "Anyone with the link can see your holdings and net worth — even people who aren't your friends. You can revoke the link any time.",
+                    stringResource(R.string.bt_social_public_ack_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textSecondary,
                 )
@@ -310,7 +334,7 @@ private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "I understand and want a public link",
+                        stringResource(R.string.bt_social_public_ack_checkbox),
                         style = MaterialTheme.typography.bodyMedium,
                         color = bt.textPrimary,
                     )
@@ -348,10 +372,4 @@ private fun FriendCheckRow(friend: Friend, checked: Boolean, onToggle: () -> Uni
             ),
         )
     }
-}
-
-private fun ShareableKind.label(): String = when (this) {
-    ShareableKind.Portfolio -> "portfolio"
-    ShareableKind.Watchlist -> "watchlist"
-    ShareableKind.Conglomerate -> "conglomerate"
 }
