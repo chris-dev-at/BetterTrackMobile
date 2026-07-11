@@ -127,6 +127,13 @@ class SyncEngineTest {
             }
         }
 
+        var regenCount = 0
+        override suspend fun regenerateClientId(id: Long, nowMs: Long): SyncOp? {
+            // Deterministic fresh key so tests can assert the swap happened.
+            update(id) { it.copy(clientId = "regen-${++regenCount}-${it.clientId}", updatedAtMs = nowMs) }
+            return ops.firstOrNull { it.id == id }
+        }
+
         override suspend fun delete(id: Long) {
             ops.removeAll { it.id == id }
         }
@@ -542,5 +549,74 @@ class SyncEngineTest {
 
         assertNull(h.store.byClient(bad.clientId))
         assertEquals(OpStatus.DONE, h.store.byClient(good.clientId)!!.status)
+    }
+
+    // ── Idempotency key handling (platform #432, PLATFORM_ASKS #9) ──────────
+
+    @Test
+    fun `key is minted at enqueue as a uuid and persisted with the op`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+
+        // A canonical RFC-4122 UUID (36 chars, 5 hyphen-separated groups).
+        assertTrue(
+            "clientId should be a UUID but was '${op.clientId}'",
+            Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                .matches(op.clientId),
+        )
+        // Persisted verbatim on the stored op — this IS the Idempotency-Key.
+        assertEquals(op.clientId, h.store.getById(op.id)!!.clientId)
+    }
+
+    @Test
+    fun `idempotency key is identical across a retryable-failure retry`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+        var call = 0
+        h.executor.execScript = {
+            if (call++ == 0) ExecResult.RetryableNotApplied("busy") else ExecResult.Success(null)
+        }
+
+        h.engine.drain() // attempt 1 → backoff
+        h.nowMs = h.store.getById(op.id)!!.nextAttemptAtMs + 1
+        h.engine.drain() // attempt 2 → success
+
+        assertEquals(OpStatus.DONE, h.store.getById(op.id)!!.status)
+        // Both sends carried the SAME persisted key so the server dedupes them.
+        assertEquals(listOf(op.clientId, op.clientId), h.executor.executed)
+    }
+
+    @Test
+    fun `invalid idempotency key is regenerated once and the retry succeeds`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+        val originalKey = op.clientId
+        var call = 0
+        h.executor.execScript = {
+            if (call++ == 0) ExecResult.InvalidKey else ExecResult.Success(null)
+        }
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Drained(1), result)
+        val done = h.store.getById(op.id)!!
+        assertEquals(OpStatus.DONE, done.status)
+        assertTrue("key should have been regenerated", done.clientId != originalKey)
+        assertEquals(1, h.store.regenCount)          // exactly one regeneration
+        assertEquals(2, h.executor.executed.size)    // rejected original + retry
+    }
+
+    @Test
+    fun `invalid idempotency key twice lands in needs-attention`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+        h.executor.execScript = { ExecResult.InvalidKey }
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Idle, result)       // nothing completed
+        assertEquals(OpStatus.NEEDS_ATTENTION, h.store.getById(op.id)!!.status)
+        assertEquals(1, h.store.regenCount)          // regenerated ONCE, not looped
+        assertEquals(2, h.executor.executed.size)    // original + single retry
     }
 }

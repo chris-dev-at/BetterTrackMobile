@@ -130,18 +130,31 @@ class SyncEngine(
                     continue
                 }
 
-                // PENDING head — attempt the send.
+                // PENDING head — attempt the send (carries the op's persisted
+                // idempotency key; a replay of a landed op returns a 2xx).
                 store.markInFlight(op.id, now())
-                when (val exec = executor.execute(op)) {
+                var exec = executor.execute(op)
+                if (exec is ExecResult.InvalidKey) {
+                    // Should never happen — keys are canonical UUIDs. #9: the server
+                    // rejected the key as non-UUID. A non-2xx releases the key, so
+                    // mint a fresh one, persist it, and retry ONCE; a repeat is a
+                    // permanent failure handled by the InvalidKey branch below.
+                    val regenerated = store.regenerateClientId(op.id, now())
+                    exec = if (regenerated != null) executor.execute(regenerated) else exec
+                }
+                when (val e = exec) {
                     is ExecResult.Success -> {
-                        store.markDone(op.id, exec.serverResultJson, now())
+                        store.markDone(op.id, e.serverResultJson, now())
                         op.portfolioId?.let(affected::add)
                         completed++
                     }
 
-                    is ExecResult.Rejected -> store.markNeedsAttention(op.id, exec.message, now())
+                    is ExecResult.Rejected -> store.markNeedsAttention(op.id, e.message, now())
 
-                    is ExecResult.Unsupported -> store.markNeedsAttention(op.id, exec.message, now())
+                    is ExecResult.Unsupported -> store.markNeedsAttention(op.id, e.message, now())
+
+                    // Still invalid after one regeneration — unrecoverable; surface it.
+                    ExecResult.InvalidKey -> store.markNeedsAttention(op.id, MSG_KEY_INVALID, now())
 
                     is ExecResult.RetryableNotApplied -> {
                         val attempts = op.attemptCount + 1
@@ -152,7 +165,7 @@ class SyncEngine(
 
                     is ExecResult.Ambiguous -> {
                         val attempts = op.attemptCount + 1
-                        return@loop if (exec.reachable) {
+                        return@loop if (e.reachable) {
                             // Server reached but outcome unclear (5xx): back off,
                             // stay in-flight so the next pass reconciles first.
                             val at = now() + backoffDelayMs(attempts)
@@ -186,5 +199,9 @@ class SyncEngine(
     companion object {
         /** Done rows kept for the debug/pending screens before pruning. */
         const val KEEP_DONE_ROWS = 25
+
+        /** Shown when the server rejects the op's idempotency key twice (#432). */
+        const val MSG_KEY_INVALID =
+            "This change couldn't be submitted (its sync key was rejected). Discard it and re-create it."
     }
 }

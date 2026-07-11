@@ -54,6 +54,14 @@ class BtApiError(
         const val ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
         const val USER_DISABLED = "USER_DISABLED"
         const val LAST_ACTIVE_PORTFOLIO = "LAST_ACTIVE_PORTFOLIO"
+
+        // ── Idempotency keys on portfolio mutations (platform #432, PLATFORM_ASKS #9) ──
+        /** 409 — a same-key mutation is still in progress server-side (transient → retry). */
+        const val IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS"
+        /** 409 — same key seen with a different body/endpoint (must not happen → permanent). */
+        const val IDEMPOTENCY_KEY_MISMATCH = "IDEMPOTENCY_KEY_MISMATCH"
+        /** 400 — the supplied key was not a UUID (regenerate once, then permanent). */
+        const val IDEMPOTENCY_KEY_INVALID = "IDEMPOTENCY_KEY_INVALID"
     }
 }
 

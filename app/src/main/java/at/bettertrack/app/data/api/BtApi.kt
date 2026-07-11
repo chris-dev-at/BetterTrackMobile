@@ -106,6 +106,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.HTTP
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -368,12 +369,19 @@ interface BtApi {
     // ── Step 5: queue-drain mutations (§7.2 ledger-event set) ────────────────
     // The forms that enqueue these arrive in Steps 8–10; the sync engine's
     // op → API mapping layer uses them now.
+    //
+    // Idempotency (platform #432, PLATFORM_ASKS #9): the offline queue attaches
+    // `Idempotency-Key: <op clientId UUID>` to every send of a queued mutation
+    // so a replayed retry runs exactly once (byte-identical 2xx). The param is
+    // nullable + defaulted — a null value makes Retrofit omit the header, so any
+    // non-queue (online-direct) caller keeps unchanged, header-free behavior.
 
     @Headers("Content-Type: application/json")
     @POST("portfolios/{portfolioId}/transactions")
     suspend fun createTransaction(
         @Path("portfolioId") portfolioId: String,
         @Body body: CreateTransactionRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CreateTransactionsResponse>
 
     @Headers("Content-Type: application/json")
@@ -381,6 +389,7 @@ interface BtApi {
     suspend fun cashDeposit(
         @Path("portfolioId") portfolioId: String,
         @Body body: CashEntryRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CashMovementResponse>
 
     @Headers("Content-Type: application/json")
@@ -388,6 +397,7 @@ interface BtApi {
     suspend fun cashWithdraw(
         @Path("portfolioId") portfolioId: String,
         @Body body: CashEntryRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CashMovementResponse>
 
     /** Full-replace of a custom asset's value points (the only write the API has). */
@@ -396,6 +406,7 @@ interface BtApi {
     suspend fun putValuePoints(
         @Path("id") assetId: String,
         @Body body: PutValuePointsRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<ValuePointsResponse>
 
     // ── Step 6: portfolio switcher management (create/rename/archive/restore,
@@ -489,6 +500,7 @@ interface BtApi {
     suspend fun cashTransfer(
         @Path("portfolioId") portfolioId: String,
         @Body body: CashTransferRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CashTransferResponse>
 
     // ── Step 14: friends & sharing (§6.8/§6.9) ───────────────────────────────

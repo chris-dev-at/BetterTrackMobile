@@ -44,6 +44,14 @@ interface OpStore {
     /** Manual drain: make every open op immediately eligible. */
     suspend fun resetBackoffGates()
 
+    /**
+     * Mint a fresh idempotency key (client UUID) for an op whose previous key the
+     * server rejected as invalid (platform #432). Status/payload/attempts are
+     * untouched — only the key (and marker identity) changes. Returns the updated
+     * op, or null if it no longer exists.
+     */
+    suspend fun regenerateClientId(id: Long, nowMs: Long): SyncOp?
+
     suspend fun delete(id: Long)
 
     /** Prune old done rows, keeping the newest [keep]. */
@@ -167,6 +175,11 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
         )
 
     override suspend fun resetBackoffGates() = dao.resetBackoffGates()
+
+    override suspend fun regenerateClientId(id: Long, nowMs: Long): SyncOp? {
+        dao.updateClientId(id, java.util.UUID.randomUUID().toString(), nowMs)
+        return dao.getById(id)?.toModel()
+    }
 
     override suspend fun delete(id: Long) = dao.delete(id)
 

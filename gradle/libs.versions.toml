@@ -120,6 +120,9 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+# MockWebServer version-aligns with OkHttp above — wire-level tests of the
+# Retrofit client (e.g. the Idempotency-Key header on queue mutations).
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 

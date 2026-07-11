@@ -321,6 +321,10 @@ interface SyncOpDao {
     @Query("UPDATE sync_ops SET nextAttemptAtMs = 0 WHERE status IN ('pending', 'in_flight')")
     suspend fun resetBackoffGates()
 
+    /** Replace the idempotency key after the server rejected it as invalid (#432). */
+    @Query("UPDATE sync_ops SET clientId = :clientId, updatedAtMs = :updatedAtMs WHERE id = :id")
+    suspend fun updateClientId(id: Long, clientId: String, updatedAtMs: Long)
+
     @Query("DELETE FROM sync_ops WHERE id = :id")
     suspend fun delete(id: Long)
 

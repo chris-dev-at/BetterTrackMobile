@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -199,6 +200,11 @@ fun SearchScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Hand-rolled top bar: consume the status-bar inset ourselves
+                    // (a Material3 TopAppBar does this internally) so the search
+                    // field isn't drawn under the status bar / camera cutout on the
+                    // edge-to-edge window.
+                    .statusBarsPadding()
                     .padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

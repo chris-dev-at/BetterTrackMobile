@@ -49,7 +49,20 @@ enum class OpStatus(val wire: String) {
 data class SyncOp(
     /** Monotonic enqueue sequence — the FIFO order. */
     val id: Long,
-    /** Client-generated UUID (§7.3): future idempotency key + reconcile marker. */
+    /**
+     * Client-generated UUID minted at enqueue and persisted for life (§7.3).
+     * Serves as BOTH the server `Idempotency-Key` (platform #432 — a replayed
+     * send runs exactly once) AND the `[bt:<uuid>]` reconcile marker retained as
+     * defense-in-depth for ambiguous-outcome lookups. Regenerated only if the
+     * server ever rejects it as invalid ([ExecResult.InvalidKey]).
+     *
+     * 48 h caveat (#9): server-side replay protection lapses after ~48 h, so the
+     * queue is flushed promptly. An op still queued past that keeps the SAME key
+     * — an expired key simply behaves like a fresh one server-side (a first
+     * application, not a replay), so no extra machinery is needed; the only
+     * residual risk is the ordinary "did an ancient offline write already land?"
+     * question the reconcile marker + refetch already answer.
+     */
     val clientId: String,
     val type: OpType,
     val portfolioId: String?,
@@ -183,6 +196,16 @@ sealed interface ExecResult {
 
     /** The platform has no endpoint for this op yet — parked as needs-attention. */
     data class Unsupported(val message: String) : ExecResult
+
+    /**
+     * 400 `IDEMPOTENCY_KEY_INVALID` (platform #432): the server rejected the
+     * `Idempotency-Key` as a non-UUID. Should be impossible — the queue always
+     * mints canonical [java.util.UUID]s — so it means a corrupted key. Per #9
+     * the engine mints a FRESH key once, persists it, and retries; a repeat is
+     * a permanent failure surfaced through needs-attention. A 4xx released the
+     * key server-side, so regenerating is safe (no double-apply).
+     */
+    data object InvalidKey : ExecResult
 }
 
 /** Outcome of asking the server whether an ambiguous op actually landed. */

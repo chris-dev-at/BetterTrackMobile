@@ -149,6 +149,12 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // JVM unit tests exercise code that calls android.util.Log (e.g. the
+        // sync executor's presence-only diagnostics); return defaults instead of
+        // throwing "not mocked" so pure-logic tests can run on the JVM.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -210,6 +216,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
