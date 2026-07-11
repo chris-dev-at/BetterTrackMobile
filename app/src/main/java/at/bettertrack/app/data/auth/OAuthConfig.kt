@@ -14,17 +14,19 @@ object OAuthConfig {
     val redirectUri: String = BuildConfig.OAUTH_REDIRECT_URI
 
     /**
-     * Whether to request the alerts:read / alerts:write scopes. HELD OFF: the
-     * platform has NOT yet seeded these scopes to the BetterTrackMobile client
-     * registration, and the OAuth authorize endpoint HARD-REJECTS any login that
-     * requests an un-seeded scope ("This app's authorization request is invalid"
-     * — device-confirmed twice on prod 2026-07-11). Shipping this `true` before
-     * the seed lands makes the WHOLE app unable to log in, not just /alerts 403.
-     * Flip to `true` the moment the platform confirms the alerts scope seed is
-     * live, rebuild, then re-verify /alerts returns 200. See docs/TODO.md +
-     * PLATFORM_ASKS.md.
+     * Whether to request the alerts:read / alerts:write scopes. NOW ON
+     * (2026-07-11): the platform seeded these scopes to the BetterTrackMobile
+     * client via migration 0030 (durably deployed — PLATFORM_ASKS.md) and the
+     * /alerts bearer gate shipped (PR #423), so the OAuth authorize endpoint
+     * accepts the full scope set and a re-login mints a token carrying alerts:*.
+     * HISTORY: while the seed was un-landed, requesting an un-seeded scope made
+     * the authorize endpoint HARD-REJECT the whole login ("This app's
+     * authorization request is invalid"), so this was held `false` to keep the
+     * app loginable. If the platform ever retracts the seed and login starts
+     * hard-rejecting, flip back to `false`, rebuild, and re-verify. See
+     * docs/TODO.md + PLATFORM_ASKS.md.
      */
-    const val ALERTS_SCOPES_ENABLED: Boolean = false
+    const val ALERTS_SCOPES_ENABLED: Boolean = true
 
     /**
      * Space-separated coarse module scopes the app requests — the FULL allowed

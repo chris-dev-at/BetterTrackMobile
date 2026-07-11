@@ -37,9 +37,12 @@ class OAuthScopeTest {
     }
 
     @Test
-    fun `the shipped flag keeps alerts scopes disabled until the platform confirms`() {
-        // Guards against accidentally committing the flag flipped on before the
-        // platform scope seed is live (which would break login on prod).
-        assertFalse(OAuthConfig.ALERTS_SCOPES_ENABLED)
+    fun `the shipped flag has alerts scopes enabled now the platform seed is live`() {
+        // Deliberate flip 2026-07-11: the platform seeded alerts:read/alerts:write
+        // to the BetterTrackMobile client (migration 0030) + shipped the /alerts
+        // bearer gate (PR #423), so the app requests them and a re-login carries
+        // them. This tripwire now guards the flag staying ON; if the platform ever
+        // retracts the seed (login hard-rejects), flip this + the flag back to false.
+        assertTrue(OAuthConfig.ALERTS_SCOPES_ENABLED)
     }
 }
