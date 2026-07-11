@@ -558,6 +558,43 @@
     <string name="bt_notif_type_security_sub">Temporary passwords and security notices</string>
     <string name="bt_notif_type_system">System</string>
     <string name="bt_notif_type_system_sub">General app notifications</string>
+    <!-- Notifications v3 — archive / delete (#437) -->
+    <string name="bt_notif_filter_active">Active</string>
+    <string name="bt_notif_filter_archived">Archived</string>
+    <string name="bt_notif_filter_all">All</string>
+    <string name="bt_notif_more_actions">More actions</string>
+    <string name="bt_notif_archived_label">Archived</string>
+    <string name="bt_notif_action_mark_read">Mark read</string>
+    <string name="bt_notif_action_archive">Archive</string>
+    <string name="bt_notif_action_unarchive">Unarchive</string>
+    <string name="bt_notif_action_delete">Delete</string>
+    <string name="bt_notif_bulk_archive_read">Archive all read</string>
+    <string name="bt_notif_bulk_delete_archived">Delete all archived</string>
+    <string name="bt_notif_bulk_delete_all">Delete all</string>
+    <string name="bt_notif_snack_archived">Notification archived</string>
+    <string name="bt_notif_snack_archived_read">Read notifications archived</string>
+    <string name="bt_notif_undo">Undo</string>
+    <string name="bt_notif_delete_title">Delete notification?</string>
+    <string name="bt_notif_delete_body">This notification will be permanently deleted.</string>
+    <string name="bt_notif_delete_archived_title">Delete all archived?</string>
+    <string name="bt_notif_delete_all_title">Delete all notifications?</string>
+    <string name="bt_notif_empty_archived_title">No archived notifications</string>
+    <string name="bt_notif_empty_archived_message">Notifications you archive show up here.</string>
+    <!-- Task C — first-class rows for the three platform share/activity types -->
+    <string name="bt_notif_type_friend_activity">Friend activity</string>
+    <string name="bt_notif_type_friend_activity_sub">When a friend trades on a shared item</string>
+    <string name="bt_notif_type_watchlist_shared">Watchlist shared</string>
+    <string name="bt_notif_type_watchlist_shared_sub">When a friend shares a watchlist</string>
+    <string name="bt_notif_type_conglomerate_shared">Conglomerate shared</string>
+    <string name="bt_notif_type_conglomerate_shared_sub">When a friend shares a conglomerate</string>
+    <plurals name="bt_notif_delete_archived_body">
+        <item quantity="one">This permanently deletes %d archived notification. This can\'t be undone.</item>
+        <item quantity="other">This permanently deletes %d archived notifications. This can\'t be undone.</item>
+    </plurals>
+    <plurals name="bt_notif_delete_all_body">
+        <item quantity="one">This permanently deletes %d notification, including archived ones. This can\'t be undone.</item>
+        <item quantity="other">This permanently deletes all %d notifications, including archived ones. This can\'t be undone.</item>
+    </plurals>
 
     <!-- ── Step 17: app lock (local PIN + biometrics, §5) ─────────────────── -->
     <string name="bt_action_done">Done</string>
@@ -930,7 +967,6 @@
     <string name="bt_social_remove_confirm_body">You\'ll both stop seeing anything shared between you. This can\'t be undone.</string>
     <string name="bt_social_remove">Remove</string>
     <string name="bt_social_alert_activity">Alert me about activity</string>
-    <string name="bt_social_coming_soon">Coming soon</string>
     <string name="bt_social_toast_alerts_on">You\'ll be alerted about activity here</string>
     <string name="bt_social_toast_alerts_off">Alerts off for this item</string>
 

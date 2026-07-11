@@ -41,6 +41,12 @@ data class NotificationItemDto(
     val payload: JsonElement? = null,
     /** ISO-8601; nullable in the schema ⇒ `null` means unread. */
     val readAt: String? = null,
+    /**
+     * ISO-8601; nullable ⇒ `null` means the row is still ACTIVE (Notifications-v3
+     * #437). Present when the server auto-archived a read item or the user archived
+     * it. Optional so an older/`view=active` response that omits it decodes fine.
+     */
+    val archivedAt: String? = null,
     val createdAt: String,
 )
 

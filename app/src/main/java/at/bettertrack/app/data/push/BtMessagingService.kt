@@ -79,10 +79,14 @@ class BtMessagingService : FirebaseMessagingService() {
 
         /** Debug helper: fire a couple of representative pushes to verify delivery. */
         fun debugSimulate(context: Context, index: Int) {
-            when (index % 3) {
+            when (index % 6) {
                 0 -> postIncoming(context, "friend.request", "New friend request", "@test_user wants to connect with you.", null)
                 1 -> postIncoming(context, "alert.triggered", "Price alert", "AAPL passed your €180,00 target.", "{\"assetId\":\"AAPL\"}")
-                else -> postIncoming(context, "portfolio.shared", "Portfolio shared", "A friend shared a portfolio with you.", "{\"portfolioId\":\"shared-demo\"}")
+                2 -> postIncoming(context, "portfolio.shared", "Portfolio shared", "A friend shared a portfolio with you.", "{\"portfolioId\":\"shared-demo\"}")
+                // Task C: the three platform share/activity types (first-class rows).
+                3 -> postIncoming(context, "friend.activity", "New activity", "@test_user bought shares in their shared portfolio.", "{\"friendId\":\"demo-uid\",\"friendUsername\":\"test_user\"}")
+                4 -> postIncoming(context, "watchlist.shared", "Watchlist shared", "A friend shared a watchlist with you.", "{\"watchlistId\":\"wl-demo\"}")
+                else -> postIncoming(context, "conglomerate.shared", "Conglomerate shared", "A friend shared a conglomerate with you.", "{\"conglomerateId\":\"cg-demo\"}")
             }
         }
 

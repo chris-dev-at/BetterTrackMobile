@@ -129,16 +129,18 @@ class NotificationSettingsStore(context: Context) {
 
     /**
      * Seed the in-app / email / **push** (+ carried web-push) columns from the
-     * server matrix; the local per-type Mute is left untouched. Server-only types
-     * the app does not surface (watchlist.shared, conglomerate.shared,
-     * friend.activity) map to [NotifKind.System] and are skipped.
+     * server matrix; the local per-type Mute is left untouched. Only the
+     * user-configurable grid kinds are synced — server types the app surfaces as
+     * inbox rows but does not let the user configure (watchlist.shared,
+     * conglomerate.shared, friend.activity) and the unknown [NotifKind.System]
+     * bucket are skipped, so they never enter the grid or the PATCH.
      */
     fun syncFromServer(serverMatrix: Map<String, ChannelPrefsDto>) {
         if (serverMatrix.isEmpty()) return
         val rows = _matrix.value.rows.toMutableMap()
         for ((typeKey, dto) in serverMatrix) {
             val kind = NotifKind.fromType(typeKey)
-            if (kind == NotifKind.System) continue
+            if (kind !in configurableKinds) continue
             val merged = (rows[kind] ?: TypePrefs()).mergedFrom(dto)
             rows[kind] = merged
             persist(kind, merged)

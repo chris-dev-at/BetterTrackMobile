@@ -2,8 +2,10 @@ package at.bettertrack.app.data.notifications
 
 import android.util.Log
 import at.bettertrack.app.data.api.BtApi
+import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
+import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
 import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.NotificationItemDto
@@ -11,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import retrofit2.Response
+import java.io.IOException
 import java.time.Instant
 
 /** Notifications feature flags (tripwire-tested: see NotificationLogicTest). */
@@ -24,29 +28,67 @@ object NotificationFlags {
      * registration itself is live and verifiable.)
      */
     const val stubDeviceRegistration: Boolean = false
+
+    /**
+     * Notification ARCHIVE + DELETE UX (Notifications-v3, platform #437).
+     *
+     * When `true`: the inbox shows the Active|Archived|All filter, per-item
+     * archive/unarchive/delete + bulk archive-all-read / delete-all-archived /
+     * delete-all, and `GET /notifications` is called with `view=`. The bell badge
+     * is unread-ACTIVE only.
+     *
+     * When `false`: the app behaves EXACTLY as before #437 — a single flat inbox,
+     * mark-read only, no `view=` param, no archive/delete affordances. This keeps
+     * the UI truthful while the platform ships #437 (never fake archive/delete
+     * locally — a refresh would resurrect the rows). Kept as a kill-switch.
+     *
+     * ON since 2026-07-11: platform PR #440 live on prod (`fb09efd`), as-shipped
+     * semantics in PLATFORM_ASKS.md update #13 — no deviations from the built
+     * shape except the bulk path (`archive-all-read`), already reconciled.
+     */
+    const val archiveDeleteEnabled: Boolean = true
 }
 
 /** Which backend is currently feeding the inbox. */
 enum class NotifSource { Unknown, Live }
 
 /**
- * Notifications repository (Step 16 → LIVE on Notifications-v2, §6.11).
+ * Notifications repository (Step 16 → LIVE on Notifications-v2; archive/delete on
+ * Notifications-v3 #437, §6.11).
  *
- * `GET /notifications` is now AUTHORITATIVE: a 2xx (even empty) replaces the inbox
- * and drives the unread badge, and `POST /notifications/mark-read` persists read
- * state server-side. A forbidden/scope read (not expected now the scope is granted)
- * degrades to a soft empty state; network / 5xx surface as a real error so the UI
- * can offer retry. Incoming FCM pushes and the debug "simulate" action feed the
- * same in-memory inbox via [addReceived] and are reconciled on the next refresh.
+ * `GET /notifications[?view=]` is AUTHORITATIVE: a 2xx (even empty) replaces the
+ * inbox for the current view and drives the unread-ACTIVE badge; the write ops
+ * (`mark-read`, `archive`/`unarchive`, `delete`, bulk) apply an OPTIMISTIC update
+ * to the in-memory list and roll it back if the server rejects. Incoming FCM pushes
+ * and the debug "simulate" action feed the same in-memory inbox via [addReceived]
+ * and are reconciled on the next refresh.
  */
 interface NotificationRepository {
+    /** The list for the currently-loaded [NotifView]. */
     val items: StateFlow<List<AppNotification>>
+    /** Bell badge: unread + ACTIVE only (archived never counts). */
     val unreadCount: StateFlow<Int>
     val source: StateFlow<NotifSource>
 
-    suspend fun refresh(): BtResult<Unit>
+    /** Fetch a view (default Active — the bell surface). Sends `view=` only when #437 is enabled. */
+    suspend fun refresh(view: NotifView = NotifView.Active): BtResult<Unit>
     suspend fun markRead(ids: List<String>)
     suspend fun markAllRead()
+
+    // ── Notifications-v3 archive/delete (#437) ──────────────────────────────
+    /** Archive one row (implies read); rolls back on error. */
+    suspend fun archive(id: String): BtResult<Unit>
+    /** Restore one archived row to active; rolls back on error. */
+    /** [restore] = the archived row, for instant re-insert on snackbar Undo. */
+    suspend fun unarchive(id: String, restore: AppNotification? = null): BtResult<Unit>
+    /** Hard-delete one row; rolls back on error. */
+    suspend fun delete(id: String): BtResult<Unit>
+    /** Bulk: archive every already-read active row; rolls back on error. */
+    suspend fun archiveAllRead(): BtResult<Unit>
+    /** Bulk: hard-delete every archived row; rolls back on error. */
+    suspend fun deleteAllArchived(): BtResult<Unit>
+    /** Bulk: hard-delete every row; rolls back on error. */
+    suspend fun deleteAll(): BtResult<Unit>
 
     /** Insert a received/simulated push into the inbox (already gated by prefs). */
     fun addReceived(notification: AppNotification)
@@ -72,22 +114,35 @@ class DefaultNotificationRepository(
     private val _source = MutableStateFlow(NotifSource.Unknown)
     override val source: StateFlow<NotifSource> = _source.asStateFlow()
 
-    override suspend fun refresh(): BtResult<Unit> {
-        return when (val r = apiCall(json) { api.notifications() }) {
+    /** The view [items] currently holds — governs how optimistic ops mutate the list. */
+    private var lastView: NotifView = NotifView.Active
+
+    override suspend fun refresh(view: NotifView): BtResult<Unit> {
+        lastView = view
+        // Only send `view=` once #437 is enabled; otherwise behave exactly as the
+        // pre-v3 client (server default = active, archived rows simply absent).
+        val viewParam = if (NotificationFlags.archiveDeleteEnabled) view.wire else null
+        return when (val r = apiCall(json) { api.notifications(view = viewParam) }) {
             is BtResult.Ok -> {
                 _source.value = NotifSource.Live
                 val mapped = r.value.items.map(::mapItem).sortedByDescending { it.createdAtMs }
-                // Server rows are authoritative — replace the inbox (a persisted push
-                // re-appears here with its real server id, so no duplicate lingers).
+                // Server rows are authoritative — replace the view's list (a persisted
+                // push re-appears here with its real server id, so no duplicate lingers).
                 _items.value = mapped
-                _unread.value = if (r.value.unreadCount > 0) r.value.unreadCount else mapped.count { it.isUnread }
-                Log.i(TAG, "Live inbox: ${mapped.size} items, ${_unread.value} unread.")
+                // Badge = unread ACTIVE only. Archive implies read, so there are no
+                // unread archived rows ⇒ the active-unread count is well-defined from
+                // any Active/All fetch. An Archived-only fetch carries no active rows,
+                // so it must NOT zero the badge — leave the last known count.
+                if (view != NotifView.Archived) {
+                    _unread.value = if (r.value.unreadCount > 0) r.value.unreadCount else mapped.activeUnreadCount()
+                }
+                Log.i(TAG, "Live inbox[${view.wire}]: ${mapped.size} items, ${_unread.value} unread-active.")
                 BtResult.Ok(Unit)
             }
             is BtResult.Err -> {
                 val e = r.error
                 _source.value = NotifSource.Live
-                Log.w(TAG, "GET /notifications failed (HTTP ${e.httpStatus} ${e.code}).")
+                Log.w(TAG, "GET /notifications[${view.wire}] failed (HTTP ${e.httpStatus} ${e.code}).")
                 // The notifications:read scope is granted, so a forbidden/scope read
                 // is not expected — degrade it to a soft empty state. Network / 5xx
                 // surface so the inbox shows its error+retry rather than a misleading
@@ -102,7 +157,7 @@ class DefaultNotificationRepository(
         _items.value = _items.value.map {
             if (it.id in ids && it.isUnread) it.copy(readAtMs = System.currentTimeMillis()) else it
         }
-        recompute()
+        recomputeBadge()
         if (_source.value == NotifSource.Live) {
             when (val r = apiCall(json) { api.markNotificationsRead(MarkReadIdsRequest(ids)) }) {
                 is BtResult.Err -> Log.w(TAG, "mark-read(ids) failed: HTTP ${r.error.httpStatus}")
@@ -114,7 +169,7 @@ class DefaultNotificationRepository(
     override suspend fun markAllRead() {
         val now = System.currentTimeMillis()
         _items.value = _items.value.map { if (it.isUnread) it.copy(readAtMs = now) else it }
-        recompute()
+        recomputeBadge()
         if (_source.value == NotifSource.Live) {
             when (val r = apiCall(json) { api.markAllNotificationsRead(MarkReadAllRequest()) }) {
                 is BtResult.Err -> Log.w(TAG, "mark-read(all) failed: HTTP ${r.error.httpStatus}")
@@ -123,9 +178,53 @@ class DefaultNotificationRepository(
         }
     }
 
+    // ── Notifications-v3 archive/delete (#437) — optimistic + rollback ─────────
+
+    override suspend fun archive(id: String): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.archiveInView(id, lastView, System.currentTimeMillis())
+        recomputeBadge()
+        return write(prev) { api.archiveNotification(id) }
+    }
+
+    override suspend fun unarchive(id: String, restore: AppNotification?): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.unarchiveInView(id, lastView, restore)
+        recomputeBadge()
+        return write(prev) { api.unarchiveNotification(id) }
+    }
+
+    override suspend fun delete(id: String): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.deleteInView(id)
+        recomputeBadge()
+        return write(prev) { api.deleteNotification(id) }
+    }
+
+    override suspend fun archiveAllRead(): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.archiveAllReadInView(lastView, System.currentTimeMillis())
+        recomputeBadge()
+        return write(prev) { api.archiveAllReadNotifications() }
+    }
+
+    override suspend fun deleteAllArchived(): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.deleteArchivedInView()
+        recomputeBadge()
+        return write(prev) { api.deleteNotifications("archived") }
+    }
+
+    override suspend fun deleteAll(): BtResult<Unit> {
+        val prev = _items.value
+        _items.value = prev.deleteAllInView()
+        recomputeBadge()
+        return write(prev) { api.deleteNotifications("all") }
+    }
+
     override fun addReceived(notification: AppNotification) {
         _items.value = (listOf(notification) + _items.value).distinctBy { it.id }
-        recompute()
+        recomputeBadge()
     }
 
     override suspend fun loadServerSettings(): BtResult<Unit> =
@@ -159,6 +258,32 @@ class DefaultNotificationRepository(
 
     // ── internals ─────────────────────────────────────────────────────────────
 
+    /**
+     * Fire an empty-body write. On any failure (network or non-2xx) restore
+     * [rollbackTo] and surface the error so the UI can revert its optimistic change.
+     */
+    private suspend fun write(
+        rollbackTo: List<AppNotification>,
+        call: suspend () -> Response<Unit>,
+    ): BtResult<Unit> {
+        val resp = try {
+            call()
+        } catch (_: IOException) {
+            _items.value = rollbackTo
+            recomputeBadge()
+            return BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection."))
+        }
+        return if (resp.isSuccessful) {
+            BtResult.Ok(Unit)
+        } else {
+            val err = parseApiError(json, resp.code(), resp.errorBody())
+            _items.value = rollbackTo
+            recomputeBadge()
+            Log.w(TAG, "notification write failed: HTTP ${resp.code()} ${err.code}")
+            BtResult.Err(err)
+        }
+    }
+
     private fun mapItem(dto: NotificationItemDto): AppNotification = AppNotification(
         id = dto.id,
         type = dto.type,
@@ -166,10 +291,22 @@ class DefaultNotificationRepository(
         body = dto.body,
         payload = dto.payload,
         readAtMs = dto.readAt?.let(::parseIso),
+        archivedAtMs = dto.archivedAt?.let(::parseIso),
         createdAtMs = parseIso(dto.createdAt) ?: System.currentTimeMillis(),
     )
 
-    private fun recompute() { _unread.value = _items.value.count { it.isUnread } }
+    /**
+     * Recompute the unread-ACTIVE badge from the current list — but only when that
+     * list actually contains the active set (Active / All views). An Archived view
+     * holds no active rows, so its badge is defined by the last Active/All load and
+     * is left untouched (archive/unarchive/delete of archived rows never change the
+     * active-unread count anyway).
+     */
+    private fun recomputeBadge() {
+        if (lastView != NotifView.Archived) {
+            _unread.value = _items.value.activeUnreadCount()
+        }
+    }
 
     private fun parseIso(iso: String): Long? = try {
         Instant.parse(iso).toEpochMilli()

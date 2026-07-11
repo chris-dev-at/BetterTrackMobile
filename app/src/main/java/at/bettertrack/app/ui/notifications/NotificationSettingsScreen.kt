@@ -279,6 +279,11 @@ private fun notifKindTitle(kind: NotifKind): String = stringResource(
         NotifKind.ChatMessage -> R.string.bt_notif_type_chat
         NotifKind.AccountInvite -> R.string.bt_notif_type_account_invite
         NotifKind.AccountTempPassword -> R.string.bt_notif_type_security
+        // Not shown in the settings grid (not in configurableKinds), but the when
+        // must stay exhaustive over NotifKind.
+        NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity
+        NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared
+        NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared
         NotifKind.System -> R.string.bt_notif_type_system
     },
 )
@@ -293,6 +298,9 @@ private fun notifKindSubtitle(kind: NotifKind): String = stringResource(
         NotifKind.ChatMessage -> R.string.bt_notif_type_chat_sub
         NotifKind.AccountInvite -> R.string.bt_notif_type_account_invite_sub
         NotifKind.AccountTempPassword -> R.string.bt_notif_type_security_sub
+        NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity_sub
+        NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared_sub
+        NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared_sub
         NotifKind.System -> R.string.bt_notif_type_system_sub
     },
 )

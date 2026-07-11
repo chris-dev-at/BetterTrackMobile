@@ -63,8 +63,6 @@ import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtAvatar
-import at.bettertrack.app.ui.components.BtBadge
-import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.MoneyText
@@ -386,10 +384,6 @@ private fun SharedItemRow(
                     color = bt.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
-                if (alertsOn) {
-                    BtBadge(text = stringResource(R.string.bt_social_coming_soon), kind = BtBadgeKind.Neutral)
-                    Spacer(Modifier.width(8.dp))
-                }
                 Switch(
                     checked = alertsOn,
                     onCheckedChange = { onToggleAlerts() },

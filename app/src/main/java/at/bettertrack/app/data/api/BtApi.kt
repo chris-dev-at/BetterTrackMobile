@@ -614,11 +614,16 @@ interface BtApi {
     // bearer works. Real FCM *sends* stay dark until the Firebase key lands on the
     // server (platform #421) — token registration below is live regardless.
 
-    /** In-app inbox: newest-first cursor-paged notifications + unread count. */
+    /**
+     * In-app inbox: newest-first cursor-paged notifications + unread count.
+     * `view` = active | archived | all (Notifications-v3 #437; default active,
+     * omitted for pre-v3 servers → same as active). Badge = unread ACTIVE only.
+     */
     @GET("notifications")
     suspend fun notifications(
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int = 50,
+        @Query("view") view: String? = null,
     ): Response<NotificationListResponse>
 
     /** Mark specific notifications read (1–200 ids). */
@@ -630,6 +635,31 @@ interface BtApi {
     @Headers("Content-Type: application/json")
     @POST("notifications/mark-read")
     suspend fun markAllNotificationsRead(@Body body: MarkReadAllRequest): Response<Unit>
+
+    // ── Notifications-v3: archive / delete (platform #437) ───────────────────
+    // archive implies read; archived rows leave the bell surface but stay under
+    // the Archived/All filters. Per-item + bulk. All bearer `notifications:write`.
+    // Empty-body 2xx → Response<Unit> (checked via isSuccessful, not apiCall).
+
+    /** Archive one notification (implies read). */
+    @POST("notifications/{id}/archive")
+    suspend fun archiveNotification(@Path("id") id: String): Response<Unit>
+
+    /** Restore one archived notification to ACTIVE (read state unchanged). */
+    @POST("notifications/{id}/unarchive")
+    suspend fun unarchiveNotification(@Path("id") id: String): Response<Unit>
+
+    /** Bulk: archive every already-read active notification. */
+    @POST("notifications/archive-all-read")
+    suspend fun archiveAllReadNotifications(): Response<Unit>
+
+    /** Delete one notification (hard delete). */
+    @DELETE("notifications/{id}")
+    suspend fun deleteNotification(@Path("id") id: String): Response<Unit>
+
+    /** Bulk delete: `scope` = archived | all (no body). */
+    @DELETE("notifications")
+    suspend fun deleteNotifications(@Query("scope") scope: String): Response<Unit>
 
     /** Upsert this install's FCM device token `{ token, platform:"android" }`. [notifications:write] */
     @Headers("Content-Type: application/json")

@@ -189,6 +189,8 @@ fun BtApp() {
             when (link) {
                 NotifDeepLink.Social -> navController.navigate(SocialTabRoute) { launchSingleTop = true }
                 is NotifDeepLink.SharedPortfolio -> navController.navigate(SharedPortfolioViewRoute(link.portfolioId))
+                is NotifDeepLink.FriendOverview -> navController.navigate(FriendOverviewRoute(link.userId, link.username))
+                is NotifDeepLink.SharedConglomerate -> navController.navigate(SharedConglomerateViewRoute(link.conglomerateId))
                 is NotifDeepLink.Chat -> navController.navigate(ChatListRoute)
                 is NotifDeepLink.Asset -> navController.navigate(AssetPageRoute(link.assetId))
                 is NotifDeepLink.Holding -> navController.navigate(HoldingDetailRoute(link.assetId))

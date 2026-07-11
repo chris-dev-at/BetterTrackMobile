@@ -557,6 +557,43 @@
     <string name="bt_notif_type_security_sub">Temporäre Passwörter und Sicherheitshinweise</string>
     <string name="bt_notif_type_system">System</string>
     <string name="bt_notif_type_system_sub">Allgemeine App-Mitteilungen</string>
+    <!-- Notifications v3 — Archivieren / Löschen (#437) -->
+    <string name="bt_notif_filter_active">Aktiv</string>
+    <string name="bt_notif_filter_archived">Archiviert</string>
+    <string name="bt_notif_filter_all">Alle</string>
+    <string name="bt_notif_more_actions">Weitere Aktionen</string>
+    <string name="bt_notif_archived_label">Archiviert</string>
+    <string name="bt_notif_action_mark_read">Als gelesen markieren</string>
+    <string name="bt_notif_action_archive">Archivieren</string>
+    <string name="bt_notif_action_unarchive">Aus Archiv holen</string>
+    <string name="bt_notif_action_delete">Löschen</string>
+    <string name="bt_notif_bulk_archive_read">Alle gelesenen archivieren</string>
+    <string name="bt_notif_bulk_delete_archived">Alle archivierten löschen</string>
+    <string name="bt_notif_bulk_delete_all">Alle löschen</string>
+    <string name="bt_notif_snack_archived">Mitteilung archiviert</string>
+    <string name="bt_notif_snack_archived_read">Gelesene Mitteilungen archiviert</string>
+    <string name="bt_notif_undo">Rückgängig</string>
+    <string name="bt_notif_delete_title">Mitteilung löschen?</string>
+    <string name="bt_notif_delete_body">Diese Mitteilung wird endgültig gelöscht.</string>
+    <string name="bt_notif_delete_archived_title">Alle archivierten löschen?</string>
+    <string name="bt_notif_delete_all_title">Alle Mitteilungen löschen?</string>
+    <string name="bt_notif_empty_archived_title">Keine archivierten Mitteilungen</string>
+    <string name="bt_notif_empty_archived_message">Mitteilungen, die du archivierst, erscheinen hier.</string>
+    <!-- Task C — eigene Zeilen für die drei Plattform-Ereignistypen -->
+    <string name="bt_notif_type_friend_activity">Freundes-Aktivität</string>
+    <string name="bt_notif_type_friend_activity_sub">Wenn ein Freund in einem geteilten Eintrag handelt</string>
+    <string name="bt_notif_type_watchlist_shared">Watchlist geteilt</string>
+    <string name="bt_notif_type_watchlist_shared_sub">Wenn ein Freund eine Watchlist teilt</string>
+    <string name="bt_notif_type_conglomerate_shared">Konglomerat geteilt</string>
+    <string name="bt_notif_type_conglomerate_shared_sub">Wenn ein Freund ein Konglomerat teilt</string>
+    <plurals name="bt_notif_delete_archived_body">
+        <item quantity="one">Dies löscht %d archivierte Mitteilung endgültig. Das kann nicht rückgängig gemacht werden.</item>
+        <item quantity="other">Dies löscht %d archivierte Mitteilungen endgültig. Das kann nicht rückgängig gemacht werden.</item>
+    </plurals>
+    <plurals name="bt_notif_delete_all_body">
+        <item quantity="one">Dies löscht %d Mitteilung endgültig, auch archivierte. Das kann nicht rückgängig gemacht werden.</item>
+        <item quantity="other">Dies löscht alle %d Mitteilungen endgültig, auch archivierte. Das kann nicht rückgängig gemacht werden.</item>
+    </plurals>
 
     <!-- App-Sperre (lokaler PIN + Biometrie, §5) -->
     <string name="bt_action_done">Fertig</string>
@@ -921,7 +958,6 @@
     <string name="bt_social_remove_confirm_body">Ihr beide seht dann nichts mehr, was ihr geteilt habt. Das kann nicht rückgängig gemacht werden.</string>
     <string name="bt_social_remove">Entfernen</string>
     <string name="bt_social_alert_activity">Bei Aktivität benachrichtigen</string>
-    <string name="bt_social_coming_soon">Bald verfügbar</string>
     <string name="bt_social_toast_alerts_on">Du wirst hier über Aktivität benachrichtigt</string>
     <string name="bt_social_toast_alerts_off">Benachrichtigungen für diesen Eintrag aus</string>
 
