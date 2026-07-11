@@ -487,6 +487,49 @@ class TransactionFormLogicTest {
         assertEquals("0,0333", formatDecimalForInput(0.0333, java.util.Locale.GERMANY))
     }
 
+    @Test
+    fun `format decimal for input is float-artifact safe`() {
+        // BigDecimal(double) would expand 231.49 to 231.4899… and truncate wrong.
+        assertEquals("231.49", formatDecimalForInput(231.49, java.util.Locale.US, maxDecimals = 6))
+    }
+
+    // ── Money prefill truncation (owner directive 2026-07-12) ───────────────
+
+    @Test
+    fun `money prefill cuts to cents without rounding`() {
+        assertEquals("231.49", truncateMoneyForPrefill(231.499320001, java.util.Locale.US))
+        assertEquals("231.49", truncateMoneyForPrefill(231.4999999, java.util.Locale.US))
+        assertEquals("0.99", truncateMoneyForPrefill(0.999, java.util.Locale.US))
+    }
+
+    @Test
+    fun `money prefill is float-artifact safe`() {
+        // The exact double behind 231.49 sits below it — a naive cut yields 231.48.
+        assertEquals("231.49", truncateMoneyForPrefill(231.49, java.util.Locale.US))
+        assertEquals("0.29", truncateMoneyForPrefill(0.29, java.util.Locale.US))
+    }
+
+    @Test
+    fun `money prefill always carries cents for whole values`() {
+        assertEquals("231.00", truncateMoneyForPrefill(231.0, java.util.Locale.US))
+        assertEquals("231.50", truncateMoneyForPrefill(231.5, java.util.Locale.US))
+    }
+
+    @Test
+    fun `sub-cent unit prices keep six significant decimals truncated`() {
+        assertEquals("0.0000123456", truncateMoneyForPrefill(0.0000123456789, java.util.Locale.US))
+        assertEquals("0.0000123", truncateMoneyForPrefill(0.0000123, java.util.Locale.US))
+        assertEquals("0.009999", truncateMoneyForPrefill(0.009999, java.util.Locale.US))
+        // Boundary: exactly one cent is NOT sub-cent.
+        assertEquals("0.01", truncateMoneyForPrefill(0.01, java.util.Locale.US))
+    }
+
+    @Test
+    fun `money prefill uses the locale decimal separator`() {
+        assertEquals("231,49", truncateMoneyForPrefill(231.499320001, java.util.Locale.GERMANY))
+        assertEquals("0,0000123", truncateMoneyForPrefill(0.0000123, java.util.Locale.GERMANY))
+    }
+
     // ── Date→price link lookup (§6.2) ────────────────────────────────────────
 
     @Test

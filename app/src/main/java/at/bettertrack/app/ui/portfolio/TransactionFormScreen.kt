@@ -742,7 +742,8 @@ class TransactionFormViewModel(
         val price = closeOnOrBefore(dailyCloses, _date.value) ?: return
         // Write the price field DIRECTLY (not via setPrice), so this auto-fill does
         // NOT feed the reverse signal and cannot bounce the date back (loop guard).
-        _priceText.value = formatDecimalForInput(price, formLocale, maxDecimals = 6)
+        // Market-data money prefill: cents, truncated (owner directive 2026-07-12).
+        _priceText.value = truncateMoneyForPrefill(price, formLocale)
         _priceLinkHint.value = PriceLinkHint.NONE
     }
 

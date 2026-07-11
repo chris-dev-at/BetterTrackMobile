@@ -378,9 +378,41 @@ fun mostRecentDateAtPrice(closes: List<Pair<LocalDate, Double>>, price: Double):
  * separator so it reads correctly in de-AT (the field parser tolerates '.'/',').
  */
 fun formatDecimalForInput(value: Double, locale: Locale, maxDecimals: Int = 8): String {
-    val bd = java.math.BigDecimal(value)
+    // BigDecimal(value.toString()) keeps the double's SHORTEST decimal form —
+    // BigDecimal(value) would expose the binary expansion and a stored 231.49
+    // could truncate to 231.489999 (the float artifact the owner directive bans).
+    val bd = java.math.BigDecimal(value.toString())
         .setScale(maxDecimals, java.math.RoundingMode.DOWN)
         .stripTrailingZeros()
+    return localizedPlain(bd, locale)
+}
+
+/**
+ * Format a MONEY value the app writes into an input field from market data
+ * (e.g. the price autofilled by the date→price link). Owner directive
+ * 2026-07-12: such prefills carry cents, TRUNCATED — 231.499320001 autofills
+ * as 231.49 (explicitly cut, never rounded half-up). String-faithful cut, so
+ * a stored 231.49 stays 231.49. Sub-cent unit prices are the exception (a
+ * cents-cut would erase them to 0.00): they keep up to 6 significant decimals,
+ * truncated, per the display directive's tiny-price rule. Applies ONLY to
+ * programmatic market-data prefills — stored-value edit prefills and anything
+ * the user types stay exact.
+ */
+fun truncateMoneyForPrefill(value: Double, locale: Locale): String {
+    val exact = java.math.BigDecimal(value.toString())
+    val cut = if (exact.abs() < java.math.BigDecimal("0.01") && exact.signum() != 0) {
+        // Keep 6 significant decimals: digits-after-leading-zeros = scale-precision.
+        val sigScale = exact.scale() - exact.precision() + 6
+        exact.setScale(minOf(exact.scale(), sigScale), java.math.RoundingMode.DOWN)
+            .stripTrailingZeros()
+    } else {
+        exact.setScale(2, java.math.RoundingMode.DOWN)
+    }
+    return localizedPlain(cut, locale)
+}
+
+/** Plain (non-scientific) rendering with the locale's decimal separator. */
+private fun localizedPlain(bd: java.math.BigDecimal, locale: Locale): String {
     val plain = if (bd.scale() < 0) bd.setScale(0).toPlainString() else bd.toPlainString()
     val sep = java.text.DecimalFormatSymbols.getInstance(locale).decimalSeparator
     return if (sep != '.') plain.replace('.', sep) else plain

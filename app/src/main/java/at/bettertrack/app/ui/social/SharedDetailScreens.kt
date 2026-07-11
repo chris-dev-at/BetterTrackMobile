@@ -222,7 +222,7 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SharedScaffold(title: String, onBack: () -> Unit, content: @Composable (Modifier) -> Unit) {
+private fun SharedScaffold(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     val bt = BtTheme.colors
     Scaffold(
         containerColor = bt.bg,
@@ -241,7 +241,12 @@ private fun SharedScaffold(title: String, onBack: () -> Unit, content: @Composab
                 ),
             )
         },
-    ) { pad -> content(Modifier.padding(pad)) }
+        // The Scaffold's inner padding (app-bar height + status-bar inset) must be
+        // applied HERE, centrally — the content lambdas render LazyColumns with a
+        // bare fillMaxSize() and previously dropped this padding, so the first list
+        // item clipped under the app bar (owner bug, 2026-07-12). Mirrors the
+        // fillMaxSize().padding(pad) pattern used by ChatListScreen/ChatThreadScreen.
+    ) { pad -> Box(Modifier.fillMaxSize().padding(pad)) { content() } }
 }
 
 @Composable
