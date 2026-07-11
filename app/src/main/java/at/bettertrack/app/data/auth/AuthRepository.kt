@@ -22,6 +22,12 @@ import kotlinx.serialization.json.Json
  *  - flips to logged-out whenever a refresh is rejected downstream.
  *
  * UI observes [authState] (navigation gate) and [loginPhase] (login screen).
+ *
+ * [onSessionAuthenticated] fires once a login round-trip yields a usable session
+ * (used to register the FCM device token); [onBeforeLogout] runs at the START of
+ * an explicit logout, while the bearer is still valid, so the device token can be
+ * deregistered BEFORE credentials are wiped. Both are decoupled seams (default
+ * no-ops) so this class stays free of push/notification knowledge and testable.
  */
 class AuthRepository(
     private val tokenManager: TokenManager,
@@ -33,6 +39,10 @@ class AuthRepository(
     private val scope: CoroutineScope,
     /** Step 5: account-keyed Room data — wiped on logout / account switch (§7.3). */
     private val localAccountData: LocalAccountData,
+    /** Fired when a login yields a usable session (e.g. register the push token). */
+    private val onSessionAuthenticated: () -> Unit = {},
+    /** Run at the start of an explicit logout, before any local wipe (bearer valid). */
+    private val onBeforeLogout: suspend () -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -150,7 +160,9 @@ class AuthRepository(
                             AuthState.LoggedIn(user)
                         }
                         _loginPhase.value = LoginPhase.Idle
-                        Log.i(TAG, "Logged in as @${user.username} (${user.email}), role=${user.role}")
+                        // No username/email in logs — logcat must stay PII-free.
+                        Log.i(TAG, "Logged in (role=${user.role}).")
+                        onSessionAuthenticated()
                     }
                 }
             }
@@ -171,6 +183,7 @@ class AuthRepository(
                     _authState.value = AuthState.LoggedIn(user)
                     _loginPhase.value = LoginPhase.Idle
                     Log.w(TAG, "Logged in but /auth/me failed transiently: ${me.error.message}")
+                    onSessionAuthenticated()
                 }
             }
         }
@@ -216,6 +229,9 @@ class AuthRepository(
 
     /** Revoke server-side (best effort), then wipe ALL local state (spec §4). */
     suspend fun logout() {
+        // Deregister the FCM device token FIRST, while the bearer is still valid
+        // (bounded + fail-soft inside the hook — logout never blocks on it).
+        onBeforeLogout()
         revokeGrantBestEffort()
         // Explicit logout wipes the account-keyed Room data too: caches AND the
         // outbound sync queue, plus any scheduled sync work (§7.3).

@@ -1,8 +1,10 @@
 package at.bettertrack.app.data.notifications
 
+import at.bettertrack.app.data.api.dto.ChannelPrefsDto
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -117,5 +119,39 @@ class NotificationLogicTest {
     @Test fun `NotifMatrix returns defaults for an absent kind`() {
         val matrix = NotifMatrix(emptyMap())
         assertEquals(TypePrefs(), matrix.prefs(NotifKind.FriendRequest))
+    }
+
+    // ── Shipped-flag tripwire (Notifications-v2 go-live) ────────────────────
+
+    @Test fun `device-token registration ships LIVE, not stubbed`() {
+        // If this fails, the app is not registering FCM tokens against the account.
+        assertFalse(NotificationFlags.stubDeviceRegistration)
+    }
+
+    @Test fun `chat message is server-modeled so it round-trips in the matrix`() {
+        assertTrue(NotifKind.ChatMessage.serverModeled)
+    }
+
+    // ── Matrix merge / PATCH shape (push now syncs; mute stays local) ───────
+
+    @Test fun `mergedFrom takes all channels from the server but keeps local mute`() {
+        // Local row muted with everything on; server says every channel OFF.
+        val local = TypePrefs(inApp = true, email = true, push = true, webpush = true, muted = true)
+        val server = ChannelPrefsDto(inapp = false, email = false, push = false, webpush = false)
+        val merged = local.mergedFrom(server)
+
+        // Server wins on the four channels — including PUSH (migrated off local).
+        assertFalse(merged.inApp)
+        assertFalse(merged.email)
+        assertFalse(merged.push)
+        assertFalse(merged.webpush)
+        // Per-type mute is app-local — the server has no per-type mute to sync.
+        assertTrue(merged.muted)
+    }
+
+    @Test fun `toChannelPrefs echoes all four channels and never leaks mute`() {
+        val prefs = TypePrefs(inApp = true, email = false, push = true, webpush = false, muted = true)
+        val dto = prefs.toChannelPrefs()
+        assertEquals(ChannelPrefsDto(inapp = true, email = false, push = true, webpush = false), dto)
     }
 }

@@ -34,16 +34,17 @@ data class AppNotification(
 }
 
 /**
- * Presentation family for a notification type. The server currently models six
- * types (friend.request, friend.accepted, portfolio.shared, account.invite,
- * account.temp_password, alert.triggered); we additionally recognise chat +
- * system so the inbox and matrix are ready when those land. Each kind carries a
+ * Presentation family for a notification type. On Notifications-v2 the server
+ * matrix models these seven app-surfaced types (friend.request, friend.accepted,
+ * portfolio.shared, alert.triggered, chat.message, account.invite,
+ * account.temp_password) plus a few web-only ones the app does not surface
+ * (watchlist.shared, conglomerate.shared, friend.activity). Each kind carries a
  * notification [channelId] and a Material icon name resolved in the UI layer.
  */
 enum class NotifKind(
     val typeKey: String?,
     val channelId: String,
-    /** Whether the platform's server matrix models email/in-app prefs for it. */
+    /** Whether the server matrix models per-channel prefs for it (round-trips on GET/PATCH). */
     val serverModeled: Boolean,
 ) {
     FriendRequest("friend.request", NotifChannels.SOCIAL, serverModeled = true),
@@ -52,7 +53,8 @@ enum class NotifKind(
     AlertTriggered("alert.triggered", NotifChannels.PORTFOLIO, serverModeled = true),
     AccountInvite("account.invite", NotifChannels.ACCOUNT, serverModeled = true),
     AccountTempPassword("account.temp_password", NotifChannels.ACCOUNT, serverModeled = true),
-    ChatMessage("chat.message", NotifChannels.SOCIAL, serverModeled = false),
+    // chat.message joined the server matrix on Notifications-v2 (PR #427).
+    ChatMessage("chat.message", NotifChannels.SOCIAL, serverModeled = true),
     System(null, NotifChannels.GENERAL, serverModeled = false),
     ;
 

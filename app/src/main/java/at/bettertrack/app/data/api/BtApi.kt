@@ -68,6 +68,8 @@ import at.bettertrack.app.data.api.dto.CreateCustomAssetResponse
 import at.bettertrack.app.data.api.dto.CreatePortfolioRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionsResponse
+import at.bettertrack.app.data.api.dto.DeregisterDeviceRequest
+import at.bettertrack.app.data.api.dto.DeviceAckResponse
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
 import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.MeResponse
@@ -78,6 +80,7 @@ import at.bettertrack.app.data.api.dto.PinStatusResponse
 import at.bettertrack.app.data.api.dto.PinVerifyRequest
 import at.bettertrack.app.data.api.dto.PinVerifyResponse
 import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
+import at.bettertrack.app.data.api.dto.RegisterDeviceRequest
 import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.PortfolioHistoryResponse
 import at.bettertrack.app.data.api.dto.PortfolioListResponse
@@ -604,12 +607,12 @@ interface BtApi {
         @Body body: SetActivityAlertRequest,
     ): Response<ActivityAlertStateDto>
 
-    // ── Step 16: notifications (§6.11) ───────────────────────────────────────
-    // Runtime auth is the OAuth bearer (the OpenAPI sessionCookie annotation is
-    // the known docs bug); these additionally need a notifications read scope the
-    // mobile client is NOT yet granted → the repository falls back to a stub inbox
-    // + local mark-read, and lights up live the moment the scope lands. There is
-    // NO device-token endpoint yet (push send/register is platform-gated).
+    // ── Step 16: notifications (§6.11 — LIVE on Notifications-v2, PR #427) ────
+    // Bearer-auth: `notifications:read` (GETs) / `notifications:write` (writes) —
+    // both in the mobile client's granted ceiling (no new consent). The OpenAPI
+    // per-route `security` here actually lists apiKeyBearer too; either way the
+    // bearer works. Real FCM *sends* stay dark until the Firebase key lands on the
+    // server (platform #421) — token registration below is live regardless.
 
     /** In-app inbox: newest-first cursor-paged notifications + unread count. */
     @GET("notifications")
@@ -628,11 +631,24 @@ interface BtApi {
     @POST("notifications/mark-read")
     suspend fun markAllNotificationsRead(@Body body: MarkReadAllRequest): Response<Unit>
 
-    /** The per-type × in-app/email notification preference matrix (mirrors web). */
+    /** Upsert this install's FCM device token `{ token, platform:"android" }`. [notifications:write] */
+    @Headers("Content-Type: application/json")
+    @POST("notifications/devices")
+    suspend fun registerDevice(@Body body: RegisterDeviceRequest): Response<DeviceAckResponse>
+
+    /**
+     * Deregister this install's FCM token on logout `{ token }`. DELETE carries a
+     * body → `@HTTP(hasBody = true)` (same shape as [deleteAccount]). [notifications:write]
+     */
+    @Headers("Content-Type: application/json")
+    @HTTP(method = "DELETE", path = "notifications/devices", hasBody = true)
+    suspend fun deregisterDevice(@Body body: DeregisterDeviceRequest): Response<DeviceAckResponse>
+
+    /** The per-type × per-channel notification preference matrix (mirrors web). */
     @GET("settings/notifications")
     suspend fun notificationSettings(): Response<NotificationSettingsResponse>
 
-    /** Update the in-app/email matrix (Push + Mute are app-local, never sent). */
+    /** Update the in-app/email/push matrix (webpush echoed; per-type Mute stays app-local). */
     @Headers("Content-Type: application/json")
     @PATCH("settings/notifications")
     suspend fun updateNotificationSettings(

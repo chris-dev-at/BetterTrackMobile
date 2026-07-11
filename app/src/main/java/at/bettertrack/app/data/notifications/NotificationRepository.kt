@@ -1,9 +1,7 @@
 package at.bettertrack.app.data.notifications
 
 import android.util.Log
-import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.data.api.BtApi
-import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
@@ -13,41 +11,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.time.Instant
 
-/** Step-16 feature flags. */
+/** Notifications feature flags (tripwire-tested: see NotificationLogicTest). */
 object NotificationFlags {
     /**
-     * When the live `GET /notifications` read is unavailable (no notifications
-     * scope granted to the mobile client yet), seed a debug sample inbox so the
-     * whole UI + badge + deep-link flow is device-verifiable. Never in release.
+     * Device-token register/refresh/delete against `POST|DELETE /notifications/devices`.
+     * LIVE on Notifications-v2 (platform PR #427) → `false`. Kept as an explicit
+     * kill-switch: flip back to `true` to disable all device-token traffic without
+     * ripping out the wiring. (Real FCM *sends* are still dark until the owner
+     * installs the Firebase key server-side — platform #421 — but token
+     * registration itself is live and verifiable.)
      */
-    val stubInbox: Boolean = BuildConfig.DEBUG
-
-    /**
-     * Device-token register/refresh/delete is stubbed: the platform exposes NO
-     * device-token endpoint yet (confirmed against production OpenAPI). Obtaining
-     * the FCM token itself works without the platform and is verified for real.
-     */
-    const val stubDeviceRegistration: Boolean = true
+    const val stubDeviceRegistration: Boolean = false
 }
 
 /** Which backend is currently feeding the inbox. */
-enum class NotifSource { Unknown, Live, Stub }
+enum class NotifSource { Unknown, Live }
 
 /**
- * Notifications repository (Step 16, §6.11). The clean seam between the app's
- * full inbox UI and the platform's current coverage.
+ * Notifications repository (Step 16 → LIVE on Notifications-v2, §6.11).
  *
- * LIVE reads/writes are wired for real against `GET /notifications` +
- * `POST /notifications/mark-read`; they light up automatically the moment the
- * mobile client is granted a notifications read scope. Until then the read 403s
- * (INSUFFICIENT_SCOPE) and we fall back to a debug sample inbox + local mark-read,
- * logging the precise probe outcome. Incoming FCM pushes ([addReceived]) and the
- * debug simulate action feed the same in-memory inbox regardless of source.
+ * `GET /notifications` is now AUTHORITATIVE: a 2xx (even empty) replaces the inbox
+ * and drives the unread badge, and `POST /notifications/mark-read` persists read
+ * state server-side. A forbidden/scope read (not expected now the scope is granted)
+ * degrades to a soft empty state; network / 5xx surface as a real error so the UI
+ * can offer retry. Incoming FCM pushes and the debug "simulate" action feed the
+ * same in-memory inbox via [addReceived] and are reconciled on the next refresh.
  */
 interface NotificationRepository {
     val items: StateFlow<List<AppNotification>>
@@ -61,9 +51,9 @@ interface NotificationRepository {
     /** Insert a received/simulated push into the inbox (already gated by prefs). */
     fun addReceived(notification: AppNotification)
 
-    /** GET the server matrix and seed the in-app/email columns (best-effort). */
+    /** GET the server matrix and seed the in-app/email/push columns (best-effort). */
     suspend fun loadServerSettings(): BtResult<Unit>
-    /** PATCH the in-app/email columns to the server (best-effort; local persists). */
+    /** PATCH the in-app/email/push columns to the server (best-effort; local persists). */
     suspend fun pushServerSettings(): BtResult<Unit>
 }
 
@@ -87,6 +77,8 @@ class DefaultNotificationRepository(
             is BtResult.Ok -> {
                 _source.value = NotifSource.Live
                 val mapped = r.value.items.map(::mapItem).sortedByDescending { it.createdAtMs }
+                // Server rows are authoritative — replace the inbox (a persisted push
+                // re-appears here with its real server id, so no duplicate lingers).
                 _items.value = mapped
                 _unread.value = if (r.value.unreadCount > 0) r.value.unreadCount else mapped.count { it.isUnread }
                 Log.i(TAG, "Live inbox: ${mapped.size} items, ${_unread.value} unread.")
@@ -94,18 +86,13 @@ class DefaultNotificationRepository(
             }
             is BtResult.Err -> {
                 val e = r.error
-                Log.w(
-                    TAG,
-                    "GET /notifications not available (HTTP ${e.httpStatus} ${e.code}); " +
-                        if (NotificationFlags.stubInbox) "using debug sample inbox." else "inbox empty in release.",
-                )
-                if (_items.value.isEmpty()) {
-                    _source.value = NotifSource.Stub
-                    if (NotificationFlags.stubInbox) seedStub() else recompute()
-                }
-                // A missing scope / forbidden read is an EXPECTED platform gap, not a
-                // user-facing error — surface success so the inbox shows content.
-                if (e.isForbidden || e.isInsufficientScope || e.isNetwork) BtResult.Ok(Unit) else r.map()
+                _source.value = NotifSource.Live
+                Log.w(TAG, "GET /notifications failed (HTTP ${e.httpStatus} ${e.code}).")
+                // The notifications:read scope is granted, so a forbidden/scope read
+                // is not expected — degrade it to a soft empty state. Network / 5xx
+                // surface so the inbox shows its error+retry rather than a misleading
+                // "no notifications".
+                if (e.isForbidden || e.isInsufficientScope) BtResult.Ok(Unit) else r.map()
             }
         }
     }
@@ -155,8 +142,8 @@ class DefaultNotificationRepository(
         }
 
     override suspend fun pushServerSettings(): BtResult<Unit> {
-        // Local persistence already happened in the store; try to mirror in-app/
-        // email to the server. Push + Mute never leave the device.
+        // Local persistence already happened in the store; mirror in-app / email /
+        // push to the server (webpush echoed verbatim). Only per-type Mute stays local.
         return when (val r = apiCall(json) {
             api.updateNotificationSettings(
                 at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest(settings.serverMatrixForPatch()),
@@ -183,49 +170,6 @@ class DefaultNotificationRepository(
     )
 
     private fun recompute() { _unread.value = _items.value.count { it.isUnread } }
-
-    private fun seedStub() {
-        val now = System.currentTimeMillis()
-        val min = 60_000L
-        fun payload(vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
-            pairs.forEach { (k, v) -> put(k, v) }
-        }
-        _items.value = listOf(
-            AppNotification(
-                id = "n-fr-1", type = "friend.request",
-                title = "New friend request",
-                body = "@marie_w wants to connect with you.",
-                payload = null, readAtMs = null, createdAtMs = now - 8 * min,
-            ),
-            AppNotification(
-                id = "n-ps-1", type = "portfolio.shared",
-                title = "A portfolio was shared with you",
-                body = "@mulham shared “Main” with you.",
-                payload = payload("portfolioId" to "shared-demo"),
-                readAtMs = null, createdAtMs = now - 55 * min,
-            ),
-            AppNotification(
-                id = "n-al-1", type = "alert.triggered",
-                title = "Price alert",
-                body = "AAPL passed your €180,00 target.",
-                payload = payload("assetId" to "AAPL"),
-                readAtMs = null, createdAtMs = now - 3 * 60 * min,
-            ),
-            AppNotification(
-                id = "n-fa-1", type = "friend.accepted",
-                title = "Friend request accepted",
-                body = "@lukas.k accepted your friend request.",
-                payload = null, readAtMs = now - 20 * 60 * min, createdAtMs = now - 22 * 60 * min,
-            ),
-            AppNotification(
-                id = "n-inv-1", type = "account.invite",
-                title = "Welcome to BetterTrack",
-                body = "Your account is ready. Tap to review your settings.",
-                payload = null, readAtMs = now - 3L * 24 * 60 * min, createdAtMs = now - 3L * 24 * 60 * min,
-            ),
-        )
-        recompute()
-    }
 
     private fun parseIso(iso: String): Long? = try {
         Instant.parse(iso).toEpochMilli()

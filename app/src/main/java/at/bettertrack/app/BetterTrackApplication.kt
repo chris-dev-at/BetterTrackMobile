@@ -28,9 +28,10 @@ class BetterTrackApplication : Application() {
         super.onCreate()
         AppGraph.init(this)
 
-        // Step 16: create the FCM notification channels (before any push) and
-        // obtain the device token (works without the platform; logs presence
-        // only — never the value). Device-token registration is stubbed.
+        // Step 16 (LIVE on Notifications-v2): create the FCM notification channels
+        // (before any push) and obtain the device token (logs presence only — never
+        // the value). Registration is bearer-gated inside the manager: it fires now
+        // if this cold start is already logged in, else it defers to the next login.
         PushChannels.ensure(this)
         AppGraph.pushTokenManager.fetchToken()
 

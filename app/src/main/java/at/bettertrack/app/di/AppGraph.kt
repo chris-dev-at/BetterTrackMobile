@@ -163,6 +163,9 @@ object AppGraph {
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
+            // Register the FCM device token on login; deregister before logout wipe.
+            onSessionAuthenticated = { pushTokenManager.onLoggedIn() },
+            onBeforeLogout = { pushTokenManager.deregisterCurrentToken() },
         )
     }
 
@@ -250,7 +253,15 @@ object AppGraph {
         DefaultNotificationRepository(api = btApi, json = json, settings = notificationSettingsStore)
     }
 
-    val pushTokenManager: PushTokenManager by lazy { PushTokenManager(appContext) }
+    val pushTokenManager: PushTokenManager by lazy {
+        PushTokenManager(
+            context = appContext,
+            api = btApi,
+            json = json,
+            isLoggedIn = { tokenManager.hasTokens() },
+            scope = appScope,
+        )
+    }
 
     // ── Step 17: local app lock (PIN + biometrics, §5) ───────────────────────
     // Login-independent: its own encrypted vault + Keystore-HMAC'd PIN, gated

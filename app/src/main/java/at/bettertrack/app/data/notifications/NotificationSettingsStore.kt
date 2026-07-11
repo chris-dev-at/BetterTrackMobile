@@ -6,14 +6,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** A notification channel column in the settings matrix (§6.11). */
+/** A user-facing notification channel column in the settings matrix (§6.11). */
 enum class NotifChannel { InApp, Email, Push }
 
-/** Per-type preference row: three channel toggles + a master mute. */
+/**
+ * Per-type preference row: the three user-facing channel toggles + a master mute,
+ * plus [webpush] — a browser-only channel the app does NOT surface but carries
+ * through verbatim from the server so the PATCH can echo it (each server matrix
+ * cell requires all four channels). [muted] is app-local: the server has only a
+ * single account-wide mute, not a per-type one, so per-type mute never leaves the
+ * device.
+ */
 data class TypePrefs(
     val inApp: Boolean = true,
     val email: Boolean = true,
     val push: Boolean = true,
+    val webpush: Boolean = true,
     val muted: Boolean = false,
 ) {
     fun get(channel: NotifChannel): Boolean = when (channel) {
@@ -28,6 +36,21 @@ data class TypePrefs(
         NotifChannel.Push -> copy(push = on)
     }
 }
+
+/**
+ * Merge a server prefs cell into local prefs (pure, unit-tested): the server owns
+ * ALL four channels including push + webpush; the app's local per-type [TypePrefs.muted]
+ * is preserved untouched (the server has no per-type mute). Server state wins on load.
+ */
+fun TypePrefs.mergedFrom(dto: ChannelPrefsDto): TypePrefs =
+    copy(inApp = dto.inapp, email = dto.email, push = dto.push, webpush = dto.webpush)
+
+/**
+ * The server cell for this type (pure, unit-tested): all four channels, with
+ * `webpush` echoed verbatim from the last GET so the PATCH satisfies the schema.
+ */
+fun TypePrefs.toChannelPrefs(): ChannelPrefsDto =
+    ChannelPrefsDto(inapp = inApp, email = email, push = push, webpush = webpush)
 
 /** The full matrix, keyed by the user-configurable notification kinds. */
 data class NotifMatrix(val rows: Map<NotifKind, TypePrefs>) {
@@ -54,11 +77,13 @@ fun decideDelivery(prefs: TypePrefs): DeliveryDecision =
 /**
  * Local persistence for the per-type × per-channel notification matrix (§6.11).
  *
- * The server models only in-app + email (per type); Push + Mute are app-local
- * (there is no server push channel yet). When the notification scope is granted
- * the in-app/email columns round-trip with `GET/PATCH /settings/notifications`
- * via [syncFromServer] / [serverMatrixForPatch]; Push + Mute always stay local.
- * Muting a type suppresses it locally through [decideDelivery] — proven on device.
+ * On Notifications-v2 the server models in-app + email + **push** (+ web-push) per
+ * type, so the in-app / email / push columns all round-trip with
+ * `GET/PATCH /settings/notifications` via [syncFromServer] / [serverMatrixForPatch];
+ * server state wins on first load. Only the per-type **Mute** stays app-local
+ * (the server has a single account-wide mute, not a per-type one). Muting a type
+ * suppresses it locally through [decideDelivery] — proven on device. The local
+ * SharedPreferences cache mirrors the server so the grid renders instantly offline.
  */
 class NotificationSettingsStore(context: Context) {
 
@@ -102,15 +127,19 @@ class NotificationSettingsStore(context: Context) {
         persist(kind, next.getValue(kind))
     }
 
-    /** Seed the in-app/email columns from the server matrix (Push/Mute untouched). */
+    /**
+     * Seed the in-app / email / **push** (+ carried web-push) columns from the
+     * server matrix; the local per-type Mute is left untouched. Server-only types
+     * the app does not surface (watchlist.shared, conglomerate.shared,
+     * friend.activity) map to [NotifKind.System] and are skipped.
+     */
     fun syncFromServer(serverMatrix: Map<String, ChannelPrefsDto>) {
         if (serverMatrix.isEmpty()) return
         val rows = _matrix.value.rows.toMutableMap()
         for ((typeKey, dto) in serverMatrix) {
             val kind = NotifKind.fromType(typeKey)
             if (kind == NotifKind.System) continue
-            val existing = rows[kind] ?: TypePrefs()
-            val merged = existing.copy(inApp = dto.inapp, email = dto.email)
+            val merged = (rows[kind] ?: TypePrefs()).mergedFrom(dto)
             rows[kind] = merged
             persist(kind, merged)
         }
@@ -121,10 +150,7 @@ class NotificationSettingsStore(context: Context) {
     fun serverMatrixForPatch(): Map<String, ChannelPrefsDto> =
         configurableKinds
             .filter { it.serverModeled && it.typeKey != null }
-            .associate { kind ->
-                val p = prefs(kind)
-                kind.typeKey!! to ChannelPrefsDto(inapp = p.inApp, email = p.email)
-            }
+            .associate { kind -> kind.typeKey!! to prefs(kind).toChannelPrefs() }
 
     private fun load(): NotifMatrix {
         val rows = configurableKinds.associateWith { kind ->
@@ -133,6 +159,7 @@ class NotificationSettingsStore(context: Context) {
                 inApp = prefs.getBoolean("$k.inapp", true),
                 email = prefs.getBoolean("$k.email", true),
                 push = prefs.getBoolean("$k.push", true),
+                webpush = prefs.getBoolean("$k.webpush", true),
                 muted = prefs.getBoolean("$k.muted", false),
             )
         }
@@ -145,6 +172,7 @@ class NotificationSettingsStore(context: Context) {
             .putBoolean("$k.inapp", p.inApp)
             .putBoolean("$k.email", p.email)
             .putBoolean("$k.push", p.push)
+            .putBoolean("$k.webpush", p.webpush)
             .putBoolean("$k.muted", p.muted)
             .apply()
     }
