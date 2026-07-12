@@ -43,12 +43,29 @@ class UpdateChecker(
     /** Non-null when the one-per-version dialog should be shown right now. */
     val pendingDialog: StateFlow<AvailableUpdate?> = _pendingDialog.asStateFlow()
 
+    /** "Automatic update checks" toggle (About) — observed by the settings UI. */
+    val autoCheckEnabled: StateFlow<Boolean> = prefs.autoCheckEnabled
+
     /** Called from the process foreground observer (also fires the cold-start check). */
     fun onForeground() {
         val cold = !checkedThisProcess
         checkedThisProcess = true
-        if (!UpdateCheckLogic.shouldCheckNow(nowMs(), prefs.lastCheckMs, cold)) return
+        if (!UpdateCheckLogic.shouldCheckNow(prefs.autoCheckEnabledNow(), nowMs(), prefs.lastCheckMs, cold)) return
         scope.launch { runCheck() }
+    }
+
+    /**
+     * About-screen toggle. Turning OFF stops all checks and clears any pending
+     * prompt; turning ON re-checks immediately (even mid-process) so the dialog
+     * can return without waiting for the next cold start.
+     */
+    fun setAutoCheckEnabled(enabled: Boolean) {
+        prefs.setAutoCheckEnabled(enabled)
+        if (enabled) {
+            scope.launch { runCheck() }
+        } else {
+            _pendingDialog.value = null
+        }
     }
 
     private suspend fun runCheck() {
@@ -59,9 +76,10 @@ class UpdateChecker(
             _available.value = null
             return
         }
-        val update = AvailableUpdate(manifest.versionCode, manifest.versionName)
+        val update = AvailableUpdate(manifest.versionCode, manifest.versionName, manifest.apk)
         prefs.cachedLatestCode = manifest.versionCode
         prefs.cachedLatestName = manifest.versionName
+        prefs.cachedLatestApk = manifest.apk
         _available.value = update
         if (
             UpdateCheckLogic.shouldShowDialog(
@@ -96,7 +114,7 @@ class UpdateChecker(
         val code = prefs.cachedLatestCode
         val name = prefs.cachedLatestName
         return if (name != null && UpdateCheckLogic.isNewer(currentVersionCode, code)) {
-            AvailableUpdate(code, name)
+            AvailableUpdate(code, name, prefs.cachedLatestApk)
         } else {
             null
         }
@@ -131,5 +149,12 @@ class UpdateChecker(
         /** The human release page, opened by "Go to GitHub" + the settings badge. */
         const val RELEASE_PAGE_URL =
             "https://github.com/$REPO/releases/tag/latest-debug"
+
+        /** Stable base for the release APK asset; GitHub 302s to a CDN (followed). */
+        const val RELEASE_DOWNLOAD_BASE =
+            "https://github.com/$REPO/releases/download/latest-debug/"
+
+        /** The direct APK download URL for a given release-asset filename. */
+        fun apkUrl(apkName: String): String = RELEASE_DOWNLOAD_BASE + apkName
     }
 }

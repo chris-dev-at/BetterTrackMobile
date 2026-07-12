@@ -18,18 +18,22 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -138,6 +142,18 @@ fun AboutScreen(
                 }
             }
 
+            // Automatic update checks (owner ask 2026-07-12): the About-level opt-out
+            // for the dev update notifier. Default ON; OFF stops launch/foreground
+            // checks so no dialog appears until the user turns it back on.
+            val autoUpdate by AppGraph.updateChecker.autoCheckEnabled.collectAsStateWithLifecycle()
+            AboutToggleRow(
+                icon = Icons.Outlined.SystemUpdateAlt,
+                title = stringResource(R.string.bt_settings_auto_update),
+                subtitle = stringResource(R.string.bt_settings_auto_update_sub),
+                checked = autoUpdate,
+                onCheckedChange = { AppGraph.updateChecker.setAutoCheckEnabled(it) },
+            )
+
             // API build (cosmetic; hidden until the public /version fetch returns).
             apiBuild?.let { info ->
                 val shortCommit = info.shortCommit.ifBlank { info.commit.take(7) }
@@ -177,6 +193,40 @@ fun AboutScreen(
                 color = bt.textMuted,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val bt = BtTheme.colors
+    Surface(color = bt.surface, border = BorderStroke(1.dp, bt.border), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = bt.onGold,
+                    checkedTrackColor = bt.gold,
+                    checkedBorderColor = bt.gold,
+                    uncheckedThumbColor = bt.textMuted,
+                    uncheckedTrackColor = bt.surface,
+                    uncheckedBorderColor = bt.borderStrong,
+                ),
             )
         }
     }

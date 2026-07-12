@@ -39,6 +39,11 @@ class BetterTrackApplication : Application() {
         // initial locked state (cold start) is set when the controller is built.
         AppGraph.appLockController.start()
 
+        // In-app update install (owner ask 2026-07-12): sweep cacheDir/updates on
+        // every start — removes the APK left by a successful install (that install
+        // killed the previous process) and any partial download from a mid-stream kill.
+        AppGraph.updateInstaller.sweepOnStart()
+
         // Fire the first-of-session data load on login-success / logged-in cold
         // start so no screen sits on skeletons until a manual pull-to-refresh.
         AppGraph.sessionInitializer.start()

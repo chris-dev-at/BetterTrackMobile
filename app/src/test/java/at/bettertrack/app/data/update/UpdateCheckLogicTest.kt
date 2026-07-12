@@ -23,14 +23,27 @@ class UpdateCheckLogicTest {
     @Test
     fun `cold start always checks and warm start respects the interval`() {
         val now = 10_000_000L
-        assertTrue(UpdateCheckLogic.shouldCheckNow(now, lastCheckMs = now, coldStart = true, intervalMs = interval))
-        assertFalse(UpdateCheckLogic.shouldCheckNow(now, lastCheckMs = now, coldStart = false, intervalMs = interval))
+        assertTrue(UpdateCheckLogic.shouldCheckNow(true, now, lastCheckMs = now, coldStart = true, intervalMs = interval))
+        assertFalse(UpdateCheckLogic.shouldCheckNow(true, now, lastCheckMs = now, coldStart = false, intervalMs = interval))
         assertTrue(
-            UpdateCheckLogic.shouldCheckNow(now, lastCheckMs = now - interval, coldStart = false, intervalMs = interval),
+            UpdateCheckLogic.shouldCheckNow(true, now, lastCheckMs = now - interval, coldStart = false, intervalMs = interval),
         )
         assertFalse(
-            UpdateCheckLogic.shouldCheckNow(now, lastCheckMs = now - (interval - 1), coldStart = false, intervalMs = interval),
+            UpdateCheckLogic.shouldCheckNow(true, now, lastCheckMs = now - (interval - 1), coldStart = false, intervalMs = interval),
         )
+    }
+
+    @Test
+    fun `disabled auto-check never checks, even on cold start`() {
+        val now = 10_000_000L
+        // The toggle is the hard gate: OFF suppresses both cold start and an
+        // otherwise-due warm check.
+        assertFalse(UpdateCheckLogic.shouldCheckNow(false, now, lastCheckMs = 0L, coldStart = true, intervalMs = interval))
+        assertFalse(
+            UpdateCheckLogic.shouldCheckNow(false, now, lastCheckMs = now - interval, coldStart = false, intervalMs = interval),
+        )
+        // Sanity: same inputs but enabled → does check.
+        assertTrue(UpdateCheckLogic.shouldCheckNow(true, now, lastCheckMs = 0L, coldStart = true, intervalMs = interval))
     }
 
     @Test

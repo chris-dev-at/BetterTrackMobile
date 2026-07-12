@@ -307,6 +307,22 @@ object AppGraph {
         )
     }
 
+    /**
+     * In-app "Download & Install" (owner ask 2026-07-12). A bare client with no
+     * overall call timeout (a ~7 MB APK download must not be capped like the tiny
+     * version.json) and generous read timeout; redirects (GitHub → CDN) followed
+     * by default. Streams to cacheDir/updates and hands off to PackageInstaller.
+     */
+    val updateInstaller: at.bettertrack.app.data.update.UpdateInstaller by lazy {
+        at.bettertrack.app.data.update.UpdateInstaller(
+            appContext = appContext,
+            client = OkHttpClient.Builder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .build(),
+        )
+    }
+
     val connectivityMonitor: ConnectivityMonitor by lazy { ConnectivityMonitor(appContext) }
 
     /** Device-scoped UI prefs (orientation lock, …) — survives logout, no secrets. */

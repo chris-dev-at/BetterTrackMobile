@@ -22,6 +22,15 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!--
+      Dev in-app update (owner ask 2026-07-12): let the app hand the downloaded
+      release APK to the platform PackageInstaller. The system still shows its
+      confirm sheet (no silent install), and the app must additionally hold the
+      user-granted "install unknown apps" source permission (checked in-app with a
+      deep-link to grant it) before an install can complete.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
       Package visibility (Android 11+): we open the OAuth authorize page in a
       Chrome Custom Tab and the web "Need an account?/Forgot password?" links in
       a browser, so we must be able to see browser apps + the Custom Tabs service.
@@ -87,6 +96,16 @@
                 <action android:name="com.google.firebase.messaging.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!--
+          Dev in-app update (owner ask 2026-07-12): receives the PackageInstaller
+          session callbacks (pending-user-action → launch the confirm sheet;
+          success/failure → cleanup/retry). Explicit + not exported: only our own
+          committed session's PendingIntent can trigger it.
+        -->
+        <receiver
+            android:name=".data.update.UpdateInstallReceiver"
+            android:exported="false" />
 
         <!-- FCM defaults for notifications posted by the system (background data). -->
         <meta-data

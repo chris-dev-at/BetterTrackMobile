@@ -385,13 +385,28 @@
 
     <!-- Dev-Update-Hinweis -->
     <string name="bt_update_dialog_title">Neue Version verfügbar</string>
-    <string name="bt_update_dialog_message">Version %1$s ist bereit zur Installation von GitHub.</string>
+    <string name="bt_update_dialog_message">Version %1$s ist bereit zur Installation.</string>
     <string name="bt_update_go_github">Zu GitHub</string>
     <string name="bt_update_remind_later">Später erinnern</string>
     <string name="bt_update_ignore">Diese Version ignorieren</string>
     <string name="bt_update_badge_title">Update verfügbar</string>
     <string name="bt_update_badge_version">Version %1$s · tippen, um GitHub zu öffnen</string>
     <string name="bt_update_badge_pill">Neu</string>
+    <!-- Herunterladen & installieren (Owner-Wunsch 2026-07-12) -->
+    <string name="bt_update_download_install">Herunterladen &amp; installieren</string>
+    <string name="bt_update_downloading">Version %1$s wird heruntergeladen…</string>
+    <string name="bt_update_preparing">Download wird vorbereitet…</string>
+    <string name="bt_update_installing">Installation wird gestartet…</string>
+    <string name="bt_update_error">Download fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="bt_update_retry">Erneut versuchen</string>
+    <string name="bt_update_cancel">Abbrechen</string>
+    <string name="bt_update_dismiss">Schließen</string>
+    <string name="bt_update_install_hint_title">App-Installation erlauben</string>
+    <string name="bt_update_install_hint_body">Um das Update abzuschließen, erlaube BetterTrack, Apps auf diesem Gerät zu installieren.</string>
+    <string name="bt_update_install_hint_action">Einstellungen öffnen</string>
+    <string name="bt_update_install_hint_ok">BetterTrack darf Updates installieren.</string>
+    <string name="bt_settings_auto_update">Automatische Update-Prüfung</string>
+    <string name="bt_settings_auto_update_sub">Beim Start nach neuen BetterTrack-Builds suchen</string>
 
     <!-- Watchlists (§6.6) -->
     <string name="bt_watchlist_title">Watchlists</string>

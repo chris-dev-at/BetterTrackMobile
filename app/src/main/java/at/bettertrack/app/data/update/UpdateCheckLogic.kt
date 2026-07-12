@@ -16,15 +16,17 @@ object UpdateCheckLogic {
 
     /**
      * Fetch the manifest on cold start (once per process) OR when the last
-     * successful check is older than [intervalMs]. Everything else is skipped
-     * so the app stays a polite API client.
+     * successful check is older than [intervalMs] — but only while the user keeps
+     * "automatic update checks" ON ([autoCheckEnabled]). Everything else is
+     * skipped so the app stays a polite API client and honours the opt-out.
      */
     fun shouldCheckNow(
+        autoCheckEnabled: Boolean,
         nowMs: Long,
         lastCheckMs: Long,
         coldStart: Boolean,
         intervalMs: Long = CHECK_INTERVAL_MS,
-    ): Boolean = coldStart || (nowMs - lastCheckMs) >= intervalMs
+    ): Boolean = autoCheckEnabled && (coldStart || (nowMs - lastCheckMs) >= intervalMs)
 
     /**
      * Show the ONE-per-version dialog only when the build is newer, has not been

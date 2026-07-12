@@ -386,13 +386,28 @@
 
     <!-- Step V — Dev update notifier -->
     <string name="bt_update_dialog_title">New version available</string>
-    <string name="bt_update_dialog_message">Version %1$s is ready to install from GitHub.</string>
+    <string name="bt_update_dialog_message">Version %1$s is ready to install.</string>
     <string name="bt_update_go_github">Go to GitHub</string>
     <string name="bt_update_remind_later">Remind me later</string>
     <string name="bt_update_ignore">Ignore this version</string>
     <string name="bt_update_badge_title">Update available</string>
     <string name="bt_update_badge_version">Version %1$s · tap to open GitHub</string>
     <string name="bt_update_badge_pill">New</string>
+    <!-- Download & Install (owner ask 2026-07-12) -->
+    <string name="bt_update_download_install">Download &amp; Install</string>
+    <string name="bt_update_downloading">Downloading version %1$s…</string>
+    <string name="bt_update_preparing">Preparing download…</string>
+    <string name="bt_update_installing">Starting installation…</string>
+    <string name="bt_update_error">Download failed. Check your connection and try again.</string>
+    <string name="bt_update_retry">Retry</string>
+    <string name="bt_update_cancel">Cancel</string>
+    <string name="bt_update_dismiss">Dismiss</string>
+    <string name="bt_update_install_hint_title">Allow installing apps</string>
+    <string name="bt_update_install_hint_body">To finish updating, allow BetterTrack to install apps on this device.</string>
+    <string name="bt_update_install_hint_action">Open settings</string>
+    <string name="bt_update_install_hint_ok">BetterTrack is allowed to install updates.</string>
+    <string name="bt_settings_auto_update">Automatic update checks</string>
+    <string name="bt_settings_auto_update_sub">Check for new BetterTrack builds on launch</string>
 
     <!-- Step 12 — Watchlists (§6.6) -->
     <string name="bt_watchlist_title">Watchlists</string>
