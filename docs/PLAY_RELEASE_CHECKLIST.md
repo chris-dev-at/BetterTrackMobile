@@ -9,6 +9,35 @@ password — paths only.
 
 ---
 
+## ⚡ FAST PATH — the "primitive" closed launch (owner directive 2026-07-14)
+
+Goal: get the .aab onto the **closed-testing track ASAP** so the mandatory
+**12-tester / 14-day clock starts running**. The platform stays **closed for new
+users** (registration mode `closed` — exactly the right launch state); Google's
+reviewers get a dedicated **test user Christian creates**. Nothing here needs to
+be pretty — production polish comes after the gate.
+
+**Christian, in order (≈1–2 hours of console work once assets are in):**
+1. Play Console developer account ready + **identity verification** done (§1).
+2. **Create the app** + upload `BetterTrack-1.0-vc10001.aab` to a **closed track** (§1–§3).
+3. **App access declaration** (Play Console → App content → App access): the app
+   is fully login-gated, so you MUST provide working review credentials — use the
+   dedicated **reviewer test user** you create (never your real account). Add a
+   note that registration is closed / invite-only.
+4. **Data Safety** (§5), **IARC rating** (§6), **Financial features** (§7), Ads = none.
+5. Store listing minimum (§4): EN copy + icon + feature graphic + ≥2 screenshots
+   (the demo-portfolio set), contact email, privacy URL. DE listing can follow later.
+6. **Tester list**: ≥12 Gmail addresses on the closed track, share the opt-in
+   link, everyone opts in → **the 14-day clock starts** — keep them opted in.
+7. Platform side (main dev, asked in PLATFORM_ASKS #29): primitive **Terms of Use
+   URL** + the **privacy-page completeness pass**. Only the privacy items block the
+   Data-Safety form; ToS is listed for completeness.
+
+**What does NOT block the closed launch:** DE listing, the full 8-screenshot set,
+production-grade copy, the follows/analytics features — all post-gate.
+
+---
+
 ## 0. Artifacts & versioning (produced by the app side)
 
 | Thing | Value / path |
@@ -63,9 +92,11 @@ password — paths only.
 - Copy: `docs/PLAY_LISTING.md` §2/§3 (EN + DE short + full descriptions — edit to taste).
 - **Hi-res icon (512×512, 32-bit PNG):** `docs/play/icon-512.png` **[APP]**
 - **Feature graphic (1024×500, no alpha):** `docs/play/feature-graphic-1024x500.png` **[APP]**
-- **Phone screenshots (≥2, 8 recommended, EN + DE):** captured on the Note20 into
-  `/Users/cwiesi/bt_scratch/step20-2026-07-14/screenshots/{en,de}/` **[APP]** — the
-  owner picks the final set (real account data → they are NOT in the repo).
+- **Phone screenshots (≥2, 8 recommended, EN + DE):** the **demo-portfolio set**
+  (owner decision 2026-07-14 — no real account data on the store) is shot into
+  `/Users/cwiesi/bt_scratch/play-shots-2026-07-14/{en,de}/` (+ 9:16 `framed/`
+  variants) **[APP]**. The earlier real-data candidates in
+  `step20-2026-07-14/screenshots/` are superseded — do not use them.
 - Category **Finance**; contact email (owner decides — `support@bettertrack.at`
   suggested); website `https://bettertrack.at`; **privacy policy** `https://bettertrack.at/privacy/`.
 
@@ -133,12 +164,31 @@ declaration / video review is triggered.
   `AccountRepositoryDeleteTest` (MockWebServer).
 - Web deletion path (Play's second required channel): `https://web.bettertrack.at/account/delete`.
 
-## 11. Final submit — **[OWNER]**
-- Upload `BetterTrack-1.0-vc10001.aab` to the closed track (then, after the gate,
-  promote to production).
+## 11. Final submit to the closed track — **[OWNER]**
+- Upload `BetterTrack-1.0-vc10001.aab` to the closed track.
 - Confirm: Data Safety complete + consistent with `https://bettertrack.at/privacy/`;
-  content rating done; financial-features declared; all listing assets in; both
-  deletion paths working; the 12-tester / 14-day closed test running or complete.
+  content rating done; financial-features declared; App-access review credentials
+  in (the dedicated reviewer test user); listing minimum in; both deletion paths
+  working; ≥12 testers opted in → the 14-day clock is running.
+
+## 12. Going PUBLIC afterwards — **[OWNER]** (the post-gate steps)
+When the closed test has run **14 continuous days with ≥12 opted-in testers**:
+1. Play Console → the **"Apply for production"** button becomes available on the
+   dashboard → answer the short questionnaire (how you tested, feedback acted on).
+2. Wait for Google's production-access approval (usually days).
+3. Decide the public rollout shape: **open production** vs staged rollout %
+   (staged recommended: 20% → 100%).
+4. Before promoting: complete the **DE listing** (copy is drafted), pick the final
+   8-screenshot set, re-check Data Safety against the then-current privacy page,
+   and upload a **fresh .aab with a bumped versionCode** (10002+) if code changed.
+5. Promote the release to **Production** → Google review (typically 1–7 days for
+   a first finance-app release) → live on the store.
+6. Post-launch: keep the closed/internal track for future pre-release testing;
+   every later update = new .aab, versionCode +1, roll through testing → production.
+7. Platform prerequisites for a *truly* public app (beyond Play): registration
+   mode flipped from `closed` (owner's call, platform #25 supports
+   `invite_token`/`approval`/`open`), and the ToS/privacy pages at their final
+   (non-primitive) quality.
 
 ---
 
