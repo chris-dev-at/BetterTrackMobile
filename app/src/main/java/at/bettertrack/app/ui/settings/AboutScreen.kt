@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -53,9 +54,9 @@ import at.bettertrack.app.ui.theme.BtTheme
 
 /**
  * Settings → About (spec §6.12): the two-color wordmark + "App" edition + tagline,
- * the installed version, a link to the web app (the only repo-known public URL — no
- * invented links; the privacy-policy URL is a platform prerequisite, not yet live),
- * and the in-app "What's new" changelog.
+ * the installed version, a link to the web app, the public privacy-policy page
+ * (https://bettertrack.at/privacy/ — required for Play review), and the in-app
+ * "What's new" changelog.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +68,10 @@ fun AboutScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val webOrigin = BuildConfig.WEB_ORIGIN.trimEnd('/')
     val webHost = webOrigin.substringAfter("://")
+    // Public privacy-policy page (required for Play review). Fixed public URL — the
+    // policy is hosted on the marketing domain, independent of the API/web origins.
+    val privacyUrl = "https://bettertrack.at/privacy/"
+    val privacyHost = privacyUrl.substringAfter("://").trimEnd('/')
     val onOpenUrl: (String) -> Unit = { url ->
         runCatching {
             context.startActivity(
@@ -182,6 +187,12 @@ fun AboutScreen(
                 title = stringResource(R.string.bt_about_open_web),
                 subtitle = webHost,
                 onClick = { onOpenUrl(webOrigin) },
+            )
+            AboutNavRow(
+                icon = Icons.Outlined.PrivacyTip,
+                title = stringResource(R.string.bt_about_privacy),
+                subtitle = privacyHost,
+                onClick = { onOpenUrl(privacyUrl) },
             )
             // "What's new" reads the GitHub dev-channel changelog, so it belongs to
             // the self-update surface — hidden in Play builds (Task B1).
