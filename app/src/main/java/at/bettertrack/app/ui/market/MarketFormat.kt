@@ -10,28 +10,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.ui.format.btFormatUnitPriceCore
 import at.bettertrack.app.ui.theme.BtTheme
-import java.text.NumberFormat
-import java.util.Currency
 import java.util.Locale
 
 /**
- * Format a price in its native currency (asset pages show USD/EUR/… directly —
- * [at.bettertrack.app.ui.components.formatEur] is EUR-only). Falls back to a
- * plain 2-decimal number if the currency code is unknown.
+ * Format a UNIT price in its native currency (asset pages show USD/EUR/… directly
+ * — [at.bettertrack.app.ui.components.formatEur] is EUR-only). Symbol-last, 2
+ * decimals half-away-from-zero, but sub-cent prices (0 < |x| < 0.01) render up to
+ * 6 significant decimals so a crypto tick never collapses to "0,00" (rule 4).
  */
-fun formatPrice(value: Double, currency: String, locale: Locale): String {
-    return try {
-        val nf = NumberFormat.getCurrencyInstance(locale)
-        nf.currency = Currency.getInstance(currency.uppercase())
-        nf.format(value)
-    } catch (_: Exception) {
-        val nf = NumberFormat.getNumberInstance(locale)
-        nf.minimumFractionDigits = 2
-        nf.maximumFractionDigits = 2
-        "${nf.format(value)} $currency"
-    }
-}
+fun formatPrice(value: Double, currency: String, locale: Locale): String =
+    btFormatUnitPriceCore(value, currency, locale)
 
 /** A localized human label for an asset type ("Stock", "ETF", "Crypto"…). */
 @Composable

@@ -335,7 +335,9 @@ private fun AssetLoadedContent(
                         }
                         if (snapshot.quoteCurrency.uppercase() != "EUR" && snapshot.eurPrice != null) {
                             Text(
-                                text = "≈ " + at.bettertrack.app.ui.components.formatEur(snapshot.eurPrice, locale),
+                                // The ≈EUR is itself a UNIT price → sub-cent aware (rule 4),
+                                // so a sub-cent asset shows "≈ 0,0000039 €", not "≈ 0,00 €".
+                                text = "≈ " + formatPrice(snapshot.eurPrice, "EUR", locale),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = bt.textSecondary,
                             )

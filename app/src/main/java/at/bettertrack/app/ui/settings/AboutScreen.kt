@@ -144,15 +144,19 @@ fun AboutScreen(
 
             // Automatic update checks (owner ask 2026-07-12): the About-level opt-out
             // for the dev update notifier. Default ON; OFF stops launch/foreground
-            // checks so no dialog appears until the user turns it back on.
-            val autoUpdate by AppGraph.updateChecker.autoCheckEnabled.collectAsStateWithLifecycle()
-            AboutToggleRow(
-                icon = Icons.Outlined.SystemUpdateAlt,
-                title = stringResource(R.string.bt_settings_auto_update),
-                subtitle = stringResource(R.string.bt_settings_auto_update_sub),
-                checked = autoUpdate,
-                onCheckedChange = { AppGraph.updateChecker.setAutoCheckEnabled(it) },
-            )
+            // checks so no dialog appears until the user turns it back on. The whole
+            // control is COMPILED OUT of Play builds (Task B1) — self-update is not
+            // allowed there, so the toggle must not appear.
+            if (BuildConfig.SELF_UPDATE_ENABLED) {
+                val autoUpdate by AppGraph.updateChecker.autoCheckEnabled.collectAsStateWithLifecycle()
+                AboutToggleRow(
+                    icon = Icons.Outlined.SystemUpdateAlt,
+                    title = stringResource(R.string.bt_settings_auto_update),
+                    subtitle = stringResource(R.string.bt_settings_auto_update_sub),
+                    checked = autoUpdate,
+                    onCheckedChange = { AppGraph.updateChecker.setAutoCheckEnabled(it) },
+                )
+            }
 
             // API build (cosmetic; hidden until the public /version fetch returns).
             apiBuild?.let { info ->
@@ -179,12 +183,16 @@ fun AboutScreen(
                 subtitle = webHost,
                 onClick = { onOpenUrl(webOrigin) },
             )
-            AboutNavRow(
-                icon = Icons.Outlined.NewReleases,
-                title = stringResource(R.string.bt_settings_whatsnew_row),
-                subtitle = stringResource(R.string.bt_settings_whatsnew_sub),
-                onClick = onOpenChangelog,
-            )
+            // "What's new" reads the GitHub dev-channel changelog, so it belongs to
+            // the self-update surface — hidden in Play builds (Task B1).
+            if (BuildConfig.SELF_UPDATE_ENABLED) {
+                AboutNavRow(
+                    icon = Icons.Outlined.NewReleases,
+                    title = stringResource(R.string.bt_settings_whatsnew_row),
+                    subtitle = stringResource(R.string.bt_settings_whatsnew_sub),
+                    onClick = onOpenChangelog,
+                )
+            }
 
             Spacer(Modifier.height(4.dp))
             Text(

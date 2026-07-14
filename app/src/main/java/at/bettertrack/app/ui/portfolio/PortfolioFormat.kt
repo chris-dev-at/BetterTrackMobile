@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
-import java.text.NumberFormat
+import at.bettertrack.app.ui.format.btFormatPercentCore
+import at.bettertrack.app.ui.format.btFormatQuantityCore
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -13,21 +14,17 @@ import java.util.Locale
  * exactly what the reference web app renders for holding weights/allocation.
  */
 
-/** Asset quantity: locale digits, up to 4 decimals, no trailing zeros. */
-fun formatQuantity(quantity: Double, locale: Locale): String {
-    val nf = NumberFormat.getNumberInstance(locale)
-    nf.minimumFractionDigits = 0
-    nf.maximumFractionDigits = 4
-    return nf.format(quantity)
-}
+/** Asset quantity (rule 3): locale digits, up to 8 decimals, no trailing zeros. */
+fun formatQuantity(quantity: Double, locale: Locale): String =
+    btFormatQuantityCore(quantity, locale)
 
-/** Unsigned percent with one decimal — allocation legend / holding weights. */
-fun formatWeight(pct: Double, locale: Locale): String {
-    val nf = NumberFormat.getNumberInstance(locale)
-    nf.minimumFractionDigits = 1
-    nf.maximumFractionDigits = 1
-    return nf.format(pct)
-}
+/**
+ * Unsigned weight percent (rule 2) — allocation legend / holding weights.
+ * Returns the FULL localized string incl. "%" (2 decimals, DE space, EN none),
+ * so callers render it directly (no separate "%" suffix).
+ */
+fun formatWeight(pct: Double, locale: Locale): String =
+    btFormatPercentCore(pct, locale, signed = false)
 
 /**
  * Weight of one server value within a server total, in percent units; null

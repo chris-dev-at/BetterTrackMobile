@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      GITHUB flavor only (Step 20, Task B1): the dev-channel self-update path.
+      The app hands the downloaded release APK to the platform PackageInstaller;
+      the system still shows its confirm sheet (no silent install) and the user
+      must additionally hold the "install unknown apps" source permission.
+
+      This permission is DELIBERATELY absent from the `play` flavor: Google Play's
+      Device-and-Network-Abuse policy forbids apps distributed on Play from
+      updating themselves outside of Play, so the play build compiles the whole
+      update checker/installer out (BuildConfig.SELF_UPDATE_ENABLED=false) and
+      never declares REQUEST_INSTALL_PACKAGES.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+</manifest>

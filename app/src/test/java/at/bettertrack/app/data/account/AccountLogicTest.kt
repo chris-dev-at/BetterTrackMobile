@@ -151,10 +151,11 @@ class AccountLogicTest {
         assertTrue(!TwoFactorState(totpEnabled = false, totpPending = true, emailEnabled = false, recoveryCodesRemaining = 0).anyEnabled)
     }
 
-    // ── Delete-account safety gate ───────────────────────────────────────────
-    @Test fun delete_account_is_disarmed_by_default() {
-        // Guards the irreversible action: this MUST stay false while the debug
-        // build points at the real production account.
-        assertTrue(!DeleteAccountFeature.armed)
+    // ── Delete-account gate ──────────────────────────────────────────────────
+    @Test fun delete_account_ships_armed() {
+        // Play mandates a working in-app deletion path (Step 20/Task B3), so the
+        // feature ships ARMED. The real product safety is the deletion screen's
+        // type-to-confirm + password re-auth, not this flag.
+        assertTrue(DeleteAccountFeature.armed)
     }
 }

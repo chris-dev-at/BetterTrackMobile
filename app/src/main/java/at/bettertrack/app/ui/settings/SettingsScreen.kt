@@ -133,8 +133,12 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            val update by AppGraph.updateChecker.available.collectAsStateWithLifecycle()
-            update?.let { UpdateAvailableRow(it) }
+            // The "Update available" row is part of the self-update surface — shown
+            // only in github builds (Task B1); Play builds compile it out.
+            if (BuildConfig.SELF_UPDATE_ENABLED) {
+                val update by AppGraph.updateChecker.available.collectAsStateWithLifecycle()
+                update?.let { UpdateAvailableRow(it) }
+            }
 
             // ── ACCOUNT ──────────────────────────────────────────────────────
             SectionLabel(stringResource(R.string.bt_settings_account_section))

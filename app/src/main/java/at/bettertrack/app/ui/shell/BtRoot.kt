@@ -13,6 +13,7 @@ import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.ui.update.UpdateNotifierHost
 
 /**
@@ -74,6 +75,9 @@ fun BtRoot(
     }
 
     // Dev update notifier (Step V) — an app-level overlay dialog, shown over any
-    // auth state when CI has published a newer debug build.
-    UpdateNotifierHost()
+    // auth state when CI has published a newer debug build. Play builds (Task B1)
+    // compile the self-update path out entirely, so the host is not rendered.
+    if (BuildConfig.SELF_UPDATE_ENABLED) {
+        UpdateNotifierHost()
+    }
 }

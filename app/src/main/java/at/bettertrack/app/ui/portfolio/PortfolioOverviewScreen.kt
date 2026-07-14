@@ -639,10 +639,7 @@ private fun AllocationCard(holdings: List<HoldingEntity>, cashEur: Double, local
                             Spacer(Modifier.width(8.dp))
                             weightPct(segment.value, total)?.let { pct ->
                                 Text(
-                                    text = stringResource(
-                                        R.string.bt_holding_weight,
-                                        formatWeight(pct, locale),
-                                    ),
+                                    text = formatWeight(pct, locale),
                                     style = BtTheme.type.numberCaption,
                                     color = bt.textPrimary,
                                 )
@@ -679,7 +676,7 @@ private fun HoldingRow(
                 Spacer(Modifier.height(2.dp))
                 val amount = "${formatQuantity(holding.quantity, locale)} ${holding.assetSymbol}"
                 val weight = weightOfPortfolioPct?.let {
-                    " · " + stringResource(R.string.bt_holding_weight, formatWeight(it, locale))
+                    " · " + formatWeight(it, locale)
                 } ?: ""
                 Text(
                     text = amount + weight,

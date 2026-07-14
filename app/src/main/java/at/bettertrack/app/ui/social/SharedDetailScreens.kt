@@ -204,7 +204,7 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                                 Text(p.asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1)
                             }
                             Text(
-                                "${formatWeight(p.weightPct)}%",
+                                formatPercent(p.weightPct, Locale.getDefault(), showSign = false),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = bt.goldEmphasis,
                                 fontWeight = FontWeight.SemiBold,
@@ -313,7 +313,3 @@ private fun ReadOnlyFooter(username: String) {
     }
 }
 
-private fun formatWeight(pct: Double): String {
-    val r = Math.round(pct * 100.0) / 100.0
-    return if (r == Math.floor(r)) r.toInt().toString() else r.toString()
-}

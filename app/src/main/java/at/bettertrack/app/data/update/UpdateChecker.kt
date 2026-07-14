@@ -1,6 +1,7 @@
 package at.bettertrack.app.data.update
 
 import android.util.Log
+import at.bettertrack.app.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +49,8 @@ class UpdateChecker(
 
     /** Called from the process foreground observer (also fires the cold-start check). */
     fun onForeground() {
+        // Play builds (Task B1) have self-update compiled off — never check.
+        if (!BuildConfig.SELF_UPDATE_ENABLED) return
         val cold = !checkedThisProcess
         checkedThisProcess = true
         if (!UpdateCheckLogic.shouldCheckNow(prefs.autoCheckEnabledNow(), nowMs(), prefs.lastCheckMs, cold)) return
@@ -60,6 +63,7 @@ class UpdateChecker(
      * can return without waiting for the next cold start.
      */
     fun setAutoCheckEnabled(enabled: Boolean) {
+        if (!BuildConfig.SELF_UPDATE_ENABLED) return
         prefs.setAutoCheckEnabled(enabled)
         if (enabled) {
             scope.launch { runCheck() }

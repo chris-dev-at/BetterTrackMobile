@@ -86,7 +86,7 @@ jobs:
       # run_number, versionName = 0.<run_number>. Local AS builds keep 1/"dev".
       - name: Build debug APK
         run: >
-          ./gradlew :app:assembleDebug
+          ./gradlew :app:assembleGithubDebug
           -PbtVersionCode=${{ github.run_number }}
           -PbtVersionName=0.${{ github.run_number }}
           --no-daemon --stacktrace
@@ -95,7 +95,7 @@ jobs:
         run: |
           mkdir -p dist
           APK_NAME="BetterTrackApp-debug-${{ github.run_number }}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "dist/$APK_NAME"
+          cp app/build/outputs/apk/github/debug/app-github-debug.apk "dist/$APK_NAME"
           # Tiny manifest the app parses to detect a newer build (dev notifier).
           cat > dist/version.json <<EOF
           {"versionCode": ${{ github.run_number }}, "versionName": "0.${{ github.run_number }}", "apk": "$APK_NAME"}

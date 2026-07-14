@@ -89,6 +89,36 @@ android {
         }
     }
 
+    // ── Play upload key (Step 20, Task B2) ──────────────────────────────────
+    // The REAL Play upload keystore + passwords live ONLY in ~/.bettertrack/
+    // (repo is public — never committed). When present, they wire the
+    // `btPlayUpload` signingConfig used by the PLAY RELEASE variant only (see the
+    // `play` flavor below). Absent (e.g. CI, a fresh clone) → the play flavor
+    // falls back to the debug key so the build still succeeds; the shippable
+    // upload-signed .aab is produced only on the machine that holds the key.
+    val playUploadKeystore = File(System.getProperty("user.home"), ".bettertrack/bt-play-upload.keystore")
+    val playUploadEnvFile = File(System.getProperty("user.home"), ".bettertrack/play-signing.env")
+    val playUploadAvailable = playUploadKeystore.exists() && playUploadEnvFile.exists()
+    if (playUploadAvailable) {
+        val kv = playUploadEnvFile.readLines().mapNotNull {
+            val i = it.indexOf('='); if (i > 0) it.substring(0, i).trim() to it.substring(i + 1).trim() else null
+        }.toMap()
+        val storePass = kv["BT_PLAY_STORE_PASS"]
+        if (storePass != null) {
+            signingConfigs {
+                create("btPlayUpload") {
+                    storeFile = playUploadKeystore
+                    storePassword = storePass
+                    keyAlias = kv["BT_PLAY_KEY_ALIAS"] ?: "btupload"
+                    keyPassword = kv["BT_PLAY_KEY_PASS"] ?: storePass
+                    // Play App Signing accepts either scheme; v2 is the modern default.
+                    enableV1Signing = true
+                    enableV2Signing = true
+                }
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "at.bettertrack.app"
         minSdk = 28
@@ -125,20 +155,49 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Sign the release so the R8 build installs + RUNS on the device for
-            // QA. Prefer the stable BT dev key when present (~/.bettertrack or CI
-            // env, same source as debug), else fall back to the debug keystore.
-            // NO release secret is committed (repo is PUBLIC); the real Play upload
-            // key is wired in Step 20 once the owner provides one.
+            // Release SIGNING is per-flavor (Step 20): a build-type signingConfig
+            // would override the flavor's, so we leave it unset here and let each
+            // flavor pick its key — `github` keeps the stable BT dev key / debug
+            // fallback (unchanged from before), `play` uses the real upload key.
+            buildConfigField("String", "API_ORIGIN", "\"https://api.bettertrack.at\"")
+            buildConfigField("String", "WEB_ORIGIN", "\"https://web.bettertrack.at\"")
+            buildConfigField("String", "OAUTH_CLIENT_ID", "\"$oauthClientId\"")
+            buildConfigField("String", "OAUTH_REDIRECT_URI", "\"$oauthRedirectUri\"")
+        }
+    }
+
+    // ── Distribution flavors (Step 20, Task B1) ─────────────────────────────
+    // Same applicationId for both (no suffix — Firebase/google-services.json and
+    // the OAuth client are registered for `at.bettertrack.app`).
+    //   • github — today's behavior: the dev update checker + in-app Download &
+    //     Install (REQUEST_INSTALL_PACKAGES lives in app/src/github/AndroidManifest).
+    //   • play   — NO self-update anything (Play's Device-and-Network-Abuse policy
+    //     forbids it): SELF_UPDATE_ENABLED=false hard-gates the checker + all update
+    //     UI, and REQUEST_INSTALL_PACKAGES is absent from its manifest.
+    // `github` sorts first alphabetically ⇒ it is Android Studio's default variant.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE_ENABLED", "true")
+            // Unchanged github signing: stable BT dev key when present, else debug.
             signingConfig = if (btSigning != null) {
                 signingConfigs.getByName("btDev")
             } else {
                 signingConfigs.getByName("debug")
             }
-            buildConfigField("String", "API_ORIGIN", "\"https://api.bettertrack.at\"")
-            buildConfigField("String", "WEB_ORIGIN", "\"https://web.bettertrack.at\"")
-            buildConfigField("String", "OAUTH_CLIENT_ID", "\"$oauthClientId\"")
-            buildConfigField("String", "OAUTH_REDIRECT_URI", "\"$oauthRedirectUri\"")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "SELF_UPDATE_ENABLED", "false")
+            // Play RELEASE is signed with the real upload key when it is available
+            // on this machine (~/.bettertrack); otherwise the build still succeeds
+            // with the debug key (no shippable .aab is produced without the key).
+            signingConfig = if (playUploadAvailable && signingConfigs.findByName("btPlayUpload") != null) {
+                signingConfigs.getByName("btPlayUpload")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {
