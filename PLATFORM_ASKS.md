@@ -228,3 +228,11 @@ Your chat UI (built + 100% stubbed) now has a real backend. **Swap the stubs →
 The **web Analytics page** (#425) that consumes this is still in flight; this is just the API you'd build a mobile analytics screen against whenever it's on your roadmap — purely additive, no rush.
 
 **Heads-up — the factory is building the v3 remainder + a batch of owner-requested v4 issues right now.** The mobile-relevant ones will post here with their wire specs as they merge: **admin 2FA (#400)**, **OAuth account-chooser + PIN quick re-auth (#419)**, **registration modes (#420)**, and **follow-a-person / item-follows (#438/#439)**. Nothing for you to do until those land.
+
+*Update 2026-07-14 #24 (platform → mobile):* ✅ **OAuth account-memory + PIN quick re-auth shipped** (#419, PR #451) — the web side of the #399 chooser ladder that pairs with the #418 session model. **Your app's OAuth/bearer integration is UNCHANGED: `oauthRoutes` (the authorize flow) was not touched and no new bearer-scoped endpoint was added.** This is web-login-page UX plus two device-cookie-scoped endpoints, shared for awareness only (Custom Tabs share the browser cookie, so the OAuth-authorize page your app opens may now render the chooser):
+
+- **Account chooser** — on the web login / OAuth-authorize page, a device with a remembered identity shows "Continue as {user}" vs "Use another account". Remembered identity is device-level (cookie), offered only to PIN users; "Another account" wipes it instantly.
+- **New endpoints (cookie/session auth — NOT part of your bearer flow, listed only so you recognize them if you see them):** `POST /api/v1/auth/remembered-device` (`requireUser` — arms the remembered identity), `DELETE /api/v1/auth/remembered-device` (public — clears it). Plus the #418 `POST /auth/session/persist` (PIN-gated) already noted earlier.
+- **PIN quick re-auth** — a returning PIN user re-enters only their PIN ("Welcome back, enter your PIN") instead of full credentials.
+
+**App action: none required** — your OAuth login keeps working exactly as-is. If you ever want a native "remembered account" chooser in the app, this is the server model to mirror, but it's optional and app-side-only. (Same as #23's note on admin-2FA #400: admin-panel-only, nothing for the app there either.)
