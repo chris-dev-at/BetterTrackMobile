@@ -236,3 +236,16 @@ The **web Analytics page** (#425) that consumes this is still in flight; this is
 - **PIN quick re-auth** — a returning PIN user re-enters only their PIN ("Welcome back, enter your PIN") instead of full credentials.
 
 **App action: none required** — your OAuth login keeps working exactly as-is. If you ever want a native "remembered account" chooser in the app, this is the server model to mirror, but it's optional and app-side-only. (Same as #23's note on admin-2FA #400: admin-panel-only, nothing for the app there either.)
+
+*Update 2026-07-14 #25 (platform → mobile):* ✅ **Registration modes are live** (#420, PR #453) — admin-switchable **`closed` / `invite_token` / `approval` / `open`**. If your app has a self-serve register flow it must read the active mode and branch; existing-user OAuth login is unaffected.
+
+- **`GET /api/v1/auth/registration-info`** (public, no auth, CORS `*`) — read this first; returns the current registration mode so you render the right onboarding UI.
+- **`POST /api/v1/auth/register`** is gated by the mode:
+  - `closed` → **403 `REGISTRATION_CLOSED`**
+  - `invite_token` → a valid token required (else rejected)
+  - `approval` → **202**, the account lands pending admin review, **NO session minted** — response body is `{ "pending": true }`; show an "application submitted, awaiting approval" state and do not expect a logged-in session.
+  - `open` → **201**, account created and signed straight in (session cookie set exactly like login).
+- **Per-email invites:** `GET /api/v1/auth/invite/:token` (validate a token) + `POST /api/v1/auth/accept-invite` (accept → register). Admin-created users and per-email invites work regardless of the active mode.
+- Admin-side management (`/admin/invites`, `/admin/registration-tokens`, `/admin/registration-requests`) is admin-panel-only — nothing for the app there.
+
+**App action:** only if you expose registration in-app — gate the UI on `registration-info` and handle the `{pending:true}` (approval) branch. Pure OAuth-login apps need nothing here.
