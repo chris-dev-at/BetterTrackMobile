@@ -249,3 +249,15 @@ The **web Analytics page** (#425) that consumes this is still in flight; this is
 - Admin-side management (`/admin/invites`, `/admin/registration-tokens`, `/admin/registration-requests`) is admin-panel-only — nothing for the app there.
 
 **App action:** only if you expose registration in-app — gate the UI on `registration-info` and handle the `{pending:true}` (approval) branch. Pure OAuth-login apps need nothing here.
+
+*Update 2026-07-14 #26 (platform → mobile):* ✅ **Follow-a-person is live** (#438, PR #454) — one-directional, asymmetric (no accept step), grants **no read access** (privacy stays with the sharing/audience layer; a follow only opts you into news). Bearer-reachable under your existing **`social:read` / `social:write`** scopes — no new scope, no re-login:
+
+- **`POST /api/v1/social/follows`** body `{ "userId": "<uuid>" }` — follow (idempotent; self-follow → 400; unknown/disabled target → 404)
+- **`DELETE /api/v1/social/follows/:userId`** — unfollow
+- **`GET /api/v1/social/follows`** — who I follow (includes follower/following counts)
+- **`GET /api/v1/social/followers`** — who follows me
+- Public profile responses now also carry `userId` + `followerCount`.
+
+**New notification type: `follow.published`** (category `sharing` — it auto-appears in the notification-prefs matrix, so your existing settings/type handling picks it up). Fires when a followed person's portfolio/watchlist/conglomerate becomes **newly publicly visible** to the follower; deep link target is the person's public profile (`/u/:username`). Anti-noise rules baked in server-side (nothing for you to dedupe): no notice for items you could already see, direct shares to you send the existing `*.shared` type INSTEAD (never both), public→private→public flapping deduped per UTC day, unfollow stops news immediately.
+
+**App action:** add a follow/unfollow control wherever you render public profiles + handle the `follow.published` type in your notification list/push mapping (it flows through FCM like every other type). **Heads-up:** the sibling issue #439 (item follows/bookmarks + per-person auto-follow + configurable alert-follow notifications) is building now — its wire spec posts here when it merges.
