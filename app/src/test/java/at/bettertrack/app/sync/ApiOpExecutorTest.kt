@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -89,6 +90,49 @@ class ApiOpExecutorTest {
         val req = server.takeRequest()
         assertTrue(req.path!!.endsWith("/cash/withdraw"))
         assertEquals(KEY, req.getHeader("Idempotency-Key"))
+    }
+
+    // ── Backdated cash date threads onto the wire, today stays byte-identical ─
+
+    @Test
+    fun `a backdated cash deposit sends executedAt on the wire`() = runBlocking {
+        server.enqueue(MockResponse().setBody(CASH_BODY))
+        val payload = """{"amountEur":10.0,"executedAt":"2026-07-01T12:00:00Z"}"""
+
+        val result = executor.execute(op(OpType.CASH_DEPOSIT, payload))
+
+        assertTrue("was $result", result is ExecResult.Success)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(
+            "expected the backdated executedAt in the request body: $body",
+            body.contains(""""executedAt":"2026-07-01T12:00:00Z""""),
+        )
+    }
+
+    @Test
+    fun `a today cash deposit omits executedAt (byte-identical to an undated deposit)`() = runBlocking {
+        server.enqueue(MockResponse().setBody(CASH_BODY))
+
+        // CASH_PAYLOAD has no executedAt key — the "left it on today" common case.
+        val result = executor.execute(op(OpType.CASH_DEPOSIT, CASH_PAYLOAD))
+
+        assertTrue("was $result", result is ExecResult.Success)
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse("a today deposit must NOT send executedAt: $body", body.contains("executedAt"))
+    }
+
+    @Test
+    fun `an old queued cash payload without the executedAt field still replays`() = runBlocking {
+        server.enqueue(MockResponse().setBody(CASH_BODY))
+        // The exact bytes a pre-feature build persisted (no executedAt key).
+        val legacy = """{"amountEur":25.0,"sourceId":"s1"}"""
+
+        val result = executor.execute(op(OpType.CASH_WITHDRAW, legacy))
+
+        assertTrue("was $result", result is ExecResult.Success)
+        val req = server.takeRequest()
+        assertTrue(req.path!!.endsWith("/cash/withdraw"))
+        assertFalse(req.body.readUtf8().contains("executedAt"))
     }
 
     @Test

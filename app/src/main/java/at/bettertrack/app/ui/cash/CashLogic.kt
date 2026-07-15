@@ -10,6 +10,8 @@ import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.pendingUiStatus
 import kotlinx.serialization.json.Json
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Pure logic behind the Step-9 cash screen (§6.3): balance-after previews,
@@ -101,6 +103,13 @@ data class PendingCashRow(
     val status: PendingUiStatus,
     val serverError: String?,
     val createdAtMs: Long,
+    /**
+     * The queued movement's `executedAt` ISO instant, or null when it carries no
+     * explicit date (a "today" deposit/withdraw — the field is omitted so the
+     * server stamps it "now"). Used to restore the date picker when editing a
+     * backdated queued entry in place.
+     */
+    val executedAt: String? = null,
 )
 
 /** Decode the OPEN queued cash ops of one portfolio, newest first. */
@@ -137,6 +146,7 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
                 status = status,
                 serverError = op.serverError,
                 createdAtMs = op.createdAtMs,
+                executedAt = p.executedAt,
             )
         }
 
@@ -157,6 +167,7 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
                 status = status,
                 serverError = op.serverError,
                 createdAtMs = op.createdAtMs,
+                executedAt = p.executedAt,
             )
         }
 
@@ -166,3 +177,26 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
 
 /** ISO instant for a cash op enqueued now. */
 fun cashExecutedAtNow(now: Instant = Instant.now()): String = now.toString()
+
+/**
+ * The `executedAt` ISO instant a dated deposit/withdrawal should carry for a
+ * picked calendar [date], or `null` to OMIT the field entirely.
+ *
+ * - Today (or, defensively, a future day the no-future picker shouldn't allow)
+ *   → `null`: the request omits `executedAt` (Json `explicitNulls=false`) and the
+ *   server stamps the movement "now" — byte-identical on the wire to a plain
+ *   undated deposit, so the common one-tap case is unchanged.
+ * - A PAST day → **midday local** of that day, exactly mirroring the transaction
+ *   form's [at.bettertrack.app.ui.portfolio.executedAtIso] past-date branch, so a
+ *   backdated movement lands on the intended calendar day in every timezone
+ *   (never slips across a day boundary via a UTC-midnight timestamp).
+ */
+fun cashExecutedAtOrNull(
+    date: LocalDate,
+    zone: ZoneId = ZoneId.systemDefault(),
+    now: Instant = Instant.now(),
+): String? {
+    val today = now.atZone(zone).toLocalDate()
+    return if (date >= today) null
+    else date.atTime(12, 0).atZone(zone).toInstant().toString()
+}

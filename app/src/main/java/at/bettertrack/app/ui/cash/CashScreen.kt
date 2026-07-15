@@ -79,6 +79,8 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtDateField
+import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
@@ -106,6 +108,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Locale
 
 /**
@@ -266,6 +271,8 @@ class CashViewModel(
         amount: Double,
         sourceId: String?,
         note: String?,
+        /** Chosen movement date; today omits `executedAt`, a past day backdates it. */
+        date: LocalDate,
         editOpId: Long?,
         onDone: (Boolean) -> Unit,
     ) {
@@ -276,7 +283,7 @@ class CashViewModel(
             _sheetError.value = null
             val payload = CashOpPayload(
                 amountEur = amount,
-                executedAt = cashExecutedAtNow(),
+                executedAt = cashExecutedAtOrNull(date),
                 note = note?.trim()?.takeIf { it.isNotEmpty() },
                 sourceId = sourceId,
             )
@@ -959,6 +966,19 @@ private fun CashEntrySheet(
     var sourceId by rememberSaveable {
         mutableStateOf(prefill?.sourceId ?: sources.firstOrNull { it.isMain }?.id)
     }
+    // Movement date — defaults to today; a queued backdated entry restores its day.
+    val initialDate = remember(prefill) {
+        prefill?.executedAt?.let { iso ->
+            try {
+                Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalDate()
+            } catch (_: Exception) {
+                null
+            }
+        } ?: LocalDate.now()
+    }
+    var pickedEpochDay by rememberSaveable { mutableStateOf(initialDate.toEpochDay()) }
+    val pickedDate = LocalDate.ofEpochDay(pickedEpochDay)
+    var datePickerOpen by rememberSaveable { mutableStateOf(false) }
 
     val amount = parseLocalizedDecimal(amountText)
     val selectedSource = sources.firstOrNull { it.id == sourceId }
@@ -1043,6 +1063,17 @@ private fun CashEntrySheet(
                 )
             }
 
+            // Optional movement date — prefilled with today, one tap to backdate a
+            // cash movement that happened earlier (no future dates, §6.3).
+            BtDateField(
+                date = pickedDate,
+                label = stringResource(R.string.bt_txform_date),
+                enabled = !submitting,
+                locale = locale,
+                onClick = { datePickerOpen = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             OutlinedTextField(
                 value = noteText,
                 onValueChange = { noteText = it.take(900) },
@@ -1062,7 +1093,7 @@ private fun CashEntrySheet(
                 ),
                 onClick = {
                     val a = amount ?: return@BtPrimaryButton
-                    vm.submitEntry(deposit, a, sourceId, noteText, editOpId) { ok ->
+                    vm.submitEntry(deposit, a, sourceId, noteText, pickedDate, editOpId) { ok ->
                         if (ok) onDismiss()
                     }
                 },
@@ -1071,6 +1102,17 @@ private fun CashEntrySheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             )
         }
+    }
+
+    if (datePickerOpen) {
+        BtDatePickerDialog(
+            initial = pickedDate,
+            onPick = { picked ->
+                pickedEpochDay = picked.toEpochDay()
+                datePickerOpen = false
+            },
+            onDismiss = { datePickerOpen = false },
+        )
     }
 }
 

@@ -10,8 +10,12 @@ import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** Step-9 pure-logic tests (§6.3): previews, validation, pending decode. */
 class CashLogicTest {
@@ -97,5 +101,47 @@ class CashLogicTest {
         assertEquals(PendingUiStatus.NEEDS_ATTENTION, rows[0].status)
         assertEquals(50.0, rows[1].amountEur, 1e-9)
         assertEquals("s1", rows[1].sourceId)
+    }
+
+    // ── Backdated cash date (board #36) ──────────────────────────────────────
+
+    @Test
+    fun `cash executedAt omits today and future, backdates a past day at local midday`() {
+        val zone = ZoneId.of("Europe/Vienna")
+        val now = LocalDate.of(2026, 7, 15).atTime(9, 30).atZone(zone).toInstant()
+
+        // Today → omitted (server stamps now; byte-identical to an undated entry).
+        assertNull(cashExecutedAtOrNull(LocalDate.of(2026, 7, 15), zone, now))
+        // A future day the no-future picker shouldn't allow → also omitted (defensive).
+        assertNull(cashExecutedAtOrNull(LocalDate.of(2026, 7, 20), zone, now))
+
+        // A past day → midday LOCAL of exactly that calendar day (no day slip).
+        val iso = cashExecutedAtOrNull(LocalDate.of(2026, 7, 1), zone, now)
+        assertTrue(iso != null)
+        val stamped = Instant.parse(iso!!).atZone(zone)
+        assertEquals(LocalDate.of(2026, 7, 1), stamped.toLocalDate())
+        assertEquals(12, stamped.hour)
+    }
+
+    @Test
+    fun `pending cash decode carries a backdated executedAt and null for a today entry`() {
+        val iso = "2026-07-01T10:00:00Z"
+        val backdated = op(
+            1, OpType.CASH_DEPOSIT,
+            json.encodeToString(
+                CashOpPayload.serializer(),
+                CashOpPayload(50.0, executedAt = iso, sourceId = "s1"),
+            ),
+        )
+        // A today entry / an old pre-feature payload: no executedAt key at all.
+        val today = op(
+            2, OpType.CASH_DEPOSIT,
+            json.encodeToString(CashOpPayload.serializer(), CashOpPayload(50.0, sourceId = "s1")),
+        )
+
+        val rows = decodePendingCashRows(listOf(backdated, today), json, "p1").associateBy { it.opId }
+
+        assertEquals(iso, rows.getValue(1L).executedAt)
+        assertNull(rows.getValue(2L).executedAt)
     }
 }
