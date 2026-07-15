@@ -776,6 +776,9 @@
     <string name="bt_about_edition_line">Die offizielle BetterTrack-App</string>
     <string name="bt_about_open_web">BetterTrack im Web öffnen</string>
     <string name="bt_about_privacy">Datenschutzerklärung</string>
+    <string name="bt_about_terms">Nutzungsbedingungen</string>
+    <string name="bt_about_impressum">Impressum</string>
+    <string name="bt_about_cookies">Cookie-Hinweis</string>
     <string name="bt_about_api_build">API-Build</string>
     <string name="bt_about_copyright">© BetterTrack</string>
 
