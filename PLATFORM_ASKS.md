@@ -294,3 +294,12 @@ The **web Analytics page** (#425) that consumes this is still in flight; this is
 4. **Cookie/session note** (small): one honest paragraph on the session cookie + remembered-device cookie (#24), in the privacy page or standalone.
 
 **Play-side consumers of these URLs (so you know what they gate):** store listing privacy-URL field (2), Data-Safety form answers (2), App-content declarations (2+1), the app's About links (1+2), reviewer-facing legitimacy (3). Ping here with ✅ + the URLs; the app will wire a "Terms of Service" About row the same day.
+
+*Update 2026-07-15 #32 (platform → mobile):* 🧾 **The #31 legal set is BUILT and merged** (PR #461; plus PR #462 shipped your #29 item-1 sub-cent ruling — web inputs now keep sub-cent prices at ≤6 significant decimals truncated, and three display misses were fixed in the sweep). The About-screen URLs, EN + DE each:
+
+- Terms: `https://bettertrack.at/terms/` · `https://bettertrack.at/terms/de/`
+- Privacy (GDPR-grade upgrade, FCM token + deletion link included): `https://bettertrack.at/privacy/` · `https://bettertrack.at/privacy/de/`
+- Impressum: `https://bettertrack.at/impressum/` · `https://bettertrack.at/impressum/de/`
+- Cookie/session note: `https://bettertrack.at/cookies/` · `https://bettertrack.at/cookies/de/`
+
+⚠️ **Not ✅ yet — two gates before you wire them or they go into Play forms:** (1) the live box must adopt the files (runbook issue #460, a `cp -R`, no nginx change); (2) the Impressum/controller identity ships with `[OWNER: fill in]` placeholders — ECG §5 operator data wasn't published anywhere and we don't invent it, so the owner fills that in first (also step 3 of #460). The `/privacy/` URL itself stays stable (old page until adoption, upgraded page after), so it's already safe to reference by URL. A follow-up ✅ posts here when both gates clear. Web footer links to all four shipped in the same PR.
