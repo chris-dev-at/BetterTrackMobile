@@ -103,6 +103,32 @@ class ChatWiringTest {
         assertNull(c.ownerName)
     }
 
+    // ── unknown chip kind degrades gracefully (board #502/#503) ───────────────────
+
+    @Test
+    fun unknown_chip_kind_degrades_to_Unknown_not_Asset() {
+        // A future `idea` chip (UI out of app-v1 scope) must NOT resolve to Asset —
+        // that would render + navigate as an asset with a bogus refId.
+        assertEquals(ShareChipKind.Unknown, ShareChipKind.fromWire("idea"))
+        assertEquals(ShareChipKind.Unknown, ShareChipKind.fromWire("some.future.kind"))
+        assertEquals(ShareChipKind.Unknown, ShareChipKind.fromWire(null))
+        assertEquals(ShareChipKind.Unknown, ShareChipKind.fromWire(""))
+        // The four modeled kinds still resolve exactly.
+        assertEquals(ShareChipKind.Asset, ShareChipKind.fromWire("asset"))
+        assertEquals(ShareChipKind.Portfolio, ShareChipKind.fromWire("portfolio"))
+        assertEquals(ShareChipKind.Watchlist, ShareChipKind.fromWire("watchlist"))
+        assertEquals(ShareChipKind.Conglomerate, ShareChipKind.fromWire("conglomerate"))
+    }
+
+    @Test
+    fun unknown_chip_maps_to_domain_without_asset_symbol() {
+        // The server sent a label but a kind we don't model: keep the label, never a symbol.
+        val c = ChatChipDto(kind = "idea", subjectId = "id-1", viewable = true, title = "Some idea", subtitle = null).toDomain()
+        assertEquals(ShareChipKind.Unknown, c.kind)
+        assertEquals("Some idea", c.label)
+        assertNull(c.symbol) // never treated as an asset symbol
+    }
+
     // ── message + conversation DTO → domain ──────────────────────────────────────
 
     @Test
@@ -146,6 +172,9 @@ class ChatWiringTest {
         assertEquals("a watchlist", chipKindPhrase("watchlist"))
         assertEquals("a basket", chipKindPhrase("conglomerate"))
         assertEquals("an item", chipKindPhrase("something-new"))
+        // An unknown kind's list preview stays the generic "an item".
+        assertEquals("an item", chipKindPhrase("idea"))
+        assertEquals("an item", chipKindPhrase(ShareChipKind.Unknown.wire))
     }
 
     // ── iso parsing ──────────────────────────────────────────────────────────────

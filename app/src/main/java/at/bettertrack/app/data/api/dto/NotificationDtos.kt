@@ -79,11 +79,19 @@ data class DeviceAckResponse(val ok: Boolean = false)
 // ── Settings matrix (Notifications-v2 §3) ────────────────────────────────────
 
 /**
- * Per-type channel preferences. The live schema models FOUR required channels per
- * type: `inapp`, `email`, `push`, `webpush` — all booleans. The app surfaces
- * in-app / email / push; `webpush` is a browser-only channel the app does not
- * control but MUST echo back on PATCH (each cell requires all four), so it is
- * carried through verbatim from the last GET.
+ * Per-type channel preferences. The pre-v4 schema modelled FOUR required channels
+ * per type (`inapp`, `email`, `push`, `webpush`); the v4 schema (platform v4 drop,
+ * `settings.ts` `notificationTypeRoutingSchema.strict()`) adds `telegram` +
+ * `discord`, making SIX required booleans per cell.
+ *
+ * Compatibility contract (round-trip rule): the app ECHOES back exactly what the
+ * server sent. [telegram] + [discord] are nullable and default `null` — a pre-v4
+ * GET returns four keys, so they stay `null` and, because the shared Json runs
+ * `explicitNulls = false`, they are OMITTED from the PATCH body (a pre-v4 strict
+ * schema would reject unknown keys). A v4 GET returns six keys → they are carried
+ * verbatim → the PATCH echoes six. We never invent telegram/discord values the
+ * server didn't send. `webpush` stays a browser-only channel the app never
+ * surfaces but must echo (see [inapp]/[email]/[push] which the app does surface).
  */
 @Serializable
 data class ChannelPrefsDto(
@@ -91,25 +99,49 @@ data class ChannelPrefsDto(
     val email: Boolean,
     val push: Boolean,
     val webpush: Boolean,
+    /** v4-only; `null` on a pre-v4 server → omitted from PATCH (explicitNulls=false). */
+    val telegram: Boolean? = null,
+    /** v4-only; `null` on a pre-v4 server → omitted from PATCH (explicitNulls=false). */
+    val discord: Boolean? = null,
+)
+
+/**
+ * Which channels the deployment can actually deliver on (v4 `channels` object,
+ * `notificationChannelAvailabilitySchema`). The app renders the Telegram/Discord
+ * settings columns ONLY when the matching flag is `true` (SMTP pattern — an
+ * unconfigured channel never surfaces). All fields are nullable/optional: an
+ * absent `channels` object (pre-v4 GET) decodes to `null` here and the app treats
+ * every extra column as hidden.
+ */
+@Serializable
+data class NotificationChannelsDto(
+    val inapp: Boolean? = null,
+    val email: Boolean? = null,
+    val telegram: Boolean? = null,
+    val discord: Boolean? = null,
+    val push: Boolean? = null,
+    val webpush: Boolean? = null,
 )
 
 /**
  * `GET /settings/notifications`. The live schema also returns a global `muted`
- * flag, a global `channels` object and `webPushPublicKey` — none of which the app
- * surfaces (there is no app-side global-mute or web-push UI), so they are left
- * unmodeled and skipped by `ignoreUnknownKeys`. The per-type app matrix (in-app /
- * email / push) round-trips through [matrix].
+ * flag and `webPushPublicKey` — neither of which the app surfaces (there is no
+ * app-side global-mute or web-push UI), so they are left unmodeled and skipped by
+ * `ignoreUnknownKeys`. The per-type app matrix (in-app / email / push / telegram /
+ * discord) round-trips through [matrix]; [channels] gates which optional columns
+ * (telegram / discord) the settings screen shows (absent ⇒ pre-v4 ⇒ hidden).
  */
 @Serializable
 data class NotificationSettingsResponse(
     val matrix: Map<String, ChannelPrefsDto> = emptyMap(),
+    val channels: NotificationChannelsDto? = null,
 )
 
 /**
  * `PATCH /settings/notifications`. We send only [matrix] (a subset of types is
- * allowed; each cell we send carries all four channels). We deliberately never
- * send the global `muted` — the app's per-type mute is local and must not clobber
- * the account-wide server mute.
+ * allowed; each cell echoes exactly the channel keys the last GET carried — four
+ * pre-v4, six on v4). We deliberately never send the global `muted` — the app's
+ * per-type mute is local and must not clobber the account-wide server mute.
  */
 @Serializable
 data class UpdateNotificationSettingsRequest(

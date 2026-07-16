@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PieChart
@@ -253,6 +254,9 @@ fun ChatThreadScreen(
             ShareChipKind.Portfolio -> onOpenSharedPortfolio(chip.refId)
             ShareChipKind.Watchlist -> onOpenSharedWatchlist(chip.refId, chip.ownerName ?: headerName)
             ShareChipKind.Conglomerate -> onOpenSharedConglomerate(chip.refId)
+            // Unknown chips render non-clickable, so this never fires — but keep the
+            // when exhaustive and a no-op so an unmodeled kind can never navigate.
+            ShareChipKind.Unknown -> Unit
         }
     }
 
@@ -431,7 +435,10 @@ private fun MessageBubble(m: at.bettertrack.app.data.repo.ChatMessage, onOpenChi
 private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
     val bt = BtTheme.colors
     val icon = chip.kind.icon()
-    if (chip.viewable) {
+    // An unmodeled kind (e.g. a future `idea` chip) renders like the recipient-gated
+    // "not shared" chip: neutral, non-navigating, no data leak. Only real, viewable
+    // kinds get the clickable "View" treatment.
+    if (chip.viewable && chip.kind != ShareChipKind.Unknown) {
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(8.dp),
@@ -450,7 +457,13 @@ private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
             }
         }
     } else {
-        // "Not shared with you" — never leaks data.
+        // Neutral, non-navigating chip. Two cases share this treatment (neither leaks
+        // data): an UNKNOWN kind the app doesn't model, and a recipient-gated "not
+        // shared with you" item. Unknown shows the server-provided label (or a generic
+        // "Shared item"); the gated case shows the kind + a "not shared" note.
+        val isUnknown = chip.kind == ShareChipKind.Unknown
+        val leadingIcon = if (isUnknown) Icons.AutoMirrored.Outlined.HelpOutline else Icons.Outlined.Lock
+        val title = if (isUnknown) chip.label.ifBlank { stringResource(R.string.bt_chat_kind_unknown) } else chip.kindLabel()
         Surface(
             shape = RoundedCornerShape(8.dp),
             color = bt.bg,
@@ -458,11 +471,13 @@ private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
             modifier = Modifier.widthIn(min = 200.dp),
         ) {
             Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Lock, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(24.dp))
+                Icon(leadingIcon, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(chip.kindLabel(), style = MaterialTheme.typography.titleSmall, color = bt.textSecondary, maxLines = 1)
-                    Text(stringResource(R.string.bt_chat_chip_not_shared), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textSecondary, maxLines = 1)
+                    if (!isUnknown) {
+                        Text(stringResource(R.string.bt_chat_chip_not_shared), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    }
                 }
             }
         }
@@ -603,6 +618,7 @@ private fun ShareChipKind.icon(): ImageVector = when (this) {
     ShareChipKind.Portfolio -> Icons.Outlined.PieChart
     ShareChipKind.Watchlist -> Icons.AutoMirrored.Outlined.ShowChart
     ShareChipKind.Conglomerate -> Icons.Outlined.Dashboard
+    ShareChipKind.Unknown -> Icons.AutoMirrored.Outlined.HelpOutline
 }
 
 @Composable
@@ -612,6 +628,7 @@ private fun ShareChip.kindLabel(): String = stringResource(
         ShareChipKind.Portfolio -> R.string.bt_chat_kind_portfolio
         ShareChipKind.Watchlist -> R.string.bt_chat_kind_watchlist
         ShareChipKind.Conglomerate -> R.string.bt_chat_kind_conglomerate
+        ShareChipKind.Unknown -> R.string.bt_chat_kind_unknown
     },
 )
 

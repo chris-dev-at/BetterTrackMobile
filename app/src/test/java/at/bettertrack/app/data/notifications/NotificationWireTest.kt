@@ -88,6 +88,52 @@ class NotificationWireTest {
         assertEquals(dto, round)
     }
 
+    // ── v4 six-channel compatibility (telegram + discord; PATCH omit-null) ──────
+
+    @Test fun `pre-v4 cell omits telegram and discord (four-key PATCH body)`() {
+        // telegram/discord default null → shared Json (explicitNulls=false) drops them,
+        // so a pre-v4 strict schema (four required keys, no extras) accepts the body.
+        val body = json.encodeToString(ChannelPrefsDto(inapp = true, email = false, push = true, webpush = false))
+        assertEquals("""{"inapp":true,"email":false,"push":true,"webpush":false}""", body)
+    }
+
+    @Test fun `v4 cell emits all six keys when telegram and discord are present`() {
+        val body = json.encodeToString(
+            ChannelPrefsDto(inapp = true, email = false, push = true, webpush = false, telegram = true, discord = false),
+        )
+        assertEquals(
+            """{"inapp":true,"email":false,"push":true,"webpush":false,"telegram":true,"discord":false}""",
+            body,
+        )
+    }
+
+    @Test fun `v4 settings response decodes six-channel cells and the channels availability`() {
+        val body = """
+            {"matrix":{
+               "friend.request":{"inapp":true,"email":false,"push":true,"webpush":false,"telegram":true,"discord":false}
+             },
+             "muted":false,
+             "channels":{"inapp":true,"email":true,"telegram":true,"discord":false,"push":true,"webpush":false},
+             "webPushPublicKey":null}
+        """.trimIndent()
+        val resp = json.decodeFromString<NotificationSettingsResponse>(body)
+        val fr = resp.matrix.getValue("friend.request")
+        assertEquals(true, fr.telegram)
+        assertEquals(false, fr.discord)
+        // Availability gates the optional columns.
+        assertEquals(true, resp.channels?.telegram)
+        assertEquals(false, resp.channels?.discord)
+    }
+
+    @Test fun `pre-v4 settings response has null channels and null telegram discord`() {
+        val body = """{"matrix":{"friend.request":{"inapp":true,"email":true,"push":true,"webpush":true}}}"""
+        val resp = json.decodeFromString<NotificationSettingsResponse>(body)
+        assertNull(resp.channels)
+        val fr = resp.matrix.getValue("friend.request")
+        assertNull(fr.telegram)
+        assertNull(fr.discord)
+    }
+
     @Test fun `settings response decodes 4-channel cells and ignores global fields`() {
         // The real GET body carries top-level muted / channels / webPushPublicKey
         // and server-only types (watchlist.shared) — all must be tolerated.

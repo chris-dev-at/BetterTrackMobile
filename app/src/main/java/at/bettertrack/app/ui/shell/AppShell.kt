@@ -50,8 +50,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import at.bettertrack.app.data.api.BtResult
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -184,35 +187,50 @@ fun BtApp() {
 
     // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
     // system-push intents (surfaced via AppGraph.pendingDeepLink).
-    val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController) {
-        { link ->
+    val scope = rememberCoroutineScope()
+    val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope) {
+        // Switch to the Social top-level TAB with the same semantics as the bottom
+        // bar; a plain push would stack Social on the current tab, so the next
+        // bottom-bar tap pops+restores it and bounces the user straight back. When
+        // the link came from the notifications inbox, drop the inbox (inclusive)
+        // first so it is never saved under a tab's restored state. (No-op if the
+        // inbox isn't on the stack, e.g. a cold-start push tap.)
+        fun goSocial() {
+            navController.popBackStack(NotificationsInboxRoute, inclusive = true)
+            navController.navigate(SocialTabRoute) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        val handler: (NotifDeepLink) -> Unit = { link ->
             when (link) {
-                NotifDeepLink.Social -> {
-                    // A top-level TAB must be reached with the same switch semantics
-                    // as the bottom bar; a plain push would stack Social on the
-                    // current tab, so the next bottom-bar tap pops+restores it and
-                    // bounces the user straight back. When the link came from the
-                    // notifications inbox, drop the inbox (inclusive) first so it is
-                    // never saved under a tab's restored state — tapping Portfolio
-                    // afterwards must land on Portfolio, not the inbox. (No-op if the
-                    // inbox isn't on the stack, e.g. a cold-start push tap.)
-                    navController.popBackStack(NotificationsInboxRoute, inclusive = true)
-                    navController.navigate(SocialTabRoute) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
+                NotifDeepLink.Social -> goSocial()
                 is NotifDeepLink.SharedPortfolio -> navController.navigate(SharedPortfolioViewRoute(link.portfolioId))
                 is NotifDeepLink.FriendOverview -> navController.navigate(FriendOverviewRoute(link.userId, link.username))
+                is NotifDeepLink.PublicProfile -> {
+                    // No userId on the wire (FCM friend.activity / follow.published).
+                    // Resolve the username against the friends list at tap time: a
+                    // friend opens their overview; anyone else (e.g. a non-friend
+                    // followee, which the app has no profile screen for) lands on the
+                    // Social tab — never a dead tap (mobile-push.md §4).
+                    scope.launch {
+                        val friend = (AppGraph.socialRepository.friends() as? BtResult.Ok)
+                            ?.value?.firstOrNull { it.username.equals(link.username, ignoreCase = true) }
+                        if (friend != null) navController.navigate(FriendOverviewRoute(friend.userId, friend.username))
+                        else goSocial()
+                    }
+                }
                 is NotifDeepLink.SharedConglomerate -> navController.navigate(SharedConglomerateViewRoute(link.conglomerateId))
                 is NotifDeepLink.Chat -> navController.navigate(ChatListRoute)
                 is NotifDeepLink.Asset -> navController.navigate(AssetPageRoute(link.assetId))
                 is NotifDeepLink.Holding -> navController.navigate(HoldingDetailRoute(link.assetId))
                 NotifDeepLink.Settings -> navController.navigate(SettingsRoute)
                 NotifDeepLink.Security -> navController.navigate(SettingsSecurityRoute)
+                NotifDeepLink.NotificationSettings -> navController.navigate(SettingsNotificationsRoute)
             }
         }
+        handler
     }
     // A push tapped while the app was closed/backgrounded: MainActivity parked the
     // target; consume it once here (StateFlow so a cold tap is never lost).

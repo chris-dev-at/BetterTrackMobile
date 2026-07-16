@@ -72,7 +72,13 @@ interface NotificationRepository {
 
     /** Fetch a view (default Active — the bell surface). Sends `view=` only when #437 is enabled. */
     suspend fun refresh(view: NotifView = NotifView.Active): BtResult<Unit>
+    /**
+     * Mark rows read. On v4 (PR #486) the server ARCHIVES them (read == archived), so
+     * on the next Active refresh they drop out of the list — that is correct, not a
+     * sync error. Optimistic locally (sets readAt); the server drives the archive.
+     */
     suspend fun markRead(ids: List<String>)
+    /** Mark all read → on v4 archives everything; reconciles from the server after. */
     suspend fun markAllRead()
 
     // ── Notifications-v3 archive/delete (#437) ──────────────────────────────
@@ -173,7 +179,14 @@ class DefaultNotificationRepository(
         if (_source.value == NotifSource.Live) {
             when (val r = apiCall(json) { api.markAllNotificationsRead(MarkReadAllRequest()) }) {
                 is BtResult.Err -> Log.w(TAG, "mark-read(all) failed: HTTP ${r.error.httpStatus}")
-                else -> {}
+                is BtResult.Ok -> {
+                    // v4 (PR #486): mark-all-read ARCHIVES every row server-side, so the
+                    // Active list should now be empty. Reconcile from the server rather
+                    // than assuming: on v4 the archived rows drop out of Active; on a
+                    // pre-v4 server they come back as read. Either outcome is correct and
+                    // never treated as an error.
+                    refresh(lastView)
+                }
             }
         }
     }
@@ -231,7 +244,16 @@ class DefaultNotificationRepository(
         when (val r = apiCall(json) { api.notificationSettings() }) {
             is BtResult.Ok -> {
                 settings.syncFromServer(r.value.matrix)
-                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types).")
+                // v4 `channels` availability gates the Telegram/Discord columns. Absent
+                // (pre-v4) ⇒ both false ⇒ columns hidden (SMTP pattern).
+                val ch = r.value.channels
+                settings.setAvailability(
+                    ChannelAvailability(
+                        telegram = ch?.telegram == true,
+                        discord = ch?.discord == true,
+                    ),
+                )
+                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types; tg=${ch?.telegram == true} dc=${ch?.discord == true}).")
                 BtResult.Ok(Unit)
             }
             is BtResult.Err -> {

@@ -554,6 +554,8 @@
     <string name="bt_notif_channel_inapp">In-App</string>
     <string name="bt_notif_channel_email">E-Mail</string>
     <string name="bt_notif_channel_push">Push</string>
+    <string name="bt_notif_channel_telegram">Telegram</string>
+    <string name="bt_notif_channel_discord">Discord</string>
 
     <!-- Mitteilungstypen -->
     <string name="bt_notif_type_friend_request">Freundschaftsanfragen</string>
@@ -583,6 +585,8 @@
     <string name="bt_notif_action_unarchive">Aus Archiv holen</string>
     <string name="bt_notif_action_delete">Löschen</string>
     <string name="bt_notif_bulk_archive_read">Alle gelesenen archivieren</string>
+    <!-- v4 (PR #486): „Alle als gelesen“ archiviert → leert den aktiven Posteingang. -->
+    <string name="bt_notif_archive_all">Alle archivieren</string>
     <string name="bt_notif_bulk_delete_archived">Alle archivierten löschen</string>
     <string name="bt_notif_bulk_delete_all">Alle löschen</string>
     <string name="bt_notif_snack_archived">Mitteilung archiviert</string>
@@ -601,6 +605,15 @@
     <string name="bt_notif_type_watchlist_shared_sub">Wenn ein Freund eine Watchlist teilt</string>
     <string name="bt_notif_type_conglomerate_shared">Konglomerat geteilt</string>
     <string name="bt_notif_type_conglomerate_shared_sub">Wenn ein Freund ein Konglomerat teilt</string>
+    <!-- V4-P0c — Follow-Graph-Zeilen + einmalige Ankündigung -->
+    <string name="bt_notif_type_follow_published">Neues von Gefolgten</string>
+    <string name="bt_notif_type_follow_published_sub">Wenn jemand, dem du folgst, etwas veröffentlicht</string>
+    <string name="bt_notif_type_follow_alert_created">Alarm eines Gefolgten erstellt</string>
+    <string name="bt_notif_type_follow_alert_created_sub">Wenn jemand, dem du folgst, einen Kursalarm setzt</string>
+    <string name="bt_notif_type_follow_alert_fired">Alarm eines Gefolgten ausgelöst</string>
+    <string name="bt_notif_type_follow_alert_fired_sub">Wenn ein gefolgter Alarm sein Ziel erreicht</string>
+    <string name="bt_notif_type_account_notice">Ankündigungen</string>
+    <string name="bt_notif_type_account_notice_sub">Wichtige Hinweise von BetterTrack</string>
     <plurals name="bt_notif_delete_archived_body">
         <item quantity="one">Dies löscht %d archivierte Mitteilung endgültig. Das kann nicht rückgängig gemacht werden.</item>
         <item quantity="other">Dies löscht %d archivierte Mitteilungen endgültig. Das kann nicht rückgängig gemacht werden.</item>
@@ -877,6 +890,8 @@
     <string name="bt_chat_kind_portfolio">Portfolio</string>
     <string name="bt_chat_kind_watchlist">Watchlist</string>
     <string name="bt_chat_kind_conglomerate">Konglomerat</string>
+    <!-- Fallback-Label für eine unbekannte Chip-Art (nie anklickbar). -->
+    <string name="bt_chat_kind_unknown">Geteiltes Element</string>
 
     <!-- Social (§6.9–§6.12) — externalisiert im Step-19-i18n-Audit -->
     <!-- Nachrichten-Kopf + Tabs -->

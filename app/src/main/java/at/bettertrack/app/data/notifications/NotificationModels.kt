@@ -31,7 +31,10 @@ data class AppNotification(
     /**
      * Epoch-ms the notification was archived, or null when still ACTIVE. Archived
      * rows never appear on the bell surface; they live under the "Archived"/"All"
-     * inbox filters. The server auto-archives read items after ~7 days (#437).
+     * inbox filters. On v4 (platform PR #486) mark-read ARCHIVES eagerly — read ==
+     * archived, so the default (active) list is unread-only and read history lives
+     * under Archive. (The pre-v4 lazy ~7-day auto-archive sweep is retired; the app
+     * stays server-driven and does not assume which behaviour a deployment runs.)
      */
     val archivedAtMs: Long? = null,
     val createdAtMs: Long,
@@ -55,10 +58,11 @@ enum class NotifView(val wire: String) {
 /**
  * Presentation family for a notification type. The server matrix models the seven
  * app-configurable types (friend.request, friend.accepted, portfolio.shared,
- * alert.triggered, chat.message, account.invite, account.temp_password). Three more
- * platform share/activity types — friend.activity, watchlist.shared,
- * conglomerate.shared — now get first-class inbox rows (icon + deep link) but are
- * NOT user-configurable in the settings grid (they are not in
+ * alert.triggered, chat.message, account.invite, account.temp_password). The
+ * remaining platform events — friend.activity, watchlist.shared, conglomerate.shared,
+ * the follow-graph trio (follow.published, follow.alert.created, follow.alert.fired)
+ * and the account.notice announcement — get first-class inbox rows (icon + deep
+ * link) but are NOT user-configurable in the settings grid (they are not in
  * [NotificationSettingsStore.configurableKinds], so [serverModeled] = false keeps
  * them out of the settings PATCH). Each kind carries a notification [channelId] and
  * a Material icon name resolved in the UI layer.
@@ -82,6 +86,17 @@ enum class NotifKind(
     FriendActivity("friend.activity", NotifChannels.SOCIAL, serverModeled = false),
     WatchlistShared("watchlist.shared", NotifChannels.SOCIAL, serverModeled = false),
     ConglomerateShared("conglomerate.shared", NotifChannels.SOCIAL, serverModeled = false),
+    // Follow-graph events (V4-P0c, mobile-push.md §3.1/§4): a followed user's
+    // publish / alert lifecycle. First-class inbox rows, not in the settings grid.
+    // follow.published → the actor's public profile (username); follow.alert.* → the
+    // asset the followed alert watches (assetId).
+    FollowPublished("follow.published", NotifChannels.SOCIAL, serverModeled = false),
+    FollowAlertCreated("follow.alert.created", NotifChannels.PORTFOLIO, serverModeled = false),
+    FollowAlertFired("follow.alert.fired", NotifChannels.PORTFOLIO, serverModeled = false),
+    // One-off in-app announcement (board #493): server-provided title/body, General
+    // family, deep-links to the notification-settings screen. Per-user dismissal is
+    // server-tracked via normal read/archive — nothing special client-side.
+    AccountNotice("account.notice", NotifChannels.GENERAL, serverModeled = false),
     System(null, NotifChannels.GENERAL, serverModeled = false),
     ;
 
@@ -113,6 +128,13 @@ sealed interface NotifDeepLink {
     data class SharedPortfolio(val portfolioId: String) : NotifDeepLink
     /** A specific friend's overview (friend.activity, when the payload identifies them). */
     data class FriendOverview(val userId: String, val username: String) : NotifDeepLink
+    /**
+     * An actor's public profile addressed by username only (friend.activity /
+     * follow.published from FCM, which carries `data.username` but no userId; web
+     * `/u/{username}`). The nav layer resolves it: a friend by that username opens
+     * their overview, anyone else lands on the Social tab (never a dead tap).
+     */
+    data class PublicProfile(val username: String) : NotifDeepLink
     /** A friend's shared conglomerate (read-only view). */
     data class SharedConglomerate(val conglomerateId: String) : NotifDeepLink
     /** Social tab → chat list, or a specific conversation. */
@@ -125,6 +147,8 @@ sealed interface NotifDeepLink {
     data object Settings : NotifDeepLink
     /** Security settings (temp-password / security events). */
     data object Security : NotifDeepLink
+    /** The notification-settings screen (account.notice announcements). */
+    data object NotificationSettings : NotifDeepLink
 }
 
 /**
@@ -148,11 +172,29 @@ fun resolveDeepLink(type: String?, payload: JsonElement?): NotifDeepLink? {
             if (pid != null) NotifDeepLink.SharedPortfolio(pid) else NotifDeepLink.Social
         }
         NotifKind.FriendActivity -> {
-            // Prefer the friend's overview when BOTH id + name are present; else the
-            // Social tab. (The route needs a username for its title/back-stack.)
+            // In-app rows can carry BOTH id + name → open the friend's overview directly.
+            // FCM twins carry only `data.username` (no userId) → PublicProfile, which the
+            // nav layer resolves against the friends list (the actor IS a friend) or falls
+            // back to Social. No username at all → Social. Never a dead tap (§4).
             val uid = str("friendId", "friendUserId", "userId", "actorId", "actorUserId")
             val uname = str("friendUsername", "username", "actorUsername", "actorName", "name")
-            if (uid != null && uname != null) NotifDeepLink.FriendOverview(uid, uname) else NotifDeepLink.Social
+            when {
+                uid != null && uname != null -> NotifDeepLink.FriendOverview(uid, uname)
+                uname != null -> NotifDeepLink.PublicProfile(uname)
+                else -> NotifDeepLink.Social
+            }
+        }
+        NotifKind.FollowPublished -> {
+            // The actor's public profile by username. A followed user may be a
+            // non-friend, so the nav layer lands on Social when no friend matches (§4).
+            val uname = str("username", "actorUsername", "actorName", "name")
+            if (uname != null) NotifDeepLink.PublicProfile(uname) else NotifDeepLink.Social
+        }
+        NotifKind.FollowAlertCreated, NotifKind.FollowAlertFired -> {
+            // The asset the followed alert watches. Missing id → the inbox: the app has
+            // no standalone Alerts list, so the inbox is the alerts landing surface (§4).
+            val assetId = str("assetId", "symbol")
+            if (assetId != null) NotifDeepLink.Asset(assetId) else null
         }
         NotifKind.ConglomerateShared -> {
             val cid = str("conglomerateId", "subjectId", "id")
@@ -163,6 +205,8 @@ fun resolveDeepLink(type: String?, payload: JsonElement?): NotifDeepLink? {
         NotifKind.WatchlistShared -> NotifDeepLink.Social
         NotifKind.ChatMessage -> NotifDeepLink.Chat(str("conversationId"))
         NotifKind.AlertTriggered -> {
+            // Own price alert. Missing assetId → the inbox surface (no standalone Alerts
+            // list in-app), rather than a dead tap (§4 fallback).
             val assetId = str("assetId", "symbol")
             when {
                 assetId == null -> null
@@ -172,6 +216,8 @@ fun resolveDeepLink(type: String?, payload: JsonElement?): NotifDeepLink? {
         }
         NotifKind.AccountInvite -> NotifDeepLink.Settings
         NotifKind.AccountTempPassword -> NotifDeepLink.Security
+        // Announcement: land on the notification-settings screen (web `/settings/notifications`).
+        NotifKind.AccountNotice -> NotifDeepLink.NotificationSettings
         NotifKind.System -> null
     }
 }

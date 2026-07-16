@@ -28,18 +28,20 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.NotificationAdd
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.RssFeed
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
@@ -104,12 +106,21 @@ private enum class BulkConfirm { DeleteArchived, DeleteAll }
 
 /**
  * In-app notification inbox (Step 16, §6.11; archive/delete on Notifications-v3
- * #437): the bell's destination. Unread badge + mark-read, deep-link tap-through,
- * and — behind [NotificationFlags.archiveDeleteEnabled] — an Active|Archived|All
- * filter, per-item archive/unarchive/delete via a row overflow menu (archive shows
- * an Undo snackbar), and bulk archive-all-read / delete-all-archived / delete-all
- * (the two deletes behind destructive confirm dialogs). When the flag is off the
- * screen is the pre-#437 flat inbox (mark-read only).
+ * #437; read==archive on v4 PR #486): the bell's destination.
+ *
+ * v4 mental model (mirrors web): reading a notification ARCHIVES it, so the default
+ * Active list is unread-only and read history lives under Archive. Per row there is
+ * ONE non-delete affordance — "Archive" (reads + archives, row leaves the Active
+ * list, Undo snackbar) — since mark-read and archive are now the same server op. The
+ * toolbar "Archive all" archives every unread active row; the Archive view + its
+ * delete actions manage history. A row vanishing from Active after read is CORRECT,
+ * not a sync error. The app stays server-driven: against a pre-v4 deployment (read ≠
+ * archive) the same actions still behave sanely.
+ *
+ * Behind [NotificationFlags.archiveDeleteEnabled]: the Active|Archived|All filter,
+ * per-item archive/unarchive/delete, and bulk delete-all-archived / delete-all (both
+ * behind destructive confirm dialogs). When the flag is off the screen is the
+ * pre-#437 flat inbox.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,7 +170,6 @@ fun NotificationsInboxScreen(
 
     // Snackbar copy resolved in composition (can't call stringResource in a lambda).
     val archivedMsg = stringResource(R.string.bt_notif_snack_archived)
-    val archivedReadMsg = stringResource(R.string.bt_notif_snack_archived_read)
     val undoLabel = stringResource(R.string.bt_notif_undo)
 
     fun onArchive(n: AppNotification) {
@@ -187,7 +197,6 @@ fun NotificationsInboxScreen(
 
     // Counts for the bulk menu + destructive dialogs (from the current view's list).
     val archivedCount = notifications.count { it.isArchived }
-    val readActiveCount = notifications.count { !it.isUnread && !it.isArchived }
     val totalCount = notifications.size
 
     Scaffold(
@@ -202,11 +211,17 @@ fun NotificationsInboxScreen(
                     }
                 },
                 actions = {
+                    // v4 (PR #486): mark-all-read ARCHIVES everything, so this clears the
+                    // active inbox. Labelled/iconed as "Archive all" so the outcome (rows
+                    // leave the active list into Archive) is not a surprise. The repo
+                    // reconciles from the server afterwards, so on v4 the active list
+                    // empties and on a pre-v4 server the rows stay (as read) — the app
+                    // never assumes which semantics it gets.
                     if (unread > 0) {
                         IconButton(onClick = { scope.launch { repo.markAllRead() } }) {
                             Icon(
-                                Icons.Outlined.DoneAll,
-                                contentDescription = stringResource(R.string.bt_notif_mark_all_read),
+                                Icons.Outlined.Archive,
+                                contentDescription = stringResource(R.string.bt_notif_archive_all),
                                 tint = bt.gold,
                             )
                         }
@@ -224,18 +239,10 @@ fun NotificationsInboxScreen(
                                 expanded = overflowOpen,
                                 onDismissRequest = { overflowOpen = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.bt_notif_bulk_archive_read)) },
-                                    leadingIcon = { Icon(Icons.Outlined.Archive, contentDescription = null) },
-                                    enabled = readActiveCount > 0,
-                                    onClick = {
-                                        overflowOpen = false
-                                        scope.launch {
-                                            val r = repo.archiveAllRead()
-                                            snackbarHostState.showSnackbar(if (r is BtResult.Err) r.error.userMessage else archivedReadMsg)
-                                        }
-                                    },
-                                )
+                                // The old bulk "Archive all read" is retired: on v4 a read
+                                // row is ALREADY archived, so there are no read+active rows
+                                // to sweep. "Archive all" (the toolbar action above) covers
+                                // clearing the active inbox; the Archive view manages history.
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.bt_notif_bulk_delete_archived), color = bt.loss) },
                                     leadingIcon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null, tint = bt.loss) },
@@ -312,7 +319,6 @@ fun NotificationsInboxScreen(
                                         onArchive = { onArchive(n) },
                                         onUnarchive = { onUnarchive(n) },
                                         onDelete = { deleteTarget = n },
-                                        onMarkRead = { scope.launch { repo.markRead(listOf(n.id)) } },
                                     )
                                 }
                             }
@@ -473,7 +479,6 @@ private fun NotificationRow(
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onDelete: () -> Unit,
-    onMarkRead: () -> Unit,
 ) {
     val bt = BtTheme.colors
     val unreadTint = if (notification.isUnread) bt.gold.copy(alpha = 0.06f) else bt.surface
@@ -531,7 +536,6 @@ private fun NotificationRow(
                     onArchive = onArchive,
                     onUnarchive = onUnarchive,
                     onDelete = onDelete,
-                    onMarkRead = onMarkRead,
                 )
             }
         }
@@ -544,7 +548,6 @@ private fun RowOverflow(
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onDelete: () -> Unit,
-    onMarkRead: () -> Unit,
 ) {
     val bt = BtTheme.colors
     var open by remember { mutableStateOf(false) }
@@ -553,13 +556,9 @@ private fun RowOverflow(
             Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.bt_notif_more_actions), tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (notification.isUnread && !notification.isArchived) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_notif_action_mark_read)) },
-                    leadingIcon = { Icon(Icons.Outlined.DoneAll, contentDescription = null) },
-                    onClick = { open = false; onMarkRead() },
-                )
-            }
+            // No separate "Mark read": on v4 reading a row ARCHIVES it (PR #486), so
+            // mark-read and archive are the SAME server op. "Archive" (below) is the
+            // single non-delete affordance — it reads + archives and offers Undo.
             if (notification.isArchived) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_notif_action_unarchive)) },
@@ -606,6 +605,11 @@ private fun notifIcon(kind: NotifKind): ImageVector = when (kind) {
     NotifKind.FriendActivity -> Icons.AutoMirrored.Outlined.TrendingUp
     NotifKind.WatchlistShared -> Icons.AutoMirrored.Outlined.ShowChart
     NotifKind.ConglomerateShared -> Icons.Outlined.Dashboard
+    // V4-P0c follow-graph + announcement kinds.
+    NotifKind.FollowPublished -> Icons.Outlined.RssFeed
+    NotifKind.FollowAlertCreated -> Icons.Outlined.NotificationAdd
+    NotifKind.FollowAlertFired -> Icons.Outlined.NotificationsActive
+    NotifKind.AccountNotice -> Icons.Outlined.Campaign
     NotifKind.System -> Icons.Outlined.Info
 }
 
@@ -621,6 +625,10 @@ private fun notifKindTitleRes(kind: NotifKind): Int = when (kind) {
     NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity
     NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared
     NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared
+    NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published
+    NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created
+    NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired
+    NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice
     NotifKind.System -> R.string.bt_notif_type_system
 }
 
@@ -636,6 +644,10 @@ private fun notifKindBodyRes(kind: NotifKind): Int = when (kind) {
     NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity_sub
     NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared_sub
     NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared_sub
+    NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published_sub
+    NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created_sub
+    NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired_sub
+    NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice_sub
     NotifKind.System -> R.string.bt_notif_type_system_sub
 }
 

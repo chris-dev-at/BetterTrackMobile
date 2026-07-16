@@ -56,10 +56,26 @@ enum class ShareChipKind(val wire: String) {
     Portfolio("portfolio"),
     Watchlist("watchlist"),
     Conglomerate("conglomerate"),
+
+    /**
+     * An unrecognized chip kind on the wire — e.g. a future `idea` chip (board
+     * #502/#503) whose UI is out of app-v1 scope. Renders a NEUTRAL, non-navigating
+     * chip so an unknown kind can never be mistaken for — or (as it used to) tapped
+     * through AS — an asset with a bogus refId. Its empty [wire] is never emitted by
+     * the app (attachables only ever build the four real kinds) and never matched by
+     * [fromWire]; it is produced solely as the fallback for a kind the app doesn't model.
+     */
+    Unknown(""),
     ;
 
     companion object {
-        fun fromWire(w: String?): ShareChipKind = entries.firstOrNull { it.wire == w } ?: Asset
+        /**
+         * Map a wire kind to its enum. An absent/blank or unrecognized kind (a new
+         * server chip the app doesn't model yet) falls back to [Unknown] — NOT [Asset]
+         * — so it degrades to a neutral, tap-safe chip instead of a bogus asset link.
+         */
+        fun fromWire(w: String?): ShareChipKind =
+            entries.firstOrNull { it.wire.isNotEmpty() && it.wire == w } ?: Unknown
     }
 }
 

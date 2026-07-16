@@ -33,6 +33,13 @@ class NotificationLogicTest {
         assertEquals(NotifKind.System, NotifKind.fromType(null))
     }
 
+    @Test fun `maps the v4 follow-graph and announcement types to their kinds`() {
+        assertEquals(NotifKind.FollowPublished, NotifKind.fromType("follow.published"))
+        assertEquals(NotifKind.FollowAlertCreated, NotifKind.fromType("follow.alert.created"))
+        assertEquals(NotifKind.FollowAlertFired, NotifKind.fromType("follow.alert.fired"))
+        assertEquals(NotifKind.AccountNotice, NotifKind.fromType("account.notice"))
+    }
+
     // ── resolveDeepLink ─────────────────────────────────────────────────────
 
     @Test fun `friend types deep-link to Social`() {
@@ -76,6 +83,59 @@ class NotificationLogicTest {
     @Test fun `system notifications have no deep link`() {
         assertNull(resolveDeepLink("system", null))
         assertNull(resolveDeepLink("totally.unknown", null))
+    }
+
+    // ── V4-P0c deep-link matrix (mobile-push.md §4) ─────────────────────────────
+
+    @Test fun `friend activity with id and username opens the friend overview`() {
+        val payload = buildJsonObject { put("userId", "u1"); put("username", "bob") }
+        assertEquals(NotifDeepLink.FriendOverview("u1", "bob"), resolveDeepLink("friend.activity", payload))
+    }
+
+    @Test fun `friend activity from FCM (username only, no userId) opens the public profile`() {
+        // FCM friend.activity carries data.username but NO userId → the nav layer
+        // resolves it against the friends list (username-only PublicProfile).
+        val payload = buildJsonObject { put("username", "bob") }
+        assertEquals(NotifDeepLink.PublicProfile("bob"), resolveDeepLink("friend.activity", payload))
+    }
+
+    @Test fun `friend activity with neither id nor username falls back to Social`() {
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("friend.activity", null))
+    }
+
+    @Test fun `follow published opens the actor public profile by username`() {
+        val payload = buildJsonObject { put("username", "alice") }
+        assertEquals(NotifDeepLink.PublicProfile("alice"), resolveDeepLink("follow.published", payload))
+    }
+
+    @Test fun `follow published without a username falls back to Social`() {
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("follow.published", null))
+    }
+
+    @Test fun `followed alert created and fired open the watched asset`() {
+        val payload = buildJsonObject { put("assetId", "MSFT") }
+        assertEquals(NotifDeepLink.Asset("MSFT"), resolveDeepLink("follow.alert.created", payload))
+        assertEquals(NotifDeepLink.Asset("MSFT"), resolveDeepLink("follow.alert.fired", payload))
+    }
+
+    @Test fun `followed alert without an assetId is not a dead tap`() {
+        // No standalone Alerts screen in-app → null (the inbox surface), never a bogus route.
+        assertNull(resolveDeepLink("follow.alert.created", null))
+        assertNull(resolveDeepLink("follow.alert.fired", null))
+    }
+
+    @Test fun `account notice deep-links to the notification-settings screen`() {
+        assertEquals(NotifDeepLink.NotificationSettings, resolveDeepLink("account.notice", null))
+    }
+
+    @Test fun `shared and social types without their id land on the type surface (never a dead tap)`() {
+        // §4 fallback table: missing id ⇒ the type's landing surface, not a no-op.
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("portfolio.shared", null))
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("watchlist.shared", null))
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("conglomerate.shared", null))
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("friend.request", null))
+        assertEquals(NotifDeepLink.Social, resolveDeepLink("friend.accepted", null))
+        assertEquals(NotifDeepLink.Chat(null), resolveDeepLink("chat.message", null))
     }
 
     @Test fun `blank payload values are ignored`() {
@@ -153,5 +213,37 @@ class NotificationLogicTest {
         val prefs = TypePrefs(inApp = true, email = false, push = true, webpush = false, muted = true)
         val dto = prefs.toChannelPrefs()
         assertEquals(ChannelPrefsDto(inapp = true, email = false, push = true, webpush = false), dto)
+    }
+
+    // ── v4 telegram/discord round-trip (echo exactly what the server sent) ──────
+
+    @Test fun `mergedFrom echoes v4 telegram and discord verbatim, and the echo round-trips`() {
+        val server = ChannelPrefsDto(inapp = true, email = true, push = true, webpush = true, telegram = false, discord = true)
+        val merged = TypePrefs().mergedFrom(server)
+        assertEquals(false, merged.telegram)
+        assertEquals(true, merged.discord)
+        // The PATCH cell carries the same six keys back.
+        assertEquals(false, merged.toChannelPrefs().telegram)
+        assertEquals(true, merged.toChannelPrefs().discord)
+    }
+
+    @Test fun `a pre-v4 four-key GET leaves telegram and discord null so the echo omits them`() {
+        val server = ChannelPrefsDto(inapp = true, email = true, push = true, webpush = true) // telegram/discord default null
+        val merged = TypePrefs(telegram = true, discord = true).mergedFrom(server)
+        // Server state wins on load — it never modeled telegram/discord, so they go null.
+        assertNull(merged.telegram)
+        assertNull(merged.discord)
+        // Null ⇒ the PATCH cell omits the keys (never invents a value the server didn't send).
+        assertNull(merged.toChannelPrefs().telegram)
+        assertNull(merged.toChannelPrefs().discord)
+    }
+
+    @Test fun `toggling a telegram or discord channel makes the echo carry that key`() {
+        val tg = TypePrefs().set(NotifChannel.Telegram, true)
+        assertEquals(true, tg.get(NotifChannel.Telegram))
+        assertEquals(true, tg.toChannelPrefs().telegram)
+        val dc = TypePrefs().set(NotifChannel.Discord, false)
+        assertEquals(false, dc.get(NotifChannel.Discord))
+        assertEquals(false, dc.toChannelPrefs().discord)
     }
 }

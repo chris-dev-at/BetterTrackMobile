@@ -555,6 +555,8 @@
     <string name="bt_notif_channel_inapp">In-app</string>
     <string name="bt_notif_channel_email">Email</string>
     <string name="bt_notif_channel_push">Push</string>
+    <string name="bt_notif_channel_telegram">Telegram</string>
+    <string name="bt_notif_channel_discord">Discord</string>
 
     <!-- Notification types (mirroring the web matrix) -->
     <string name="bt_notif_type_friend_request">Friend requests</string>
@@ -584,6 +586,8 @@
     <string name="bt_notif_action_unarchive">Unarchive</string>
     <string name="bt_notif_action_delete">Delete</string>
     <string name="bt_notif_bulk_archive_read">Archive all read</string>
+    <!-- v4 (PR #486): mark-all-read archives → the toolbar action clears the active inbox. -->
+    <string name="bt_notif_archive_all">Archive all</string>
     <string name="bt_notif_bulk_delete_archived">Delete all archived</string>
     <string name="bt_notif_bulk_delete_all">Delete all</string>
     <string name="bt_notif_snack_archived">Notification archived</string>
@@ -602,6 +606,15 @@
     <string name="bt_notif_type_watchlist_shared_sub">When a friend shares a watchlist</string>
     <string name="bt_notif_type_conglomerate_shared">Conglomerate shared</string>
     <string name="bt_notif_type_conglomerate_shared_sub">When a friend shares a conglomerate</string>
+    <!-- V4-P0c — follow-graph rows + one-off announcement -->
+    <string name="bt_notif_type_follow_published">New from people you follow</string>
+    <string name="bt_notif_type_follow_published_sub">When someone you follow publishes an item</string>
+    <string name="bt_notif_type_follow_alert_created">Followed alert created</string>
+    <string name="bt_notif_type_follow_alert_created_sub">When someone you follow sets a price alert</string>
+    <string name="bt_notif_type_follow_alert_fired">Followed alert fired</string>
+    <string name="bt_notif_type_follow_alert_fired_sub">When a followed alert hits its target</string>
+    <string name="bt_notif_type_account_notice">Announcements</string>
+    <string name="bt_notif_type_account_notice_sub">Important notices from BetterTrack</string>
     <plurals name="bt_notif_delete_archived_body">
         <item quantity="one">This permanently deletes %d archived notification. This can\'t be undone.</item>
         <item quantity="other">This permanently deletes %d archived notifications. This can\'t be undone.</item>
@@ -886,6 +899,8 @@
     <string name="bt_chat_kind_portfolio">Portfolio</string>
     <string name="bt_chat_kind_watchlist">Watchlist</string>
     <string name="bt_chat_kind_conglomerate">Conglomerate</string>
+    <!-- Fallback label for an unmodeled/unknown share-chip kind (never navigates). -->
+    <string name="bt_chat_kind_unknown">Shared item</string>
 
     <!-- Social (§6.9–§6.12) — externalized in the Step-19 i18n audit -->
     <!-- Messages header + tabs -->

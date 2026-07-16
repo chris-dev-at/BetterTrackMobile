@@ -81,8 +81,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     val matrix by store.matrix.collectAsStateWithLifecycle()
+    val availability by store.availability.collectAsStateWithLifecycle()
 
-    // Best-effort: pull the server matrix on open so in-app/email reflect the web.
+    // Best-effort: pull the server matrix + channel availability on open so the
+    // in-app/email/telegram/discord columns reflect the web (v4 gates the extra columns).
     androidx.compose.runtime.LaunchedEffect(Unit) { repo.loadServerSettings() }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -151,6 +153,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 TypePrefCard(
                     kind = kind,
                     prefs = matrix.prefs(kind),
+                    availability = availability,
                     onToggleChannel = { channel, on ->
                         store.setChannel(kind, channel, on)
                         scope.launch { repo.pushServerSettings() }
@@ -214,6 +217,7 @@ private fun PermissionStatusCard(granted: Boolean, needsPermission: Boolean, onE
 private fun TypePrefCard(
     kind: NotifKind,
     prefs: at.bettertrack.app.data.notifications.TypePrefs,
+    availability: at.bettertrack.app.data.notifications.ChannelAvailability,
     onToggleChannel: (NotifChannel, Boolean) -> Unit,
     onToggleMute: (Boolean) -> Unit,
 ) {
@@ -254,6 +258,14 @@ private fun TypePrefCard(
                 ChannelChip(R.string.bt_notif_channel_inapp, prefs.inApp, prefs.muted) { onToggleChannel(NotifChannel.InApp, it) }
                 ChannelChip(R.string.bt_notif_channel_email, prefs.email, prefs.muted) { onToggleChannel(NotifChannel.Email, it) }
                 ChannelChip(R.string.bt_notif_channel_push, prefs.push, prefs.muted) { onToggleChannel(NotifChannel.Push, it) }
+                // v4 additive columns: shown only when the server reports the channel
+                // configured (SMTP pattern — an unlinked Telegram/Discord never surfaces).
+                if (availability.telegram) {
+                    ChannelChip(R.string.bt_notif_channel_telegram, prefs.get(NotifChannel.Telegram), prefs.muted) { onToggleChannel(NotifChannel.Telegram, it) }
+                }
+                if (availability.discord) {
+                    ChannelChip(R.string.bt_notif_channel_discord, prefs.get(NotifChannel.Discord), prefs.muted) { onToggleChannel(NotifChannel.Discord, it) }
+                }
             }
         }
     }
@@ -284,6 +296,10 @@ private fun notifKindTitle(kind: NotifKind): String = stringResource(
         NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity
         NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared
         NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared
+        NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published
+        NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created
+        NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired
+        NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice
         NotifKind.System -> R.string.bt_notif_type_system
     },
 )
@@ -301,6 +317,10 @@ private fun notifKindSubtitle(kind: NotifKind): String = stringResource(
         NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity_sub
         NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared_sub
         NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared_sub
+        NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published_sub
+        NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created_sub
+        NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired_sub
+        NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice_sub
         NotifKind.System -> R.string.bt_notif_type_system_sub
     },
 )
