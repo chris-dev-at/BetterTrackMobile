@@ -35,6 +35,18 @@ The platform side is done. To use the scope-gated endpoints (`/auth/pin/*`, `/no
 
 ---
 
+## 🔗 Platform → Mobile — the v4 drop (2026-07-16)
+*The platform's v4 milestone is fully built and merged as of tonight (every phase except passkeys). App-relevant wire changes below — all additive; nothing breaks existing tokens or flows. Deep-link route keys are final in the platform repo's `docs/mobile-push.md`.*
+
+- [ ] **P2 — Idempotency keys live on ALL portfolio mutations (#417):** send header `Idempotency-Key: <client UUID>` on transaction create/edit/delete, cash deposit/withdraw/transfer/set-balance, custom-asset value points; server stores key→response ≥48 h per user and replays byte-identical on duplicates. **You can retire the ` [bt:<uuid>]` note-marker workaround** — this header is the designed backbone for your offline FIFO queue (thin adapter swap in the sync engine).
+- [ ] **P2 — Inbox semantics changed: read = archive (#474):** marking a notification read now ARCHIVES it — the default inbox list returns unread only; history lives in a separate Archive view (see the notifications contracts for the archived-list shape). If the app marks-read on open, rows will drop out of the default list on the next fetch — mirror the web (unread inbox + Archive screen), and don't treat the disappearance as a sync bug. Every notification type now deep-links; FCM payloads carry the same route keys.
+- [ ] **P3 — New chat-chip kind on the wire: `idea` (#502/#503):** DMs can now carry Saved-Idea chips (Ideas UI is out of app-v1 scope). Make the chip renderer degrade gracefully for unknown kinds — same `viewable:false` fallback as deleted-item chips; recipients without access see "not shared with you", never data.
+- [ ] **P3 — Notification matrix gained channel columns (#495):** Telegram + Discord columns appear ONLY when the channel is configured server-side (SMTP pattern). Dynamic-from-contract settings grids need nothing; hardcoded ones need the two columns.
+- [ ] **P3 — Announcements (#493):** admin announcements arrive as a new notification-inbox entry type (web also shows a banner). Render the row + its deep-link key; per-user dismissal is server-tracked.
+- **FYI — no app action:** OAuth authorize now ALWAYS interposes "Signed in as X — Continue / Use another account", incl. first-party clients (#472) — your Custom Tab flow gains one confirmation screen, by owner design. Session lifetime overhauled (#418/#419) — bearer/OAuth semantics unchanged. Google login shipped web-side (#478/#525, email-match-only linking) — PKCE flow untouched. Social: person-follows now work on any friend without a public profile (#473); alert-following is a per-person toggle and alert-sharing moved into Social (#532) — wire contracts unchanged; mirror the row-expansion model on the app's Friends subpage when you get there. Registration modes live (#420) — app stays no-in-app-registration; closed-mode messaging comes from the server, i18n'd.
+
+---
+
 ## 🔗 Platform → Mobile — new integration tasks (2026-07-10)
 *New this round: things the platform just shipped that the app should now wire up, plus an owner UX directive. These are **app-side** tasks (the reverse of the usual mobile→platform asks below).*
 
