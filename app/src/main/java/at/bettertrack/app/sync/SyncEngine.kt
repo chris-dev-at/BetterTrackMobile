@@ -2,6 +2,7 @@ package at.bettertrack.app.sync
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /** Executes one op against the API and answers reconcile lookups. */
@@ -47,6 +48,14 @@ class SyncEngine(
     /** Owner key stamped on enqueued ops (defense-in-depth; DB is single-owner). */
     private val ownerKey: suspend () -> String,
     private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * Hard cap on a single online attempt — the send AND its reconcile lookup.
+     * OkHttp's connect (20 s) / read (30 s) timeouts and lack of a call timeout
+     * let a server that accepts the socket but never replies hold an attempt far
+     * beyond this; the cap guarantees a queued op can't sit in-flight forever.
+     * Injected (default [ATTEMPT_TIMEOUT_MS]) so tests drive it under virtual time.
+     */
+    private val attemptTimeoutMs: Long = ATTEMPT_TIMEOUT_MS,
 ) {
     private val drainMutex = Mutex()
 
@@ -113,8 +122,10 @@ class SyncEngine(
                 if (op.nextAttemptAtMs > now()) return@loop DrainResult.RetryAt(op.nextAttemptAtMs)
 
                 if (op.status == OpStatus.IN_FLIGHT) {
-                    // Ambiguous from a crash / lost response: reconcile, never resend blindly.
-                    when (val looked = executor.lookup(op)) {
+                    // Ambiguous from a crash / lost response: reconcile, never resend
+                    // blindly. Bounded by the same cap so a hung lookup (server accepts
+                    // the socket, never replies) can't wedge the drain either.
+                    when (val looked = withTimeoutOrNull(attemptTimeoutMs) { executor.lookup(op) }) {
                         is LookupResult.Found -> {
                             store.markDone(op.id, looked.serverResultJson, now())
                             op.portfolioId?.let(affected::add)
@@ -125,24 +136,47 @@ class SyncEngine(
                             // Provably absent — safe to resend right away.
                             store.markPending(op.id, op.attemptCount, 0L, now())
 
-                        LookupResult.Unreachable -> return@loop DrainResult.Offline
+                        // Unreachable OR a timed-out reconcile: behave like offline —
+                        // wait for a healthy link; the op stays in-flight for a later pass.
+                        LookupResult.Unreachable, null -> return@loop DrainResult.Offline
                     }
                     continue
                 }
 
                 // PENDING head — attempt the send (carries the op's persisted
-                // idempotency key; a replay of a landed op returns a 2xx).
+                // idempotency key; a replay of a landed op returns a 2xx). Bounded by
+                // the hard cap: a server that never replies must not stall the queue.
                 store.markInFlight(op.id, now())
-                var exec = executor.execute(op)
+                var exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(op) }
                 if (exec is ExecResult.InvalidKey) {
                     // Should never happen — keys are canonical UUIDs. #9: the server
                     // rejected the key as non-UUID. A non-2xx releases the key, so
                     // mint a fresh one, persist it, and retry ONCE; a repeat is a
                     // permanent failure handled by the InvalidKey branch below.
                     val regenerated = store.regenerateClientId(op.id, now())
-                    exec = if (regenerated != null) executor.execute(regenerated) else exec
+                    if (regenerated != null) {
+                        exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(regenerated) }
+                    }
                 }
                 when (val e = exec) {
+                    null -> {
+                        // The attempt blew the hard cap while online: cancellation
+                        // aborted the Retrofit call. The op is still IN_FLIGHT so a
+                        // single bounded reconcile can't double-submit — if it actually
+                        // landed, complete it; otherwise park it as timed-out with the
+                        // Retry / Remove affordances (Retry re-sends the SAME
+                        // idempotency key — safe).
+                        when (val looked = withTimeoutOrNull(attemptTimeoutMs) { executor.lookup(op) }) {
+                            is LookupResult.Found -> {
+                                store.markDone(op.id, looked.serverResultJson, now())
+                                op.portfolioId?.let(affected::add)
+                                completed++
+                            }
+                            // NotFound / Unreachable / lookup timeout — surface "timed out".
+                            else -> store.markNeedsAttention(op.id, MSG_ATTEMPT_TIMED_OUT, now())
+                        }
+                    }
+
                     is ExecResult.Success -> {
                         store.markDone(op.id, e.serverResultJson, now())
                         op.portfolioId?.let(affected::add)
@@ -203,5 +237,21 @@ class SyncEngine(
         /** Shown when the server rejects the op's idempotency key twice (#432). */
         const val MSG_KEY_INVALID =
             "This change couldn't be submitted (its sync key was rejected). Discard it and re-create it."
+
+        /**
+         * Hard per-attempt cap (send AND reconcile lookup): an attempt only tries
+         * for 10 s while online; a server that accepts the connection but never
+         * replies is aborted so the op can't sit in-flight forever.
+         */
+        const val ATTEMPT_TIMEOUT_MS = 10_000L
+
+        /**
+         * Client-generated park message (same raw-`serverError` pattern as
+         * [MSG_KEY_INVALID]; the pending-sync UIs render `serverError` verbatim,
+         * with no sentinel→resource mapping) for an op whose online attempt blew
+         * [ATTEMPT_TIMEOUT_MS] and whose reconcile couldn't prove it landed.
+         */
+        const val MSG_ATTEMPT_TIMED_OUT =
+            "This change timed out (the server didn't respond within 10 seconds). Retry, or remove it."
     }
 }

@@ -1,6 +1,8 @@
 package at.bettertrack.app.sync
 
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -156,13 +158,23 @@ class SyncEngineTest {
         var execScript: (SyncOp) -> ExecResult = { ExecResult.Success(null) }
         var lookupScript: (SyncOp) -> LookupResult = { LookupResult.NotFound }
 
+        /**
+         * Simulate a server that accepts the socket but never replies: the call
+         * suspends forever until the engine's timeout cancels it. Per-op so a
+         * later op in the same drain can still respond normally.
+         */
+        var execHangsFor: (SyncOp) -> Boolean = { false }
+        var lookupHangsFor: (SyncOp) -> Boolean = { false }
+
         override suspend fun execute(op: SyncOp): ExecResult {
             executed += op.clientId
+            if (execHangsFor(op)) awaitCancellation()
             return execScript(op)
         }
 
         override suspend fun lookup(op: SyncOp): LookupResult {
             lookedUp += op.clientId
+            if (lookupHangsFor(op)) awaitCancellation()
             return lookupScript(op)
         }
     }
@@ -618,5 +630,93 @@ class SyncEngineTest {
         assertEquals(OpStatus.NEEDS_ATTENTION, h.store.getById(op.id)!!.status)
         assertEquals(1, h.store.regenCount)          // regenerated ONCE, not looped
         assertEquals(2, h.executor.executed.size)    // original + single retry
+    }
+
+    // ── 10 s hard attempt timeout (server accepts the socket, never replies) ──
+
+    @Test
+    fun `execute that hangs times out then reconcile finds it landed and marks done`() = runTest {
+        val h = Harness()
+        val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        h.executor.execHangsFor = { true }                     // send never returns
+        h.executor.lookupScript = { LookupResult.Found("""{"transactionIds":["s1"]}""") }
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Drained(1), result)
+        val done = h.store.byClient(op.clientId)!!
+        assertEquals(OpStatus.DONE, done.status)
+        assertNotNull(done.serverResultJson)
+        assertEquals(1, h.executor.executed.size)              // the one (timed-out) send
+        assertEquals(1, h.executor.lookedUp.size)              // one bounded reconcile
+    }
+
+    @Test
+    fun `execute that hangs times out and an absent op parks as timed-out needs-attention`() =
+        runTest {
+            val h = Harness()
+            val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+            h.executor.execHangsFor = { true }
+            h.executor.lookupScript = { LookupResult.NotFound } // provably never landed
+
+            val result = h.engine.drain()
+
+            assertEquals(DrainResult.Idle, result)              // nothing completed
+            val parked = h.store.byClient(op.clientId)!!
+            assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
+            // Surfaces "timed out" with the existing Retry / Remove affordances.
+            assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
+        }
+
+    @Test
+    fun `a hung op parks and does not block a later op`() = runTest {
+        val h = Harness()
+        val stuck = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        val later = h.engine.enqueue(OpType.TX_BUY, "p2", """{"assetId":"b"}""")
+        h.executor.execHangsFor = { it.clientId == stuck.clientId }
+        h.executor.lookupScript = { LookupResult.NotFound }    // the stuck op never landed
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Drained(1), result)           // the later op still drained
+        val parked = h.store.byClient(stuck.clientId)!!
+        assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
+        assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
+        assertEquals(OpStatus.DONE, h.store.byClient(later.clientId)!!.status)
+    }
+
+    @Test
+    fun `a hung in-flight reconcile ends the drain offline without wedging`() = runTest {
+        val store = FakeOpStore()
+        val executor = FakeExecutor()
+        // An op left IN_FLIGHT by a crash; its reconcile lookup will hang.
+        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
+        store.markInFlight(crashed.id, 2L)
+        val h = Harness(store = store, executor = executor)
+        executor.lookupHangsFor = { true }
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Offline, result)              // a hung reconcile == Unreachable
+        assertEquals(OpStatus.IN_FLIGHT, store.byClient("c1")!!.status) // reconcilable on a later pass
+        assertTrue(executor.executed.isEmpty())                // never blindly resent
+        assertEquals(1, executor.lookedUp.size)                // the one (timed-out) probe
+    }
+
+    @Test
+    fun `retry of a timed-out op sends it back to pending`() = runTest {
+        val h = Harness()
+        val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        h.executor.execHangsFor = { true }
+        h.executor.lookupScript = { LookupResult.NotFound }
+        h.engine.drain()
+        assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(op.clientId)!!.status)
+
+        h.engine.retryOp(op.id)
+
+        val retried = h.store.byClient(op.clientId)!!
+        assertEquals(OpStatus.PENDING, retried.status)         // Retry re-sends the SAME key — safe
+        assertEquals(0, retried.attemptCount)
+        assertNull(retried.serverError)
     }
 }
