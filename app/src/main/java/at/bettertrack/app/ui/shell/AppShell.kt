@@ -187,7 +187,22 @@ fun BtApp() {
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController) {
         { link ->
             when (link) {
-                NotifDeepLink.Social -> navController.navigate(SocialTabRoute) { launchSingleTop = true }
+                NotifDeepLink.Social -> {
+                    // A top-level TAB must be reached with the same switch semantics
+                    // as the bottom bar; a plain push would stack Social on the
+                    // current tab, so the next bottom-bar tap pops+restores it and
+                    // bounces the user straight back. When the link came from the
+                    // notifications inbox, drop the inbox (inclusive) first so it is
+                    // never saved under a tab's restored state — tapping Portfolio
+                    // afterwards must land on Portfolio, not the inbox. (No-op if the
+                    // inbox isn't on the stack, e.g. a cold-start push tap.)
+                    navController.popBackStack(NotificationsInboxRoute, inclusive = true)
+                    navController.navigate(SocialTabRoute) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
                 is NotifDeepLink.SharedPortfolio -> navController.navigate(SharedPortfolioViewRoute(link.portfolioId))
                 is NotifDeepLink.FriendOverview -> navController.navigate(FriendOverviewRoute(link.userId, link.username))
                 is NotifDeepLink.SharedConglomerate -> navController.navigate(SharedConglomerateViewRoute(link.conglomerateId))
