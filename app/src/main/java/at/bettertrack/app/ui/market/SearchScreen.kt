@@ -55,6 +55,7 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.SearchOutcome
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtBadge
@@ -84,6 +85,67 @@ sealed interface SearchUiState {
     data object OfflineState : SearchUiState
     data class Error(val message: String) : SearchUiState
 }
+
+/**
+ * Web parity with apps/web `AssetSearchBox` (ENRICH_POLL_MS / ENRICH_TIMEOUT_MS):
+ * poll the search endpoint every [pollMs] while the server answers
+ * `enriching == true` (it kicked off a background provider search), capped at
+ * [timeoutMs] total — an uncached ticker (e.g. QTCOM before web cached it) then
+ * appears on its own within ~10 s without re-typing. After the cap, whatever
+ * results exist are shown WITHOUT the "Searching providers…" row (or Empty).
+ *
+ * Pure and side-effect-injected ([search] + [emit]) so the poll is unit-testable
+ * under virtual time; cancelling the calling coroutine (a new keystroke via the
+ * ViewModel's debounce + collectLatest) aborts the poll mid-`delay`. A failed
+ * poll iteration stops polling and keeps the partial results already shown.
+ */
+internal suspend fun searchWithEnrichPolling(
+    query: String,
+    search: suspend (String) -> BtResult<SearchOutcome>,
+    pollMs: Long = ENRICH_POLL_MS,
+    timeoutMs: Long = ENRICH_TIMEOUT_MS,
+    emit: (SearchUiState) -> Unit,
+) {
+    emit(SearchUiState.Loading)
+    when (val r = search(query)) {
+        is BtResult.Ok -> {
+            var outcome = r.value
+            emit(outcome.toUiState(stillPolling = outcome.enriching))
+            var remaining = timeoutMs
+            while (outcome.enriching && remaining > 0) {
+                val wait = minOf(pollMs, remaining)
+                delay(wait)
+                remaining -= wait
+                when (val next = search(query)) {
+                    is BtResult.Ok -> {
+                        outcome = next.value
+                        emit(outcome.toUiState(stillPolling = outcome.enriching && remaining > 0))
+                    }
+                    // Keep the partial results already shown; stop polling.
+                    is BtResult.Err -> return
+                }
+            }
+            // Cap reached while still enriching → drop the enriching row.
+            if (outcome.enriching) emit(outcome.toUiState(stillPolling = false))
+        }
+
+        is BtResult.Err ->
+            emit(
+                if (r.error.isNetwork) SearchUiState.OfflineState
+                else SearchUiState.Error(r.error.userMessage),
+            )
+    }
+}
+
+private fun SearchOutcome.toUiState(stillPolling: Boolean): SearchUiState =
+    if (results.isEmpty() && !stillPolling) SearchUiState.Empty
+    else SearchUiState.Results(results, stillPolling)
+
+/** Refetch cadence while `enriching` (mirrors web ENRICH_POLL_MS). */
+internal const val ENRICH_POLL_MS = 1_500L
+
+/** Hard cap on total enrichment polling (mirrors web ENRICH_TIMEOUT_MS). */
+internal const val ENRICH_TIMEOUT_MS = 10_000L
 
 @OptIn(FlowPreview::class)
 class SearchViewModel(
@@ -132,32 +194,10 @@ class SearchViewModel(
     }
 
     private suspend fun runSearch(q: String) {
-        _state.value = SearchUiState.Loading
-        when (val r = market.search(q)) {
-            is BtResult.Ok -> {
-                val res = r.value
-                _state.value = if (res.results.isEmpty() && !res.enriching) {
-                    SearchUiState.Empty
-                } else {
-                    SearchUiState.Results(res.results, res.enriching)
-                }
-                // Providers still resolving → refetch once and merge (§6.5).
-                if (res.enriching) {
-                    delay(750)
-                    when (val r2 = market.search(q)) {
-                        is BtResult.Ok -> _state.value =
-                            if (r2.value.results.isEmpty()) SearchUiState.Empty
-                            else SearchUiState.Results(r2.value.results, r2.value.enriching)
-
-                        is BtResult.Err -> { /* keep the partial results already shown */ }
-                    }
-                }
-            }
-
-            is BtResult.Err ->
-                _state.value = if (r.error.isNetwork) SearchUiState.OfflineState
-                else SearchUiState.Error(r.error.userMessage)
-        }
+        // Delegates to the pure, virtual-time-testable poll loop; the debounce +
+        // collectLatest in init cancels this coroutine (and its poll) on a new
+        // keystroke, so the loop needs no cancellation logic of its own.
+        searchWithEnrichPolling(q, market::search) { _state.value = it }
     }
 
     fun retry() {
