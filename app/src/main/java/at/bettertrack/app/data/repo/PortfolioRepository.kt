@@ -497,13 +497,18 @@ class PortfolioRepository(
     // ONLINE-ONLY by spec (§7.2 — the queue stays append-only in v1): direct
     // API call, then refetch the portfolio scope so Room mirrors server truth.
 
-    /** PATCH a synced transaction; refreshes ledger + totals + cash on success. */
+    /**
+     * PATCH a synced transaction; refreshes ledger + totals + cash on success.
+     * [idempotencyKey] is a per-submission UUID (minted by the form) so an
+     * in-form resend of the same edit replays the server's stored 2xx.
+     */
     suspend fun updateTransaction(
         portfolioId: String,
         txId: String,
         body: UpdateTransactionRequest,
+        idempotencyKey: String? = null,
     ): BtResult<Unit> =
-        when (val r = apiCall(json) { api.updateTransaction(portfolioId, txId, body) }) {
+        when (val r = apiCall(json) { api.updateTransaction(portfolioId, txId, body, idempotencyKey) }) {
             is BtResult.Ok -> {
                 afterDrain(setOf(portfolioId))
                 BtResult.Ok(Unit)
@@ -515,10 +520,18 @@ class PortfolioRepository(
             }
         }
 
-    /** DELETE a synced transaction (204, no body); refreshes the scope after. */
-    suspend fun deleteTransaction(portfolioId: String, txId: String): BtResult<Unit> {
+    /**
+     * DELETE a synced transaction (204, no body); refreshes the scope after.
+     * [idempotencyKey] is a per-delete UUID so a retry after a lost 204 replays
+     * the stored 2xx rather than 404-ing on the already-removed row.
+     */
+    suspend fun deleteTransaction(
+        portfolioId: String,
+        txId: String,
+        idempotencyKey: String? = null,
+    ): BtResult<Unit> {
         val resp = try {
-            api.deleteTransaction(portfolioId, txId)
+            api.deleteTransaction(portfolioId, txId, idempotencyKey)
         } catch (_: java.io.IOException) {
             return BtResult.Err(
                 at.bettertrack.app.data.api.BtApiError(

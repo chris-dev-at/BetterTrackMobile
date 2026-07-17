@@ -42,7 +42,6 @@ import at.bettertrack.app.sync.ApiOpExecutor
 import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.sync.RoomOpStore
 import at.bettertrack.app.sync.SyncEngine
-import at.bettertrack.app.sync.SyncFeatureFlags
 import at.bettertrack.app.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -353,7 +352,6 @@ object AppGraph {
             executor = ApiOpExecutor(
                 api = btApi,
                 json = json,
-                idempotencyEnabled = SyncFeatureFlags.IDEMPOTENCY_KEYS_ENABLED,
             ),
             refresher = portfolioRepository,
             hasSession = { tokenManager.hasTokens() },

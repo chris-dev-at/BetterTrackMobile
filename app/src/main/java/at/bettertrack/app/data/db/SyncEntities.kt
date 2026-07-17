@@ -9,10 +9,10 @@ import androidx.room.PrimaryKey
  * append-only ledger event stored here until it has provably reached the
  * server. The INTEGER autoincrement [id] is the strict FIFO drain order; the
  * [clientId] UUID is the operation's identity — generated at enqueue, persisted
- * for life, and destined to become the server-side idempotency key once the
- * platform accepts one (platform-prereq, §7.3; until then it is embedded as a
- * `[bt:<uuid>]` note marker so reconciliation can prove whether an ambiguous
- * send landed — see ApiOpExecutor).
+ * for life, and sent as the server-side `Idempotency-Key` on every mutation
+ * (platform #432), which makes a resend of an ambiguous op exactly-once. The
+ * legacy `[bt:<uuid>]` note marker that used to prove landing is retired; see
+ * ApiOpExecutor + SyncEngine's replay-reconcile.
  */
 @Entity(
     tableName = "sync_ops",
@@ -43,6 +43,13 @@ data class SyncOpEntity(
     val accountKey: String,
     val createdAtMs: Long,
     val updatedAtMs: Long,
+    /**
+     * Wall-clock ms this op began its CURRENT in-flight streak (0 = never sent /
+     * not in-flight). Bounds the replay-reconcile window: an ambiguous op older
+     * than [at.bettertrack.app.sync.SyncEngine.REPLAY_SAFE_WINDOW_MS] parks
+     * instead of blind-replaying past the server's dedupe TTL. Added in DB v5.
+     */
+    val firstAttemptAtMs: Long = 0L,
 )
 
 /**

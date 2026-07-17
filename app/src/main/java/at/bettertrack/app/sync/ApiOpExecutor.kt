@@ -15,45 +15,33 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
 import retrofit2.Response
 import java.io.IOException
-import kotlin.math.abs
 
 /**
  * The op → API mapping layer (§7.2 ledger-event set → module endpoints).
  *
- * Exactly-once via the server idempotency key (platform #432, LIVE — see
- * PLATFORM_ASKS #9): every send of a queued mutation carries
+ * Exactly-once via the server idempotency key (platform #432, live on ALL
+ * portfolio mutations): every send of a queued mutation carries
  * `Idempotency-Key: <op.clientId>` (a UUID minted + persisted at enqueue), so a
  * replayed retry runs exactly once and returns a byte-identical 2xx. This is the
- * PRIMARY exactly-once guarantee now.
+ * SOLE exactly-once mechanism — [SyncEngine] reconciles an ambiguous op by
+ * simply re-executing it here (a landed op replays its stored 2xx, a never-landed
+ * op executes once).
  *
- * The legacy ` [bt:<uuid>]` note marker is RETAINED as defense-in-depth: after
- * an ambiguous send (crash, lost response, 5xx) [lookup] can still PROVE whether
- * the op landed by finding the marker, so the drain marks it done without a
- * resend. And should the marker lookup ever miss a landed op, the eventual
- * resend now REPLAYS (same key) instead of duplicating — strictly safer than the
- * marker alone. Value points never needed a marker (their write is a full-replace
- * PUT of the merged point set, idempotent by construction) but still carry the
- * key. Dropping the marker entirely is a separable cleanup (it would rework the
- * reconcile lookup path); out of scope for adopting the key.
+ * The legacy ` [bt:<uuid>]` note marker — an interim landing-proof used before
+ * the platform accepted an idempotency key — is retired: sends no longer touch
+ * the user's note, and there is no reconcile lookup. Display code still strips
+ * the marker from legacy rows that carry one (see `PortfolioFormat.displayNote`).
+ * Value-point writes were always idempotent (a full-replace PUT of the merged
+ * point set) and, like every other op, carry the key.
  */
 class ApiOpExecutor(
     private val api: BtApi,
     private val json: Json,
-    /** Kill-switch for the #432 header — see [SyncFeatureFlags.IDEMPOTENCY_KEYS_ENABLED]. */
-    private val idempotencyEnabled: Boolean = true,
 ) : OpExecutor {
-
-    /** The Idempotency-Key to send for [op], or null when the feature is off. */
-    private fun idempotencyKeyFor(op: SyncOp): String? =
-        if (idempotencyEnabled) op.clientId else null
 
     override suspend fun execute(op: SyncOp): ExecResult {
         // Presence-only diagnostics — the idempotency-key UUID is not a secret.
-        Log.d(
-            TAG,
-            "execute ${op.type.wire} op#${op.id} Idempotency-Key=" +
-                if (idempotencyEnabled) op.clientId else "(disabled)",
-        )
+        Log.d(TAG, "execute ${op.type.wire} op#${op.id} Idempotency-Key=${op.clientId}")
         return when (op.type) {
             OpType.TX_BUY, OpType.TX_SELL -> executeTransaction(op)
             OpType.CASH_DEPOSIT -> executeCash(op, deposit = true)
@@ -61,12 +49,6 @@ class ApiOpExecutor(
             OpType.CASH_TRANSFER -> executeTransfer(op)
             OpType.CUSTOM_ASSET_VALUE_POINT -> executeValuePoint(op)
         }
-    }
-
-    override suspend fun lookup(op: SyncOp): LookupResult = when (op.type) {
-        OpType.TX_BUY, OpType.TX_SELL -> lookupTransaction(op)
-        OpType.CASH_DEPOSIT, OpType.CASH_WITHDRAW, OpType.CASH_TRANSFER -> lookupCashMovement(op)
-        OpType.CUSTOM_ASSET_VALUE_POINT -> lookupValuePoint(op)
     }
 
     // ── Transactions (buy / sell) ────────────────────────────────────────────
@@ -85,43 +67,17 @@ class ApiOpExecutor(
                     price = payload.price,
                     fee = payload.fee,
                     executedAt = payload.executedAt,
-                    note = markedNote(payload.note, op.clientId),
+                    note = payload.note,
                     payFromCash = payload.payFromCash,
                     addProceedsToCash = payload.addProceedsToCash,
                     settleCashAsOfToday = payload.settleCashAsOfToday,
                     allowUncovered = payload.allowUncovered,
                     uncoveredEntryPrice = payload.uncoveredEntryPrice,
                 ),
-                idempotencyKey = idempotencyKeyFor(op),
+                idempotencyKey = op.clientId,
             )
         }) { body ->
             resultJson("transactionIds", body.transactions.map { it.id })
-        }
-    }
-
-    private suspend fun lookupTransaction(op: SyncOp): LookupResult {
-        val portfolioId = op.portfolioId ?: return LookupResult.NotFound
-        val marker = marker(op.clientId)
-        return try {
-            // Walk up to 3 newest pages (600 rows) — the op was sent recently,
-            // so its marker sits at the top of the ledger if it landed.
-            var cursor: String? = null
-            repeat(3) {
-                val resp = api.transactions(portfolioId, cursor = cursor, limit = 200)
-                if (!resp.isSuccessful) return LookupResult.Unreachable
-                val body = resp.body() ?: return LookupResult.Unreachable
-                val hit = body.items.firstOrNull { it.note?.contains(marker) == true }
-                if (hit != null) {
-                    return LookupResult.Found(resultJson("transactionIds", listOf(hit.id)))
-                }
-                cursor = body.nextCursor ?: return LookupResult.NotFound
-            }
-            LookupResult.NotFound
-        } catch (_: IOException) {
-            LookupResult.Unreachable
-        } catch (e: Exception) {
-            Log.w(TAG, "Transaction lookup failed: ${e.message}")
-            LookupResult.Unreachable
         }
     }
 
@@ -133,21 +89,21 @@ class ApiOpExecutor(
             amountEur = payload.amountEur,
             sourceId = payload.sourceId,
             executedAt = payload.executedAt,
-            note = markedNote(payload.note, op.clientId),
+            note = payload.note,
         )
         val portfolioId = op.portfolioId ?: return malformed(op)
         return runMutation(op, {
             if (deposit) {
-                api.cashDeposit(portfolioId, body, idempotencyKey = idempotencyKeyFor(op))
+                api.cashDeposit(portfolioId, body, idempotencyKey = op.clientId)
             } else {
-                api.cashWithdraw(portfolioId, body, idempotencyKey = idempotencyKeyFor(op))
+                api.cashWithdraw(portfolioId, body, idempotencyKey = op.clientId)
             }
         }) { resp ->
             resultJson("movementIds", listOf(resp.movement.id))
         }
     }
 
-    /** Step 9: atomic transfer between two sources (the marker rides the note). */
+    /** Step 9: atomic transfer between two sources. */
     private suspend fun executeTransfer(op: SyncOp): ExecResult {
         val payload = decode(CashTransferOpPayload.serializer(), op) ?: return malformed(op)
         val portfolioId = op.portfolioId ?: return malformed(op)
@@ -159,32 +115,12 @@ class ApiOpExecutor(
                     toSourceId = payload.toSourceId,
                     amountEur = payload.amountEur,
                     executedAt = payload.executedAt,
-                    note = markedNote(payload.note, op.clientId),
+                    note = payload.note,
                 ),
-                idempotencyKey = idempotencyKeyFor(op),
+                idempotencyKey = op.clientId,
             )
         }) { resp ->
             resultJson("movementIds", listOfNotNull(resp.outgoing.id, resp.incoming?.id))
-        }
-    }
-
-    private suspend fun lookupCashMovement(op: SyncOp): LookupResult {
-        val portfolioId = op.portfolioId ?: return LookupResult.NotFound
-        val marker = marker(op.clientId)
-        return try {
-            val resp = api.cash(portfolioId)
-            if (!resp.isSuccessful) return LookupResult.Unreachable
-            val hit = resp.body()?.movements?.firstOrNull { it.note?.contains(marker) == true }
-            if (hit != null) {
-                LookupResult.Found(resultJson("movementIds", listOf(hit.id)))
-            } else {
-                LookupResult.NotFound
-            }
-        } catch (_: IOException) {
-            LookupResult.Unreachable
-        } catch (e: Exception) {
-            Log.w(TAG, "Cash lookup failed: ${e.message}")
-            LookupResult.Unreachable
         }
     }
 
@@ -193,7 +129,7 @@ class ApiOpExecutor(
     /**
      * The API's only write is a full-replace PUT, so "add a value point" is
      * read-merge-write keyed by date — replaying it converges on the same set,
-     * making this op idempotent without any marker.
+     * making this op idempotent by construction (and it carries the key too).
      */
     private suspend fun executeValuePoint(op: SyncOp): ExecResult {
         val payload = decode(ValuePointOpPayload.serializer(), op) ?: return malformed(op)
@@ -218,26 +154,9 @@ class ApiOpExecutor(
             api.putValuePoints(
                 payload.customAssetId,
                 PutValuePointsRequest(merged.sortedBy { it.date }),
-                idempotencyKey = idempotencyKeyFor(op),
+                idempotencyKey = op.clientId,
             )
         }) { null }
-    }
-
-    private suspend fun lookupValuePoint(op: SyncOp): LookupResult {
-        val payload = decode(ValuePointOpPayload.serializer(), op) ?: return LookupResult.NotFound
-        return try {
-            val resp = api.valuePoints(payload.customAssetId)
-            if (!resp.isSuccessful) return LookupResult.Unreachable
-            val hit = resp.body()?.points?.any {
-                it.date == payload.date && abs(it.value - payload.value) < 1e-9
-            } == true
-            if (hit) LookupResult.Found(null) else LookupResult.NotFound
-        } catch (_: IOException) {
-            LookupResult.Unreachable
-        } catch (e: Exception) {
-            Log.w(TAG, "Value-point lookup failed: ${e.message}")
-            LookupResult.Unreachable
-        }
     }
 
     // ── Shared plumbing ──────────────────────────────────────────────────────
@@ -273,7 +192,7 @@ class ApiOpExecutor(
         ExecResult.Ambiguous(reachable = false)
     } catch (e: Exception) {
         // E.g. a 2xx whose body failed to parse: it DID land — treat as
-        // ambiguous so reconcile proves it instead of resubmitting.
+        // ambiguous so a replay proves it instead of resubmitting.
         Log.w(TAG, "Mutation ended ambiguously: ${e.message}")
         ExecResult.Ambiguous(reachable = true)
     }
@@ -327,19 +246,5 @@ class ApiOpExecutor(
     companion object {
         private const val TAG = "BtOpExecutor"
         private const val MSG_MALFORMED = "This queued entry is malformed and can't be submitted."
-
-        /** The reconcile marker carried in the API's real `note` field. */
-        fun marker(clientId: String): String = "[bt:$clientId]"
-
-        /**
-         * Append the marker to the user's note (clamped to the API's 1000-char
-         * limit). Interim mechanism until the platform accepts an idempotency
-         * key on portfolio mutations (§7.3 platform-prereq).
-         */
-        fun markedNote(userNote: String?, clientId: String): String {
-            val m = marker(clientId)
-            val trimmed = userNote?.trim().orEmpty()
-            return if (trimmed.isEmpty()) m else "${trimmed.take(1000 - m.length - 1)} $m"
-        }
     }
 }

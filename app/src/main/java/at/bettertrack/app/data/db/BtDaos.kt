@@ -325,6 +325,14 @@ interface SyncOpDao {
     @Query("UPDATE sync_ops SET clientId = :clientId, updatedAtMs = :updatedAtMs WHERE id = :id")
     suspend fun updateClientId(id: Long, clientId: String, updatedAtMs: Long)
 
+    /**
+     * Stamp the in-flight streak start (DB v5). Written only on entry to IN_FLIGHT;
+     * [updateState] deliberately leaves this column alone so every other transition
+     * preserves it. See [at.bettertrack.app.sync.RoomOpStore.markInFlight].
+     */
+    @Query("UPDATE sync_ops SET firstAttemptAtMs = :firstAttemptAtMs WHERE id = :id")
+    suspend fun updateFirstAttempt(id: Long, firstAttemptAtMs: Long)
+
     @Query("DELETE FROM sync_ops WHERE id = :id")
     suspend fun delete(id: Long)
 

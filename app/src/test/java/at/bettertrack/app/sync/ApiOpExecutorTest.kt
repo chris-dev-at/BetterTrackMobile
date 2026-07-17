@@ -47,7 +47,7 @@ class ApiOpExecutorTest {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(BtApi::class.java)
-        executor = ApiOpExecutor(api, json) // idempotencyEnabled defaults true
+        executor = ApiOpExecutor(api, json)
     }
 
     @After
@@ -180,15 +180,34 @@ class ApiOpExecutorTest {
         assertEquals(KEY, server.takeRequest().getHeader("Idempotency-Key"))
     }
 
-    @Test
-    fun `disabled kill-switch sends no Idempotency-Key header`() = runBlocking {
-        val disabled = ApiOpExecutor(api, json, idempotencyEnabled = false)
-        server.enqueue(MockResponse().setBody("""{"transactions":[]}"""))
+    // ── The legacy [bt:<uuid>] note marker is retired: notes go out verbatim ─
 
-        val result = disabled.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+    @Test
+    fun `a transaction note is sent verbatim with no bt marker appended`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"transactions":[]}"""))
+        val payload =
+            """{"assetId":"a1","side":"buy","quantity":1.0,"price":2.0,"executedAt":"$TS","note":"Monthly plan"}"""
+
+        val result = executor.execute(op(OpType.TX_BUY, payload))
 
         assertTrue("was $result", result is ExecResult.Success)
-        assertNull("flag off ⇒ no header", server.takeRequest().getHeader("Idempotency-Key"))
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue("note should be present verbatim: $body", body.contains(""""note":"Monthly plan""""))
+        assertFalse("no [bt: marker may leak into the note: $body", body.contains("[bt:"))
+        assertFalse("the client UUID must not leak into the body: $body", body.contains(KEY))
+    }
+
+    @Test
+    fun `a cash note is sent verbatim with no bt marker appended`() = runBlocking {
+        server.enqueue(MockResponse().setBody(CASH_BODY))
+        val payload = """{"amountEur":10.0,"note":"salary"}"""
+
+        val result = executor.execute(op(OpType.CASH_DEPOSIT, payload))
+
+        assertTrue("was $result", result is ExecResult.Success)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue("note should be present verbatim: $body", body.contains(""""note":"salary""""))
+        assertFalse("no [bt: marker may leak into the note: $body", body.contains("[bt:"))
     }
 
     // ── Server idempotency error-code classification ─────────────────────────

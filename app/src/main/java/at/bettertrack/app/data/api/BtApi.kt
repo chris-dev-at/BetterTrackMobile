@@ -447,6 +447,10 @@ interface BtApi {
     suspend fun deleteTransaction(
         @Path("portfolioId") portfolioId: String,
         @Path("txId") txId: String,
+        // Idempotency-Key (platform #432, accepted on all portfolio mutations): a
+        // per-delete UUID so a retry after a lost 204 replays the stored 2xx
+        // instead of hitting a spurious 404 for the already-removed row.
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<Unit>
 
     /** Edit a SYNCED transaction (Step 8, online-only §7.2; re-validates oversell). */
@@ -456,6 +460,9 @@ interface BtApi {
         @Path("portfolioId") portfolioId: String,
         @Path("txId") txId: String,
         @Body body: UpdateTransactionRequest,
+        // Idempotency-Key: a per-submission UUID so a resend after a lost response
+        // replays the stored 2xx (the PATCH is field-absolute, so also naturally safe).
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<UpdateTransactionResponse>
 
     // ── Step 9: cash sources & transfers (§6.3) ──────────────────────────────

@@ -12,9 +12,12 @@ import org.junit.Test
 /**
  * Plain-JUnit tests of the queue state machine (spec §7.3): enqueue →
  * in-flight → done/needs-attention, FIFO ordering, backoff, ambiguous-outcome
- * reconciliation (crash mid-drain must never double-submit), session gating.
+ * RECONCILE-BY-REPLAY (crash mid-drain must never double-submit), the replay
+ * safety window, session gating.
  */
 class SyncEngineTest {
+
+    private val HOUR_MS = 60L * 60 * 1000
 
     // ── Fakes ────────────────────────────────────────────────────────────────
 
@@ -44,6 +47,7 @@ class SyncEngineTest {
                 accountKey = accountKey,
                 createdAtMs = nowMs,
                 updatedAtMs = nowMs,
+                firstAttemptAtMs = 0L,
             )
             ops += op
             return op
@@ -60,8 +64,19 @@ class SyncEngineTest {
             if (i >= 0) ops[i] = mutate(ops[i])
         }
 
-        override suspend fun markInFlight(id: Long, nowMs: Long) =
-            update(id) { it.copy(status = OpStatus.IN_FLIGHT, updatedAtMs = nowMs) }
+        override suspend fun markInFlight(id: Long, nowMs: Long) = update(id) {
+            // Stamp the streak start on ENTRY: a fresh (non-in-flight) op or an
+            // unstamped one starts its clock now; an op already mid-streak keeps it.
+            val streakStart =
+                if (it.status != OpStatus.IN_FLIGHT || it.firstAttemptAtMs == 0L) nowMs
+                else it.firstAttemptAtMs
+            it.copy(
+                status = OpStatus.IN_FLIGHT,
+                firstAttemptAtMs = streakStart,
+                serverError = null,
+                updatedAtMs = nowMs,
+            )
+        }
 
         override suspend fun markInFlightAttempt(
             id: Long,
@@ -149,33 +164,51 @@ class SyncEngineTest {
             ops.count { it.status == OpStatus.PENDING || it.status == OpStatus.IN_FLIGHT }
 
         fun byClient(clientId: String): SyncOp? = ops.firstOrNull { it.clientId == clientId }
+
+        /** Force an op into an IN_FLIGHT streak that started [ageMs] ago (test seed). */
+        fun seedInFlightSince(clientId: String, streakStartMs: Long) {
+            val i = ops.indexOfFirst { it.clientId == clientId }
+            if (i >= 0) ops[i] = ops[i].copy(status = OpStatus.IN_FLIGHT, firstAttemptAtMs = streakStartMs)
+        }
     }
 
-    /** Scripted executor: outcomes per clientId (repeatable last entry). */
+    /**
+     * Scripted executor that ALSO models the platform's idempotent server: a
+     * successful application records the op's key in [serverApplied], and a later
+     * `execute` of an already-applied key returns the stored 2xx (a replay) — so
+     * `serverApplied.size` proves exactly-once regardless of how often the client
+     * re-sends. [execScript] drives the outcome of a FIRST (fresh) application.
+     */
     private class FakeExecutor : OpExecutor {
-        val executed = mutableListOf<String>()
-        val lookedUp = mutableListOf<String>()
+        val executed = mutableListOf<String>()        // every client send/replay
+        val serverApplied = mutableListOf<String>()   // keys the "server" applied
         var execScript: (SyncOp) -> ExecResult = { ExecResult.Success(null) }
-        var lookupScript: (SyncOp) -> LookupResult = { LookupResult.NotFound }
 
         /**
-         * Simulate a server that accepts the socket but never replies: the call
-         * suspends forever until the engine's timeout cancels it. Per-op so a
-         * later op in the same drain can still respond normally.
+         * The send reaches the server (which APPLIES the op) but the client loses
+         * the response, seeing this ambiguous/failure outcome. The key is recorded
+         * as applied, so the reconcile replay returns the stored 2xx.
          */
+        var landsSilentlyFor: (SyncOp) -> ExecResult? = { null }
+
+        /** Simulate a server that accepts the socket but never replies. */
         var execHangsFor: (SyncOp) -> Boolean = { false }
-        var lookupHangsFor: (SyncOp) -> Boolean = { false }
 
         override suspend fun execute(op: SyncOp): ExecResult {
             executed += op.clientId
             if (execHangsFor(op)) awaitCancellation()
-            return execScript(op)
+            if (op.clientId in serverApplied) return ExecResult.Success(REPLAY_RESULT)
+            landsSilentlyFor(op)?.let {
+                serverApplied += op.clientId
+                return it
+            }
+            val r = execScript(op)
+            if (r is ExecResult.Success) serverApplied += op.clientId
+            return r
         }
 
-        override suspend fun lookup(op: SyncOp): LookupResult {
-            lookedUp += op.clientId
-            if (lookupHangsFor(op)) awaitCancellation()
-            return lookupScript(op)
+        companion object {
+            const val REPLAY_RESULT = """{"replayed":true}"""
         }
     }
 
@@ -368,7 +401,7 @@ class SyncEngineTest {
         assertEquals(BACKOFF_CAP_MS, backoffDelayMs(100))
     }
 
-    // ── Ambiguous outcomes & crash-mid-drain (exactly-once) ─────────────────
+    // ── Ambiguous outcomes & crash-mid-drain (reconcile-by-replay) ──────────
 
     @Test
     fun `transport failure leaves op in flight and reports offline`() = runBlocking {
@@ -383,75 +416,81 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `ambiguous send that actually landed completes via reconcile without resend`() =
+    fun `an ambiguous send that landed silently is completed by a replay exactly once`() =
         runBlocking {
             val h = Harness()
             val op = h.enqueueTx()
-            h.executor.execScript = { ExecResult.Ambiguous(reachable = false) }
-            h.engine.drain() // send attempt #1 — outcome unknown
+            // Attempt #1 reaches the server (applies) but the client sees offline.
+            h.executor.landsSilentlyFor = { ExecResult.Ambiguous(reachable = false) }
+            h.engine.drain()
+            assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(op.clientId)!!.status)
 
-            // Connectivity back; the server HAS the op (marker found).
-            h.executor.lookupScript = { LookupResult.Found("""{"transactionIds":["s1"]}""") }
+            // Connectivity back; the reconcile REPLAY returns the stored 2xx.
             val result = h.engine.drain()
 
             assertEquals(DrainResult.Drained(1), result)
             val done = h.store.byClient(op.clientId)!!
             assertEquals(OpStatus.DONE, done.status)
             assertNotNull(done.serverResultJson)
-            // CRITICAL: only the ONE original send — no double-submit.
-            assertEquals(1, h.executor.executed.size)
-            assertEquals(1, h.executor.lookedUp.size)
+            // The replay carried the SAME idempotency key; the server applied ONCE.
+            assertEquals(listOf(op.clientId, op.clientId), h.executor.executed)
+            assertEquals(1, h.executor.serverApplied.size)
         }
 
     @Test
-    fun `ambiguous send that did not land is resent exactly once after reconcile`() = runBlocking {
+    fun `an ambiguous send that never reached the server is applied by the replay`() = runBlocking {
         val h = Harness()
         val op = h.enqueueTx()
-        h.executor.execScript = { ExecResult.Ambiguous(reachable = false) }
+        var call = 0
+        h.executor.execScript = {
+            if (call++ == 0) ExecResult.Ambiguous(reachable = false) // never reached the server
+            else ExecResult.Success(null)                            // replay applies it
+        }
         h.engine.drain()
+        assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(op.clientId)!!.status)
 
-        h.executor.lookupScript = { LookupResult.NotFound }
-        h.executor.execScript = { ExecResult.Success(null) }
         val result = h.engine.drain()
 
         assertEquals(DrainResult.Drained(1), result)
         assertEquals(OpStatus.DONE, h.store.byClient(op.clientId)!!.status)
-        assertEquals(2, h.executor.executed.size) // original attempt + one resend
+        assertEquals(2, h.executor.executed.size)        // original attempt + one replay
+        assertEquals(1, h.executor.serverApplied.size)   // applied exactly once (on the replay)
     }
 
     @Test
-    fun `op stuck in flight from a crash is reconciled by a fresh engine`() = runBlocking {
+    fun `an op left in-flight by a crash is reconciled by replay in a fresh engine`() = runBlocking {
         val store = FakeOpStore()
         val executor = FakeExecutor()
-        // Simulate a crash mid-drain: the row was persisted as IN_FLIGHT and the
-        // process died before any outcome arrived.
+        // Crash mid-drain: the row persisted IN_FLIGHT (streak stamped) and the
+        // send had actually landed server-side before the process died.
         val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
         store.markInFlight(crashed.id, 2L)
+        executor.serverApplied += "c1"
 
         // App restarts with a brand-new engine.
         val h = Harness(store = store, executor = executor)
-        executor.lookupScript = { LookupResult.Found(null) }
         val result = h.engine.drain()
 
         assertEquals(DrainResult.Drained(1), result)
         assertEquals(OpStatus.DONE, store.byClient("c1")!!.status)
-        assertTrue(executor.executed.isEmpty()) // reconciled, never re-sent
+        assertEquals(1, executor.executed.size)          // one replay
+        assertEquals(1, executor.serverApplied.size)     // still applied exactly once
     }
 
     @Test
-    fun `reconcile is impossible while unreachable so nothing is resent`() = runBlocking {
-        val h = Harness()
-        val op = h.enqueueTx()
-        h.executor.execScript = { ExecResult.Ambiguous(reachable = false) }
-        h.engine.drain()
+    fun `an in-flight replay that stays offline keeps the op in-flight without applying`() =
+        runBlocking {
+            val h = Harness()
+            val op = h.enqueueTx()
+            h.executor.execScript = { ExecResult.Ambiguous(reachable = false) }
+            h.engine.drain()
+            val result = h.engine.drain()
 
-        h.executor.lookupScript = { LookupResult.Unreachable }
-        val result = h.engine.drain()
-
-        assertEquals(DrainResult.Offline, result)
-        assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(op.clientId)!!.status)
-        assertEquals(1, h.executor.executed.size) // still only the original send
-    }
+            assertEquals(DrainResult.Offline, result)
+            assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(op.clientId)!!.status)
+            assertEquals(2, h.executor.executed.size)        // each pass attempts a replay
+            assertTrue(h.executor.serverApplied.isEmpty())   // nothing applied — exactly-once holds
+        }
 
     @Test
     fun `server 5xx backs off in flight and reconciles on the next pass`() = runBlocking {
@@ -465,13 +504,76 @@ class SyncEngineTest {
         assertEquals(1, inFlight.attemptCount)
         assertEquals(DrainResult.RetryAt(h.nowMs + backoffDelayMs(1)), r1)
 
-        // After the gate: lookup says it never landed → pending → resent OK.
+        // After the gate: the replay succeeds → done.
         h.nowMs = inFlight.nextAttemptAtMs + 1
-        h.executor.lookupScript = { LookupResult.NotFound }
         h.executor.execScript = { ExecResult.Success(null) }
         assertEquals(DrainResult.Drained(1), h.engine.drain())
         assertEquals(OpStatus.DONE, h.store.byClient(op.clientId)!!.status)
     }
+
+    // ── Replay safety window (server dedupe TTL) ────────────────────────────
+
+    @Test
+    fun `an in-flight op past the replay window parks as needs-attention`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+        // In-flight since 41 h ago — beyond REPLAY_SAFE_WINDOW_MS (40 h).
+        h.store.seedInFlightSince(op.clientId, h.nowMs - 41 * HOUR_MS)
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Idle, result)             // nothing completed
+        val parked = h.store.byClient(op.clientId)!!
+        assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
+        assertEquals(SyncEngine.MSG_REPLAY_WINDOW_EXPIRED, parked.serverError)
+        assertTrue(h.executor.executed.isEmpty())          // never blind-replayed
+    }
+
+    @Test
+    fun `an in-flight op within the replay window is replayed and completes`() = runBlocking {
+        val h = Harness()
+        val op = h.enqueueTx()
+        h.store.seedInFlightSince(op.clientId, h.nowMs - 39 * HOUR_MS)  // still inside 40 h
+        h.executor.execScript = { ExecResult.Success("""{"transactionIds":["s1"]}""") }
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Drained(1), result)
+        assertEquals(OpStatus.DONE, h.store.byClient(op.clientId)!!.status)
+        assertEquals(listOf(op.clientId), h.executor.executed) // exactly one replay
+    }
+
+    @Test
+    fun `a replay-window-parked op steps aside for a later op`() = runBlocking {
+        val h = Harness()
+        val stale = h.enqueueTx("p1")
+        val later = h.enqueueTx("p2")
+        h.store.seedInFlightSince(stale.clientId, h.nowMs - 41 * HOUR_MS)
+
+        val result = h.engine.drain()
+
+        assertEquals(DrainResult.Drained(1), result)
+        assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(stale.clientId)!!.status)
+        assertEquals(OpStatus.DONE, h.store.byClient(later.clientId)!!.status)
+    }
+
+    @Test
+    fun `retry of a replay-window-parked op sends it back to pending with the same key`() =
+        runBlocking {
+            val h = Harness()
+            val op = h.enqueueTx()
+            h.store.seedInFlightSince(op.clientId, h.nowMs - 41 * HOUR_MS)
+            h.engine.drain()
+            assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(op.clientId)!!.status)
+
+            h.engine.retryOp(op.id)
+
+            val retried = h.store.byClient(op.clientId)!!
+            assertEquals(OpStatus.PENDING, retried.status)   // Retry re-sends the SAME key
+            assertEquals(op.clientId, retried.clientId)
+            assertEquals(0, retried.attemptCount)
+            assertNull(retried.serverError)
+        }
 
     // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -538,10 +640,13 @@ class SyncEngineTest {
         assertEquals(false, h.engine.updateOp(ambiguous.id, """{"x":1}"""))
         assertEquals("""{"assetId":"a"}""", h.store.byClient(ambiguous.clientId)!!.payloadJson)
 
+        // Resolve the in-flight head via a successful replay.
+        h.executor.execScript = { ExecResult.Success(null) }
+        h.engine.drain()
+        assertEquals(OpStatus.DONE, h.store.byClient(ambiguous.clientId)!!.status)
+
         // DONE: server truth, immutable through the queue.
         val done = h.enqueueTx()
-        h.executor.lookupScript = { LookupResult.Found(null) } // resolve the in-flight head
-        h.executor.execScript = { ExecResult.Success(null) }
         h.engine.drain()
         assertEquals(OpStatus.DONE, h.store.byClient(done.clientId)!!.status)
         assertEquals(false, h.engine.updateOp(done.id, """{"x":1}"""))
@@ -635,88 +740,123 @@ class SyncEngineTest {
     // ── 10 s hard attempt timeout (server accepts the socket, never replies) ──
 
     @Test
-    fun `execute that hangs times out then reconcile finds it landed and marks done`() = runTest {
+    fun `a timed-out send stays in-flight and backs off rather than parking`() = runTest {
         val h = Harness()
         val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
-        h.executor.execHangsFor = { true }                     // send never returns
-        h.executor.lookupScript = { LookupResult.Found("""{"transactionIds":["s1"]}""") }
+        h.executor.execHangsFor = { true }
 
         val result = h.engine.drain()
 
-        assertEquals(DrainResult.Drained(1), result)
-        val done = h.store.byClient(op.clientId)!!
-        assertEquals(OpStatus.DONE, done.status)
-        assertNotNull(done.serverResultJson)
-        assertEquals(1, h.executor.executed.size)              // the one (timed-out) send
-        assertEquals(1, h.executor.lookedUp.size)              // one bounded reconcile
+        assertTrue("expected RetryAt, was $result", result is DrainResult.RetryAt)
+        val after = h.store.byClient(op.clientId)!!
+        assertEquals(OpStatus.IN_FLIGHT, after.status)   // NOT parked as needs-attention
+        assertNull(after.serverError)
+        assertEquals(1, after.attemptCount)
     }
 
     @Test
-    fun `execute that hangs times out and an absent op parks as timed-out needs-attention`() =
-        runTest {
-            val h = Harness()
-            val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
-            h.executor.execHangsFor = { true }
-            h.executor.lookupScript = { LookupResult.NotFound } // provably never landed
+    fun `a hung send times out then a later replay completes it`() = runTest {
+        val h = Harness()
+        val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        var firstAttempt = true
+        h.executor.execHangsFor = { firstAttempt }
+        h.executor.execScript = { ExecResult.Success("""{"transactionIds":["s1"]}""") }
 
-            val result = h.engine.drain()
+        val r1 = h.engine.drain()                    // times out → in-flight + backoff
+        firstAttempt = false
+        assertTrue(r1 is DrainResult.RetryAt)
+        assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(op.clientId)!!.status)
 
-            assertEquals(DrainResult.Idle, result)              // nothing completed
-            val parked = h.store.byClient(op.clientId)!!
-            assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
-            // Surfaces "timed out" with the existing Retry / Remove affordances.
-            assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
-        }
+        h.nowMs = h.store.byClient(op.clientId)!!.nextAttemptAtMs + 1
+        val r2 = h.engine.drain()                    // replay succeeds
+        assertEquals(DrainResult.Drained(1), r2)
+        assertEquals(OpStatus.DONE, h.store.byClient(op.clientId)!!.status)
+    }
 
     @Test
-    fun `a hung op parks and does not block a later op`() = runTest {
+    fun `a hung head blocks the queue then both drain once it replays`() = runTest {
         val h = Harness()
-        val stuck = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        val head = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
         val later = h.engine.enqueue(OpType.TX_BUY, "p2", """{"assetId":"b"}""")
-        h.executor.execHangsFor = { it.clientId == stuck.clientId }
-        h.executor.lookupScript = { LookupResult.NotFound }    // the stuck op never landed
+        var headHangs = true
+        h.executor.execHangsFor = { headHangs && it.clientId == head.clientId }
+        h.executor.execScript = { ExecResult.Success(null) }
+
+        val r1 = h.engine.drain()                    // head times out, blocks FIFO
+        assertTrue(r1 is DrainResult.RetryAt)
+        assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(head.clientId)!!.status)
+        assertEquals(OpStatus.PENDING, h.store.byClient(later.clientId)!!.status)  // blocked
+        assertEquals(1, h.executor.executed.size)    // only the head was attempted
+
+        headHangs = false
+        h.nowMs = h.store.byClient(head.clientId)!!.nextAttemptAtMs + 1
+        val r2 = h.engine.drain()                    // head replays, then later drains
+        assertEquals(DrainResult.Drained(2), r2)
+        assertEquals(OpStatus.DONE, h.store.byClient(head.clientId)!!.status)
+        assertEquals(OpStatus.DONE, h.store.byClient(later.clientId)!!.status)
+    }
+
+    @Test
+    fun `a hung replay of a crash-ambiguous op parks as timed out instead of wedging`() = runTest {
+        val store = FakeOpStore()
+        val executor = FakeExecutor()
+        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
+        store.markInFlight(crashed.id, 2L)           // ambiguous from a crash
+        val h = Harness(store = store, executor = executor)
+        executor.execHangsFor = { true }             // the reconcile replay hangs too
 
         val result = h.engine.drain()
 
-        assertEquals(DrainResult.Drained(1), result)           // the later op still drained
-        val parked = h.store.byClient(stuck.clientId)!!
+        // IN_FLIGHT pickup + hard-cap hit = second strike → park, don't hold the head.
+        assertEquals(DrainResult.Idle, result)
+        val parked = store.byClient("c1")!!
+        assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
+        assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
+        assertEquals(1, executor.executed.size)      // the one (timed-out) replay
+        assertTrue(executor.serverApplied.isEmpty()) // nothing applied
+    }
+
+    @Test
+    fun `two consecutive timeouts park the op as timed out and the queue flows`() = runTest {
+        val h = Harness()
+        val head = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
+        val later = h.engine.enqueue(OpType.TX_BUY, "p2", """{"assetId":"b"}""")
+        h.executor.execHangsFor = { it.clientId == head.clientId }  // head hangs forever
+        h.executor.execScript = { ExecResult.Success(null) }
+
+        val r1 = h.engine.drain()                    // fresh attempt times out → one free replay
+        assertTrue("expected RetryAt, was $r1", r1 is DrainResult.RetryAt)
+        assertEquals(OpStatus.IN_FLIGHT, h.store.byClient(head.clientId)!!.status)
+        assertEquals(OpStatus.PENDING, h.store.byClient(later.clientId)!!.status)
+
+        h.nowMs = h.store.byClient(head.clientId)!!.nextAttemptAtMs + 1
+        val r2 = h.engine.drain()                    // replay times out → park; successor drains
+        assertEquals(DrainResult.Drained(1), r2)
+        val parked = h.store.byClient(head.clientId)!!
         assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
         assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
         assertEquals(OpStatus.DONE, h.store.byClient(later.clientId)!!.status)
     }
 
     @Test
-    fun `a hung in-flight reconcile ends the drain offline without wedging`() = runTest {
-        val store = FakeOpStore()
-        val executor = FakeExecutor()
-        // An op left IN_FLIGHT by a crash; its reconcile lookup will hang.
-        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
-        store.markInFlight(crashed.id, 2L)
-        val h = Harness(store = store, executor = executor)
-        executor.lookupHangsFor = { true }
-
-        val result = h.engine.drain()
-
-        assertEquals(DrainResult.Offline, result)              // a hung reconcile == Unreachable
-        assertEquals(OpStatus.IN_FLIGHT, store.byClient("c1")!!.status) // reconcilable on a later pass
-        assertTrue(executor.executed.isEmpty())                // never blindly resent
-        assertEquals(1, executor.lookedUp.size)                // the one (timed-out) probe
-    }
-
-    @Test
-    fun `retry of a timed-out op sends it back to pending`() = runTest {
+    fun `retry of a timeout-parked op replays the same key and can complete`() = runTest {
         val h = Harness()
         val op = h.engine.enqueue(OpType.TX_BUY, "p1", """{"assetId":"a"}""")
-        h.executor.execHangsFor = { true }
-        h.executor.lookupScript = { LookupResult.NotFound }
-        h.engine.drain()
+        var hangs = true
+        h.executor.execHangsFor = { hangs }
+        h.executor.execScript = { ExecResult.Success("""{"transactionIds":["s1"]}""") }
+
+        h.engine.drain()                             // strike one → in-flight backoff
+        h.nowMs = h.store.byClient(op.clientId)!!.nextAttemptAtMs + 1
+        h.engine.drain()                             // strike two → parked
         assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(op.clientId)!!.status)
 
-        h.engine.retryOp(op.id)
-
-        val retried = h.store.byClient(op.clientId)!!
-        assertEquals(OpStatus.PENDING, retried.status)         // Retry re-sends the SAME key — safe
-        assertEquals(0, retried.attemptCount)
-        assertNull(retried.serverError)
+        hangs = false                                // server recovers
+        h.engine.retryOp(h.store.byClient(op.clientId)!!.id)
+        val r = h.engine.drain()
+        assertEquals(DrainResult.Drained(1), r)
+        val done = h.store.byClient(op.clientId)!!
+        assertEquals(OpStatus.DONE, done.status)
+        assertEquals(op.clientId, done.clientId)     // SAME idempotency key end to end
     }
 }

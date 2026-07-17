@@ -5,16 +5,14 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
-/** Executes one op against the API and answers reconcile lookups. */
+/**
+ * Executes one op against the API. There is no separate reconcile lookup:
+ * every send carries the op's persisted `Idempotency-Key`, so re-executing an
+ * ambiguous op IS the reconcile — a landed op replays its stored 2xx, a
+ * never-landed op runs exactly once (platform #432, live on all mutations).
+ */
 interface OpExecutor {
     suspend fun execute(op: SyncOp): ExecResult
-
-    /**
-     * Ask the server whether [op] (whose last send was ambiguous) actually
-     * landed — via the `[bt:<clientId>]` note marker or, for value points, the
-     * (date, value) pair. Must be side-effect free.
-     */
-    suspend fun lookup(op: SyncOp): LookupResult
 }
 
 /** Refetch-and-reconcile hook (§7.3): server truth replaces local projections. */
@@ -31,9 +29,18 @@ interface PostSyncRefresher {
  *  - strict FIFO, one op at a time; a backing-off head BLOCKS the queue
  *    (ledger events must apply in order), but needs-attention ops never do;
  *  - an op is marked in-flight BEFORE its send; any ambiguous outcome (crash,
- *    lost response, 5xx) leaves it in-flight, and the next drain RECONCILES it
- *    against the server before any resend — this is what makes a crash
- *    mid-drain unable to double-submit;
+ *    lost response, 5xx, 10 s timeout) leaves it in-flight, and the next drain
+ *    RECONCILES it by re-sending the SAME idempotency key — a replay of a
+ *    landed op returns its stored 2xx, a replay of a never-landed op runs once,
+ *    so a crash mid-drain can never double-submit;
+ *  - the replay guarantee lives only inside the server's dedupe TTL, so an
+ *    ambiguous op whose in-flight streak is older than [REPLAY_SAFE_WINDOW_MS]
+ *    is parked NEEDS_ATTENTION instead of blind-replayed;
+ *  - a hung server can't wedge the queue: a timed-out fresh attempt earns ONE
+ *    automatic replay; when the replay times out too, the op parks
+ *    NEEDS_ATTENTION ("timed out", Retry/Remove) and steps aside — worst case
+ *    ~10 s + backoff + ~10 s before successors flow again (owner directive
+ *    2026-07-15);
  *  - business rejections (4xx) become needs-attention with the server's
  *    message and the drain moves on;
  *  - auth failures stop the drain with ops left pending: an expired session
@@ -121,60 +128,45 @@ class SyncEngine(
                 // Backoff gate — the head blocks the whole queue (FIFO ordering).
                 if (op.nextAttemptAtMs > now()) return@loop DrainResult.RetryAt(op.nextAttemptAtMs)
 
-                if (op.status == OpStatus.IN_FLIGHT) {
-                    // Ambiguous from a crash / lost response: reconcile, never resend
-                    // blindly. Bounded by the same cap so a hung lookup (server accepts
-                    // the socket, never replies) can't wedge the drain either.
-                    when (val looked = withTimeoutOrNull(attemptTimeoutMs) { executor.lookup(op) }) {
-                        is LookupResult.Found -> {
-                            store.markDone(op.id, looked.serverResultJson, now())
-                            op.portfolioId?.let(affected::add)
-                            completed++
-                        }
-
-                        LookupResult.NotFound ->
-                            // Provably absent — safe to resend right away.
-                            store.markPending(op.id, op.attemptCount, 0L, now())
-
-                        // Unreachable OR a timed-out reconcile: behave like offline —
-                        // wait for a healthy link; the op stays in-flight for a later pass.
-                        LookupResult.Unreachable, null -> return@loop DrainResult.Offline
-                    }
+                if (op.status == OpStatus.IN_FLIGHT &&
+                    op.firstAttemptAtMs != 0L &&
+                    now() - op.firstAttemptAtMs > REPLAY_SAFE_WINDOW_MS
+                ) {
+                    // Ambiguous op past the server's dedupe TTL: a blind replay could
+                    // double-apply an op that already landed, so step aside and let the
+                    // user decide (needs-attention never blocks the queue). Their Retry
+                    // re-sends the SAME key — a documented, chosen residual risk.
+                    store.markNeedsAttention(op.id, MSG_REPLAY_WINDOW_EXPIRED, now())
                     continue
                 }
 
-                // PENDING head — attempt the send (carries the op's persisted
-                // idempotency key; a replay of a landed op returns a 2xx). Bounded by
-                // the hard cap: a server that never replies must not stall the queue.
+                // Mark (or re-mark) in-flight BEFORE the send: a PENDING head stamps the
+                // streak's firstAttemptAtMs and becomes crash-reconcilable; an IN_FLIGHT
+                // head (crash / lost response / 5xx / timeout) keeps its streak start and
+                // RECONCILES by replaying the same idempotency key — a landed op returns
+                // its stored 2xx, a never-landed op runs exactly once. One bounded attempt:
+                // a server that never replies is cancelled at the hard cap (returns null).
+                val wasReplay = op.status == OpStatus.IN_FLIGHT
                 store.markInFlight(op.id, now())
-                var exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(op) }
-                if (exec is ExecResult.InvalidKey) {
-                    // Should never happen — keys are canonical UUIDs. #9: the server
-                    // rejected the key as non-UUID. A non-2xx releases the key, so
-                    // mint a fresh one, persist it, and retry ONCE; a repeat is a
-                    // permanent failure handled by the InvalidKey branch below.
-                    val regenerated = store.regenerateClientId(op.id, now())
-                    if (regenerated != null) {
-                        exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(regenerated) }
-                    }
-                }
-                when (val e = exec) {
+                when (val e = attempt(op)) {
                     null -> {
-                        // The attempt blew the hard cap while online: cancellation
-                        // aborted the Retrofit call. The op is still IN_FLIGHT so a
-                        // single bounded reconcile can't double-submit — if it actually
-                        // landed, complete it; otherwise park it as timed-out with the
-                        // Retry / Remove affordances (Retry re-sends the SAME
-                        // idempotency key — safe).
-                        when (val looked = withTimeoutOrNull(attemptTimeoutMs) { executor.lookup(op) }) {
-                            is LookupResult.Found -> {
-                                store.markDone(op.id, looked.serverResultJson, now())
-                                op.portfolioId?.let(affected::add)
-                                completed++
-                            }
-                            // NotFound / Unreachable / lookup timeout — surface "timed out".
-                            else -> store.markNeedsAttention(op.id, MSG_ATTEMPT_TIMED_OUT, now())
+                        // Timed out — outcome unknown. A fresh (PENDING-picked) op gets ONE
+                        // free automatic replay: stay in-flight and back off, the next pass
+                        // re-sends the same key. But when the timed-out attempt WAS already
+                        // a replay (two consecutive hard-cap hits on the same streak), the
+                        // server is wedged for this op — park it with Retry/Remove (owner
+                        // directive 2026-07-15: ~10 s then "timed out", never a stuck
+                        // queue) and move on; needs-attention steps aside, so successors
+                        // flow. Retry re-sends the SAME key — exactly-once-safe inside
+                        // [REPLAY_SAFE_WINDOW_MS].
+                        if (wasReplay) {
+                            store.markNeedsAttention(op.id, MSG_ATTEMPT_TIMED_OUT, now())
+                            continue
                         }
+                        val attempts = op.attemptCount + 1
+                        val at = now() + backoffDelayMs(attempts)
+                        store.markInFlightAttempt(op.id, attempts, at, now())
+                        return@loop DrainResult.RetryAt(at)
                     }
 
                     is ExecResult.Success -> {
@@ -191,6 +183,11 @@ class SyncEngine(
                     ExecResult.InvalidKey -> store.markNeedsAttention(op.id, MSG_KEY_INVALID, now())
 
                     is ExecResult.RetryableNotApplied -> {
+                        // Provably NOT applied (408/429, or IDEMPOTENCY_IN_PROGRESS —
+                        // a prior same-key send is still processing): back off as
+                        // PENDING. The previous attempt left no effect, so the streak
+                        // clock restarts when it next goes in-flight (a longer, honest
+                        // ambiguity window than counting from the discarded attempt).
                         val attempts = op.attemptCount + 1
                         val at = now() + backoffDelayMs(attempts)
                         store.markPending(op.id, attempts, at, now())
@@ -201,13 +198,13 @@ class SyncEngine(
                         val attempts = op.attemptCount + 1
                         return@loop if (e.reachable) {
                             // Server reached but outcome unclear (5xx): back off,
-                            // stay in-flight so the next pass reconciles first.
+                            // stay in-flight so the next pass replays first.
                             val at = now() + backoffDelayMs(attempts)
                             store.markInFlightAttempt(op.id, attempts, at, now())
                             DrainResult.RetryAt(at)
                         } else {
                             // Transport failure: wait for connectivity; no gate so
-                            // the reconnect drain reconciles immediately.
+                            // the reconnect drain replays immediately.
                             store.markInFlightAttempt(op.id, attempts, 0L, now())
                             DrainResult.Offline
                         }
@@ -230,6 +227,26 @@ class SyncEngine(
         result
     }
 
+    /**
+     * One bounded send of [op]; the reconcile replay of an in-flight op uses this
+     * same path (send == reconcile now that the idempotency key makes a resend
+     * exactly-once). Returns null when the hard cap [attemptTimeoutMs] fires (a
+     * server that accepts the socket but never replies). A single key
+     * regeneration handles the should-never-happen non-UUID rejection (#9): a
+     * non-2xx released the key server-side, so minting a fresh one and retrying
+     * once cannot double-apply; a repeat surfaces as [ExecResult.InvalidKey].
+     */
+    private suspend fun attempt(op: SyncOp): ExecResult? {
+        var exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(op) }
+        if (exec is ExecResult.InvalidKey) {
+            val regenerated = store.regenerateClientId(op.id, now())
+            if (regenerated != null) {
+                exec = withTimeoutOrNull(attemptTimeoutMs) { executor.execute(regenerated) }
+            }
+        }
+        return exec
+    }
+
     companion object {
         /** Done rows kept for the debug/pending screens before pruning. */
         const val KEEP_DONE_ROWS = 25
@@ -239,19 +256,40 @@ class SyncEngine(
             "This change couldn't be submitted (its sync key was rejected). Discard it and re-create it."
 
         /**
-         * Hard per-attempt cap (send AND reconcile lookup): an attempt only tries
-         * for 10 s while online; a server that accepts the connection but never
+         * Hard per-attempt cap (each send / replay): an attempt only tries for
+         * 10 s while online; a server that accepts the connection but never
          * replies is aborted so the op can't sit in-flight forever.
          */
         const val ATTEMPT_TIMEOUT_MS = 10_000L
 
         /**
+         * Conservative replay-reconcile window. The server stores key→response for
+         * ≥48 h per user; past that a resend of an ambiguous op is no longer a
+         * guaranteed replay and could double-apply. An in-flight op whose streak
+         * ([SyncOp.firstAttemptAtMs]) is older than this parks instead of
+         * replaying. 40 h leaves generous headroom under the 48 h floor.
+         */
+        const val REPLAY_SAFE_WINDOW_MS = 40L * 60 * 60 * 1000
+
+        /**
          * Client-generated park message (same raw-`serverError` pattern as
          * [MSG_KEY_INVALID]; the pending-sync UIs render `serverError` verbatim,
-         * with no sentinel→resource mapping) for an op whose online attempt blew
-         * [ATTEMPT_TIMEOUT_MS] and whose reconcile couldn't prove it landed.
+         * with no sentinel→resource mapping) for an ambiguous op the drain can no
+         * longer safely replay because its in-flight streak crossed
+         * [REPLAY_SAFE_WINDOW_MS]. The user's Retry re-sends the SAME key.
+         */
+        const val MSG_REPLAY_WINDOW_EXPIRED =
+            "Couldn't confirm whether this change reached the server. " +
+                "Check your transactions before retrying."
+
+        /**
+         * Park message when an op's attempt AND its automatic replay both blew
+         * [ATTEMPT_TIMEOUT_MS] (the server accepts the socket but never answers
+         * this request). Same raw-`serverError` pattern as [MSG_KEY_INVALID].
+         * Retry re-sends the SAME idempotency key — safe inside
+         * [REPLAY_SAFE_WINDOW_MS].
          */
         const val MSG_ATTEMPT_TIMED_OUT =
-            "This change timed out (the server didn't respond within 10 seconds). Retry, or remove it."
+            "This change timed out (the server didn't respond). Retry, or remove it."
     }
 }

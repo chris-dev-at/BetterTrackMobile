@@ -51,17 +51,18 @@ data class SyncOp(
     val id: Long,
     /**
      * Client-generated UUID minted at enqueue and persisted for life (§7.3).
-     * Serves as BOTH the server `Idempotency-Key` (platform #432 — a replayed
-     * send runs exactly once) AND the `[bt:<uuid>]` reconcile marker retained as
-     * defense-in-depth for ambiguous-outcome lookups. Regenerated only if the
-     * server ever rejects it as invalid ([ExecResult.InvalidKey]).
+     * This IS the server `Idempotency-Key` (platform #432, live on ALL portfolio
+     * mutations): every send carries it, so a replayed retry of a landed op
+     * returns a byte-identical 2xx and a replay of a never-landed op executes
+     * exactly once. It is the SOLE exactly-once mechanism — the legacy
+     * `[bt:<uuid>]` note marker is retired. Regenerated only if the server ever
+     * rejects it as non-UUID ([ExecResult.InvalidKey]).
      *
-     * 48 h caveat (#9): server-side replay protection lapses after ~48 h, so the
-     * queue is flushed promptly. An op still queued past that keeps the SAME key
-     * — an expired key simply behaves like a fresh one server-side (a first
-     * application, not a replay), so no extra machinery is needed; the only
-     * residual risk is the ordinary "did an ancient offline write already land?"
-     * question the reconcile marker + refetch already answer.
+     * TTL caveat (#9): the server stores key→response for ≥48 h per user, then
+     * the replay guarantee lapses. Reconcile replays an ambiguous op only while
+     * it is younger than [SyncEngine.REPLAY_SAFE_WINDOW_MS] (a conservative 40 h
+     * measured by [firstAttemptAtMs]); past that it parks NEEDS_ATTENTION rather
+     * than blind-replay a possibly-already-applied op past its dedupe window.
      */
     val clientId: String,
     val type: OpType,
@@ -75,6 +76,14 @@ data class SyncOp(
     val accountKey: String,
     val createdAtMs: Long,
     val updatedAtMs: Long,
+    /**
+     * Wall-clock ms the op began its CURRENT in-flight streak (0 = never sent /
+     * not currently in-flight). Set when a non-in-flight op transitions to
+     * IN_FLIGHT, preserved across ambiguous replays, and implicitly reset when
+     * the op leaves IN_FLIGHT (a provably-not-applied 408/429/auth, a queue
+     * edit, or a Retry). Bounds the replay-reconcile window (see [clientId]).
+     */
+    val firstAttemptAtMs: Long = 0L,
 )
 
 // ── Op payloads (kotlinx-serialized into SyncOp.payloadJson) ─────────────────
@@ -206,13 +215,6 @@ sealed interface ExecResult {
      * key server-side, so regenerating is safe (no double-apply).
      */
     data object InvalidKey : ExecResult
-}
-
-/** Outcome of asking the server whether an ambiguous op actually landed. */
-sealed interface LookupResult {
-    data class Found(val serverResultJson: String?) : LookupResult
-    data object NotFound : LookupResult
-    data object Unreachable : LookupResult
 }
 
 // ── Backoff ─────────────────────────────────────────────────────────────────

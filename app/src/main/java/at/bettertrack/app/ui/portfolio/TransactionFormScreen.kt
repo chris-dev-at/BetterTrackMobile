@@ -133,6 +133,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import java.util.UUID
 
 /**
  * The Step-8 buy/sell form (spec §6.2) — phone-first, number-first, primary
@@ -318,8 +319,15 @@ class TransactionFormViewModel(
     private val _uncoveredEntryPriceText = MutableStateFlow("")
     val uncoveredEntryPriceText: StateFlow<String> = _uncoveredEntryPriceText.asStateFlow()
 
-    /** Original server note of a synced edit — its `[bt:…]` marker is preserved. */
+    /** Original server note of a synced edit — a legacy `[bt:…]` marker is preserved. */
     private var originalSyncedNote: String? = null
+
+    /**
+     * Stable Idempotency-Key for deleting THIS synced transaction — minted once
+     * and reused across in-form retries so a retry after a lost 204 replays the
+     * server's stored 2xx instead of 404-ing on the already-removed row.
+     */
+    private var syncedDeleteKey: String? = null
 
     /**
      * Snapshot of the synced transaction as loaded — the PATCH body carries
@@ -1045,7 +1053,10 @@ class TransactionFormViewModel(
             _events.value = TxFormEvent.Close
             return
         }
-        when (val r = repo.updateTransaction(m.portfolioId, m.txId, body)) {
+        // Per-submission Idempotency-Key: a resend of this same PATCH replays the
+        // server's stored 2xx (the edit is field-absolute, so also naturally safe).
+        val key = UUID.randomUUID().toString()
+        when (val r = repo.updateTransaction(m.portfolioId, m.txId, body, key)) {
             is BtResult.Ok -> _events.value = TxFormEvent.Close
             is BtResult.Err -> _serverError.value = r.error.userMessage
         }
@@ -1060,7 +1071,9 @@ class TransactionFormViewModel(
             when (m) {
                 is FormMode.EditSynced -> {
                     if (isOnline.value) {
-                        when (val r = repo.deleteTransaction(m.portfolioId, m.txId)) {
+                        val key = syncedDeleteKey
+                            ?: UUID.randomUUID().toString().also { syncedDeleteKey = it }
+                        when (val r = repo.deleteTransaction(m.portfolioId, m.txId, key)) {
                             is BtResult.Ok -> _events.value = TxFormEvent.Close
                             is BtResult.Err -> _serverError.value = r.error.userMessage
                         }

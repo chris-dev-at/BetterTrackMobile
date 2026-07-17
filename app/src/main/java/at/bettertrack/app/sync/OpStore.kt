@@ -47,8 +47,8 @@ interface OpStore {
     /**
      * Mint a fresh idempotency key (client UUID) for an op whose previous key the
      * server rejected as invalid (platform #432). Status/payload/attempts are
-     * untouched — only the key (and marker identity) changes. Returns the updated
-     * op, or null if it no longer exists.
+     * untouched — only the key changes. Returns the updated op, or null if it no
+     * longer exists.
      */
     suspend fun regenerateClientId(id: Long, nowMs: Long): SyncOp?
 
@@ -104,6 +104,15 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             serverResultJson = null,
             updatedAtMs = nowMs,
         )
+        // Stamp the in-flight streak start on ENTRY: a fresh (non-in-flight) op — or a
+        // legacy/crashed row with no stamp — starts its clock now; an op already
+        // mid-streak keeps its original start so [SyncEngine.REPLAY_SAFE_WINDOW_MS]
+        // measures the true ambiguity age. (updateState above never touches
+        // firstAttemptAtMs, so a 408/429/auth/edit/Retry that flipped the op to
+        // PENDING implicitly restarts the clock here on its next attempt.)
+        if (op.status != OpStatus.IN_FLIGHT.wire || op.firstAttemptAtMs == 0L) {
+            dao.updateFirstAttempt(id, nowMs)
+        }
     }
 
     override suspend fun markInFlightAttempt(
@@ -203,4 +212,5 @@ fun SyncOpEntity.toModel(): SyncOp = SyncOp(
     accountKey = accountKey,
     createdAtMs = createdAtMs,
     updatedAtMs = updatedAtMs,
+    firstAttemptAtMs = firstAttemptAtMs,
 )
