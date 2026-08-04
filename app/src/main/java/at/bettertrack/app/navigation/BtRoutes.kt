@@ -10,8 +10,9 @@ import kotlinx.serialization.Serializable
  */
 
 // ── Auth & lock ────────────────────────────────────────────────────────────
-@Serializable data object LoginRoute            // TODO(step 4)
-@Serializable data object AppLockRoute          // reserved (lock is a BtRoot gate, not a nav route)
+// S6 P2-19: LoginRoute / AppLockRoute were declared here and registered as
+// "Under construction" placeholders, but nothing ever navigated to them — login
+// and the app lock are BtRoot gates that run OUTSIDE this graph. Both are gone.
 /** Step 17 (§5): set-up / change-PIN flow. [change] gates verify-current-first. */
 @Serializable data class AppLockSetupRoute(val change: Boolean = false)
 
@@ -73,10 +74,12 @@ import kotlinx.serialization.Serializable
 // ── Market ─────────────────────────────────────────────────────────────────
 @Serializable data class AssetPageRoute(val assetId: String)                // TODO(step 11)
 @Serializable data object SearchRoute                                       // TODO(step 11)
-@Serializable data class WatchlistRoute(val watchlistId: String? = null)    // TODO(step 12)
+// S6 P2-19: WatchlistRoute is gone — watchlists are a PANEL inside the Assets
+// tab (WatchlistPanel), never a destination of their own.
 
 // ── Workboard ──────────────────────────────────────────────────────────────
-@Serializable data object ConglomerateListRoute                             // TODO(step 13)
+// S6 P2-19: ConglomerateListRoute is gone — the list is a SEGMENT of the
+// Workboard tab, composed directly by WorkboardScreen.
 @Serializable data class ConglomerateBuilderRoute(val conglomerateId: String? = null) // TODO(step 13)
 @Serializable data class ConglomerateDetailRoute(val conglomerateId: String) // TODO(step 13)
 
@@ -101,7 +104,8 @@ import kotlinx.serialization.Serializable
 
 // ── Settings (spec §6.12) ────────────────────────────────────────────────────
 @Serializable data object SettingsRoute
-@Serializable data object SettingsAccountRoute
+// S6 P2-19: SettingsAccountRoute is gone — account settings live on SettingsRoute
+// itself; the separate route only ever rendered "Under construction".
 @Serializable data object SettingsSecurityRoute
 @Serializable data object SettingsNotificationsRoute
 @Serializable data object SettingsLanguageRoute

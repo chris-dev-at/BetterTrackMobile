@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,6 +56,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -81,6 +83,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -227,11 +230,19 @@ fun NotificationsInboxScreen(
                             Icon(
                                 Icons.Outlined.Archive,
                                 contentDescription = stringResource(R.string.bt_notif_archive_all),
-                                tint = bt.gold,
+                                // S6 P2-21: this used to be tinted gold. Gold is this
+                                // app's SELECTED / active state, so a permanently gold
+                                // toolbar icon read as "archive mode is on" — a state
+                                // that does not exist. It is an ordinary action.
+                                tint = bt.textSecondary,
                             )
                         }
                     }
-                    if (actionsEnabled) {
+                    // S6 P2-21: the debug "simulate a notification" flask used to sit
+                    // inline with the real actions, as if shipping. It is an overflow
+                    // ENTRY now, and only in debug builds — so the release toolbar is
+                    // exactly the actions a user has.
+                    if (actionsEnabled || BuildConfig.DEBUG) {
                         Box {
                             IconButton(onClick = { overflowOpen = true }) {
                                 Icon(
@@ -248,27 +259,34 @@ fun NotificationsInboxScreen(
                                 // row is ALREADY archived, so there are no read+active rows
                                 // to sweep. "Archive all" (the toolbar action above) covers
                                 // clearing the active inbox; the Archive view manages history.
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.bt_notif_bulk_delete_archived), color = bt.loss) },
-                                    leadingIcon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null, tint = bt.loss) },
-                                    enabled = archivedCount > 0,
-                                    onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteArchived },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.bt_notif_bulk_delete_all), color = bt.loss) },
-                                    leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = bt.loss) },
-                                    enabled = totalCount > 0,
-                                    onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteAll },
-                                )
+                                if (actionsEnabled) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.bt_notif_bulk_delete_archived), color = bt.loss) },
+                                        leadingIcon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null, tint = bt.loss) },
+                                        enabled = archivedCount > 0,
+                                        onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteArchived },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.bt_notif_bulk_delete_all), color = bt.loss) },
+                                        leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = bt.loss) },
+                                        enabled = totalCount > 0,
+                                        onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteAll },
+                                    )
+                                }
+                                if (BuildConfig.DEBUG) {
+                                    if (actionsEnabled) HorizontalDivider(color = bt.border)
+                                    DropdownMenuItem(
+                                        // Debug-only affordance: deliberately not localized.
+                                        text = { Text("Simulate a notification", color = bt.textMuted) },
+                                        leadingIcon = { Icon(Icons.Outlined.Science, contentDescription = null, tint = bt.textMuted) },
+                                        onClick = {
+                                            overflowOpen = false
+                                            BtMessagingService.debugSimulate(context, simulateIndex)
+                                            simulateIndex++
+                                        },
+                                    )
+                                }
                             }
-                        }
-                    }
-                    if (BuildConfig.DEBUG) {
-                        IconButton(onClick = {
-                            BtMessagingService.debugSimulate(context, simulateIndex)
-                            simulateIndex++
-                        }) {
-                            Icon(Icons.Outlined.Science, contentDescription = "Simulate a notification", tint = bt.textMuted)
                         }
                     }
                 },
@@ -320,6 +338,12 @@ fun NotificationsInboxScreen(
                                         onClick = {
                                             scope.launch { repo.markRead(listOf(n.id)) }
                                             resolveDeepLink(n.type, n.payload)?.let(onDeepLink)
+                                        },
+                                        // Only alert rows get the manager shortcut.
+                                        onAlerts = if (n.kind == NotifKind.AlertTriggered) {
+                                            { onDeepLink(NotifDeepLink.Alerts) }
+                                        } else {
+                                            null
                                         },
                                         onArchive = { onArchive(n) },
                                         onUnarchive = { onUnarchive(n) },
@@ -481,6 +505,8 @@ private fun NotificationRow(
     notification: AppNotification,
     showActions: Boolean,
     onClick: () -> Unit,
+    /** Non-null on an alert row only — the "Manage alerts" quick-entry (S6 P1-10). */
+    onAlerts: (() -> Unit)?,
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onDelete: () -> Unit,
@@ -494,7 +520,7 @@ private fun NotificationRow(
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 4.dp), verticalAlignment = Alignment.Top) {
+        Row(modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 14.dp), verticalAlignment = Alignment.Top) {
             // Icon-in-badge (matches the empty/error state language).
             Box(
                 modifier = Modifier
@@ -506,18 +532,41 @@ private fun NotificationRow(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
+                // S6 P1-16: timestamp, unread dot and the ⋮ all belong to the ROW,
+                // so they all sit on the title's line. The overflow used to be a
+                // sibling of this whole column and therefore floated ~10dp below
+                // the dot it was supposed to line up with. Its 40dp touch target
+                // is preserved with requiredSize, overflowing a 20dp slot that
+                // does not stretch the title line.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         notification.title.ifBlank { stringResource(notifKindTitleRes(notification.kind)) },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (notification.isUnread) FontWeight.SemiBold else FontWeight.Medium,
                         color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     Text(inboxRelativeTime(notification.createdAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
                     if (notification.isUnread) {
                         Spacer(Modifier.width(8.dp))
                         BtUnreadDot()
+                    }
+                    if (showActions) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier.size(width = 22.dp, height = 20.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            RowOverflow(
+                                notification = notification,
+                                onAlerts = onAlerts,
+                                onArchive = onArchive,
+                                onUnarchive = onUnarchive,
+                                onDelete = onDelete,
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.size(3.dp))
@@ -535,14 +584,6 @@ private fun NotificationRow(
                     )
                 }
             }
-            if (showActions) {
-                RowOverflow(
-                    notification = notification,
-                    onArchive = onArchive,
-                    onUnarchive = onUnarchive,
-                    onDelete = onDelete,
-                )
-            }
         }
     }
 }
@@ -550,6 +591,7 @@ private fun NotificationRow(
 @Composable
 private fun RowOverflow(
     notification: AppNotification,
+    onAlerts: (() -> Unit)?,
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onDelete: () -> Unit,
@@ -557,10 +599,23 @@ private fun RowOverflow(
     val bt = BtTheme.colors
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = { open = true }, modifier = Modifier.requiredSize(40.dp)) {
             Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.bt_notif_more_actions), tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // S6 P1-10: an alert that just fired is exactly when you want to
+            // re-arm, retune or delete it — and the manager was four taps away
+            // (Workboard → Alerts, after finding the Workboard tab at all). The
+            // row's PRIMARY tap still opens the asset, which is what you came to
+            // look at; this rides the overflow the row already had, so nothing
+            // new competes for the row surface.
+            onAlerts?.let { alerts ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_notif_action_manage_alerts)) },
+                    leadingIcon = { Icon(Icons.Outlined.NotificationsActive, contentDescription = null) },
+                    onClick = { open = false; alerts() },
+                )
+            }
             // No separate "Mark read": on v4 reading a row ARCHIVES it (PR #486), so
             // mark-read and archive are the SAME server op. "Archive" (below) is the
             // single non-delete affordance — it reads + archives and offers Undo.

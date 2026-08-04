@@ -64,6 +64,33 @@ class ChatWiringTest {
         assertEquals(5, conversationsToTotalUnread(list))
     }
 
+    /**
+     * S6 P1-10 put this number in the app-shell top bar, on every tab, so the
+     * "no badge" cases now matter visually and not just arithmetically.
+     */
+    @Test
+    fun total_unread_is_zero_with_no_conversations() {
+        assertEquals(0, conversationsToTotalUnread(emptyList()))
+    }
+
+    @Test
+    fun total_unread_is_zero_when_every_thread_is_read() {
+        val list = listOf(
+            Conversation("c1", "u1", "a", "p", 10L, unread = 0),
+            Conversation("c2", "u2", "b", "p", 20L, unread = 0),
+        )
+        assertEquals(0, conversationsToTotalUnread(list))
+    }
+
+    @Test
+    fun total_unread_counts_a_single_busy_thread() {
+        val list = listOf(
+            Conversation("c1", "u1", "a", "p", 10L, unread = 0),
+            Conversation("c2", "u2", "b", "p", 20L, unread = 12),
+        )
+        assertEquals(12, conversationsToTotalUnread(list))
+    }
+
     @Test
     fun conversations_sorted_newest_first() {
         val a = Conversation("c1", "u1", "a", "", 100L, 0)

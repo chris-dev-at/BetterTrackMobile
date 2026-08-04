@@ -339,7 +339,14 @@ fun SearchScreen(
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // S6 P1-11: focus AND keyboard. Every entry point into search (the Assets-tab
+    // field, the top-bar glyph, the empty-watchlist CTA) is a user who has already
+    // decided to type; landing on a focused-but-silent field made the tab's search
+    // affordance feel like a button that did half the job.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
 
     pickerAsset?.let { asset ->
         at.bettertrack.app.ui.watchlist.BoardPickerSheet(asset = asset, onDismiss = { pickerAsset = null })

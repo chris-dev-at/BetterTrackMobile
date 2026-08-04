@@ -12,7 +12,9 @@ import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.sync.ConnectivityMonitor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -109,11 +111,67 @@ class PortfolioOverviewViewModel(
     private val _switcherVisible = MutableStateFlow(false)
     val switcherVisible: StateFlow<Boolean> = _switcherVisible.asStateFlow()
 
-    fun openSwitcher() { _switcherVisible.value = true }
+    /**
+     * Portfolios whose on-open detail prefetch did NOT land (S6 P1-6). The sheet
+     * shimmers a row until its totals arrive; a row in this set has stopped
+     * waiting and falls back to the em-dash, so the shimmer is never a lie that
+     * runs forever.
+     */
+    private val _switcherValueFailed = MutableStateFlow<Set<String>>(emptySet())
+    val switcherValueFailed: StateFlow<Set<String>> = _switcherValueFailed.asStateFlow()
+
+    private var switcherPrefetchJob: Job? = null
+
+    fun openSwitcher() {
+        _switcherVisible.value = true
+        prefetchSwitcherTotals()
+    }
 
     fun dismissSwitcher() {
         _switcherVisible.value = false
         _switcherError.value = null
+        // Nothing on screen is waiting on these any more.
+        switcherPrefetchJob?.cancel()
+        switcherPrefetchJob = null
+    }
+
+    /**
+     * Fill in the per-portfolio values the switcher would otherwise leave blank.
+     *
+     * Only portfolios you have actually opened have their totals cached, so a
+     * multi-portfolio account used to see a column of em-dashes. The repository
+     * makes this cheap — one `refreshPortfolioDetail` per id, already Room-backed
+     * — so the sheet fans them out on open, capped at
+     * [SWITCHER_PREFETCH_CONCURRENCY] in flight, and the rows fill in as each
+     * lands. Offline there is nothing to wait for, so every pending row falls
+     * straight to the em-dash instead of shimmering at a user who has no
+     * connection.
+     */
+    private fun prefetchSwitcherTotals() {
+        switcherPrefetchJob?.cancel()
+        val ids = switcherPrefetchIds(portfolios.value, _switcherValueFailed.value)
+        if (ids.isEmpty()) return
+        if (!isOnline.value) {
+            _switcherValueFailed.value = _switcherValueFailed.value + ids
+            return
+        }
+        switcherPrefetchJob = viewModelScope.launch {
+            ids.chunked(SWITCHER_PREFETCH_CONCURRENCY).forEach { chunk ->
+                coroutineScope {
+                    chunk.map { id ->
+                        async {
+                            id to (repo.refreshPortfolioDetail(id) is BtResult.Err)
+                        }
+                    }.awaitAll()
+                }.filter { (_, failed) -> failed }
+                    .map { (id, _) -> id }
+                    .let { failedIds ->
+                        if (failedIds.isNotEmpty()) {
+                            _switcherValueFailed.value = _switcherValueFailed.value + failedIds
+                        }
+                    }
+            }
+        }
     }
 
     private var lastRefreshAtMs = 0L

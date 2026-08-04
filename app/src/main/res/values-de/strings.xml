@@ -43,6 +43,7 @@
     <string name="bt_tab_social">Social</string>
     <string name="bt_tab_workboard">Workboard</string>
     <string name="bt_top_notifications">Mitteilungen</string>
+    <string name="bt_top_messages">Nachrichten</string>
     <string name="bt_top_settings">Einstellungen</string>
     <string name="bt_offline_banner">Offline — Daten von %1$s</string>
     <string name="bt_offline_banner_no_data">Offline</string>
@@ -298,7 +299,7 @@
     <string name="bt_cash_new_source">Neue Quelle</string>
     <string name="bt_cash_new_source_title">Neue Bargeldquelle</string>
     <string name="bt_cash_rename_source_title">Bargeldquelle bearbeiten</string>
-    <string name="bt_cash_main_badge">Haupt</string>
+    <string name="bt_cash_primary_badge">Primär</string>
     <string name="bt_cash_source_actions_cd">Quellen-Aktionen</string>
     <string name="bt_cash_archive_title">Quelle archivieren?</string>
     <string name="bt_cash_archive_message">„%1$s“ wird archiviert. Der Saldo muss null sein.</string>
@@ -625,6 +626,7 @@
     <string name="bt_notif_filter_archived">Archiviert</string>
     <string name="bt_notif_filter_all">Alle</string>
     <string name="bt_notif_more_actions">Weitere Aktionen</string>
+    <string name="bt_notif_action_manage_alerts">Kursalarme verwalten</string>
     <string name="bt_notif_archived_label">Archiviert</string>
     <string name="bt_notif_action_mark_read">Als gelesen markieren</string>
     <string name="bt_notif_action_archive">Archivieren</string>
@@ -958,6 +960,7 @@
     <string name="bt_social_offline_body">Freunde und Freigaben brauchen eine Verbindung. Stelle die Verbindung wieder her, um sie zu sehen.</string>
     <string name="bt_social_friends_since">Befreundet seit %1$s</string>
     <string name="bt_social_message_friend_cd">@%1$s eine Nachricht schreiben</string>
+    <string name="bt_social_open_friend_cd">Übersicht von @%1$s öffnen</string>
     <string name="bt_social_request_wants">Möchte mit dir befreundet sein</string>
     <string name="bt_social_request_waiting">Wartet auf Annahme</string>
     <string name="bt_social_decline_cd">Ablehnen</string>

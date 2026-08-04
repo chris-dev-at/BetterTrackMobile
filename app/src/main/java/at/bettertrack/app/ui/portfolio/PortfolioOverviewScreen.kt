@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -36,10 +38,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -68,6 +72,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
@@ -121,6 +126,7 @@ fun PortfolioOverviewScreen(
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val switcherBusy by vm.switcherBusy.collectAsStateWithLifecycle()
     val switcherError by vm.switcherError.collectAsStateWithLifecycle()
+    val switcherValueFailed by vm.switcherValueFailed.collectAsStateWithLifecycle()
     val pendingTx by vm.pendingTx.collectAsStateWithLifecycle()
 
     // Sheet visibility lives in the VM so the shell top-bar selector can open it.
@@ -133,11 +139,25 @@ fun PortfolioOverviewScreen(
 
     val bt = BtTheme.colors
     val pullState = rememberPullToRefreshState()
+    // S6 P1-7: the buy/sell FAB sits exactly over the allocation legend's value
+    // column, so on a portfolio with more than a couple of slices the reader
+    // simply cannot see the last percentages. Rather than inset the legend (which
+    // would waste that width on every screen, FAB or no FAB), the FAB gets out of
+    // the way while the user scrolls down and comes straight back on the way up.
+    val fabVisibility = rememberBtFabVisibility()
+    val listState = rememberLazyListState()
+    // Back at the very top = nothing to get out of the way of. This also covers
+    // the short-list case, where the FAB must never be able to stay hidden.
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }.collect { atTop -> if (atTop) fabVisibility.show() }
+    }
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = { vm.refresh() },
         state = pullState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().nestedScroll(fabVisibility.nestedScroll),
         indicator = {
             PullToRefreshDefaults.Indicator(
                 state = pullState,
@@ -168,6 +188,7 @@ fun PortfolioOverviewScreen(
 
             else -> OverviewContent(
                 portfolio = selected!!,
+                listState = listState,
                 holdings = holdings,
                 history = history,
                 range = range,
@@ -184,17 +205,18 @@ fun PortfolioOverviewScreen(
         // this FAB opens the buy/sell form directly.
         selected?.let { p ->
             val fabCd = stringResource(R.string.bt_overview_fab_cd)
-            FloatingActionButton(
-                onClick = { onNewTransaction(p.id) },
-                containerColor = bt.gold,
-                contentColor = bt.onGold,
-                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(20.dp)
-                    .semantics { contentDescription = fabCd },
+            fabVisibility.Content(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
+                FloatingActionButton(
+                    onClick = { onNewTransaction(p.id) },
+                    containerColor = bt.gold,
+                    contentColor = bt.onGold,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                    modifier = Modifier.semantics { contentDescription = fabCd },
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = null)
+                }
             }
         }
     }
@@ -206,6 +228,7 @@ fun PortfolioOverviewScreen(
             isOnline = isOnline,
             busy = switcherBusy,
             error = switcherError,
+            valueFailedIds = switcherValueFailed,
             onDismiss = { vm.dismissSwitcher() },
             onSelect = { id ->
                 vm.selectPortfolio(id)
@@ -225,6 +248,7 @@ fun PortfolioOverviewScreen(
 @Composable
 private fun OverviewContent(
     portfolio: PortfolioEntity,
+    listState: LazyListState,
     holdings: List<HoldingEntity>,
     history: PortfolioHistory?,
     range: HistoryRange,
@@ -249,10 +273,13 @@ private fun OverviewContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             top = 8.dp,
             // Clear the buy/sell FAB (56dp + 20dp inset + margin) so the last
-            // holding row scrolls fully into view instead of under it.
+            // holding row scrolls fully into view instead of under it. Kept even
+            // though the FAB now hides on scroll (S6 P1-7): it comes back the
+            // moment the user scrolls up, and the last row must still clear it.
             bottom = 96.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -20,6 +20,7 @@ class PortfolioSwitcherLogicTest {
         name: String = id,
         archived: Boolean = false,
         isDefault: Boolean = false,
+        loaded: Boolean = false,
     ) = PortfolioEntity(
         id = id,
         name = name,
@@ -29,8 +30,8 @@ class PortfolioSwitcherLogicTest {
         defaultPayFromCash = false,
         archivedAt = if (archived) "2026-07-10T10:00:00Z" else null,
         baseCurrency = null,
-        totals = null,
-        detailSyncedAtMs = null,
+        totals = if (loaded) TOTALS else null,
+        detailSyncedAtMs = if (loaded) 1L else null,
     )
 
     // ── Section split (archived grouping) ───────────────────────────────────────
@@ -98,5 +99,57 @@ class PortfolioSwitcherLogicTest {
     fun `a blank portfolio name can never be confirmed`() {
         assertFalse(deleteConfirmationMatches("", ""))
         assertFalse(deleteConfirmationMatches("   ", "   "))
+    }
+
+    // ── Value prefetch selection (S6 P1-6) ─────────────────────────────────────
+
+    @Test
+    fun `prefetch targets exactly the active rows whose totals are missing`() {
+        val all = listOf(
+            portfolio("loaded", loaded = true),
+            portfolio("blank"),
+            portfolio("archived-blank", archived = true),
+            portfolio("archived-loaded", archived = true, loaded = true),
+        )
+        // The archived group is collapsed by default and its rows never render a
+        // value, so fetching for them would be pure waste.
+        assertEquals(listOf("blank"), switcherPrefetchIds(all))
+    }
+
+    @Test
+    fun `a row whose prefetch already failed is not retried`() {
+        val all = listOf(portfolio("a"), portfolio("b"), portfolio("c"))
+        assertEquals(listOf("b", "c"), switcherPrefetchIds(all, alreadyFailed = setOf("a")))
+        assertEquals(emptyList<String>(), switcherPrefetchIds(all, alreadyFailed = setOf("a", "b", "c")))
+    }
+
+    @Test
+    fun `nothing to prefetch when every active row is already cached`() {
+        val all = listOf(portfolio("a", loaded = true), portfolio("b", loaded = true))
+        assertTrue(switcherPrefetchIds(all).isEmpty())
+    }
+
+    @Test
+    fun `prefetch keeps the list order so the visible rows fill in top down`() {
+        val all = listOf(portfolio("p3"), portfolio("p1"), portfolio("p2"))
+        assertEquals(listOf("p3", "p1", "p2"), switcherPrefetchIds(all))
+    }
+
+    @Test
+    fun `the concurrency cap is small enough not to burst`() {
+        assertTrue(SWITCHER_PREFETCH_CONCURRENCY in 1..8)
+    }
+
+    private companion object {
+        val TOTALS = at.bettertrack.app.data.db.PortfolioTotals(
+            marketValueEur = 100.0,
+            investedEur = 90.0,
+            unrealizedPnlEur = 10.0,
+            unrealizedPnlPct = 11.1,
+            dayChangeEur = 1.0,
+            dayChangePct = 1.0,
+            cashEur = 5.0,
+            totalValueEur = 105.0,
+        )
     }
 }

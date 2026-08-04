@@ -149,14 +149,20 @@ fun ConglomerateListScreen(
             }
         }
 
+        // S6 P1-12: the empty state already carries a full "Create conglomerate"
+        // CTA. Stacking the gold + FAB on top of it shows the same action twice
+        // on one screen, so the FAB stands down while that CTA is visible.
+        val emptyCtaVisible = (state as? ConglomerateListState.Loaded)?.items?.isEmpty() == true
         val fabCd = stringResource(R.string.bt_conglo_create)
-        FloatingActionButton(
-            onClick = onCreate,
-            containerColor = if (isOnline) bt.gold else bt.border,
-            contentColor = if (isOnline) bt.onGold else bt.textMuted,
-            elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).semantics { contentDescription = fabCd },
-        ) { Icon(Icons.Outlined.Add, contentDescription = null) }
+        if (!emptyCtaVisible) {
+            FloatingActionButton(
+                onClick = onCreate,
+                containerColor = if (isOnline) bt.gold else bt.border,
+                contentColor = if (isOnline) bt.onGold else bt.textMuted,
+                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).semantics { contentDescription = fabCd },
+            ) { Icon(Icons.Outlined.Add, contentDescription = null) }
+        }
     }
 }
 

@@ -26,6 +26,31 @@ fun switcherSections(all: List<PortfolioEntity>): SwitcherSections =
         archived = all.filter { it.archivedAt != null },
     )
 
+/**
+ * Which portfolios the switcher should prefetch `GET /portfolios/{id}` for when
+ * the sheet opens (S6 P1-6).
+ *
+ * Only ACTIVE rows are candidates — the archived group is collapsed by default
+ * and its rows never render a value — and only those whose server totals are not
+ * cached yet. Rows whose prefetch already failed are left alone: they have fallen
+ * back to the em-dash and re-firing the same doomed request on every re-open
+ * would just burn battery.
+ */
+fun switcherPrefetchIds(
+    all: List<PortfolioEntity>,
+    alreadyFailed: Set<String> = emptySet(),
+): List<String> =
+    switcherSections(all).active
+        .filter { it.totals == null && it.id !in alreadyFailed }
+        .map { it.id }
+
+/**
+ * How many detail fetches the switcher runs at once. Small on purpose: the point
+ * is to fill in the visible rows without turning one sheet-open into a burst that
+ * competes with whatever the overview is already loading.
+ */
+const val SWITCHER_PREFETCH_CONCURRENCY = 4
+
 /** Outcome of a hard-delete, mapped from the API result for the confirm dialog. */
 sealed interface PortfolioDeleteResult {
     /** 204 — gone. Close the dialog (and let the caller re-resolve selection). */

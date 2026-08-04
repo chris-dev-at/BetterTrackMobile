@@ -53,6 +53,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -74,6 +75,11 @@ fun PortfolioSwitcherSheet(
     isOnline: Boolean,
     busy: Boolean,
     error: String?,
+    /**
+     * Ids whose value prefetch gave up (S6 P1-6). A row that is neither loaded
+     * nor in this set is still in flight and shimmers.
+     */
+    valueFailedIds: Set<String>,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
     onCreate: (String, onDone: (Boolean) -> Unit) -> Unit,
@@ -157,6 +163,7 @@ fun PortfolioSwitcherSheet(
                 SwitcherRow(
                     portfolio = p,
                     selected = p.id == selectedId,
+                    valueGaveUp = p.id in valueFailedIds,
                     actionsEnabled = actionsEnabled,
                     onClick = { onSelect(p.id) },
                     onRename = { renameTarget = p },
@@ -279,6 +286,7 @@ fun PortfolioSwitcherSheet(
 private fun SwitcherRow(
     portfolio: PortfolioEntity,
     selected: Boolean,
+    valueGaveUp: Boolean,
     actionsEnabled: Boolean,
     onClick: () -> Unit,
     onRename: () -> Unit,
@@ -355,18 +363,32 @@ private fun SwitcherRow(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
+                // S6 P1-6: a portfolio you have not opened yet has no cached
+                // totals. A bare em-dash reads as "this portfolio is worth
+                // nothing"; a shimmer reads as "still loading", which is the
+                // truth while the on-open prefetch is in flight. Once that
+                // prefetch gives up (or we are offline) the row does fall back
+                // to the em-dash — a shimmer that never resolves would be the
+                // worse lie of the two.
                 val totals = portfolio.totals
-                if (totals != null) {
-                    MoneyText(
+                when {
+                    totals != null -> MoneyText(
                         value = totals.totalValueEur,
                         style = BtTheme.type.numberCaption,
                         color = bt.textSecondary,
                     )
-                } else {
-                    Text(
+
+                    valueGaveUp -> Text(
                         text = stringResource(R.string.bt_switcher_value_pending),
                         style = BtTheme.type.numberCaption,
                         color = bt.textMuted,
+                    )
+
+                    else -> BtSkeleton(
+                        Modifier
+                            .padding(vertical = 2.dp)
+                            .width(76.dp)
+                            .height(12.dp),
                     )
                 }
             }

@@ -43,6 +43,7 @@
     <string name="bt_tab_social">Social</string>
     <string name="bt_tab_workboard">Workboard</string>
     <string name="bt_top_notifications">Notifications</string>
+    <string name="bt_top_messages">Messages</string>
     <string name="bt_top_settings">Settings</string>
     <string name="bt_offline_banner">Offline — showing data as of %1$s</string>
     <string name="bt_offline_banner_no_data">Offline</string>
@@ -299,7 +300,10 @@
     <string name="bt_cash_new_source">New source</string>
     <string name="bt_cash_new_source_title">New cash source</string>
     <string name="bt_cash_rename_source_title">Edit cash source</string>
-    <string name="bt_cash_main_badge">Main</string>
+    <!-- S6 P1-15: was "Main", which collided with the portfolio named "Main" and
+         the source named "Main" on the very same screen ("Main / Main / Main").
+         "Primary" names the ROLE, which is what the badge is actually about. -->
+    <string name="bt_cash_primary_badge">Primary</string>
     <string name="bt_cash_source_actions_cd">Source actions</string>
     <string name="bt_cash_archive_title">Archive source?</string>
     <string name="bt_cash_archive_message">“%1$s” moves to Archived. Its balance must be zero.</string>
@@ -626,6 +630,7 @@
     <string name="bt_notif_filter_archived">Archived</string>
     <string name="bt_notif_filter_all">All</string>
     <string name="bt_notif_more_actions">More actions</string>
+    <string name="bt_notif_action_manage_alerts">Manage alerts</string>
     <string name="bt_notif_archived_label">Archived</string>
     <string name="bt_notif_action_mark_read">Mark read</string>
     <string name="bt_notif_action_archive">Archive</string>
@@ -967,6 +972,7 @@
     <string name="bt_social_offline_body">Friends and shares need a connection. Reconnect to see them.</string>
     <string name="bt_social_friends_since">Friends since %1$s</string>
     <string name="bt_social_message_friend_cd">Message @%1$s</string>
+    <string name="bt_social_open_friend_cd">Open @%1$s’s overview</string>
     <string name="bt_social_request_wants">Wants to be your friend</string>
     <string name="bt_social_request_waiting">Waiting to accept</string>
     <string name="bt_social_decline_cd">Decline</string>

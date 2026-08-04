@@ -103,6 +103,13 @@ private enum class WorkboardSection { Conglomerates, Alerts }
  * The Workboard tab (owner ask 2026-07-10): a two-segment host — the Step-13
  * conglomerate list and the new price-alerts manager. Same segmented-pill
  * pattern as the Social tab.
+ *
+ * S6 P1-10 (discoverability): alerts STAY here — a third home for two lists
+ * would be worse than a clearly-labelled segment — but the segment now carries
+ * the count of alerts that have actually FIRED, so "one of your alerts hit"
+ * is visible from the Workboard without opening the segment first, and the
+ * notifications inbox can send the user straight to it (see [WorkboardEntry]).
+ * The alerts VM is hoisted to this host so that badge exists on both segments.
  */
 @Composable
 fun WorkboardScreen(
@@ -111,20 +118,51 @@ fun WorkboardScreen(
     onOpenAsset: (String) -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(WorkboardSection.Conglomerates) }
+
+    val alertsVm: AlertsViewModel = viewModel {
+        AlertsViewModel(
+            AppGraph.alertsRepository,
+            AppGraph.marketRepository,
+            AppGraph.connectivityMonitor,
+        )
+    }
+    val alertsState by alertsVm.state.collectAsStateWithLifecycle()
+    val triggered = (alertsState as? AlertsState.Loaded)
+        ?.items.orEmpty()
+        .count { it.status == AlertStatus.Triggered }
+
+    // Deep-link entry from the notifications inbox ("Manage alerts" on an alert
+    // row): open on the Alerts segment, once.
+    val pendingAlerts by WorkboardEntry.pendingAlerts.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingAlerts) {
+        if (pendingAlerts) {
+            section = WorkboardSection.Alerts
+            WorkboardEntry.consume()
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
-        SegmentedTabs(selected = section, onSelect = { section = it })
+        SegmentedTabs(
+            selected = section,
+            triggeredAlerts = triggered,
+            onSelect = { section = it },
+        )
         when (section) {
             WorkboardSection.Conglomerates -> ConglomerateListScreen(
                 onOpen = onOpenConglomerate,
                 onCreate = onCreateConglomerate,
             )
-            WorkboardSection.Alerts -> AlertsSection(onOpenAsset = onOpenAsset)
+            WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
         }
     }
 }
 
 @Composable
-private fun SegmentedTabs(selected: WorkboardSection, onSelect: (WorkboardSection) -> Unit) {
+private fun SegmentedTabs(
+    selected: WorkboardSection,
+    triggeredAlerts: Int,
+    onSelect: (WorkboardSection) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -139,13 +177,20 @@ private fun SegmentedTabs(selected: WorkboardSection, onSelect: (WorkboardSectio
         Segment(
             label = stringResource(R.string.bt_workboard_seg_alerts),
             selected = selected == WorkboardSection.Alerts,
+            badge = triggeredAlerts,
             modifier = Modifier.weight(1f),
         ) { onSelect(WorkboardSection.Alerts) }
     }
 }
 
 @Composable
-private fun Segment(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun Segment(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier,
+    badge: Int = 0,
+    onClick: () -> Unit,
+) {
     val bt = BtTheme.colors
     Surface(
         onClick = onClick,
@@ -161,6 +206,10 @@ private fun Segment(label: String, selected: Boolean, modifier: Modifier, onClic
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            if (badge > 0) {
+                Spacer(Modifier.width(6.dp))
+                BtBadge(text = badge.toString(), kind = BtBadgeKind.Gold)
+            }
         }
     }
 }
@@ -288,14 +337,7 @@ class AlertsViewModel(
 // ── Alerts section ───────────────────────────────────────────────────────────
 
 @Composable
-private fun AlertsSection(onOpenAsset: (String) -> Unit) {
-    val vm: AlertsViewModel = viewModel {
-        AlertsViewModel(
-            AppGraph.alertsRepository,
-            AppGraph.marketRepository,
-            AppGraph.connectivityMonitor,
-        )
-    }
+private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
     val bt = BtTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
@@ -306,6 +348,13 @@ private fun AlertsSection(onOpenAsset: (String) -> Unit) {
     var deleteTarget by remember { mutableStateOf<PriceAlert?>(null) }
 
     LaunchedEffect(Unit) { vm.load() }
+
+    // S6 P1-12: the empty state already offers a full-width "Create alert" CTA.
+    // Showing the gold + FAB on top of it duplicates the exact same action twice
+    // on one screen and leaves the user guessing whether they differ — so while
+    // that CTA is on screen, the FAB stands down. Once there is a list to scroll,
+    // the FAB is the only create affordance and comes back.
+    val emptyCtaVisible = (state as? AlertsState.Loaded)?.items?.isEmpty() == true
 
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
@@ -362,16 +411,18 @@ private fun AlertsSection(onOpenAsset: (String) -> Unit) {
         }
 
         val fabCd = stringResource(R.string.bt_alert_create_action)
-        FloatingActionButton(
-            onClick = { if (isOnline) createOpen = true },
-            containerColor = if (isOnline) bt.gold else bt.border,
-            contentColor = if (isOnline) bt.onGold else bt.textMuted,
-            elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(20.dp)
-                .semantics { contentDescription = fabCd },
-        ) { Icon(Icons.Outlined.Add, contentDescription = null) }
+        if (!emptyCtaVisible) {
+            FloatingActionButton(
+                onClick = { if (isOnline) createOpen = true },
+                containerColor = if (isOnline) bt.gold else bt.border,
+                contentColor = if (isOnline) bt.onGold else bt.textMuted,
+                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .semantics { contentDescription = fabCd },
+            ) { Icon(Icons.Outlined.Add, contentDescription = null) }
+        }
     }
 
     if (createOpen) {

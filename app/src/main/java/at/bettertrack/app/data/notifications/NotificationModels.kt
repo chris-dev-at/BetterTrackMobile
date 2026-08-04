@@ -206,6 +206,14 @@ sealed interface NotifDeepLink {
     data class Asset(val assetId: String) : NotifDeepLink
     /** A held-position detail (portfolio-scoped alerts). */
     data class Holding(val assetId: String) : NotifDeepLink
+    /**
+     * The price-alert manager (Workboard → Alerts). Never produced by
+     * [resolveDeepLink] — a fired alert should open the ASSET, which is what the
+     * user wants to look at. This target exists for the explicit "Manage alerts"
+     * entry the inbox offers on alert rows (S6 P1-10), so re-arming or deleting
+     * an alert that just fired is one tap away instead of four.
+     */
+    data object Alerts : NotifDeepLink
     /** Account settings (invites). */
     data object Settings : NotifDeepLink
     /** Security settings (temp-password / security events). */

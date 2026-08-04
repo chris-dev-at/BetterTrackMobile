@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -516,13 +518,26 @@ private fun SectionHeader(title: String, count: Int) {
     }
 }
 
-/** A friend row: whole card opens the overview; the chat quick-action stays here. */
+/**
+ * A friend row. TWO targets, both spoken (S6 P1-16):
+ *  · the row itself opens the friend's overview;
+ *  · the speech bubble opens the chat.
+ *
+ * The trailing chevron is gone. It was a third target sitting inside the row's
+ * own tap area, doing exactly what the row already did — so it taught the user
+ * that this row has three separate things to hit when it has two, and it pushed
+ * the one real action (the bubble) off the row's optical end.
+ */
 @Composable
 private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
     val bt = BtTheme.colors
-    BtCard(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
+    val openCd = stringResource(R.string.bt_social_open_friend_cd, f.username)
+    BtCard(
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = openCd },
+        onClick = onOpen,
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BtAvatar(name = f.username, size = 40.dp)
@@ -534,7 +549,6 @@ private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
             IconButton(onClick = onChat) {
                 Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = stringResource(R.string.bt_social_message_friend_cd, f.username), tint = bt.textSecondary)
             }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
     }
 }

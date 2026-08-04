@@ -37,6 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
@@ -130,14 +134,33 @@ fun AssetsTabScreen(
     }
 }
 
-/** A tappable search "field" (looks like an input, opens the search screen). */
+/**
+ * The Assets tab's search entry.
+ *
+ * S6 P1-11 — design call, both halves of the audited option taken: the field
+ * SHAPE stays (a full-width input silhouette is the single strongest "you can
+ * search here" signal on Android, and the top bar's 20dp glyph competes with two
+ * neighbours for the same job), but it stops pretending to BE an input:
+ *  · semantics declare it a button with a spoken label, so TalkBack no longer
+ *    announces an editable text field that cannot be edited;
+ *  · [SearchScreen] now raises the keyboard itself on entry, so tapping this
+ *    behaves exactly like tapping a real field would — one tap, caret blinking,
+ *    keyboard up. That was the actual broken promise; the styling never was.
+ */
 @Composable
 private fun SearchBarButton(onClick: () -> Unit) {
     val bt = BtTheme.colors
     val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(R.string.bt_assets_search_bar)
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().btPressScale(interaction, pressedScale = 0.985f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .btPressScale(interaction, pressedScale = 0.985f)
+            .semantics {
+                role = Role.Button
+                contentDescription = label
+            },
         shape = BtShapes.control,
         color = bt.surface,
         border = BorderStroke(1.dp, bt.border),
@@ -150,7 +173,7 @@ private fun SearchBarButton(onClick: () -> Unit) {
             Icon(Icons.Outlined.Search, contentDescription = null, tint = bt.textMuted)
             Spacer(Modifier.width(10.dp))
             Text(
-                text = stringResource(R.string.bt_assets_search_bar),
+                text = label,
                 style = MaterialTheme.typography.bodyLarge,
                 color = bt.textMuted,
             )

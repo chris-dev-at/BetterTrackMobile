@@ -23,11 +23,13 @@ import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewVmInitializer
 import at.bettertrack.app.ui.theme.BtShapes
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Notifications
@@ -72,11 +74,11 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.navigation.AppLockRoute
 import at.bettertrack.app.navigation.StandingOrdersRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.AssetsTabRoute
+import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.navigation.CashRulesRoute
 import at.bettertrack.app.navigation.CashTagsRoute
 import at.bettertrack.app.navigation.ChangelogRoute
@@ -85,19 +87,17 @@ import at.bettertrack.app.navigation.ChatListRoute
 import at.bettertrack.app.navigation.ChatThreadRoute
 import at.bettertrack.app.navigation.ConglomerateBuilderRoute
 import at.bettertrack.app.navigation.ConglomerateDetailRoute
-import at.bettertrack.app.navigation.ConglomerateListRoute
 import at.bettertrack.app.navigation.CustomAssetDetailRoute
 import at.bettertrack.app.navigation.CustomAssetsRoute
 import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
-import at.bettertrack.app.navigation.LoginRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
+import at.bettertrack.app.navigation.owningTab
 import at.bettertrack.app.navigation.PendingSyncRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
 import at.bettertrack.app.navigation.SearchRoute
 import at.bettertrack.app.navigation.SettingsAboutRoute
-import at.bettertrack.app.navigation.SettingsAccountRoute
 import at.bettertrack.app.navigation.ChangePasswordRoute
 import at.bettertrack.app.navigation.TwoFactorRoute
 import at.bettertrack.app.navigation.ActiveSessionsRoute
@@ -114,14 +114,13 @@ import at.bettertrack.app.navigation.DevBackendRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
-import at.bettertrack.app.navigation.WatchlistRoute
 import at.bettertrack.app.navigation.WorkboardTabRoute
+import at.bettertrack.app.ui.components.BtBadgeOverlay
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
 import at.bettertrack.app.ui.conglomerate.ConglomerateBuilderScreen
 import at.bettertrack.app.ui.conglomerate.ConglomerateDetailScreen
-import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
 import at.bettertrack.app.ui.market.AssetPageScreen
 import at.bettertrack.app.ui.market.SearchScreen
@@ -139,8 +138,8 @@ import at.bettertrack.app.ui.portfolio.TransactionFormScreen
 import at.bettertrack.app.ui.portfolio.TransactionsScreen
 import at.bettertrack.app.ui.sync.PendingSyncScreen
 import at.bettertrack.app.ui.screens.AssetsTabScreen
-import at.bettertrack.app.ui.screens.PlaceholderScreen
 import at.bettertrack.app.ui.screens.WorkboardTabScreen
+import at.bettertrack.app.ui.workboard.WorkboardEntry
 import at.bettertrack.app.ui.chat.ChatListScreen
 import at.bettertrack.app.ui.chat.ChatThreadScreen
 import at.bettertrack.app.ui.social.FriendOverviewScreen
@@ -163,17 +162,17 @@ import kotlin.reflect.KClass
 
 /** Bottom-navigation tab metadata — Portfolio · Assets · Social · Workboard. */
 private data class TabSpec(
-    val route: Any,
+    val tab: BtTab,
     val routeClass: KClass<*>,
     val labelRes: Int,
     val icon: ImageVector,
 )
 
 private val Tabs = listOf(
-    TabSpec(PortfolioTabRoute, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart),
-    TabSpec(AssetsTabRoute, AssetsTabRoute::class, R.string.bt_tab_assets, Icons.AutoMirrored.Outlined.ShowChart),
-    TabSpec(SocialTabRoute, SocialTabRoute::class, R.string.bt_tab_social, Icons.Outlined.People),
-    TabSpec(WorkboardTabRoute, WorkboardTabRoute::class, R.string.bt_tab_workboard, Icons.Outlined.Dashboard),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart),
+    TabSpec(BtTab.Assets, AssetsTabRoute::class, R.string.bt_tab_assets, Icons.AutoMirrored.Outlined.ShowChart),
+    TabSpec(BtTab.Social, SocialTabRoute::class, R.string.bt_tab_social, Icons.Outlined.People),
+    TabSpec(BtTab.Workboard, WorkboardTabRoute::class, R.string.bt_tab_workboard, Icons.Outlined.Dashboard),
 )
 
 /**
@@ -195,45 +194,65 @@ fun BtApp() {
     // system-push intents (surfaced via AppGraph.pendingDeepLink).
     val scope = rememberCoroutineScope()
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope) {
-        // Switch to the Social top-level TAB with the same semantics as the bottom
-        // bar; a plain push would stack Social on the current tab, so the next
-        // bottom-bar tap pops+restores it and bounces the user straight back. When
-        // the link came from the notifications inbox, drop the inbox (inclusive)
-        // first so it is never saved under a tab's restored state. (No-op if the
-        // inbox isn't on the stack, e.g. a cold-start push tap.)
-        fun goSocial() {
-            navController.popBackStack(NotificationsInboxRoute, inclusive = true)
-            navController.navigate(SocialTabRoute) {
+        // Switch to a top-level TAB with the same semantics as the bottom bar.
+        fun switchToTab(tab: BtTab) {
+            navController.navigate(tab.route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
             }
         }
+        // EVERY deep link lands the same way (S6 P1-8):
+        //   1. drop the notifications inbox (inclusive) if the tap came from it, so
+        //      it is never saved under a tab's restored state — a no-op on a
+        //      cold-start push tap, where the inbox isn't on the stack;
+        //   2. switch to the tab that OWNS the target (see `owningTab`) with
+        //      bottom-bar semantics — a plain push would stack the detail on
+        //      whatever tab happened to be selected, and the next bottom-bar tap
+        //      would pop+restore it and bounce the user straight back;
+        //   3. push the detail route on top of that tab, if the link has one.
+        fun open(link: NotifDeepLink, push: (() -> Unit)? = null) {
+            navController.popBackStack(NotificationsInboxRoute, inclusive = true)
+            switchToTab(owningTab(link))
+            push?.invoke()
+        }
         val handler: (NotifDeepLink) -> Unit = { link ->
             when (link) {
-                NotifDeepLink.Social -> goSocial()
-                is NotifDeepLink.SharedPortfolio -> navController.navigate(SharedPortfolioViewRoute(link.portfolioId))
-                is NotifDeepLink.FriendOverview -> navController.navigate(FriendOverviewRoute(link.userId, link.username))
+                NotifDeepLink.Social -> open(link)
+                is NotifDeepLink.SharedPortfolio ->
+                    open(link) { navController.navigate(SharedPortfolioViewRoute(link.portfolioId)) }
+                is NotifDeepLink.FriendOverview ->
+                    open(link) { navController.navigate(FriendOverviewRoute(link.userId, link.username)) }
                 is NotifDeepLink.PublicProfile -> {
                     // No userId on the wire (FCM friend.activity / follow.published).
                     // Resolve the username against the friends list at tap time: a
                     // friend opens their overview; anyone else (e.g. a non-friend
                     // followee, which the app has no profile screen for) lands on the
-                    // Social tab — never a dead tap (mobile-push.md §4).
+                    // Social tab — never a dead tap (mobile-push.md §4). The tab
+                    // switch happens NOW so the user is never left staring at the
+                    // wrong tab while the lookup is in flight.
+                    open(link)
                     scope.launch {
                         val friend = (AppGraph.socialRepository.friends() as? BtResult.Ok)
                             ?.value?.firstOrNull { it.username.equals(link.username, ignoreCase = true) }
                         if (friend != null) navController.navigate(FriendOverviewRoute(friend.userId, friend.username))
-                        else goSocial()
                     }
                 }
-                is NotifDeepLink.SharedConglomerate -> navController.navigate(SharedConglomerateViewRoute(link.conglomerateId))
-                is NotifDeepLink.Chat -> navController.navigate(ChatListRoute)
-                is NotifDeepLink.Asset -> navController.navigate(AssetPageRoute(link.assetId))
-                is NotifDeepLink.Holding -> navController.navigate(HoldingDetailRoute(link.assetId))
-                NotifDeepLink.Settings -> navController.navigate(SettingsRoute)
-                NotifDeepLink.Security -> navController.navigate(SettingsSecurityRoute)
-                NotifDeepLink.NotificationSettings -> navController.navigate(SettingsNotificationsRoute)
+                is NotifDeepLink.SharedConglomerate ->
+                    open(link) { navController.navigate(SharedConglomerateViewRoute(link.conglomerateId)) }
+                is NotifDeepLink.Chat -> open(link) { navController.navigate(ChatListRoute) }
+                is NotifDeepLink.Asset -> open(link) { navController.navigate(AssetPageRoute(link.assetId)) }
+                is NotifDeepLink.Holding -> open(link) { navController.navigate(HoldingDetailRoute(link.assetId)) }
+                // The alerts manager is a SEGMENT of the Workboard tab, not a route
+                // of its own: switch to the tab and ask it to open that segment.
+                NotifDeepLink.Alerts -> {
+                    WorkboardEntry.requestAlerts()
+                    open(link)
+                }
+                NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
+                NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
+                NotifDeepLink.NotificationSettings ->
+                    open(link) { navController.navigate(SettingsNotificationsRoute) }
             }
         }
         handler
@@ -251,6 +270,13 @@ fun BtApp() {
     // Bell unread badge: refresh the inbox once on entry so the count is live.
     val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { AppGraph.notificationRepository.refresh() }
+
+    // Chat was only reachable from a card inside the Social tab — invisible from
+    // the other three, and a new message announced itself nowhere (S6 P1-10). The
+    // repository already keeps a server-derived total, so the shell just needs to
+    // prime it once and hang a badged affordance next to the bell.
+    val chatUnread by AppGraph.chatRepository.totalUnread.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { AppGraph.chatRepository.refreshConversations() }
 
     Scaffold(
         containerColor = bt.bg,
@@ -284,12 +310,16 @@ fun BtApp() {
                 }
                 BtTopBar(
                     notifUnread = notifUnread,
+                    chatUnread = chatUnread,
                     portfolioName = selectorName,
                     onOpenSwitcher = openSwitcher,
                     onWordmarkLongPress = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
                     onSearch = { navController.navigate(SearchRoute) },
+                    // The chat list belongs to Social, so it opens with the very
+                    // same tab semantics a notification tap uses (S6 P1-8).
+                    onChats = { navigateDeepLink(NotifDeepLink.Chat(null)) },
                     onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                 )
@@ -302,7 +332,7 @@ fun BtApp() {
                         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
                     },
                     onSelect = { tab ->
-                        navController.navigate(tab.route) {
+                        navController.navigate(tab.tab.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -340,10 +370,12 @@ fun BtApp() {
 @Composable
 private fun BtTopBar(
     notifUnread: Int,
+    chatUnread: Int,
     portfolioName: String?,
     onOpenSwitcher: (() -> Unit)?,
     onWordmarkLongPress: () -> Unit,
     onSearch: () -> Unit,
+    onChats: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -382,6 +414,9 @@ private fun BtTopBar(
                     tint = bt.textSecondary,
                 )
             }
+            // Messages + unread badge → chat list. Same badge language as the
+            // bell; sits beside it because both answer "did anything happen?".
+            BtTopBarChats(unread = chatUnread, onClick = onChats)
             // Notification bell + unread badge → in-app inbox (Step 16, §6.11).
             NotificationBell(unread = notifUnread, onClick = onNotifications)
             IconButton(onClick = onSettings) {
@@ -397,6 +432,34 @@ private fun BtTopBar(
             titleContentColor = bt.textPrimary,
         ),
     )
+}
+
+/**
+ * Top-bar messages affordance (S6 P1-10): the chat list was previously reachable
+ * only from a card inside the Social tab, so from the other three tabs the
+ * feature simply did not exist and an incoming message announced itself nowhere.
+ * Deliberately built as the bell's twin — same 24dp glyph, same [BtBadgeOverlay]
+ * gold count — so the two "something happened" entries read as one pair rather
+ * than two competing idioms.
+ */
+@Composable
+private fun BtTopBarChats(unread: Int, onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    Box {
+        IconButton(onClick = onClick) {
+            Icon(
+                Icons.AutoMirrored.Outlined.Chat,
+                contentDescription = stringResource(R.string.bt_top_messages),
+                tint = bt.textSecondary,
+            )
+        }
+        BtBadgeOverlay(
+            count = unread,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 7.dp, end = 6.dp),
+        )
+    }
 }
 
 /**
@@ -541,9 +604,9 @@ private fun BtNavHost(
             )
         }
 
-        // Auth & lock
-        composable<LoginRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_login), back) }
-        composable<AppLockRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_app_lock), back) }
+        // S6 P2-19: LoginRoute / AppLockRoute were registered here as "Under
+        // construction" placeholders. Nothing navigates to either — auth and the
+        // app lock are BtRoot gates that run OUTSIDE this graph — so they are gone.
 
         // Portfolio
         composable<HoldingDetailRoute> { entry ->
@@ -683,15 +746,10 @@ private fun BtNavHost(
                 },
             )
         }
-        composable<WatchlistRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_watchlists), back) }
-
         // Workboard
-        composable<ConglomerateListRoute> {
-            ConglomerateListScreen(
-                onOpen = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
-                onCreate = { navController.navigate(ConglomerateBuilderRoute()) },
-            )
-        }
+        // S6 P2-19: ConglomerateListRoute is gone — the list is a SEGMENT of the
+        // Workboard tab (WorkboardScreen composes ConglomerateListScreen directly),
+        // never a route of its own.
         composable<ConglomerateBuilderRoute> { entry ->
             val route = entry.toRoute<ConglomerateBuilderRoute>()
             ConglomerateBuilderScreen(
@@ -792,7 +850,6 @@ private fun BtNavHost(
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
-        composable<SettingsAccountRoute> { PlaceholderScreen(stringResource(R.string.bt_dest_settings_account), back) }
         composable<SettingsSecurityRoute> {
             SecurityScreen(
                 onBack = back,

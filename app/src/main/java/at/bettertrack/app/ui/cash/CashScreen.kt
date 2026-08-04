@@ -27,7 +27,6 @@ import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NorthEast
-import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.ShoppingCart
@@ -837,10 +836,16 @@ fun CashScreen(
                     // Two rows rather than one row of four: at four-up the labels
                     // ellipsize on a narrow phone, and pairing them keeps the two
                     // money-in/out actions visually apart from the two "other" ones.
+                    //
+                    // S6 P1-15: the four used to be four IDENTICAL outlined buttons,
+                    // which is the design saying "these are equally likely" about a
+                    // set where they plainly are not. Deposit is the action people
+                    // come to this screen for, so it is the one filled primary; the
+                    // other three stay outlined secondaries.
                     item(key = "actions") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                BtSecondaryButton(
+                                BtPrimaryButton(
                                     text = stringResource(R.string.bt_cash_deposit),
                                     onClick = {
                                         editPrefill = null
@@ -1352,7 +1357,7 @@ private fun SourceRow(
                     if (source.isMain) {
                         Spacer(Modifier.width(8.dp))
                         BtBadge(
-                            text = stringResource(R.string.bt_cash_main_badge),
+                            text = stringResource(R.string.bt_cash_primary_badge),
                             kind = BtBadgeKind.Gold,
                         )
                     }
@@ -2518,15 +2523,35 @@ private fun movementLabel(m: CashMovementEntity, sourceNames: Map<String, String
         null -> m.kind
     }
 
-/** Leading glyph for a ledger row; unknown kinds get a neutral placeholder. */
+/**
+ * Leading glyph for a ledger row.
+ *
+ * ONE rule, two families (S6 P1-15 — the column used to mix unrelated metaphors,
+ * so it read as decoration rather than information):
+ *
+ *  · Rows the USER books by hand — deposit, withdrawal, fee, transfer — carry a
+ *    DIRECTION glyph and nothing else: in (↙), out (↗), sideways (⇄). WHICH kind
+ *    of outflow a row is (a withdrawal or a fee) is the label's job; making the
+ *    glyph answer that too just meant two different questions were being answered
+ *    in the same 18dp.
+ *  · Rows the SYSTEM derives from a parent event carry that event's own glyph
+ *    (trade, sale, dividend) — they are not something you did to your cash, they
+ *    are the cash side of something else. The institution glyph is RESERVED for
+ *    tax rows: those are the only ones an authority books.
+ *
+ * An unknown wire kind gets the neutral placeholder — never a wrong glyph.
+ */
 private fun movementIcon(kind: String): ImageVector = when (CashKind.fromWire(kind)) {
+    // User-booked → direction only.
     CashKind.DEPOSIT -> Icons.Outlined.SouthWest
-    CashKind.WITHDRAWAL -> Icons.Outlined.NorthEast
-    CashKind.FEE -> Icons.Outlined.Receipt
+    CashKind.WITHDRAWAL, CashKind.FEE -> Icons.Outlined.NorthEast
+    // Derived → the parent event's glyph.
     CashKind.BUY -> Icons.Outlined.ShoppingCart
     CashKind.SELL_PROCEEDS -> Icons.Outlined.Sell
     CashKind.DIVIDEND -> Icons.Outlined.Savings
+    // Institution glyph — tax only.
     CashKind.TAX_WITHHOLDING, CashKind.TAX_REFUND -> Icons.Outlined.AccountBalance
+    // User-booked, lateral: neither in nor out of the portfolio.
     CashKind.TRANSFER_OUT, CashKind.TRANSFER_IN -> Icons.Outlined.SwapHoriz
     null -> Icons.AutoMirrored.Outlined.HelpOutline
 }
