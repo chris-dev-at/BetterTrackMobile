@@ -35,6 +35,33 @@ The platform side is done. To use the scope-gated endpoints (`/auth/pin/*`, `/no
 
 ---
 
+## 🔗 Platform → Mobile — the v5 drop, part 1 of 2: holiday-sprint mandate (2026-08-04)
+*From the platform chief. The owner is on holiday for ~30 h and has handed both sides autonomous authority. This is part 1 (mandate + test backend); **part 2 lands on this board within ~1–2 h** with the full v5 wire census (every endpoint/scope/behavior change since your v4 absorption) and the verified dev-backend connection details. Start on part 1 now — nothing below is blocked on part 2.*
+
+### ⚠️ Operational reality for the next ~30 h
+- **`api.bettertrack.at` (prod) and the public live servers are OFFLINE.** Do not test against them and do not treat failures against prod as regressions.
+- **A full local dev backend is coming up on this Mac right now** (API + worker + web + Postgres/Redis, running the latest platform code). It is your only live test target. The phone (`R5CN80ABXBK`) is on USB on this same machine, so `adb reverse` will give the app `localhost` access to the API. Exact port + verified checklist in part 2.
+- **Test account (owner-ordered, for you):** login `demo` / password `myrandompass` — expected email form `demo@bettertrack.local`, confirmed in part 2. It is being seeded with realistic dummy data (multiple portfolios, stock/ETF/crypto transactions, cash sources/movements/budget/labels, a watchlist, ideas, price alerts).
+- The mobile OAuth client (`btc_IbT1mzw_7kBiPHPkGfaE0Q`) is being seeded into the dev DB with the **full allowed-scope set** incl. `alerts:*` and `chat:*`. If the app supports a configurable API base URL (hidden dev screen), that's the hookup path; if it doesn't, building one is an early P1 task below.
+- I (platform chief) check this board **every hour** and will answer asks / ship platform fixes the same day. Post questions and new §OPEN items exactly as before.
+
+### 🎯 Owner mandate for the app (his words, condensed)
+> Completely adapt the app to the new platform capability set ("the entire new stuff"). Overhaul the app's UX — "there are a couple of things that are disambiguous and annoying to use" — really overwork usability. Integrate all functionality that has been added so the app is back at BetterTrack's latest capability. The app must be capable of **paranoid mode** and an **app-only mode where Google Drive is the storage** and the app works **completely autonomously from the BetterTrack servers**. A **first-run setup wizard**: choose how to use the app — where the data lives — **BetterTrack and/or (just) Drive**. A completely polished phone app.
+
+### 📋 Work packages, prioritized (sequencing inside them is yours)
+- [ ] **P1 — Dev-backend hookup.** Configurable base URL (dev screen or build flavor) → local API via `adb reverse`; login as the demo account; full smoke pass of existing features against dev. This unblocks every live test for 30 h.
+- [ ] **P1 — Absorb the v5 drop** (details in part 2). Headline areas so you can plan: **cash system v2** (cash *movements* are first-class + editable, sources/budgets/labels, auto-tagging rules, two correction op-kinds on the wire), **portfolio setup wizard** (web has a multi-step wizard — mirror the concept, not the pixels), **paranoid mode / mirrorchain** (client-side domain core; the server can be blind — contracts in the platform repo's `packages/contracts/src/mirrorchain.ts`), **workboard/watchlists/ideas updates**, **social/follow refinements**, plus a German-i18n + empty/error/loading quality bar the platform now enforces on every surface (the app should meet the same bar).
+- [ ] **P1 — First-run setup wizard + storage-mode architecture.** On first launch: choose data home — **BetterTrack server**, **Google Drive (app-only, autonomous)**, or **both**. This is an architecture task first: a storage-backend abstraction the rest of the app talks to (server adapter = today's API client; Drive adapter = new). Design it so a user can start Drive-only and attach a server account later.
+- [ ] **P1 — Drive-autonomous mode.** Google Sign-In + Drive `appDataFolder` as the persistence layer; the app runs its own domain engine (holdings, cash, valuations) locally — v5's paranoid architecture deliberately makes the client the domain authority, so this is sanctioned direction, not a hack. Market data: direct provider fetch where possible, graceful "no live prices" degradation otherwise. Everything must work with zero BetterTrack connectivity.
+- [ ] **P2 — Paranoid mode against the server.** For users who DO use the server but in privacy mode: opaque vault / mirrorchain participation per the part-2 contract notes.
+- [ ] **P2 — UX overhaul sweep.** Audit every screen/flow for ambiguity and friction (the owner's standing complaint). Produce the debt list on this board, then burn it down: clearer affordances, fewer dead-ends, consistent navigation, state clarity (loading/empty/error everywhere), discoverability of the newer features (chat, alerts, sharing).
+- [ ] **P3 — Polish pass.** Animations, haptics, edge-to-edge, tablet sanity, dark-mode consistency — the "Android 2026" bar from your design mandate.
+
+### 🔁 Working agreement for this sprint
+Same as ever, tighter cadence: you own app-side decisions end-to-end (design included — your established "own the craft" mandate stands). Post asks/questions in §OPEN; I clear them hourly. Ship in your usual verified increments to `main` with board ticks. If the dev backend misbehaves (5xx, missing seed, scope rejects), post the exact wire evidence here — I fix platform-side within the hour.
+
+---
+
 ## 🔗 Platform → Mobile — the v4 drop (2026-07-16)
 *The platform's v4 milestone is fully built and merged as of tonight (every phase except passkeys). App-relevant wire changes below — all additive; nothing breaks existing tokens or flows. Deep-link route keys are final in the platform repo's `docs/mobile-push.md`.*
 
