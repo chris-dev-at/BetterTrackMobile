@@ -22,11 +22,18 @@ import kotlinx.serialization.Serializable
  *    #368, still platform-gated).
  */
 
-/** A minimal public user reference — id + username (no email/avatar, §6.9). */
+/**
+ * A minimal public user reference — id + username (never an email, §6.9).
+ *
+ * V5 added [profileIcon]: one of 16 curated icon ids (`PROFILE_ICON_IDS`), not a
+ * URL — the platform ships a finite avatar set rather than user-uploaded images.
+ * It is optional on the wire, so pre-v5 payloads still decode.
+ */
 @Serializable
 data class SocialUserDto(
-    val id: String,
-    val username: String,
+    val id: String = "",
+    val username: String = "",
+    val profileIcon: String? = null,
 )
 
 // ── GET /social/friends ──────────────────────────────────────────────────────
@@ -116,6 +123,8 @@ data class MySharedResponse(
     val portfolios: List<MySharedPortfolioDto> = emptyList(),
     val conglomerates: List<MySharedConglomerateDto> = emptyList(),
     val watchlists: List<MySharedWatchlistDto> = emptyList(),
+    /** V5. Defaulted, so a pre-v5 body without the key still decodes. */
+    val ideas: List<MySharedIdeaDto> = emptyList(),
 )
 
 @Serializable
@@ -146,6 +155,21 @@ data class MySharedWatchlistDto(
     val friendCount: Int = 0,
 )
 
+/**
+ * V5: a saved workboard idea in **My items**. Ideas became a share kind
+ * alongside the other three, so without this row the app would offer an `idea`
+ * audience it could never reach a single idea through.
+ */
+@Serializable
+data class MySharedIdeaDto(
+    val ideaId: String,
+    val name: String,
+    /** Whether a written thesis is attached (the app's row subtitle says so). */
+    val hasThesis: Boolean = false,
+    val audience: String,
+    val friendCount: Int = 0,
+)
+
 // ── Unified audience model (V3-P5): GET|PUT /social/audience/:kind/:subjectId ─
 
 /** Live public-link status for one audience (hash-only storage → shown once at mint). */
@@ -158,25 +182,34 @@ data class ShareLinkStateDto(
 /** `GET /social/audience/:kind/:subjectId` — the owner's current audience for one item. */
 @Serializable
 data class AudienceStateDto(
-    /** `portfolio` | `conglomerate` | `watchlist`. */
+    /** `portfolio` | `conglomerate` | `watchlist` | `idea`. */
     val kind: String,
     val subjectId: String,
-    /** `private` | `specific_friends` | `all_friends` | `public_link`. */
+    /** `private` | `specific_friends` | `group` | `all_friends` | `public_link`. */
     val audience: String,
     /** Populated only for `specific_friends`. */
     val friendIds: List<String> = emptyList(),
+    /**
+     * V5: populated only for the `group` rung — a share to a friend group is
+     * ONE group id, not a list. The roster is resolved live at read time, so
+     * adding someone to the group shares the item with them retroactively and
+     * deleting the group fails closed (it resolves to nobody).
+     */
+    val groupId: String? = null,
     val link: ShareLinkStateDto = ShareLinkStateDto(),
 )
 
 /**
  * `PUT /social/audience/:kind/:subjectId` body. `friendIds` honoured only for
- * `specific_friends`; `acknowledgePublic` MUST be `true` to select `public_link`
- * (the §16 explicit-acknowledgment gate, enforced server-side too).
+ * `specific_friends`; `groupId` only for `group` (V5 — omitting it there is a
+ * 400 `GROUP_AUDIENCE_INVALID`); `acknowledgePublic` MUST be `true` to select
+ * `public_link` (the §16 explicit-acknowledgment gate, enforced server-side too).
  */
 @Serializable
 data class SetAudienceRequest(
     val audience: String,
     val friendIds: List<String>? = null,
+    val groupId: String? = null,
     val acknowledgePublic: Boolean? = null,
 )
 

@@ -1243,7 +1243,14 @@
     <string name="bt_cash_summary_untagged">Ohne Tag</string>
     <string name="bt_cash_summary_empty">Diesen Monat keine Buchungen.</string>
     <string name="bt_cash_summary_overlap_hint">Eine Buchung mit mehreren Tags zählt bei jedem davon mit — die Zeilen können also mehr ergeben als die Summe.</string>
+    <string name="bt_cash_summary_error">Monatsübersicht konnte nicht geladen werden.</string>
+    <plurals name="bt_cash_summary_movements">
+        <item quantity="one">%1$d Buchung</item>
+        <item quantity="other">%1$d Buchungen</item>
+    </plurals>
     <string name="bt_cash_trends_section">Letzte Monate</string>
+    <string name="bt_cash_trends_empty">Noch kein Verlauf vorhanden.</string>
+    <string name="bt_cash_trends_error">Verlauf konnte nicht geladen werden.</string>
 
     <!-- ── V5 S2c: Daueraufträge ───────────────────────────────────────────── -->
     <string name="bt_so_title">Daueraufträge</string>
@@ -1464,4 +1471,233 @@
     <string name="bt_storage_both_blocked_body">„Beides“ heißt, deine Daten liegen an zwei Orten — und der zweite braucht eine Google-Verbindung, die diese Version noch nicht herstellen kann. Wir tragen keine Sicherung ein, die es nicht gibt: Wähle unten eine der beiden Möglichkeiten, die andere kannst du später in den Einstellungen ergänzen.</string>
     <string name="bt_storage_both_settle_server">Nur mit BetterTrack weitermachen</string>
     <string name="bt_storage_both_settle_drive">Stattdessen nur Google Drive</string>
+    <!-- ANCHOR-INTEL: V5 S2c-2 market intel -->
+    <string name="bt_intel_title">Marktinfos</string>
+    <string name="bt_intel_subtitle">Termine, Dividenden und Schlagzeilen zu allem, was du hältst oder beobachtest.</string>
+    <string name="bt_intel_unavailable_title">Marktinfos sind für dein Konto nicht verfügbar</string>
+    <string name="bt_intel_unavailable_message">Momentan lässt sich davon nichts abrufen. Sobald es wieder geht, steht es hier.</string>
+    <string name="bt_intel_section_dividends">Dividenden</string>
+    <string name="bt_intel_section_earnings">Quartalszahlen</string>
+    <string name="bt_intel_section_news">News</string>
+    <string name="bt_intel_section_splits">Splits</string>
+    <string name="bt_intel_forward_yield">Erwartete Rendite</string>
+    <string name="bt_intel_trailing_amount">Letzte 12 Monate</string>
+    <string name="bt_intel_next_payout">Nächste Zahlung</string>
+    <string name="bt_intel_dividend_history">Letzte Zahlungen</string>
+    <string name="bt_intel_dividends_empty">Keine Dividenden erfasst</string>
+    <string name="bt_intel_ex_date">Ex-Tag %1$s</string>
+    <string name="bt_intel_pay_date">Zahltag %1$s</string>
+    <string name="bt_intel_date_unknown">Datum noch offen</string>
+    <string name="bt_intel_next_report">Nächster Bericht</string>
+    <string name="bt_intel_recent_reports">Letzte Berichte</string>
+    <string name="bt_intel_earnings_empty">Keine Termine bekannt</string>
+    <string name="bt_intel_date_estimated">Termin geschätzt</string>
+    <string name="bt_intel_date_confirmed">Termin bestätigt</string>
+    <string name="bt_intel_eps_estimate_value">EPS-Schätzung %1$s</string>
+    <string name="bt_intel_eps_pair">erw. %1$s → %2$s</string>
+    <string name="bt_intel_beat">Übertroffen</string>
+    <string name="bt_intel_miss">Verfehlt</string>
+    <string name="bt_intel_news_empty">Aktuell keine Schlagzeilen</string>
+    <string name="bt_intel_open_article">Artikel öffnen</string>
+    <string name="bt_intel_earnings_calendar">Berichtstermine</string>
+    <string name="bt_intel_calendar_empty">Keine Termine in Sicht</string>
+    <string name="bt_intel_dividend_calendar">Dividendenkalender</string>
+    <string name="bt_intel_div_calendar_empty">Keine Dividenden in Sicht</string>
+    <string name="bt_intel_dividend_projection">Erwartete Dividendenerträge</string>
+    <string name="bt_intel_projection_empty">Keine deiner Positionen zahlt Dividende</string>
+    <string name="bt_intel_per_month">Pro Monat</string>
+    <string name="bt_intel_per_year">Pro Jahr</string>
+    <string name="bt_intel_projection_note">Geschätzt aus der zuletzt angekündigten Dividende je Anteil, in Euro umgerechnet.</string>
+    <string name="bt_intel_projection_holding_line">%1$s × %2$s pro Jahr</string>
+    <string name="bt_intel_news_digest">News-Überblick</string>
+    <string name="bt_intel_open_asset">Wertpapier öffnen</string>
+    <string name="bt_intel_held">Im Depot</string>
+    <string name="bt_intel_watched">Beobachtet</string>
+    <string name="bt_intel_age_now">gerade eben</string>
+    <string name="bt_intel_age_minutes">vor %1$d Min.</string>
+    <string name="bt_intel_age_hours">vor %1$d Std.</string>
+    <string name="bt_intel_age_days">vor %1$d T.</string>
+    <string name="bt_intel_age_weeks">vor %1$d Wo.</string>
+
+    <!-- ANCHOR-SOCIAL: V5 S2c-2 comment threads + friend groups -->
+
+    <!-- Kommentare + Emoji-Reaktionen zu geteilten Elementen -->
+    <string name="bt_thread_title">Kommentare</string>
+    <string name="bt_thread_reactions_label">Reaktionen</string>
+    <string name="bt_thread_react_cd">Mit %1$s reagieren</string>
+    <string name="bt_thread_unreact_cd">Deine Reaktion %1$s entfernen</string>
+    <string name="bt_thread_add_reaction_cd">Reaktion hinzufügen</string>
+    <string name="bt_thread_empty_title">Noch keine Kommentare</string>
+    <string name="bt_thread_empty_body">Sag als Erste:r etwas dazu — alle, mit denen es geteilt ist, sehen es.</string>
+    <string name="bt_thread_not_shared_title">Nicht mehr mit dir geteilt</string>
+    <string name="bt_thread_not_shared_body">Wem das gehört, hat geändert, wer es sehen darf. Die Unterhaltung läuft dort weiter — nur eben ohne dich.</string>
+    <string name="bt_thread_error_title">Kommentare konnten nicht geladen werden</string>
+    <string name="bt_thread_placeholder">Kommentar schreiben…</string>
+    <string name="bt_thread_send_cd">Kommentar senden</string>
+    <string name="bt_thread_counter">%1$d / %2$d</string>
+    <string name="bt_thread_too_long">Dieser Kommentar ist zu lang — kürze ihn ein wenig.</string>
+    <string name="bt_thread_delete_cd">Kommentar löschen</string>
+    <string name="bt_thread_delete_title">Diesen Kommentar löschen?</string>
+    <string name="bt_thread_delete_body">Er verschwindet für alle. Kommentare lassen sich nicht bearbeiten, nur löschen.</string>
+    <string name="bt_thread_delete_action">Löschen</string>
+    <string name="bt_thread_deleted_toast">Kommentar gelöscht</string>
+    <string name="bt_thread_rate_limited">Du hast in der letzten Stunde viel geschrieben. Mach kurz Pause und versuche es dann erneut.</string>
+    <string name="bt_thread_reaction_failed">Die Reaktion wurde nicht gespeichert. Versuche es erneut.</string>
+    <plurals name="bt_thread_comment_count">
+        <item quantity="one">%1$d Kommentar</item>
+        <item quantity="other">%1$d Kommentare</item>
+    </plurals>
+
+    <!-- Die Freigabe-Art `idea` — eine gespeicherte Workboard-Analyse (Name + These + Backtest) -->
+    <string name="bt_share_kind_idea">Idee</string>
+    <string name="bt_share_idea_subtitle">These und Backtest</string>
+    <string name="bt_share_choose_idea">Lege fest, wer diese Idee lesen darf — deine These und den Backtest dahinter.</string>
+    <string name="bt_share_hint_all_friends_idea">Alle Freunde können dann die These lesen und sehen, wie der Backtest ausgegangen ist.</string>
+    <string name="bt_share_hint_public_active_idea">Jede:r mit dem Link kann diese Idee lesen. Wähle eine andere Sichtbarkeit, um den Link abzuschalten.</string>
+
+    <!-- Freundesgruppen -->
+    <string name="bt_groups_title">Freundesgruppen</string>
+    <string name="bt_groups_entry_title">Freundesgruppen</string>
+    <string name="bt_groups_entry_sub">Einen Kreis von Freunden einmal benennen und mit einem Tippen teilen</string>
+    <string name="bt_groups_open_entry_cd">Freundesgruppen öffnen</string>
+    <string name="bt_groups_empty_title">Noch keine Gruppen</string>
+    <string name="bt_groups_empty_body">Eine Gruppe ist ein benannter Kreis von Freunden — Familie, Trading-Crew — den du als eine einzige Sichtbarkeit wählen kannst.</string>
+    <string name="bt_groups_error_title">Deine Gruppen konnten nicht geladen werden</string>
+    <string name="bt_groups_new">Neue Gruppe</string>
+    <string name="bt_groups_create_title">Neue Gruppe</string>
+    <string name="bt_groups_create_body">Gib ihr einen Namen, den du später wiedererkennst. Mitglieder kannst du gleich danach hinzufügen.</string>
+    <string name="bt_groups_rename_title">Gruppe umbenennen</string>
+    <string name="bt_groups_name_label">Gruppenname</string>
+    <string name="bt_groups_name_placeholder">Familie</string>
+    <string name="bt_groups_create_action">Erstellen</string>
+    <string name="bt_groups_rename_action">Speichern</string>
+    <string name="bt_groups_delete_title">%1$s löschen?</string>
+    <string name="bt_groups_delete_body">Alles, was mit dieser Gruppe geteilt ist, wird nicht mehr geteilt, und ihre Mitglieder verlieren sofort den Zugriff. Befreundet bleibst du mit allen.</string>
+    <string name="bt_groups_delete_action">Gruppe löschen</string>
+    <string name="bt_groups_rename_cd">Gruppe umbenennen</string>
+    <string name="bt_groups_delete_cd">Gruppe löschen</string>
+    <string name="bt_groups_expand_cd">Mitglieder von %1$s anzeigen</string>
+    <string name="bt_groups_collapse_cd">Mitglieder von %1$s ausblenden</string>
+    <string name="bt_groups_members">Mitglieder</string>
+    <string name="bt_groups_no_members">Noch niemand drin. Füge einen Freund hinzu, damit die Gruppe etwas bringt.</string>
+    <string name="bt_groups_add_member">Freund hinzufügen</string>
+    <string name="bt_groups_add_done">Fertig</string>
+    <string name="bt_groups_all_friends_in">Alle deine Freunde sind bereits in dieser Gruppe.</string>
+    <string name="bt_groups_no_friends">Du hast noch keine Freunde — nur angenommene Freunde können in eine Gruppe.</string>
+    <string name="bt_groups_remove_member_cd">@%1$s aus der Gruppe entfernen</string>
+    <string name="bt_groups_add_member_cd">@%1$s zur Gruppe hinzufügen</string>
+    <string name="bt_groups_err_not_friend">Nur angenommene Freunde können in eine Gruppe. Schicke zuerst eine Freundschaftsanfrage.</string>
+    <string name="bt_groups_err_not_found">Diese Gruppe gibt es nicht mehr.</string>
+    <string name="bt_groups_err_audience_invalid">Wähle eine deiner Gruppen aus, bevor du mit einer Gruppe teilst.</string>
+    <string name="bt_groups_toast_created">Gruppe erstellt</string>
+    <string name="bt_groups_toast_renamed">Gruppe umbenannt</string>
+    <string name="bt_groups_toast_deleted">Gruppe gelöscht</string>
+    <string name="bt_groups_toast_member_added">@%1$s hinzugefügt</string>
+    <string name="bt_groups_toast_member_removed">@%1$s entfernt</string>
+    <plurals name="bt_groups_member_count">
+        <item quantity="one">%1$d Mitglied</item>
+        <item quantity="other">%1$d Mitglieder</item>
+    </plurals>
+
+    <!-- Die Gruppen-Stufe der Sichtbarkeitsleiter -->
+    <string name="bt_groups_audience_title">Eine Gruppe</string>
+    <string name="bt_groups_audience_sub">Ein benannter Kreis von Freunden</string>
+    <string name="bt_groups_audience_pick">Wähle genau eine Gruppe — eine Freigabe geht immer an eine einzige.</string>
+    <string name="bt_groups_audience_live">Eine Gruppenfreigabe ist live: Wer beim Ansehen in der Gruppe ist, sieht es — wen du später hinzufügst, bekommt es also auch.</string>
+    <string name="bt_groups_audience_empty">Du hast noch keine Gruppe. Lege eine an, dann kannst du dieselbe Sichtbarkeit immer wieder verwenden.</string>
+    <string name="bt_groups_audience_goto">Zu den Freundesgruppen</string>
+    <string name="bt_groups_audience_badge">Gruppe</string>
+    <string name="bt_groups_toast_shared">%1$s wird jetzt mit %2$s geteilt</string>
+    <string name="bt_groups_toast_shared_generic">%1$s wird jetzt mit einer Gruppe geteilt</string>
+
+    <!-- ANCHOR-CHAIN: V5 S2c-2 mirrorchain + workboard ideas -->
+    <!-- Einstiege in die Gruppen-Ansicht (Badge-Tippfläche + Zwilling im ⋮-Menü). -->
+    <string name="bt_chain_open_cd">Gruppendetails anzeigen</string>
+    <string name="bt_chain_open_action">Gruppendetails</string>
+    <!-- Einstieg vom Assets-Tab in die portfolioweiten Marktinfos. -->
+    <string name="bt_assets_intel_row_title">Marktinfos</string>
+    <string name="bt_assets_intel_row_subtitle">Quartalszahlen, Dividenden und News zu deinen Werten</string>
+    <!-- Mirrorchain: Teilnahme an Gruppen-Portfolios. Die Verwaltung einer Kette
+         läuft plattformseitig nur über die Web-Session — deshalb gibt es hier
+         bewusst keine Texte für Umbenennen / Einladen / Rollen / Auflösen. -->
+    <string name="bt_chain_invites_title">Gruppen-Einladungen</string>
+    <string name="bt_chain_invite_from">@%1$s hat dich eingeladen</string>
+    <string name="bt_chain_invite_accept">Annehmen</string>
+    <string name="bt_chain_invite_decline">Ablehnen</string>
+    <string name="bt_chain_invite_accepted_toast">Du bist jetzt in %1$s — das Gruppen-Portfolio steht in deiner Liste.</string>
+    <string name="bt_chain_invite_declined_toast">Einladung abgelehnt.</string>
+    <string name="bt_chain_err_cap">Diese Gruppe ist voll. Sie hat bereits alle 16 Mitglieder.</string>
+    <string name="bt_chain_err_not_friends">Ihr seid keine Freunde mehr, deshalb lässt sich diese Einladung nicht annehmen.</string>
+    <string name="bt_chain_err_busy">Die Gruppe ist gerade beschäftigt. Versuch es gleich noch einmal.</string>
+    <string name="bt_chain_members_section">Mitglieder</string>
+    <string name="bt_chain_members_count">%1$d von %2$d Mitgliedern</string>
+    <string name="bt_chain_activity_section">Aktivität</string>
+    <string name="bt_chain_activity_empty">In dieser Gruppe ist noch nichts passiert.</string>
+    <string name="bt_chain_load_older">Ältere laden</string>
+    <string name="bt_chain_role_owner">Eigentümer</string>
+    <string name="bt_chain_role_manager">Verwalter</string>
+    <string name="bt_chain_role_member">Mitglied</string>
+    <string name="bt_chain_you">Du</string>
+    <string name="bt_chain_dissolved">Diese Gruppe wurde aufgelöst. Was du hier siehst, ist Historie.</string>
+    <string name="bt_chain_gone_title">Du bist nicht in dieser Gruppe</string>
+    <string name="bt_chain_gone_message">Sie wurde aufgelöst oder du wurdest entfernt. Deine eigene Kopie des Portfolios bleibt unverändert bestehen.</string>
+    <string name="bt_chain_admin_hint">Umbenennen, Einladen, Rollen und Auflösen laufen über die BetterTrack-Web-App.</string>
+    <string name="bt_chain_leave">Gruppe verlassen</string>
+    <string name="bt_chain_leave_title">%1$s verlassen?</string>
+    <string name="bt_chain_leave_message">Deine Kopie des Portfolios behältst du, sie wird aber nicht mehr mit der Gruppe synchronisiert. Die Eigentümerrolle geht an ein anderes Mitglied, oder die Gruppe löst sich auf, wenn niemand mehr übrig bleibt.</string>
+    <string name="bt_chain_leave_action">Verlassen</string>
+
+    <!-- Workboard-Ideen: eine gespeicherte Backtest-Analyse (Titel + These + Setup). -->
+    <string name="bt_ideas_segment">Ideen</string>
+    <string name="bt_ideas_empty_title">Noch keine Ideen gespeichert</string>
+    <string name="bt_ideas_empty_message">Eine Idee ist ein Backtest, den du behalten hast: die getesteten Werte oder das Konglomerat, Zeitraum und Rebalancing — und eine Notiz, warum er dich überzeugt hat.</string>
+    <string name="bt_ideas_create">Neue Idee</string>
+    <string name="bt_ideas_create_title">Idee speichern</string>
+    <string name="bt_ideas_name_label">Titel</string>
+    <string name="bt_ideas_thesis_label">These (optional)</string>
+    <string name="bt_ideas_thesis_hint">Warum lohnt sich das?</string>
+    <string name="bt_ideas_source_label">Basiert auf</string>
+    <string name="bt_ideas_source_conglomerate">Einem Konglomerat</string>
+    <string name="bt_ideas_source_adhoc">Einzelnen Werten</string>
+    <string name="bt_ideas_source_conglomerate_generic">Konglomerat</string>
+    <string name="bt_ideas_no_conglomerates">Du hast noch kein Konglomerat. Lege zuerst eines an oder baue die Idee aus einzelnen Werten.</string>
+    <string name="bt_ideas_pick_assets">Nach einem Wert suchen</string>
+    <string name="bt_ideas_equal_weight_hint">Jeder Wert bekommt dieselbe Gewichtung.</string>
+    <string name="bt_ideas_range_label">Zeitraum</string>
+    <string name="bt_ideas_range_max">Max</string>
+    <string name="bt_ideas_rebalance_label">Rebalancing</string>
+    <string name="bt_ideas_rebalance_none">Nie</string>
+    <string name="bt_ideas_rebalance_monthly">Monatlich</string>
+    <string name="bt_ideas_rebalance_quarterly">Quartalsweise</string>
+    <string name="bt_ideas_rebalance_yearly">Jährlich</string>
+    <string name="bt_ideas_mode_label">Wenn eine Gewichtung überläuft</string>
+    <string name="bt_ideas_mode_hint">Was passiert, wenn eine Position ihren vollen Anteil nicht aufnehmen kann.</string>
+    <string name="bt_ideas_mode_clip">Abschneiden</string>
+    <string name="bt_ideas_mode_cash">Als Bargeld liegen lassen</string>
+    <string name="bt_ideas_mode_redistribute">Auf die anderen verteilen</string>
+    <string name="bt_ideas_benchmark_label">Vergleichsindex</string>
+    <string name="bt_ideas_benchmark_none">Keiner</string>
+    <string name="bt_ideas_benchmark_sp500">S&amp;P 500</string>
+    <string name="bt_ideas_benchmark_dax">DAX</string>
+    <string name="bt_ideas_benchmark_world">MSCI World</string>
+    <string name="bt_ideas_benchmark_vs">vs. %1$s</string>
+    <string name="bt_ideas_benchmark_vs_none">Kein Vergleich</string>
+    <string name="bt_ideas_save">Idee speichern</string>
+    <string name="bt_ideas_save_changes">Änderungen speichern</string>
+    <string name="bt_ideas_edit_title">Idee bearbeiten</string>
+    <string name="bt_ideas_delete">Idee löschen</string>
+    <string name="bt_ideas_delete_title">Diese Idee löschen?</string>
+    <string name="bt_ideas_delete_message">Das gespeicherte Setup und deine These verschwinden mit. Das lässt sich nicht rückgängig machen.</string>
+    <string name="bt_ideas_no_thesis">Noch keine These geschrieben.</string>
+    <string name="bt_ideas_setup">Setup</string>
+    <string name="bt_ideas_assets">Werte</string>
+    <string name="bt_ideas_no_assets">Für diese Idee sind keine Positionen gespeichert.</string>
+    <string name="bt_ideas_asset_unresolved_cd">Wert %1$s — Details nicht verfügbar</string>
+    <string name="bt_ideas_updated">Aktualisiert %1$s</string>
+    <string name="bt_ideas_gone_title">Diese Idee gibt es nicht mehr</string>
+    <string name="bt_ideas_gone_message">Sie wurde gelöscht oder gehört jemand anderem. Nur der Eigentümer kann eine Idee öffnen.</string>
+    <plurals name="bt_ideas_assets_count">
+        <item quantity="one">%1$d Wert</item>
+        <item quantity="other">%1$d Werte</item>
+    </plurals>
 </resources>

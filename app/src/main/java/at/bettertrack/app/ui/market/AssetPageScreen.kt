@@ -417,6 +417,15 @@ private fun AssetLoadedContent(
             }
         }
 
+        // V5 S2c: dividends, earnings, news and splits — below the price and the
+        // stats, because those are why someone opened this page; intel is what
+        // they read next. The section renders NOTHING at all when the provider
+        // serves none of it (every custom asset), so this item costs an
+        // unsupported asset no space and no heading.
+        item(key = "intel") {
+            AssetIntelSection(assetId = snapshot.asset.id, modifier = Modifier.fillMaxWidth())
+        }
+
         // Quick buy / sell.
         item(key = "trade") {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

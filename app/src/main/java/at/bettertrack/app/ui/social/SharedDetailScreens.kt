@@ -37,6 +37,7 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.SharedWatchlistDetailResponse
+import at.bettertrack.app.data.repo.ShareableKind
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
@@ -129,6 +130,17 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
                         }
                     }
                 }
+                // V5 S2c: the conversation about a shared item lives with the
+                // item, below what it is about — and above the read-only footer,
+                // because "you can look but not change it" is the last word on
+                // the screen, not a caption on the discussion.
+                item {
+                    ItemThreadSection(
+                        kind = ShareableKind.Portfolio,
+                        subjectId = portfolioId,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 item { ReadOnlyFooter(d.owner.username) }
             }
         }
@@ -163,6 +175,13 @@ fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: ()
                             Text(it2.asset.currency, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
                         }
                     }
+                }
+                item {
+                    ItemThreadSection(
+                        kind = ShareableKind.Watchlist,
+                        subjectId = watchlistId,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                 }
                 item { ReadOnlyFooter(d.owner.username) }
             }
@@ -211,6 +230,13 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                             )
                         }
                     }
+                }
+                item {
+                    ItemThreadSection(
+                        kind = ShareableKind.Conglomerate,
+                        subjectId = conglomerateId,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                 }
                 item { ReadOnlyFooter(d.owner.username) }
             }

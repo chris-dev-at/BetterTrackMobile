@@ -3,6 +3,7 @@ package at.bettertrack.app.ui.portfolio
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,9 +43,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
@@ -55,6 +58,8 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.mirrorchain.ChainDetailSheet
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -107,6 +112,8 @@ fun PortfolioSwitcherSheet(
     var archiveTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<PortfolioEntity?>(null) }
     var archivedExpanded by rememberSaveable { mutableStateOf(false) }
+    /** V5 S2c: the mirrorchain whose detail sheet is open, if any. */
+    var chainTarget by rememberSaveable { mutableStateOf<String?>(null) }
 
     val sections = switcherSections(portfolios)
     val active = sections.active
@@ -169,6 +176,7 @@ fun PortfolioSwitcherSheet(
                     onRename = { renameTarget = p },
                     onArchive = { archiveTarget = p },
                     onDelete = { deleteTarget = p },
+                    onOpenChain = { chainTarget = it },
                 )
             }
 
@@ -280,6 +288,13 @@ fun PortfolioSwitcherSheet(
             onDismiss = { deleteTarget = null },
         )
     }
+
+    // V5 S2c: members / activity / leave for a group portfolio's chain. Only
+    // ACTIVE rows offer it — an archived group portfolio is history, and the
+    // chain either moved on without you or is gone.
+    chainTarget?.let { chainId ->
+        ChainDetailSheet(chainId = chainId, onDismiss = { chainTarget = null })
+    }
 }
 
 @Composable
@@ -292,6 +307,7 @@ private fun SwitcherRow(
     onRename: () -> Unit,
     onArchive: () -> Unit,
     onDelete: () -> Unit,
+    onOpenChain: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -327,12 +343,32 @@ private fun SwitcherRow(
                     // v5: a group (mirrorchain) portfolio is a materially different
                     // thing to own — its rows come from other people — so it earns
                     // a gold badge rather than a neutral one.
-                    if (portfolio.mirror?.mirrorChainId != null) {
+                    //
+                    // V5 S2c: the badge is now the way IN to the chain — members,
+                    // activity and leaving. It sits inside a row whose own tap
+                    // selects the portfolio, so it takes an explicit 40dp touch
+                    // target and its own content description; the ⋮ menu carries
+                    // the same action as a full-size fallback, because a badge is
+                    // a small thing to ask someone to hit precisely.
+                    val chainId = portfolio.mirror?.mirrorChainId
+                    if (chainId != null) {
                         Spacer(Modifier.width(8.dp))
-                        BtBadge(
-                            text = stringResource(R.string.bt_mirror_group_badge),
-                            kind = BtBadgeKind.Gold,
-                        )
+                        Box(
+                            modifier = Modifier
+                                .heightIn(min = 40.dp)
+                                .clip(BtShapes.pill)
+                                .clickable(
+                                    role = Role.Button,
+                                    onClickLabel = stringResource(R.string.bt_chain_open_cd),
+                                ) { onOpenChain(chainId) }
+                                .padding(horizontal = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            BtBadge(
+                                text = stringResource(R.string.bt_mirror_group_badge),
+                                kind = BtBadgeKind.Gold,
+                            )
+                        }
                     }
                 }
                 portfolio.mirror?.let { m ->
@@ -412,6 +448,16 @@ private fun SwitcherRow(
                 onDismissRequest = { menuOpen = false },
                 containerColor = bt.surface,
             ) {
+                // Full-size twin of the gold badge's tap target (see above).
+                portfolio.mirror?.mirrorChainId?.let { chainId ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bt_chain_open_action), color = bt.textPrimary) },
+                        onClick = {
+                            menuOpen = false
+                            onOpenChain(chainId)
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_switcher_rename), color = bt.textPrimary) },
                     onClick = {

@@ -74,6 +74,13 @@ import kotlinx.serialization.Serializable
 // ── Market ─────────────────────────────────────────────────────────────────
 @Serializable data class AssetPageRoute(val assetId: String)                // TODO(step 11)
 @Serializable data object SearchRoute                                       // TODO(step 11)
+/**
+ * V5 S2c: portfolio-wide market intel — earnings + dividend calendars, the
+ * projected-income summary and the grouped news digest. Reached from the Assets
+ * tab. A destination rather than another Assets-tab panel because it is four
+ * lists deep and would bury the watchlists it sits next to.
+ */
+@Serializable data object MarketIntelRoute
 // S6 P2-19: WatchlistRoute is gone — watchlists are a PANEL inside the Assets
 // tab (WatchlistPanel), never a destination of their own.
 
@@ -82,10 +89,22 @@ import kotlinx.serialization.Serializable
 // Workboard tab, composed directly by WorkboardScreen.
 @Serializable data class ConglomerateBuilderRoute(val conglomerateId: String? = null) // TODO(step 13)
 @Serializable data class ConglomerateDetailRoute(val conglomerateId: String) // TODO(step 13)
+/**
+ * V5 S2c: one saved workboard idea (name + thesis + the backtest setup behind
+ * it). The list is a SEGMENT of the Workboard tab, like conglomerates and
+ * alerts; only the detail is a destination.
+ */
+@Serializable data class IdeaDetailRoute(val ideaId: String)
 
 // ── Social ─────────────────────────────────────────────────────────────────
 /** Per-friend overview (Social v2): profile + everything they share + go-to-chat + remove. */
 @Serializable data class FriendOverviewRoute(val userId: String, val username: String)
+/**
+ * V5 S2c: friend groups — named sets of friends that act as ONE sharing
+ * audience. Reached from the Social tab's Friends section, and from the
+ * audience picker when the user has no group to share to yet.
+ */
+@Serializable data object FriendGroupsRoute
 /** Read-only friend-shared views (Step 14, §6.9). */
 @Serializable data class SharedPortfolioViewRoute(val portfolioId: String)
 @Serializable data class SharedWatchlistViewRoute(val watchlistId: String, val ownerName: String)

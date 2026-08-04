@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.People
@@ -72,6 +74,8 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.AudienceState
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Friend
+import at.bettertrack.app.data.repo.FriendGroup
+import at.bettertrack.app.data.repo.FriendGroupRepository
 import at.bettertrack.app.data.repo.FriendRequest
 import at.bettertrack.app.data.repo.MyShared
 import at.bettertrack.app.data.repo.MySharedItem
@@ -91,6 +95,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,6 +115,8 @@ data class SocialUiState(
     val outgoing: List<FriendRequest> = emptyList(),
     val sharedWithMe: SharedWithMe? = null,
     val myShared: MyShared? = null,
+    /** V5: the caller's friend groups — the audience sheet's Group rung reads these. */
+    val groups: List<FriendGroup> = emptyList(),
     /** The item whose audience sheet is open (null = closed). */
     val sharingItem: MySharedItem? = null,
     /** The item's live audience (friendIds + link state); null while loading. */
@@ -121,6 +128,7 @@ data class SocialUiState(
 
 class SocialViewModel(
     private val repo: SocialRepository,
+    private val groupRepo: FriendGroupRepository,
     connectivity: ConnectivityMonitor,
 ) : ViewModel() {
 
@@ -148,6 +156,10 @@ class SocialViewModel(
             val requestsR = repo.requests()
             val sharedR = repo.sharedWithMe()
             val mineR = repo.myShared()
+            // Groups feed the audience sheet's Group rung. They are deliberately
+            // NOT part of the error fold below: an empty group list is a normal,
+            // fully usable state, so a failure here must never blank the tab.
+            val groupsR = groupRepo.groups()
 
             val err = listOf(friendsR, requestsR, sharedR, mineR)
                 .filterIsInstance<BtResult.Err>()
@@ -162,6 +174,7 @@ class SocialViewModel(
                 outgoing = (requestsR as? BtResult.Ok)?.value?.outgoing ?: _state.value.outgoing,
                 sharedWithMe = (sharedR as? BtResult.Ok)?.value ?: _state.value.sharedWithMe,
                 myShared = (mineR as? BtResult.Ok)?.value ?: _state.value.myShared,
+                groups = (groupsR as? BtResult.Ok)?.value ?: _state.value.groups,
             )
         }
     }
@@ -187,7 +200,15 @@ class SocialViewModel(
         viewModelScope.launch {
             val r = repo.getAudience(item.kind, item.id)
             val resolved = (r as? BtResult.Ok)?.value
-                ?: AudienceState(item.kind, item.id, item.audience, emptySet(), linkActive = false, linkCreatedAt = null)
+                ?: AudienceState(
+                    kind = item.kind,
+                    subjectId = item.id,
+                    audience = item.audience,
+                    friendIds = emptySet(),
+                    groupId = null,
+                    linkActive = false,
+                    linkCreatedAt = null,
+                )
             // Only apply if the sheet is still open for the same item.
             if (_state.value.sharingItem?.id == item.id) {
                 _state.value = _state.value.copy(sharingState = resolved)
@@ -198,10 +219,18 @@ class SocialViewModel(
     fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null) }
     fun dismissLink() { _state.value = _state.value.copy(publicLinkToShow = null) }
 
-    fun applyAudience(item: MySharedItem, audience: ShareAudience, friendIds: Set<String>, acknowledge: Boolean) {
+    fun applyAudience(
+        item: MySharedItem,
+        audience: ShareAudience,
+        friendIds: Set<String>,
+        groupId: String?,
+        acknowledge: Boolean,
+    ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(sharingBusy = true)
-            val r = repo.setAudience(item.kind, item.id, audience, friendIds, acknowledge)
+            // The repository sends each optional field only on the rung that owns
+            // it, so passing groupId unconditionally here is safe.
+            val r = repo.setAudience(item.kind, item.id, audience, friendIds, acknowledge, groupId)
             when (r) {
                 is BtResult.Ok -> {
                     _state.value = _state.value.copy(
@@ -215,6 +244,13 @@ class SocialViewModel(
                             ShareAudience.Private -> SocialToast.Res(R.string.bt_social_toast_now_private, listOf(item.name))
                             ShareAudience.AllFriends -> SocialToast.Res(R.string.bt_social_toast_shared_all, listOf(item.name))
                             ShareAudience.SpecificFriends -> SocialToast.Quantity(R.plurals.bt_social_toast_shared_specific, friendIds.size, listOf(item.name, friendIds.size))
+                            // Name the group, not the mechanism — "shared with
+                            // Family" is what the user just decided. The unnamed
+                            // fallback only fires if the group vanished mid-apply.
+                            ShareAudience.Group ->
+                                _state.value.groups.firstOrNull { it.id == groupId }?.name
+                                    ?.let { SocialToast.Res(R.string.bt_groups_toast_shared, listOf(item.name, it)) }
+                                    ?: SocialToast.Res(R.string.bt_groups_toast_shared_generic, listOf(item.name))
                             ShareAudience.PublicLink -> SocialToast.Res(R.string.bt_social_toast_public_active)
                         }
                     }
@@ -247,9 +283,10 @@ fun SocialScreen(
     onOpenFriend: (userId: String, username: String) -> Unit,
     onOpenChats: () -> Unit,
     onOpenChatWith: (friendUserId: String, username: String) -> Unit,
+    onOpenGroups: () -> Unit,
 ) {
     val vm: SocialViewModel = viewModel {
-        SocialViewModel(AppGraph.socialRepository, AppGraph.connectivityMonitor)
+        SocialViewModel(AppGraph.socialRepository, AppGraph.friendGroupRepository, AppGraph.connectivityMonitor)
     }
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
@@ -315,7 +352,14 @@ fun SocialScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                     else -> when (section) {
-                        SocialSection.Friends -> FriendsSection(ui, vm, onAdd = { showAdd = true }, onOpenFriend = onOpenFriend, onChatWith = onOpenChatWith)
+                        SocialSection.Friends -> FriendsSection(
+                            ui = ui,
+                            vm = vm,
+                            onAdd = { showAdd = true },
+                            onOpenFriend = onOpenFriend,
+                            onChatWith = onOpenChatWith,
+                            onOpenGroups = onOpenGroups,
+                        )
                         SocialSection.SharedWithMe -> SharedWithMeSection(ui.sharedWithMe, onOpenPerson = onOpenFriend)
                         SocialSection.MyShares -> MySharesSection(ui.myShared, onShare = { vm.openSharing(it) })
                     }
@@ -340,9 +384,16 @@ fun SocialScreen(
             currentAudience = audienceState.audience,
             friends = ui.friends,
             initialFriendIds = audienceState.friendIds,
+            groups = ui.groups,
+            initialGroupId = audienceState.groupId,
             linkActive = audienceState.linkActive,
             busy = ui.sharingBusy,
-            onApply = { audience, friendIds, ack -> vm.applyAudience(item, audience, friendIds, ack) },
+            onApply = { audience, friendIds, groupId, ack ->
+                vm.applyAudience(item, audience, friendIds, groupId, ack)
+            },
+            // Leaving for Groups closes the sheet; the user comes back to a fresh
+            // one with the group they just made already in the list.
+            onOpenGroups = { vm.closeSharing(); onOpenGroups() },
             onDismiss = { vm.closeSharing() },
         )
     }
@@ -460,12 +511,18 @@ private fun FriendsSection(
     onAdd: () -> Unit,
     onOpenFriend: (String, String) -> Unit,
     onChatWith: (String, String) -> Unit,
+    onOpenGroups: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // V5 S2c: a group-portfolio (mirrorchain) invitation is the one thing on
+        // this tab that is genuinely WAITING on the user, so it sits above even
+        // the add-friend button. The card renders at zero height when there is
+        // nothing to answer, so it costs this list nothing the rest of the time.
+        item { MirrorInvitesCard(modifier = Modifier.fillMaxWidth()) }
         item {
             BtPrimaryButton(
                 text = stringResource(R.string.bt_social_add_friend),
@@ -473,6 +530,9 @@ private fun FriendsSection(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             )
         }
+        // Groups live under Friends because a group IS a set of friends — putting
+        // it here means you find it while looking at the people it is made of.
+        item { GroupsEntryRow(count = ui.groups.size, onClick = onOpenGroups) }
 
         if (ui.incoming.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.bt_social_requests_to_you), ui.incoming.size) }
@@ -501,6 +561,40 @@ private fun FriendsSection(
             items(ui.friends, key = { "f-" + it.userId }) { f ->
                 FriendRow(f, onOpen = { onOpenFriend(f.userId, f.username) }, onChat = { onChatWith(f.userId, f.username) })
             }
+        }
+    }
+}
+
+/** The Social tab's way in to [FriendGroupsScreen]. */
+@Composable
+private fun GroupsEntryRow(count: Int, onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    val cd = stringResource(R.string.bt_groups_open_entry_cd)
+    BtCard(modifier = Modifier.fillMaxWidth().semantics { contentDescription = cd }, onClick = onClick) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Groups, contentDescription = null, tint = bt.gold, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.bt_groups_entry_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = bt.textPrimary,
+                )
+                Text(
+                    stringResource(R.string.bt_groups_entry_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+            if (count > 0) {
+                BtBadge(text = count.toString(), kind = BtBadgeKind.Gold)
+                Spacer(Modifier.width(6.dp))
+            }
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -711,6 +805,8 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
         ShareableKind.Portfolio -> Icons.Outlined.PieChart
         ShareableKind.Watchlist -> Icons.AutoMirrored.Outlined.ShowChart
         ShareableKind.Conglomerate -> Icons.Outlined.Dashboard
+        // A saved workboard analysis: a written thesis with a backtest behind it.
+        ShareableKind.Idea -> Icons.Outlined.Lightbulb
     }
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onShare) {
         Row(
@@ -725,6 +821,9 @@ private fun MySharedRow(item: MySharedItem, onShare: () -> Unit) {
                     ShareableKind.Portfolio -> stringResource(R.string.bt_social_kind_portfolio)
                     ShareableKind.Conglomerate -> pluralStringResource(R.plurals.bt_social_positions, item.count, item.count)
                     ShareableKind.Watchlist -> pluralStringResource(R.plurals.bt_social_assets, item.count, item.count)
+                    // An idea has no countable rows — it is one thesis and one
+                    // backtest — so it names what it is instead of counting.
+                    ShareableKind.Idea -> stringResource(R.string.bt_share_idea_subtitle)
                 }
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             }
@@ -747,6 +846,9 @@ private fun audienceChrome(a: ShareAudience, friendCount: Int): AudienceChrome =
         if (friendCount > 0) pluralStringResource(R.plurals.bt_social_audience_friend_count, friendCount, friendCount) else stringResource(R.string.bt_social_audience_some_friends),
         BtBadgeKind.Gold,
     )
+    // The row has no group id (the my-shared list carries only the audience), so
+    // the badge names the rung; the sheet is where the group itself is named.
+    ShareAudience.Group -> AudienceChrome(Icons.Outlined.Groups, stringResource(R.string.bt_groups_audience_badge), BtBadgeKind.Gold)
     ShareAudience.AllFriends -> AudienceChrome(Icons.Outlined.Group, stringResource(R.string.bt_social_audience_all_friends), BtBadgeKind.Gold)
     ShareAudience.PublicLink -> AudienceChrome(Icons.Outlined.Link, stringResource(R.string.bt_social_audience_public), BtBadgeKind.Gold)
 }

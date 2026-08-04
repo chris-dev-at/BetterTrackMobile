@@ -27,7 +27,12 @@ import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.BuildInfoRepository
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.DefaultWatchlistRepository
+import at.bettertrack.app.data.repo.FriendGroupRepository
+import at.bettertrack.app.data.repo.IdeasRepository
+import at.bettertrack.app.data.repo.MarketIntelRepository
 import at.bettertrack.app.data.repo.MarketRepository
+import at.bettertrack.app.data.repo.MirrorchainRepository
+import at.bettertrack.app.data.repo.SocialThreadRepository
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.data.repo.ChatRepository
@@ -363,6 +368,37 @@ object AppGraph {
 
     val socialRepository: SocialRepository by lazy {
         DefaultSocialRepository(api = btApi, json = json, webOrigin = DevOriginOverride.webOrigin)
+    }
+
+    // ── V5 S2c-2 surfaces ────────────────────────────────────────────────────
+    // All five are thin, server-only adapters (no Room, no storage-mode seam):
+    // market intel is provider data the app must not cache, and the social /
+    // mirrorchain / ideas surfaces have no Drive equivalent by definition — a
+    // Drive-only install has no BetterTrack account to have friends on.
+
+    /** Market intel: per-asset dividends/earnings/news/splits + portfolio roll-ups. */
+    val marketIntelRepository: MarketIntelRepository by lazy {
+        MarketIntelRepository(api = btApi, json = json)
+    }
+
+    /** Comments + emoji reactions on shared items. */
+    val socialThreadRepository: SocialThreadRepository by lazy {
+        SocialThreadRepository(api = btApi, json = json)
+    }
+
+    /** Friend groups — named audiences for the sharing ladder. */
+    val friendGroupRepository: FriendGroupRepository by lazy {
+        FriendGroupRepository(api = btApi, json = json)
+    }
+
+    /** Group-portfolio participation (read + invites + leave; admin stays web). */
+    val mirrorchainRepository: MirrorchainRepository by lazy {
+        MirrorchainRepository(api = btApi, json = json)
+    }
+
+    /** Workboard ideas — saved backtest analyses. */
+    val ideasRepository: IdeasRepository by lazy {
+        IdeasRepository(api = btApi, json = json)
     }
 
     /**

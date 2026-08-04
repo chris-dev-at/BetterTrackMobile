@@ -84,6 +84,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
+import at.bettertrack.app.ui.ideas.IdeasSection
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import java.util.Locale
@@ -97,7 +98,7 @@ import kotlinx.coroutines.launch
 
 // ── Workboard host: Conglomerates · Alerts ───────────────────────────────────
 
-private enum class WorkboardSection { Conglomerates, Alerts }
+private enum class WorkboardSection { Conglomerates, Ideas, Alerts }
 
 /**
  * The Workboard tab (owner ask 2026-07-10): a two-segment host — the Step-13
@@ -116,6 +117,7 @@ fun WorkboardScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(WorkboardSection.Conglomerates) }
 
@@ -152,6 +154,7 @@ fun WorkboardScreen(
                 onOpen = onOpenConglomerate,
                 onCreate = onCreateConglomerate,
             )
+            WorkboardSection.Ideas -> IdeasSection(onOpenIdea = onOpenIdea)
             WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
         }
     }
@@ -174,6 +177,15 @@ private fun SegmentedTabs(
             selected = selected == WorkboardSection.Conglomerates,
             modifier = Modifier.weight(1f),
         ) { onSelect(WorkboardSection.Conglomerates) }
+        // V5 S2c: ideas were completely unreachable in the app until now — the
+        // workboard has been storing them all along. A third segment (rather
+        // than a fourth bottom-nav home) keeps them where the rest of the
+        // "thinking about investments" surface already lives.
+        Segment(
+            label = stringResource(R.string.bt_ideas_segment),
+            selected = selected == WorkboardSection.Ideas,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(WorkboardSection.Ideas) }
         Segment(
             label = stringResource(R.string.bt_workboard_seg_alerts),
             selected = selected == WorkboardSection.Alerts,

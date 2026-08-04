@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
+import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -107,6 +110,7 @@ fun AssetsTabScreen(
     onOpenCustomAssets: () -> Unit = {},
     onOpenAsset: (String) -> Unit = {},
     onAddToWatchlist: () -> Unit = {},
+    onOpenMarketIntel: () -> Unit = {},
 ) {
     // Step 12 (§6.6): the Assets tab is search + watchlists. Custom-asset
     // management (§6.4) stays reachable via the link.
@@ -114,6 +118,12 @@ fun AssetsTabScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
         SearchBarButton(onClick = onOpenSearch)
+        Spacer(Modifier.height(10.dp))
+        // V5 S2c: market intel is about the assets you already hold or watch, so
+        // it belongs on this tab rather than in a menu — but it is a read you
+        // visit occasionally, not the tab's job, so it is one row above the
+        // watchlists instead of a segment competing with them.
+        MarketIntelEntryRow(onClick = onOpenMarketIntel)
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -131,6 +141,66 @@ fun AssetsTabScreen(
             onAddAsset = { onAddToWatchlist() },
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+/**
+ * The Assets tab's entry into the portfolio-wide market intel screen.
+ *
+ * A single row rather than a card: it is a doorway, and the tab's content is the
+ * watchlists below it. The chevron and the button role carry the affordance;
+ * nothing here previews the data, because every block behind it is
+ * availability-gated and a preview that renders "—" would be worse than none.
+ */
+@Composable
+private fun MarketIntelEntryRow(onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(R.string.bt_assets_intel_row_title)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .btPressScale(interaction, pressedScale = 0.985f)
+            .semantics {
+                role = Role.Button
+                contentDescription = label
+            },
+        shape = BtShapes.control,
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        interactionSource = interaction,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.EventNote,
+                contentDescription = null,
+                tint = bt.goldEmphasis,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = bt.textPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.bt_assets_intel_row_subtitle),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = bt.textMuted,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -195,12 +265,14 @@ fun WorkboardTabScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
 ) {
-    // Step-13 conglomerates + the new price-alerts manager, behind the Workboard
-    // segmented host (owner ask 2026-07-10).
+    // Step-13 conglomerates + the price-alerts manager + (V5 S2c) saved ideas,
+    // behind the Workboard segmented host (owner ask 2026-07-10).
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
         onOpenAsset = onOpenAsset,
+        onOpenIdea = onOpenIdea,
     )
 }

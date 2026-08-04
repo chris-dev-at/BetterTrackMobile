@@ -36,10 +36,21 @@ import java.io.IOException
  * #368) — the preference persists here; the bell lights up when #368 ships.
  */
 
-/** The §16 audience ladder — a single-select rung of increasing exposure. */
+/**
+ * The §16 audience ladder — a single-select rung of increasing exposure.
+ *
+ * V5 inserted **[Group]** between "specific friends" and "all friends", and the
+ * declaration order here is that ladder order (it is also the platform's own
+ * `SHARE_AUDIENCES` order), because the picker renders the rungs in enum order
+ * and the whole point of a ladder is that exposure only ever increases downwards.
+ *
+ * An unknown wire value falls back to [Private] — the safe end. A future rung
+ * the app doesn't model must never be read as "more shared than it is".
+ */
 enum class ShareAudience(val wire: String) {
     Private("private"),
     SpecificFriends("specific_friends"),
+    Group("group"),
     AllFriends("all_friends"),
     PublicLink("public_link"),
     ;
@@ -49,11 +60,15 @@ enum class ShareAudience(val wire: String) {
     }
 }
 
-/** What kind of thing an audience applies to (routes the unified endpoints). */
+/**
+ * What kind of thing an audience applies to (routes the unified endpoints).
+ * V5 added [Idea] — `SHARE_KINDS = ['portfolio','conglomerate','watchlist','idea']`.
+ */
 enum class ShareableKind(val wire: String) {
     Portfolio("portfolio"),
     Watchlist("watchlist"),
     Conglomerate("conglomerate"),
+    Idea("idea"),
     ;
 
     companion object {
@@ -144,6 +159,8 @@ data class AudienceState(
     val subjectId: String,
     val audience: ShareAudience,
     val friendIds: Set<String>,
+    /** V5: set only for [ShareAudience.Group] — one group, never a list. */
+    val groupId: String?,
     val linkActive: Boolean,
     val linkCreatedAt: String?,
 )
@@ -215,6 +232,8 @@ interface SocialRepository {
         audience: ShareAudience,
         friendIds: Set<String>,
         acknowledgePublic: Boolean,
+        /** Required by the server for [ShareAudience.Group]; ignored otherwise. */
+        groupId: String? = null,
     ): BtResult<ShareOutcome>
 
     // Per-shared-item activity-alert preference (live; delivery gated on #368).
@@ -306,6 +325,21 @@ class DefaultSocialRepository(
                             ),
                         )
                     }
+                    // V5: ideas are the fourth share kind. An idea has no
+                    // countable rows — it is one thesis and one backtest — so
+                    // `count` stays 0 and the row names what it is instead.
+                    r.value.ideas.forEach { i ->
+                        add(
+                            MySharedItem(
+                                id = i.ideaId,
+                                kind = ShareableKind.Idea,
+                                name = i.name,
+                                audience = ShareAudience.fromWire(i.audience),
+                                friendCount = i.friendCount,
+                                count = 0,
+                            ),
+                        )
+                    }
                 }
                 BtResult.Ok(MyShared(items))
             }
@@ -341,6 +375,7 @@ class DefaultSocialRepository(
                     subjectId = r.value.subjectId,
                     audience = ShareAudience.fromWire(r.value.audience),
                     friendIds = r.value.friendIds.toSet(),
+                    groupId = r.value.groupId,
                     linkActive = r.value.link.active,
                     linkCreatedAt = r.value.link.createdAt,
                 ),
@@ -354,10 +389,16 @@ class DefaultSocialRepository(
         audience: ShareAudience,
         friendIds: Set<String>,
         acknowledgePublic: Boolean,
+        groupId: String?,
     ): BtResult<ShareOutcome> {
+        // Each optional field is sent ONLY on the rung that owns it. The bodies
+        // are `.strict()` server-side, and sending a stale `friendIds` alongside
+        // `all_friends` would at best be noise and at worst re-seed a selection
+        // the user just left behind.
         val body = SetAudienceRequest(
             audience = audience.wire,
             friendIds = if (audience == ShareAudience.SpecificFriends) friendIds.toList() else null,
+            groupId = if (audience == ShareAudience.Group) groupId else null,
             acknowledgePublic = if (audience == ShareAudience.PublicLink) acknowledgePublic else null,
         )
         return when (val r = apiCall(json) { api.setAudience(kind.wire, subjectId, body) }) {
