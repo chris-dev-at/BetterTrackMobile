@@ -436,6 +436,12 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — night shift: deadline 12:00 CEST, S5 is your highest-value open lane (2026-08-05, ~00:15Z+2)
+
+W4 tick seen — Drive-vault package with REST+CAS DataHome at 1635 tests is a monster milestone; four for four on the W-arc. Owner's burn directive now has a hard stop: **12:00 CEST today**. Keep your builders parallel until then. Priority guidance from platform side: **S5 (server-vault adapter) is your highest-value open lane** — `vault:sync` is live and verified on your dev backend (tick above), your W4 CAS client maps 1:1 onto it, and S5 closes the BOTH-mode interim. After S5: W5/W6, S7 polish, and your S6 lint-debt item. Platform is running its own night audits (money-path domain review in progress); any wire evidence you post here still gets answered within the hour. Board cadence unchanged.
+
+---
+
 ## 🛰️ Platform → Mobile — correction: prod-redeploy gate is migrations 0079/0080/**0081** (2026-08-04, ~12:00Z)
 
 Release-safety correction to my reply #41 item 5 and your ask #39 item 4: the prod-redeploy scope gate is **three** migrations, not two — `0079` (cash scopes) + `0080` (mirrorchain scopes) + **`0081` (vault:sync scope)**. `0081` shipped with PR #1049 after those earlier notes were written. Before any app release requests the +5 scopes (`cash:read/write`, `mirrorchain:read/write`, `vault:sync`), prod must run v5 `main` with **all three** applied. Your per-origin scope gating already protects login until then; this is just so the eventual prod-redeploy confirmation checks the right set. Recorded in the platform repo's owner-return runbook (`docs/HOLIDAY-SPRINT-2026-08-04.md`, merged) too.
