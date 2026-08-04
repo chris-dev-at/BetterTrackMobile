@@ -1,0 +1,8375 @@
+{
+ "module": "tax",
+ "vectors": [
+  {
+   "fn": "TAX_CONSTANTS",
+   "case": "the module constants, values and declaration order",
+   "input": {},
+   "output": {
+    "TAX_MODES": [
+     "none",
+     "manual_per_trade",
+     "country_specific",
+     "custom"
+    ],
+    "TAX_COUNTRY_AT": "AT",
+    "TAX_COUNTRY_DE": "DE",
+    "TAX_COUNTRY_FI": "FI",
+    "SUPPORTED_TAX_COUNTRIES": [
+     "AT",
+     "DE",
+     "FI"
+    ],
+    "COST_BASIS_STRATEGIES": [
+     "moving-average",
+     "fifo"
+    ],
+    "AT_KEST_RATE": 0.275,
+    "DE_KAPEST_RATE": 0.25,
+    "DE_SOLI_RATE": 0.055,
+    "DE_SPARER_PAUSCHBETRAG_EUR": 1000,
+    "FI_CAPITAL_INCOME_RATE": 0.3,
+    "FI_CAPITAL_INCOME_HIGH_RATE": 0.34,
+    "FI_HIGH_RATE_THRESHOLD_EUR": 30000,
+    "TAX_YEAR_TIME_ZONE": "Europe/Vienna",
+    "QTY_EPSILON": 1e-9,
+    "QTY_STORAGE_QUANTUM": 1e-8,
+    "AT_AS_CUSTOM_PARAMS": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "initialCustomCarry",
+   "case": "the empty carry",
+   "input": {},
+   "output": {
+    "potEur": 0,
+    "cumulativePoolEur": 0,
+    "cumulativeHeldEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "FI mandates FIFO",
+   "input": {
+    "country": "FI"
+   },
+   "output": "fifo",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "DE mandates FIFO",
+   "input": {
+    "country": "DE"
+   },
+   "output": "fifo",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "AT keeps the moving average",
+   "input": {
+    "country": "AT"
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "null keeps the moving average",
+   "input": {
+    "country": null
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "undefined keeps the moving average",
+   "input": {},
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForCountry",
+   "case": "an unknown country keeps the moving average",
+   "input": {
+    "country": "US"
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 0",
+   "input": {
+    "amountEur": 0
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 0.005",
+   "input": {
+    "amountEur": 0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case -0.005",
+   "input": {
+    "amountEur": -0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 1.005",
+   "input": {
+    "amountEur": 1.005
+   },
+   "output": 1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case -1.005",
+   "input": {
+    "amountEur": -1.005
+   },
+   "output": -1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 2.675",
+   "input": {
+    "amountEur": 2.675
+   },
+   "output": 2.67,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 100.004999",
+   "input": {
+    "amountEur": 100.004999
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 100.006",
+   "input": {
+    "amountEur": 100.006
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 8.61",
+   "input": {
+    "amountEur": 8.61
+   },
+   "output": 8.61,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 0.1 + 0.2",
+   "input": {
+    "amountEur": 0.30000000000000004
+   },
+   "output": 0.3,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 123.456",
+   "input": {
+    "amountEur": 123.456
+   },
+   "output": 123.45,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case -76.545",
+   "input": {
+    "amountEur": -76.545
+   },
+   "output": -76.54,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors down: 1.005 -> 1.00",
+   "input": {
+    "amountEur": 1.005
+   },
+   "output": 1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors down: -1.005 -> -1.00",
+   "input": {
+    "amountEur": -1.005
+   },
+   "output": -1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors down: 100.006 -> 100.00",
+   "input": {
+    "amountEur": 100.006
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors down: 0.1 + 0.2 -> 0.30",
+   "input": {
+    "amountEur": 0.30000000000000004
+   },
+   "output": 0.3,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent, positive (0.005)",
+   "input": {
+    "amountEur": 0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent, negative (-0.005)",
+   "input": {
+    "amountEur": -0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent above a cent (0.015)",
+   "input": {
+    "amountEur": 0.015
+   },
+   "output": 0.01,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent above a cent, negative (-0.015)",
+   "input": {
+    "amountEur": -0.015
+   },
+   "output": -0.01,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent (2.005)",
+   "input": {
+    "amountEur": 2.005
+   },
+   "output": 2,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half cent, negative (-2.005)",
+   "input": {
+    "amountEur": -2.005
+   },
+   "output": -2,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half (0.045)",
+   "input": {
+    "amountEur": 0.045
+   },
+   "output": 0.04,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "exact half, negative (-0.045)",
+   "input": {
+    "amountEur": -0.045
+   },
+   "output": -0.04,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "classic float trap (2.675)",
+   "input": {
+    "amountEur": 2.675
+   },
+   "output": 2.67,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "classic float trap, negative (-2.675)",
+   "input": {
+    "amountEur": -2.675
+   },
+   "output": -2.67,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "negative that floors away entirely (-0.004)",
+   "input": {
+    "amountEur": -0.004
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "negative sub-cent residue (-100.006)",
+   "input": {
+    "amountEur": -100.006
+   },
+   "output": -100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "the KESt of an awkward pool (0.275 * 33.33)",
+   "input": {
+    "amountEur": 9.165750000000001
+   },
+   "output": 9.16,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "the Soli of an awkward KapESt (0.055 * 336.1)",
+   "input": {
+    "amountEur": 18.485500000000002
+   },
+   "output": 18.48,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "a large magnitude (1234567.891)",
+   "input": {
+    "amountEur": 1234567.891
+   },
+   "output": 1234567.89,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "a large negative magnitude (-1234567.891)",
+   "input": {
+    "amountEur": -1234567.891
+   },
+   "output": -1234567.89,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "buckets 2025-12-31T23:30Z into the NEW Vienna year",
+   "input": {
+    "isoTimestamp": "2025-12-31T23:30:00.000Z"
+   },
+   "output": 2026,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "buckets 2025-12-31T22:59:59Z into the old Vienna year",
+   "input": {
+    "isoTimestamp": "2025-12-31T22:59:59.000Z"
+   },
+   "output": 2025,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "mid-year is unambiguous",
+   "input": {
+    "isoTimestamp": "2026-07-15T12:00:00.000Z"
+   },
+   "output": 2026,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "summer time (CEST, UTC+2) at the boundary",
+   "input": {
+    "isoTimestamp": "2026-06-30T22:30:00.000Z"
+   },
+   "output": 2026,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "a non-UTC offset is honoured",
+   "input": {
+    "isoTimestamp": "2026-01-01T00:30:00+01:00"
+   },
+   "output": 2026,
+   "throws": null
+  },
+  {
+   "fn": "viennaYearOf",
+   "case": "fails loud on unparseable timestamps",
+   "input": {
+    "isoTimestamp": "not-a-date"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Timestamp must be ISO-8601 date/time, got not-a-date"
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "realizes a simple round trip against the average cost",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 10,
+     "proceedsEur": 1100,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 100,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "capitalises buy fees into the basis and deducts sell fees from the gain",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 10,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 110,
+      "feeEur": 5,
+      "executedAt": "2026-02-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 5,
+     "proceedsEur": 545,
+     "costBasisEur": 505,
+     "realizedPnlEur": 40,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "re-averages on buys and leaves the average unchanged across sells",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 120,
+      "feeEur": 0,
+      "executedAt": "2026-01-04T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-03T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 180,
+     "costBasisEur": 150,
+     "realizedPnlEur": 30,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-04T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 120,
+     "costBasisEur": 150,
+     "realizedPnlEur": -30,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "replays chronologically regardless of input order",
+   "input": {
+    "transactions": [
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-03T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 180,
+     "costBasisEur": 150,
+     "realizedPnlEur": 30,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "mixed sub-second precision sorts as time, not as strings ('.' < 'Z')",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00.500Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-01T10:00:00.500Z",
+     "quantity": 1,
+     "proceedsEur": 150,
+     "costBasisEur": 100,
+     "realizedPnlEur": 50,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "handles fractional quantities and closes positions to exactly zero",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.1,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.2,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.3,
+      "priceEur": 20,
+      "feeEur": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "id": "b3",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 60,
+      "feeEur": 0,
+      "executedAt": "2026-03-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-03T10:00:00Z",
+     "quantity": 0.3,
+     "proceedsEur": 6,
+     "costBasisEur": 2.9999999999999996,
+     "realizedPnlEur": 3.0000000000000004,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2026-03-01T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 60,
+     "costBasisEur": 50,
+     "realizedPnlEur": 10,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "tracks assets independently",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "B",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 500,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T11:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "B",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 400,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T11:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "A",
+     "executedAt": "2026-01-02T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 110,
+     "costBasisEur": 100,
+     "realizedPnlEur": 10,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "B",
+     "executedAt": "2026-01-02T11:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 400,
+     "costBasisEur": 500,
+     "realizedPnlEur": -100,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects an oversell — an inconsistent log must never price a basis",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 2,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 2 exceeds the held 1 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects a zero quantity",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Transaction quantity must be a finite positive number, got 0 (transaction b1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects a negative price",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": -1,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Transaction priceEur must be a finite non-negative number, got -1 (transaction b1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects an unparseable executedAt",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "garbage"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Transaction executedAt must be ISO-8601, got garbage (transaction b1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects a negative fee",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": -1,
+      "executedAt": "2026-01-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Transaction feeEur must be a finite non-negative number, got -1 (transaction b1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "rejects an unknown transaction side",
+   "input": {
+    "transactions": [
+     {
+      "id": "x1",
+      "assetId": "asset-1",
+      "side": "short",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown transaction side short (transaction x1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: basises the uncovered shares at the sale price -> 0 gain",
+   "input": {
+    "transactions": [
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z",
+      "allowUncovered": true
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 10,
+     "proceedsEur": 1000,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 0,
+     "uncoveredQuantity": 10
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: splits a partial-cover sell (covered at avg, uncovered at sale price)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 40,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z",
+      "allowUncovered": true
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 10,
+     "proceedsEur": 1000,
+     "costBasisEur": 880,
+     "realizedPnlEur": 120,
+     "uncoveredQuantity": 8
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: uses a supplied EUR entry price for the uncovered portion",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 40,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPriceEur": 60
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 10,
+     "proceedsEur": 1000,
+     "costBasisEur": 560,
+     "realizedPnlEur": 440,
+     "uncoveredQuantity": 8
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: an explicit null entry price falls back to the sale price",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 40,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPriceEur": null
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 10,
+     "proceedsEur": 1000,
+     "costBasisEur": 880,
+     "realizedPnlEur": 120,
+     "uncoveredQuantity": 8
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: rejects a negative supplied entry price",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 40,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPriceEur": -1
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Transaction uncoveredEntryPriceEur must be a finite non-negative number, got -1 (transaction s1)."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: marks a covered sell with uncoveredQuantity 0",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 4,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-02-01T10:00:00Z",
+     "quantity": 4,
+     "proceedsEur": 440,
+     "costBasisEur": 400,
+     "realizedPnlEur": 40,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: closes at 0 and lets a later buy rebuild a clean average (no shorts)",
+   "input": {
+    "transactions": [
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z",
+      "allowUncovered": true
+     },
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 2,
+      "priceEur": 70,
+      "feeEur": 0,
+      "executedAt": "2026-03-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-01T10:00:00Z",
+     "quantity": 5,
+     "proceedsEur": 500,
+     "costBasisEur": 500,
+     "realizedPnlEur": 0,
+     "uncoveredQuantity": 5
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2026-03-01T10:00:00Z",
+     "quantity": 2,
+     "proceedsEur": 140,
+     "costBasisEur": 100,
+     "realizedPnlEur": 40,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "uncovered: still rejects an oversell when the flag is absent",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 2,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 2 exceeds the held 1 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: waives a same-batch one-quantum shortfall",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-02T10:00:00Z",
+     "quantity": 1.00000001,
+     "proceedsEur": 110.00000109999999,
+     "costBasisEur": 100.00000109999999,
+     "realizedPnlEur": 10,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: scales the envelope per contributing row — multi-buy drift (F1 shape)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "b3",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "id": "b4",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-01-04T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.40000002,
+      "priceEur": 60,
+      "feeEur": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-05T10:00:00Z",
+     "quantity": 0.40000002,
+     "proceedsEur": 24.0000012,
+     "costBasisEur": 20.0000012,
+     "realizedPnlEur": 4,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: waives identically under the FIFO strategy",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-02T10:00:00Z",
+     "quantity": 1.00000001,
+     "proceedsEur": 110.00000109999999,
+     "costBasisEur": 100.00000109999999,
+     "realizedPnlEur": 10,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: closes the position so a later buy rebuilds a clean average",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 70,
+      "feeEur": 0,
+      "executedAt": "2026-03-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2026-01-02T10:00:00Z",
+     "quantity": 1.00000001,
+     "proceedsEur": 110.00000109999999,
+     "costBasisEur": 100.00000109999999,
+     "realizedPnlEur": 10,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2026-03-01T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 70,
+     "costBasisEur": 50,
+     "realizedPnlEur": 20,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: fails closed beyond the per-row envelope (moving-average)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000003,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 1.00000003 exceeds the held 1 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: fails closed beyond the per-row envelope (fifo)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000003,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 1.00000003 exceeds the held 1 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: resets the envelope when a position closes exactly",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1.00000003,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-02-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 1.00000003 exceeds the held 1 units of asset-1 (transaction s2); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "#917: a real oversell still throws regardless of the row count",
+   "input": {
+    "transactions": [
+     {
+      "id": "b0",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b3",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b4",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b5",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b6",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b7",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b8",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b9",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b10",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b11",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b12",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b13",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b14",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b15",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b16",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b17",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b18",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b19",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b20",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b21",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b22",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b23",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b24",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b25",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b26",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b27",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b28",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b29",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b30",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b31",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b32",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b33",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b34",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b35",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b36",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b37",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b38",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b39",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b40",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b41",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b42",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b43",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b44",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b45",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b46",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b47",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b48",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b49",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b50",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b51",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b52",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b53",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b54",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b55",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b56",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b57",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b58",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b59",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b60",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b61",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b62",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b63",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b64",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b65",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b66",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b67",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b68",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b69",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b70",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b71",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b72",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b73",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b74",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b75",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b76",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b77",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b78",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b79",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b80",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b81",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b82",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b83",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b84",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b85",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b86",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b87",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b88",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b89",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b90",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b91",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b92",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b93",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b94",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b95",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b96",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b97",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b98",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "b99",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 101,
+      "priceEur": 110,
+      "feeEur": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 101 exceeds the held 100 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "the flat rate on the pool, cent-quantized (450)",
+   "input": {
+    "poolEur": 450
+   },
+   "output": 123.75,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "the flat rate on the pool, cent-quantized (350)",
+   "input": {
+    "poolEur": 350
+   },
+   "output": 96.25,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "clamps a net-loss year to exactly zero (-100)",
+   "input": {
+    "poolEur": -100
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "clamps a net-loss year to exactly zero (0)",
+   "input": {
+    "poolEur": 0
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "floors the tax due to whole cents (0.02 -> 0.00)",
+   "input": {
+    "poolEur": 0.02
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "floors the tax due to whole cents (0.01 -> 0.00)",
+   "input": {
+    "poolEur": 0.01
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "floors the tax due to whole cents (0.5 -> 0.13)",
+   "input": {
+    "poolEur": 0.5
+   },
+   "output": 0.13,
+   "throws": null
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "an awkward pool floors, never rounds up (33.33)",
+   "input": {
+    "poolEur": 33.33
+   },
+   "output": 9.16,
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "owner example, step 1: +450 gain from an empty year",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75
+    ],
+    "heldAfterEur": 123.75
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "owner example, step 2: -100 loss refunds down to 27.5 % x 350",
+   "input": {
+    "existingGainsEur": [
+     450
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 123.75,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "loss first: nothing to refund",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "loss first: later gains taxed on the net only",
+   "input": {
+    "existingGainsEur": [
+     -100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     96.25
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "a refund never exceeds what the year holds",
+   "input": {
+    "existingGainsEur": [
+     100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 27.5,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "taxes dividends at the flat rate inside the same pool",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     27.5
+    ],
+    "heldAfterEur": 27.5
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "a prior same-year loss offsets dividend tax too (one pool)",
+   "input": {
+    "existingGainsEur": [
+     -100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 60
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "attributes per-event marginal deltas within one batch",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75,
+     -27.5
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "posts a correction when re-shaped history no longer matches the held tax",
+   "input": {
+    "existingGainsEur": [
+     300
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 123.75,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -41.25,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 82.5
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "lands on exact cents even for awkward pools",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 33.33
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     9.16
+    ],
+    "heldAfterEur": 9.16
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "existing dividends join the pool in list order",
+   "input": {
+    "existingGainsEur": [
+     10.11
+    ],
+    "existingDividendsEur": [
+     20.22,
+     30.33
+    ],
+    "heldEur": 0,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 16.68,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 16.68
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "rejects a zero-amount dividend event",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 0
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividend gross amounts must be strictly positive, got 0."
+   }
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "rejects a negative-amount dividend event",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": -10
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividend gross amounts must be strictly positive, got -10."
+   }
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "rejects an unknown event kind",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "bogus",
+      "amountEur": 1
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown pool event kind bogus."
+   }
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "rejects a non-positive existing dividend",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [
+     0
+    ],
+    "heldEur": 0,
+    "newEvents": []
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Existing dividend gross amounts must be strictly positive, got 0."
+   }
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "maps a positive delta to a withholding (negative amount)",
+   "input": {
+    "deltaEur": 123.75
+   },
+   "output": {
+    "kind": "tax_withholding",
+    "amountEur": -123.75
+   },
+   "throws": null
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "maps a negative delta to a refund (positive amount)",
+   "input": {
+    "deltaEur": -27.5
+   },
+   "output": {
+    "kind": "tax_refund",
+    "amountEur": 27.5
+   },
+   "throws": null
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "posts nothing for a zero delta",
+   "input": {
+    "deltaEur": 0
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "a one-cent withholding",
+   "input": {
+    "deltaEur": 0.01
+   },
+   "output": {
+    "kind": "tax_withholding",
+    "amountEur": -0.01
+   },
+   "throws": null
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "a one-cent refund",
+   "input": {
+    "deltaEur": -0.01
+   },
+   "output": {
+    "kind": "tax_refund",
+    "amountEur": 0.01
+   },
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "records the entered amount as-is",
+   "input": {
+    "taxAmountEur": 12.34,
+    "baseEur": 999
+   },
+   "output": 12.34,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "floors the entered amount (12.345 -> 12.34)",
+   "input": {
+    "taxAmountEur": 12.345,
+    "baseEur": 999
+   },
+   "output": 12.34,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "applies a rate to a positive base",
+   "input": {
+    "taxRatePct": 27.5,
+    "baseEur": 100
+   },
+   "output": 27.5,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "a loss base records EUR 0.00",
+   "input": {
+    "taxRatePct": 27.5,
+    "baseEur": -100
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "returns null when nothing was entered",
+   "input": {
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "explicit nulls also mean \"nothing entered\"",
+   "input": {
+    "taxAmountEur": null,
+    "taxRatePct": null,
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "rejects both an amount and a rate",
+   "input": {
+    "taxAmountEur": 1,
+    "taxRatePct": 1,
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Provide a manual tax amount OR a rate, not both."
+   }
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "rejects a negative amount",
+   "input": {
+    "taxAmountEur": -1,
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Manual tax amount must be a finite non-negative EUR amount, got -1."
+   }
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "rejects a rate above 100",
+   "input": {
+    "taxRatePct": 101,
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Manual tax rate must be between 0 and 100, got 101."
+   }
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "rejects a negative rate",
+   "input": {
+    "taxRatePct": -1,
+    "baseEur": 100
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Manual tax rate must be between 0 and 100, got -1."
+   }
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "a zero rate records EUR 0.00",
+   "input": {
+    "taxRatePct": 0,
+    "baseEur": 100
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "a 100 % rate is admissible",
+   "input": {
+    "taxRatePct": 100,
+    "baseEur": 100
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "floors the rate result (33.33 % of 100)",
+   "input": {
+    "taxRatePct": 33.33,
+    "baseEur": 100
+   },
+   "output": 33.33,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "30 % to EUR 30,000, 34 % above (40,000)",
+   "input": {
+    "poolEur": 40000
+   },
+   "output": 12400,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "exactly at the threshold: base rate only (30,000)",
+   "input": {
+    "poolEur": 30000
+   },
+   "output": 9000,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "below the threshold: flat 30 % (1,000)",
+   "input": {
+    "poolEur": 1000
+   },
+   "output": 300,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "clamps a net-loss year to exactly zero (-500)",
+   "input": {
+    "poolEur": -500
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "clamps a net-loss year to exactly zero (0)",
+   "input": {
+    "poolEur": 0
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "floors to whole cents (0.03 -> 0.00)",
+   "input": {
+    "poolEur": 0.03
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "floors to whole cents (0.5 -> 0.15)",
+   "input": {
+    "poolEur": 0.5
+   },
+   "output": 0.15,
+   "throws": null
+  },
+  {
+   "fn": "fiYearTargetEur",
+   "case": "one cent above the threshold",
+   "input": {
+    "poolEur": 30000.01
+   },
+   "output": 9000,
+   "throws": null
+  },
+  {
+   "fn": "settleFiYear",
+   "case": "a marginal gain crossing the threshold is taxed at 34 % on the excess",
+   "input": {
+    "existingGainsEur": [
+     25000
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 7500,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 10000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     3200
+    ],
+    "heldAfterEur": 10700
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleFiYear",
+   "case": "a same-year loss refunds down to the shrunken progressive target",
+   "input": {
+    "existingGainsEur": [
+     35000
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 10700,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -5000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -1700
+    ],
+    "heldAfterEur": 9000
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleFiYear",
+   "case": "a loss-first year parks at EUR 0.00 and later gains tax only the net",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -1000
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 1500
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     150,
+     150
+    ],
+    "heldAfterEur": 300
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleFiYear",
+   "case": "reconciles reshaped history like the AT settlement (signed correction)",
+   "input": {
+    "existingGainsEur": [
+     1000
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 500,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -200,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 300
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-simple-gain: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 5,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 600,
+      "feeEur": 5,
+      "executedAt": "2024-09-12T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-09-12T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 5995,
+     "costBasisEur": 1005,
+     "realizedPnlEur": 4990,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-simple-gain: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 5,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 600,
+      "feeEur": 5,
+      "executedAt": "2024-09-12T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-09-12T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 5995,
+     "costBasisEur": 1005,
+     "realizedPnlEur": 4990,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-simple-gain/2024: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-simple-gain/2024/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 4990
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     1052.36
+    ],
+    "heldAfterEur": 1052.36,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 4990,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 3990,
+     "kapestEur": 997.5,
+     "soliEur": 54.86,
+     "totalTaxEur": 1052.36,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-simple-gain/2024: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 4990
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     1052.36
+    ],
+    "heldAfterEur": 1052.36,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 4990,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 3990,
+     "kapestEur": 997.5,
+     "soliEur": 54.86,
+     "totalTaxEur": 1052.36,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-simple-gain/2024: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 4990
+     }
+    ],
+    "heldEur": 1052.36,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 1052.36,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 4990,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 3990,
+     "kapestEur": 997.5,
+     "soliEur": 54.86,
+     "totalTaxEur": 1052.36,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-fifo-multi-lot: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-10T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-03-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 100,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2024-06-20T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 50,
+      "priceEur": 210,
+      "feeEur": 0,
+      "executedAt": "2024-11-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-06-20T12:00:00.000Z",
+     "quantity": 100,
+     "proceedsEur": 18000,
+     "costBasisEur": 10000,
+     "realizedPnlEur": 8000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-11-05T12:00:00.000Z",
+     "quantity": 50,
+     "proceedsEur": 10500,
+     "costBasisEur": 10000,
+     "realizedPnlEur": 500,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-fifo-multi-lot: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-10T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-03-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 100,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2024-06-20T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 50,
+      "priceEur": 210,
+      "feeEur": 0,
+      "executedAt": "2024-11-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-06-20T12:00:00.000Z",
+     "quantity": 100,
+     "proceedsEur": 18000,
+     "costBasisEur": 15000,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-11-05T12:00:00.000Z",
+     "quantity": 50,
+     "proceedsEur": 10500,
+     "costBasisEur": 7500,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-fifo-multi-lot/2024: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-fifo-multi-lot/2024/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 8000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     1846.25
+    ],
+    "heldAfterEur": 1846.25,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 8000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 7000,
+     "kapestEur": 1750,
+     "soliEur": 96.25,
+     "totalTaxEur": 1846.25,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-fifo-multi-lot/2024/s2: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 8000
+     }
+    ],
+    "heldEur": 1846.25,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     131.87
+    ],
+    "heldAfterEur": 1978.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 8500,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 7500,
+     "kapestEur": 1875,
+     "soliEur": 103.12,
+     "totalTaxEur": 1978.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-fifo-multi-lot/2024: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 8000
+     },
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     1846.25,
+     131.87
+    ],
+    "heldAfterEur": 1978.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 8500,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 7500,
+     "kapestEur": 1875,
+     "soliEur": 103.12,
+     "totalTaxEur": 1978.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-fifo-multi-lot/2024: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 8000
+     },
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 500
+     }
+    ],
+    "heldEur": 1978.12,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 1978.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 8500,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 7500,
+     "kapestEur": 1875,
+     "soliEur": 103.12,
+     "totalTaxEur": 1978.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-allowance-exhaustion: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [],
+    "strategy": "fifo"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-allowance-exhaustion: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [],
+    "strategy": "moving-average"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-allowance-exhaustion/2025: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-allowance-exhaustion/2025/d1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 600
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 600,
+     "allowanceUsedEur": 600,
+     "allowanceRemainingEur": 400,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-allowance-exhaustion/2025/d2: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 600
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 700
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     79.12
+    ],
+    "heldAfterEur": 79.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 300,
+     "kapestEur": 75,
+     "soliEur": 4.12,
+     "totalTaxEur": 79.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-allowance-exhaustion/2025/d3: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 600
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 700
+     }
+    ],
+    "heldEur": 79.12,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     105.5
+    ],
+    "heldAfterEur": 184.62,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1700,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 700,
+     "kapestEur": 175,
+     "soliEur": 9.62,
+     "totalTaxEur": 184.62,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-allowance-exhaustion/2025: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 600
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 700
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     79.12,
+     105.5
+    ],
+    "heldAfterEur": 184.62,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1700,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 700,
+     "kapestEur": 175,
+     "soliEur": 9.62,
+     "totalTaxEur": 184.62,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-allowance-exhaustion/2025: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 600
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 700
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ],
+    "heldEur": 184.62,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 184.62,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1700,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 700,
+     "kapestEur": 175,
+     "soliEur": 9.62,
+     "totalTaxEur": 184.62,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-aktien-loss-ringfenced: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2024-01-08T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2024-05-20T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-05-20T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 1500,
+     "costBasisEur": 3000,
+     "realizedPnlEur": -1500,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-aktien-loss-ringfenced: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2024-01-08T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2024-05-20T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-05-20T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 1500,
+     "costBasisEur": 3000,
+     "realizedPnlEur": -1500,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-aktien-loss-ringfenced/2024: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-aktien-loss-ringfenced/2024/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -1500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 1500,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-aktien-loss-ringfenced/2024/d1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -1500
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 2000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     263.75
+    ],
+    "heldAfterEur": 263.75,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1000,
+     "kapestEur": 250,
+     "soliEur": 13.75,
+     "totalTaxEur": 263.75,
+     "aktienPotOutEur": 1500,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-aktien-loss-ringfenced/2024: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -1500
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 2000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     263.75
+    ],
+    "heldAfterEur": 263.75,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1000,
+     "kapestEur": 250,
+     "soliEur": 13.75,
+     "totalTaxEur": 263.75,
+     "aktienPotOutEur": 1500,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-aktien-loss-ringfenced/2024: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -1500
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 2000
+     }
+    ],
+    "heldEur": 263.75,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 263.75,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1000,
+     "kapestEur": 250,
+     "soliEur": 13.75,
+     "totalTaxEur": 263.75,
+     "aktienPotOutEur": 1500,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-sonstige-loss-cross-offset: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-etf-a",
+      "side": "buy",
+      "quantity": 20,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2024-02-01T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 400,
+      "feeEur": 0,
+      "executedAt": "2024-04-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-etf-a",
+      "side": "sell",
+      "quantity": 20,
+      "priceEur": 90,
+      "feeEur": 0,
+      "executedAt": "2024-08-19T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-04-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 4000,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "executedAt": "2024-08-19T12:00:00.000Z",
+     "quantity": 20,
+     "proceedsEur": 1800,
+     "costBasisEur": 3000,
+     "realizedPnlEur": -1200,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-sonstige-loss-cross-offset: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-etf-a",
+      "side": "buy",
+      "quantity": 20,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2024-02-01T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 400,
+      "feeEur": 0,
+      "executedAt": "2024-04-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-etf-a",
+      "side": "sell",
+      "quantity": 20,
+      "priceEur": 90,
+      "feeEur": 0,
+      "executedAt": "2024-08-19T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-04-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 4000,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "executedAt": "2024-08-19T12:00:00.000Z",
+     "quantity": 20,
+     "proceedsEur": 1800,
+     "costBasisEur": 3000,
+     "realizedPnlEur": -1200,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-sonstige-loss-cross-offset/2024: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-sonstige-loss-cross-offset/2024/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 3000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     527.5
+    ],
+    "heldAfterEur": 527.5,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 3000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 2000,
+     "kapestEur": 500,
+     "soliEur": 27.5,
+     "totalTaxEur": 527.5,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-sonstige-loss-cross-offset/2024/d1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 3000
+     }
+    ],
+    "heldEur": 527.5,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     131.87
+    ],
+    "heldAfterEur": 659.37,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 3500,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 2500,
+     "kapestEur": 625,
+     "soliEur": 34.37,
+     "totalTaxEur": 659.37,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-sonstige-loss-cross-offset/2024/s2: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 3000
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     }
+    ],
+    "heldEur": 659.37,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -1200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -316.5
+    ],
+    "heldAfterEur": 342.87,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1300,
+     "kapestEur": 325,
+     "soliEur": 17.87,
+     "totalTaxEur": 342.87,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-sonstige-loss-cross-offset/2024: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 3000
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     },
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -1200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     527.5,
+     131.87,
+     -316.5
+    ],
+    "heldAfterEur": 342.87,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1300,
+     "kapestEur": 325,
+     "soliEur": 17.87,
+     "totalTaxEur": 342.87,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-sonstige-loss-cross-offset/2024: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 3000
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     },
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -1200
+     }
+    ],
+    "heldEur": 342.87,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 342.87,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1300,
+     "kapestEur": 325,
+     "soliEur": 17.87,
+     "totalTaxEur": 342.87,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-rounding-truncation: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 1000,
+      "feeEur": 0,
+      "executedAt": "2025-01-09T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 2,
+      "priceEur": 2172.21,
+      "feeEur": 0,
+      "executedAt": "2025-07-21T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-07-21T12:00:00.000Z",
+     "quantity": 2,
+     "proceedsEur": 4344.42,
+     "costBasisEur": 2000,
+     "realizedPnlEur": 2344.42,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-rounding-truncation: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 1000,
+      "feeEur": 0,
+      "executedAt": "2025-01-09T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 2,
+      "priceEur": 2172.21,
+      "feeEur": 0,
+      "executedAt": "2025-07-21T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-07-21T12:00:00.000Z",
+     "quantity": 2,
+     "proceedsEur": 4344.42,
+     "costBasisEur": 2000,
+     "realizedPnlEur": 2344.42,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-rounding-truncation/2025: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-rounding-truncation/2025/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2344.42
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     354.58
+    ],
+    "heldAfterEur": 354.58,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2344.42,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1344.42,
+     "kapestEur": 336.1,
+     "soliEur": 18.48,
+     "totalTaxEur": 354.58,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-rounding-truncation/2025: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2344.42
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     354.58
+    ],
+    "heldAfterEur": 354.58,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2344.42,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1344.42,
+     "kapestEur": 336.1,
+     "soliEur": 18.48,
+     "totalTaxEur": 354.58,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-rounding-truncation/2025: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2344.42
+     }
+    ],
+    "heldEur": 354.58,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 354.58,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2344.42,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1344.42,
+     "kapestEur": 336.1,
+     "soliEur": 18.48,
+     "totalTaxEur": 354.58,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-year-boundary-carry: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-02-12T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-etf-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 120,
+      "feeEur": 0,
+      "executedAt": "2024-06-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-etf-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 70,
+      "feeEur": 0,
+      "executedAt": "2024-10-14T12:00:00.000Z"
+     },
+     {
+      "id": "b3",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 5,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2025-01-20T12:00:00.000Z"
+     },
+     {
+      "id": "s3",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 500,
+      "feeEur": 0,
+      "executedAt": "2025-05-11T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-06-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 1200,
+     "costBasisEur": 2000,
+     "realizedPnlEur": -800,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "executedAt": "2024-10-14T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 700,
+     "costBasisEur": 1000,
+     "realizedPnlEur": -300,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s3",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-05-11T12:00:00.000Z",
+     "quantity": 5,
+     "proceedsEur": 2500,
+     "costBasisEur": 500,
+     "realizedPnlEur": 2000,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-year-boundary-carry: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-02-12T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "de-etf-a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 120,
+      "feeEur": 0,
+      "executedAt": "2024-06-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-etf-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 70,
+      "feeEur": 0,
+      "executedAt": "2024-10-14T12:00:00.000Z"
+     },
+     {
+      "id": "b3",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 5,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2025-01-20T12:00:00.000Z"
+     },
+     {
+      "id": "s3",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 500,
+      "feeEur": 0,
+      "executedAt": "2025-05-11T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2024-06-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 1200,
+     "costBasisEur": 2000,
+     "realizedPnlEur": -800,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "executedAt": "2024-10-14T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 700,
+     "costBasisEur": 1000,
+     "realizedPnlEur": -300,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s3",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-05-11T12:00:00.000Z",
+     "quantity": 5,
+     "proceedsEur": 2500,
+     "costBasisEur": 500,
+     "realizedPnlEur": 2000,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-year-boundary-carry/2024: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2024/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -800
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 800,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2024/s2: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -800
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -300
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 800,
+     "sonstigePotOutEur": 300
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2024: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -800
+     },
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -300
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 800,
+     "sonstigePotOutEur": 300
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2024: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -800
+     },
+     {
+      "kind": "sell_gain",
+      "category": "sonstige",
+      "amountEur": -300
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 800,
+     "sonstigePotOutEur": 300
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-year-boundary-carry/2025: pots carried into the year",
+   "input": {
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "category": "aktien",
+       "amountEur": -800
+      },
+      {
+       "kind": "sell_gain",
+       "category": "sonstige",
+       "amountEur": -300
+      }
+     ]
+    ]
+   },
+   "output": {
+    "aktienEur": 800,
+    "sonstigeEur": 300
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2025/s3: settlement step",
+   "input": {
+    "aktienPotInEur": 800,
+    "sonstigePotInEur": 300,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 900,
+     "allowanceUsedEur": 900,
+     "allowanceRemainingEur": 100,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2025/d1: settlement step",
+   "input": {
+    "aktienPotInEur": 800,
+    "sonstigePotInEur": 300,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     79.12
+    ],
+    "heldAfterEur": 79.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 300,
+     "kapestEur": 75,
+     "soliEur": 4.12,
+     "totalTaxEur": 79.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2025: whole-year batch",
+   "input": {
+    "aktienPotInEur": 800,
+    "sonstigePotInEur": 300,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     79.12
+    ],
+    "heldAfterEur": 79.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 300,
+     "kapestEur": 75,
+     "soliEur": 4.12,
+     "totalTaxEur": 79.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-year-boundary-carry/2025: year-end state",
+   "input": {
+    "aktienPotInEur": 800,
+    "sonstigePotInEur": 300,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 400
+     }
+    ],
+    "heldEur": 79.12,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 79.12,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 300,
+     "kapestEur": 75,
+     "soliEur": 4.12,
+     "totalTaxEur": 79.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-intra-year-refund: FIFO realizations, per lot consumption",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 20,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2025-01-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2025-03-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 25,
+      "feeEur": 0,
+      "executedAt": "2025-09-22T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-03-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 3000,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 2000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-09-22T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 250,
+     "costBasisEur": 1000,
+     "realizedPnlEur": -750,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "de-intra-year-refund: the moving-average strategy on the same log",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "de-stock-a",
+      "side": "buy",
+      "quantity": 20,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2025-01-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2025-03-10T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "de-stock-a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 25,
+      "feeEur": 0,
+      "executedAt": "2025-09-22T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-03-10T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 3000,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 2000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "executedAt": "2025-09-22T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 250,
+     "costBasisEur": 1000,
+     "realizedPnlEur": -750,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "de-intra-year-refund/2025: pots carried into the year",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-intra-year-refund/2025/s1: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     263.75
+    ],
+    "heldAfterEur": 263.75,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 2000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1000,
+     "kapestEur": 250,
+     "soliEur": 13.75,
+     "totalTaxEur": 263.75,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-intra-year-refund/2025/s2: settlement step",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     }
+    ],
+    "heldEur": 263.75,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -750
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -197.82
+    ],
+    "heldAfterEur": 65.93,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1250,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 250,
+     "kapestEur": 62.5,
+     "soliEur": 3.43,
+     "totalTaxEur": 65.93,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-intra-year-refund/2025: whole-year batch",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     },
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -750
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     263.75,
+     -197.82
+    ],
+    "heldAfterEur": 65.93,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1250,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 250,
+     "kapestEur": 62.5,
+     "soliEur": 3.43,
+     "totalTaxEur": 65.93,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "de-intra-year-refund/2025: year-end state",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": 2000
+     },
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -750
+     }
+    ],
+    "heldEur": 65.93,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 65.93,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 1250,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 250,
+     "kapestEur": 62.5,
+     "soliEur": 3.43,
+     "totalTaxEur": 65.93,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: pro-rates buy fees into the lot and consumes partial lots oldest-first",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 4,
+      "priceEur": 10,
+      "feeEur": 2,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 6,
+      "priceEur": 20,
+      "feeEur": 3,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 30,
+      "feeEur": 1,
+      "executedAt": "2024-06-05T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 8,
+      "feeEur": 0,
+      "executedAt": "2024-09-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-06-05T12:00:00.000Z",
+     "quantity": 5,
+     "proceedsEur": 149,
+     "costBasisEur": 62.5,
+     "realizedPnlEur": 86.5,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-09-05T12:00:00.000Z",
+     "quantity": 5,
+     "proceedsEur": 40,
+     "costBasisEur": 102.5,
+     "realizedPnlEur": -62.5,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: keeps per-asset lot queues independent",
+   "input": {
+    "transactions": [
+     {
+      "id": "a-buy",
+      "assetId": "a",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "b-buy",
+      "assetId": "b",
+      "side": "buy",
+      "quantity": 10,
+      "priceEur": 1,
+      "feeEur": 0,
+      "executedAt": "2024-01-06T12:00:00.000Z"
+     },
+     {
+      "id": "a-sell",
+      "assetId": "a",
+      "side": "sell",
+      "quantity": 10,
+      "priceEur": 150,
+      "feeEur": 0,
+      "executedAt": "2024-05-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "a-sell",
+     "assetId": "a",
+     "executedAt": "2024-05-05T12:00:00.000Z",
+     "quantity": 10,
+     "proceedsEur": 1500,
+     "costBasisEur": 1000,
+     "realizedPnlEur": 500,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: throws on an unacknowledged oversell, exactly like the moving average",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 5,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 6,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 6 exceeds the held 5 units of asset-1 (transaction s1); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: an acknowledged uncovered sell releases real lots, the rest takes the supplied basis",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 2,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 5,
+      "priceEur": 50,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z",
+      "allowUncovered": true,
+      "uncoveredEntryPriceEur": 30
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2024-05-05T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 25,
+      "feeEur": 0,
+      "executedAt": "2024-06-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-03-05T12:00:00.000Z",
+     "quantity": 5,
+     "proceedsEur": 250,
+     "costBasisEur": 290,
+     "realizedPnlEur": -40,
+     "uncoveredQuantity": 3
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-06-05T12:00:00.000Z",
+     "quantity": 1,
+     "proceedsEur": 25,
+     "costBasisEur": 10,
+     "realizedPnlEur": 15,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: an uncovered sell without an entry price books 0 gain on the uncovered portion",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 3,
+      "priceEur": 60,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z",
+      "allowUncovered": true
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-03-05T12:00:00.000Z",
+     "quantity": 3,
+     "proceedsEur": 180,
+     "costBasisEur": 220,
+     "realizedPnlEur": -40,
+     "uncoveredQuantity": 2
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: clamps float dust when fractional sells close the position",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.3,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.1,
+      "priceEur": 12,
+      "feeEur": 0,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.2,
+      "priceEur": 12,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-02-05T12:00:00.000Z",
+     "quantity": 0.1,
+     "proceedsEur": 1.2000000000000002,
+     "costBasisEur": 1,
+     "realizedPnlEur": 0.20000000000000018,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-03-05T12:00:00.000Z",
+     "quantity": 0.2,
+     "proceedsEur": 2.4000000000000004,
+     "costBasisEur": 1.9999999999999998,
+     "realizedPnlEur": 0.4000000000000006,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "FIFO: the position is closed afterwards — another sell must be an oversell",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 0.3,
+      "priceEur": 10,
+      "feeEur": 0,
+      "executedAt": "2024-01-05T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.1,
+      "priceEur": 12,
+      "feeEur": 0,
+      "executedAt": "2024-02-05T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.2,
+      "priceEur": 12,
+      "feeEur": 0,
+      "executedAt": "2024-03-05T12:00:00.000Z"
+     },
+     {
+      "id": "s3",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 0.1,
+      "priceEur": 12,
+      "feeEur": 0,
+      "executedAt": "2024-04-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Sell of 0.1 exceeds the held 0 units of asset-1 (transaction s3); the transaction log is inconsistent."
+   }
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "strategy default: omitting the argument is the pre-V5-P4 replay",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-10T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-03-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 100,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2024-06-20T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 50,
+      "priceEur": 210,
+      "feeEur": 0,
+      "executedAt": "2024-11-05T12:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-06-20T12:00:00.000Z",
+     "quantity": 100,
+     "proceedsEur": 18000,
+     "costBasisEur": 15000,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-11-05T12:00:00.000Z",
+     "quantity": 50,
+     "proceedsEur": 10500,
+     "costBasisEur": 7500,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "strategy default: the explicit moving-average replay",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-10T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-03-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 100,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2024-06-20T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 50,
+      "priceEur": 210,
+      "feeEur": 0,
+      "executedAt": "2024-11-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-06-20T12:00:00.000Z",
+     "quantity": 100,
+     "proceedsEur": 18000,
+     "costBasisEur": 15000,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-11-05T12:00:00.000Z",
+     "quantity": 50,
+     "proceedsEur": 10500,
+     "costBasisEur": 7500,
+     "realizedPnlEur": 3000,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "strategy default: the FIFO replay genuinely differs (#576 S2)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2024-01-10T12:00:00.000Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "asset-1",
+      "side": "buy",
+      "quantity": 100,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2024-03-15T12:00:00.000Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 100,
+      "priceEur": 180,
+      "feeEur": 0,
+      "executedAt": "2024-06-20T12:00:00.000Z"
+     },
+     {
+      "id": "s2",
+      "assetId": "asset-1",
+      "side": "sell",
+      "quantity": 50,
+      "priceEur": 210,
+      "feeEur": 0,
+      "executedAt": "2024-11-05T12:00:00.000Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "asset-1",
+     "executedAt": "2024-06-20T12:00:00.000Z",
+     "quantity": 100,
+     "proceedsEur": 18000,
+     "costBasisEur": 10000,
+     "realizedPnlEur": 8000,
+     "uncoveredQuantity": 0
+    },
+    {
+     "id": "s2",
+     "assetId": "asset-1",
+     "executedAt": "2024-11-05T12:00:00.000Z",
+     "quantity": 50,
+     "proceedsEur": 10500,
+     "costBasisEur": 10000,
+     "realizedPnlEur": 500,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies a stock as Aktien",
+   "input": {
+    "assetType": "stock"
+   },
+   "output": "aktien",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies etf as Sonstige",
+   "input": {
+    "assetType": "etf"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies index as Sonstige",
+   "input": {
+    "assetType": "index"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies fx as Sonstige",
+   "input": {
+    "assetType": "fx"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies commodity as Sonstige",
+   "input": {
+    "assetType": "commodity"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies crypto as Sonstige",
+   "input": {
+    "assetType": "crypto"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "dePotCategoryForAssetType",
+   "case": "classifies custom as Sonstige",
+   "input": {
+    "assetType": "custom"
+   },
+   "output": "sonstige",
+   "throws": null
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "an all-zero year",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 0,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": 0
+   },
+   "output": {
+    "taxableBeforeAllowanceEur": 0,
+    "allowanceUsedEur": 0,
+    "allowanceRemainingEur": 1000,
+    "taxableBaseEur": 0,
+    "kapestEur": 0,
+    "soliEur": 0,
+    "totalTaxEur": 0,
+    "aktienPotOutEur": 0,
+    "sonstigePotOutEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "rejects a negative Aktien pot in",
+   "input": {
+    "aktienPotInEur": -1,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 0,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": 0
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Aktien pot in must be a finite non-negative EUR amount, got -1."
+   }
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "rejects a negative dividends sum",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 0,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": -5
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividends sum must be non-negative, got -5."
+   }
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "the one-directional cross-offset consumes an Aktien gain",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 2000,
+    "sonstigeSalePnlEur": -1500,
+    "dividendsEur": 0
+   },
+   "output": {
+    "taxableBeforeAllowanceEur": 500,
+    "allowanceUsedEur": 500,
+    "allowanceRemainingEur": 500,
+    "taxableBaseEur": 0,
+    "kapestEur": 0,
+    "soliEur": 0,
+    "totalTaxEur": 0,
+    "aktienPotOutEur": 0,
+    "sonstigePotOutEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "an Aktien loss NEVER offsets Sonstige income (the ring-fence)",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": -1500,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": 2000
+   },
+   "output": {
+    "taxableBeforeAllowanceEur": 2000,
+    "allowanceUsedEur": 1000,
+    "allowanceRemainingEur": 0,
+    "taxableBaseEur": 1000,
+    "kapestEur": 250,
+    "soliEur": 13.75,
+    "totalTaxEur": 263.75,
+    "aktienPotOutEur": 1500,
+    "sonstigePotOutEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "the allowance is consumed before the rate applies",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 1000,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": 0
+   },
+   "output": {
+    "taxableBeforeAllowanceEur": 1000,
+    "allowanceUsedEur": 1000,
+    "allowanceRemainingEur": 0,
+    "taxableBaseEur": 0,
+    "kapestEur": 0,
+    "soliEur": 0,
+    "totalTaxEur": 0,
+    "aktienPotOutEur": 0,
+    "sonstigePotOutEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "the Soli floors, never rounds up (base 1344.42 x 4)",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "aktienSalePnlEur": 6377.68,
+    "sonstigeSalePnlEur": 0,
+    "dividendsEur": 0
+   },
+   "output": {
+    "taxableBeforeAllowanceEur": 6377.68,
+    "allowanceUsedEur": 1000,
+    "allowanceRemainingEur": 0,
+    "taxableBaseEur": 5377.68,
+    "kapestEur": 1344.42,
+    "soliEur": 73.94,
+    "totalTaxEur": 1418.36,
+    "aktienPotOutEur": 0,
+    "sonstigePotOutEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "rejects a zero-amount dividend",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 0
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividend gross amounts must be strictly positive, got 0."
+   }
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "rejects a negative dividend",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": -10
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividend gross amounts must be strictly positive, got -10."
+   }
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "rejects an unknown pot category",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "weird",
+      "amountEur": 10
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown DE pot category weird."
+   }
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "rejects an unknown DE event kind",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "nope",
+      "amountEur": 10
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown DE event kind nope."
+   }
+  },
+  {
+   "fn": "settleDeYear",
+   "case": "reconciles held drift as a correction before new events (backdated re-shape)",
+   "input": {
+    "aktienPotInEur": 0,
+    "sonstigePotInEur": 0,
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "category": "aktien",
+      "amountEur": -400
+     }
+    ],
+    "heldEur": 50,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -50,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 0,
+    "yearEnd": {
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 400,
+     "sonstigePotOutEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "no prior years: both pots empty",
+   "input": {
+    "priorYearEvents": []
+   },
+   "output": {
+    "aktienEur": 0,
+    "sonstigeEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "a loss year fills both pots",
+   "input": {
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "category": "aktien",
+       "amountEur": -800
+      },
+      {
+       "kind": "sell_gain",
+       "category": "sonstige",
+       "amountEur": -300
+      }
+     ]
+    ]
+   },
+   "output": {
+    "aktienEur": 800,
+    "sonstigeEur": 300
+   },
+   "throws": null
+  },
+  {
+   "fn": "deCarryPots",
+   "case": "an interleaved event-less year changes nothing (indefinite carry)",
+   "input": {
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "category": "aktien",
+       "amountEur": -800
+      },
+      {
+       "kind": "sell_gain",
+       "category": "sonstige",
+       "amountEur": -300
+      }
+     ],
+     []
+    ]
+   },
+   "output": {
+    "aktienEur": 800,
+    "sonstigeEur": 300
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): owner example: +450 gain",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75
+    ],
+    "heldAfterEur": 123.75
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): owner example: +450 gain",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75
+    ],
+    "heldAfterEur": 123.75,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): owner example: -100 loss after the gain",
+   "input": {
+    "existingGainsEur": [
+     450
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 123.75,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): owner example: -100 loss after the gain",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ],
+    "heldEur": 123.75,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 96.25,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): loss first: nothing to refund",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): loss first: nothing to refund",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): loss first: later gains taxed on the net only",
+   "input": {
+    "existingGainsEur": [
+     -100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     96.25
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): loss first: later gains taxed on the net only",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     96.25
+    ],
+    "heldAfterEur": 96.25,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): a refund never exceeds what the year holds",
+   "input": {
+    "existingGainsEur": [
+     100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 27.5,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): a refund never exceeds what the year holds",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 100
+     }
+    ],
+    "heldEur": 27.5,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -27.5
+    ],
+    "heldAfterEur": 0,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): taxes dividends at the flat rate inside the same pool",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     27.5
+    ],
+    "heldAfterEur": 27.5
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): taxes dividends at the flat rate inside the same pool",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     27.5
+    ],
+    "heldAfterEur": 27.5,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): a prior same-year loss offsets dividend tax too",
+   "input": {
+    "existingGainsEur": [
+     -100
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 60
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): a prior same-year loss offsets dividend tax too",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 60
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0
+    ],
+    "heldAfterEur": 0,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): attributes per-event marginal deltas within one batch",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75,
+     -27.5
+    ],
+    "heldAfterEur": 96.25
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): attributes per-event marginal deltas within one batch",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75,
+     -27.5
+    ],
+    "heldAfterEur": 96.25,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): posts a correction when re-shaped history no longer matches the held tax",
+   "input": {
+    "existingGainsEur": [
+     300
+    ],
+    "existingDividendsEur": [],
+    "heldEur": 123.75,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -41.25,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 82.5
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): posts a correction when re-shaped history no longer matches the held tax",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 300
+     }
+    ],
+    "heldEur": 123.75,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -41.25,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 82.5,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "AT parity (AT side): lands on exact cents even for awkward pools",
+   "input": {
+    "existingGainsEur": [],
+    "existingDividendsEur": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 33.33
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     9.16
+    ],
+    "heldAfterEur": 9.16
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT parity (custom side): lands on exact cents even for awkward pools",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 33.33
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     9.16
+    ],
+    "heldAfterEur": 9.16,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customYearOutcome",
+   "case": "AT params: a net-loss year leaves a clean carry",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "events": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -400
+     }
+    ]
+   },
+   "output": {
+    "targetEur": 0,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "AT params: year 2's gain is taxed in full — no cross-year offset",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     55
+    ],
+    "heldAfterEur": 55,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "lossOffset off: a loss neither refunds nor shrinks the pool",
+   "input": {
+    "params": {
+     "ratePct": 10,
+     "lossOffset": false,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 100
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -80
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 50
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     10,
+     0,
+     5
+    ],
+    "heldAfterEur": 15,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "lossOffset on: the same events land on 10 % x (100 - 80 + 50)",
+   "input": {
+    "params": {
+     "ratePct": 10,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 100
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -80
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 50
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     10,
+     -8,
+     5
+    ],
+    "heldAfterEur": 7,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customYearOutcome",
+   "case": "lossOffset off: a loss-only year accrues no carry even with carryForward on",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": false,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "events": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -500
+     }
+    ]
+   },
+   "output": {
+    "targetEur": 0,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "refund off: a loss after a taxed gain posts no refund movement",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75,
+     0
+    ],
+    "heldAfterEur": 123.75,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "refund off: later gains withhold again only past the ratchet",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     123.75,
+     0,
+     27.5
+    ],
+    "heldAfterEur": 151.25,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "refund off: a history-reshape correction stays signed",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 300
+     }
+    ],
+    "heldEur": 123.75,
+    "newEvents": []
+   },
+   "output": {
+    "correctionDeltaEur": -41.25,
+    "newEventDeltasEur": [],
+    "heldAfterEur": 82.5,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "refund off: after a reshape correction, new events ratchet from the corrected base",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 300
+     }
+    ],
+    "heldEur": 123.75,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -100
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": -41.25,
+    "newEventDeltasEur": [
+     0,
+     27.5
+    ],
+    "heldAfterEur": 110,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customCarryForYears",
+   "case": "yearReset off: a year-1 loss survives Jan 1",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": false,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": -100
+      }
+     ]
+    ]
+   },
+   "output": {
+    "potEur": 0,
+    "cumulativePoolEur": -100,
+    "cumulativeHeldEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "yearReset off: the year-1 loss offsets a year-2 gain through the carry",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": false,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": -100,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 450
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     96.25
+    ],
+    "heldAfterEur": 96.25,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 350,
+     "cumulativeHeldEur": 96.25
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customCarryForYears",
+   "case": "yearReset off: year 1 attributes its own tax to cumulativeHeld",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": false,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": 400
+      }
+     ]
+    ]
+   },
+   "output": {
+    "potEur": 0,
+    "cumulativePoolEur": 400,
+    "cumulativeHeldEur": 110
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "yearReset off: a later-year loss refunds prior years' tax",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": false,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 400,
+     "cumulativeHeldEur": 110
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     -55
+    ],
+    "heldAfterEur": -55,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 200,
+     "cumulativeHeldEur": 55
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customCarryForYears",
+   "case": "yearReset off + refund off: year 1",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": false,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": 400
+      }
+     ]
+    ]
+   },
+   "output": {
+    "potEur": 0,
+    "cumulativePoolEur": 400,
+    "cumulativeHeldEur": 110
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "yearReset off + refund off: the cumulative regime still never refunds",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": false,
+     "yearReset": false,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 400,
+     "cumulativeHeldEur": 110
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": -200
+     },
+     {
+      "kind": "sell_gain",
+      "amountEur": 300
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     0,
+     27.5
+    ],
+    "heldAfterEur": 27.5,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 500,
+     "cumulativeHeldEur": 137.5
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customCarryForYears",
+   "case": "carryForward on: year 1 parks 300, year 2 consumes part of it",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": -300
+      }
+     ],
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": 100
+      }
+     ]
+    ]
+   },
+   "output": {
+    "potEur": 200,
+    "cumulativePoolEur": 0,
+    "cumulativeHeldEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "carryForward on: the pot offsets before the rate applies",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 200,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 500
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     82.5
+    ],
+    "heldAfterEur": 82.5,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "customCarryForYears",
+   "case": "carryForward on: an empty year passes the pot through unchanged",
+   "input": {
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": true,
+     "costBasis": "moving-average"
+    },
+    "priorYearEvents": [
+     [
+      {
+       "kind": "sell_gain",
+       "amountEur": -150
+      }
+     ],
+     []
+    ]
+   },
+   "output": {
+    "potEur": 150,
+    "cumulativePoolEur": 0,
+    "cumulativeHeldEur": 0
+   },
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "cost-basis seam: FIFO consumes the oldest lot (gain 200)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2026-02-05T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2026-03-05T10:00:00Z"
+     }
+    ],
+    "strategy": "fifo"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "A",
+     "executedAt": "2026-03-05T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 300,
+     "costBasisEur": 100,
+     "realizedPnlEur": 200,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "cost-basis seam: moving average basis 150 (gain 150)",
+   "input": {
+    "transactions": [
+     {
+      "id": "b1",
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 100,
+      "feeEur": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "id": "b2",
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "priceEur": 200,
+      "feeEur": 0,
+      "executedAt": "2026-02-05T10:00:00Z"
+     },
+     {
+      "id": "s1",
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "priceEur": 300,
+      "feeEur": 0,
+      "executedAt": "2026-03-05T10:00:00Z"
+     }
+    ],
+    "strategy": "moving-average"
+   },
+   "output": [
+    {
+     "id": "s1",
+     "assetId": "A",
+     "executedAt": "2026-03-05T10:00:00Z",
+     "quantity": 1,
+     "proceedsEur": 300,
+     "costBasisEur": 150,
+     "realizedPnlEur": 150,
+     "uncoveredQuantity": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "cost-basis seam: 10 % of the FIFO gain",
+   "input": {
+    "params": {
+     "ratePct": 10,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 200
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     20
+    ],
+    "heldAfterEur": 20,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "cost-basis seam: 10 % of the moving-average gain",
+   "input": {
+    "params": {
+     "ratePct": 10,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    },
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "sell_gain",
+      "amountEur": 150
+     }
+    ]
+   },
+   "output": {
+    "correctionDeltaEur": 0,
+    "newEventDeltasEur": [
+     15
+    ],
+    "heldAfterEur": 15,
+    "carryOut": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects a rate above 100",
+   "input": {
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [],
+    "params": {
+     "ratePct": 101,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Custom tax rate must be between 0 and 100, got 101."
+   }
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects a negative rate",
+   "input": {
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [],
+    "params": {
+     "ratePct": -1,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Custom tax rate must be between 0 and 100, got -1."
+   }
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects an unknown cost-basis strategy",
+   "input": {
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [],
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "lifo"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown cost-basis strategy lifo."
+   }
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects a zero-amount dividend",
+   "input": {
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "dividend",
+      "amountEur": 0
+     }
+    ],
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Dividend gross amounts must be strictly positive, got 0."
+   }
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects an unknown custom event kind",
+   "input": {
+    "carry": {
+     "potEur": 0,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [
+     {
+      "kind": "bogus",
+      "amountEur": 1
+     }
+    ],
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Unknown custom event kind bogus."
+   }
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects a negative carry pot",
+   "input": {
+    "carry": {
+     "potEur": -1,
+     "cumulativePoolEur": 0,
+     "cumulativeHeldEur": 0
+    },
+    "existingEvents": [],
+    "heldEur": 0,
+    "newEvents": [],
+    "params": {
+     "ratePct": 27.5,
+     "lossOffset": true,
+     "refund": true,
+     "yearReset": true,
+     "carryForward": false,
+     "costBasis": "moving-average"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxComputationError",
+    "message": "Carry pot must be non-negative, got -1."
+   }
+  }
+ ]
+}

@@ -71,6 +71,56 @@ import {
   type SourcedCashMovement,
 } from './vendor/domain/src/cashLedger.ts';
 
+import {
+  AT_AS_CUSTOM_PARAMS,
+  AT_KEST_RATE,
+  atYearTargetEur,
+  COST_BASIS_STRATEGIES,
+  costBasisStrategyForCountry,
+  customCarryForYears,
+  customYearOutcome,
+  DE_KAPEST_RATE,
+  DE_SOLI_RATE,
+  DE_SPARER_PAUSCHBETRAG_EUR,
+  deCarryPots,
+  dePotCategoryForAssetType,
+  deYearOutcome,
+  FI_CAPITAL_INCOME_HIGH_RATE,
+  FI_CAPITAL_INCOME_RATE,
+  FI_HIGH_RATE_THRESHOLD_EUR,
+  fiYearTargetEur,
+  floorCents as taxFloorCents,
+  initialCustomCarry,
+  manualTaxEur,
+  QTY_EPSILON as TAX_QTY_EPSILON,
+  QTY_STORAGE_QUANTUM,
+  realizedSellsEur,
+  settleAtYear,
+  settleCustomYear,
+  settleDeYear,
+  settleFiYear,
+  SUPPORTED_TAX_COUNTRIES,
+  TAX_COUNTRY_AT,
+  TAX_COUNTRY_DE,
+  TAX_COUNTRY_FI,
+  TAX_MODES,
+  TAX_YEAR_TIME_ZONE,
+  taxMovementForDelta,
+  viennaYearOf,
+  type AtYearSettlementInput,
+  type CostBasisStrategy,
+  type CustomTaxableEvent,
+  type CustomTaxParams,
+  type DeTaxableEvent,
+  type DeYearAggregates,
+  type NewAtEvent,
+  type TaxableTransaction,
+} from './vendor/domain/src/tax.ts';
+import {
+  DE_TAX_FIXTURES,
+  type DeTaxFixtureScenario,
+} from './vendor/domain/src/__tests__/deTaxFixtures.ts';
+
 import serverTwrParity from './vendor/fixtures/serverTwrParity.fixture.json' with { type: 'json' };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +149,7 @@ const vectors: Record<string, Vector[]> = {
   seriesStats: [],
   settingsScope: [],
   cashLedger: [],
+  tax: [],
   serverTwrParity: [],
 };
 const skips: Skip[] = [];
@@ -2614,6 +2665,1247 @@ function genServerTwrParity(): void {
 }
 
 // ===========================================================================
+// tax.ts  (S5/S6 deferred port — plan §3.2 third row)
+// ===========================================================================
+//
+// Sources replayed here, case for case:
+//   src/__tests__/tax.test.ts            (52 it() cases)
+//   src/__tests__/deTaxEngine.test.ts    (18)
+//   src/__tests__/customTax.test.ts      (22)
+//   src/__tests__/deTaxFixtures.test.ts  (15 — fixture-data consistency; skipped
+//                                         here and hand-ported over the emitted
+//                                         deTaxFixtures.json)
+//
+// Unlike the cashLedger section, no bespoke JSON reshaping is needed: every tax
+// input and every tax result is already a plain JSON-safe object (no Map, no
+// class instance, no observable member order), so the vitest inputs travel
+// verbatim and the outputs are recorded as the engine returns them.
+
+const taxEmit = (fn: string, name: string, input: unknown, run: () => unknown): void =>
+  emit('tax', fn, name, input, run);
+
+/** tax.test.ts `T()` */
+function T(
+  id: string,
+  side: 'buy' | 'sell',
+  quantity: number,
+  priceEur: number,
+  executedAt: string,
+  feeEur = 0,
+  assetId = 'asset-1',
+): TaxableTransaction {
+  return { id, assetId, side, quantity, priceEur, feeEur, executedAt };
+}
+
+/** deTaxEngine.test.ts `tx()` */
+function dtx(
+  id: string,
+  side: 'buy' | 'sell',
+  quantity: number,
+  priceEur: number,
+  executedAt: string,
+  extra: Partial<TaxableTransaction> = {},
+): TaxableTransaction {
+  return {
+    id,
+    assetId: extra.assetId ?? 'asset-1',
+    side,
+    quantity,
+    priceEur,
+    feeEur: 0,
+    executedAt,
+    ...extra,
+  };
+}
+
+/** customTax.test.ts `params()` */
+const cparams = (overrides: Partial<CustomTaxParams> = {}): CustomTaxParams => ({
+  ...AT_AS_CUSTOM_PARAMS,
+  ...overrides,
+});
+
+const sells = (
+  name: string,
+  transactions: TaxableTransaction[],
+  strategy?: CostBasisStrategy,
+): void =>
+  taxEmit(
+    'realizedSellsEur',
+    name,
+    strategy === undefined ? { transactions } : { transactions, strategy },
+    () => (strategy === undefined ? realizedSellsEur(transactions) : realizedSellsEur(transactions, strategy)),
+  );
+
+const settleAt = (name: string, input: AtYearSettlementInput): void =>
+  taxEmit('settleAtYear', name, input, () => settleAtYear(input));
+
+const settleFi = (name: string, input: AtYearSettlementInput): void =>
+  taxEmit('settleFiYear', name, input, () => settleFiYear(input));
+
+const settleDe = (name: string, input: Parameters<typeof settleDeYear>[0]): void =>
+  taxEmit('settleDeYear', name, input, () => settleDeYear(input));
+
+const settleCustom = (name: string, input: Parameters<typeof settleCustomYear>[0]): void =>
+  taxEmit('settleCustomYear', name, input, () => settleCustomYear(input));
+
+// --- constants -------------------------------------------------------------
+
+function genTaxConstants(): void {
+  taxEmit('TAX_CONSTANTS', 'the module constants, values and declaration order', {}, () => ({
+    TAX_MODES: [...TAX_MODES],
+    TAX_COUNTRY_AT,
+    TAX_COUNTRY_DE,
+    TAX_COUNTRY_FI,
+    SUPPORTED_TAX_COUNTRIES: [...SUPPORTED_TAX_COUNTRIES],
+    COST_BASIS_STRATEGIES: [...COST_BASIS_STRATEGIES],
+    AT_KEST_RATE,
+    DE_KAPEST_RATE,
+    DE_SOLI_RATE,
+    DE_SPARER_PAUSCHBETRAG_EUR,
+    FI_CAPITAL_INCOME_RATE,
+    FI_CAPITAL_INCOME_HIGH_RATE,
+    FI_HIGH_RATE_THRESHOLD_EUR,
+    TAX_YEAR_TIME_ZONE,
+    QTY_EPSILON: TAX_QTY_EPSILON,
+    QTY_STORAGE_QUANTUM,
+    AT_AS_CUSTOM_PARAMS: { ...AT_AS_CUSTOM_PARAMS },
+  }));
+
+  taxEmit('initialCustomCarry', 'the empty carry', {}, () => initialCustomCarry());
+
+  const country = (name: string, value: string | null | undefined): void =>
+    taxEmit(
+      'costBasisStrategyForCountry',
+      name,
+      value === undefined ? {} : { country: value },
+      () => costBasisStrategyForCountry(value),
+    );
+  country('FI mandates FIFO', TAX_COUNTRY_FI);
+  country('DE mandates FIFO', TAX_COUNTRY_DE);
+  country('AT keeps the moving average', TAX_COUNTRY_AT);
+  country('null keeps the moving average', null);
+  country('undefined keeps the moving average', undefined);
+  country('an unknown country keeps the moving average', 'US');
+}
+
+// --- floorCents (tax.ts's OWN copy — plan §3.3 rule 3) ---------------------
+
+function genTaxFloorCents(): void {
+  const run = (name: string, amountEur: number): void =>
+    taxEmit('floorCents', name, { amountEur }, () => taxFloorCents(amountEur));
+
+  // The 12 values of tax.test.ts's cashLedger-parity case, each as its own vector.
+  run('parity case 0', 0);
+  run('parity case 0.005', 0.005);
+  run('parity case -0.005', -0.005);
+  run('parity case 1.005', 1.005);
+  run('parity case -1.005', -1.005);
+  run('parity case 2.675', 2.675);
+  run('parity case 100.004999', 100.004999);
+  run('parity case 100.006', 100.006);
+  run('parity case 8.61', 8.61);
+  run('parity case 0.1 + 0.2', 0.1 + 0.2);
+  run('parity case 123.456', 123.456);
+  run('parity case -76.545', -76.545);
+
+  // "floors down (never rounds up) despite float representation".
+  run('floors down: 1.005 -> 1.00', 1.005);
+  run('floors down: -1.005 -> -1.00', -1.005);
+  run('floors down: 100.006 -> 100.00', 100.006);
+  run('floors down: 0.1 + 0.2 -> 0.30', 0.1 + 0.2);
+
+  // Plan §3.3 rule 3 demands every quantizer be probed on negatives and exact
+  // halves. tax.ts has NO Math.round/trunc/toFixed at all — floorCents' single
+  // Math.floor is the whole rounding surface — so these pin its edges directly.
+  run('exact half cent, positive (0.005)', 0.005);
+  run('exact half cent, negative (-0.005)', -0.005);
+  run('exact half cent above a cent (0.015)', 0.015);
+  run('exact half cent above a cent, negative (-0.015)', -0.015);
+  run('exact half cent (2.005)', 2.005);
+  run('exact half cent, negative (-2.005)', -2.005);
+  run('exact half (0.045)', 0.045);
+  run('exact half, negative (-0.045)', -0.045);
+  run('classic float trap (2.675)', 2.675);
+  run('classic float trap, negative (-2.675)', -2.675);
+  run('negative that floors away entirely (-0.004)', -0.004);
+  run('negative sub-cent residue (-100.006)', -100.006);
+  run('the KESt of an awkward pool (0.275 * 33.33)', 0.275 * 33.33);
+  run('the Soli of an awkward KapESt (0.055 * 336.1)', 0.055 * 336.1);
+  run('a large magnitude (1234567.891)', 1234567.891);
+  run('a large negative magnitude (-1234567.891)', -1234567.891);
+
+  skip(
+    'floorCents',
+    'matches cashLedger.floorCents on the boundary cases exactly',
+    "cross-module identity (tax.floorCents === cashLedger.floorCents on 12 values): a vector records ONE function's output, it cannot assert two ports agree — hand-ported in TaxHandPortedTest (\"tax floorCents matches the cashLedger floorCents on every boundary case\")",
+  );
+  skip(
+    'floorCents',
+    'rejects non-finite amounts',
+    'inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest ("floorCents rejects non-finite amounts")',
+  );
+  skip(
+    'floorCents',
+    'returns POSITIVE zero for a floored-away negative',
+    'signed-zero identity: JSON carries no -0 (the generator refuses to emit one) — hand-ported in TaxHandPortedTest ("floorCents never returns negative zero")',
+  );
+}
+
+// --- viennaYearOf ----------------------------------------------------------
+
+function genViennaYearOf(): void {
+  const run = (name: string, isoTimestamp: string): void =>
+    taxEmit('viennaYearOf', name, { isoTimestamp }, () => viennaYearOf(isoTimestamp));
+
+  // 23:30 UTC on Dec 31 is 00:30 Jan 1 in Vienna (CET, UTC+1).
+  run('buckets 2025-12-31T23:30Z into the NEW Vienna year', '2025-12-31T23:30:00.000Z');
+  run('buckets 2025-12-31T22:59:59Z into the old Vienna year', '2025-12-31T22:59:59.000Z');
+  run('mid-year is unambiguous', '2026-07-15T12:00:00.000Z');
+  run('summer time (CEST, UTC+2) at the boundary', '2026-06-30T22:30:00.000Z');
+  run('a non-UTC offset is honoured', '2026-01-01T00:30:00+01:00');
+  run('fails loud on unparseable timestamps', 'not-a-date');
+}
+
+// --- realizedSellsEur ------------------------------------------------------
+
+function genRealizedSellsEur(): void {
+  sells('realizes a simple round trip against the average cost', [
+    T('b1', 'buy', 10, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 10, 110, '2026-02-01T10:00:00Z'),
+  ]);
+
+  sells('capitalises buy fees into the basis and deducts sell fees from the gain', [
+    T('b1', 'buy', 10, 100, '2026-01-01T10:00:00Z', 10),
+    T('s1', 'sell', 5, 110, '2026-02-01T10:00:00Z', 5),
+  ]);
+
+  sells('re-averages on buys and leaves the average unchanged across sells', [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+    T('b2', 'buy', 1, 200, '2026-01-02T10:00:00Z'),
+    T('s1', 'sell', 1, 180, '2026-01-03T10:00:00Z'),
+    T('s2', 'sell', 1, 120, '2026-01-04T10:00:00Z'),
+  ]);
+
+  sells('replays chronologically regardless of input order', [
+    T('s1', 'sell', 1, 180, '2026-01-03T10:00:00Z'),
+    T('b2', 'buy', 1, 200, '2026-01-02T10:00:00Z'),
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+  ]);
+  sells("mixed sub-second precision sorts as time, not as strings ('.' < 'Z')", [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 1, 150, '2026-01-01T10:00:00.500Z'),
+  ]);
+
+  sells('handles fractional quantities and closes positions to exactly zero', [
+    T('b1', 'buy', 0.1, 10, '2026-01-01T10:00:00Z'),
+    T('b2', 'buy', 0.2, 10, '2026-01-02T10:00:00Z'),
+    T('s1', 'sell', 0.3, 20, '2026-01-03T10:00:00Z'),
+    T('b3', 'buy', 1, 50, '2026-02-01T10:00:00Z'),
+    T('s2', 'sell', 1, 60, '2026-03-01T10:00:00Z'),
+  ]);
+
+  sells('tracks assets independently', [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z', 0, 'A'),
+    T('b2', 'buy', 1, 500, '2026-01-01T11:00:00Z', 0, 'B'),
+    T('s1', 'sell', 1, 110, '2026-01-02T10:00:00Z', 0, 'A'),
+    T('s2', 'sell', 1, 400, '2026-01-02T11:00:00Z', 0, 'B'),
+  ]);
+
+  sells('rejects an oversell — an inconsistent log must never price a basis', [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 2, 100, '2026-01-02T10:00:00Z'),
+  ]);
+
+  sells('rejects a zero quantity', [T('b1', 'buy', 0, 100, '2026-01-01T10:00:00Z')]);
+  sells('rejects a negative price', [T('b1', 'buy', 1, -1, '2026-01-01T10:00:00Z')]);
+  sells('rejects an unparseable executedAt', [T('b1', 'buy', 1, 100, 'garbage')]);
+  sells('rejects a negative fee', [T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z', -1)]);
+  sells('rejects an unknown transaction side', [
+    { ...T('x1', 'buy', 1, 100, '2026-01-01T10:00:00Z'), side: 'short' as 'buy' },
+  ]);
+
+  // --- uncovered sell — allowUncovered (issue #369) ---
+  sells('uncovered: basises the uncovered shares at the sale price -> 0 gain', [
+    { ...T('s1', 'sell', 10, 100, '2026-02-01T10:00:00Z'), allowUncovered: true },
+  ]);
+  sells('uncovered: splits a partial-cover sell (covered at avg, uncovered at sale price)', [
+    T('b1', 'buy', 2, 40, '2026-01-01T10:00:00Z'),
+    { ...T('s1', 'sell', 10, 100, '2026-02-01T10:00:00Z'), allowUncovered: true },
+  ]);
+  sells('uncovered: uses a supplied EUR entry price for the uncovered portion', [
+    T('b1', 'buy', 2, 40, '2026-01-01T10:00:00Z'),
+    {
+      ...T('s1', 'sell', 10, 100, '2026-02-01T10:00:00Z'),
+      allowUncovered: true,
+      uncoveredEntryPriceEur: 60,
+    },
+  ]);
+  sells('uncovered: an explicit null entry price falls back to the sale price', [
+    T('b1', 'buy', 2, 40, '2026-01-01T10:00:00Z'),
+    {
+      ...T('s1', 'sell', 10, 100, '2026-02-01T10:00:00Z'),
+      allowUncovered: true,
+      uncoveredEntryPriceEur: null,
+    },
+  ]);
+  sells('uncovered: rejects a negative supplied entry price', [
+    T('b1', 'buy', 2, 40, '2026-01-01T10:00:00Z'),
+    {
+      ...T('s1', 'sell', 10, 100, '2026-02-01T10:00:00Z'),
+      allowUncovered: true,
+      uncoveredEntryPriceEur: -1,
+    },
+  ]);
+  sells('uncovered: marks a covered sell with uncoveredQuantity 0', [
+    T('b1', 'buy', 10, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 4, 110, '2026-02-01T10:00:00Z'),
+  ]);
+  sells('uncovered: closes at 0 and lets a later buy rebuild a clean average (no shorts)', [
+    { ...T('s1', 'sell', 5, 100, '2026-01-01T10:00:00Z'), allowUncovered: true },
+    T('b1', 'buy', 2, 50, '2026-02-01T10:00:00Z'),
+    T('s2', 'sell', 2, 70, '2026-03-01T10:00:00Z'),
+  ]);
+  sells('uncovered: still rejects an oversell when the flag is absent', [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 2, 100, '2026-01-02T10:00:00Z'),
+  ]);
+
+  // --- storage-quantum shortfall waiver (#917) ---
+  const quantumPair = (sellQuantity: number): TaxableTransaction[] => [
+    T('b1', 'buy', 1.0, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', sellQuantity, 110, '2026-01-02T10:00:00Z'),
+  ];
+  sells('#917: waives a same-batch one-quantum shortfall', quantumPair(1.00000001));
+  sells('#917: scales the envelope per contributing row — multi-buy drift (F1 shape)', [
+    T('b1', 'buy', 0.1, 50, '2026-01-01T10:00:00Z'),
+    T('b2', 'buy', 0.1, 50, '2026-01-02T10:00:00Z'),
+    T('b3', 'buy', 0.1, 50, '2026-01-03T10:00:00Z'),
+    T('b4', 'buy', 0.1, 50, '2026-01-04T10:00:00Z'),
+    T('s1', 'sell', 0.40000002, 60, '2026-01-05T10:00:00Z'),
+  ]);
+  sells('#917: waives identically under the FIFO strategy', quantumPair(1.00000001), 'fifo');
+  sells('#917: closes the position so a later buy rebuilds a clean average', [
+    ...quantumPair(1.00000001),
+    T('b2', 'buy', 1, 50, '2026-02-01T10:00:00Z'),
+    T('s2', 'sell', 1, 70, '2026-03-01T10:00:00Z'),
+  ]);
+  sells('#917: fails closed beyond the per-row envelope (moving-average)', quantumPair(1.00000003));
+  sells('#917: fails closed beyond the per-row envelope (fifo)', quantumPair(1.00000003), 'fifo');
+  sells('#917: resets the envelope when a position closes exactly', [
+    T('b1', 'buy', 1, 100, '2026-01-01T10:00:00Z'),
+    T('s1', 'sell', 1, 110, '2026-01-02T10:00:00Z'),
+    T('b2', 'buy', 1, 100, '2026-02-01T10:00:00Z'),
+    T('s2', 'sell', 1.00000003, 110, '2026-02-02T10:00:00Z'),
+  ]);
+  sells('#917: a real oversell still throws regardless of the row count', [
+    ...Array.from({ length: 100 }, (_, i) => T(`b${i}`, 'buy', 1, 100, '2026-01-01T10:00:00Z')),
+    T('s1', 'sell', 101, 110, '2026-01-02T10:00:00Z'),
+  ]);
+}
+
+// --- the AT engine ---------------------------------------------------------
+
+function genAtEngine(): void {
+  const target = (name: string, poolEur: number): void =>
+    taxEmit('atYearTargetEur', name, { poolEur }, () => atYearTargetEur(poolEur));
+
+  target('the flat rate on the pool, cent-quantized (450)', 450);
+  target('the flat rate on the pool, cent-quantized (350)', 350);
+  target('clamps a net-loss year to exactly zero (-100)', -100);
+  target('clamps a net-loss year to exactly zero (0)', 0);
+  target('floors the tax due to whole cents (0.02 -> 0.00)', 0.02);
+  target('floors the tax due to whole cents (0.01 -> 0.00)', 0.01);
+  target('floors the tax due to whole cents (0.5 -> 0.13)', 0.5);
+  target('an awkward pool floors, never rounds up (33.33)', 33.33);
+
+  settleAt('owner example, step 1: +450 gain from an empty year', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: 450 }],
+  });
+  settleAt('owner example, step 2: -100 loss refunds down to 27.5 % x 350', {
+    existingGainsEur: [450],
+    existingDividendsEur: [],
+    heldEur: 123.75,
+    newEvents: [{ kind: 'sell_gain', amountEur: -100 }],
+  });
+  settleAt('loss first: nothing to refund', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: -100 }],
+  });
+  settleAt('loss first: later gains taxed on the net only', {
+    existingGainsEur: [-100],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: 450 }],
+  });
+  settleAt('a refund never exceeds what the year holds', {
+    existingGainsEur: [100],
+    existingDividendsEur: [],
+    heldEur: 27.5,
+    newEvents: [{ kind: 'sell_gain', amountEur: -500 }],
+  });
+  settleAt('taxes dividends at the flat rate inside the same pool', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'dividend', amountEur: 100 }],
+  });
+  settleAt('a prior same-year loss offsets dividend tax too (one pool)', {
+    existingGainsEur: [-100],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'dividend', amountEur: 60 }],
+  });
+  settleAt('attributes per-event marginal deltas within one batch', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: 450 },
+      { kind: 'sell_gain', amountEur: -100 },
+    ],
+  });
+  settleAt('posts a correction when re-shaped history no longer matches the held tax', {
+    existingGainsEur: [300],
+    existingDividendsEur: [],
+    heldEur: 123.75,
+    newEvents: [],
+  });
+  settleAt('lands on exact cents even for awkward pools', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: 33.33 }],
+  });
+  settleAt('existing dividends join the pool in list order', {
+    existingGainsEur: [10.11],
+    existingDividendsEur: [20.22, 30.33],
+    heldEur: 0,
+    newEvents: [],
+  });
+  settleAt('rejects a zero-amount dividend event', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'dividend', amountEur: 0 }],
+  });
+  settleAt('rejects a negative-amount dividend event', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'dividend', amountEur: -10 }],
+  });
+  settleAt('rejects an unknown event kind', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'bogus' as 'dividend', amountEur: 1 }],
+  });
+  settleAt('rejects a non-positive existing dividend', {
+    existingGainsEur: [],
+    existingDividendsEur: [0],
+    heldEur: 0,
+    newEvents: [],
+  });
+
+  skip(
+    'settleAtYear',
+    'rejects a NaN event amount / an infinite heldEur',
+    'inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest ("settleAtYear rejects non-finite input")',
+  );
+  skip(
+    'atYearTargetEur',
+    'rejects a non-finite pool',
+    'input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest ("year targets reject a non-finite pool")',
+  );
+
+  const mv = (name: string, deltaEur: number): void =>
+    taxEmit('taxMovementForDelta', name, { deltaEur }, () => taxMovementForDelta(deltaEur));
+  mv('maps a positive delta to a withholding (negative amount)', 123.75);
+  mv('maps a negative delta to a refund (positive amount)', -27.5);
+  mv('posts nothing for a zero delta', 0);
+  mv('a one-cent withholding', 0.01);
+  mv('a one-cent refund', -0.01);
+  skip(
+    'taxMovementForDelta',
+    'rejects a non-finite delta',
+    'input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest ("taxMovementForDelta rejects a non-finite delta")',
+  );
+
+  const manual = (
+    name: string,
+    input: { taxAmountEur?: number | null; taxRatePct?: number | null; baseEur: number },
+  ): void => taxEmit('manualTaxEur', name, input, () => manualTaxEur(input));
+  manual('records the entered amount as-is', { taxAmountEur: 12.34, baseEur: 999 });
+  manual('floors the entered amount (12.345 -> 12.34)', { taxAmountEur: 12.345, baseEur: 999 });
+  manual('applies a rate to a positive base', { taxRatePct: 27.5, baseEur: 100 });
+  manual('a loss base records EUR 0.00', { taxRatePct: 27.5, baseEur: -100 });
+  manual('returns null when nothing was entered', { baseEur: 100 });
+  manual('explicit nulls also mean "nothing entered"', {
+    taxAmountEur: null,
+    taxRatePct: null,
+    baseEur: 100,
+  });
+  manual('rejects both an amount and a rate', { taxAmountEur: 1, taxRatePct: 1, baseEur: 100 });
+  manual('rejects a negative amount', { taxAmountEur: -1, baseEur: 100 });
+  manual('rejects a rate above 100', { taxRatePct: 101, baseEur: 100 });
+  manual('rejects a negative rate', { taxRatePct: -1, baseEur: 100 });
+  manual('a zero rate records EUR 0.00', { taxRatePct: 0, baseEur: 100 });
+  manual('a 100 % rate is admissible', { taxRatePct: 100, baseEur: 100 });
+  manual('floors the rate result (33.33 % of 100)', { taxRatePct: 33.33, baseEur: 100 });
+  skip(
+    'manualTaxEur',
+    'rejects a non-finite base',
+    'input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest ("manualTaxEur rejects a non-finite base")',
+  );
+}
+
+// --- the FI engine (#635) --------------------------------------------------
+
+function genFiEngine(): void {
+  const target = (name: string, poolEur: number): void =>
+    taxEmit('fiYearTargetEur', name, { poolEur }, () => fiYearTargetEur(poolEur));
+
+  target('30 % to EUR 30,000, 34 % above (40,000)', 40_000);
+  target('exactly at the threshold: base rate only (30,000)', 30_000);
+  target('below the threshold: flat 30 % (1,000)', 1_000);
+  target('clamps a net-loss year to exactly zero (-500)', -500);
+  target('clamps a net-loss year to exactly zero (0)', 0);
+  target('floors to whole cents (0.03 -> 0.00)', 0.03);
+  target('floors to whole cents (0.5 -> 0.15)', 0.5);
+  target('one cent above the threshold', 30_000.01);
+
+  settleFi('a marginal gain crossing the threshold is taxed at 34 % on the excess', {
+    existingGainsEur: [25_000],
+    existingDividendsEur: [],
+    heldEur: 7_500,
+    newEvents: [{ kind: 'sell_gain', amountEur: 10_000 }],
+  });
+  settleFi('a same-year loss refunds down to the shrunken progressive target', {
+    existingGainsEur: [35_000],
+    existingDividendsEur: [],
+    heldEur: 10_700,
+    newEvents: [{ kind: 'sell_gain', amountEur: -5_000 }],
+  });
+  settleFi('a loss-first year parks at EUR 0.00 and later gains tax only the net', {
+    existingGainsEur: [],
+    existingDividendsEur: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: -1_000 },
+      { kind: 'sell_gain', amountEur: 1_500 },
+      { kind: 'dividend', amountEur: 500 },
+    ],
+  });
+  settleFi('reconciles reshaped history like the AT settlement (signed correction)', {
+    existingGainsEur: [1_000],
+    existingDividendsEur: [],
+    heldEur: 500,
+    newEvents: [],
+  });
+}
+
+// --- the DE engine (#576 / #580) -------------------------------------------
+
+/** deTaxEngine.test.ts `taxablesOf()` */
+function taxablesOf(scenario: DeTaxFixtureScenario): TaxableTransaction[] {
+  return scenario.transactions.map((t) => ({
+    id: t.id,
+    assetId: t.assetId,
+    side: t.side,
+    quantity: t.quantity,
+    priceEur: t.priceEur,
+    feeEur: t.feeEur,
+    executedAt: t.executedAt,
+  }));
+}
+
+interface DeYearEvent {
+  id: string;
+  ms: number;
+  year: number;
+  event: DeTaxableEvent;
+}
+
+/** deTaxEngine.test.ts `engineEventsOf()` */
+function engineEventsOf(scenario: DeTaxFixtureScenario): DeYearEvent[] {
+  const realizations = new Map(
+    realizedSellsEur(taxablesOf(scenario), 'fifo').map((r) => [r.id, r]),
+  );
+  const scenarioSells: DeYearEvent[] = scenario.transactions
+    .filter((t) => t.side === 'sell')
+    .map((t) => {
+      const realization = realizations.get(t.id);
+      if (!realization) throw new Error(`No realization for sell ${t.id}`);
+      return {
+        id: t.id,
+        ms: Date.parse(t.executedAt),
+        year: viennaYearOf(t.executedAt),
+        event: {
+          kind: 'sell_gain' as const,
+          category: t.category,
+          amountEur: realization.realizedPnlEur,
+        },
+      };
+    });
+  const dividends: DeYearEvent[] = scenario.dividends.map((d) => ({
+    id: d.id,
+    ms: Date.parse(d.executedAt),
+    year: viennaYearOf(d.executedAt),
+    event: { kind: 'dividend' as const, amountEur: d.grossEur },
+  }));
+  return [...scenarioSells, ...dividends].sort((a, b) => a.ms - b.ms);
+}
+
+function genDeFixtureEngine(): void {
+  for (const scenario of DE_TAX_FIXTURES) {
+    const txs = taxablesOf(scenario);
+    sells(`${scenario.id}: FIFO realizations, per lot consumption`, txs, 'fifo');
+    sells(`${scenario.id}: the moving-average strategy on the same log`, txs, 'moving-average');
+
+    const events = engineEventsOf(scenario);
+    scenario.expectedYears.forEach((year, i) => {
+      // The pot chain entering this year: every earlier listed year's events.
+      const priorYearEvents = scenario.expectedYears
+        .slice(0, i)
+        .map((prior) => events.filter((e) => e.year === prior.year).map((e) => e.event));
+      taxEmit(
+        'deCarryPots',
+        `${scenario.id}/${year.year}: pots carried into the year`,
+        { priorYearEvents },
+        () => deCarryPots(priorYearEvents),
+      );
+
+      const yearEvents = events.filter((e) => e.year === year.year);
+
+      // Step by step: each event settles alone against the events before it.
+      const existing: DeTaxableEvent[] = [];
+      let held = 0;
+      year.steps.forEach((step, j) => {
+        const input = {
+          aktienPotInEur: year.aktienPotInEur,
+          sonstigePotInEur: year.sonstigePotInEur,
+          // Snapshot: `existing` keeps growing and the vector holds this object.
+          existingEvents: [...existing],
+          heldEur: held,
+          newEvents: [yearEvents[j]!.event],
+        };
+        settleDe(`${scenario.id}/${year.year}/${step.eventId}: settlement step`, input);
+        existing.push(yearEvents[j]!.event);
+        held = settleDeYear(input).heldAfterEur;
+      });
+
+      // The same year settled as ONE batch — same deltas, same final target.
+      settleDe(`${scenario.id}/${year.year}: whole-year batch`, {
+        aktienPotInEur: year.aktienPotInEur,
+        sonstigePotInEur: year.sonstigePotInEur,
+        existingEvents: [],
+        heldEur: 0,
+        newEvents: yearEvents.map((e) => e.event),
+      });
+
+      // The year-end state (allowance, base, KapESt, Soli, pot-outs).
+      settleDe(`${scenario.id}/${year.year}: year-end state`, {
+        aktienPotInEur: year.aktienPotInEur,
+        sonstigePotInEur: year.sonstigePotInEur,
+        existingEvents: yearEvents.map((e) => e.event),
+        heldEur: year.totalTaxEur,
+        newEvents: [],
+      });
+    });
+  }
+
+  skip(
+    'realizedSellsEur',
+    'the moving-average strategy reproduces the stated divergent P/L — never the FIFO one',
+    "the case's load-bearing assertion is an INEQUALITY between the engine output and a fixture literal (`expect(fifoPnl).not.toBe(maPnl)`); both engine outputs travel as vectors, the inequality against the fixtures is hand-ported in DeTaxFixturesHandPortedTest",
+  );
+}
+
+function genDeUnitCases(): void {
+  // --- FIFO strategy unit tests ---
+  sells(
+    'FIFO: pro-rates buy fees into the lot and consumes partial lots oldest-first',
+    [
+      dtx('b1', 'buy', 4, 10, '2024-01-05T12:00:00.000Z', { feeEur: 2 }),
+      dtx('b2', 'buy', 6, 20, '2024-02-05T12:00:00.000Z', { feeEur: 3 }),
+      dtx('s1', 'sell', 5, 30, '2024-06-05T12:00:00.000Z', { feeEur: 1 }),
+      dtx('s2', 'sell', 5, 8, '2024-09-05T12:00:00.000Z'),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: keeps per-asset lot queues independent',
+    [
+      dtx('a-buy', 'buy', 10, 100, '2024-01-05T12:00:00.000Z', { assetId: 'a' }),
+      dtx('b-buy', 'buy', 10, 1, '2024-01-06T12:00:00.000Z', { assetId: 'b' }),
+      dtx('a-sell', 'sell', 10, 150, '2024-05-05T12:00:00.000Z', { assetId: 'a' }),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: throws on an unacknowledged oversell, exactly like the moving average',
+    [
+      dtx('b1', 'buy', 5, 10, '2024-01-05T12:00:00.000Z'),
+      dtx('s1', 'sell', 6, 10, '2024-02-05T12:00:00.000Z'),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: an acknowledged uncovered sell releases real lots, the rest takes the supplied basis',
+    [
+      dtx('b1', 'buy', 2, 100, '2024-01-05T12:00:00.000Z'),
+      dtx('s1', 'sell', 5, 50, '2024-03-05T12:00:00.000Z', {
+        allowUncovered: true,
+        uncoveredEntryPriceEur: 30,
+      }),
+      dtx('b2', 'buy', 1, 10, '2024-05-05T12:00:00.000Z'),
+      dtx('s2', 'sell', 1, 25, '2024-06-05T12:00:00.000Z'),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: an uncovered sell without an entry price books 0 gain on the uncovered portion',
+    [
+      dtx('b1', 'buy', 1, 100, '2024-01-05T12:00:00.000Z'),
+      dtx('s1', 'sell', 3, 60, '2024-03-05T12:00:00.000Z', { allowUncovered: true }),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: clamps float dust when fractional sells close the position',
+    [
+      dtx('b1', 'buy', 0.3, 10, '2024-01-05T12:00:00.000Z'),
+      dtx('s1', 'sell', 0.1, 12, '2024-02-05T12:00:00.000Z'),
+      dtx('s2', 'sell', 0.2, 12, '2024-03-05T12:00:00.000Z'),
+    ],
+    'fifo',
+  );
+  sells(
+    'FIFO: the position is closed afterwards — another sell must be an oversell',
+    [
+      dtx('b1', 'buy', 0.3, 10, '2024-01-05T12:00:00.000Z'),
+      dtx('s1', 'sell', 0.1, 12, '2024-02-05T12:00:00.000Z'),
+      dtx('s2', 'sell', 0.2, 12, '2024-03-05T12:00:00.000Z'),
+      dtx('s3', 'sell', 0.1, 12, '2024-04-05T12:00:00.000Z'),
+    ],
+    'fifo',
+  );
+
+  const strategyLog = [
+    dtx('b1', 'buy', 100, 100, '2024-01-10T12:00:00.000Z'),
+    dtx('b2', 'buy', 100, 200, '2024-03-15T12:00:00.000Z'),
+    dtx('s1', 'sell', 100, 180, '2024-06-20T12:00:00.000Z'),
+    dtx('s2', 'sell', 50, 210, '2024-11-05T12:00:00.000Z'),
+  ];
+  sells('strategy default: omitting the argument is the pre-V5-P4 replay', strategyLog);
+  sells('strategy default: the explicit moving-average replay', strategyLog, 'moving-average');
+  sells('strategy default: the FIFO replay genuinely differs (#576 S2)', strategyLog, 'fifo');
+  skip(
+    'realizedSellsEur',
+    'defaults to the moving average: omitting the strategy is the pre-V5-P4 replay',
+    'the case asserts an EQUALITY between two calls (`realizedSellsEur(log)` deep-equals `realizedSellsEur(log, "moving-average")`); both travel as vectors, the equality between them is hand-ported in TaxHandPortedTest',
+  );
+
+  // --- Pot classification & guards ---
+  const potOf = (name: string, assetType: string): void =>
+    taxEmit(
+      'dePotCategoryForAssetType',
+      name,
+      { assetType },
+      () => dePotCategoryForAssetType(assetType),
+    );
+  potOf('classifies a stock as Aktien', 'stock');
+  for (const type of ['etf', 'index', 'fx', 'commodity', 'crypto', 'custom']) {
+    potOf(`classifies ${type} as Sonstige`, type);
+  }
+
+  const outcome = (name: string, agg: DeYearAggregates): void =>
+    taxEmit('deYearOutcome', name, agg, () => deYearOutcome(agg));
+  const baseAgg: DeYearAggregates = {
+    aktienPotInEur: 0,
+    sonstigePotInEur: 0,
+    aktienSalePnlEur: 0,
+    sonstigeSalePnlEur: 0,
+    dividendsEur: 0,
+  };
+  outcome('an all-zero year', { ...baseAgg });
+  outcome('rejects a negative Aktien pot in', { ...baseAgg, aktienPotInEur: -1 });
+  outcome('rejects a negative dividends sum', { ...baseAgg, dividendsEur: -5 });
+  outcome('the one-directional cross-offset consumes an Aktien gain', {
+    ...baseAgg,
+    aktienSalePnlEur: 2000,
+    sonstigeSalePnlEur: -1500,
+  });
+  outcome('an Aktien loss NEVER offsets Sonstige income (the ring-fence)', {
+    ...baseAgg,
+    aktienSalePnlEur: -1500,
+    dividendsEur: 2000,
+  });
+  outcome('the allowance is consumed before the rate applies', {
+    ...baseAgg,
+    aktienSalePnlEur: 1000,
+  });
+  outcome('the Soli floors, never rounds up (base 1344.42 x 4)', {
+    ...baseAgg,
+    aktienSalePnlEur: 1000 + 1344.42 * 4,
+  });
+  skip(
+    'deYearOutcome',
+    'rejects a NaN pot',
+    'input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest ("deYearOutcome rejects non-finite aggregates")',
+  );
+
+  const deSettleGuard = (name: string, event: DeTaxableEvent): void =>
+    settleDe(name, {
+      aktienPotInEur: 0,
+      sonstigePotInEur: 0,
+      existingEvents: [],
+      heldEur: 0,
+      newEvents: [event],
+    });
+  deSettleGuard('rejects a zero-amount dividend', { kind: 'dividend', amountEur: 0 });
+  deSettleGuard('rejects a negative dividend', { kind: 'dividend', amountEur: -10 });
+  deSettleGuard('rejects an unknown pot category', {
+    kind: 'sell_gain',
+    category: 'weird' as never,
+    amountEur: 10,
+  });
+  deSettleGuard('rejects an unknown DE event kind', {
+    kind: 'nope',
+    amountEur: 10,
+  } as never as DeTaxableEvent);
+
+  settleDe('reconciles held drift as a correction before new events (backdated re-shape)', {
+    aktienPotInEur: 0,
+    sonstigePotInEur: 0,
+    existingEvents: [{ kind: 'sell_gain', category: 'aktien', amountEur: -400 }],
+    heldEur: 50,
+    newEvents: [],
+  });
+
+  const lossYear: DeTaxableEvent[] = [
+    { kind: 'sell_gain', category: 'aktien', amountEur: -800 },
+    { kind: 'sell_gain', category: 'sonstige', amountEur: -300 },
+  ];
+  const pots = (name: string, priorYearEvents: DeTaxableEvent[][]): void =>
+    taxEmit('deCarryPots', name, { priorYearEvents }, () => deCarryPots(priorYearEvents));
+  pots('no prior years: both pots empty', []);
+  pots('a loss year fills both pots', [lossYear]);
+  pots('an interleaved event-less year changes nothing (indefinite carry)', [lossYear, []]);
+}
+
+// --- the custom rule-built engine (#584) -----------------------------------
+
+/** The eight AT-parity inputs of customTax.test.ts, in suite order. */
+const AT_PARITY_INPUTS: ReadonlyArray<readonly [string, AtYearSettlementInput]> = [
+  [
+    'owner example: +450 gain',
+    {
+      existingGainsEur: [],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'sell_gain', amountEur: 450 }],
+    },
+  ],
+  [
+    'owner example: -100 loss after the gain',
+    {
+      existingGainsEur: [450],
+      existingDividendsEur: [],
+      heldEur: 123.75,
+      newEvents: [{ kind: 'sell_gain', amountEur: -100 }],
+    },
+  ],
+  [
+    'loss first: nothing to refund',
+    {
+      existingGainsEur: [],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'sell_gain', amountEur: -100 }],
+    },
+  ],
+  [
+    'loss first: later gains taxed on the net only',
+    {
+      existingGainsEur: [-100],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'sell_gain', amountEur: 450 }],
+    },
+  ],
+  [
+    'a refund never exceeds what the year holds',
+    {
+      existingGainsEur: [100],
+      existingDividendsEur: [],
+      heldEur: 27.5,
+      newEvents: [{ kind: 'sell_gain', amountEur: -500 }],
+    },
+  ],
+  [
+    'taxes dividends at the flat rate inside the same pool',
+    {
+      existingGainsEur: [],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'dividend', amountEur: 100 }],
+    },
+  ],
+  [
+    'a prior same-year loss offsets dividend tax too',
+    {
+      existingGainsEur: [-100],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'dividend', amountEur: 60 }],
+    },
+  ],
+  [
+    'attributes per-event marginal deltas within one batch',
+    {
+      existingGainsEur: [],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [
+        { kind: 'sell_gain', amountEur: 450 },
+        { kind: 'sell_gain', amountEur: -100 },
+      ],
+    },
+  ],
+  [
+    'posts a correction when re-shaped history no longer matches the held tax',
+    {
+      existingGainsEur: [300],
+      existingDividendsEur: [],
+      heldEur: 123.75,
+      newEvents: [],
+    },
+  ],
+  [
+    'lands on exact cents even for awkward pools',
+    {
+      existingGainsEur: [],
+      existingDividendsEur: [],
+      heldEur: 0,
+      newEvents: [{ kind: 'sell_gain', amountEur: 33.33 }],
+    },
+  ],
+];
+
+/** customTax.test.ts `expectAtParity()` — the custom side of one parity input. */
+function atParityCustomInput(
+  input: AtYearSettlementInput,
+): Parameters<typeof settleCustomYear>[0] {
+  return {
+    params: AT_AS_CUSTOM_PARAMS,
+    carry: initialCustomCarry(),
+    existingEvents: [
+      ...input.existingGainsEur.map(
+        (amountEur): CustomTaxableEvent => ({ kind: 'sell_gain', amountEur }),
+      ),
+      ...input.existingDividendsEur.map(
+        (amountEur): CustomTaxableEvent => ({ kind: 'dividend', amountEur }),
+      ),
+    ],
+    heldEur: input.heldEur,
+    newEvents: input.newEvents as readonly CustomTaxableEvent[] as CustomTaxableEvent[],
+  };
+}
+
+function genCustomEngine(): void {
+  // Both sides of every AT-parity case travel as vectors; the equality BETWEEN
+  // them is a relation, so it is hand-ported (see the skip below).
+  for (const [name, input] of AT_PARITY_INPUTS) {
+    settleAt(`AT parity (AT side): ${name}`, input);
+    settleCustom(`AT parity (custom side): ${name}`, atParityCustomInput(input));
+  }
+  skip(
+    'settleCustomYear',
+    'custom-as-AT parity (the required expressibility test)',
+    'the suite\'s point is an EQUALITY between two engines (settleCustomYear with AT_AS_CUSTOM_PARAMS === settleAtYear) over 10 inputs; both sides travel as vectors, the equality is hand-ported in TaxHandPortedTest ("AT_AS_CUSTOM_PARAMS reproduces settleAtYear output for output")',
+  );
+
+  const yearOutcome = (
+    name: string,
+    params: CustomTaxParams,
+    carry: ReturnType<typeof initialCustomCarry>,
+    events: CustomTaxableEvent[],
+  ): void =>
+    taxEmit(
+      'customYearOutcome',
+      name,
+      { params, carry, events },
+      () => customYearOutcome(params, carry, events),
+    );
+
+  const carryYears = (
+    name: string,
+    params: CustomTaxParams,
+    priorYearEvents: CustomTaxableEvent[][],
+  ): void =>
+    taxEmit(
+      'customCarryForYears',
+      name,
+      { params, priorYearEvents },
+      () => customCarryForYears(params, priorYearEvents),
+    );
+
+  // hard Jan-1 reset with carry off
+  yearOutcome('AT params: a net-loss year leaves a clean carry', AT_AS_CUSTOM_PARAMS, initialCustomCarry(), [
+    { kind: 'sell_gain', amountEur: -400 },
+  ]);
+  settleCustom("AT params: year 2's gain is taxed in full — no cross-year offset", {
+    params: AT_AS_CUSTOM_PARAMS,
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: 200 }],
+  });
+
+  // lossOffset off
+  const offsetEvents: CustomTaxableEvent[] = [
+    { kind: 'sell_gain', amountEur: 100 },
+    { kind: 'sell_gain', amountEur: -80 },
+    { kind: 'sell_gain', amountEur: 50 },
+  ];
+  settleCustom('lossOffset off: a loss neither refunds nor shrinks the pool', {
+    params: cparams({ ratePct: 10, lossOffset: false }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: offsetEvents,
+  });
+  settleCustom('lossOffset on: the same events land on 10 % x (100 - 80 + 50)', {
+    params: cparams({ ratePct: 10 }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: offsetEvents,
+  });
+  yearOutcome(
+    'lossOffset off: a loss-only year accrues no carry even with carryForward on',
+    cparams({ lossOffset: false, carryForward: true }),
+    initialCustomCarry(),
+    [{ kind: 'sell_gain', amountEur: -500 }],
+  );
+
+  // refund off
+  settleCustom('refund off: a loss after a taxed gain posts no refund movement', {
+    params: cparams({ refund: false }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: 450 },
+      { kind: 'sell_gain', amountEur: -100 },
+    ],
+  });
+  settleCustom('refund off: later gains withhold again only past the ratchet', {
+    params: cparams({ refund: false }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: 450 },
+      { kind: 'sell_gain', amountEur: -100 },
+      { kind: 'sell_gain', amountEur: 200 },
+    ],
+  });
+  settleCustom('refund off: a history-reshape correction stays signed', {
+    params: cparams({ refund: false }),
+    carry: initialCustomCarry(),
+    existingEvents: [{ kind: 'sell_gain', amountEur: 300 }],
+    heldEur: 123.75,
+    newEvents: [],
+  });
+  settleCustom('refund off: after a reshape correction, new events ratchet from the corrected base', {
+    params: cparams({ refund: false }),
+    carry: initialCustomCarry(),
+    existingEvents: [{ kind: 'sell_gain', amountEur: 300 }],
+    heldEur: 123.75,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: -100 },
+      { kind: 'sell_gain', amountEur: 200 },
+    ],
+  });
+
+  // yearReset off — one cumulative pool across years
+  const resetOffCarry = cparams({ yearReset: false, carryForward: true });
+  carryYears('yearReset off: a year-1 loss survives Jan 1', resetOffCarry, [
+    [{ kind: 'sell_gain', amountEur: -100 }],
+  ]);
+  settleCustom('yearReset off: the year-1 loss offsets a year-2 gain through the carry', {
+    params: resetOffCarry,
+    carry: customCarryForYears(resetOffCarry, [[{ kind: 'sell_gain', amountEur: -100 }]]),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: 450 }],
+  });
+
+  const resetOff = cparams({ yearReset: false });
+  carryYears('yearReset off: year 1 attributes its own tax to cumulativeHeld', resetOff, [
+    [{ kind: 'sell_gain', amountEur: 400 }],
+  ]);
+  settleCustom("yearReset off: a later-year loss refunds prior years' tax", {
+    params: resetOff,
+    carry: customCarryForYears(resetOff, [[{ kind: 'sell_gain', amountEur: 400 }]]),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: -200 }],
+  });
+
+  const resetOffNoRefund = cparams({ yearReset: false, refund: false });
+  carryYears('yearReset off + refund off: year 1', resetOffNoRefund, [
+    [{ kind: 'sell_gain', amountEur: 400 }],
+  ]);
+  settleCustom('yearReset off + refund off: the cumulative regime still never refunds', {
+    params: resetOffNoRefund,
+    carry: customCarryForYears(resetOffNoRefund, [[{ kind: 'sell_gain', amountEur: 400 }]]),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: -200 },
+      { kind: 'sell_gain', amountEur: 300 },
+    ],
+  });
+
+  // yearReset on + carryForward on — a loss pot survives the boundary
+  const potCarry = cparams({ carryForward: true });
+  carryYears('carryForward on: year 1 parks 300, year 2 consumes part of it', potCarry, [
+    [{ kind: 'sell_gain', amountEur: -300 }],
+    [{ kind: 'sell_gain', amountEur: 100 }],
+  ]);
+  settleCustom('carryForward on: the pot offsets before the rate applies', {
+    params: potCarry,
+    carry: customCarryForYears(potCarry, [
+      [{ kind: 'sell_gain', amountEur: -300 }],
+      [{ kind: 'sell_gain', amountEur: 100 }],
+    ]),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'dividend', amountEur: 500 }],
+  });
+  carryYears('carryForward on: an empty year passes the pot through unchanged', potCarry, [
+    [{ kind: 'sell_gain', amountEur: -150 }],
+    [],
+  ]);
+
+  // cost-basis seam
+  const seamLog: TaxableTransaction[] = [
+    {
+      id: 'b1',
+      assetId: 'A',
+      side: 'buy',
+      quantity: 1,
+      priceEur: 100,
+      feeEur: 0,
+      executedAt: '2026-01-05T10:00:00Z',
+    },
+    {
+      id: 'b2',
+      assetId: 'A',
+      side: 'buy',
+      quantity: 1,
+      priceEur: 200,
+      feeEur: 0,
+      executedAt: '2026-02-05T10:00:00Z',
+    },
+    {
+      id: 's1',
+      assetId: 'A',
+      side: 'sell',
+      quantity: 1,
+      priceEur: 300,
+      feeEur: 0,
+      executedAt: '2026-03-05T10:00:00Z',
+    },
+  ];
+  sells('cost-basis seam: FIFO consumes the oldest lot (gain 200)', seamLog, 'fifo');
+  sells('cost-basis seam: moving average basis 150 (gain 150)', seamLog, 'moving-average');
+  settleCustom('cost-basis seam: 10 % of the FIFO gain', {
+    params: cparams({ ratePct: 10 }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [{ kind: 'sell_gain', amountEur: realizedSellsEur(seamLog, 'fifo')[0]!.realizedPnlEur }],
+  });
+  settleCustom('cost-basis seam: 10 % of the moving-average gain', {
+    params: cparams({ ratePct: 10 }),
+    carry: initialCustomCarry(),
+    existingEvents: [],
+    heldEur: 0,
+    newEvents: [
+      { kind: 'sell_gain', amountEur: realizedSellsEur(seamLog, 'moving-average')[0]!.realizedPnlEur },
+    ],
+  });
+
+  // validation fails loud
+  const guardBase = {
+    carry: initialCustomCarry(),
+    existingEvents: [] as CustomTaxableEvent[],
+    heldEur: 0,
+    newEvents: [] as CustomTaxableEvent[],
+  };
+  settleCustom('rejects a rate above 100', { ...guardBase, params: cparams({ ratePct: 101 }) });
+  settleCustom('rejects a negative rate', { ...guardBase, params: cparams({ ratePct: -1 }) });
+  settleCustom('rejects an unknown cost-basis strategy', {
+    ...guardBase,
+    params: cparams({ costBasis: 'lifo' as unknown as CostBasisStrategy }),
+  });
+  settleCustom('rejects a zero-amount dividend', {
+    ...guardBase,
+    params: cparams(),
+    newEvents: [{ kind: 'dividend', amountEur: 0 }],
+  });
+  settleCustom('rejects an unknown custom event kind', {
+    ...guardBase,
+    params: cparams(),
+    newEvents: [{ kind: 'bogus' as 'dividend', amountEur: 1 }],
+  });
+  settleCustom('rejects a negative carry pot', {
+    ...guardBase,
+    params: cparams(),
+    carry: { potEur: -1, cumulativePoolEur: 0, cumulativeHeldEur: 0 },
+  });
+  skip(
+    'settleCustomYear',
+    'rejects a NaN rate / an infinite heldEur',
+    'inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest ("settleCustomYear rejects non-finite input")',
+  );
+}
+
+// --- deTaxFixtures.test.ts: fixture-data consistency ------------------------
+
+function skipDeFixtureShapeSuite(): void {
+  const reason =
+    'deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest.';
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ['DE tax fixture catalog', 'contains the eight mandated scenarios with unique ids'],
+    ['DE tax fixture catalog', 'documents every scenario with statute references'],
+    ['per scenario', 'has valid, coherent inputs (dates parse; amounts sane; ids unique)'],
+    ['per scenario', 'never sells more units than were bought before the sell'],
+    ['per scenario', 'states exactly one expected realization per sell, with matching category'],
+    ['per scenario', 'year aggregates reconcile with the per-event inputs'],
+    ['per scenario', 'follows the researched year-target formula (pots, cross-offset, allowance, floors)'],
+    ['per scenario', 'chains pots across consecutive listed years'],
+    ['per scenario', 'settlement steps cover the year events chronologically and chain to the target'],
+    ['acceptance pins (#576)', 'the FIFO scenario provably differs from moving average in total'],
+    ['acceptance pins (#576)', 'the allowance scenario exhausts EUR 1,000 partially, then fully'],
+    ['acceptance pins (#576)', 'the ring-fence scenario taxes the dividend while the Aktien loss carries out'],
+    ['acceptance pins (#576)', 'a refund-of-already-withheld step exists and stays within what was withheld'],
+    ['acceptance pins (#576)', 'pots carry across the year boundary while the allowance resets'],
+    ['acceptance pins (#576)', 'Soli is 5.5 % of the (floored) KapESt, floored — never rounded up'],
+  ];
+  for (const [fn, name] of cases) skip(`deTaxFixtures/${fn}`, name, reason);
+}
+
+// ===========================================================================
 // Emit
 // ===========================================================================
 
@@ -2656,9 +3948,28 @@ async function main(): Promise<void> {
   genTransfersAndSetBalance();
   genCashBySourceOverTime();
   genSettingsScope();
+  genTaxConstants();
+  genTaxFloorCents();
+  genViennaYearOf();
+  genRealizedSellsEur();
+  genAtEngine();
+  genFiEngine();
+  genDeFixtureEngine();
+  genDeUnitCases();
+  genCustomEngine();
+  skipDeFixtureShapeSuite();
   genServerTwrParity();
 
   mkdirSync(OUT_DIR, { recursive: true });
+
+  // The DE fixture set (#576) verbatim: 8 hand-computed scenarios whose
+  // internal consistency deTaxFixtures.test.ts asserts. Those 15 cases are
+  // fixture-DATA assertions, not engine calls, so they are hand-ported in
+  // Kotlin against this file rather than replayed as {fn, input, output}.
+  writeFileSync(
+    join(OUT_DIR, 'deTaxFixtures.json'),
+    `${JSON.stringify({ source: 'packages/domain/src/__tests__/deTaxFixtures.ts', scenarios: DE_TAX_FIXTURES }, null, 1)}\n`,
+  );
 
   // The raw server-generated golden, copied byte-identically so the Kotlin
   // golden gate reads the platform's own artifact rather than a reshaping of it.

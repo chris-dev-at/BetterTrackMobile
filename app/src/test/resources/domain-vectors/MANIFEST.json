@@ -7,6 +7,7 @@
   "seriesStats": 41,
   "settingsScope": 9,
   "cashLedger": 188,
+  "tax": 269,
   "serverTwrParity": 4
  },
  "byFunction": {
@@ -52,11 +53,32 @@
    "setBalanceMovement": 4,
    "cashBySourceOverTime": 7
   },
+  "tax": {
+   "TAX_CONSTANTS": 1,
+   "initialCustomCarry": 1,
+   "costBasisStrategyForCountry": 6,
+   "floorCents": 32,
+   "viennaYearOf": 6,
+   "realizedSellsEur": 57,
+   "atYearTargetEur": 8,
+   "settleAtYear": 25,
+   "taxMovementForDelta": 5,
+   "manualTaxEur": 13,
+   "fiYearTargetEur": 8,
+   "settleFiYear": 4,
+   "deCarryPots": 12,
+   "settleDeYear": 41,
+   "dePotCategoryForAssetType": 7,
+   "deYearOutcome": 7,
+   "settleCustomYear": 29,
+   "customYearOutcome": 2,
+   "customCarryForYears": 5
+  },
   "serverTwrParity": {
    "timeWeightedReturn": 4
   }
  },
- "totalVectors": 337,
+ "totalVectors": 606,
  "skipped": [
   {
    "fn": "reducePosition",
@@ -137,6 +159,141 @@
    "fn": "setBalanceDelta",
    "case": "rejects a non-finite target and a non-finite current balance",
    "reason": "inputs are Number.POSITIVE_INFINITY / Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"setBalanceDelta rejects non-finite operands\")"
+  },
+  {
+   "fn": "floorCents",
+   "case": "matches cashLedger.floorCents on the boundary cases exactly",
+   "reason": "cross-module identity (tax.floorCents === cashLedger.floorCents on 12 values): a vector records ONE function's output, it cannot assert two ports agree — hand-ported in TaxHandPortedTest (\"tax floorCents matches the cashLedger floorCents on every boundary case\")"
+  },
+  {
+   "fn": "floorCents",
+   "case": "rejects non-finite amounts",
+   "reason": "inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"floorCents rejects non-finite amounts\")"
+  },
+  {
+   "fn": "floorCents",
+   "case": "returns POSITIVE zero for a floored-away negative",
+   "reason": "signed-zero identity: JSON carries no -0 (the generator refuses to emit one) — hand-ported in TaxHandPortedTest (\"floorCents never returns negative zero\")"
+  },
+  {
+   "fn": "settleAtYear",
+   "case": "rejects a NaN event amount / an infinite heldEur",
+   "reason": "inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"settleAtYear rejects non-finite input\")"
+  },
+  {
+   "fn": "atYearTargetEur",
+   "case": "rejects a non-finite pool",
+   "reason": "input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"year targets reject a non-finite pool\")"
+  },
+  {
+   "fn": "taxMovementForDelta",
+   "case": "rejects a non-finite delta",
+   "reason": "input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"taxMovementForDelta rejects a non-finite delta\")"
+  },
+  {
+   "fn": "manualTaxEur",
+   "case": "rejects a non-finite base",
+   "reason": "input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"manualTaxEur rejects a non-finite base\")"
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "the moving-average strategy reproduces the stated divergent P/L — never the FIFO one",
+   "reason": "the case's load-bearing assertion is an INEQUALITY between the engine output and a fixture literal (`expect(fifoPnl).not.toBe(maPnl)`); both engine outputs travel as vectors, the inequality against the fixtures is hand-ported in DeTaxFixturesHandPortedTest"
+  },
+  {
+   "fn": "realizedSellsEur",
+   "case": "defaults to the moving average: omitting the strategy is the pre-V5-P4 replay",
+   "reason": "the case asserts an EQUALITY between two calls (`realizedSellsEur(log)` deep-equals `realizedSellsEur(log, \"moving-average\")`); both travel as vectors, the equality between them is hand-ported in TaxHandPortedTest"
+  },
+  {
+   "fn": "deYearOutcome",
+   "case": "rejects a NaN pot",
+   "reason": "input is Number.NaN, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"deYearOutcome rejects non-finite aggregates\")"
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "custom-as-AT parity (the required expressibility test)",
+   "reason": "the suite's point is an EQUALITY between two engines (settleCustomYear with AT_AS_CUSTOM_PARAMS === settleAtYear) over 10 inputs; both sides travel as vectors, the equality is hand-ported in TaxHandPortedTest (\"AT_AS_CUSTOM_PARAMS reproduces settleAtYear output for output\")"
+  },
+  {
+   "fn": "settleCustomYear",
+   "case": "rejects a NaN rate / an infinite heldEur",
+   "reason": "inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in TaxHandPortedTest (\"settleCustomYear rejects non-finite input\")"
+  },
+  {
+   "fn": "deTaxFixtures/DE tax fixture catalog",
+   "case": "contains the eight mandated scenarios with unique ids",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/DE tax fixture catalog",
+   "case": "documents every scenario with statute references",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "has valid, coherent inputs (dates parse; amounts sane; ids unique)",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "never sells more units than were bought before the sell",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "states exactly one expected realization per sell, with matching category",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "year aggregates reconcile with the per-event inputs",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "follows the researched year-target formula (pots, cross-offset, allowance, floors)",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "chains pots across consecutive listed years",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/per scenario",
+   "case": "settlement steps cover the year events chronologically and chain to the target",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "the FIFO scenario provably differs from moving average in total",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "the allowance scenario exhausts EUR 1,000 partially, then fully",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "the ring-fence scenario taxes the dividend while the Aktien loss carries out",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "a refund-of-already-withheld step exists and stays within what was withheld",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "pots carry across the year boundary while the allowance resets",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "deTaxFixtures/acceptance pins (#576)",
+   "case": "Soli is 5.5 % of the (floored) KapESt, floored — never rounded up",
+   "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
   }
  ]
 }
