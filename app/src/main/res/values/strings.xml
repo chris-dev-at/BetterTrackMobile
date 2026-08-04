@@ -46,6 +46,9 @@
     <string name="bt_top_settings">Settings</string>
     <string name="bt_offline_banner">Offline — showing data as of %1$s</string>
     <string name="bt_offline_banner_no_data">Offline</string>
+    <!-- Inline refresh-failure row on pushed routes (S6 P0-5). -->
+    <string name="bt_refresh_failed_banner">Couldn\'t refresh — showing saved data</string>
+    <string name="bt_refresh_failed_dismiss">Dismiss</string>
 
     <!-- Tab placeholder states -->
     <string name="bt_tab_portfolio_empty_title">Your portfolio lives here</string>
@@ -1101,6 +1104,8 @@
     <string name="bt_paranoid_works_notifications">Notifications</string>
     <string name="bt_paranoid_web_hint">Portfolio, tax and import features live on the BetterTrack web app while your vault is server-blind.</string>
     <string name="bt_paranoid_open_web">Open the web app</string>
+    <!-- Top bar of the explainer when it replaces a PUSHED route (S6 P0-1). -->
+    <string name="bt_paranoid_topbar">Paranoid mode</string>
 
     <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
     <string name="bt_notif_type_dividend">Dividend</string>

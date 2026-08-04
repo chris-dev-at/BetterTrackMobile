@@ -171,9 +171,35 @@ fun BtAreaChart(
         }
 
         // ── The series: line + gradient fill (morphed while transitioning) ──
-        val linePath = Path()
-        val fillPath = Path()
+        val fillBrush = Brush.verticalGradient(
+            colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
+            startY = 0f,
+            endY = plotH,
+        )
+        val lineStroke = Stroke(
+            width = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round,
+        )
+        val drawSegment: (Path) -> Unit = { linePath ->
+            val bounds = linePath.getBounds()
+            val fillPath = Path()
+            fillPath.addPath(linePath)
+            // Close each segment against the baseline UNDER ITSELF — a shared
+            // full-width close would paint the gradient straight across a gap.
+            fillPath.lineTo(bounds.right, plotH)
+            fillPath.lineTo(bounds.left, plotH)
+            fillPath.close()
+            drawPath(path = fillPath, brush = fillBrush)
+            drawPath(path = linePath, color = lineColor, style = lineStroke)
+        }
+
         if (morphing) {
+            // Range transition (≤320 ms): both series are resampled onto one
+            // x-grid and lerped, so the morph is deliberately drawn as a single
+            // continuous stroke — it is an animation BETWEEN two truths, not a
+            // claim about the data. The settled frame below is segmented.
+            val linePath = Path()
             val oldScale = yScale(previousPoints)
             val samples = 120
             for (i in 0..samples) {
@@ -185,6 +211,7 @@ fun BtAreaChart(
                 val y = plotH * (1f - yNorm)
                 if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
             }
+            drawSegment(linePath)
         } else {
             // V5: x is keyed on epoch MILLIS, not epoch days — 1D/1W/1M come back
             // as dense sub-daily curves and a day-key would collapse every point
@@ -193,34 +220,28 @@ fun BtAreaChart(
             val tMin = series.first().epochMillis
             val tMax = series.last().epochMillis
             val tSpan = max(1L, tMax - tMin).toDouble()
-            series.forEachIndexed { i, p ->
-                val x = (plotW * ((p.epochMillis - tMin) / tSpan)).toFloat()
-                val y = plotH * (1f - scale.normalize(p.valueEur))
-                if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
+            fun px(p: HistoryPoint) = (plotW * ((p.epochMillis - tMin) / tSpan)).toFloat()
+            fun py(p: HistoryPoint) = plotH * (1f - scale.normalize(p.valueEur))
+
+            // S6 P0-3: market-closed stretches are GAPS, not diagonal ramps.
+            // Each connected run is stroked and filled on its own.
+            chartSegments(series.map { it.epochMillis }).forEach { range ->
+                if (range.first == range.last) {
+                    // An observation isolated between two gaps: a stroke of zero
+                    // length would vanish, so mark it with a dot instead of
+                    // silently dropping the point.
+                    val p = series[range.first]
+                    drawCircle(color = lineColor, radius = 2.dp.toPx(), center = Offset(px(p), py(p)))
+                    return@forEach
+                }
+                val linePath = Path()
+                for (i in range) {
+                    val p = series[i]
+                    if (i == range.first) linePath.moveTo(px(p), py(p)) else linePath.lineTo(px(p), py(p))
+                }
+                drawSegment(linePath)
             }
         }
-        fillPath.addPath(linePath)
-        fillPath.lineTo(plotW, plotH)
-        fillPath.lineTo(0f, plotH)
-        fillPath.close()
-
-        drawPath(
-            path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
-                startY = 0f,
-                endY = plotH,
-            ),
-        )
-        drawPath(
-            path = linePath,
-            color = lineColor,
-            style = Stroke(
-                width = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round,
-            ),
-        )
 
         // ── x labels: first + last date, muted, in the reserved strip ──────
         if (!minimal) {

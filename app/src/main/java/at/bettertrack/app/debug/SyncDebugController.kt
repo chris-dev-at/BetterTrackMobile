@@ -20,6 +20,30 @@ import kotlinx.serialization.json.Json
 import java.time.Instant
 
 /**
+ * The ONE portfolio name the destructive test-data cleanup will ever touch.
+ *
+ * This build runs against the owner's PRODUCTION account, so the throwaway
+ * portfolio is identified by an exact name, never by position in a list.
+ */
+const val TEST_PORTFOLIO_NAME = "ZZ App Test"
+
+/**
+ * Pure arming rule for the destructive cleanup (S6 P0-2) — safe by construction
+ * and unit-testable without Android:
+ *
+ *  * a portfolio must be EXPLICITLY selected (`null` = nothing tapped),
+ *  * its name must be exactly [TEST_PORTFOLIO_NAME] (no prefix/case/whitespace
+ *    leniency — a real portfolio called "ZZ App Test 2" is not the throwaway),
+ *  * and the user must have typed that name to confirm.
+ *
+ * The previous version enabled the button on `selectedId != null` against a
+ * silent first-live-portfolio default, i.e. one tap could archive the user's
+ * real default portfolio.
+ */
+fun cleanupArmed(selectedName: String?, typedConfirmation: String): Boolean =
+    selectedName == TEST_PORTFOLIO_NAME && typedConfirmation.trim() == TEST_PORTFOLIO_NAME
+
+/**
  * Facade behind the Step-5 debug queue screen: live queue contents, real
  * connectivity + data age, a parameterizable test op, manual drain, and the
  * minimal retry/discard affordances (the full needs-attention UX is Step 8).
@@ -124,15 +148,33 @@ class SyncDebugController(
         }
 
     /**
-     * Delete every test transaction (note carries the `[bt:` sync marker) in
-     * the portfolio, then archive it. Returns a human-readable summary.
+     * Delete EVERY transaction in the throwaway portfolio, then archive it —
+     * which is exactly what the button says it does. Returns a human-readable
+     * summary.
+     *
+     * S6 P0-2, two fixes:
+     *  * the scope is now the throwaway portfolio itself. It used to filter on
+     *    the retired `[bt:` note marker (#417) — a filter that has matched
+     *    nothing since the marker was dropped, so the "delete" phase silently
+     *    did nothing while `archivePortfolio` still fired.
+     *  * the name is re-checked HERE against Room, not only in the UI: the
+     *    destructive call refuses any portfolio that is not [expectedName], so
+     *    no future caller can point it at a real portfolio by mistake.
      */
-    suspend fun cleanupTestData(portfolioId: String): String {
+    suspend fun cleanupTestData(
+        portfolioId: String,
+        expectedName: String = TEST_PORTFOLIO_NAME,
+    ): String {
+        val local = db.portfolioDao().getAll().firstOrNull { it.id == portfolioId }
+            ?: return "Cleanup refused: portfolio $portfolioId is not in the local cache."
+        if (local.name != expectedName) {
+            return "Cleanup REFUSED: \"${local.name}\" is not the throwaway portfolio \"$expectedName\"."
+        }
         val live = when (val r = apiCall(json) { api.transactions(portfolioId, limit = 200) }) {
             is BtResult.Ok -> r.value.items
             is BtResult.Err -> return "Cleanup failed at GET: ${r.error.userMessage}"
         }
-        val testTxs = live.filter { it.note?.contains("[bt:") == true }
+        val testTxs = live
         var deleted = 0
         for (tx in testTxs) {
             // DELETE returns 204 No Content — use the raw response (apiCall would

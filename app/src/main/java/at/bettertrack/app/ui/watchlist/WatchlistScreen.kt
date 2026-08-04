@@ -56,6 +56,8 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.market.assetTypeLabel
+import at.bettertrack.app.ui.shell.RefreshFailedBanner
+import at.bettertrack.app.ui.shell.RefreshNoticeState
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -93,6 +95,14 @@ class WatchlistViewModel(
     private val _quotes = MutableStateFlow<Map<String, WatchQuote>>(emptyMap())
     val quotes: StateFlow<Map<String, WatchQuote>> = _quotes.asStateFlow()
 
+    /**
+     * S6 P0-5: a quote fetch that fails used to be dropped on the floor
+     * (`is BtResult.Err -> null`), leaving the row's last known price on screen
+     * with nothing to say it is stale. Now the panel says so.
+     */
+    private val _refreshNotice = MutableStateFlow(RefreshNoticeState())
+    val refreshNotice: StateFlow<RefreshNoticeState> = _refreshNotice.asStateFlow()
+
     init {
         // Default to the first board (General) once loaded.
         viewModelScope.launch {
@@ -119,9 +129,17 @@ class WatchlistViewModel(
                         is BtResult.Err -> null
                     }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll()
         }.await()
-        _quotes.value = _quotes.value + results.toMap()
+        val ok = results.filterNotNull()
+        _quotes.value = _quotes.value + ok.toMap()
+        // Any row that failed to quote makes the panel's prices partly stale —
+        // one honest notice beats a silently frozen number on a live-looking row.
+        _refreshNotice.value = if (ok.size == results.size) {
+            _refreshNotice.value.onSuccess()
+        } else {
+            _refreshNotice.value.onFailure()
+        }
     }
 
     fun selectBoard(id: String) { _selectedBoardId.value = id }
@@ -129,6 +147,11 @@ class WatchlistViewModel(
     fun refresh() = viewModelScope.launch {
         watchlist.refresh()
         fetchQuotes(items.value)
+    }
+
+    /** The user dismissed the "couldn't refresh" row. */
+    fun dismissRefreshNotice() {
+        _refreshNotice.value = _refreshNotice.value.onDismiss()
     }
 
     fun createBoard(name: String, onDone: (Boolean) -> Unit) = viewModelScope.launch {
@@ -168,6 +191,7 @@ fun WatchlistPanel(
     val items by vm.items.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
+    val refreshNotice by vm.refreshNotice.collectAsStateWithLifecycle()
 
     var createOpen by remember { mutableStateOf(false) }
     var renameBoard by remember { mutableStateOf<WatchlistBoard?>(null) }
@@ -176,6 +200,14 @@ fun WatchlistPanel(
     val selectedBoard = boards.firstOrNull { it.id == selectedId }
 
     Column(modifier) {
+        // S6 P0-5: quotes that failed to load are named, not silently stale.
+        if (refreshNotice.visible(isOnline)) {
+            RefreshFailedBanner(
+                onDismiss = { vm.dismissRefreshNotice() },
+                onRetry = { vm.refresh() },
+            )
+        }
+
         // Board selector chips.
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),

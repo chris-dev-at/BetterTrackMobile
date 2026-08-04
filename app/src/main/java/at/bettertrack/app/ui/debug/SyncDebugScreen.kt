@@ -53,6 +53,8 @@ import at.bettertrack.app.data.api.dto.VersionResponse
 import at.bettertrack.app.data.api.dto.formatApiBuiltAtDate
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.SyncOpEntity
+import at.bettertrack.app.debug.TEST_PORTFOLIO_NAME
+import at.bettertrack.app.debug.cleanupArmed
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
@@ -94,16 +96,18 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
     var testDataResult by remember { mutableStateOf<String?>(null) }
     var showApiCheck by remember { mutableStateOf(false) }
     var testPortfolioId by remember { mutableStateOf<String?>(null) }
+    var cleanupConfirmFor by remember { mutableStateOf<PortfolioEntity?>(null) }
 
-    // Default the test-data portfolio selection to the E2E throwaway if present.
+    // S6 P0-2: NO default selection. This screen archives real portfolios on a
+    // production account, so the target is only ever something the user tapped;
+    // a selection that disappears (archived, refreshed away) falls back to
+    // nothing, never to "the first live portfolio".
     LaunchedEffect(portfolios) {
-        if (testPortfolioId == null || portfolios.none { it.id == testPortfolioId }) {
-            testPortfolioId = (
-                portfolios.firstOrNull { it.name == TEST_PORTFOLIO_NAME && it.archivedAt == null }
-                    ?: portfolios.firstOrNull { it.archivedAt == null }
-                )?.id
+        if (testPortfolioId != null && portfolios.none { it.id == testPortfolioId }) {
+            testPortfolioId = null
         }
     }
+    val selectedPortfolio = portfolios.firstOrNull { it.id == testPortfolioId }
 
     Scaffold(
         containerColor = bt.bg,
@@ -212,7 +216,7 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
             item {
                 TestDataCard(
                     portfolios = portfolios,
-                    selectedId = testPortfolioId,
+                    selected = selectedPortfolio,
                     onSelect = { testPortfolioId = it },
                     result = testDataResult,
                     onCreate = {
@@ -222,13 +226,8 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
                         }
                     },
                     onApiCheck = { showApiCheck = true },
-                    onCleanup = {
-                        val pid = testPortfolioId ?: return@TestDataCard
-                        scope.launch {
-                            testDataResult = "Cleaning up…"
-                            testDataResult = controller.cleanupTestData(pid)
-                        }
-                    },
+                    // Never destructive on tap: it opens the type-to-confirm.
+                    onCleanup = { cleanupConfirmFor = selectedPortfolio },
                 )
             }
             item {
@@ -275,6 +274,20 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
         )
     }
 
+    cleanupConfirmFor?.let { target ->
+        CleanupConfirmDialog(
+            target = target,
+            onDismiss = { cleanupConfirmFor = null },
+            onConfirm = {
+                cleanupConfirmFor = null
+                scope.launch {
+                    testDataResult = "Cleaning up…"
+                    testDataResult = controller.cleanupTestData(target.id)
+                }
+            },
+        )
+    }
+
     if (showApiCheck) {
         val pid = testPortfolioId
         ApiCheckDialog(
@@ -291,13 +304,10 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
     }
 }
 
-/** Name of the throwaway E2E portfolio (test-data hygiene, Step 5). */
-private const val TEST_PORTFOLIO_NAME = "ZZ App Test"
-
 @Composable
 private fun TestDataCard(
     portfolios: List<PortfolioEntity>,
-    selectedId: String?,
+    selected: PortfolioEntity?,
     onSelect: (String) -> Unit,
     result: String?,
     onCreate: () -> Unit,
@@ -305,6 +315,11 @@ private fun TestDataCard(
     onCleanup: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    val selectedId = selected?.id
+    // S6 P0-2: the destructive button arms ONLY for an explicitly tapped
+    // portfolio named exactly "ZZ App Test" — everything else is someone's
+    // real, live portfolio on a production account.
+    val isThrowaway = selected?.name == TEST_PORTFOLIO_NAME
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -350,8 +365,22 @@ private fun TestDataCard(
             BtSecondaryButton(
                 text = "Clean up test data (delete tx + archive)",
                 onClick = onCleanup,
-                enabled = selectedId != null,
+                enabled = isThrowaway,
                 modifier = Modifier.fillMaxWidth(),
+            )
+            // Honest disabled note — the button explains why it is off rather
+            // than looking broken.
+            Text(
+                text = when {
+                    selected == null -> "Select the \"$TEST_PORTFOLIO_NAME\" portfolio above to enable cleanup."
+                    !isThrowaway ->
+                        "Cleanup is disabled: \"${selected.name}\" is a real portfolio. " +
+                            "Only \"$TEST_PORTFOLIO_NAME\" can be cleaned up."
+
+                    else -> "Deletes EVERY transaction in \"$TEST_PORTFOLIO_NAME\", then archives it."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isThrowaway) bt.textMuted else bt.loss,
             )
             if (result != null) {
                 Text(
@@ -362,6 +391,66 @@ private fun TestDataCard(
             }
         }
     }
+}
+
+/**
+ * Type-to-confirm before anything destructive (S6 P0-2), mirroring the
+ * account-deletion flow: the portfolio's exact name has to be typed, and the
+ * confirm button stays disabled until [cleanupArmed] agrees.
+ */
+@Composable
+private fun CleanupConfirmDialog(
+    target: PortfolioEntity,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    var typed by remember { mutableStateOf("") }
+    val armed = cleanupArmed(target.name, typed)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = bt.surface,
+        titleContentColor = bt.loss,
+        textContentColor = bt.textSecondary,
+        title = { Text("Delete all data in \"${target.name}\"?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "This deletes EVERY transaction in this portfolio and then " +
+                        "archives it. It runs against the live production account " +
+                        "and cannot be undone.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "Type $TEST_PORTFOLIO_NAME to confirm:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = bt.textMuted,
+                )
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = bt.textPrimary,
+                        unfocusedTextColor = bt.textPrimary,
+                        focusedBorderColor = bt.gold,
+                        unfocusedBorderColor = bt.border,
+                        cursorColor = bt.gold,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = armed) {
+                Text("Delete + archive", color = if (armed) bt.loss else bt.textMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = bt.textSecondary) }
+        },
+    )
 }
 
 @Composable

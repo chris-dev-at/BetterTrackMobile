@@ -46,6 +46,9 @@
     <string name="bt_top_settings">Einstellungen</string>
     <string name="bt_offline_banner">Offline — Daten von %1$s</string>
     <string name="bt_offline_banner_no_data">Offline</string>
+    <!-- Inline refresh-failure row on pushed routes (S6 P0-5). -->
+    <string name="bt_refresh_failed_banner">Aktualisieren fehlgeschlagen — gespeicherte Daten</string>
+    <string name="bt_refresh_failed_dismiss">Ausblenden</string>
 
     <!-- Tab-Platzhalter -->
     <string name="bt_tab_portfolio_empty_title">Hier lebt dein Portfolio</string>
@@ -1092,6 +1095,8 @@
     <string name="bt_paranoid_works_notifications">Benachrichtigungen</string>
     <string name="bt_paranoid_web_hint">Portfolio-, Steuer- und Import-Funktionen liegen in der BetterTrack-Web-App, solange dein Tresor server-blind ist.</string>
     <string name="bt_paranoid_open_web">Web-App öffnen</string>
+    <!-- Top bar of the explainer when it replaces a PUSHED route (S6 P0-1). -->
+    <string name="bt_paranoid_topbar">Paranoid-Modus</string>
 
     <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
     <string name="bt_notif_type_dividend">Dividende</string>

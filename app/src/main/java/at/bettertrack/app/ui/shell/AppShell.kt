@@ -128,6 +128,7 @@ import at.bettertrack.app.ui.market.SearchScreen
 import at.bettertrack.app.ui.notifications.NotificationBell
 import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
 import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
+import at.bettertrack.app.ui.paranoid.ParanoidGate
 import at.bettertrack.app.ui.debug.DevBackendScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
@@ -496,25 +497,22 @@ private fun BtNavHost(
             // V5 S2a: a paranoid account's portfolio family is server-blind. Route
             // ONLY these killed surfaces to the explainer — Assets/Social/Workboard
             // and everything under them keep working, because they genuinely do.
-            val paranoid by at.bettertrack.app.data.api.ParanoidModeState.active
-                .collectAsStateWithLifecycle()
-            if (paranoid) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            // Top-level tab: no onBack — the shell's own bars are showing.
+            ParanoidGate {
+                PortfolioOverviewScreen(
+                    onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
+                    onOpenTransactions = { portfolioId ->
+                        navController.navigate(TransactionsRoute(portfolioId))
+                    },
+                    onNewTransaction = { portfolioId ->
+                        navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
+                    },
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                    onOpenCash = { portfolioId ->
+                        navController.navigate(CashRoute(portfolioId = portfolioId))
+                    },
+                )
             }
-            PortfolioOverviewScreen(
-                onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
-                onOpenTransactions = { portfolioId ->
-                    navController.navigate(TransactionsRoute(portfolioId))
-                },
-                onNewTransaction = { portfolioId ->
-                    navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
-                },
-                onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-                onOpenCash = { portfolioId ->
-                    navController.navigate(CashRoute(portfolioId = portfolioId))
-                },
-            )
         }
         composable<AssetsTabRoute> {
             AssetsTabScreen(
@@ -550,52 +548,48 @@ private fun BtNavHost(
         // Portfolio
         composable<HoldingDetailRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<HoldingDetailRoute>()
+                HoldingDetailScreen(
+                    assetId = route.holdingId,
+                    onBack = back,
+                    onNewTransaction = { portfolioId, assetId ->
+                        navController.navigate(
+                            TransactionFormRoute(portfolioId = portfolioId, assetId = assetId),
+                        )
+                    },
+                    onEditSynced = { txId ->
+                        navController.navigate(TransactionFormRoute(transactionId = txId))
+                    },
+                    onEditQueued = { opId ->
+                        navController.navigate(TransactionFormRoute(opId = opId))
+                    },
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                    onOpenCustomAsset = { customAssetId ->
+                        navController.navigate(CustomAssetDetailRoute(customAssetId))
+                    },
+                    onOpenAssetPage = { assetId ->
+                        navController.navigate(AssetPageRoute(assetId))
+                    },
+                )
             }
-            val route = entry.toRoute<HoldingDetailRoute>()
-            HoldingDetailScreen(
-                assetId = route.holdingId,
-                onBack = back,
-                onNewTransaction = { portfolioId, assetId ->
-                    navController.navigate(
-                        TransactionFormRoute(portfolioId = portfolioId, assetId = assetId),
-                    )
-                },
-                onEditSynced = { txId ->
-                    navController.navigate(TransactionFormRoute(transactionId = txId))
-                },
-                onEditQueued = { opId ->
-                    navController.navigate(TransactionFormRoute(opId = opId))
-                },
-                onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-                onOpenCustomAsset = { customAssetId ->
-                    navController.navigate(CustomAssetDetailRoute(customAssetId))
-                },
-                onOpenAssetPage = { assetId ->
-                    navController.navigate(AssetPageRoute(assetId))
-                },
-            )
         }
         composable<TransactionsRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<TransactionsRoute>()
+                TransactionsScreen(
+                    routePortfolioId = route.portfolioId,
+                    onBack = back,
+                    onEditSynced = { txId ->
+                        navController.navigate(TransactionFormRoute(transactionId = txId))
+                    },
+                    onEditQueued = { opId ->
+                        navController.navigate(TransactionFormRoute(opId = opId))
+                    },
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                )
             }
-            val route = entry.toRoute<TransactionsRoute>()
-            TransactionsScreen(
-                routePortfolioId = route.portfolioId,
-                onBack = back,
-                onEditSynced = { txId ->
-                    navController.navigate(TransactionFormRoute(transactionId = txId))
-                },
-                onEditQueued = { opId ->
-                    navController.navigate(TransactionFormRoute(opId = opId))
-                },
-                onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-            )
         }
         composable<TransactionFormRoute> { entry ->
             val route = entry.toRoute<TransactionFormRoute>()
@@ -603,51 +597,43 @@ private fun BtNavHost(
         }
         composable<CashRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<CashRoute>()
+                CashScreen(
+                    routePortfolioId = route.portfolioId,
+                    editOpId = route.editOpId,
+                    onBack = back,
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                    onOpenTags = { navController.navigate(CashTagsRoute) },
+                    onOpenRules = { navController.navigate(CashRulesRoute) },
+                    onOpenStandingOrders = {
+                        navController.navigate(StandingOrdersRoute(route.portfolioId))
+                    },
+                )
             }
-            val route = entry.toRoute<CashRoute>()
-            CashScreen(
-                routePortfolioId = route.portfolioId,
-                editOpId = route.editOpId,
-                onBack = back,
-                onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-                onOpenTags = { navController.navigate(CashTagsRoute) },
-                onOpenRules = { navController.navigate(CashRulesRoute) },
-                onOpenStandingOrders = {
-                    navController.navigate(StandingOrdersRoute(route.portfolioId))
-                },
-            )
         }
         // V5 S2c. The cash-classification layer and standing orders are
         // server-only surfaces over portfolio data, so they ride the same
         // paranoid guard as the rest of that family: a paranoid account has no
         // server-side ledger to classify or schedule against.
         composable<CashTagsRoute> {
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                at.bettertrack.app.ui.cash.CashTagsScreen(onBack = back)
             }
-            at.bettertrack.app.ui.cash.CashTagsScreen(onBack = back)
         }
         composable<CashRulesRoute> {
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                at.bettertrack.app.ui.cash.CashRulesScreen(onBack = back)
             }
-            at.bettertrack.app.ui.cash.CashRulesScreen(onBack = back)
         }
         composable<StandingOrdersRoute> { entry ->
-            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
-                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
-                return@composable
+            ParanoidGate(onBack = back) {
+                val soRoute = entry.toRoute<StandingOrdersRoute>()
+                at.bettertrack.app.ui.standingorders.StandingOrdersScreen(
+                    routePortfolioId = soRoute.portfolioId,
+                    onBack = back,
+                )
             }
-            val soRoute = entry.toRoute<StandingOrdersRoute>()
-            at.bettertrack.app.ui.standingorders.StandingOrdersScreen(
-                routePortfolioId = soRoute.portfolioId,
-                onBack = back,
-            )
         }
         composable<CustomAssetsRoute> {
             CustomAssetsScreen(

@@ -17,8 +17,8 @@ import java.time.ZoneId
 /**
  * Step-8 pure-logic tests (spec §6.2/§7.4): decimal input parsing, the
  * cash-after preview math, the sticky cash-coupling default, form validation
- * (hard cash block vs soft oversell warning), synced-note marker preservation
- * and the pending-row decoding/filtering.
+ * (hard cash block vs soft oversell warning), the submitted note (#417 — the
+ * `[bt:` marker is retired) and the pending-row decoding/filtering.
  */
 class TransactionFormLogicTest {
 
@@ -166,23 +166,30 @@ class TransactionFormLogicTest {
         )
     }
 
-    // ── Synced-note marker preservation ─────────────────────────────────────
+    // ── Submitted note (#417: the `[bt:` marker is retired) ─────────────────
 
     @Test
-    fun `editing a synced note keeps its invisible bt marker`() {
-        val original = "my note [bt:c963cc59-1111-2222-3333-444455556666]"
-        assertEquals(
-            "changed [bt:c963cc59-1111-2222-3333-444455556666]",
-            mergeNotePreservingMarker("changed", original),
-        )
-        // Clearing the note still keeps the marker (reconcile/cleanup key).
-        assertEquals(
-            "[bt:c963cc59-1111-2222-3333-444455556666]",
-            mergeNotePreservingMarker("", original),
-        )
-        // No marker on the original ⇒ plain note / null.
-        assertEquals("plain", mergeNotePreservingMarker("plain", "old"))
-        assertNull(mergeNotePreservingMarker("", "old"))
+    fun `a submitted note is the typed text and nothing else`() {
+        assertEquals("changed", submittedNote("changed"))
+        assertEquals("changed", submittedNote("  changed  "))
+        assertNull(submittedNote(""))
+        assertNull(submittedNote("   "))
+        assertNull(submittedNote(null))
+    }
+
+    @Test
+    fun `editing a note can never write a retired bt marker back`() {
+        // A historical row whose stored note still carries the dead marker: the
+        // form loads the STRIPPED text (displayNote) and submits exactly that,
+        // so the marker cannot be re-attached on the way out.
+        val stored = "my note [bt:c963cc59-1111-2222-3333-444455556666]"
+        val loaded = displayNote(stored)
+        assertEquals("my note", loaded)
+        assertEquals("my note", submittedNote(loaded))
+        assertFalse(submittedNote("changed")!!.contains("[bt:"))
+        // An untouched note is not a change (compared in display form), so the
+        // legacy row is not rewritten at all by an unrelated edit.
+        assertEquals(displayNote(stored), submittedNote(loaded))
     }
 
     // ── Pending rows (§7.4) ──────────────────────────────────────────────────

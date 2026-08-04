@@ -447,25 +447,18 @@ fun executedAtMsFor(date: LocalDate, zone: ZoneId = ZoneId.systemDefault(), now:
     else date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
 }
 
-// ── Note marker preservation (synced edits) ─────────────────────────────────
-
-private val MARKER_REGEX = Regex("""\[bt:[0-9a-fA-F-]{8,}]""")
+// ── Note submission (synced edits) ──────────────────────────────────────────
 
 /**
- * When EDITING a synced transaction, the original note may carry the
- * ` [bt:<uuid>]` reconcile marker from its offline birth. The user edits only
- * the visible part ([displayNote]); this re-attaches the original marker so
- * it stays intact and invisible (the cleanup/reconcile tooling keys on it).
+ * The note an edit actually submits: exactly what the user typed, trimmed, with
+ * an empty note meaning "no note" (null).
+ *
+ * The legacy ` [bt:<uuid>]` reconcile marker is RETIRED (#417) — idempotent
+ * replay is the reconcile now. Nothing re-attaches a marker on edit any more, so
+ * the dead format can never be written back to the server. Historical rows that
+ * still carry one are handled purely on the display side ([displayNote]).
  */
-fun mergeNotePreservingMarker(userNote: String?, originalNote: String?): String? {
-    val marker = originalNote?.let { MARKER_REGEX.find(it)?.value }
-    val visible = userNote?.trim().orEmpty()
-    return when {
-        marker == null -> visible.takeIf { it.isNotEmpty() }
-        visible.isEmpty() -> marker
-        else -> "${visible.take(1000 - marker.length - 1)} $marker"
-    }
-}
+fun submittedNote(userNote: String?): String? = userNote?.trim()?.takeIf { it.isNotEmpty() }
 
 // ── Pending-op display models (§7.4) ─────────────────────────────────────────
 

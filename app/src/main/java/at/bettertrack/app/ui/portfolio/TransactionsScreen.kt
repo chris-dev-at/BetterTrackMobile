@@ -71,6 +71,8 @@ import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.ui.shell.RefreshFailedBanner
+import at.bettertrack.app.ui.shell.RefreshNoticeState
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -162,6 +164,14 @@ class TransactionsViewModel(
         .map { it != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /**
+     * S6 P0-5: a failed refresh/loadMore is SURFACED. The cached rows keep
+     * rendering (they are real, just older), and an inline dismissible row says
+     * so instead of the old `is BtResult.Err -> Unit`.
+     */
+    private val _refreshNotice = MutableStateFlow(RefreshNoticeState())
+    val refreshNotice: StateFlow<RefreshNoticeState> = _refreshNotice.asStateFlow()
+
     private var refreshedOnce = false
 
     init {
@@ -181,11 +191,20 @@ class TransactionsViewModel(
         viewModelScope.launch {
             _refreshing.value = true
             when (val r = repo.refreshTransactions(pid)) {
-                is BtResult.Ok -> _nextCursor.value = r.value
-                is BtResult.Err -> Unit // cached rows stay; banner explains offline
+                is BtResult.Ok -> {
+                    _nextCursor.value = r.value
+                    _refreshNotice.value = _refreshNotice.value.onSuccess()
+                }
+                // Cached rows stay — and the user is told they are cached.
+                is BtResult.Err -> _refreshNotice.value = _refreshNotice.value.onFailure()
             }
             _refreshing.value = false
         }
+    }
+
+    /** The user dismissed the "couldn't refresh" row. */
+    fun dismissRefreshNotice() {
+        _refreshNotice.value = _refreshNotice.value.onDismiss()
     }
 
     fun loadMore() {
@@ -195,8 +214,12 @@ class TransactionsViewModel(
         viewModelScope.launch {
             _loadingMore.value = true
             when (val r = repo.loadMoreTransactions(pid, cursor)) {
-                is BtResult.Ok -> _nextCursor.value = r.value
-                is BtResult.Err -> Unit
+                is BtResult.Ok -> {
+                    _nextCursor.value = r.value
+                    _refreshNotice.value = _refreshNotice.value.onSuccess()
+                }
+                // A swallowed loadMore looked like "you have reached the end".
+                is BtResult.Err -> _refreshNotice.value = _refreshNotice.value.onFailure()
             }
             _loadingMore.value = false
         }
@@ -243,6 +266,7 @@ fun TransactionsScreen(
     val sideFilter by vm.sideFilter.collectAsStateWithLifecycle()
     val assetFilter by vm.assetFilter.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by vm.refreshNotice.collectAsStateWithLifecycle()
     val loadingMore by vm.loadingMore.collectAsStateWithLifecycle()
     val hasMore by vm.hasMore.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
@@ -292,6 +316,15 @@ fun TransactionsScreen(
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
             if (!isOnline) OfflineBanner(asOfMs = dataAgeMs, onClick = onOpenPendingSync)
+            // S6 P0-5: online but the fetch failed — say so instead of leaving
+            // the stale ledger looking freshly loaded. (Offline is already
+            // covered by the banner above, so the row suppresses itself there.)
+            if (refreshNotice.visible(isOnline)) {
+                RefreshFailedBanner(
+                    onDismiss = { vm.dismissRefreshNotice() },
+                    onRetry = { vm.refresh() },
+                )
+            }
 
             // Filter row: type chips + asset picker (§6.2).
             Row(

@@ -319,9 +319,6 @@ class TransactionFormViewModel(
     private val _uncoveredEntryPriceText = MutableStateFlow("")
     val uncoveredEntryPriceText: StateFlow<String> = _uncoveredEntryPriceText.asStateFlow()
 
-    /** Original server note of a synced edit — a legacy `[bt:…]` marker is preserved. */
-    private var originalSyncedNote: String? = null
-
     /**
      * Stable Idempotency-Key for deleting THIS synced transaction — minted once
      * and reused across in-form retries so a retry after a lost 204 replays the
@@ -546,7 +543,8 @@ class TransactionFormViewModel(
                     _priceText.value = editNumber(tx.price)
                     _feeText.value = if (tx.fee > 0.0) editNumber(tx.fee) else ""
                     _date.value = epochMsToLocalDate(tx.executedAtMs)
-                    originalSyncedNote = tx.note
+                    // #417: the note is loaded through the display strip and goes
+                    // back verbatim — no marker is ever re-attached on submit.
                     _noteText.value = displayNote(tx.note).orEmpty()
                     refineAssetFromHoldings(tx.assetId)
                 }
@@ -1031,7 +1029,7 @@ class TransactionFormViewModel(
         val newQty = parseLocalizedDecimal(_quantityText.value) ?: return
         val newPrice = parseLocalizedDecimal(_priceText.value) ?: return
         val newFee = parseLocalizedDecimal(_feeText.value) ?: 0.0
-        val newNote = mergeNotePreservingMarker(_noteText.value, originalSyncedNote)
+        val newNote = submittedNote(_noteText.value)
         val dateChanged = _date.value != epochMsToLocalDate(orig.executedAtMs)
 
         // Uncovered (over-)sell (PR #429): a synced edit that raises the sold
@@ -1044,7 +1042,10 @@ class TransactionFormViewModel(
             price = newPrice.takeIf { it != orig.price },
             fee = newFee.takeIf { it != orig.fee },
             executedAt = if (dateChanged) executedAtIso(_date.value) else null,
-            note = newNote.takeIf { it != orig.note },
+            // Compared against the DISPLAY form of the stored note: a historical
+            // row whose note still carries a retired `[bt:…]` marker must not be
+            // counted as "changed" just because the strip removed the marker.
+            note = newNote.takeIf { it != displayNote(orig.note) },
             allowUncovered = if (uncovered.active) true else null,
             uncoveredEntryPrice = if (uncovered.active) parseUncoveredEntryPrice(_uncoveredEntryPriceText.value) else null,
         )
