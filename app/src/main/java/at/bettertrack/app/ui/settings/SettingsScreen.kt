@@ -87,6 +87,7 @@ fun SettingsScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},
+    onOpenDevEndpoint: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val context = LocalContext.current
@@ -247,6 +248,14 @@ fun SettingsScreen(
                     title = stringResource(R.string.bt_settings_dev_sync),
                     subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
                     onClick = onOpenSyncDebug,
+                )
+                // Which backend this build talks to (v5 sprint). The subtitle
+                // carries the live origin so the answer needs no navigation.
+                SettingsNavRow(
+                    icon = Icons.Outlined.Code,
+                    title = stringResource(R.string.bt_settings_dev_endpoint),
+                    subtitle = AppGraph.endpoint.apiLabel,
+                    onClick = onOpenDevEndpoint,
                 )
             }
 

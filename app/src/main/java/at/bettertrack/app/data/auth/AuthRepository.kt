@@ -35,6 +35,8 @@ class AuthRepository(
     private val store: SecureStore,
     private val json: Json,
     private val webOrigin: String,
+    /** The API origin the session targets — selects the per-backend scope set (§4). */
+    private val apiOrigin: String,
     private val clientId: String,
     private val scope: CoroutineScope,
     /** Step 5: account-keyed Room data — wiped on logout / account switch (§7.3). */
@@ -86,7 +88,7 @@ class AuthRepository(
         val state = Pkce.generateState()
         store.savePending(codeVerifier, state)
         _loginPhase.value = LoginPhase.InProgress
-        return OAuthConfig.authorizeUrl(webOrigin, codeChallenge, state)
+        return OAuthConfig.authorizeUrl(webOrigin, apiOrigin, codeChallenge, state)
     }
 
     /** The user returned from the Custom Tab without completing — silent idle (§4). */

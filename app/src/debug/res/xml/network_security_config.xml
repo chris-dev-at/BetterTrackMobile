@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY (v5 holiday sprint). Android has blocked cleartext HTTP by
+  default since API 28, which is exactly right for the shipped app — and exactly
+  wrong for talking to the local dev stack, which serves plain HTTP on the Mac.
+
+  Scope is kept as narrow as the situation allows:
+    • localhost / 127.0.0.1 — the phone-side end of `adb reverse tcp:3000` and
+      `tcp:6771`; traffic never leaves the USB cable.
+    • 10.0.2.2 — the same host loopback as seen from an Android emulator (the
+      Gradle default origin for debug builds).
+    • 192.168.0.114 — the Mac's LAN address, the documented fallback when adb
+      reverse is unavailable (PLATFORM_ASKS v5 drop part 2).
+
+  Everything else — including api.bettertrack.at — still requires TLS, in debug
+  too. This file lives in the `debug` source set, so it is physically absent from
+  every release APK/AAB and cannot weaken a shipped build.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">192.168.0.114</domain>
+    </domain-config>
+</network-security-config>

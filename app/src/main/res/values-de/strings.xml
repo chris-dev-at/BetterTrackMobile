@@ -699,6 +699,27 @@
     <string name="bt_settings_dev_sync_sub">Die Offline-Warteschlange inspizieren</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
     <string name="bt_settings_dev_hint">Noch %1$d Mal tippen, um Entwickleroptionen freizuschalten</string>
+    <string name="bt_settings_dev_endpoint">API-Endpunkt</string>
+    <string name="bt_settings_dev_endpoint_sub">Diesen Debug-Build auf ein anderes Backend richten</string>
+
+    <!-- Entwickler → API-Endpunkt (nur Debug-Builds) -->
+    <string name="bt_dev_endpoint_title">API-Endpunkt</string>
+    <string name="bt_dev_endpoint_intro">Wähl, mit welchem BetterTrack-Backend dieser Debug-Build spricht. Nur Debug-Builds — Release-Builds nutzen immer die Produktion.</string>
+    <string name="bt_dev_endpoint_current">In dieser Sitzung aktiv</string>
+    <string name="bt_dev_endpoint_api">API-Origin</string>
+    <string name="bt_dev_endpoint_web">Web-Origin</string>
+    <string name="bt_dev_endpoint_scopes">Scopes, die der nächste Login anfordert</string>
+    <string name="bt_dev_endpoint_preset_local">Lokale Dev-Umgebung (adb reverse)</string>
+    <string name="bt_dev_endpoint_preset_lan">Lokale Dev-Umgebung (Mac-LAN)</string>
+    <string name="bt_dev_endpoint_preset_prod">Produktion</string>
+    <string name="bt_dev_endpoint_preset_build">Build-Standard</string>
+    <string name="bt_dev_endpoint_test">Verbindung testen</string>
+    <string name="bt_dev_endpoint_testing">Verbinde…</string>
+    <string name="bt_dev_endpoint_test_ok">Erreichbar — HTTP %1$d in %2$d ms</string>
+    <string name="bt_dev_endpoint_test_fail">Nicht erreichbar — %1$s</string>
+    <string name="bt_dev_endpoint_apply_warning">Übernehmen meldet dich ab und startet die App neu: Access-Tokens stammen von genau einem Backend und werden von jedem anderen abgelehnt.</string>
+    <string name="bt_dev_endpoint_apply">Übernehmen und neu starten</string>
+    <string name="bt_login_dev_endpoint">Backend: %1$s</string>
 
     <!-- Passwort ändern -->
     <string name="bt_dest_change_password">Passwort ändern</string>

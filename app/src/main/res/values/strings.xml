@@ -708,6 +708,27 @@
     <string name="bt_settings_dev_sync_sub">Inspect the offline outbound queue</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
     <string name="bt_settings_dev_hint">%1$d more taps to unlock developer options</string>
+    <string name="bt_settings_dev_endpoint">API endpoint</string>
+    <string name="bt_settings_dev_endpoint_sub">Point this debug build at another backend</string>
+
+    <!-- Developer → API endpoint (debug builds only) -->
+    <string name="bt_dev_endpoint_title">API endpoint</string>
+    <string name="bt_dev_endpoint_intro">Choose which BetterTrack backend this debug build talks to. Debug builds only — release builds always use production.</string>
+    <string name="bt_dev_endpoint_current">Active this session</string>
+    <string name="bt_dev_endpoint_api">API origin</string>
+    <string name="bt_dev_endpoint_web">Web origin</string>
+    <string name="bt_dev_endpoint_scopes">Scopes the next login will request</string>
+    <string name="bt_dev_endpoint_preset_local">Local dev (adb reverse)</string>
+    <string name="bt_dev_endpoint_preset_lan">Local dev (Mac LAN)</string>
+    <string name="bt_dev_endpoint_preset_prod">Production</string>
+    <string name="bt_dev_endpoint_preset_build">Build default</string>
+    <string name="bt_dev_endpoint_test">Test connection</string>
+    <string name="bt_dev_endpoint_testing">Contacting…</string>
+    <string name="bt_dev_endpoint_test_ok">Reachable — HTTP %1$d in %2$d ms</string>
+    <string name="bt_dev_endpoint_test_fail">Unreachable — %1$s</string>
+    <string name="bt_dev_endpoint_apply_warning">Applying signs you out and restarts the app: access tokens are minted by one backend and rejected by every other.</string>
+    <string name="bt_dev_endpoint_apply">Apply and restart</string>
+    <string name="bt_login_dev_endpoint">Backend: %1$s</string>
 
     <!-- Change password -->
     <string name="bt_dest_change_password">Change password</string>

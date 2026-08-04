@@ -107,6 +107,7 @@ import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
 import at.bettertrack.app.navigation.SocialTabRoute
+import at.bettertrack.app.navigation.DevEndpointRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
@@ -127,6 +128,7 @@ import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
 import at.bettertrack.app.ui.gallery.GalleryScreen
+import at.bettertrack.app.ui.settings.DevEndpointScreen
 import at.bettertrack.app.ui.portfolio.HoldingDetailScreen
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen
 import at.bettertrack.app.ui.portfolio.TransactionFormScreen
@@ -739,6 +741,7 @@ private fun BtNavHost(
                 onOpenChangelog = { navController.navigate(ChangelogRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
+                onOpenDevEndpoint = { navController.navigate(DevEndpointRoute) },
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
@@ -790,5 +793,6 @@ private fun BtNavHost(
                 onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
             )
         }
+        composable<DevEndpointRoute> { DevEndpointScreen(onBack = back) }
     }
 }

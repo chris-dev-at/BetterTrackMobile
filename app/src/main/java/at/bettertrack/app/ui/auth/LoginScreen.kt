@@ -55,6 +55,15 @@ fun LoginScreen(
     onNeedAccount: () -> Unit,
     onForgotPassword: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Debug builds only (v5 sprint): the backend this build will authenticate
+     * against, shown as a tappable footer. Switching backends REQUIRES being
+     * logged out — tokens are minted by one server and rejected by every other —
+     * so the switcher has to be reachable from here, not only from Settings.
+     * Null in release builds, where the footer does not exist at all.
+     */
+    devEndpointLabel: String? = null,
+    onOpenDevEndpoint: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -152,6 +161,16 @@ fun LoginScreen(
                     text = stringResource(R.string.bt_login_forgot_password),
                     style = MaterialTheme.typography.labelLarge,
                     color = bt.textSecondary,
+                )
+            }
+        }
+
+        if (devEndpointLabel != null) {
+            TextButton(onClick = onOpenDevEndpoint, enabled = !inProgress) {
+                Text(
+                    text = stringResource(R.string.bt_login_dev_endpoint, devEndpointLabel),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = bt.textMuted,
                 )
             }
         }

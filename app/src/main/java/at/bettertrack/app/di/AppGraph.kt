@@ -19,6 +19,8 @@ import at.bettertrack.app.data.notifications.DefaultNotificationRepository
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
+import at.bettertrack.app.data.prefs.ApiEndpoint
+import at.bettertrack.app.data.prefs.ApiEndpointStore
 import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.BuildInfoRepository
@@ -86,8 +88,20 @@ object AppGraph {
         json.asConverterFactory("application/json".toMediaType())
     }
 
+    /**
+     * Which backend this process talks to. Resolved ONCE and eagerly-cached: the
+     * Retrofit clients below capture their base URL at construction and OAuth
+     * tokens are server-specific, so an origin must never change under a running
+     * process. The debug-only Developer surface therefore persists a change and
+     * restarts the app (see [at.bettertrack.app.data.prefs.ApiEndpointStore]);
+     * release builds always resolve to the compiled-in production origins.
+     */
+    val endpoint: ApiEndpoint by lazy { apiEndpointStore.current() }
+
+    val apiEndpointStore: ApiEndpointStore by lazy { ApiEndpointStore(appContext) }
+
     private val apiBaseUrl: String
-        get() = BuildConfig.API_ORIGIN.trimEnd('/') + "/api/v1/"
+        get() = endpoint.apiOrigin.trimEnd('/') + "/api/v1/"
 
     private fun loggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply {
@@ -159,7 +173,8 @@ object AppGraph {
             btApi = btApi,
             store = secureStore,
             json = json,
-            webOrigin = BuildConfig.WEB_ORIGIN,
+            webOrigin = endpoint.webOrigin,
+            apiOrigin = endpoint.apiOrigin,
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
@@ -206,7 +221,7 @@ object AppGraph {
     }
 
     val socialRepository: SocialRepository by lazy {
-        DefaultSocialRepository(api = btApi, json = json, webOrigin = BuildConfig.WEB_ORIGIN)
+        DefaultSocialRepository(api = btApi, json = json, webOrigin = endpoint.webOrigin)
     }
 
     /**
@@ -227,7 +242,7 @@ object AppGraph {
             api = btApi,
             json = json,
             gateway = SocketIoChatGateway(
-                apiOrigin = BuildConfig.API_ORIGIN,
+                apiOrigin = endpoint.apiOrigin,
                 client = wsClient,
                 tokenProvider = { tokenManager.currentAccessToken() },
                 json = json,

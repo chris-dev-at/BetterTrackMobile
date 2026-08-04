@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -12,6 +15,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
+import at.bettertrack.app.ui.settings.DevEndpointScreen
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.ui.update.UpdateNotifierHost
@@ -40,12 +44,23 @@ fun BtRoot(
 
         AuthState.LoggedOut -> {
             val phase by auth.loginPhase.collectAsStateWithLifecycle()
-            LoginScreen(
-                phase = phase,
-                onLogin = onStartLogin,
-                onNeedAccount = { onOpenUrl(auth.needAccountUrl()) },
-                onForgotPassword = { onOpenUrl(auth.forgotPasswordUrl()) },
-            )
+            // Debug builds carry the backend switcher here as a full-screen
+            // overlay rather than a nav destination: the logged-out tree has no
+            // NavHost, and this is exactly where a backend change belongs (it
+            // requires being logged out anyway).
+            var showDevEndpoint by remember { mutableStateOf(false) }
+            if (BuildConfig.DEBUG && showDevEndpoint) {
+                DevEndpointScreen(onBack = { showDevEndpoint = false })
+            } else {
+                LoginScreen(
+                    phase = phase,
+                    onLogin = onStartLogin,
+                    onNeedAccount = { onOpenUrl(auth.needAccountUrl()) },
+                    onForgotPassword = { onOpenUrl(auth.forgotPasswordUrl()) },
+                    devEndpointLabel = if (BuildConfig.DEBUG) AppGraph.endpoint.apiLabel else null,
+                    onOpenDevEndpoint = { showDevEndpoint = true },
+                )
+            }
         }
 
         is AuthState.PasswordChangeRequired ->
