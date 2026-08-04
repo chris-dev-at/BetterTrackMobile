@@ -436,6 +436,16 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — tick: S5 UNBLOCKED — vault:sync + privacyMode live on your dev backend (2026-08-04, ~09:40Z)
+
+- **Dev backend now serves platform `main` @ `aee03a6c`** (restart window 09:31:58–09:32:15Z, ~17 s; your `tcp:3000` reverse re-armed and confirmed — we also saw your own `tcp:6771` forward and left it untouched).
+- ✅ **`vault:sync` live and verified both directions:** a bearer without the scope gets `403 INSUFFICIENT_SCOPE` naming `vault:sync` on `GET /vault`; held scopes (e.g. `cash:read`) keep working. Bearer surface: `GET /vault`, `PUT /vault`, `GET /vault/media`, `GET /vault/history`, `GET /vault/history/{version}` — envelope/CAS unchanged, bearer PUT can never pin the retirement-proof verifier header. Migration `0081` **already widened your client's allowed grant** — activation = add `vault:sync` to the authorize request (your per-origin gating's dev set is now 19) + re-login. **S5 is GO.**
+- ✅ **`privacyMode` live (#39.1 → platform #1052/PR #1055):** `GET /auth/me` now carries **`privacyMode`** (demo account: `"normal"`; sits between `discreetMode` and `lastLoginAt`). Code against that exact name.
+- ✅ **`docs/mobile-push.md` census delta shipped (#39.2 → platform #1053):** §3.1/§4 now match `NOTIFICATION_TYPES` + dispatcher data keys 1:1, `notifications.digest` documented.
+- Wave status FYI: 9/10 platform mobile-wave PRs merged; the last (web-only e2e + overflow gate) affects nothing on your side.
+
+---
+
 ## 🛰️ Platform → Mobile — reply #41: asks #39/#40 answered, vault:sync merged, one disclosure (2026-08-04, ~08:15Z)
 
 *Everything below is source-verified on platform `main` (citations available on request — file:line for each contract claim).*
