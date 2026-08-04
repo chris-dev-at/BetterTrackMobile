@@ -62,11 +62,27 @@ Outputs, all overwritten in place:
 
 | File | Contents |
 |---|---|
-| `app/src/test/resources/domain-vectors/holdings.json` | vectors for `reducePosition`, `deriveHoldings`, `dailyCloseSeries`, `valueOverTime`, `costBasisOverTime`, `netFlowsOverTime`, `timeWeightedReturn`, `rebasePerformance` |
+| `app/src/test/resources/domain-vectors/holdings.json` | vectors for `reducePosition`, `deriveHoldings`, `dailyCloseSeries`, `valueOverTime`, `costBasisOverTime` (incl. the `costBasisOverTime` half of `dailySnapshotSeries.test.ts`), `netFlowsOverTime`, `timeWeightedReturn`, `rebasePerformance` |
 | `app/src/test/resources/domain-vectors/seriesStats.json` | vectors for `computeSeriesStats`, `toPerformanceSeries`, `deflateSeries`, `indexAveragePctPerYear`, `computeContributions`, `compareSeriesStats` |
 | `app/src/test/resources/domain-vectors/settingsScope.json` | vectors for `resolvePortfolioSetting` |
+| `app/src/test/resources/domain-vectors/cashLedger.json` | vectors for `floorCents`, `cashBalance`, `applyCashMovement`, `projectCashLedger`, `spendableAsOf`, `cashBalanceOverTime`, `cashBalancesBySource`, `projectCashLedgerBySource`, `cashBySourceOverTime` (the ledger half of `dailySnapshotSeries.test.ts`), `pairedTransferMovements`, `setBalanceDelta`, `setBalanceMovement`, `netWorthSeries`, `isExternalCashMovement`, `externalCashFlowsForTwr`, the three exported constants, and the `timeWeightedReturn` compositions the ledger feeds |
 | `app/src/test/resources/domain-vectors/serverTwrParity.json` | the server-generated TWR golden, reshaped as `timeWeightedReturn` inputs |
 | `app/src/test/resources/domain-vectors/MANIFEST.json` | per-module counts + every case the generator deliberately skipped, with a reason |
+
+`holdings.json`, `seriesStats.json`, `settingsScope.json` and `serverTwrParity.json`
+replay through `DomainVectorTest`; `cashLedger.json` replays through its sibling
+`CashLedgerVectorTest`. Both runners share the decoding, encoding and comparison
+plumbing in `DomainVectors.kt`, so "exact" means the same thing in both.
+
+### Shapes JSON cannot carry natively
+
+A JavaScript `Map` renders as `{}` and a JSON object has no observable member
+order, so every `Map`-valued ledger result (`cashBalancesBySource`,
+`projectCashLedgerBySource`, `CashBySourcePoint.balances`) is emitted as an
+**array of pairs** in the map's own iteration order. That is deliberate: it turns
+`LinkedHashMap` ordering (plan §3.3 rule 4) into an asserted property instead of
+an invisible one. The Kotlin encoders in `DomainVectors.kt` mirror the shapes
+one-for-one.
 
 ## Vector format (plan §3.4)
 
@@ -103,11 +119,65 @@ rounds — so the JSON is not a precision-losing intermediary.
 
 Interaction and identity assertions are not pure input→output data. They are
 listed in `MANIFEST.json` with a reason and **hand-ported** as ordinary Kotlin
-tests in `app/src/test/java/at/bettertrack/app/domain/DomainHandPortedTest.kt`:
+tests in `app/src/test/java/at/bettertrack/app/domain/DomainHandPortedTest.kt`
+(holdings / seriesStats) and `CashLedgerHandPortedTest.kt` (cashLedger):
 
 - `vi.fn()` FX call-count / call-argument assertions (converter coalescing) —
   hand-ported against a *counting* Kotlin fake
 - assertions on an error's fields beyond the fact that it threw
-  (`OversellError.requested` / `.held` / `.assetId`)
-- referential-identity checks (`expect(real).not.toBe(input)` — "returns a fresh
-  array", meaningless in Kotlin where the port returns new lists by construction)
+  (`OversellError.requested` / `.held` / `.assetId`;
+  `InsufficientCashError.balanceEur` / `.shortfallEur` / `.movement.sourceId`)
+- referential-identity checks — both directions: `expect(real).not.toBe(input)`
+  ("returns a fresh array", meaningless in Kotlin where the port returns new lists
+  by construction) and `expect(err.movement).toBe(movement)` (the rejected
+  movement is the caller's own object, asserted with `assertSame`)
+- class-identity checks that are *negative*
+  (`InsufficientCashError` is deliberately **not** a `CashLedgerError`)
+- non-finite inputs (`Number.NaN`, `±Infinity`) — JSON has no literal for them
+- **signed zero** — `Object.is(floorCents(-0.005), 0)` separates `+0` from `−0`;
+  JSON does not, and the generator refuses to emit a `−0` at all
+- "does not mutate the input array" — a property of the call, not of its output
+
+---
+
+## W3 addendum — the vault snapshot (`vendor/web-vault/`, `vendor/fflate/`)
+
+W3 vendored a second body of reference material for the `BTVAULT1` port in
+`app/src/main/java/at/bettertrack/app/vault/`. Same discipline, different shape:
+**there is no generator here.** The platform already publishes a hand-authored
+conformance oracle, so the app replays it directly instead of recording one.
+
+| Vendored | Ported into | Proven by |
+|---|---|---|
+| `web-vault/{bytes,errors,envelope,crypto}.ts` | `Vault{Bytes,Errors,Envelope,Crypto}.kt` | `VaultConformanceTest` |
+| `web-vault/{rekey,recovery}.ts` | `Vault{Rekey,Recovery}.kt` | `VaultConformanceTest` |
+| `web-vault/{merge,mirrorProvenance}.ts` | `VaultMerge.kt`, `MirrorProvenance.kt` | `VaultMergeTest`, `MirrorProvenanceTest` |
+| `web-vault/contracts-vault.ts` | `VaultContracts.kt` | all of the above |
+| `fflate/index.ts` (v0.8.3) | `RawDeflate.kt` | `RawDeflateTest` |
+
+The oracles live in `app/src/test/resources/vault-vectors/`:
+
+| File | What it pins |
+|---|---|
+| `vectors.fixture.json` | copied byte-identically from `apps/web/src/user/vault/`. Fixed passphrase → `kekBase64`, fixed VK and salt, exact header + envelope bytes, plus wrong-passphrase, tamper, update-required, passphrase-change, rotation, recovery-kit and rollback cases |
+| `clientMoney.fixture.json` | a real encrypted envelope whose decrypted entities must produce the published money through the W2 engine (`ClientMoneyEndToEndTest`) |
+| `deflate.json` | plaintext/compressed pairs **derived** from the two fixtures above (decrypt → inflate), never hand-typed, so a compressor regression names itself instead of surfacing as "some envelope byte changed" |
+
+`VaultConformanceTest.rebuildsThePublishedInitialEnvelopeByteForByte` is the
+load-bearing one: it regenerates the published envelope from nothing but the
+passphrase and a deterministic CSPRNG, so vault key generation, salt generation,
+Argon2id, key wrapping, header serialization, DEFLATE, AES-GCM and framing all
+have to agree with the reference simultaneously.
+
+### Web tests deliberately not ported
+
+`merge.test.ts` has four cases that assert JavaScript-only object pathologies —
+sparse arrays, array index accessors that throw, non-enumerable properties, and
+symbol-keyed properties. `kotlinx.serialization`'s `JsonElement` cannot express
+any of them (`JsonArray` is a dense `List`, `JsonObject` a plain `Map`, keys are
+`String` by type), so the guards they exercise are unreachable rather than
+untested. The reasoning is recorded on `canonicalJson` in `VaultJson.kt`.
+
+`mirrorProvenance.test.ts`'s two `captureForkProvenanceIntoVault` cases drive a
+`VaultSyncEngine` fake; the sync engine arrives in W4, and every pure function
+they compose is covered by `MirrorProvenanceTest`.

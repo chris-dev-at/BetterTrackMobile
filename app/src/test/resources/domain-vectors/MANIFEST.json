@@ -6,6 +6,7 @@
   "holdings": 95,
   "seriesStats": 41,
   "settingsScope": 9,
+  "cashLedger": 188,
   "serverTwrParity": 4
  },
  "byFunction": {
@@ -30,11 +31,32 @@
   "settingsScope": {
    "resolvePortfolioSetting": 9
   },
+  "cashLedger": {
+   "floorCents": 19,
+   "cashBalance": 18,
+   "applyCashMovement": 16,
+   "projectCashLedger": 22,
+   "cashBalanceOverTime": 5,
+   "spendableAsOf": 7,
+   "CASH_MOVEMENT_KINDS": 1,
+   "CASH_MOVEMENT_SIGN": 1,
+   "EXTERNAL_CASH_MOVEMENT_KINDS": 1,
+   "isExternalCashMovement": 11,
+   "externalCashFlowsForTwr": 21,
+   "timeWeightedReturn": 13,
+   "netWorthSeries": 19,
+   "cashBalancesBySource": 4,
+   "projectCashLedgerBySource": 4,
+   "pairedTransferMovements": 9,
+   "setBalanceDelta": 6,
+   "setBalanceMovement": 4,
+   "cashBySourceOverTime": 7
+  },
   "serverTwrParity": {
    "timeWeightedReturn": 4
   }
  },
- "totalVectors": 149,
+ "totalVectors": 337,
  "skipped": [
   {
    "fn": "reducePosition",
@@ -65,6 +87,56 @@
    "fn": "deflateSeries",
    "case": "returns a FRESH array / fresh points (not.toBe identity checks)",
    "reason": "referential-identity assertion; the Kotlin port returns new lists by construction, so there is nothing to replay"
+  },
+  {
+   "fn": "floorCents",
+   "case": "throws on a non-finite amount",
+   "reason": "inputs are Number.POSITIVE_INFINITY / Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"floorCents rejects a non-finite amount\")"
+  },
+  {
+   "fn": "floorCents",
+   "case": "returns POSITIVE zero for a floored-away negative (Object.is checks)",
+   "reason": "signed-zero identity: JSON carries no -0 (the generator refuses to emit one), so `Object.is(floorCents(-0.005), 0)` cannot travel in a vector — hand-ported in CashLedgerHandPortedTest (\"floorCents never returns negative zero\")"
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects non-finite amounts",
+   "reason": "inputs are Number.NaN / ±Number.POSITIVE_INFINITY, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"cashBalance rejects non-finite amounts\")"
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "rejects a non-finite starting balance",
+   "reason": "inputs are Number.NaN / Number.POSITIVE_INFINITY, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"applyCashMovement rejects a non-finite starting balance\")"
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "InsufficientCashError field + identity assertions",
+   "reason": "asserts err.balanceEur / err.shortfallEur / err.name, `err.movement` REFERENTIAL identity, and `not.toBeInstanceOf(CashLedgerError)` — none of which is input→output data — hand-ported in CashLedgerHandPortedTest"
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "does not mutate the input array (mutation assertion)",
+   "reason": "asserts the CALLER’s array is untouched, which is a property of the port, not of its output — hand-ported in CashLedgerHandPortedTest (\"projectCashLedger does not mutate the input list\")"
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "fails loud on a non-finite holdings value",
+   "reason": "input carries Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"netWorthSeries rejects a non-finite holdings value\")"
+  },
+  {
+   "fn": "projectCashLedgerBySource",
+   "case": "the rejection carries balanceEur / shortfallEur / movement.sourceId",
+   "reason": "asserts the InsufficientCashError’s FIELDS (and that the offending movement kept its source attribution), not merely that it threw — hand-ported in CashLedgerHandPortedTest"
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a NaN amount",
+   "reason": "input is Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"pairedTransferMovements rejects a non-finite amount\")"
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "rejects a non-finite target and a non-finite current balance",
+   "reason": "inputs are Number.POSITIVE_INFINITY / Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest (\"setBalanceDelta rejects non-finite operands\")"
   }
  ]
 }

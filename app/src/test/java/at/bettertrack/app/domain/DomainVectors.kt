@@ -272,7 +272,14 @@ internal fun assertThrewLike(expected: JsonObject, thrown: Throwable?) {
         fail("expected $expectedName(\"$expectedMessage\") but nothing was thrown")
         return
     }
-    val actualName = if (thrown is OversellError) "OversellError" else "Error"
+    // Mirrors the TypeScript `Error.name` each class sets in its constructor; a
+    // bare `throw new Error(...)` in the domain reports "Error".
+    val actualName = when (thrown) {
+        is OversellError -> "OversellError"
+        is InsufficientCashError -> "InsufficientCashError"
+        is CashLedgerError -> "CashLedgerError"
+        else -> "Error"
+    }
     assertEquals("error class", expectedName, actualName)
     assertEquals("error message", expectedMessage, thrown.message)
 }
@@ -373,6 +380,65 @@ internal fun decodeMetricVector(o: JsonObject): ComparisonMetricVector {
 
 internal fun decodeValuePoints(a: JsonArray) =
     a.map { ValuePoint(it.jsonObject.s("date"), it.jsonObject.d("valueEur")) }
+
+// ---------------------------------------------------------------------------
+// cashLedger
+// ---------------------------------------------------------------------------
+//
+// The generator shapes every ledger value that JSON cannot carry natively — a
+// `Map` renders as `{}`, and an object has no observable member order — into an
+// ARRAY of pairs (see `mJson` / `balancesJson` / `entriesJson` in generate.ts).
+// The encoders below mirror those shapes exactly, which is what turns
+// LinkedHashMap iteration order (plan §3.3 rule 4) into an asserted property.
+
+/**
+ * A movement carrying a `sourceId` decodes to [SourcedCashMovement], one without
+ * to a plain [CashMovement] — reproducing which of the two TypeScript types the
+ * vitest helper (`mv()` vs `smv()` / `movement()`) built.
+ */
+internal fun decodeCashMovement(o: JsonObject): CashMovement {
+    val sourceId = o.sOrNull("sourceId")
+    return if (sourceId == null) {
+        CashMovement(o.s("kind"), o.d("amountEur"), o.s("occurredAt"))
+    } else {
+        SourcedCashMovement(o.s("kind"), o.d("amountEur"), o.s("occurredAt"), sourceId)
+    }
+}
+
+internal fun decodeCashMovements(a: JsonArray): List<CashMovement> =
+    a.map { decodeCashMovement(it.jsonObject) }
+
+internal fun decodeSourcedCashMovements(a: JsonArray): List<SourcedCashMovement> =
+    a.map { decodeCashMovement(it.jsonObject) as SourcedCashMovement }
+
+internal fun encodeCashMovement(m: CashMovement): JsonElement = buildJsonObject {
+    put("kind", JsonPrimitive(m.kind))
+    put("amountEur", num(m.amountEur))
+    put("occurredAt", JsonPrimitive(m.occurredAt))
+    if (m is SourcedCashMovement) put("sourceId", JsonPrimitive(m.sourceId))
+}
+
+internal fun encodeCashLedgerEntries(entries: List<CashLedgerEntry>): JsonElement = buildJsonArray {
+    entries.forEach {
+        add(
+            buildJsonObject {
+                put("movement", encodeCashMovement(it.movement))
+                put("balanceEur", num(it.balanceEur))
+            },
+        )
+    }
+}
+
+internal fun encodeBalancesBySource(balances: Map<String, Double>): JsonElement = buildJsonArray {
+    balances.forEach { (sourceId, balanceEur) ->
+        add(
+            buildJsonObject {
+                put("sourceId", JsonPrimitive(sourceId))
+                put("balanceEur", num(balanceEur))
+            },
+        )
+    }
+}
 
 internal fun decodeFlowPoints(a: JsonArray) =
     a.map { FlowPoint(it.jsonObject.s("date"), it.jsonObject.d("flowEur")) }

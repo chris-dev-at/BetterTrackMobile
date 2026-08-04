@@ -68,6 +68,19 @@ androidxAppcompat = "1.7.1"
 # enrollment QR. No network, no external assets (CSP/self-contained).
 zxingCore = "3.5.3"
 
+# ── W3 (BTVAULT1 vault crypto, docs/S3S4_STORAGE_PLAN.md §2.2) ─────────────
+# Bouncy Castle provider — used ONLY for its lightweight (non-JCA-provider)
+# `org.bouncycastle.crypto.generators.Argon2BytesGenerator`. Argon2id is the
+# vault KEK derivation and the JDK/Android platform has no implementation of it.
+# Deliberately NOT an Android-native argon2 JNI binding: BC is pure Java, so the
+# identical code path runs in plain JVM unit tests, which is what lets the
+# byte-for-byte vault conformance suite gate CI. AES-GCM stays on JCA.
+# Verified against the platform's published oracle
+# (apps/web/src/user/vault/vectors.fixture.json `kekBase64`): BC 1.80 with
+# ARGON2_id + ARGON2_VERSION_13 + m=65536 KiB/t=3/p=1/len=32 reproduces it
+# exactly. Argon2 version 1.0 does NOT — the version is part of the contract.
+bouncycastle = "1.80"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -111,6 +124,9 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 # Step 18 — per-app language switch + 2FA QR encoder.
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidxAppcompat" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
+
+# W3 — Argon2id for the BTVAULT1 vault KEK (see the version note above).
+bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 
 # Step 5 — Room (local DB) + WorkManager (sync worker) + process lifecycle.
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

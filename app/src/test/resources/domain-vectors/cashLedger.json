@@ -1,0 +1,4811 @@
+{
+ "module": "cashLedger",
+ "vectors": [
+  {
+   "fn": "floorCents",
+   "case": "no-op on values already expressible in whole cents (0)",
+   "input": {
+    "amountEur": 0
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "no-op on values already expressible in whole cents (100)",
+   "input": {
+    "amountEur": 100
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "no-op on values already expressible in whole cents (1234.56)",
+   "input": {
+    "amountEur": 1234.56
+   },
+   "output": 1234.56,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "no-op on values already expressible in whole cents (-99.99)",
+   "input": {
+    "amountEur": -99.99
+   },
+   "output": -99.99,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "an exact cent whose decimal literal underflows survives (8.61)",
+   "input": {
+    "amountEur": 8.61
+   },
+   "output": 8.61,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "an exact cent whose decimal literal underflows survives (0.07)",
+   "input": {
+    "amountEur": 0.07
+   },
+   "output": 0.07,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (100.006)",
+   "input": {
+    "amountEur": 100.006
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (100.004)",
+   "input": {
+    "amountEur": 100.004
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (0.005)",
+   "input": {
+    "amountEur": 0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (0.009999)",
+   "input": {
+    "amountEur": 0.009999
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (1.005 is stored as 1.00499…)",
+   "input": {
+    "amountEur": 1.005
+   },
+   "output": 1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "floors sub-cent EUR down, never up (2.675)",
+   "input": {
+    "amountEur": 2.675
+   },
+   "output": 2.67,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "truncates the magnitude toward zero for outflows (-100.006)",
+   "input": {
+    "amountEur": -100.006
+   },
+   "output": -100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "truncates the magnitude toward zero for outflows (-0.005)",
+   "input": {
+    "amountEur": -0.005
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "truncates the magnitude toward zero for outflows (-1.005)",
+   "input": {
+    "amountEur": -1.005
+   },
+   "output": -1,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "sheds FP summation dust (0.1 + 0.2 - 0.3)",
+   "input": {
+    "amountEur": 5.551115123125783e-17
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "a value a hair below a cent boundary still floors onto it (0.1 + 0.2)",
+   "input": {
+    "amountEur": 0.30000000000000004
+   },
+   "output": 0.3,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "withdraw-all safety: the true (unrounded) balance of a sub-cent deposit",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100.006,
+      "occurredAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": 100.006,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "makes withdraw-all safe: the reported balance",
+   "input": {
+    "amountEur": 100.006
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "makes withdraw-all safe: the residue after withdrawing it",
+   "input": {
+    "amountEur": 0.006000000000000227
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "is the sum of signed movements across a mixed sequence",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": 550,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "reconciles: current cash === sum of movements (mixed sequence)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": 550,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "reconciles: current cash === sum of movements (two small deposits)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 0.1,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 0.2,
+      "occurredAt": "2026-01-06"
+     }
+    ]
+   },
+   "output": 0.30000000000000004,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "reconciles: current cash === sum of movements (decimal round trip)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 123.45,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -23.45,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 250.5,
+      "occurredAt": "2026-02-01T09:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -250.5,
+      "occurredAt": "2026-02-02T09:00:00Z"
+     }
+    ]
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "is 0 for an empty ledger",
+   "input": {
+    "movements": []
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "does not enforce non-negativity — reconciliation is a pure sum",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -150,
+      "occurredAt": "2026-01-06"
+     }
+    ]
+   },
+   "output": -50,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects an unknown kind",
+   "input": {
+    "movements": [
+     {
+      "kind": "jackpot",
+      "amountEur": 10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Unknown movement kind jackpot (movement 0); expected one of deposit, withdrawal, buy, sell_proceeds, transfer_out, transfer_in, dividend, tax_withholding, tax_refund, fee."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects a zero amount",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 0,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Movement amountEur must be a finite non-zero number, got 0 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects a sign that contradicts the kind (deposit)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": -10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A deposit must carry a strictly positive amountEur, got -10 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects a sign that contradicts the kind (sell_proceeds)",
+   "input": {
+    "movements": [
+     {
+      "kind": "sell_proceeds",
+      "amountEur": -10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A sell_proceeds must carry a strictly positive amountEur, got -10 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects a sign that contradicts the kind (withdrawal)",
+   "input": {
+    "movements": [
+     {
+      "kind": "withdrawal",
+      "amountEur": 10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A withdrawal must carry a strictly negative amountEur, got 10 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects a sign that contradicts the kind (buy)",
+   "input": {
+    "movements": [
+     {
+      "kind": "buy",
+      "amountEur": 10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A buy must carry a strictly negative amountEur, got 10 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rejects an unparseable timestamp and names the movement index",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 10,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 10,
+      "occurredAt": "yesterday-ish"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Movement occurredAt must be an ISO-8601 date/time, got yesterday-ish"
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "a positive fee is rejected (fee is negative-only)",
+   "input": {
+    "movements": [
+     {
+      "kind": "fee",
+      "amountEur": 12.5,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A fee must carry a strictly negative amountEur, got 12.5 (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalance",
+   "case": "a negative fee is accepted",
+   "input": {
+    "movements": [
+     {
+      "kind": "fee",
+      "amountEur": -12.5,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     }
+    ]
+   },
+   "output": -12.5,
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "rolls the per-source union up to the portfolio balance",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 250,
+      "occurredAt": "2026-01-05T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -50,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": 800,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "returns the balance after the movement (deposit)",
+   "input": {
+    "balanceEur": 0,
+    "movement": {
+     "kind": "deposit",
+     "amountEur": 1000,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 1000,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "returns the balance after the movement (buy)",
+   "input": {
+    "balanceEur": 1000,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -400,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 600,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "returns the balance after the movement (withdrawal to exactly 0)",
+   "input": {
+    "balanceEur": 600,
+    "movement": {
+     "kind": "withdrawal",
+     "amountEur": -600,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "allows spending the balance down to exactly 0",
+   "input": {
+    "balanceEur": 250,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -250,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "throws the typed InsufficientCashError when a buy would overdraw",
+   "input": {
+    "balanceEur": 100,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -150,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -150 € at 2026-01-05 exceeds the available balance of 100 € by 50 €."
+   }
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "throws when a withdrawal would overdraw",
+   "input": {
+    "balanceEur": 100,
+    "movement": {
+     "kind": "withdrawal",
+     "amountEur": -100.01,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -100.01 € at 2026-01-05 exceeds the available balance of 100 € by 0.010000000000005116 €."
+   }
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "carries the available balance, the movement, and the exact shortfall",
+   "input": {
+    "balanceEur": 100,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -150,
+     "occurredAt": "2026-01-05T09:00:00Z"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -150 € at 2026-01-05T09:00:00Z exceeds the available balance of 100 € by 50 €."
+   }
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "InsufficientCashError is not a CashLedgerError — valid, just unaffordable",
+   "input": {
+    "balanceEur": 0,
+    "movement": {
+     "kind": "withdrawal",
+     "amountEur": -1,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -1 € at 2026-01-05 exceeds the available balance of 0 € by 1 €."
+   }
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates FP dust: 0.1 + 0.2 in, 0.3 out (step 1)",
+   "input": {
+    "balanceEur": 0,
+    "movement": {
+     "kind": "deposit",
+     "amountEur": 0.1,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 0.1,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates FP dust: 0.1 + 0.2 in, 0.3 out (step 2)",
+   "input": {
+    "balanceEur": 0.1,
+    "movement": {
+     "kind": "deposit",
+     "amountEur": 0.2,
+     "occurredAt": "2026-01-06"
+    }
+   },
+   "output": 0.30000000000000004,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates FP dust: 0.1 + 0.2 in, 0.3 out (step 3, does not throw)",
+   "input": {
+    "balanceEur": 0.30000000000000004,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -0.3,
+     "occurredAt": "2026-01-07"
+    }
+   },
+   "output": 5.551115123125783e-17,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates dust the other way: 0.3 in, 0.1 + 0.2 out (step 1)",
+   "input": {
+    "balanceEur": 0,
+    "movement": {
+     "kind": "deposit",
+     "amountEur": 0.3,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": 0.3,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates dust the other way: 0.3 in, 0.1 + 0.2 out (step 2)",
+   "input": {
+    "balanceEur": 0.3,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -0.1,
+     "occurredAt": "2026-01-06"
+    }
+   },
+   "output": 0.19999999999999998,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "tolerates dust the other way: 0.3 in, 0.1 + 0.2 out (step 3, does not throw)",
+   "input": {
+    "balanceEur": 0.19999999999999998,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -0.2,
+     "occurredAt": "2026-01-07"
+    }
+   },
+   "output": -2.7755575615628914e-17,
+   "throws": null
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "a real overdraft of one cent is NOT dust and throws",
+   "input": {
+    "balanceEur": 0.3,
+    "movement": {
+     "kind": "buy",
+     "amountEur": -0.31,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -0.31 € at 2026-01-05 exceeds the available balance of 0.3 € by 0.010000000000000009 €."
+   }
+  },
+  {
+   "fn": "applyCashMovement",
+   "case": "rejects a negative starting balance",
+   "input": {
+    "balanceEur": -1,
+    "movement": {
+     "kind": "deposit",
+     "amountEur": 10,
+     "occurredAt": "2026-01-05"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Starting balance must be a finite non-negative number of EUR, got -1."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "returns the running balance after every movement (balance-over-time)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     "balanceEur": 600
+    },
+    {
+     "movement": {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     "balanceEur": 750
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     },
+     "balanceEur": 550
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "a sequence that stays >= 0 does not throw",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     "balanceEur": 600
+    },
+    {
+     "movement": {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     "balanceEur": 750
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     },
+     "balanceEur": 550
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "a sequence that dips negative does throw",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-06"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -1,
+      "occurredAt": "2026-01-07"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -1 € at 2026-01-07 exceeds the available balance of 0 € by 1 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "final projected balance equals cashBalance",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     "balanceEur": 600
+    },
+    {
+     "movement": {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     "balanceEur": 750
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     },
+     "balanceEur": 550
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "replays by occurredAt, not input order",
+   "input": {
+    "movements": [
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     "balanceEur": 500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "a buy dated before its funding deposit throws, wherever it is listed",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -500 € at 2026-01-05T10:00:00Z exceeds the available balance of 0 € by 500 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "breaks timestamp ties by input order (deposit first: accepted)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     "balanceEur": 100
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     "balanceEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "breaks timestamp ties by input order (buy first: rejected)",
+   "input": {
+    "movements": [
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -100 € at 2026-01-05T10:00:00Z exceeds the available balance of 0 € by 100 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "does not mutate the input array",
+   "input": {
+    "movements": [
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T10:00:00Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     "balanceEur": 500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "returns [] for an empty ledger",
+   "input": {
+    "movements": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "validates every movement up front",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 10,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": -1,
+      "occurredAt": "2026-01-06"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A deposit must carry a strictly positive amountEur, got -1 (movement 1)."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "a fee lowers the balance and is gated by the same no-negative rule",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -2.5,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     "balanceEur": 100
+    },
+    {
+     "movement": {
+      "kind": "fee",
+      "amountEur": -2.5,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     },
+     "balanceEur": 97.5
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "an unfunded fee overdraws like any other outflow",
+   "input": {
+    "movements": [
+     {
+      "kind": "fee",
+      "amountEur": -2.5,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: fee of -2.5 € at 2026-01-06T09:00:00Z exceeds the available balance of 0 € by 2.5 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "per-source validity implies the portfolio-level union never dips negative",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -500,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     "balanceEur": 500
+    },
+    {
+     "movement": {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     "balanceEur": 0
+    },
+    {
+     "movement": {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     },
+     "balanceEur": 500
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -500,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "bank"
+     },
+     "balanceEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: a 400 buy backdated before the deposit overdraws",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-02-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -400 € at 2025-06-01T00:00:00.000Z exceeds the available balance of 0 € by 400 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: spending exactly the pre-existing balance is accepted",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2025-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2025-01-01T00:00:00.000Z"
+     },
+     "balanceEur": 500
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     },
+     "balanceEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: one cent more than the pre-existing balance is rejected",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2025-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -500.01,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -500.01 € at 2025-06-01T00:00:00.000Z exceeds the available balance of 500 € by 0.009999999999990905 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: the later withdrawal binds the spend to 100 (accepted)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -900,
+      "occurredAt": "2026-01-02T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     "balanceEur": 1000
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     "balanceEur": 900
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -900,
+      "occurredAt": "2026-01-02T00:00:00.000Z"
+     },
+     "balanceEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: the later withdrawal binds the spend to 100 (150 rejected)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -900,
+      "occurredAt": "2026-01-02T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -150,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -900 € at 2026-01-02T00:00:00.000Z exceeds the available balance of 850 € by 50 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: a same-instant deposit funds that instant’s buy",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     },
+     "balanceEur": 400
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     },
+     "balanceEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: mixed history: spendable is accepted exactly",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 300,
+      "occurredAt": "2026-01-10T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-03-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-04-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -300,
+      "occurredAt": "2026-02-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 300,
+      "occurredAt": "2026-01-10T00:00:00.000Z"
+     },
+     "balanceEur": 300
+    },
+    {
+     "movement": {
+      "kind": "buy",
+      "amountEur": -300,
+      "occurredAt": "2026-02-01T00:00:00.000Z"
+     },
+     "balanceEur": 0
+    },
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-03-01T00:00:00.000Z"
+     },
+     "balanceEur": 500
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-04-01T00:00:00.000Z"
+     },
+     "balanceEur": 300
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: mixed history: one cent past spendable is rejected",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 300,
+      "occurredAt": "2026-01-10T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-03-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-04-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -300.01,
+      "occurredAt": "2026-02-01T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: buy of -300.01 € at 2026-02-01T00:00:00.000Z exceeds the available balance of 300 € by 0.009999999999990905 €."
+   }
+  },
+  {
+   "fn": "cashBalanceOverTime",
+   "case": "emits one point per movement day with that day’s closing balance",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "balanceEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "balanceEur": 600
+    },
+    {
+     "date": "2026-01-07",
+     "balanceEur": 750
+    },
+    {
+     "date": "2026-01-08",
+     "balanceEur": 550
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBalanceOverTime",
+   "case": "collapses same-day movements to the last balance of the day",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-05T15:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-07T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "balanceEur": 600
+    },
+    {
+     "date": "2026-01-07",
+     "balanceEur": 500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBalanceOverTime",
+   "case": "is sparse — days without movements produce no point",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "balanceEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "balanceEur": 600
+    },
+    {
+     "date": "2026-01-07",
+     "balanceEur": 750
+    },
+    {
+     "date": "2026-01-08",
+     "balanceEur": 550
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBalanceOverTime",
+   "case": "rejects negative-dipping histories like the projection",
+   "input": {
+    "movements": [
+     {
+      "kind": "withdrawal",
+      "amountEur": -1,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -1 € at 2026-01-05 exceeds the available balance of 0 € by 1 €."
+   }
+  },
+  {
+   "fn": "cashBalanceOverTime",
+   "case": "returns [] for an empty ledger",
+   "input": {
+    "movements": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "is 0 when the cash was only deposited AFTER the buy date",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-02-01T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2025-06-01T00:00:00.000Z"
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "is the balance already present when the deposit predates the buy",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2025-01-01T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2025-06-01T00:00:00.000Z"
+   },
+   "output": 500,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "takes the running MINIMUM from the buy instant on — a later withdrawal binds",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -900,
+      "occurredAt": "2026-01-02T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2026-01-01T00:00:00.000Z"
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "counts a same-instant deposit as available (credits before debits)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 400,
+      "occurredAt": "2025-06-01T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2025-06-01T00:00:00.000Z"
+   },
+   "output": 400,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "a buy dated at/after the newest movement yields the current balance",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -300,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2026-07-01T00:00:00.000Z"
+   },
+   "output": 700,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "is 0 for an empty ledger",
+   "input": {
+    "movements": [],
+    "occurredAt": "2025-06-01T00:00:00.000Z"
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "matches the write-boundary gate across a mixed history",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 300,
+      "occurredAt": "2026-01-10T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-03-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-04-01T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2026-02-01T00:00:00.000Z"
+   },
+   "output": 300,
+   "throws": null
+  },
+  {
+   "fn": "CASH_MOVEMENT_KINDS",
+   "case": "the declared kinds, in declaration order",
+   "input": {},
+   "output": [
+    "deposit",
+    "withdrawal",
+    "buy",
+    "sell_proceeds",
+    "transfer_out",
+    "transfer_in",
+    "dividend",
+    "tax_withholding",
+    "tax_refund",
+    "fee"
+   ],
+   "throws": null
+  },
+  {
+   "fn": "CASH_MOVEMENT_SIGN",
+   "case": "the required sign of EVERY kind, in declaration order",
+   "input": {},
+   "output": [
+    {
+     "kind": "deposit",
+     "sign": 1
+    },
+    {
+     "kind": "sell_proceeds",
+     "sign": 1
+    },
+    {
+     "kind": "transfer_in",
+     "sign": 1
+    },
+    {
+     "kind": "dividend",
+     "sign": 1
+    },
+    {
+     "kind": "tax_refund",
+     "sign": 1
+    },
+    {
+     "kind": "withdrawal",
+     "sign": -1
+    },
+    {
+     "kind": "buy",
+     "sign": -1
+    },
+    {
+     "kind": "transfer_out",
+     "sign": -1
+    },
+    {
+     "kind": "tax_withholding",
+     "sign": -1
+    },
+    {
+     "kind": "fee",
+     "sign": -1
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "EXTERNAL_CASH_MOVEMENT_KINDS",
+   "case": "exactly deposit + withdrawal",
+   "input": {},
+   "output": [
+    "deposit",
+    "withdrawal"
+   ],
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (deposit)",
+   "input": {
+    "kind": "deposit"
+   },
+   "output": true,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (withdrawal)",
+   "input": {
+    "kind": "withdrawal"
+   },
+   "output": true,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (buy)",
+   "input": {
+    "kind": "buy"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (sell_proceeds)",
+   "input": {
+    "kind": "sell_proceeds"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (transfer_out)",
+   "input": {
+    "kind": "transfer_out"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (transfer_in)",
+   "input": {
+    "kind": "transfer_in"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (dividend)",
+   "input": {
+    "kind": "dividend"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (tax_withholding)",
+   "input": {
+    "kind": "tax_withholding"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (tax_refund)",
+   "input": {
+    "kind": "tax_refund"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "pins the classification of every kind (fee)",
+   "input": {
+    "kind": "fee"
+   },
+   "output": false,
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "deposit-then-buy-from-cash yields exactly ONE external flow: the deposit",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "returns only deposits/withdrawals; buy and sell_proceeds are internal",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08T12:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    },
+    {
+     "date": "2026-01-08",
+     "flowEur": -200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "keeps the FlowPoint sign convention and sorts ascending",
+   "input": {
+    "movements": [
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-08"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    },
+    {
+     "date": "2026-01-08",
+     "flowEur": -200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "nets same-day external flows into one point",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-01-05T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -300,
+      "occurredAt": "2026-01-05T15:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "is a pure classifier — it does not enforce solvency",
+   "input": {
+    "movements": [
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": -100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "returns [] for an empty ledger",
+   "input": {
+    "movements": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "returns [] when there are no external movements",
+   "input": {
+    "movements": [
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-05"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -150,
+      "occurredAt": "2026-01-06"
+     }
+    ]
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "validates movements like the rest of the engine",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": -10,
+      "occurredAt": "2026-01-05"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A deposit must carry a strictly positive amountEur, got -10 (movement 0)."
+   }
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "a fee never enters the TWR flow series",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -10,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -10,
+      "occurredAt": "2026-01-07T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "flowEur": -10
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "none of the three tax kinds is ever an external flow",
+   "input": {
+    "movements": [
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "tax_withholding",
+      "amountEur": -13.75,
+      "occurredAt": "2026-01-08T10:00:00Z"
+     },
+     {
+      "kind": "tax_refund",
+      "amountEur": 5,
+      "occurredAt": "2026-01-08T11:00:00Z"
+     }
+    ]
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "fee drag: the fee-free ledger’s external flows",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "fee drag: the fee-charged ledger’s external flows",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -10,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "fee drag: the fee-free portfolio earns the pure market return",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "fee drag: the fee-charged portfolio earns strictly less",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 990
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1089
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": -1.0000000000000009
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 8.899999999999997
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "fee vs withdrawal: the same 10 EUR booked as a withdrawal IS external",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -10,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "flowEur": -10
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "fee vs withdrawal: as a withdrawal the drag is divided back out (the misreport)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 990
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1089
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "flowEur": -10
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "fee vs withdrawal: as a fee the curve reads honestly",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 990
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1089
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": -1.0000000000000009
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 8.899999999999997
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "TWR neutrality: a cash-funded buy is not an external flow",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "TWR neutrality: the performance curve is unaffected by cash -> stock",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "TWR neutrality counterfactual: misclassifying the buy corrupts the curve",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "flowEur": -1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 100
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 120.00000000000001
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "a dividend MOVES the line: income the holdings generated (net worth)",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1000
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     }
+    ],
+    "today": "2026-01-08"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1050
+    },
+    {
+     "date": "2026-01-08",
+     "valueEur": 1050
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "a dividend MOVES the line: income the holdings generated (external flows)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a dividend MOVES the line: income the holdings generated (performance)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1050
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1050
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 5.000000000000004
+    },
+    {
+     "date": "2026-01-08",
+     "pct": 5.000000000000004
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "counterfactual: classifying that dividend as a deposit erases the income",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1050
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1050
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "flowEur": 50
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-08",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "withheld tax drags the line — the curve reads NET of tax (net worth)",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1000
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "tax_withholding",
+      "amountEur": -13.75,
+      "occurredAt": "2026-01-08T10:00:00Z"
+     }
+    ],
+    "today": "2026-01-08"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1050
+    },
+    {
+     "date": "2026-01-08",
+     "valueEur": 1036.25
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "withheld tax drags the line — the curve reads NET of tax (external flows)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "tax_withholding",
+      "amountEur": -13.75,
+      "occurredAt": "2026-01-08T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "withheld tax drags the line — the curve reads NET of tax (performance)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1050
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1036.25
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 5.000000000000004
+    },
+    {
+     "date": "2026-01-08",
+     "pct": 3.6250000000000115
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "a tax refund lifts the line back, symmetrically (net worth)",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1000
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "tax_withholding",
+      "amountEur": -13.75,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "tax_refund",
+      "amountEur": 13.75,
+      "occurredAt": "2026-01-08T10:00:00Z"
+     }
+    ],
+    "today": "2026-01-08"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1036.25
+    },
+    {
+     "date": "2026-01-08",
+     "valueEur": 1050
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "a tax refund lifts the line back, symmetrically (external flows)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "dividend",
+      "amountEur": 50,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "tax_withholding",
+      "amountEur": -13.75,
+      "occurredAt": "2026-01-07T11:00:00Z"
+     },
+     {
+      "kind": "tax_refund",
+      "amountEur": 13.75,
+      "occurredAt": "2026-01-08T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a tax refund lifts the line back, symmetrically (performance)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1036.25
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 1050
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 3.6249999999999893
+    },
+    {
+     "date": "2026-01-08",
+     "pct": 4.999999999999982
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "transfer legs: external flows BEFORE the transfer",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 200,
+      "occurredAt": "2026-01-05T09:30:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "transfer legs: external flows AFTER the transfer (identical)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 200,
+      "occurredAt": "2026-01-05T09:30:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "transfer legs: net worth BEFORE the transfer",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 200,
+      "occurredAt": "2026-01-05T09:30:00Z",
+      "sourceId": "bank"
+     }
+    ],
+    "today": "2026-01-07"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1200
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1200
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "transfer legs: net worth AFTER the transfer (identical)",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 200,
+      "occurredAt": "2026-01-05T09:30:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ],
+    "today": "2026-01-07"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1200
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1200
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "transfer legs: performance BEFORE the transfer",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1200
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1200
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1200
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1200
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "transfer legs: performance AFTER the transfer (identical)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1200
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1200
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1200
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1200
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "composes with timeWeightedReturn (net worth)",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1100
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     }
+    ],
+    "today": "2026-01-07"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "composes with timeWeightedReturn (external flows)",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -1000,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "flowEur": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "composes with timeWeightedReturn: deposit and conversion both link flat",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "returns an empty series when there are neither holdings values nor movements",
+   "input": {
+    "holdingsValues": [],
+    "movements": [],
+    "today": "2026-01-10"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "is the identity on the holdings curve when the ledger is empty",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 1100
+     }
+    ],
+    "movements": [],
+    "today": "2026-01-06"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "renders a cash-only portfolio as a dense daily curve through today",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -250,
+      "occurredAt": "2026-01-07T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-09"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 750
+    },
+    {
+     "date": "2026-01-08",
+     "valueEur": 750
+    },
+    {
+     "date": "2026-01-09",
+     "valueEur": 750
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "equals holdings value + end-of-day cash balance on every day",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-07",
+      "valueEur": 400
+     },
+     {
+      "date": "2026-01-08",
+      "valueEur": 400
+     },
+     {
+      "date": "2026-01-09",
+      "valueEur": 250
+     },
+     {
+      "date": "2026-01-10",
+      "valueEur": 250
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-07T10:00:00Z"
+     },
+     {
+      "kind": "sell_proceeds",
+      "amountEur": 150,
+      "occurredAt": "2026-01-09T11:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-10T12:00:00Z"
+     }
+    ],
+    "today": "2026-01-10"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-08",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-09",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-10",
+     "valueEur": 800
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "a deposit/withdrawal moves the curve by exactly its amount; a cash-funded buy does not",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-06",
+      "valueEur": 500
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 500
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-07T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-07"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-07",
+     "valueEur": 800
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "aggregates several same-day movements into one end-of-day balance",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 300,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 700,
+      "occurredAt": "2026-01-05T15:00:00Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T18:00:00Z"
+     }
+    ],
+    "today": "2026-01-05"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 900
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "ignores movements dated after the series end",
+   "input": {
+    "holdingsValues": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 100
+     }
+    ],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-02-01T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-05"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "only future-dated movements and no holdings leaves nothing plottable",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-02-01T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-05"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "display path: renders a ledger that dips negative instead of throwing",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "withdrawal",
+      "amountEur": -200,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-06"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": -200
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 800
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "fails loud on a malformed today",
+   "input": {
+    "holdingsValues": [],
+    "movements": [],
+    "today": "not-a-day"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "today must be ISO YYYY-MM-DD, got not-a-day"
+   }
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "fails loud on a movement whose sign contradicts its kind",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": -5,
+      "occurredAt": "2026-01-05"
+     }
+    ],
+    "today": "2026-01-05"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A deposit must carry a strictly positive amountEur, got -5 (movement 0)."
+   }
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "a fee still counts toward net worth — the money really left the account",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -10,
+      "occurredAt": "2026-01-06T09:00:00Z"
+     }
+    ],
+    "today": "2026-01-06"
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-06",
+     "valueEur": 990
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBalancesBySource",
+   "case": "sums each source independently",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 250,
+      "occurredAt": "2026-01-05T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -400,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -50,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "sourceId": "main",
+     "balanceEur": 600
+    },
+    {
+     "sourceId": "bank",
+     "balanceEur": 200
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBalancesBySource",
+   "case": "omits sources without movements (empty ledger)",
+   "input": {
+    "movements": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "cashBalancesBySource",
+   "case": "fails loud on an empty sourceId",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1,
+      "occurredAt": "2026-01-05",
+      "sourceId": ""
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Movement sourceId must be a non-empty string (movement 0)."
+   }
+  },
+  {
+   "fn": "cashBalancesBySource",
+   "case": "a fee belongs to exactly one source and never pairs",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -4,
+      "occurredAt": "2026-01-06T09:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 50,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     }
+    ]
+   },
+   "output": [
+    {
+     "sourceId": "bank",
+     "balanceEur": 96
+    },
+    {
+     "sourceId": "main",
+     "balanceEur": 50
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedgerBySource",
+   "case": "rejects a source overdraft even when another source holds plenty",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 10000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -150,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -150 € at 2026-01-06T10:00:00Z exceeds the available balance of 100 € by 50 €."
+   }
+  },
+  {
+   "fn": "projectCashLedgerBySource",
+   "case": "projects each source chronologically and independently",
+   "input": {
+    "movements": [
+     {
+      "kind": "transfer_in",
+      "amountEur": 300,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 1000,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -300,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -500,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "main"
+     }
+    ]
+   },
+   "output": [
+    {
+     "sourceId": "bank",
+     "entries": [
+      {
+       "movement": {
+        "kind": "transfer_in",
+        "amountEur": 300,
+        "occurredAt": "2026-01-06T10:00:00Z",
+        "sourceId": "bank"
+       },
+       "balanceEur": 300
+      }
+     ]
+    },
+    {
+     "sourceId": "main",
+     "entries": [
+      {
+       "movement": {
+        "kind": "deposit",
+        "amountEur": 1000,
+        "occurredAt": "2026-01-05T09:00:00Z",
+        "sourceId": "main"
+       },
+       "balanceEur": 1000
+      },
+      {
+       "movement": {
+        "kind": "transfer_out",
+        "amountEur": -300,
+        "occurredAt": "2026-01-06T10:00:00Z",
+        "sourceId": "main"
+       },
+       "balanceEur": 700
+      },
+      {
+       "movement": {
+        "kind": "buy",
+        "amountEur": -500,
+        "occurredAt": "2026-01-07T10:00:00Z",
+        "sourceId": "main"
+       },
+       "balanceEur": 200
+      }
+     ]
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedgerBySource",
+   "case": "per-source validity implies portfolio-level validity",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-01-06T10:00:00Z",
+      "sourceId": "bank"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -500,
+      "occurredAt": "2026-01-07T10:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "sourceId": "main",
+     "entries": [
+      {
+       "movement": {
+        "kind": "deposit",
+        "amountEur": 500,
+        "occurredAt": "2026-01-05T09:00:00Z",
+        "sourceId": "main"
+       },
+       "balanceEur": 500
+      },
+      {
+       "movement": {
+        "kind": "transfer_out",
+        "amountEur": -500,
+        "occurredAt": "2026-01-06T10:00:00Z",
+        "sourceId": "main"
+       },
+       "balanceEur": 0
+      }
+     ]
+    },
+    {
+     "sourceId": "bank",
+     "entries": [
+      {
+       "movement": {
+        "kind": "transfer_in",
+        "amountEur": 500,
+        "occurredAt": "2026-01-06T10:00:00Z",
+        "sourceId": "bank"
+       },
+       "balanceEur": 500
+      },
+      {
+       "movement": {
+        "kind": "withdrawal",
+        "amountEur": -500,
+        "occurredAt": "2026-01-07T10:00:00Z",
+        "sourceId": "bank"
+       },
+       "balanceEur": 0
+      }
+     ]
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedgerBySource",
+   "case": "solvency is per source: \"main\" cannot cover a fee charged to \"bank\"",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 1,
+      "occurredAt": "2026-01-05T09:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "fee",
+      "amountEur": -4,
+      "occurredAt": "2026-01-06T09:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: fee of -4 € at 2026-01-06T09:00:00Z exceeds the available balance of 0 € by 4 €."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "builds mirrored double-entry legs sharing the timestamp",
+   "input": {
+    "fromSourceId": "main",
+    "toSourceId": "bank",
+    "amountEur": 500,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": {
+    "outgoing": {
+     "kind": "transfer_out",
+     "amountEur": -500,
+     "occurredAt": "2026-02-01T12:00:00Z",
+     "sourceId": "main"
+    },
+    "incoming": {
+     "kind": "transfer_in",
+     "amountEur": 500,
+     "occurredAt": "2026-02-01T12:00:00Z",
+     "sourceId": "bank"
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "floors the magnitude to whole cents",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "b",
+    "amountEur": 10.005,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": {
+    "outgoing": {
+     "kind": "transfer_out",
+     "amountEur": -10,
+     "occurredAt": "2026-02-01T12:00:00Z",
+     "sourceId": "a"
+    },
+    "incoming": {
+     "kind": "transfer_in",
+     "amountEur": 10,
+     "occurredAt": "2026-02-01T12:00:00Z",
+     "sourceId": "b"
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a same-source transfer",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "a",
+    "amountEur": 10,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A transfer needs two different cash sources."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a zero amount",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "b",
+    "amountEur": 0,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Transfer amountEur must be a strictly positive number, got 0."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a negative amount",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "b",
+    "amountEur": -5,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Transfer amountEur must be a strictly positive number, got -5."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a sub-cent amount that floors away",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "b",
+    "amountEur": 0.001,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Transfer amountEur floors to €0.00 (got 0.001); nothing to move."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects an empty fromSourceId",
+   "input": {
+    "fromSourceId": "",
+    "toSourceId": "b",
+    "amountEur": 10,
+    "occurredAt": "2026-02-01T12:00:00Z"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Transfer fromSourceId must be a non-empty string."
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "rejects a malformed occurredAt",
+   "input": {
+    "fromSourceId": "a",
+    "toSourceId": "b",
+    "amountEur": 10,
+    "occurredAt": "not-a-date"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Movement occurredAt must be an ISO-8601 date/time, got not-a-date"
+   }
+  },
+  {
+   "fn": "pairedTransferMovements",
+   "case": "transfer legs are internal: the pair cancels in every roll-up",
+   "input": {
+    "fromSourceId": "main",
+    "toSourceId": "bank",
+    "amountEur": 500,
+    "occurredAt": "2026-01-06T10:00:00Z"
+   },
+   "output": {
+    "outgoing": {
+     "kind": "transfer_out",
+     "amountEur": -500,
+     "occurredAt": "2026-01-06T10:00:00Z",
+     "sourceId": "main"
+    },
+    "incoming": {
+     "kind": "transfer_in",
+     "amountEur": 500,
+     "occurredAt": "2026-01-06T10:00:00Z",
+     "sourceId": "bank"
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "cashBalance",
+   "case": "a transfer pair cancels to exactly 0",
+   "input": {
+    "movements": [
+     {
+      "kind": "transfer_out",
+      "amountEur": -500,
+      "occurredAt": "2026-02-01T12:00:00Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 500,
+      "occurredAt": "2026-02-01T12:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "computes the owner example exactly: 123.45 -> 200.00 is +76.55",
+   "input": {
+    "currentBalanceEur": 123.45,
+    "targetBalanceEur": 200
+   },
+   "output": 76.55,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "is symmetric for negative deltas: 200.00 -> 123.45 is -76.55",
+   "input": {
+    "currentBalanceEur": 200,
+    "targetBalanceEur": 123.45
+   },
+   "output": -76.55,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "floors both operands to cents before differencing (0 -> 100.006)",
+   "input": {
+    "currentBalanceEur": 0,
+    "targetBalanceEur": 100.006
+   },
+   "output": 100,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "floors both operands to cents before differencing (100.004 -> 100.004)",
+   "input": {
+    "currentBalanceEur": 100.004,
+    "targetBalanceEur": 100.004
+   },
+   "output": 0,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "setting a balance to 0.00 withdraws everything",
+   "input": {
+    "currentBalanceEur": 123.45,
+    "targetBalanceEur": 0
+   },
+   "output": -123.45,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceDelta",
+   "case": "rejects a negative target",
+   "input": {
+    "currentBalanceEur": 100,
+    "targetBalanceEur": -1
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "Set-balance target must be a finite non-negative number of EUR, got -1."
+   }
+  },
+  {
+   "fn": "setBalanceMovement",
+   "case": "builds a normal deposit for a positive delta",
+   "input": {
+    "sourceId": "bank",
+    "currentBalanceEur": 123.45,
+    "targetBalanceEur": 200,
+    "occurredAt": "2026-03-01T08:00:00Z"
+   },
+   "output": {
+    "kind": "deposit",
+    "amountEur": 76.55,
+    "occurredAt": "2026-03-01T08:00:00Z",
+    "sourceId": "bank"
+   },
+   "throws": null
+  },
+  {
+   "fn": "setBalanceMovement",
+   "case": "builds a withdrawal for a negative delta",
+   "input": {
+    "sourceId": "bank",
+    "currentBalanceEur": 200,
+    "targetBalanceEur": 123.45,
+    "occurredAt": "2026-03-01T08:00:00Z"
+   },
+   "output": {
+    "kind": "withdrawal",
+    "amountEur": -76.55,
+    "occurredAt": "2026-03-01T08:00:00Z",
+    "sourceId": "bank"
+   },
+   "throws": null
+  },
+  {
+   "fn": "setBalanceMovement",
+   "case": "records nothing when the target equals the current balance",
+   "input": {
+    "sourceId": "bank",
+    "currentBalanceEur": 200,
+    "targetBalanceEur": 200,
+    "occurredAt": "2026-03-01T08:00:00Z"
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "setBalanceMovement",
+   "case": "set-balance deltas are external flows",
+   "input": {
+    "sourceId": "bank",
+    "currentBalanceEur": 0,
+    "targetBalanceEur": 500,
+    "occurredAt": "2026-03-01T08:00:00Z"
+   },
+   "output": {
+    "kind": "deposit",
+    "amountEur": 500,
+    "occurredAt": "2026-03-01T08:00:00Z",
+    "sourceId": "bank"
+   },
+   "throws": null
+  },
+  {
+   "fn": "externalCashFlowsForTwr",
+   "case": "a set-balance deposit is an external flow like any other",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 500,
+      "occurredAt": "2026-03-01T08:00:00Z",
+      "sourceId": "bank"
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-03-01",
+     "flowEur": 500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "isExternalCashMovement",
+   "case": "a set-balance movement’s kind is external",
+   "input": {
+    "kind": "deposit"
+   },
+   "output": true,
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "returns an empty series without movements at all",
+   "input": {
+    "movements": [],
+    "endDay": "2026-01-05"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "returns an empty series when every movement is after endDay",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-02-01T10:00:00.000Z",
+      "sourceId": "s1"
+     }
+    ],
+    "endDay": "2026-01-05"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "carries each source’s EOD balance forward daily",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T10:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 50,
+      "occurredAt": "2026-01-03T10:00:00.000Z",
+      "sourceId": "bank"
+     }
+    ],
+    "endDay": "2026-01-04"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      }
+     ]
+    },
+    {
+     "date": "2026-01-02",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      }
+     ]
+    },
+    {
+     "date": "2026-01-03",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      },
+      {
+       "sourceId": "bank",
+       "balanceEur": 50
+      }
+     ]
+    },
+    {
+     "date": "2026-01-04",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      },
+      {
+       "sourceId": "bank",
+       "balanceEur": 50
+      }
+     ]
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "nets same-day movements to one EOD figure and moves a transfer between sources",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T09:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_out",
+      "amountEur": -40,
+      "occurredAt": "2026-01-01T12:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "transfer_in",
+      "amountEur": 40,
+      "occurredAt": "2026-01-01T12:00:00.000Z",
+      "sourceId": "bank"
+     }
+    ],
+    "endDay": "2026-01-01"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 60
+      },
+      {
+       "sourceId": "bank",
+       "balanceEur": 40
+      }
+     ]
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "sums per day to exactly the net-worth curve’s cash leg",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 123.45,
+      "occurredAt": "2026-01-01T10:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -23.45,
+      "occurredAt": "2026-01-02T10:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 10,
+      "occurredAt": "2026-01-02T10:00:00.000Z",
+      "sourceId": "bank"
+     }
+    ],
+    "endDay": "2026-01-03"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 123.45
+      }
+     ]
+    },
+    {
+     "date": "2026-01-02",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      },
+      {
+       "sourceId": "bank",
+       "balanceEur": 10
+      }
+     ]
+    },
+    {
+     "date": "2026-01-03",
+     "balances": [
+      {
+       "sourceId": "main",
+       "balanceEur": 100
+      },
+      {
+       "sourceId": "bank",
+       "balanceEur": 10
+      }
+     ]
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netWorthSeries",
+   "case": "the net-worth curve the per-source split must sum to, day for day",
+   "input": {
+    "holdingsValues": [],
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 123.45,
+      "occurredAt": "2026-01-01T10:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -23.45,
+      "occurredAt": "2026-01-02T10:00:00.000Z",
+      "sourceId": "main"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 10,
+      "occurredAt": "2026-01-02T10:00:00.000Z",
+      "sourceId": "bank"
+     }
+    ],
+    "today": "2026-01-03"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 123.45
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 110
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 110
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "fails loud on a malformed endDay",
+   "input": {
+    "movements": [],
+    "endDay": "nope"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "endDay must be ISO YYYY-MM-DD, got nope"
+   }
+  },
+  {
+   "fn": "cashBySourceOverTime",
+   "case": "fails loud on a movement whose sign contradicts its kind",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": -5,
+      "occurredAt": "2026-01-01T10:00:00.000Z",
+      "sourceId": "s1"
+     }
+    ],
+    "endDay": "2026-01-02"
+   },
+   "output": null,
+   "throws": {
+    "name": "CashLedgerError",
+    "message": "A deposit must carry a strictly positive amountEur, got -5 (movement 0)."
+   }
+  }
+ ]
+}

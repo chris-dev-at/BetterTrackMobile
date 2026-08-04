@@ -264,6 +264,13 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.zxing.core)
 
+    // W3 — BTVAULT1 vault crypto (docs/S3S4_STORAGE_PLAN.md §2.2). Bouncy Castle
+    // supplies Argon2id (Argon2BytesGenerator, the lightweight API — the JCA
+    // provider is never registered), which neither the JDK nor Android ships.
+    // Pure Java on purpose: at.bettertrack.app.vault must stay Android-free so
+    // the byte-identity conformance suite runs as a plain JVM unit test.
+    implementation(libs.bouncycastle.prov)
+
     // Step 5 — local database (Room) & sync engine core (WorkManager).
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

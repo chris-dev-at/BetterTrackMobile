@@ -46,6 +46,30 @@ import {
   type StatSeriesPoint,
 } from './vendor/domain/src/seriesStats.ts';
 import { resolvePortfolioSetting } from './vendor/domain/src/settingsScope.ts';
+import {
+  applyCashMovement,
+  CASH_MOVEMENT_KINDS,
+  CASH_MOVEMENT_SIGN,
+  cashBalance,
+  cashBalanceOverTime,
+  cashBalancesBySource,
+  cashBySourceOverTime,
+  EXTERNAL_CASH_MOVEMENT_KINDS,
+  externalCashFlowsForTwr,
+  floorCents,
+  isExternalCashMovement,
+  netWorthSeries,
+  pairedTransferMovements,
+  projectCashLedger,
+  projectCashLedgerBySource,
+  setBalanceDelta,
+  setBalanceMovement,
+  spendableAsOf,
+  type CashLedgerEntry,
+  type CashMovement,
+  type CashMovementKind,
+  type SourcedCashMovement,
+} from './vendor/domain/src/cashLedger.ts';
 
 import serverTwrParity from './vendor/fixtures/serverTwrParity.fixture.json' with { type: 'json' };
 
@@ -74,6 +98,7 @@ const vectors: Record<string, Vector[]> = {
   holdings: [],
   seriesStats: [],
   settingsScope: [],
+  cashLedger: [],
   serverTwrParity: [],
 };
 const skips: Skip[] = [];
@@ -1317,6 +1342,1088 @@ function genSeriesStats(): void {
 }
 
 // ===========================================================================
+// cashLedger.ts  (+ the cashBySourceOverTime half of dailySnapshotSeries.test.ts;
+// W2 already covered that file's costBasisOverTime half under `holdings`)
+// ===========================================================================
+
+const cash = (fn: string, name: string, input: unknown, run: () => unknown): void =>
+  emit('cashLedger', fn, name, input, run);
+
+/** cashLedger.test.ts `mv()` */
+function mv(kind: CashMovementKind, amountEur: number, occurredAt: string): CashMovement {
+  return { kind, amountEur, occurredAt };
+}
+
+/** cashLedger.test.ts `smv()` */
+function smv(
+  sourceId: string,
+  kind: CashMovementKind,
+  amountEur: number,
+  occurredAt: string,
+): SourcedCashMovement {
+  return { sourceId, kind, amountEur, occurredAt };
+}
+
+/** dailySnapshotSeries.test.ts `movement()` */
+function sourced(
+  overrides: Partial<SourcedCashMovement> & { occurredAt: string },
+): SourcedCashMovement {
+  return { kind: 'deposit', amountEur: 100, sourceId: 's1', ...overrides };
+}
+
+/** cashLedger.test.ts `mixedSequence()` */
+function mixedSequence(): CashMovement[] {
+  return [
+    mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+    mv('buy', -400, '2026-01-06T10:00:00Z'),
+    mv('sell_proceeds', 150, '2026-01-07T11:00:00Z'),
+    mv('withdrawal', -200, '2026-01-08T12:00:00Z'),
+  ];
+}
+
+// --- canonical JSON shapes -------------------------------------------------
+//
+// JSON.stringify renders a `Map` as `{}` and would carry whatever key ORDER the
+// test helper happened to build a movement literal with, so every ledger value
+// that travels in a vector goes through one of these shapers. The Kotlin
+// encoders in DomainVectors.kt mirror them exactly, which is also what makes the
+// Map ITERATION ORDER (plan §3.3 rule 4) an asserted property rather than an
+// invisible one — an array of pairs has an order, a JSON object does not.
+
+interface MovementJson {
+  kind: string;
+  amountEur: number;
+  occurredAt: string;
+  sourceId?: string;
+}
+
+function mJson(m: CashMovement): MovementJson {
+  const out: MovementJson = { kind: m.kind, amountEur: m.amountEur, occurredAt: m.occurredAt };
+  const sourceId = (m as SourcedCashMovement).sourceId;
+  if (sourceId !== undefined) out.sourceId = sourceId;
+  return out;
+}
+
+const msJson = (movements: readonly CashMovement[]): MovementJson[] => movements.map(mJson);
+
+const entriesJson = (
+  entries: readonly CashLedgerEntry[],
+): { movement: MovementJson; balanceEur: number }[] =>
+  entries.map((e) => ({ movement: mJson(e.movement), balanceEur: e.balanceEur }));
+
+const balancesJson = (
+  balances: ReadonlyMap<string, number>,
+): { sourceId: string; balanceEur: number }[] =>
+  [...balances.entries()].map(([sourceId, balanceEur]) => ({ sourceId, balanceEur }));
+
+// --- floorCents ------------------------------------------------------------
+
+function genFloorCents(): void {
+  const run = (name: string, amountEur: number): void =>
+    cash('floorCents', name, { amountEur }, () => floorCents(amountEur));
+
+  run('no-op on values already expressible in whole cents (0)', 0);
+  run('no-op on values already expressible in whole cents (100)', 100);
+  run('no-op on values already expressible in whole cents (1234.56)', 1234.56);
+  run('no-op on values already expressible in whole cents (-99.99)', -99.99);
+  run('an exact cent whose decimal literal underflows survives (8.61)', 8.61);
+  run('an exact cent whose decimal literal underflows survives (0.07)', 0.07);
+
+  run('floors sub-cent EUR down, never up (100.006)', 100.006);
+  run('floors sub-cent EUR down, never up (100.004)', 100.004);
+  run('floors sub-cent EUR down, never up (0.005)', 0.005);
+  run('floors sub-cent EUR down, never up (0.009999)', 0.009999);
+  run('floors sub-cent EUR down, never up (1.005 is stored as 1.00499…)', 1.005);
+  run('floors sub-cent EUR down, never up (2.675)', 2.675);
+
+  run('truncates the magnitude toward zero for outflows (-100.006)', -100.006);
+  run('truncates the magnitude toward zero for outflows (-0.005)', -0.005);
+  run('truncates the magnitude toward zero for outflows (-1.005)', -1.005);
+
+  run('sheds FP summation dust (0.1 + 0.2 - 0.3)', 0.1 + 0.2 - 0.3);
+  run('a value a hair below a cent boundary still floors onto it (0.1 + 0.2)', 0.1 + 0.2);
+
+  // "makes withdraw-all safe": the reported balance is the floored true balance,
+  // and withdrawing it leaves a residue that itself floors to exactly 0.
+  const trueBalance = cashBalance([mv('deposit', 100.006, '2026-01-01T00:00:00Z')]);
+  cash(
+    'cashBalance',
+    'withdraw-all safety: the true (unrounded) balance of a sub-cent deposit',
+    { movements: msJson([mv('deposit', 100.006, '2026-01-01T00:00:00Z')]) },
+    () => cashBalance([mv('deposit', 100.006, '2026-01-01T00:00:00Z')]),
+  );
+  run('makes withdraw-all safe: the reported balance', trueBalance);
+  run('makes withdraw-all safe: the residue after withdrawing it', trueBalance - floorCents(trueBalance));
+
+  skip(
+    'floorCents',
+    'throws on a non-finite amount',
+    'inputs are Number.POSITIVE_INFINITY / Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("floorCents rejects a non-finite amount")',
+  );
+  skip(
+    'floorCents',
+    'returns POSITIVE zero for a floored-away negative (Object.is checks)',
+    'signed-zero identity: JSON carries no -0 (the generator refuses to emit one), so `Object.is(floorCents(-0.005), 0)` cannot travel in a vector — hand-ported in CashLedgerHandPortedTest ("floorCents never returns negative zero")',
+  );
+}
+
+// --- cashBalance -----------------------------------------------------------
+
+function genCashBalance(): void {
+  const run = (name: string, movements: CashMovement[]): void =>
+    cash('cashBalance', name, { movements: msJson(movements) }, () => cashBalance(movements));
+
+  run('is the sum of signed movements across a mixed sequence', mixedSequence());
+  run('reconciles: current cash === sum of movements (mixed sequence)', mixedSequence());
+  run('reconciles: current cash === sum of movements (two small deposits)', [
+    mv('deposit', 0.1, '2026-01-05'),
+    mv('deposit', 0.2, '2026-01-06'),
+  ]);
+  run('reconciles: current cash === sum of movements (decimal round trip)', [
+    mv('deposit', 123.45, '2026-01-05T09:00:00Z'),
+    mv('withdrawal', -23.45, '2026-01-05T10:00:00Z'),
+    mv('buy', -100, '2026-01-06T09:00:00Z'),
+    mv('sell_proceeds', 250.5, '2026-02-01T09:00:00Z'),
+    mv('withdrawal', -250.5, '2026-02-02T09:00:00Z'),
+  ]);
+  run('is 0 for an empty ledger', []);
+  run('does not enforce non-negativity — reconciliation is a pure sum', [
+    mv('deposit', 100, '2026-01-05'),
+    mv('buy', -150, '2026-01-06'),
+  ]);
+  run('rejects an unknown kind', [mv('jackpot' as CashMovementKind, 10, '2026-01-05')]);
+  run('rejects a zero amount', [mv('deposit', 0, '2026-01-05')]);
+  run('rejects a sign that contradicts the kind (deposit)', [mv('deposit', -10, '2026-01-05')]);
+  run('rejects a sign that contradicts the kind (sell_proceeds)', [
+    mv('sell_proceeds', -10, '2026-01-05'),
+  ]);
+  run('rejects a sign that contradicts the kind (withdrawal)', [
+    mv('withdrawal', 10, '2026-01-05'),
+  ]);
+  run('rejects a sign that contradicts the kind (buy)', [mv('buy', 10, '2026-01-05')]);
+  run('rejects an unparseable timestamp and names the movement index', [
+    mv('deposit', 10, '2026-01-05'),
+    mv('deposit', 10, 'yesterday-ish'),
+  ]);
+  run('a positive fee is rejected (fee is negative-only)', [
+    mv('fee', 12.5, '2026-01-05T09:00:00Z'),
+  ]);
+  run('a negative fee is accepted', [mv('fee', -12.5, '2026-01-05T09:00:00Z')]);
+  run('rolls the per-source union up to the portfolio balance', [
+    smv('main', 'deposit', 1000, '2026-01-05T09:00:00Z'),
+    smv('bank', 'deposit', 250, '2026-01-05T10:00:00Z'),
+    smv('main', 'buy', -400, '2026-01-06T10:00:00Z'),
+    smv('bank', 'withdrawal', -50, '2026-01-07T10:00:00Z'),
+  ]);
+
+  skip(
+    'cashBalance',
+    'rejects non-finite amounts',
+    'inputs are Number.NaN / ±Number.POSITIVE_INFINITY, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("cashBalance rejects non-finite amounts")',
+  );
+}
+
+// --- applyCashMovement -----------------------------------------------------
+
+function genApplyCashMovement(): void {
+  const run = (name: string, balanceEur: number, movement: CashMovement): void =>
+    cash('applyCashMovement', name, { balanceEur, movement: mJson(movement) }, () =>
+      applyCashMovement(balanceEur, movement),
+    );
+
+  run('returns the balance after the movement (deposit)', 0, mv('deposit', 1000, '2026-01-05'));
+  run('returns the balance after the movement (buy)', 1000, mv('buy', -400, '2026-01-05'));
+  run(
+    'returns the balance after the movement (withdrawal to exactly 0)',
+    600,
+    mv('withdrawal', -600, '2026-01-05'),
+  );
+  run('allows spending the balance down to exactly 0', 250, mv('buy', -250, '2026-01-05'));
+  run(
+    'throws the typed InsufficientCashError when a buy would overdraw',
+    100,
+    mv('buy', -150, '2026-01-05'),
+  );
+  run('throws when a withdrawal would overdraw', 100, mv('withdrawal', -100.01, '2026-01-05'));
+  run(
+    'carries the available balance, the movement, and the exact shortfall',
+    100,
+    mv('buy', -150, '2026-01-05T09:00:00Z'),
+  );
+  run(
+    'InsufficientCashError is not a CashLedgerError — valid, just unaffordable',
+    0,
+    mv('withdrawal', -1, '2026-01-05'),
+  );
+
+  // "tolerates FP dust": the three-step chain, each step recorded with the exact
+  // double the previous step returned.
+  let balance = 0;
+  const dustUp: [string, number, CashMovement][] = [];
+  dustUp.push(['0.1 + 0.2 in, 0.3 out (step 1)', balance, mv('deposit', 0.1, '2026-01-05')]);
+  balance = applyCashMovement(balance, mv('deposit', 0.1, '2026-01-05'));
+  dustUp.push(['0.1 + 0.2 in, 0.3 out (step 2)', balance, mv('deposit', 0.2, '2026-01-06')]);
+  balance = applyCashMovement(balance, mv('deposit', 0.2, '2026-01-06'));
+  dustUp.push(['0.1 + 0.2 in, 0.3 out (step 3, does not throw)', balance, mv('buy', -0.3, '2026-01-07')]);
+  for (const [name, b, m] of dustUp) run(`tolerates FP dust: ${name}`, b, m);
+
+  balance = 0;
+  const dustDown: [string, number, CashMovement][] = [];
+  dustDown.push(['0.3 in, 0.1 + 0.2 out (step 1)', balance, mv('deposit', 0.3, '2026-01-05')]);
+  balance = applyCashMovement(balance, mv('deposit', 0.3, '2026-01-05'));
+  dustDown.push(['0.3 in, 0.1 + 0.2 out (step 2)', balance, mv('buy', -0.1, '2026-01-06')]);
+  balance = applyCashMovement(balance, mv('buy', -0.1, '2026-01-06'));
+  dustDown.push(['0.3 in, 0.1 + 0.2 out (step 3, does not throw)', balance, mv('buy', -0.2, '2026-01-07')]);
+  for (const [name, b, m] of dustDown) run(`tolerates dust the other way: ${name}`, b, m);
+
+  run('a real overdraft of one cent is NOT dust and throws', 0.3, mv('buy', -0.31, '2026-01-05'));
+  run('rejects a negative starting balance', -1, mv('deposit', 10, '2026-01-05'));
+
+  skip(
+    'applyCashMovement',
+    'rejects a non-finite starting balance',
+    'inputs are Number.NaN / Number.POSITIVE_INFINITY, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("applyCashMovement rejects a non-finite starting balance")',
+  );
+  skip(
+    'applyCashMovement',
+    'InsufficientCashError field + identity assertions',
+    'asserts err.balanceEur / err.shortfallEur / err.name, `err.movement` REFERENTIAL identity, and `not.toBeInstanceOf(CashLedgerError)` — none of which is input→output data — hand-ported in CashLedgerHandPortedTest',
+  );
+}
+
+// --- projectCashLedger -----------------------------------------------------
+
+function genProjectCashLedger(): void {
+  const run = (name: string, movements: CashMovement[]): void =>
+    cash('projectCashLedger', name, { movements: msJson(movements) }, () =>
+      entriesJson(projectCashLedger(movements)),
+    );
+
+  run('returns the running balance after every movement (balance-over-time)', mixedSequence());
+  run('a sequence that stays >= 0 does not throw', mixedSequence());
+  run('a sequence that dips negative does throw', [
+    mv('deposit', 100, '2026-01-05'),
+    mv('buy', -100, '2026-01-06'),
+    mv('withdrawal', -1, '2026-01-07'),
+  ]);
+  run('final projected balance equals cashBalance', mixedSequence());
+  run('replays by occurredAt, not input order', [
+    mv('buy', -500, '2026-01-06T10:00:00Z'),
+    mv('deposit', 1000, '2026-01-05T10:00:00Z'),
+  ]);
+  run('a buy dated before its funding deposit throws, wherever it is listed', [
+    mv('deposit', 1000, '2026-01-06T10:00:00Z'),
+    mv('buy', -500, '2026-01-05T10:00:00Z'),
+  ]);
+  run('breaks timestamp ties by input order (deposit first: accepted)', [
+    mv('deposit', 100, '2026-01-05T10:00:00Z'),
+    mv('buy', -100, '2026-01-05T10:00:00Z'),
+  ]);
+  run('breaks timestamp ties by input order (buy first: rejected)', [
+    mv('buy', -100, '2026-01-05T10:00:00Z'),
+    mv('deposit', 100, '2026-01-05T10:00:00Z'),
+  ]);
+  run('does not mutate the input array', [
+    mv('buy', -500, '2026-01-06T10:00:00Z'),
+    mv('deposit', 1000, '2026-01-05T10:00:00Z'),
+  ]);
+  run('returns [] for an empty ledger', []);
+  run('validates every movement up front', [
+    mv('deposit', 10, '2026-01-05'),
+    mv('deposit', -1, '2026-01-06'),
+  ]);
+  run('a fee lowers the balance and is gated by the same no-negative rule', [
+    mv('deposit', 100, '2026-01-05T09:00:00Z'),
+    mv('fee', -2.5, '2026-01-06T09:00:00Z'),
+  ]);
+  run('an unfunded fee overdraws like any other outflow', [
+    mv('fee', -2.5, '2026-01-06T09:00:00Z'),
+  ]);
+  run('per-source validity implies the portfolio-level union never dips negative', [
+    smv('main', 'deposit', 500, '2026-01-05T09:00:00Z'),
+    smv('main', 'transfer_out', -500, '2026-01-06T10:00:00Z'),
+    smv('bank', 'transfer_in', 500, '2026-01-06T10:00:00Z'),
+    smv('bank', 'withdrawal', -500, '2026-01-07T10:00:00Z'),
+  ]);
+
+  // spendableAsOf's `gateAccepts()` helper: the write-boundary gate's own verdict
+  // on inserting a buy of `cost` at `at`, recorded as real projections.
+  const gate = (name: string, movements: CashMovement[], cost: number, at: string): void =>
+    run(`gate: ${name}`, [...movements, mv('buy', -cost, at)]);
+
+  gate(
+    'a 400 buy backdated before the deposit overdraws',
+    [mv('deposit', 500, '2026-02-01T00:00:00.000Z')],
+    400,
+    '2025-06-01T00:00:00.000Z',
+  );
+  gate(
+    'spending exactly the pre-existing balance is accepted',
+    [mv('deposit', 500, '2025-01-01T00:00:00.000Z')],
+    500,
+    '2025-06-01T00:00:00.000Z',
+  );
+  gate(
+    'one cent more than the pre-existing balance is rejected',
+    [mv('deposit', 500, '2025-01-01T00:00:00.000Z')],
+    500.01,
+    '2025-06-01T00:00:00.000Z',
+  );
+  gate(
+    'the later withdrawal binds the spend to 100 (accepted)',
+    [
+      mv('deposit', 1000, '2026-01-01T00:00:00.000Z'),
+      mv('withdrawal', -900, '2026-01-02T00:00:00.000Z'),
+    ],
+    100,
+    '2026-01-01T00:00:00.000Z',
+  );
+  gate(
+    'the later withdrawal binds the spend to 100 (150 rejected)',
+    [
+      mv('deposit', 1000, '2026-01-01T00:00:00.000Z'),
+      mv('withdrawal', -900, '2026-01-02T00:00:00.000Z'),
+    ],
+    150,
+    '2026-01-01T00:00:00.000Z',
+  );
+  gate(
+    'a same-instant deposit funds that instant’s buy',
+    [mv('deposit', 400, '2025-06-01T00:00:00.000Z')],
+    400,
+    '2025-06-01T00:00:00.000Z',
+  );
+  gate(
+    'mixed history: spendable is accepted exactly',
+    [
+      mv('deposit', 300, '2026-01-10T00:00:00.000Z'),
+      mv('deposit', 500, '2026-03-01T00:00:00.000Z'),
+      mv('withdrawal', -200, '2026-04-01T00:00:00.000Z'),
+    ],
+    300,
+    '2026-02-01T00:00:00.000Z',
+  );
+  gate(
+    'mixed history: one cent past spendable is rejected',
+    [
+      mv('deposit', 300, '2026-01-10T00:00:00.000Z'),
+      mv('deposit', 500, '2026-03-01T00:00:00.000Z'),
+      mv('withdrawal', -200, '2026-04-01T00:00:00.000Z'),
+    ],
+    300.01,
+    '2026-02-01T00:00:00.000Z',
+  );
+
+  skip(
+    'projectCashLedger',
+    'does not mutate the input array (mutation assertion)',
+    'asserts the CALLER’s array is untouched, which is a property of the port, not of its output — hand-ported in CashLedgerHandPortedTest ("projectCashLedger does not mutate the input list")',
+  );
+}
+
+// --- cashBalanceOverTime ---------------------------------------------------
+
+function genCashBalanceOverTime(): void {
+  const run = (name: string, movements: CashMovement[]): void =>
+    cash('cashBalanceOverTime', name, { movements: msJson(movements) }, () =>
+      cashBalanceOverTime(movements),
+    );
+
+  run('emits one point per movement day with that day’s closing balance', mixedSequence());
+  run('collapses same-day movements to the last balance of the day', [
+    mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+    mv('buy', -400, '2026-01-05T15:00:00Z'),
+    mv('withdrawal', -100, '2026-01-07T09:00:00Z'),
+  ]);
+  run('is sparse — days without movements produce no point', mixedSequence());
+  run('rejects negative-dipping histories like the projection', [
+    mv('withdrawal', -1, '2026-01-05'),
+  ]);
+  run('returns [] for an empty ledger', []);
+}
+
+// --- spendableAsOf ---------------------------------------------------------
+
+function genSpendableAsOf(): void {
+  const run = (name: string, movements: CashMovement[], occurredAt: string): void =>
+    cash('spendableAsOf', name, { movements: msJson(movements), occurredAt }, () =>
+      spendableAsOf(movements, occurredAt),
+    );
+
+  run(
+    'is 0 when the cash was only deposited AFTER the buy date',
+    [mv('deposit', 500, '2026-02-01T00:00:00.000Z')],
+    '2025-06-01T00:00:00.000Z',
+  );
+  run(
+    'is the balance already present when the deposit predates the buy',
+    [mv('deposit', 500, '2025-01-01T00:00:00.000Z')],
+    '2025-06-01T00:00:00.000Z',
+  );
+  run(
+    'takes the running MINIMUM from the buy instant on — a later withdrawal binds',
+    [
+      mv('deposit', 1000, '2026-01-01T00:00:00.000Z'),
+      mv('withdrawal', -900, '2026-01-02T00:00:00.000Z'),
+    ],
+    '2026-01-01T00:00:00.000Z',
+  );
+  run(
+    'counts a same-instant deposit as available (credits before debits)',
+    [mv('deposit', 400, '2025-06-01T00:00:00.000Z')],
+    '2025-06-01T00:00:00.000Z',
+  );
+  run(
+    'a buy dated at/after the newest movement yields the current balance',
+    [
+      mv('deposit', 1000, '2026-01-01T00:00:00.000Z'),
+      mv('buy', -300, '2026-01-05T00:00:00.000Z'),
+    ],
+    '2026-07-01T00:00:00.000Z',
+  );
+  run('is 0 for an empty ledger', [], '2025-06-01T00:00:00.000Z');
+  run(
+    'matches the write-boundary gate across a mixed history',
+    [
+      mv('deposit', 300, '2026-01-10T00:00:00.000Z'),
+      mv('deposit', 500, '2026-03-01T00:00:00.000Z'),
+      mv('withdrawal', -200, '2026-04-01T00:00:00.000Z'),
+    ],
+    '2026-02-01T00:00:00.000Z',
+  );
+}
+
+// --- the TWR classifier ----------------------------------------------------
+
+function genTwrClassification(): void {
+  cash('CASH_MOVEMENT_KINDS', 'the declared kinds, in declaration order', {}, () => [
+    ...CASH_MOVEMENT_KINDS,
+  ]);
+  cash(
+    'CASH_MOVEMENT_SIGN',
+    'the required sign of EVERY kind, in declaration order',
+    {},
+    () =>
+      Object.entries(CASH_MOVEMENT_SIGN).map(([kind, sign]) => ({ kind, sign })),
+  );
+  cash('EXTERNAL_CASH_MOVEMENT_KINDS', 'exactly deposit + withdrawal', {}, () => [
+    ...EXTERNAL_CASH_MOVEMENT_KINDS,
+  ]);
+
+  for (const kind of CASH_MOVEMENT_KINDS) {
+    cash(
+      'isExternalCashMovement',
+      `pins the classification of every kind (${kind})`,
+      { kind },
+      () => isExternalCashMovement(kind),
+    );
+  }
+
+  const run = (name: string, movements: CashMovement[]): void =>
+    cash('externalCashFlowsForTwr', name, { movements: msJson(movements) }, () =>
+      externalCashFlowsForTwr(movements),
+    );
+
+  run('deposit-then-buy-from-cash yields exactly ONE external flow: the deposit', [
+    mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+    mv('buy', -1000, '2026-01-06T10:00:00Z'),
+  ]);
+  run('returns only deposits/withdrawals; buy and sell_proceeds are internal', mixedSequence());
+  run('keeps the FlowPoint sign convention and sorts ascending', [
+    mv('withdrawal', -200, '2026-01-08'),
+    mv('deposit', 1000, '2026-01-05'),
+  ]);
+  run('nets same-day external flows into one point', [
+    mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+    mv('deposit', 500, '2026-01-05T11:00:00Z'),
+    mv('withdrawal', -300, '2026-01-05T15:00:00Z'),
+  ]);
+  run('is a pure classifier — it does not enforce solvency', [
+    mv('withdrawal', -100, '2026-01-05'),
+  ]);
+  run('returns [] for an empty ledger', []);
+  run('returns [] when there are no external movements', [
+    mv('sell_proceeds', 150, '2026-01-05'),
+    mv('buy', -150, '2026-01-06'),
+  ]);
+  run('validates movements like the rest of the engine', [mv('deposit', -10, '2026-01-05')]);
+  run('a fee never enters the TWR flow series', [
+    mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+    mv('fee', -10, '2026-01-06T09:00:00Z'),
+    mv('withdrawal', -10, '2026-01-07T09:00:00Z'),
+  ]);
+  run('none of the three tax kinds is ever an external flow', [
+    mv('dividend', 50, '2026-01-07T10:00:00Z'),
+    mv('tax_withholding', -13.75, '2026-01-08T10:00:00Z'),
+    mv('tax_refund', 5, '2026-01-08T11:00:00Z'),
+  ]);
+}
+
+// --- compositions with holdings.timeWeightedReturn -------------------------
+//
+// Every composition case in the suite runs the ledger classifier / net-worth
+// builder and feeds the result to `timeWeightedReturn`. Each stage is emitted as
+// its own vector against the REAL intermediate the TS produced, so the chain is
+// covered end to end without inventing a composite entry point.
+
+function genLedgerTwrCompositions(): void {
+  const flows = (name: string, movements: CashMovement[]): { date: string; flowEur: number }[] => {
+    cash('externalCashFlowsForTwr', name, { movements: msJson(movements) }, () =>
+      externalCashFlowsForTwr(movements),
+    );
+    return externalCashFlowsForTwr(movements) as { date: string; flowEur: number }[];
+  };
+  const twr = (
+    name: string,
+    values: { date: string; valueEur: number }[],
+    flowPoints: { date: string; flowEur: number }[],
+  ): void =>
+    cash('timeWeightedReturn', name, { values, flows: flowPoints }, () =>
+      timeWeightedReturn(values, flowPoints),
+    );
+  const netWorth = (
+    name: string,
+    holdingsValues: { date: string; valueEur: number }[],
+    movements: CashMovement[],
+    today: string,
+  ): { date: string; valueEur: number }[] => {
+    cash(
+      'netWorthSeries',
+      name,
+      { holdingsValues, movements: msJson(movements), today },
+      () => netWorthSeries({ holdingsValues, movements, today }),
+    );
+    return netWorthSeries({ holdingsValues, movements, today });
+  };
+
+  // --- the `fee` kind DRAGS the return ---
+  {
+    const feeFreeValues = [
+      { date: '2026-01-05', valueEur: 1000 },
+      { date: '2026-01-06', valueEur: 1000 },
+      { date: '2026-01-07', valueEur: 1100 },
+    ];
+    const feePaidValues = [
+      { date: '2026-01-05', valueEur: 1000 },
+      { date: '2026-01-06', valueEur: 990 },
+      { date: '2026-01-07', valueEur: 1089 },
+    ];
+    const deposit = mv('deposit', 1000, '2026-01-05T09:00:00Z');
+    const freeFlows = flows('fee drag: the fee-free ledger’s external flows', [deposit]);
+    const paidFlows = flows('fee drag: the fee-charged ledger’s external flows', [
+      deposit,
+      mv('fee', -10, '2026-01-06T09:00:00Z'),
+    ]);
+    twr('fee drag: the fee-free portfolio earns the pure market return', feeFreeValues, freeFlows);
+    twr('fee drag: the fee-charged portfolio earns strictly less', feePaidValues, paidFlows);
+
+    const sameValues = feePaidValues;
+    const withdrawalFlows = flows(
+      'fee vs withdrawal: the same 10 EUR booked as a withdrawal IS external',
+      [deposit, mv('withdrawal', -10, '2026-01-06T09:00:00Z')],
+    );
+    twr(
+      'fee vs withdrawal: as a withdrawal the drag is divided back out (the misreport)',
+      sameValues,
+      withdrawalFlows,
+    );
+    twr('fee vs withdrawal: as a fee the curve reads honestly', sameValues, paidFlows);
+  }
+
+  // --- TWR neutrality of cash-funded buys ---
+  {
+    const values = [
+      { date: '2026-01-05', valueEur: 1000 },
+      { date: '2026-01-06', valueEur: 1000 },
+      { date: '2026-01-07', valueEur: 1100 },
+    ];
+    const movements = [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('buy', -1000, '2026-01-06T10:00:00Z'),
+    ];
+    const f = flows('TWR neutrality: a cash-funded buy is not an external flow', movements);
+    twr('TWR neutrality: the performance curve is unaffected by cash -> stock', values, f);
+    twr('TWR neutrality counterfactual: misclassifying the buy corrupts the curve', values, [
+      { date: '2026-01-05', flowEur: 1000 },
+      { date: '2026-01-06', flowEur: -1000 },
+    ]);
+  }
+
+  // --- dividends and tax settlements are TWR-internal ---
+  {
+    const holdingsValues = [
+      { date: '2026-01-06', valueEur: 1000 },
+      { date: '2026-01-07', valueEur: 1000 },
+      { date: '2026-01-08', valueEur: 1000 },
+    ];
+    const funded: CashMovement[] = [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('buy', -1000, '2026-01-06T10:00:00Z'),
+    ];
+    const perfFor = (label: string, movements: CashMovement[]): void => {
+      const points = netWorth(`${label} (net worth)`, holdingsValues, movements, '2026-01-08');
+      const f = flows(`${label} (external flows)`, movements);
+      twr(`${label} (performance)`, points, f);
+    };
+
+    perfFor('a dividend MOVES the line: income the holdings generated', [
+      ...funded,
+      mv('dividend', 50, '2026-01-07T10:00:00Z'),
+    ]);
+    {
+      const movements = [...funded, mv('dividend', 50, '2026-01-07T10:00:00Z')];
+      const points = netWorthSeries({ holdingsValues, movements, today: '2026-01-08' });
+      twr('counterfactual: classifying that dividend as a deposit erases the income', points, [
+        ...externalCashFlowsForTwr(movements),
+        { date: '2026-01-07', flowEur: 50 },
+      ]);
+    }
+    perfFor('withheld tax drags the line — the curve reads NET of tax', [
+      ...funded,
+      mv('dividend', 50, '2026-01-07T10:00:00Z'),
+      mv('tax_withholding', -13.75, '2026-01-08T10:00:00Z'),
+    ]);
+    perfFor('a tax refund lifts the line back, symmetrically', [
+      ...funded,
+      mv('dividend', 50, '2026-01-07T10:00:00Z'),
+      mv('tax_withholding', -13.75, '2026-01-07T11:00:00Z'),
+      mv('tax_refund', 13.75, '2026-01-08T10:00:00Z'),
+    ]);
+  }
+
+  // --- transfer legs are invisible to both curves ---
+  {
+    const before = [
+      smv('main', 'deposit', 1000, '2026-01-05T09:00:00Z'),
+      smv('bank', 'deposit', 200, '2026-01-05T09:30:00Z'),
+    ];
+    const legs = pairedTransferMovements({
+      fromSourceId: 'main',
+      toSourceId: 'bank',
+      amountEur: 500,
+      occurredAt: '2026-01-06T10:00:00Z',
+    });
+    const after = [...before, legs.outgoing, legs.incoming];
+    const today = '2026-01-07';
+    const beforeFlows = flows('transfer legs: external flows BEFORE the transfer', before);
+    const afterFlows = flows('transfer legs: external flows AFTER the transfer (identical)', after);
+    const beforeValues = netWorth(
+      'transfer legs: net worth BEFORE the transfer',
+      [],
+      before,
+      today,
+    );
+    const afterValues = netWorth(
+      'transfer legs: net worth AFTER the transfer (identical)',
+      [],
+      after,
+      today,
+    );
+    twr('transfer legs: performance BEFORE the transfer', beforeValues, beforeFlows);
+    twr('transfer legs: performance AFTER the transfer (identical)', afterValues, afterFlows);
+  }
+
+  // --- netWorthSeries composes with timeWeightedReturn ---
+  {
+    const holdingsValues = [
+      { date: '2026-01-06', valueEur: 1000 },
+      { date: '2026-01-07', valueEur: 1100 },
+    ];
+    const movements = [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('buy', -1000, '2026-01-06T10:00:00Z'),
+    ];
+    const points = netWorth(
+      'composes with timeWeightedReturn (net worth)',
+      holdingsValues,
+      movements,
+      '2026-01-07',
+    );
+    const f = flows('composes with timeWeightedReturn (external flows)', movements);
+    twr('composes with timeWeightedReturn: deposit and conversion both link flat', points, f);
+  }
+}
+
+// --- netWorthSeries --------------------------------------------------------
+
+function genNetWorthSeries(): void {
+  const run = (
+    name: string,
+    holdingsValues: { date: string; valueEur: number }[],
+    movements: CashMovement[],
+    today: string,
+  ): void =>
+    cash(
+      'netWorthSeries',
+      name,
+      { holdingsValues, movements: msJson(movements), today },
+      () => netWorthSeries({ holdingsValues, movements, today }),
+    );
+
+  run('returns an empty series when there are neither holdings values nor movements', [], [], '2026-01-10');
+  run(
+    'is the identity on the holdings curve when the ledger is empty',
+    [
+      { date: '2026-01-05', valueEur: 1000 },
+      { date: '2026-01-06', valueEur: 1100 },
+    ],
+    [],
+    '2026-01-06',
+  );
+  run(
+    'renders a cash-only portfolio as a dense daily curve through today',
+    [],
+    [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('withdrawal', -250, '2026-01-07T09:00:00Z'),
+    ],
+    '2026-01-09',
+  );
+  run(
+    'equals holdings value + end-of-day cash balance on every day',
+    [
+      { date: '2026-01-07', valueEur: 400 },
+      { date: '2026-01-08', valueEur: 400 },
+      { date: '2026-01-09', valueEur: 250 },
+      { date: '2026-01-10', valueEur: 250 },
+    ],
+    [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('buy', -400, '2026-01-07T10:00:00Z'),
+      mv('sell_proceeds', 150, '2026-01-09T11:00:00Z'),
+      mv('withdrawal', -200, '2026-01-10T12:00:00Z'),
+    ],
+    '2026-01-10',
+  );
+  run(
+    'a deposit/withdrawal moves the curve by exactly its amount; a cash-funded buy does not',
+    [
+      { date: '2026-01-06', valueEur: 500 },
+      { date: '2026-01-07', valueEur: 500 },
+    ],
+    [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('buy', -500, '2026-01-06T10:00:00Z'),
+      mv('withdrawal', -200, '2026-01-07T09:00:00Z'),
+    ],
+    '2026-01-07',
+  );
+  run(
+    'aggregates several same-day movements into one end-of-day balance',
+    [],
+    [
+      mv('deposit', 300, '2026-01-05T09:00:00Z'),
+      mv('deposit', 700, '2026-01-05T15:00:00Z'),
+      mv('withdrawal', -100, '2026-01-05T18:00:00Z'),
+    ],
+    '2026-01-05',
+  );
+  run(
+    'ignores movements dated after the series end',
+    [{ date: '2026-01-05', valueEur: 100 }],
+    [mv('deposit', 1000, '2026-02-01T09:00:00Z')],
+    '2026-01-05',
+  );
+  run(
+    'only future-dated movements and no holdings leaves nothing plottable',
+    [],
+    [mv('deposit', 1000, '2026-02-01T09:00:00Z')],
+    '2026-01-05',
+  );
+  run(
+    'display path: renders a ledger that dips negative instead of throwing',
+    [],
+    [
+      mv('withdrawal', -200, '2026-01-05T09:00:00Z'),
+      mv('deposit', 1000, '2026-01-06T09:00:00Z'),
+    ],
+    '2026-01-06',
+  );
+  run('fails loud on a malformed today', [], [], 'not-a-day');
+  run(
+    'fails loud on a movement whose sign contradicts its kind',
+    [],
+    [mv('deposit', -5, '2026-01-05')],
+    '2026-01-05',
+  );
+  run(
+    'a fee still counts toward net worth — the money really left the account',
+    [],
+    [
+      mv('deposit', 1000, '2026-01-05T09:00:00Z'),
+      mv('fee', -10, '2026-01-06T09:00:00Z'),
+    ],
+    '2026-01-06',
+  );
+
+  skip(
+    'netWorthSeries',
+    'fails loud on a non-finite holdings value',
+    'input carries Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("netWorthSeries rejects a non-finite holdings value")',
+  );
+}
+
+// --- cash sources ----------------------------------------------------------
+
+function genCashSources(): void {
+  const balances = (name: string, movements: SourcedCashMovement[]): void =>
+    cash('cashBalancesBySource', name, { movements: msJson(movements) }, () =>
+      balancesJson(cashBalancesBySource(movements)),
+    );
+
+  balances('sums each source independently', [
+    smv('main', 'deposit', 1000, '2026-01-05T09:00:00Z'),
+    smv('bank', 'deposit', 250, '2026-01-05T10:00:00Z'),
+    smv('main', 'buy', -400, '2026-01-06T10:00:00Z'),
+    smv('bank', 'withdrawal', -50, '2026-01-07T10:00:00Z'),
+  ]);
+  balances('omits sources without movements (empty ledger)', []);
+  balances('fails loud on an empty sourceId', [
+    { kind: 'deposit', amountEur: 1, occurredAt: '2026-01-05', sourceId: '' },
+  ]);
+  balances('a fee belongs to exactly one source and never pairs', [
+    { ...mv('deposit', 100, '2026-01-05T09:00:00Z'), sourceId: 'bank' },
+    { ...mv('fee', -4, '2026-01-06T09:00:00Z'), sourceId: 'bank' },
+    { ...mv('deposit', 50, '2026-01-05T09:00:00Z'), sourceId: 'main' },
+  ]);
+
+  const project = (name: string, movements: SourcedCashMovement[]): void =>
+    cash('projectCashLedgerBySource', name, { movements: msJson(movements) }, () =>
+      [...projectCashLedgerBySource(movements).entries()].map(([sourceId, entries]) => ({
+        sourceId,
+        entries: entriesJson(entries),
+      })),
+    );
+
+  project('rejects a source overdraft even when another source holds plenty', [
+    smv('main', 'deposit', 10_000, '2026-01-05T09:00:00Z'),
+    smv('bank', 'deposit', 100, '2026-01-05T10:00:00Z'),
+    smv('bank', 'withdrawal', -150, '2026-01-06T10:00:00Z'),
+  ]);
+  project('projects each source chronologically and independently', [
+    smv('bank', 'transfer_in', 300, '2026-01-06T10:00:00Z'),
+    smv('main', 'deposit', 1000, '2026-01-05T09:00:00Z'),
+    smv('main', 'transfer_out', -300, '2026-01-06T10:00:00Z'),
+    smv('main', 'buy', -500, '2026-01-07T10:00:00Z'),
+  ]);
+  project('per-source validity implies portfolio-level validity', [
+    smv('main', 'deposit', 500, '2026-01-05T09:00:00Z'),
+    smv('main', 'transfer_out', -500, '2026-01-06T10:00:00Z'),
+    smv('bank', 'transfer_in', 500, '2026-01-06T10:00:00Z'),
+    smv('bank', 'withdrawal', -500, '2026-01-07T10:00:00Z'),
+  ]);
+  project('solvency is per source: "main" cannot cover a fee charged to "bank"', [
+    { ...mv('deposit', 1, '2026-01-05T09:00:00Z'), sourceId: 'main' },
+    { ...mv('fee', -4, '2026-01-06T09:00:00Z'), sourceId: 'bank' },
+  ]);
+
+  skip(
+    'projectCashLedgerBySource',
+    'the rejection carries balanceEur / shortfallEur / movement.sourceId',
+    'asserts the InsufficientCashError’s FIELDS (and that the offending movement kept its source attribution), not merely that it threw — hand-ported in CashLedgerHandPortedTest',
+  );
+}
+
+// --- transfers & set-balance ----------------------------------------------
+
+function genTransfersAndSetBalance(): void {
+  const transfer = (
+    name: string,
+    fromSourceId: string,
+    toSourceId: string,
+    amountEur: number,
+    occurredAt: string,
+  ): void =>
+    cash(
+      'pairedTransferMovements',
+      name,
+      { fromSourceId, toSourceId, amountEur, occurredAt },
+      () => {
+        const legs = pairedTransferMovements({ fromSourceId, toSourceId, amountEur, occurredAt });
+        return { outgoing: mJson(legs.outgoing), incoming: mJson(legs.incoming) };
+      },
+    );
+
+  transfer(
+    'builds mirrored double-entry legs sharing the timestamp',
+    'main',
+    'bank',
+    500,
+    '2026-02-01T12:00:00Z',
+  );
+  transfer('floors the magnitude to whole cents', 'a', 'b', 10.005, '2026-02-01T12:00:00Z');
+  transfer('rejects a same-source transfer', 'a', 'a', 10, '2026-02-01T12:00:00Z');
+  transfer('rejects a zero amount', 'a', 'b', 0, '2026-02-01T12:00:00Z');
+  transfer('rejects a negative amount', 'a', 'b', -5, '2026-02-01T12:00:00Z');
+  transfer('rejects a sub-cent amount that floors away', 'a', 'b', 0.001, '2026-02-01T12:00:00Z');
+  transfer('rejects an empty fromSourceId', '', 'b', 10, '2026-02-01T12:00:00Z');
+  transfer('rejects a malformed occurredAt', 'a', 'b', 10, 'not-a-date');
+  transfer(
+    'transfer legs are internal: the pair cancels in every roll-up',
+    'main',
+    'bank',
+    500,
+    '2026-01-06T10:00:00Z',
+  );
+
+  {
+    const legs = pairedTransferMovements({
+      fromSourceId: 'main',
+      toSourceId: 'bank',
+      amountEur: 500,
+      occurredAt: '2026-02-01T12:00:00Z',
+    });
+    const pair = [legs.outgoing, legs.incoming];
+    cash('cashBalance', 'a transfer pair cancels to exactly 0', { movements: msJson(pair) }, () =>
+      cashBalance(pair),
+    );
+  }
+
+  skip(
+    'pairedTransferMovements',
+    'rejects a NaN amount',
+    'input is Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("pairedTransferMovements rejects a non-finite amount")',
+  );
+
+  const delta = (name: string, currentBalanceEur: number, targetBalanceEur: number): void =>
+    cash('setBalanceDelta', name, { currentBalanceEur, targetBalanceEur }, () =>
+      setBalanceDelta(currentBalanceEur, targetBalanceEur),
+    );
+
+  delta('computes the owner example exactly: 123.45 -> 200.00 is +76.55', 123.45, 200.0);
+  delta('is symmetric for negative deltas: 200.00 -> 123.45 is -76.55', 200.0, 123.45);
+  delta('floors both operands to cents before differencing (0 -> 100.006)', 0, 100.006);
+  delta('floors both operands to cents before differencing (100.004 -> 100.004)', 100.004, 100.004);
+  delta('setting a balance to 0.00 withdraws everything', 123.45, 0);
+  delta('rejects a negative target', 100, -1);
+
+  skip(
+    'setBalanceDelta',
+    'rejects a non-finite target and a non-finite current balance',
+    'inputs are Number.POSITIVE_INFINITY / Number.NaN, which JSON cannot represent — hand-ported in CashLedgerHandPortedTest ("setBalanceDelta rejects non-finite operands")',
+  );
+
+  const setBalance = (
+    name: string,
+    sourceId: string,
+    currentBalanceEur: number,
+    targetBalanceEur: number,
+    occurredAt: string,
+  ): void =>
+    cash(
+      'setBalanceMovement',
+      name,
+      { sourceId, currentBalanceEur, targetBalanceEur, occurredAt },
+      () => {
+        const movement = setBalanceMovement({
+          sourceId,
+          currentBalanceEur,
+          targetBalanceEur,
+          occurredAt,
+        });
+        return movement === null ? null : mJson(movement);
+      },
+    );
+
+  setBalance('builds a normal deposit for a positive delta', 'bank', 123.45, 200.0, '2026-03-01T08:00:00Z');
+  setBalance('builds a withdrawal for a negative delta', 'bank', 200.0, 123.45, '2026-03-01T08:00:00Z');
+  setBalance('records nothing when the target equals the current balance', 'bank', 200.0, 200.0, '2026-03-01T08:00:00Z');
+  setBalance('set-balance deltas are external flows', 'bank', 0, 500, '2026-03-01T08:00:00Z');
+
+  {
+    const movement = setBalanceMovement({
+      sourceId: 'bank',
+      currentBalanceEur: 0,
+      targetBalanceEur: 500,
+      occurredAt: '2026-03-01T08:00:00Z',
+    })!;
+    cash(
+      'externalCashFlowsForTwr',
+      'a set-balance deposit is an external flow like any other',
+      { movements: msJson([movement]) },
+      () => externalCashFlowsForTwr([movement]),
+    );
+    cash(
+      'isExternalCashMovement',
+      'a set-balance movement’s kind is external',
+      { kind: movement.kind },
+      () => isExternalCashMovement(movement.kind),
+    );
+  }
+}
+
+// --- cashBySourceOverTime (the cashLedger half of dailySnapshotSeries.test.ts)
+
+function genCashBySourceOverTime(): void {
+  const run = (name: string, movements: SourcedCashMovement[], endDay: string): void =>
+    cash('cashBySourceOverTime', name, { movements: msJson(movements), endDay }, () =>
+      cashBySourceOverTime(movements, endDay).map((p) => ({
+        date: p.date,
+        balances: balancesJson(p.balances),
+      })),
+    );
+
+  run('returns an empty series without movements at all', [], '2026-01-05');
+  run(
+    'returns an empty series when every movement is after endDay',
+    [sourced({ occurredAt: at('2026-02-01') })],
+    '2026-01-05',
+  );
+  run(
+    'carries each source’s EOD balance forward daily',
+    [
+      sourced({ occurredAt: at('2026-01-01'), amountEur: 100, sourceId: 'main' }),
+      sourced({ occurredAt: at('2026-01-03'), amountEur: 50, sourceId: 'bank' }),
+    ],
+    '2026-01-04',
+  );
+  run(
+    'nets same-day movements to one EOD figure and moves a transfer between sources',
+    [
+      sourced({ occurredAt: '2026-01-01T09:00:00.000Z', amountEur: 100, sourceId: 'main' }),
+      sourced({
+        kind: 'transfer_out',
+        occurredAt: '2026-01-01T12:00:00.000Z',
+        amountEur: -40,
+        sourceId: 'main',
+      }),
+      sourced({
+        kind: 'transfer_in',
+        occurredAt: '2026-01-01T12:00:00.000Z',
+        amountEur: 40,
+        sourceId: 'bank',
+      }),
+    ],
+    '2026-01-01',
+  );
+
+  const cashLeg: SourcedCashMovement[] = [
+    sourced({ occurredAt: at('2026-01-01'), amountEur: 123.45, sourceId: 'main' }),
+    sourced({
+      kind: 'withdrawal',
+      occurredAt: at('2026-01-02'),
+      amountEur: -23.45,
+      sourceId: 'main',
+    }),
+    sourced({ occurredAt: at('2026-01-02'), amountEur: 10, sourceId: 'bank' }),
+  ];
+  run('sums per day to exactly the net-worth curve’s cash leg', cashLeg, '2026-01-03');
+  cash(
+    'netWorthSeries',
+    'the net-worth curve the per-source split must sum to, day for day',
+    { holdingsValues: [], movements: msJson(cashLeg), today: '2026-01-03' },
+    () => netWorthSeries({ holdingsValues: [], movements: cashLeg, today: '2026-01-03' }),
+  );
+
+  run('fails loud on a malformed endDay', [], 'nope');
+  run(
+    'fails loud on a movement whose sign contradicts its kind',
+    [sourced({ occurredAt: at('2026-01-01'), amountEur: -5 })],
+    '2026-01-02',
+  );
+}
+
+// ===========================================================================
 // settingsScope.ts
 // ===========================================================================
 
@@ -1536,6 +2643,18 @@ async function main(): Promise<void> {
   genTimeWeightedReturn();
   genRebasePerformance();
   genSeriesStats();
+  genFloorCents();
+  genCashBalance();
+  genApplyCashMovement();
+  genProjectCashLedger();
+  genCashBalanceOverTime();
+  genSpendableAsOf();
+  genTwrClassification();
+  genLedgerTwrCompositions();
+  genNetWorthSeries();
+  genCashSources();
+  genTransfersAndSetBalance();
+  genCashBySourceOverTime();
   genSettingsScope();
   genServerTwrParity();
 

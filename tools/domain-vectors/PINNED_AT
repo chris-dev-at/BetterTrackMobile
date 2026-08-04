@@ -5,9 +5,45 @@ ref     = origin/main
 copied  = 2026-08-04
 
 # Paths vendored under vendor/ (read-only snapshot, `git show origin/main:<path>`)
-#   packages/domain/**                                        -> vendor/domain/**
+#
+# W2 — domain engine + money fixtures
+#   packages/domain/**                                          -> vendor/domain/**
 #   apps/web/src/user/vault/engine/serverTwrParity.fixture.json -> vendor/fixtures/
 #   apps/web/src/user/vault/engine/clientMoney.fixture.json     -> vendor/fixtures/
+#
+# W3 — vault crypto/format/merge reference + its conformance oracle
+#   apps/web/src/user/vault/bytes.ts                            -> vendor/web-vault/
+#   apps/web/src/user/vault/errors.ts                           -> vendor/web-vault/
+#   apps/web/src/user/vault/envelope.ts                         -> vendor/web-vault/
+#   apps/web/src/user/vault/crypto.ts                           -> vendor/web-vault/
+#   apps/web/src/user/vault/rekey.ts                            -> vendor/web-vault/
+#   apps/web/src/user/vault/recovery.ts                         -> vendor/web-vault/
+#   apps/web/src/user/vault/merge.ts                            -> vendor/web-vault/
+#   apps/web/src/user/vault/merge.test.ts                       -> vendor/web-vault/
+#   apps/web/src/user/vault/mirrorProvenance.ts                 -> vendor/web-vault/
+#   apps/web/src/user/vault/mirrorProvenance.test.ts            -> vendor/web-vault/
+#   apps/web/src/user/vault/vault.test.ts                       -> vendor/web-vault/
+#   apps/web/src/user/vault/vectors.ts                          -> vendor/web-vault/
+#   apps/web/src/user/vault/vectors.fixture.json                -> vendor/web-vault/
+#   packages/contracts/src/vault.ts                             -> vendor/web-vault/contracts-vault.ts
+#
+# The two published fixtures are ALSO copied byte-identically into the app's test
+# resources, because they are replayed directly rather than reshaped:
+#   app/src/test/resources/vault-vectors/vectors.fixture.json
+#   app/src/test/resources/vault-vectors/clientMoney.fixture.json
+#
+# NOT from the monorepo — a third-party npm package, vendored for the same
+# reason (a literal port needs its source pinned):
+#   fflate 0.8.3, src/index.ts                                  -> vendor/fflate/index.ts
+#     source : https://raw.githubusercontent.com/101arrowz/fflate/v0.8.3/src/index.ts
+#     sha256 : 74515f941b5e06fa4df0ceedb0e68c0878a090a277264e907574b8717500d43b
+#     tarball: https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz
+#              sha256 38c2cd824402407b43153c782274aec2ea83ea688e4aa0b743c5f2c305857d92
+#     why    : apps/web/package.json depends on "fflate": "^0.8.3" and compresses
+#              the vault document with its deflateSync. java.util.zip.Deflater
+#              cannot reproduce those bytes at ANY level or strategy, so
+#              app/.../vault/RawDeflate.kt is a literal port of fflate's
+#              compressor. See RawDeflateTest for the measurement.
 #
 # NOTE on the plan's pin (docs/S3S4_STORAGE_PLAN.md §3.1 says `439d0d5d`):
 # origin/main had moved on to cb530f7e by the time W2 was built, but
@@ -16,3 +52,18 @@ copied  = 2026-08-04
 # is EMPTY: every vendored path is byte-identical between the two commits.
 # The last commit that touched packages/domain is 4b3f3ce9 (2026-07-30), which
 # predates both. The pin in the plan therefore still holds for this snapshot.
+#
+# Re-verified at W3 (2026-08-04): origin/main had advanced again, to
+# aee03a6c0861b542bc28d76a538f8317232b7464, and
+#   git diff --stat cb530f7e origin/main -- packages/domain \
+#       apps/web/src/user/vault packages/contracts/src/vault.ts
+# is EMPTY. Every W2 and W3 vendored path is identical at cb530f7e and aee03a6c.
+#
+# ── A dependency-VERSION trap worth remembering ─────────────────────────────
+# `packages/contracts` declares zod "^3.24.1", but that range resolves to 3.25.x,
+# and the two disagree about `z.string().datetime()`: 3.24.1 requires seconds
+# (HH:MM:SS), 3.25.x makes them optional. Transcribing the regex from the
+# DECLARED version made the Kotlin port reject `2026-07-25T10:00Z` — an instant
+# the platform accepts and its own merge suite exercises on purpose. When porting
+# a validator, check the version that actually RESOLVES, not the one in the
+# manifest. (Fixed in VaultContracts.kt; see the KDoc on DATETIME_REGEX.)
