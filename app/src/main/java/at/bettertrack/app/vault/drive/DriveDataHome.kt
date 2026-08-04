@@ -177,6 +177,47 @@ class DriveDataHome(
         is DataHomeTransport -> result
     }
 
+    /**
+     * Removes the vault object from `appDataFolder` — the "remove the Drive
+     * medium" half of plan §1.4 row 4.
+     *
+     * **Best effort, and honest about it.** `false` means the bytes are still in
+     * the user's Drive, and the caller must say so out loud (plan §5 rule 2):
+     * this is the user's own ciphertext in the user's own storage, and telling
+     * them a copy is gone when it is not is exactly the kind of quiet
+     * mis-statement that makes a privacy feature worthless.
+     *
+     * An absent file counts as deleted. Nothing here throws — a failure to reach
+     * Drive is an ordinary outcome, not an exception.
+     */
+    suspend fun delete(): Boolean {
+        val target = when (val found = findFile()) {
+            is DriveFileResult.Absent -> return true
+            is DriveFileResult.Ok -> found.files
+            else -> return false
+        }
+        // Every replica, not just the winner: leaving the duplicates behind would
+        // mean "removed" was true of one object and false of the data.
+        var allGone = true
+        for (file in target) {
+            val url = apiBase.newBuilder()
+                .addPathSegment("files")
+                .addPathSegment(file.id)
+                .build()
+            val response = when (val fetched = driveFetch(Request.Builder().url(url).delete().build())) {
+                is Fetched.Failure -> {
+                    allGone = false
+                    continue
+                }
+
+                is Fetched.Ok -> fetched.response
+            }
+            // 404 = someone else already removed it, which is the state we wanted.
+            if (!response.isSuccessful && response.code != 404) allGone = false
+        }
+        return allGone
+    }
+
     // ── Replica observation (detection only — see the class doc) ────────────
 
     /** `observeReplicas` (driveDataHome.ts:188-212). */

@@ -120,6 +120,11 @@ import kotlinx.serialization.Serializable
 @Serializable data object DeleteAccountRoute
 /** In-app changelog / "New features" (owner 2026-07-09) — bundled per-version notes. */
 @Serializable data object ChangelogRoute
+/**
+ * V5 W5 — Settings → "Where your data lives" (S3/S4 plan §4.2 step 5): the mode,
+ * the backup status, the vault's key actions and the §1.4 medium changes.
+ */
+@Serializable data object StorageHomeRoute
 
 // ── Sync & debug ───────────────────────────────────────────────────────────
 @Serializable data object PendingSyncRoute                                  // TODO(step 8, §7.4)

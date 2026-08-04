@@ -219,6 +219,12 @@ object AppGraph {
                 pushTokenManager.onLoggedIn()
             },
             onBeforeLogout = { pushTokenManager.deregisterCurrentToken() },
+            // Plan §4.4 row 2: BOTH keeps its vault and becomes DRIVE. SERVER is
+            // unchanged, which is why this is a no-op on every install today.
+            onAfterLogout = {
+                val demoted = at.bettertrack.app.data.storage.modeAfterLogout(storageModeStore.modeNow())
+                if (demoted != storageModeStore.modeNow()) storageModeStore.set(demoted)
+            },
         )
     }
 
@@ -243,6 +249,15 @@ object AppGraph {
     private val storageMode: () -> StorageMode =
         { at.bettertrack.app.data.prefs.DriveModeGate.gatedMode(storageModeStore.modeNow()).effective }
 
+    /**
+     * The gated mode with [StorageMode.UNSET] **preserved** — the one caller that
+     * needs the distinction is `BtRoot`, because UNSET is what selects the
+     * first-run wizard. Everything else wants [storageMode], which collapses
+     * UNSET into SERVER.
+     */
+    fun gatedStorageMode(stored: StorageMode): StorageMode =
+        at.bettertrack.app.data.prefs.DriveModeGate.gatedMode(stored)
+
     val accountDataManager: AccountDataManager by lazy {
         AccountDataManager(
             db = database,
@@ -263,14 +278,20 @@ object AppGraph {
     /**
      * The active storage backend (S3/S4 plan §1.2).
      *
-     * The `when` resolves ONCE, at first touch, from the gated mode: a mode
-     * change is restart-applied exactly like the S1 origin override, and W5's
-     * wizard sets the mode before the graph is used for the first time. A
-     * release build can never take the vault arm — [storageMode] has already
-     * gated DRIVE/BOTH down to SERVER by then.
+     * V5 W5: routed **per call** rather than resolved once. The first-run wizard
+     * runs inside a process that has already forced this graph, so a lazily
+     * resolved backend would leave a fresh Drive install talking to a server it
+     * has no account on until the next restart — see
+     * [at.bettertrack.app.data.storage.ModeRoutingPortfolioBackend]. A release
+     * build can still never take the vault arm: [storageMode] has already gated
+     * DRIVE/BOTH down to SERVER.
      */
     val portfolioBackend: PortfolioBackend by lazy {
-        if (storageMode().isDriveOnly) vaultPortfolioBackend else serverPortfolioBackend
+        at.bettertrack.app.data.storage.ModeRoutingPortfolioBackend(
+            mode = storageMode,
+            server = { serverPortfolioBackend },
+            vault = { vaultPortfolioBackend },
+        )
     }
 
     private val serverPortfolioBackend: PortfolioBackend by lazy {
@@ -309,8 +330,14 @@ object AppGraph {
      * the money path. W6 adds manual price entry and the opt-in lookup toggle.
      */
     val marketDataSource: MarketDataSource by lazy {
-        if (storageMode().isDriveOnly) noLivePricesMarketDataSource else ApiMarketDataSource(api = btApi, json = json)
+        at.bettertrack.app.data.storage.ModeRoutingMarketDataSource(
+            mode = storageMode,
+            server = { apiMarketDataSource },
+            offline = { noLivePricesMarketDataSource },
+        )
     }
+
+    private val apiMarketDataSource: MarketDataSource by lazy { ApiMarketDataSource(api = btApi, json = json) }
 
     val marketRepository: MarketRepository by lazy {
         MarketRepository(api = btApi, db = database, json = json, data = marketDataSource)
@@ -551,7 +578,7 @@ object AppGraph {
     }
 
     /** The on-device encrypted cache — app-private storage, one file per vault scope. */
-    private val localDataHome: at.bettertrack.app.vault.LocalDataHome by lazy {
+    val localDataHome: at.bettertrack.app.vault.LocalDataHome by lazy {
         at.bettertrack.app.vault.LocalDataHome(
             directory = java.io.File(appContext.filesDir, "vault"),
             scope = "primary",
@@ -658,6 +685,121 @@ object AppGraph {
                 vaultSyncCoordinator?.requestPush()
             },
         )
+    }
+
+    // ── V5 W5: the wizard, the mode switch and the vault's settings surface ──
+
+    /**
+     * Creating the first vault, with the verified round trip that decides whether
+     * the mode may be persisted at all (plan §4.2 step e).
+     *
+     * The first portfolio is written through [vaultPortfolioBackend] rather than
+     * straight into [vaultStore] so the projection into the Room read models runs
+     * exactly as it will for every later write — a vault whose first portfolio was
+     * created by a special-case path would be the one portfolio never proven
+     * against the real projection code.
+     */
+    val vaultProvisioner: at.bettertrack.app.vault.VaultProvisioner by lazy {
+        at.bettertrack.app.vault.VaultProvisioner(
+            custody = vaultKeyCustody,
+            store = vaultStore,
+            local = localDataHome,
+            createFirstPortfolio = { name ->
+                vaultPortfolioBackend.createPortfolio(name) is BtResult.Ok
+            },
+        )
+    }
+
+    /**
+     * A flat, never-changing sync state for screens that render the vault section
+     * while no coordinator exists (SERVER mode). Cheaper and clearer than making
+     * every consumer handle a null flow.
+     */
+    val emptyVaultSyncState: kotlinx.coroutines.flow.StateFlow<at.bettertrack.app.vault.VaultSyncState> by lazy {
+        kotlinx.coroutines.flow.MutableStateFlow(at.bettertrack.app.vault.VaultSyncState())
+    }
+
+    /**
+     * True when a Google account is actually connected.
+     *
+     * Reads the provider identity rather than a stored flag: the only honest
+     * answer today is "no", because
+     * [at.bettertrack.app.vault.drive.SignedOutGoogleAuthProvider] is what the
+     * graph wires (plan §6.8 — the OAuth client is an owner action). When a real
+     * provider lands this becomes true without any UI change.
+     */
+    val isGoogleConnected: Boolean
+        get() = googleAuthProvider !== at.bettertrack.app.vault.drive.SignedOutGoogleAuthProvider
+
+    /** Drops the Google connection; the vault keeps working, device-local. */
+    fun disconnectGoogle() {
+        googleAuthProvider = at.bettertrack.app.vault.drive.SignedOutGoogleAuthProvider
+        driveDataHomeInstance = null
+    }
+
+    /** What the §1.4 transition rules may assume — facts, not hopes. */
+    fun transitionCapabilities(): at.bettertrack.app.data.storage.TransitionCapabilities =
+        at.bettertrack.app.data.storage.TransitionCapabilities(
+            googleConnected = isGoogleConnected,
+            serverSignedIn = tokenManager.hasTokens(),
+            vaultUnlocked = !vaultKeyCustody.locked.value,
+            // The vault→server replay over the idempotent op queue is specified
+            // (plan §1.4 row 2) but not built; saying otherwise here would make
+            // the UI offer a button that silently does nothing.
+            attachReplayAvailable = false,
+        )
+
+    val storageModeSwitcher: at.bettertrack.app.data.storage.StorageModeSwitcher by lazy {
+        at.bettertrack.app.data.storage.StorageModeSwitcher(
+            setMode = { storageModeStore.set(it) },
+            deleteRemoteVault = { deleteRemoteVaultBestEffort() },
+            forgetVaultKey = { vaultKeyCustody.forget() },
+            wipeVaultTables = { vaultStore.wipe() },
+            logoutServer = { authRepository.logout() },
+            capabilities = { transitionCapabilities() },
+        )
+    }
+
+    /**
+     * Best-effort removal of the Drive appdata object.
+     *
+     * Returns `false` — "it is still there" — whenever the medium cannot be
+     * reached at all, which with the placeholder auth provider is always. The
+     * caller turns that into a visible sentence rather than a silent success,
+     * because those bytes are the user's own ciphertext in the user's own Drive.
+     */
+    private suspend fun deleteRemoteVaultBestEffort(): Boolean {
+        if (!isGoogleConnected) return false
+        val home = driveDataHome() as? at.bettertrack.app.vault.drive.DriveDataHome ?: return false
+        return home.delete()
+    }
+
+    /**
+     * "Delete everything on this device" (plan §4.4 row 1).
+     *
+     * The order is deliberate: key material first, so a kill mid-wipe leaves
+     * ciphertext nobody — including this app — can read, rather than a readable
+     * vault with half its rows gone.
+     */
+    suspend fun deleteEverythingOnThisDevice() {
+        vaultKeyCustody.forget()
+        localDataHome.clear()
+        vaultStore.wipe()
+        accountDataManager.wipeAll()
+        storageModeStore.set(StorageMode.UNSET)
+    }
+
+    /**
+     * One timer, one mental model (plan §2.7/§4.4): the vault follows the app
+     * lock's idle timeout instead of introducing a second, differently-behaving
+     * one the user has to learn. Started once from the Application.
+     */
+    fun linkVaultLockToAppLock() {
+        appScope.launch {
+            appLockController.locked.collect { locked ->
+                if (locked && storageMode().holdsVault) vaultKeyCustody.lock()
+            }
+        }
     }
 
     val syncDebugController: SyncDebugController by lazy {

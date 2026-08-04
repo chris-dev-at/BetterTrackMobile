@@ -44,6 +44,10 @@ class BetterTrackApplication : Application() {
         // initial locked state (cold start) is set when the controller is built.
         AppGraph.appLockController.start()
 
+        // V5 W5 (S3/S4 plan §2.7/§4.4): the vault follows the SAME idle lock, so
+        // there is one timer and one mental model rather than two competing ones.
+        AppGraph.linkVaultLockToAppLock()
+
         // In-app update install (owner ask 2026-07-12): sweep cacheDir/updates on
         // every start — removes the APK left by a successful install (that install
         // killed the previous process) and any partial download from a mid-stream kill.

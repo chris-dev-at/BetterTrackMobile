@@ -1297,4 +1297,143 @@
         <item quantity="other">%1$d Buchungen getaggt</item>
     </plurals>
     <string name="bt_so_err_amount_large">Dieser Betrag ist zu groß.</string>
+
+    <!-- V5 W5 — Speicher-Assistent, Tresor-Sperre, „Wo deine Daten liegen“ (S3/S4-Plan §4) -->
+    <string name="bt_storage_wizard_title">Wo sollen deine Daten liegen?</string>
+    <string name="bt_storage_wizard_intro">Das legt fest, wo deine Portfolios gespeichert werden. Bis du fertig bist, wird nichts angelegt — und du kannst es später in den Einstellungen ändern.</string>
+    <string name="bt_storage_not_available">Nicht verfügbar</string>
+    <string name="bt_storage_continue">Weiter</string>
+    <string name="bt_storage_choose_server_title">BetterTrack-Konto</string>
+    <string name="bt_storage_choose_server_body">Deine Portfolios liegen bei BetterTrack. Kurse, Performance, Steuermodi, Freunde, Chat und Alarme funktionieren alle.</string>
+    <string name="bt_storage_choose_server_missing">Braucht ein Konto und eine Verbindung. BetterTrack hält deine Daten.</string>
+    <string name="bt_storage_choose_drive_title">Nur Google Drive</string>
+    <string name="bt_storage_choose_drive_body">Alles wird auf diesem Gerät verschlüsselt und in deinem eigenen Google Drive abgelegt. Kein BetterTrack-Konto — und niemand außer dir kann es öffnen.</string>
+    <string name="bt_storage_choose_drive_missing">Freunde, Teilen und Chat · Alarme und Mitteilungen · Steuermodi · Live-Kurse nur eingeschränkt</string>
+    <string name="bt_storage_choose_both_title">Beides</string>
+    <string name="bt_storage_choose_both_body">BetterTrack bleibt dein Hauptzuhause, zusätzlich landet eine verschlüsselte Sicherung in deinem Drive.</string>
+    <string name="bt_storage_choose_both_missing">Braucht ein Konto und eine Google-Verbindung.</string>
+
+    <string name="bt_storage_google_title">Google Drive verbinden</string>
+    <string name="bt_storage_google_body">BetterTrack fragt nur eine Berechtigung ab: den eigenen versteckten Ordner in deinem Drive. Deine übrigen Dateien bleiben unsichtbar.</string>
+    <string name="bt_storage_google_scope_note">Angeforderte Berechtigung: nur der App-Ordner</string>
+    <string name="bt_storage_google_connect">Google Drive verbinden</string>
+    <string name="bt_storage_google_unavailable_title">Die Google-Anmeldung gibt es in dieser Version noch nicht</string>
+    <string name="bt_storage_google_unavailable_body">Dein Tresor liegt auf diesem Gerät und synchronisiert sich mit Drive, sobald die Verbindung steht.</string>
+    <string name="bt_storage_google_continue_local">Auf diesem Gerät weitermachen</string>
+    <string name="bt_storage_google_connected">Google Drive verbunden</string>
+
+    <string name="bt_storage_pass_title">Wähle eine Tresor-Passphrase</string>
+    <string name="bt_storage_pass_body">Das ist ein neues Geheimnis, nicht dein BetterTrack-Passwort. Nur damit öffnet sich dein Tresor.</string>
+    <string name="bt_storage_pass_label">Tresor-Passphrase</string>
+    <string name="bt_storage_pass_confirm_label">Passphrase wiederholen</string>
+    <string name="bt_storage_pass_too_short">Verwende mindestens %1$d Zeichen.</string>
+    <string name="bt_storage_pass_mismatch">Die beiden Eingaben stimmen nicht überein.</string>
+    <string name="bt_storage_pass_weak_hint">Ein paar zusammenhanglose Wörter merkst du dir leichter und sind viel schwerer zu erraten.</string>
+    <string name="bt_storage_strength_weak">Schwach</string>
+    <string name="bt_storage_strength_fair">Brauchbar</string>
+    <string name="bt_storage_strength_strong">Stark</string>
+
+    <string name="bt_storage_kit_title">Sichere deinen Wiederherstellungs-Schlüssel</string>
+    <string name="bt_storage_kit_body">Der Wiederherstellungs-Schlüssel ist eine kleine Datei, die deinen Tresor öffnet, falls du die Passphrase vergisst. Leg sie dorthin, wo nur du hinkommst — in einen Passwort-Manager oder auf einen verschlüsselten Datenträger.</string>
+    <string name="bt_storage_kit_save">Schlüsseldatei speichern</string>
+    <string name="bt_storage_kit_created">Wiederherstellungs-Schlüssel erstellt.</string>
+    <string name="bt_storage_kit_ack">Ich habe meinen Wiederherstellungs-Schlüssel sicher verwahrt</string>
+    <string name="bt_storage_kit_failed">Der Wiederherstellungs-Schlüssel konnte nicht erstellt werden.</string>
+
+    <string name="bt_storage_ack_title">Verlierst du beides, sind die Daten weg</string>
+    <string name="bt_storage_ack_body">Dein Tresor ist auf diesem Gerät mit deiner Passphrase verschlüsselt. BetterTrack kann ihn nicht öffnen, Google kann ihn nicht öffnen, und es gibt keinen Zurücksetzen-Link. Sind Passphrase und Schlüsseldatei weg, kann niemand deine Daten zurückholen.</string>
+    <string name="bt_storage_ack_checkbox">Mir ist klar, dass niemand meine Daten für mich wiederherstellen kann</string>
+
+    <string name="bt_storage_first_title">Benenne dein erstes Portfolio</string>
+    <string name="bt_storage_first_body">Weitere kannst du später anlegen. Alles, was du erfasst, wandert in deinen verschlüsselten Tresor.</string>
+    <string name="bt_storage_first_label">Portfolio-Name</string>
+    <string name="bt_storage_first_default">Mein Portfolio</string>
+    <string name="bt_storage_create">Tresor anlegen</string>
+
+    <string name="bt_storage_working_title">Dein Tresor wird angelegt</string>
+    <string name="bt_storage_working_body">Verschlüsseln, schreiben und wieder einlesen — damit wir erst dann von Sicherheit sprechen, wenn sie wirklich da ist.</string>
+    <string name="bt_storage_fail_round_trip_title">Der Tresor konnte nicht bestätigt werden</string>
+    <string name="bt_storage_fail_round_trip_body">Er wurde geschrieben, ließ sich aber nicht zurücklesen — deshalb behaupten wir nicht, er sei sicher. Prüfe den freien Speicher dieses Geräts und versuche es erneut.</string>
+    <string name="bt_storage_fail_crypto_title">Dein Tresor-Schlüssel konnte nicht erzeugt werden</string>
+    <string name="bt_storage_fail_crypto_body">Dieses Gerät hat es abgelehnt, den Schlüssel zu erzeugen oder abzulegen. Starte die App neu und versuche es erneut.</string>
+    <string name="bt_storage_fail_write_title">Das erste Portfolio konnte nicht gespeichert werden</string>
+    <string name="bt_storage_fail_write_body">Es wurde nichts angelegt, also ist auch nichts verloren. Du kannst es erneut versuchen.</string>
+
+    <string name="bt_vault_unlock_title">Tresor entsperren</string>
+    <string name="bt_vault_unlock_body">Gib deine Tresor-Passphrase ein, um deine Daten auf diesem Gerät zu öffnen.</string>
+    <string name="bt_vault_unlock_action">Entsperren</string>
+    <string name="bt_vault_unlock_working">Wird entsperrt…</string>
+    <string name="bt_vault_unlock_wrong">Mit dieser Passphrase öffnet sich dieser Tresor nicht.</string>
+    <string name="bt_vault_unlock_kit_hint">Vergessen? Dein Wiederherstellungs-Schlüssel öffnet den Tresor trotzdem.</string>
+    <string name="bt_vault_unlock_kit_action">Wiederherstellungs-Schlüssel verwenden</string>
+    <string name="bt_vault_unlock_kit_wrong">Diese Datei ist kein Wiederherstellungs-Schlüssel für diesen Tresor.</string>
+    <string name="bt_vault_lock_action">Tresor sperren</string>
+    <string name="bt_vault_lock_sub">Beim nächsten Mal wieder nach der Passphrase fragen.</string>
+
+    <string name="bt_storage_settings_row">Wo deine Daten liegen</string>
+    <string name="bt_storage_mode_server">BetterTrack-Konto</string>
+    <string name="bt_storage_mode_drive">Dein Google Drive</string>
+    <string name="bt_storage_mode_both">BetterTrack + verschlüsselte Drive-Sicherung</string>
+    <string name="bt_storage_section_backup">Sicherung</string>
+    <string name="bt_storage_section_vault">Tresor</string>
+    <string name="bt_storage_section_change">Speicherort ändern</string>
+    <string name="bt_storage_section_device">Dieses Gerät</string>
+    <string name="bt_storage_sync_now">Jetzt sichern</string>
+    <string name="bt_storage_drive_absent_note">Freunde, Alarme und Steuermodi brauchen ein BetterTrack-Konto und gehören deshalb nicht zu diesem Modus.</string>
+
+    <string name="bt_vault_sync_idle">Noch nicht gesichert</string>
+    <string name="bt_vault_sync_syncing">Wird gesichert…</string>
+    <string name="bt_vault_sync_synced">In Drive gesichert</string>
+    <string name="bt_vault_sync_saved_locally">Auf diesem Gerät gespeichert</string>
+    <string name="bt_vault_sync_sign_in">Zum Synchronisieren bei Google anmelden</string>
+    <string name="bt_vault_sync_quota">Dein Google Drive ist voll — Änderungen liegen auf diesem Gerät</string>
+    <string name="bt_vault_sync_offline">Offline — Änderungen liegen auf diesem Gerät</string>
+    <string name="bt_vault_sync_locked">Tresor gesperrt — Änderungen liegen auf diesem Gerät</string>
+    <string name="bt_vault_sync_attention">Braucht deine Aufmerksamkeit</string>
+    <string name="bt_vault_sync_pending_google">Noch nicht mit Google verbunden — dein Tresor liegt auf diesem Gerät</string>
+    <string name="bt_vault_sync_unpushed">Dieses Gerät hat Änderungen, die Drive noch nicht kennt.</string>
+
+    <string name="bt_vault_change_pass">Passphrase ändern</string>
+    <string name="bt_vault_change_pass_sub">Du brauchst dafür deine aktuelle.</string>
+    <string name="bt_vault_new_kit">Neuer Wiederherstellungs-Schlüssel</string>
+    <string name="bt_vault_new_kit_sub">Ältere Schlüsseldateien funktionieren weiter — das ist nur eine zusätzliche Kopie.</string>
+    <string name="bt_vault_rekey_title">Tresor-Passphrase ändern</string>
+    <string name="bt_vault_rekey_body">Deine Daten werden nicht neu verschlüsselt; nur der Schlüssel, der sie schützt, wird neu verpackt. Bereits erstellte Schlüsseldateien funktionieren weiter.</string>
+    <string name="bt_vault_rekey_current">Aktuelle Passphrase</string>
+    <string name="bt_vault_rekey_new">Neue Passphrase</string>
+    <string name="bt_vault_rekey_confirm">Neue Passphrase wiederholen</string>
+    <string name="bt_vault_rekey_wrong">Das ist nicht deine aktuelle Passphrase.</string>
+    <string name="bt_vault_rekey_done">Passphrase geändert.</string>
+    <string name="bt_vault_rekey_failed">Die Passphrase konnte nicht geändert werden. Es wurde nichts verändert.</string>
+
+    <string name="bt_storage_tr_server_to_both">Verschlüsselte Drive-Sicherung ergänzen</string>
+    <string name="bt_storage_tr_server_to_both_sub">BetterTrack bleibt dein Hauptzuhause, zusätzlich spiegelst du eine verschlüsselte Kopie in dein Drive.</string>
+    <string name="bt_storage_tr_drive_to_both">BetterTrack-Konto ergänzen</string>
+    <string name="bt_storage_tr_drive_to_both_sub">Hol deinen Tresor zu BetterTrack und behalte Drive als Sicherung.</string>
+    <string name="bt_storage_tr_both_to_drive">Nur Google Drive verwenden</string>
+    <string name="bt_storage_tr_both_to_drive_sub">Deine Drive-Kopie wird zum Original und du meldest dich von BetterTrack ab. Dort wird nichts gelöscht.</string>
+    <string name="bt_storage_tr_both_to_server">Drive-Sicherung entfernen</string>
+    <string name="bt_storage_tr_both_to_server_sub">Behalte dein BetterTrack-Konto und lösche die verschlüsselte Datei aus deinem Drive.</string>
+    <string name="bt_storage_blocked_google">Braucht eine Google-Verbindung — die Google-Anmeldung gibt es in dieser Version noch nicht.</string>
+    <string name="bt_storage_blocked_server">Braucht ein BetterTrack-Konto. Melde dich zuerst an.</string>
+    <string name="bt_storage_blocked_unlock">Entsperre zuerst deinen Tresor.</string>
+    <string name="bt_storage_blocked_attach">Einen Drive-Tresor in ein BetterTrack-Konto zu holen, ist noch nicht gebaut.</string>
+    <string name="bt_storage_remote_delete_failed">Die Sicherung wurde hier entfernt, aber die Datei in deinem Google Drive ließ sich nicht löschen. Du kannst sie dort selbst entfernen.</string>
+    <string name="bt_storage_switch_done">Erledigt.</string>
+
+    <string name="bt_storage_disconnect_drive">Google Drive trennen</string>
+    <string name="bt_storage_disconnect_drive_sub">Behält alles auf diesem Gerät und stoppt die Synchronisierung.</string>
+    <string name="bt_storage_delete_everything">Alles auf diesem Gerät löschen</string>
+    <string name="bt_storage_delete_everything_sub">Dein Tresor, dein Schlüssel und jedes Portfolio auf diesem Handy.</string>
+    <string name="bt_storage_delete_warning_title">Das lässt sich nicht rückgängig machen</string>
+    <string name="bt_storage_delete_warning_body">Das löscht deinen Tresor, deinen Schlüssel und jedes Portfolio von diesem Gerät. Ohne Schlüsseldatei oder Kopie in Drive sind die Daten endgültig weg.</string>
+    <string name="bt_storage_delete_confirm_label">Tippe zur Bestätigung %1$s</string>
+    <string name="bt_storage_delete_confirm_word">LÖSCHEN</string>
+    <string name="bt_storage_delete_mismatch">Tippe es genau so wie angezeigt.</string>
+    <string name="bt_storage_delete_action">Alles löschen</string>
+
+    <string name="bt_login_use_without_account">Ohne Konto nutzen (Google Drive)</string>
+    <string name="bt_storage_both_blocked_body">„Beides“ heißt, deine Daten liegen an zwei Orten — und der zweite braucht eine Google-Verbindung, die diese Version noch nicht herstellen kann. Wir tragen keine Sicherung ein, die es nicht gibt: Wähle unten eine der beiden Möglichkeiten, die andere kannst du später in den Einstellungen ergänzen.</string>
+    <string name="bt_storage_both_settle_server">Nur mit BetterTrack weitermachen</string>
+    <string name="bt_storage_both_settle_drive">Stattdessen nur Google Drive</string>
 </resources>

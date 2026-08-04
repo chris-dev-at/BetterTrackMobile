@@ -35,6 +35,21 @@ class StorageModeStore(context: Context) {
     /** The RAW stored mode. Behavioural rules want [StorageMode.effective]. */
     val mode: StateFlow<StorageMode> = _mode.asStateFlow()
 
+    private val _resolved = MutableStateFlow(false)
+
+    /**
+     * True once [grandfather] has run for this process.
+     *
+     * W1 could ignore this because UNSET and SERVER behaved identically, so the
+     * async DB probe raced with nothing. W5's gate **consumes** UNSET by showing
+     * the first-run wizard, which turns that race into a visible bug: an existing
+     * install could flash the wizard for the few milliseconds before the owner-key
+     * probe answered. `BtRoot` therefore holds the neutral background until this
+     * flips — the same no-flash backstop `AuthState.Unknown` already gets, for the
+     * same reason.
+     */
+    val resolved: StateFlow<Boolean> = _resolved.asStateFlow()
+
     /** Synchronous read — the graph needs it while wiring the sync engine. */
     fun modeNow(): StorageMode = _mode.value
 
@@ -79,6 +94,10 @@ class StorageModeStore(context: Context) {
             set(resolved)
             Log.i(TAG, "Existing install grandfathered to storage mode ${resolved.wire}.")
         }
+        // Ordering guarantee: this flips only AFTER the rule has been applied and
+        // persisted, so no gate can observe UNSET on an install that was about to
+        // be grandfathered to SERVER.
+        _resolved.value = true
     }
 
     private companion object {

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.ScreenRotation
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,7 +65,10 @@ import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.data.auth.SessionUser
 import at.bettertrack.app.data.i18n.AppLanguage
 import at.bettertrack.app.data.i18n.LocaleManager
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.storage.labelRes
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.theme.BtShapes
@@ -89,6 +93,7 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     onOpenChangelog: () -> Unit = {},
+    onOpenDataHome: () -> Unit = {},
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},
     onOpenDevBackend: () -> Unit = {},
@@ -97,6 +102,15 @@ fun SettingsScreen(
     val context = LocalContext.current
     val auth = AppGraph.authRepository
     val authState by auth.authState.collectAsStateWithLifecycle()
+    // V5 W5: Settings adapts to where the data lives (S3/S4 plan §4.5). A
+    // Drive-only install has no BetterTrack account, so the account rows, the
+    // server-backed notification settings and "Log out" are ABSENT — the vault
+    // section on "Where your data lives" is what replaces them. SERVER and BOTH
+    // render exactly as before.
+    val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
+    val storageMode = AppGraph.gatedStorageMode(storedMode)
+    val hasAccount = storageMode.shows(BtSurface.ACCOUNT_SETTINGS)
+    val hasNotifications = storageMode.shows(BtSurface.ALERTS_NOTIFICATIONS)
     val user: SessionUser? = when (val s = authState) {
         is AuthState.LoggedIn -> s.user
         is AuthState.PasswordChangeRequired -> s.user
@@ -154,24 +168,26 @@ fun SettingsScreen(
             }
 
             // ── ACCOUNT ──────────────────────────────────────────────────────
-            SectionLabel(stringResource(R.string.bt_settings_account_section))
-            BtCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AccountRow(stringResource(R.string.bt_settings_username), user?.username?.ifBlank { "—" } ?: "—")
-                    AccountRow(stringResource(R.string.bt_settings_email), user?.email?.ifBlank { "—" } ?: "—")
+            if (hasAccount) {
+                SectionLabel(stringResource(R.string.bt_settings_account_section))
+                BtCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        AccountRow(stringResource(R.string.bt_settings_username), user?.username?.ifBlank { "—" } ?: "—")
+                        AccountRow(stringResource(R.string.bt_settings_email), user?.email?.ifBlank { "—" } ?: "—")
+                    }
                 }
-            }
-            SettingsNavRow(
-                icon = Icons.Outlined.Key,
-                title = stringResource(R.string.bt_dest_change_password),
-                subtitle = stringResource(R.string.bt_settings_change_password_sub),
-                onClick = onOpenChangePassword,
-            )
+                SettingsNavRow(
+                    icon = Icons.Outlined.Key,
+                    title = stringResource(R.string.bt_dest_change_password),
+                    subtitle = stringResource(R.string.bt_settings_change_password_sub),
+                    onClick = onOpenChangePassword,
+                )
 
-            Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(4.dp))
+            }
 
             // ── PREFERENCES ──────────────────────────────────────────────────
             SectionLabel(stringResource(R.string.bt_settings_preferences_section))
@@ -182,11 +198,19 @@ fun SettingsScreen(
                 onClick = onOpenSecurity,
             )
             SettingsNavRow(
-                icon = Icons.Outlined.Notifications,
-                title = stringResource(R.string.bt_settings_notifications_row),
-                subtitle = stringResource(R.string.bt_settings_notifications_sub),
-                onClick = onOpenNotifications,
+                icon = Icons.Outlined.Storage,
+                title = stringResource(R.string.bt_storage_settings_row),
+                subtitle = stringResource(storageMode.labelRes()),
+                onClick = onOpenDataHome,
             )
+            if (hasNotifications) {
+                SettingsNavRow(
+                    icon = Icons.Outlined.Notifications,
+                    title = stringResource(R.string.bt_settings_notifications_row),
+                    subtitle = stringResource(R.string.bt_settings_notifications_sub),
+                    onClick = onOpenNotifications,
+                )
+            }
             SettingsNavRow(
                 icon = Icons.Outlined.Translate,
                 title = stringResource(R.string.bt_dest_settings_language),
@@ -205,6 +229,9 @@ fun SettingsScreen(
             Spacer(Modifier.height(4.dp))
 
             // ── PRIVACY ──────────────────────────────────────────────────────
+            // Discreet mode round-trips through the account, so it belongs to the
+            // modes that have one.
+            if (hasAccount) {
             SectionLabel(stringResource(R.string.bt_settings_privacy_section))
             val discreet by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
@@ -239,6 +266,7 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(4.dp))
+            }
 
             // ── ABOUT ────────────────────────────────────────────────────────
             SectionLabel(stringResource(R.string.bt_settings_about_section))
@@ -308,13 +336,19 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            BtSecondaryButton(
-                text = stringResource(R.string.bt_action_logout),
-                onClick = { showLogoutConfirm = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            )
+            // "Log out" is meaningless without an account (plan §4.4 row 1);
+            // Drive mode offers lock / disconnect / delete-everything on
+            // "Where your data lives" instead.
+            if (hasAccount) {
+                BtSecondaryButton(
+                    text = stringResource(R.string.bt_action_logout),
+                    onClick = { showLogoutConfirm = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                )
+            }
 
             // ── DANGER ZONE ──────────────────────────────────────────────────
+            if (hasAccount) {
             Spacer(Modifier.height(8.dp))
             SectionLabel(stringResource(R.string.bt_settings_danger_section))
             Surface(
@@ -333,6 +367,7 @@ fun SettingsScreen(
                     }
                     Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
                 }
+            }
             }
             Spacer(Modifier.height(8.dp))
         }

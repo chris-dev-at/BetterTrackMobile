@@ -43,6 +43,16 @@ class AuthRepository(
     private val onSessionAuthenticated: () -> Unit = {},
     /** Run at the start of an explicit logout, before any local wipe (bearer valid). */
     private val onBeforeLogout: suspend () -> Unit = {},
+    /**
+     * Run after an explicit logout has completed (S3/S4 plan §4.4 row 2).
+     *
+     * Logging out of a BetterTrack account in BOTH mode must not leave the
+     * install claiming a server medium it no longer has — the vault survived the
+     * scoped wipe and is now the only place the data lives, so the mode demotes
+     * to DRIVE. Kept as a hook rather than a direct storage-mode dependency so
+     * this class stays about sessions.
+     */
+    private val onAfterLogout: () -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -258,6 +268,10 @@ class AuthRepository(
         store.wipeAll()
         _authState.value = AuthState.LoggedOut
         _loginPhase.value = LoginPhase.Idle
+        // AFTER the wipe: the wipe scope itself is decided by the mode we are
+        // leaving, so demoting first would run the full EVERYTHING wipe under a
+        // mode that still holds a vault — and destroy it.
+        onAfterLogout()
     }
 
     /**

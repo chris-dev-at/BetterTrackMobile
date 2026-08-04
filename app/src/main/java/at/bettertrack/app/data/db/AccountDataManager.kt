@@ -104,12 +104,29 @@ val SERVER_SCOPED_TABLES: List<String> = listOf(
 )
 
 /**
- * Tables that belong to the user's own Drive vault and therefore survive a
- * logout in any mode that holds one. **Empty until W4** creates `vault_entities`
- * / `vault_meta` — which is precisely why W1's two wipe scopes are behaviourally
- * identical today.
+ * Tables a mode-aware logout must **spare** (S3/S4 plan §4.4 row 2).
+ *
+ * W4 created these; W5 makes the distinction reachable, because it ships the
+ * first mode in which a logout can happen while a vault exists. Logging out of a
+ * BetterTrack account in BOTH mode has to leave the user's own encrypted data
+ * exactly where it was — the account is what they are leaving, not the data.
+ *
+ * `price_cache` is here for a different reason than the other two: it is not
+ * vault content, it is the *input* Drive-mode valuation needs to produce a net
+ * worth at all (plan §1.3, §2.5). Clearing it on a logout that demotes the
+ * install to DRIVE would leave a working vault that suddenly cannot price
+ * anything — a self-inflicted "no live prices" state with no cause the user
+ * could ever understand.
+ *
+ * Note these names are absent from [SERVER_SCOPED_TABLES] as well, so the scoped
+ * wipe already never touched them; listing them here states the classification
+ * out loud and gives `LogoutWipeRuleTest` something to hold the line on.
  */
-val VAULT_SCOPED_TABLES: List<String> = emptyList()
+val VAULT_SCOPED_TABLES: List<String> = listOf(
+    "vault_entities",
+    "vault_meta",
+    "price_cache",
+)
 
 /**
  * Which tables a [WipeScope] clears. `null` means "all of them" and maps to

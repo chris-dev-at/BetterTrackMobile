@@ -72,6 +72,10 @@ import androidx.navigation.compose.rememberNavController
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.notifications.NotifDeepLink
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.shows
+import at.bettertrack.app.data.storage.visibleTabSurfaces
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.StandingOrdersRoute
@@ -105,6 +109,7 @@ import at.bettertrack.app.navigation.DeleteAccountRoute
 import at.bettertrack.app.navigation.SettingsLanguageRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
 import at.bettertrack.app.navigation.SettingsRoute
+import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SettingsSecurityRoute
 import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
@@ -166,14 +171,34 @@ private data class TabSpec(
     val routeClass: KClass<*>,
     val labelRes: Int,
     val icon: ImageVector,
+    /** The §4.5 surface this tab is the entry point for — drives mode gating. */
+    val surface: BtSurface,
 )
 
 private val Tabs = listOf(
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart),
-    TabSpec(BtTab.Assets, AssetsTabRoute::class, R.string.bt_tab_assets, Icons.AutoMirrored.Outlined.ShowChart),
-    TabSpec(BtTab.Social, SocialTabRoute::class, R.string.bt_tab_social, Icons.Outlined.People),
-    TabSpec(BtTab.Workboard, WorkboardTabRoute::class, R.string.bt_tab_workboard, Icons.Outlined.Dashboard),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO),
+    TabSpec(BtTab.Assets, AssetsTabRoute::class, R.string.bt_tab_assets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
+    TabSpec(BtTab.Social, SocialTabRoute::class, R.string.bt_tab_social, Icons.Outlined.People, BtSurface.SOCIAL),
+    TabSpec(BtTab.Workboard, WorkboardTabRoute::class, R.string.bt_tab_workboard, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES),
 )
+
+/**
+ * The tabs this mode may show (S3/S4 plan §4.5, "absent, not greyed").
+ *
+ * A Drive-only install has no BetterTrack account, so Social and the Workboard's
+ * conglomerates are not features it is missing — they are features that cannot
+ * exist for it. Rendering them disabled would turn two thirds of the bottom bar
+ * into a permanent advertisement for something the user deliberately opted out
+ * of; dropping them leaves a bar where every entry works.
+ *
+ * The Assets tab stays: search and watchlists are DEGRADED rather than absent
+ * (no live quotes until W6, device-local watchlist membership per board #40.3),
+ * and each of those surfaces renders its own honest reduced state.
+ */
+private fun tabsFor(mode: StorageMode): List<TabSpec> {
+    val visible = visibleTabSurfaces(mode)
+    return Tabs.filter { it.surface in visible }
+}
 
 /**
  * The BetterTrack app shell (Step 3): top bar (wordmark + bell slot + settings),
@@ -189,6 +214,17 @@ fun BtApp() {
     val isTopLevel = Tabs.any { tab ->
         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
     }
+    // V5 W5: per-mode surface gating (plan §4.5). Read once here so the bars and
+    // the routes below cannot disagree about what this install can do.
+    val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
+    // The GATED mode, not the raw one: a release build resolves a stale stored
+    // DRIVE/BOTH down to SERVER, and the bars must agree with the backend the app
+    // is actually running on — otherwise a release APK with a leftover pref would
+    // hide Social while still talking to the server.
+    val storageMode = remember(storedMode) { AppGraph.gatedStorageMode(storedMode) }
+    val visibleTabs = remember(storageMode) { tabsFor(storageMode) }
+    val showSocialSurfaces = storageMode.shows(BtSurface.SOCIAL)
+    val showNotificationSurfaces = storageMode.shows(BtSurface.ALERTS_NOTIFICATIONS)
 
     // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
     // system-push intents (surfaced via AppGraph.pendingDeepLink).
@@ -269,14 +305,20 @@ fun BtApp() {
 
     // Bell unread badge: refresh the inbox once on entry so the count is live.
     val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { AppGraph.notificationRepository.refresh() }
+    // Drive-only has no server to hold an inbox; asking would be a guaranteed
+    // failed call on every launch, not a feature.
+    LaunchedEffect(showNotificationSurfaces) {
+        if (showNotificationSurfaces) AppGraph.notificationRepository.refresh()
+    }
 
     // Chat was only reachable from a card inside the Social tab — invisible from
     // the other three, and a new message announced itself nowhere (S6 P1-10). The
     // repository already keeps a server-derived total, so the shell just needs to
     // prime it once and hang a badged affordance next to the bell.
     val chatUnread by AppGraph.chatRepository.totalUnread.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { AppGraph.chatRepository.refreshConversations() }
+    LaunchedEffect(showSocialSurfaces) {
+        if (showSocialSurfaces) AppGraph.chatRepository.refreshConversations()
+    }
 
     Scaffold(
         containerColor = bt.bg,
@@ -311,6 +353,8 @@ fun BtApp() {
                 BtTopBar(
                     notifUnread = notifUnread,
                     chatUnread = chatUnread,
+                    showChats = showSocialSurfaces,
+                    showNotifications = showNotificationSurfaces,
                     portfolioName = selectorName,
                     onOpenSwitcher = openSwitcher,
                     onWordmarkLongPress = {
@@ -328,6 +372,7 @@ fun BtApp() {
         bottomBar = {
             if (isTopLevel) {
                 BtBottomBar(
+                    tabs = visibleTabs,
                     isSelected = { tab ->
                         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
                     },
@@ -371,6 +416,8 @@ fun BtApp() {
 private fun BtTopBar(
     notifUnread: Int,
     chatUnread: Int,
+    showChats: Boolean,
+    showNotifications: Boolean,
     portfolioName: String?,
     onOpenSwitcher: (() -> Unit)?,
     onWordmarkLongPress: () -> Unit,
@@ -416,9 +463,9 @@ private fun BtTopBar(
             }
             // Messages + unread badge → chat list. Same badge language as the
             // bell; sits beside it because both answer "did anything happen?".
-            BtTopBarChats(unread = chatUnread, onClick = onChats)
-            // Notification bell + unread badge → in-app inbox (Step 16, §6.11).
-            NotificationBell(unread = notifUnread, onClick = onNotifications)
+            // Both are absent (not disabled) in Drive-only mode — plan §4.5.
+            if (showChats) BtTopBarChats(unread = chatUnread, onClick = onChats)
+            if (showNotifications) NotificationBell(unread = notifUnread, onClick = onNotifications)
             IconButton(onClick = onSettings) {
                 Icon(
                     Icons.Outlined.Settings,
@@ -516,6 +563,7 @@ private fun PortfolioSelectorChip(
 
 @Composable
 private fun BtBottomBar(
+    tabs: List<TabSpec>,
     isSelected: (TabSpec) -> Boolean,
     onSelect: (TabSpec) -> Unit,
 ) {
@@ -523,7 +571,7 @@ private fun BtBottomBar(
     Column {
         HorizontalDivider(thickness = 1.dp, color = bt.border)
         NavigationBar(containerColor = bt.surface) {
-            Tabs.forEach { tab ->
+            tabs.forEach { tab ->
                 NavigationBarItem(
                     selected = isSelected(tab),
                     onClick = { onSelect(tab) },
@@ -844,12 +892,16 @@ private fun BtNavHost(
                 onOpenAbout = { navController.navigate(SettingsAboutRoute) },
                 onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
                 onOpenChangelog = { navController.navigate(ChangelogRoute) },
+                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
                 onOpenDevBackend = { navController.navigate(DevBackendRoute) },
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
+        composable<StorageHomeRoute> {
+            at.bettertrack.app.ui.storage.WhereYourDataLivesScreen(onBack = back)
+        }
         composable<SettingsSecurityRoute> {
             SecurityScreen(
                 onBack = back,

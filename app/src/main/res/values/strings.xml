@@ -1309,4 +1309,143 @@
         <item quantity="other">%1$d movements tagged</item>
     </plurals>
     <string name="bt_so_err_amount_large">That amount is too large.</string>
+
+    <!-- V5 W5 — storage wizard, vault gate, "Where your data lives" (S3/S4 plan §4) -->
+    <string name="bt_storage_wizard_title">Where should your data live?</string>
+    <string name="bt_storage_wizard_intro">This decides where your portfolios are kept. Nothing is created until you finish, and you can change it later in Settings.</string>
+    <string name="bt_storage_not_available">Not available</string>
+    <string name="bt_storage_continue">Continue</string>
+    <string name="bt_storage_choose_server_title">BetterTrack account</string>
+    <string name="bt_storage_choose_server_body">Your portfolios live on BetterTrack. Prices, performance, tax modes, friends, chat and alerts all work.</string>
+    <string name="bt_storage_choose_server_missing">Needs an account and a connection. BetterTrack holds your data.</string>
+    <string name="bt_storage_choose_drive_title">Google Drive only</string>
+    <string name="bt_storage_choose_drive_body">Everything is encrypted on this device and kept in your own Google Drive. No BetterTrack account, and nobody but you can open it.</string>
+    <string name="bt_storage_choose_drive_missing">Friends, sharing and chat · Alerts and notifications · Tax modes · Live prices are limited</string>
+    <string name="bt_storage_choose_both_title">Both</string>
+    <string name="bt_storage_choose_both_body">BetterTrack stays your main home, and an encrypted backup also goes into your Drive.</string>
+    <string name="bt_storage_choose_both_missing">Needs an account and a Google connection.</string>
+
+    <string name="bt_storage_google_title">Connect Google Drive</string>
+    <string name="bt_storage_google_body">BetterTrack asks for one permission: its own hidden folder in your Drive. It can never see the rest of your files.</string>
+    <string name="bt_storage_google_scope_note">Requested permission: app folder only</string>
+    <string name="bt_storage_google_connect">Connect Google Drive</string>
+    <string name="bt_storage_google_unavailable_title">Google sign-in isn\'t available in this build yet</string>
+    <string name="bt_storage_google_unavailable_body">Your vault will live on this device and sync to Drive once connected.</string>
+    <string name="bt_storage_google_continue_local">Continue on this device</string>
+    <string name="bt_storage_google_connected">Google Drive connected</string>
+
+    <string name="bt_storage_pass_title">Choose a vault passphrase</string>
+    <string name="bt_storage_pass_body">This is a new secret, not your BetterTrack password. It is the only thing that opens your vault.</string>
+    <string name="bt_storage_pass_label">Vault passphrase</string>
+    <string name="bt_storage_pass_confirm_label">Repeat passphrase</string>
+    <string name="bt_storage_pass_too_short">Use at least %1$d characters.</string>
+    <string name="bt_storage_pass_mismatch">The two entries don\'t match.</string>
+    <string name="bt_storage_pass_weak_hint">A few unrelated words are easier to remember and much harder to guess.</string>
+    <string name="bt_storage_strength_weak">Weak</string>
+    <string name="bt_storage_strength_fair">Reasonable</string>
+    <string name="bt_storage_strength_strong">Strong</string>
+
+    <string name="bt_storage_kit_title">Save your recovery kit</string>
+    <string name="bt_storage_kit_body">The recovery kit is a small file that opens your vault if you ever forget the passphrase. Put it somewhere only you can reach — a password manager or an encrypted drive.</string>
+    <string name="bt_storage_kit_save">Save recovery kit</string>
+    <string name="bt_storage_kit_created">Recovery kit created.</string>
+    <string name="bt_storage_kit_ack">I have stored my recovery kit safely</string>
+    <string name="bt_storage_kit_failed">The recovery kit could not be created.</string>
+
+    <string name="bt_storage_ack_title">If you lose both, the data is gone</string>
+    <string name="bt_storage_ack_body">Your vault is encrypted on this device with your passphrase. BetterTrack cannot open it, Google cannot open it, and there is no reset link. Lose the passphrase and the recovery kit, and nobody can bring your data back.</string>
+    <string name="bt_storage_ack_checkbox">I understand that nobody can recover my data for me</string>
+
+    <string name="bt_storage_first_title">Name your first portfolio</string>
+    <string name="bt_storage_first_body">You can add more later. Everything you record goes into your encrypted vault.</string>
+    <string name="bt_storage_first_label">Portfolio name</string>
+    <string name="bt_storage_first_default">My portfolio</string>
+    <string name="bt_storage_create">Create my vault</string>
+
+    <string name="bt_storage_working_title">Creating your vault</string>
+    <string name="bt_storage_working_body">Encrypting it, writing it and reading it back — so we only tell you it is safe once it really is.</string>
+    <string name="bt_storage_fail_round_trip_title">The vault could not be verified</string>
+    <string name="bt_storage_fail_round_trip_body">It was written but could not be read back, so we will not tell you it is safe. Check that this device has free storage, then try again.</string>
+    <string name="bt_storage_fail_crypto_title">Your vault key could not be created</string>
+    <string name="bt_storage_fail_crypto_body">This device refused to generate or store the encryption key. Restart the app and try again.</string>
+    <string name="bt_storage_fail_write_title">The first portfolio could not be saved</string>
+    <string name="bt_storage_fail_write_body">Nothing was created, so nothing was lost. You can try again.</string>
+
+    <string name="bt_vault_unlock_title">Unlock your vault</string>
+    <string name="bt_vault_unlock_body">Enter your vault passphrase to open your data on this device.</string>
+    <string name="bt_vault_unlock_action">Unlock</string>
+    <string name="bt_vault_unlock_working">Unlocking…</string>
+    <string name="bt_vault_unlock_wrong">That passphrase doesn\'t open this vault.</string>
+    <string name="bt_vault_unlock_kit_hint">Forgot it? Your recovery kit can still open the vault.</string>
+    <string name="bt_vault_unlock_kit_action">Use my recovery kit</string>
+    <string name="bt_vault_unlock_kit_wrong">That file is not a recovery kit for this vault.</string>
+    <string name="bt_vault_lock_action">Lock vault</string>
+    <string name="bt_vault_lock_sub">Ask for the passphrase again next time.</string>
+
+    <string name="bt_storage_settings_row">Where your data lives</string>
+    <string name="bt_storage_mode_server">BetterTrack account</string>
+    <string name="bt_storage_mode_drive">Your Google Drive</string>
+    <string name="bt_storage_mode_both">BetterTrack + encrypted Drive backup</string>
+    <string name="bt_storage_section_backup">Backup</string>
+    <string name="bt_storage_section_vault">Vault</string>
+    <string name="bt_storage_section_change">Change where it lives</string>
+    <string name="bt_storage_section_device">This device</string>
+    <string name="bt_storage_sync_now">Back up now</string>
+    <string name="bt_storage_drive_absent_note">Friends, alerts and tax modes need a BetterTrack account, so they are not part of this mode.</string>
+
+    <string name="bt_vault_sync_idle">Not backed up yet</string>
+    <string name="bt_vault_sync_syncing">Backing up…</string>
+    <string name="bt_vault_sync_synced">Backed up to Drive</string>
+    <string name="bt_vault_sync_saved_locally">Saved on this device</string>
+    <string name="bt_vault_sync_sign_in">Sign in to Google to sync</string>
+    <string name="bt_vault_sync_quota">Your Google Drive is full — changes saved on this device</string>
+    <string name="bt_vault_sync_offline">Offline — changes saved on this device</string>
+    <string name="bt_vault_sync_locked">Vault locked — changes saved on this device</string>
+    <string name="bt_vault_sync_attention">Needs your attention</string>
+    <string name="bt_vault_sync_pending_google">Not connected to Google yet — your vault lives on this device</string>
+    <string name="bt_vault_sync_unpushed">This device has changes Drive has not seen yet.</string>
+
+    <string name="bt_vault_change_pass">Change passphrase</string>
+    <string name="bt_vault_change_pass_sub">You will need your current one.</string>
+    <string name="bt_vault_new_kit">New recovery kit</string>
+    <string name="bt_vault_new_kit_sub">Older kits keep working — this just makes another copy.</string>
+    <string name="bt_vault_rekey_title">Change vault passphrase</string>
+    <string name="bt_vault_rekey_body">Your data is not re-encrypted; only the key that protects it is wrapped again. Recovery kits you already made keep working.</string>
+    <string name="bt_vault_rekey_current">Current passphrase</string>
+    <string name="bt_vault_rekey_new">New passphrase</string>
+    <string name="bt_vault_rekey_confirm">Repeat new passphrase</string>
+    <string name="bt_vault_rekey_wrong">That is not your current passphrase.</string>
+    <string name="bt_vault_rekey_done">Passphrase changed.</string>
+    <string name="bt_vault_rekey_failed">The passphrase could not be changed. Nothing has been altered.</string>
+
+    <string name="bt_storage_tr_server_to_both">Add an encrypted Drive backup</string>
+    <string name="bt_storage_tr_server_to_both_sub">Keep BetterTrack as your main home and mirror an encrypted copy into your Drive.</string>
+    <string name="bt_storage_tr_drive_to_both">Add a BetterTrack account</string>
+    <string name="bt_storage_tr_drive_to_both_sub">Bring your vault to BetterTrack and keep Drive as the backup.</string>
+    <string name="bt_storage_tr_both_to_drive">Use Google Drive only</string>
+    <string name="bt_storage_tr_both_to_drive_sub">Your Drive copy becomes the real one and you sign out of BetterTrack. Nothing is deleted there.</string>
+    <string name="bt_storage_tr_both_to_server">Remove the Drive backup</string>
+    <string name="bt_storage_tr_both_to_server_sub">Keep your BetterTrack account and delete the encrypted file from your Drive.</string>
+    <string name="bt_storage_blocked_google">Needs a Google connection — Google sign-in isn\'t available in this build yet.</string>
+    <string name="bt_storage_blocked_server">Needs a BetterTrack account. Sign in first.</string>
+    <string name="bt_storage_blocked_unlock">Unlock your vault first.</string>
+    <string name="bt_storage_blocked_attach">Bringing a Drive vault into a BetterTrack account is not built yet.</string>
+    <string name="bt_storage_remote_delete_failed">The backup was removed here, but the file in your Google Drive could not be deleted. You can remove it yourself in Drive.</string>
+    <string name="bt_storage_switch_done">Done.</string>
+
+    <string name="bt_storage_disconnect_drive">Disconnect Google Drive</string>
+    <string name="bt_storage_disconnect_drive_sub">Keeps everything on this device and stops syncing.</string>
+    <string name="bt_storage_delete_everything">Delete everything on this device</string>
+    <string name="bt_storage_delete_everything_sub">Your vault, your key and every portfolio on this phone.</string>
+    <string name="bt_storage_delete_warning_title">This cannot be undone</string>
+    <string name="bt_storage_delete_warning_body">This erases your vault, your key and every portfolio from this device. Without a recovery kit or a copy in Drive, the data is gone for good.</string>
+    <string name="bt_storage_delete_confirm_label">Type %1$s to confirm</string>
+    <string name="bt_storage_delete_confirm_word">DELETE</string>
+    <string name="bt_storage_delete_mismatch">Type it exactly as shown.</string>
+    <string name="bt_storage_delete_action">Delete everything</string>
+
+    <string name="bt_login_use_without_account">Use without an account (Google Drive)</string>
+    <string name="bt_storage_both_blocked_body">"Both" means your data is in two places, and the second one needs a Google connection this build cannot make yet. We won\'t record a backup that isn\'t there — pick one of the two options below, and you can add the other later in Settings.</string>
+    <string name="bt_storage_both_settle_server">Continue with BetterTrack only</string>
+    <string name="bt_storage_both_settle_drive">Use Google Drive only instead</string>
 </resources>

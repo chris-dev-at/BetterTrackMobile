@@ -49,6 +49,16 @@ import at.bettertrack.app.ui.theme.BtTheme
  * action, and subtle "Need an account?" / "Forgot password?" links that open the
  * web. An in-progress state covers the Custom Tab + token exchange; a
  * human-readable error surfaces on failure (a user closing the tab is silent).
+ *
+ * V5 W5 adds two optional affordances, both `null` in the ordinary logged-out
+ * gate so that screen is unchanged:
+ *
+ * @param onUseWithoutAccount when non-null, offers the Drive-only branch (plan
+ *   §4.2 step 6). Passed **only** from inside the first-run wizard: someone who
+ *   already has a BetterTrack account must never be nudged toward abandoning it,
+ *   and someone who has not chosen yet deserves to know the option exists.
+ * @param onBack when non-null, shows a back affordance — the wizard's login step
+ *   is reachable by choice and must be leavable the same way.
  */
 @Composable
 fun LoginScreen(
@@ -58,6 +68,8 @@ fun LoginScreen(
     onForgotPassword: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPressWordmark: () -> Unit = {},
+    onUseWithoutAccount: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -88,6 +100,17 @@ fun LoginScreen(
             .padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (onBack != null) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onBack, enabled = !inProgress) {
+                    Text(
+                        text = stringResource(R.string.bt_action_back),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = bt.textSecondary,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.weight(1f))
 
         // ── Brand block ─────────────────────────────────────────────────────
@@ -166,6 +189,20 @@ fun LoginScreen(
                     text = stringResource(R.string.bt_login_forgot_password),
                     style = MaterialTheme.typography.labelLarge,
                     color = bt.textSecondary,
+                )
+            }
+        }
+
+        // The Drive-only escape hatch. Set apart from the account links above by
+        // a divider-free gap and muted styling: it is a genuinely different kind
+        // of choice, not a third variation on "sign in".
+        if (onUseWithoutAccount != null) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onUseWithoutAccount, enabled = !inProgress) {
+                Text(
+                    text = stringResource(R.string.bt_login_use_without_account),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = bt.gold,
                 )
             }
         }

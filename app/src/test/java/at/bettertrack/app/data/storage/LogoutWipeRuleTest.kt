@@ -57,11 +57,43 @@ class LogoutWipeRuleTest {
     }
 
     @Test
-    fun `the vault table list is empty until W4 creates those tables`() {
-        // A guard on the claim above: if W4 adds vault tables without revisiting
-        // this file, the assertion below fails and forces the decision to be
-        // made deliberately.
-        assertTrue(VAULT_SCOPED_TABLES.isEmpty())
+    fun `the real vault tables are the ones a scoped wipe spares`() {
+        // W1 asserted this list was EMPTY, deliberately, so that W4 adding the
+        // tables would fail here and force the classification to be made rather
+        // than defaulted. W5 makes it: these three, and nothing else.
+        assertEquals(
+            listOf("vault_entities", "vault_meta", "price_cache"),
+            VAULT_SCOPED_TABLES,
+        )
+    }
+
+    @Test
+    fun `no table is classified as both server-scoped and vault-scoped`() {
+        // The two lists drive opposite decisions on a logout. A name in both
+        // would mean the same table is simultaneously the account's to destroy
+        // and the user's to keep — and the subtraction in `tablesToClear` would
+        // silently resolve it one way forever.
+        val overlap = SERVER_SCOPED_TABLES.intersect(VAULT_SCOPED_TABLES.toSet())
+        assertTrue("classified twice: $overlap", overlap.isEmpty())
+    }
+
+    @Test
+    fun `logging out of BOTH keeps every vault table`() {
+        // The claim W4 could not make and W5 can: a BOTH install that logs out
+        // still owns its vault afterwards.
+        val cleared = tablesToClear(logoutWipeScope(StorageMode.BOTH))!!
+        for (table in VAULT_SCOPED_TABLES) {
+            assertTrue("$table must survive a BOTH logout", table !in cleared)
+        }
+    }
+
+    @Test
+    fun `a server-only logout still destroys everything including the vault tables`() {
+        // The other half of the guarantee, and the reason the scope exists at
+        // all: in SERVER mode there is no vault to protect, and leaving stray
+        // vault rows behind for the NEXT account would be a data leak between
+        // two people sharing a phone.
+        assertNull(tablesToClear(logoutWipeScope(StorageMode.SERVER)))
     }
 
     // ── The scoped wipe W4 extends ──────────────────────────────────────────

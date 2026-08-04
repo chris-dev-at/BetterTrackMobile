@@ -2,7 +2,9 @@ package at.bettertrack.app.vault
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -227,5 +229,100 @@ class VaultKeyCustodyTest {
 
         val again = custody.unlockedKey()!!
         assertFalse("custody still holds real key material", again.all { it == 0.toByte() })
+    }
+
+    // ── Changing the passphrase (W5, plan §4.2 step 5) ──────────────────────
+
+    @Test
+    fun changingThePassphraseKeepsTheKeyAndTheKeyId() = runBlocking {
+        val custody = custody()
+        custody.create("correct horse battery staple")
+        val keyId = custody.keyId
+        val before = custody.unlockedKey()!!
+
+        assertTrue(custody.changePassphrase("correct horse battery staple", "seven blue lanterns drift"))
+
+        // Only the WRAPPER changes identity. If the vault key itself moved, every
+        // envelope ever written and every recovery kit ever exported would stop
+        // opening this vault — a "password change" that silently destroys the
+        // user's backups.
+        assertEquals(keyId, custody.keyId)
+        assertArrayEquals(before, custody.unlockedKey())
+    }
+
+    @Test
+    fun theNewPassphraseOpensTheVaultAndTheOldOneDoesNot() = runBlocking {
+        val custody = custody()
+        custody.create("correct horse battery staple")
+        custody.changePassphrase("correct horse battery staple", "seven blue lanterns drift")
+        custody.lock()
+
+        assertFalse("the replaced passphrase must stop working", custody.unlock("correct horse battery staple"))
+        assertTrue(custody.unlock("seven blue lanterns drift"))
+    }
+
+    @Test
+    fun aWrongCurrentPassphraseChangesNothingAtAll() = runBlocking {
+        val custody = custody()
+        custody.create("correct horse battery staple")
+        val wrapperBefore = custody.wrappedKey()
+
+        assertFalse(custody.changePassphrase("not my passphrase", "seven blue lanterns drift"))
+
+        // The critical property: a failed change must not leave a vault that
+        // neither passphrase opens.
+        assertEquals(wrapperBefore, custody.wrappedKey())
+        custody.lock()
+        assertTrue(custody.unlock("correct horse battery staple"))
+    }
+
+    @Test
+    fun reusingTheSamePassphraseIsRefused() = runBlocking {
+        val custody = custody()
+        custody.create("correct horse battery staple")
+        assertFalse(custody.changePassphrase("correct horse battery staple", "correct horse battery staple"))
+    }
+
+    @Test
+    fun changingThePassphraseOnADeviceWithNoVaultIsRefused() = runBlocking {
+        val custody = custody()
+        assertFalse(custody.changePassphrase("anything at all", "something else"))
+    }
+
+    @Test
+    fun aChangedPassphraseGetsAFreshKdfSalt() = runBlocking {
+        // The class-wide fake RNG is deliberately constant so envelope bytes are
+        // reproducible; "fresh" is unobservable against it, so this one test uses
+        // a varying source — which is what a real CSPRNG is.
+        var draw = 0
+        val custody = VaultKeyCustody(
+            prefs = FakeSharedPreferences(),
+            kdfDispatcher = UnconfinedTestDispatcher(),
+            randomBytes = { length -> draw++; ByteArray(length) { (it + draw).toByte() } },
+            argon2 = fakeArgon2,
+            newId = { "018f0000-0000-7000-8000-0000000004%02d".format(idCounter++) },
+        )
+        custody.create("correct horse battery staple")
+        val saltBefore = custody.wrappedKey()!!.kdf.salt
+
+        custody.changePassphrase("correct horse battery staple", "seven blue lanterns drift")
+
+        // Reusing the salt would let anyone holding both wrappers attack two
+        // passphrases for the price of one KDF table.
+        assertNotEquals(saltBefore, custody.wrappedKey()!!.kdf.salt)
+    }
+
+    @Test
+    fun theRecoveryKitStillOpensTheVaultAfterAPassphraseChange() = runBlocking {
+        val custody = custody()
+        custody.create("correct horse battery staple")
+        val kit = custody.recoveryKit()!!
+
+        custody.changePassphrase("correct horse battery staple", "seven blue lanterns drift")
+        custody.lock()
+
+        // The promise the settings copy makes out loud: kits made before the
+        // change keep working, because the key they carry never moved.
+        assertTrue(custody.unlockWithRecoveryKit(kit.bytes))
     }
 }

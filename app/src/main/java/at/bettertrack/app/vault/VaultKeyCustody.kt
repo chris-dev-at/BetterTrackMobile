@@ -168,6 +168,58 @@ class VaultKeyCustody(
         false
     }
 
+    /**
+     * Re-wraps the SAME vault key under a new passphrase (W5, plan §4.2 step 5).
+     *
+     * Only the wrapper changes identity — the vault key, the key id and therefore
+     * every envelope and every recovery kit ever produced stay valid. That is the
+     * whole point: a user changing their passphrase must not silently invalidate
+     * the kit they filed away, and re-encrypting the document to achieve a
+     * password change would be an enormous, failure-prone write for no security
+     * benefit (`VaultRekey.changeVaultPassphrase` documents the same split).
+     *
+     * The wrapper is what the next push stamps into the envelope header
+     * (`VaultSyncCoordinator` reads [wrappedKey] on every encrypt), so callers
+     * should push promptly — until they do, the copy at rest still opens with the
+     * old passphrase. Not a correctness problem, but a surprising one, so the
+     * settings screen forces a sync right after this returns.
+     *
+     * @return false on a wrong current passphrase, an identical new one, or a
+     *   device crypto failure. Nothing is written on any of those paths.
+     */
+    suspend fun changePassphrase(current: String, next: String): Boolean = withContext(kdfDispatcher) {
+        if (current == next) return@withContext false
+        val wrapped = wrappedKey() ?: return@withContext false
+        var oldKek: ByteArray? = null
+        var newKek: ByteArray? = null
+        var vk: ByteArray? = null
+        try {
+            oldKek = deriveVaultKek(current, wrapped.kdf, argon2)
+            vk = unwrapVaultKey(wrapped, wrapped.keyId, oldKek)
+            // A fresh salt, not the old one: reusing it would let anyone holding
+            // both wrappers attack two passphrases for the cost of one KDF table.
+            val kdf = newKdfParams(randomBytes)
+            newKek = deriveVaultKek(next, kdf, argon2)
+            val rewrapped = wrapVaultKey(vk, newKek, wrapped.keyId, kdf, randomBytes)
+            prefs.edit()
+                .putString(KEY_SALT, kdf.salt)
+                .putString(KEY_WRAPPED, rewrapped.wrappedVk)
+                .apply()
+            // The user just proved they know the passphrase; staying unlocked is
+            // the same courtesy `create` extends.
+            vaultKey = vk.copyOf()
+            _locked.value = false
+            true
+        } catch (cause: VaultCryptoError) {
+            Log.d(TAG, "vault passphrase change rejected: ${cause.code}")
+            false
+        } finally {
+            oldKek?.let { zeroBytes(it) }
+            newKek?.let { zeroBytes(it) }
+            vk?.let { zeroBytes(it) }
+        }
+    }
+
     /** Drops the in-memory key. The vault stays on disk; it just cannot be read. */
     fun lock() {
         vaultKey?.let { zeroBytes(it) }
