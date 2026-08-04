@@ -24,6 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PortfolioHistoryEntity::class,
         CashSourceEntity::class,
         CashMovementEntity::class,
+        CashTagEntity::class,
         CustomAssetEntity::class,
         ValuePointEntity::class,
         WatchlistEntity::class,
@@ -33,7 +34,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOpEntity::class,
         MetaEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -42,6 +43,7 @@ abstract class BtDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun portfolioHistoryDao(): PortfolioHistoryDao
     abstract fun cashDao(): CashDao
+    abstract fun cashTagDao(): CashTagDao
     abstract fun customAssetDao(): CustomAssetDao
     abstract fun watchlistDao(): WatchlistDao
     abstract fun conglomerateDao(): ConglomerateDao
@@ -145,6 +147,32 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 → v8 (V5 cash classification): the per-movement tag set + the tag
+         * cache itself.
+         *
+         * `tagIds` is `NOT NULL DEFAULT ''` — the empty string is the honest
+         * reading of "this cached row predates classification", i.e. untagged,
+         * which is exactly how it renders until the next refresh fills in the
+         * server's real set. `cash_tags` is created empty and populated by the
+         * first `refreshTags()`; the app never invents a tag locally, so an empty
+         * table simply means "chips have no names yet", not lost data.
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `tagIds` TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `cash_tags` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`color` TEXT NOT NULL, " +
+                        "`system` INTEGER NOT NULL, " +
+                        "`systemKey` TEXT, " +
+                        "PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
                 .addMigrations(
@@ -154,6 +182,7 @@ abstract class BtDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
     }

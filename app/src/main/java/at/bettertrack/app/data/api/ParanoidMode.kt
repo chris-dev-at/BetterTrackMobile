@@ -14,27 +14,56 @@ import okhttp3.Response
  * An account can live in "paranoid mode": its portfolio/tax/import data is held
  * in an opaque client-side vault, and the platform deliberately answers the
  * portfolio-family endpoints with `403 { error: { code: "PARANOID_MODE" } }`.
- * Bearer clients get **no pre-flight signal** today — the vault routes are session-only
- * and `MeResponse` does not expose `privacyMode` (that ask is filed) — so the
- * app can only learn about it from a refusal.
  *
  * Without this layer such an account would see a generic error, or worse an
- * apparently-legitimate **€0 portfolio**. Instead the first PARANOID_MODE
- * refusal flips [ParanoidModeState], and the killed surfaces swap to a designed
- * explanation screen. The surviving features (friends, chat, watchlists, price
- * alerts, notifications) are untouched and keep working normally.
+ * apparently-legitimate **€0 portfolio**. Instead the killed surfaces swap to a
+ * designed explanation screen. The surviving features (friends, chat,
+ * watchlists, price alerts, notifications) are untouched and keep working.
+ *
+ * There are now TWO ways in, and the pair is deliberate:
+ *  1. **Proactive** — `GET /auth/me` carries `privacyMode` since platform PR
+ *     #1055 (the app's #39.1 ask), so [applyPrivacyMode] can route the user
+ *     purposefully at login and even at cold start, before a single doomed
+ *     portfolio call is made.
+ *  2. **Reactive backstop** — [ParanoidModeInterceptor] still watches every
+ *     response for the refusal. It covers what the signal cannot: a pre-v5
+ *     server that omits the field, and a mode flipped web-side mid-session.
  */
 object ParanoidModeState {
 
     private val _active = MutableStateFlow(false)
 
-    /** True once the server has refused a call with `403 PARANOID_MODE`. */
+    /**
+     * True when the portfolio surfaces should show the paranoid explainer —
+     * either because `/auth/me` said so up front or because the server refused a
+     * call with `403 PARANOID_MODE`.
+     */
     val active: StateFlow<Boolean> = _active.asStateFlow()
 
     fun markActive() {
         if (!_active.value) {
             Log.i(TAG, "Account is in PARANOID MODE — routing portfolio surfaces to the explainer")
             _active.value = true
+        }
+    }
+
+    /**
+     * Apply the server's `privacyMode` verdict from `/auth/me`.
+     *
+     * [at.bettertrack.app.data.auth.paranoidRoutingDecision] returns `null` for
+     * an absent or unrecognised value, and that case must be a **no-op**: a
+     * pre-v5 server omitting the key must never clear a detection the
+     * interceptor earned from a real 403, and a future third mode name must
+     * never black out a normal account. Only an explicit `"normal"` clears.
+     */
+    fun applyPrivacyMode(rawPrivacyMode: String?) {
+        when (at.bettertrack.app.data.auth.paranoidRoutingDecision(rawPrivacyMode)) {
+            true -> markActive()
+            false -> if (_active.value) {
+                Log.i(TAG, "Server reports a normal account — clearing the paranoid routing")
+                _active.value = false
+            }
+            null -> Unit // No opinion: leave whatever the interceptor concluded.
         }
     }
 

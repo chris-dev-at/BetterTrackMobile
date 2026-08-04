@@ -18,6 +18,7 @@ import at.bettertrack.app.data.api.dto.UpdateCustomAssetRequest
 import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.api.dto.ValuePointDto
+import at.bettertrack.app.data.cash.encodeTagIds
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.CashMovementEntity
 import at.bettertrack.app.data.db.CashSourceEntity
@@ -208,6 +209,9 @@ class ServerPortfolioBackend(
                         note = m.note,
                         createdAt = m.createdAt,
                         source = m.source ?: "manual",
+                        // v5 classification chips, cached so they render offline.
+                        // A pre-v5 server omits `tags` entirely → "" (untagged).
+                        tagIds = encodeTagIds(m.tags ?: emptyList()),
                         mirror = m.mirror.toRowMirror(),
                     )
                 }

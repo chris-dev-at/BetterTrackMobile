@@ -107,14 +107,19 @@ enum class NotifKind(
     /** Mirrorchain invite (`data.chainId` + `data.inviteId`) — the one actionable mirror type. */
     MirrorInvite("mirror.invite", NotifChannels.SOCIAL, serverModeled = false),
     /**
-     * Every OTHER `mirror.*` event (member joined/left, chain renamed, roles
-     * changed, dissolved, …). Matched by **prefix** rather than by eight
-     * enumerated names: the platform ships eight today and the exact strings are
-     * not yet in the contract of record (mobile-push.md §3.1 is the pending doc
-     * refresh in #39.2), so pinning invented names would be worse than useless —
-     * a renamed or ninth type would silently fall through to the generic System
-     * row. Prefix-matching gives every mirror event the right channel, icon and
-     * inbox target no matter what the tail is.
+     * Every OTHER `mirror.*` event — the seven informational chain events listed
+     * in [MIRROR_EVENT_TYPES]. They share ONE presentation family on purpose:
+     * the channel, icon, label and inbox target are identical for all of them,
+     * so seven enum rows would be seven copies of the same three lines in four
+     * `when` blocks.
+     *
+     * HISTORY: S2a matched these by **prefix alone**, because the exact strings
+     * were not yet in the contract of record — mobile-push.md's §3.1 table
+     * predated them (the app's own #39.2 ask). The platform shipped that doc
+     * refresh (#1053), so the names are now pinned exactly in
+     * [MIRROR_EVENT_TYPES] and a test asserts the full set. The prefix match is
+     * KEPT as a deliberate fallback so a future ninth `mirror.*` type still
+     * lands in the right family instead of the generic System row.
      */
     MirrorEvent(null, NotifChannels.SOCIAL, serverModeled = false),
     /**
@@ -131,11 +136,34 @@ enum class NotifKind(
         /** Wire prefix for the mirrorchain event family (see [MirrorEvent]). */
         const val MIRROR_PREFIX = "mirror."
 
+        /**
+         * The seven informational `mirror.*` types, **verbatim from the platform's
+         * `docs/mobile-push.md` §3.1** after the #1053 doc refresh (the eighth,
+         * `mirror.invite`, is its own actionable kind — see [MirrorInvite]).
+         *
+         * These are exact registrations, not a guess: the doc is the contract of
+         * record, and a test pins this set against it. FCM `data` carries
+         * `chainId` on all seven (plus `inviteId` on the invite).
+         */
+        val MIRROR_EVENT_TYPES: Set<String> = setOf(
+            "mirror.member_joined",
+            "mirror.member_left",
+            "mirror.member_removed",
+            "mirror.removed",
+            "mirror.ownership_transferred",
+            "mirror.chain_dissolved",
+            "mirror.sync_stalled",
+        )
+
         fun fromType(type: String?): NotifKind {
             entries.firstOrNull { it.typeKey != null && it.typeKey == type }?.let { return it }
-            // Any unrecognised mirror.* still lands in the SOCIAL family with a
-            // sensible row; everything else keeps the existing System fallback.
-            if (type != null && type.startsWith(MIRROR_PREFIX)) return MirrorEvent
+            // Exact registrations first (the documented seven), then the prefix
+            // fallback so a FUTURE mirror.* type the app has never heard of still
+            // lands in the SOCIAL family with a sensible row rather than dropping
+            // to the generic System one. Everything else keeps the System fallback.
+            if (type != null && (type in MIRROR_EVENT_TYPES || type.startsWith(MIRROR_PREFIX))) {
+                return MirrorEvent
+            }
             return System
         }
     }
@@ -252,13 +280,18 @@ fun resolveDeepLink(type: String?, payload: JsonElement?): NotifDeepLink? {
         // V5: a dividend row opens the asset it was paid on; without an assetId
         // there is nothing specific to open, so the tap just lands on the inbox.
         NotifKind.DividendEvent -> str("assetId", "asset_id")?.let { NotifDeepLink.Asset(it) }
-        // Budgets live in the cash-classification layer, which has no app screen
-        // yet (S2c) — inbox for now rather than a dead tap.
+        // Inbox BY CONTRACT, not for want of a screen: mobile-push.md §4 says
+        // "Notification inbox; never construct an expense URL". The app now HAS a
+        // budgets surface (S2c), but the payload carries only `categoryId` +
+        // `period` — no portfolioId — and budgets are per portfolio, so there is
+        // no honest way to pick which ledger to open. The inbox stays the target.
         NotifKind.BudgetExceeded -> null
         // A chain invite is a person-to-person request: the Social tab is where
-        // the app already collects incoming requests.
+        // the app already collects incoming requests (mobile-push.md §4).
         NotifKind.MirrorInvite -> NotifDeepLink.Social
-        // Other mirror events are informational; no chain screen exists yet (S2c).
+        // The seven informational chain events. §4 routes them to the inbox (or a
+        // Social group context from `chainId`); the app has no chain screen, and
+        // a chainId is explicitly NOT a portfolio id, so inbox it is.
         NotifKind.MirrorEvent -> null
         // The digest is a roll-up — its whole point is "go look at your inbox".
         NotifKind.NotificationsDigest -> null

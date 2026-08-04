@@ -21,6 +21,8 @@ import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
 import at.bettertrack.app.data.prefs.DevOriginOverride
 import at.bettertrack.app.data.push.PushTokenManager
+import at.bettertrack.app.data.cash.CashClassificationRepository
+import at.bettertrack.app.data.standingorders.StandingOrderRepository
 import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.BuildInfoRepository
 import at.bettertrack.app.data.repo.ConglomerateRepository
@@ -256,6 +258,26 @@ object AppGraph {
 
     val portfolioRepository: PortfolioRepository by lazy {
         PortfolioRepository(db = database, json = json, backend = portfolioBackend)
+    }
+
+    /**
+     * V5 cash classification (tags / budgets / rules / dashboards). Deliberately
+     * NOT behind [PortfolioBackend]: there is no Drive equivalent for the
+     * classification layer yet, so this is a plain server repository — see its
+     * kdoc.
+     */
+    val cashClassificationRepository: CashClassificationRepository by lazy {
+        CashClassificationRepository(
+            api = btApi,
+            tagDao = database.cashTagDao(),
+            cashDao = database.cashDao(),
+            json = json,
+        )
+    }
+
+    /** V5 standing orders — network-only (nothing about an order is renderable stale). */
+    val standingOrderRepository: StandingOrderRepository by lazy {
+        StandingOrderRepository(api = btApi, json = json)
     }
 
     /** Prices/quotes/search seam (plan §1.3); W6 adds the no-live-prices source. */

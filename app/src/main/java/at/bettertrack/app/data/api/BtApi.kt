@@ -9,6 +9,28 @@ import at.bettertrack.app.data.api.dto.CashSourceRequest
 import at.bettertrack.app.data.api.dto.CashSourceResponse
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CashTransferResponse
+import at.bettertrack.app.data.api.dto.CashBudgetListResponse
+import at.bettertrack.app.data.api.dto.CashBudgetResponse
+import at.bettertrack.app.data.api.dto.CashMovementTagsResponse
+import at.bettertrack.app.data.api.dto.CashRuleApplyResponse
+import at.bettertrack.app.data.api.dto.CashRuleListResponse
+import at.bettertrack.app.data.api.dto.CashRulePreviewRequest
+import at.bettertrack.app.data.api.dto.CashRulePreviewResponse
+import at.bettertrack.app.data.api.dto.CashRuleResponse
+import at.bettertrack.app.data.api.dto.CashSummaryResponse
+import at.bettertrack.app.data.api.dto.CashTagListResponse
+import at.bettertrack.app.data.api.dto.CashTagResponse
+import at.bettertrack.app.data.api.dto.CashTrendResponse
+import at.bettertrack.app.data.api.dto.CreateCashBudgetRequest
+import at.bettertrack.app.data.api.dto.CreateCashRuleRequest
+import at.bettertrack.app.data.api.dto.CreateCashTagRequest
+import at.bettertrack.app.data.api.dto.CreateStandingOrderRequest
+import at.bettertrack.app.data.api.dto.SetCashMovementTagsRequest
+import at.bettertrack.app.data.api.dto.StandingOrderDto
+import at.bettertrack.app.data.api.dto.StandingOrderListResponse
+import at.bettertrack.app.data.api.dto.UpdateCashBudgetRequest
+import at.bettertrack.app.data.api.dto.UpdateCashRuleRequest
+import at.bettertrack.app.data.api.dto.UpdateCashTagRequest
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
@@ -547,6 +569,166 @@ interface BtApi {
         @Body body: CashTransferRequest,
         @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CashTransferResponse>
+
+    // ── V5: cash classification (tags / budgets / rules / dashboards) ────────
+    // Gated on cash:read / cash:write — a SEPARATE scope pair from the cash
+    // MOVEMENTS above, which ride portfolio:* under /portfolios/{id}/cash/…
+    //
+    // No Idempotency-Key on any of these: the platform mounts that middleware
+    // per-route and mounts none here, and the writes are naturally
+    // idempotent/replaceable anyway (whole-set PUT, field-absolute PATCH, an
+    // additive `apply` that reports 0 on a second press).
+
+    /** The caller's cash-flow tags, app-owned ones included. [cash:read] */
+    @GET("cash/tags")
+    suspend fun cashTags(): Response<CashTagListResponse>
+
+    /** Create a user tag; a case-insensitive duplicate name is 409 CASH_TAG_NAME_TAKEN. */
+    @Headers("Content-Type: application/json")
+    @POST("cash/tags")
+    suspend fun createCashTag(@Body body: CreateCashTagRequest): Response<CashTagResponse>
+
+    /** Rename and/or re-tint. System tags accept both; only DELETE is refused. */
+    @Headers("Content-Type: application/json")
+    @PATCH("cash/tags/{tagId}")
+    suspend fun updateCashTag(
+        @Path("tagId") tagId: String,
+        @Body body: UpdateCashTagRequest,
+    ): Response<CashTagResponse>
+
+    /** 204. A SYSTEM tag answers 409 `CASH_TAG_SYSTEM_PROTECTED`. */
+    @DELETE("cash/tags/{tagId}")
+    suspend fun deleteCashTag(@Path("tagId") tagId: String): Response<Unit>
+
+    /** Whole-set replace of one movement's tags; `[]` clears them. */
+    @Headers("Content-Type: application/json")
+    @PUT("cash/movements/{movementId}/tags")
+    suspend fun setCashMovementTags(
+        @Path("movementId") movementId: String,
+        @Body body: SetCashMovementTagsRequest,
+    ): Response<CashMovementTagsResponse>
+
+    /** Budgets + this month's progress. [portfolioId] REQUIRED; omitted month ⇒ current. */
+    @GET("cash/budgets")
+    suspend fun cashBudgets(
+        @Query("portfolioId") portfolioId: String,
+        @Query("month") month: String? = null,
+    ): Response<CashBudgetListResponse>
+
+    /** One budget per (portfolio, tag, period) — a second is 409 CASH_BUDGET_EXISTS. */
+    @Headers("Content-Type: application/json")
+    @POST("cash/budgets")
+    suspend fun createCashBudget(
+        @Body body: CreateCashBudgetRequest,
+    ): Response<CashBudgetResponse>
+
+    @Headers("Content-Type: application/json")
+    @PATCH("cash/budgets/{budgetId}")
+    suspend fun updateCashBudget(
+        @Path("budgetId") budgetId: String,
+        @Body body: UpdateCashBudgetRequest,
+    ): Response<CashBudgetResponse>
+
+    @DELETE("cash/budgets/{budgetId}")
+    suspend fun deleteCashBudget(@Path("budgetId") budgetId: String): Response<Unit>
+
+    /** Already in EVALUATION order (ascending priority, then age) — do not re-sort. */
+    @GET("cash/rules")
+    suspend fun cashRules(): Response<CashRuleListResponse>
+
+    @Headers("Content-Type: application/json")
+    @POST("cash/rules")
+    suspend fun createCashRule(@Body body: CreateCashRuleRequest): Response<CashRuleResponse>
+
+    /** Every field optional; `tagIds` REPLACES the set. */
+    @Headers("Content-Type: application/json")
+    @PATCH("cash/rules/{ruleId}")
+    suspend fun updateCashRule(
+        @Path("ruleId") ruleId: String,
+        @Body body: UpdateCashRuleRequest,
+    ): Response<CashRuleResponse>
+
+    @DELETE("cash/rules/{ruleId}")
+    suspend fun deleteCashRule(@Path("ruleId") ruleId: String): Response<Unit>
+
+    /**
+     * Run every enabled rule over the existing movements. NO BODY — Retrofit needs
+     * none for a bodyless POST. Additive + idempotent: a second press honestly
+     * reports 0 rather than re-counting the same rows.
+     */
+    @POST("cash/rules/apply")
+    suspend fun applyCashRules(): Response<CashRuleApplyResponse>
+
+    /** What the rules WOULD tag this note as (first match wins). Empty note ⇒ `[]`. */
+    @Headers("Content-Type: application/json")
+    @POST("cash/rules/preview")
+    suspend fun previewCashRules(
+        @Body body: CashRulePreviewRequest,
+    ): Response<CashRulePreviewResponse>
+
+    /** One portfolio's month. The per-tag rows do NOT sum to the totals — see the DTO. */
+    @GET("cash/summary")
+    suspend fun cashSummary(
+        @Query("portfolioId") portfolioId: String,
+        @Query("month") month: String? = null,
+    ): Response<CashSummaryResponse>
+
+    /** Trailing inflow/outflow per month, oldest→newest, gaps as zeros. months = 1..24. */
+    @GET("cash/trends")
+    suspend fun cashTrends(
+        @Query("portfolioId") portfolioId: String,
+        @Query("months") months: Int? = null,
+    ): Response<CashTrendResponse>
+
+    // ── V5: standing orders (§13.5 V5-P6b) ──────────────────────────────────
+    // Same portfolio:* scope pair as the rest of the portfolio surface.
+    // ONLY the list is enveloped (`{"orders":[…]}`); every single-order response
+    // is the BARE object — verified in the platform monorepo, see
+    // [at.bettertrack.app.data.api.dto.StandingOrderDto]. No Idempotency-Key:
+    // standingOrdersRoutes.ts mounts no idempotency middleware.
+
+    /** The caller's standing orders, optionally narrowed to one portfolio. */
+    @GET("standing-orders")
+    suspend fun standingOrders(
+        @Query("portfolioId") portfolioId: String? = null,
+    ): Response<StandingOrderListResponse>
+
+    /** 201 with the BARE created order. */
+    @Headers("Content-Type: application/json")
+    @POST("standing-orders")
+    suspend fun createStandingOrder(
+        @Body body: CreateStandingOrderRequest,
+    ): Response<StandingOrderDto>
+
+    @GET("standing-orders/{id}")
+    suspend fun standingOrder(@Path("id") id: String): Response<StandingOrderDto>
+
+    /**
+     * Edit amount / label / endDate ONLY — kind, asset, portfolio, cadence,
+     * anchorDay and startDate are immutable so a live order's period identity
+     * never shifts under it. The body is a raw [JsonObject] because `label` and
+     * `endDate` are nullish server-side: the app must be able to send
+     * `"label": null` (CLEAR) distinctly from an omitted label (LEAVE), which a
+     * nullable DTO field cannot express under `explicitNulls = false`. Built by
+     * [at.bettertrack.app.data.standingorders.buildStandingOrderPatch].
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("standing-orders/{id}")
+    suspend fun updateStandingOrder(
+        @Path("id") id: String,
+        @Body body: JsonObject,
+    ): Response<StandingOrderDto>
+
+    /** Stop firing; keeps history. Resuming never back-fills the paused periods. */
+    @POST("standing-orders/{id}/pause")
+    suspend fun pauseStandingOrder(@Path("id") id: String): Response<StandingOrderDto>
+
+    @POST("standing-orders/{id}/resume")
+    suspend fun resumeStandingOrder(@Path("id") id: String): Response<StandingOrderDto>
+
+    /** 204 — the order's run history cascades. */
+    @DELETE("standing-orders/{id}")
+    suspend fun deleteStandingOrder(@Path("id") id: String): Response<Unit>
 
     // ── Step 14: friends & sharing (§6.8/§6.9) ───────────────────────────────
     // READS gate on social:read (the mobile client HAS it → live).

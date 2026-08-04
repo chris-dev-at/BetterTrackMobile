@@ -53,6 +53,20 @@ import kotlinx.serialization.Serializable
     val portfolioId: String? = null,
     val editOpId: Long? = null,
 )
+
+/**
+ * V5 S2c cash-classification surfaces, reached from the cash screen's overflow.
+ * Tags and rules are per USER, not per portfolio (a label means the same thing
+ * in every ledger the account owns), so neither route carries a portfolio id.
+ */
+@Serializable data object CashTagsRoute                                     // manage tags (§v5 cash:*)
+@Serializable data object CashRulesRoute                                    // auto-tag rules (§v5 cash:*)
+
+/**
+ * Standing orders — scheduled recurring buys / cash movements. Portfolio-scoped
+ * because an order books into one ledger; a null id lists every portfolio's.
+ */
+@Serializable data class StandingOrdersRoute(val portfolioId: String? = null)
 @Serializable data object CustomAssetsRoute                                 // custom-asset list (§6.4)
 @Serializable data class CustomAssetDetailRoute(val assetId: String)        // custom-asset detail (§6.4)
 

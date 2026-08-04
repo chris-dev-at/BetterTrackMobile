@@ -66,6 +66,10 @@ class AuthRepository(
     private fun resolveInitialState(): AuthState {
         if (!tokenManager.hasTokens()) return AuthState.LoggedOut
         val user = store.loadUser() ?: SessionUser.unknown()
+        // Cold start: route a paranoid account to the explainer from the PERSISTED
+        // privacyMode, before /auth/me has answered — that is the whole point of
+        // the pre-flight signal (#39.1). refreshUser() corrects it either way.
+        at.bettertrack.app.data.api.ParanoidModeState.applyPrivacyMode(user.privacyMode)
         return if (user.mustChangePassword) {
             AuthState.PasswordChangeRequired(user)
         } else {
@@ -152,6 +156,12 @@ class AuthRepository(
                     user.status == "disabled" -> wipeAndFail(LoginError.ACCOUNT_DISABLED)
                     else -> {
                         store.saveUser(user)
+                        // PROACTIVE paranoid routing (#39.1): the server told us the
+                        // account's privacyMode, so the portfolio surfaces can show the
+                        // explainer instead of firing a burst of doomed calls and
+                        // flashing error states until a 403 teaches the interceptor.
+                        at.bettertrack.app.data.api.ParanoidModeState
+                            .applyPrivacyMode(user.privacyMode)
                         // Detects an account switch and wipes local data if so (§7.3).
                         localAccountData.onSessionEstablished(user.id)
                         _authState.value = if (user.mustChangePassword) {
@@ -204,6 +214,11 @@ class AuthRepository(
                         user.status == "disabled" -> wipeAndFail(LoginError.ACCOUNT_DISABLED)
                         else -> {
                             store.saveUser(user)
+                            // Keeps the paranoid routing honest inside a live session:
+                            // a mode flipped web-side is picked up on the next refresh
+                            // without waiting for a portfolio call to be refused.
+                            at.bettertrack.app.data.api.ParanoidModeState
+                                .applyPrivacyMode(user.privacyMode)
                             // Late identity resolution upgrades the local-data owner key.
                             localAccountData.onSessionEstablished(user.id)
                             _authState.value = if (user.mustChangePassword) {

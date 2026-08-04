@@ -36,6 +36,14 @@ data class SessionUser(
     val status: String,
     val mustChangePassword: Boolean,
     val baseCurrency: String,
+    /**
+     * The account's `privacyMode` as last seen on `/auth/me` (`"normal"` /
+     * `"paranoid"`, or null on a pre-v5 server). Persisted with the rest of the
+     * session so a COLD START can route a paranoid account to the explainer
+     * before `/auth/me` has answered — the whole point of the pre-flight signal.
+     * Null-defaulted so an existing stored session deserializes unchanged.
+     */
+    val privacyMode: String? = null,
 ) {
     companion object {
         /** Placeholder used when a valid token exists but /auth/me hasn't resolved yet. */
@@ -47,6 +55,7 @@ data class SessionUser(
             status = "active",
             mustChangePassword = false,
             baseCurrency = "EUR",
+            privacyMode = null,
         )
     }
 }
@@ -59,6 +68,7 @@ fun MeResponse.toSessionUser(): SessionUser = SessionUser(
     status = status,
     mustChangePassword = mustChangePassword,
     baseCurrency = baseCurrency,
+    privacyMode = privacyMode,
 )
 
 /**

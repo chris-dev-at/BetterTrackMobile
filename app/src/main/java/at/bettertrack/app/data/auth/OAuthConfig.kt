@@ -45,8 +45,13 @@ object OAuthConfig {
      * `/portfolios/{id}/cash/…` ride the portfolio scopes as before) and
      * mirrorchain:read/mirrorchain:write (group-portfolio participation: chains,
      * members, activity, invites read; invite accept/decline + chain leave
-     * write — chain ADMINISTRATION stays session-only this sprint) are appended
-     * only when the EFFECTIVE backend has the seeds — see [v5ScopesAllowedFor].
+     * write — chain ADMINISTRATION stays session-only this sprint) and
+     * vault:sync (the paranoid vault over bearer — `GET`/`PUT /vault`,
+     * `GET /vault/media`, `GET /vault/history[/{version}]`; a single combined
+     * scope with no read/write split, and `PATCH /vault/media` plus every
+     * `/account/paranoid/…` transition deliberately stay session-only) are
+     * appended only when the EFFECTIVE backend has the seeds — see
+     * [v5ScopesAllowedFor].
      *
      * A computed property, not a constant: the effective API origin is a runtime
      * value on debug builds ([DevOriginOverride]), so the scope set must be read
@@ -91,17 +96,22 @@ private const val BASE_SCOPES =
 private const val ALERTS_SCOPES = "alerts:read alerts:write"
 
 /**
- * The v5 drop's four scopes (cash classification + mirrorchain participation),
- * appended to the request only against a backend that has seeded them (see
- * [v5ScopesAllowedFor]).
+ * The v5 drop's scopes (cash classification + mirrorchain participation + the
+ * paranoid vault), appended to the request only against a backend that has
+ * seeded them (see [v5ScopesAllowedFor]).
+ *
+ * Grew from four to FIVE on 2026-08-04 when the platform's `vault:sync` landed
+ * (PR #1049, seeded by migration `0081` — board tick "S5 UNBLOCKED"). The dev
+ * set is therefore 14 + 5 = 19; production still requests the proven 14.
  */
-private const val V5_SCOPES = "cash:read cash:write mirrorchain:read mirrorchain:write"
+private const val V5_SCOPES =
+    "cash:read cash:write mirrorchain:read mirrorchain:write vault:sync"
 
 /** The production API origin — the one backend that is NOT known to be v5-seeded. */
 const val PROD_API_ORIGIN = "https://api.bettertrack.at"
 
 /**
- * **Per-backend** gate for the four v5 scopes (board #42.1), superseding the
+ * **Per-backend** gate for the v5 scopes (board #42.1), superseding the
  * flat `V5_SCOPES_ENABLED` boolean this file carried on 2026-08-04.
  *
  * Why per-backend rather than per-build: requesting a scope the SERVING OAuth
@@ -110,13 +120,14 @@ const val PROD_API_ORIGIN = "https://api.bettertrack.at"
  * scope. That is the same hard-reject the alerts scopes taught us
  * ([OAuthConfig.ALERTS_SCOPES_ENABLED], held `false` until migration 0030
  * landed). The v5 seeds (migrations `0079`/`0080`, from the v5 drop addendum —
- * PRs #1046 cash-classification / #1048 mirrorchain) are live on the LOCAL DEV
- * stack and **not yet confirmed on prod**, which was deliberately offline for
- * the holiday sprint. A single flat flag therefore cannot be right for both
- * backends at once: on it breaks a prod login, off it costs the sprint its
- * `cash:*` / `mirrorchain:*` work.
+ * PRs #1046 cash-classification / #1048 mirrorchain, joined 2026-08-04 by
+ * `0081` for `vault:sync` — PR #1049) are live on the LOCAL DEV stack and **not
+ * yet confirmed on prod**, which was deliberately offline for the holiday
+ * sprint. A single flat flag therefore cannot be right for both backends at
+ * once: on it breaks a prod login, off it costs the sprint its `cash:*` /
+ * `mirrorchain:*` / `vault:sync` work.
  *
- * So: any origin that is not production requests the full 18; production keeps
+ * So: any origin that is not production requests the full 19; production keeps
  * requesting the proven 14 until the prod 0079/0080 seed is confirmed. **When it
  * is, this function is the one place that changes** (return `true`
  * unconditionally, or delete the gate) — and re-verify a real prod login before

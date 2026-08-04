@@ -73,9 +73,12 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.AppLockRoute
+import at.bettertrack.app.navigation.StandingOrdersRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.AssetsTabRoute
+import at.bettertrack.app.navigation.CashRulesRoute
+import at.bettertrack.app.navigation.CashTagsRoute
 import at.bettertrack.app.navigation.ChangelogRoute
 import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.ChatListRoute
@@ -610,6 +613,40 @@ private fun BtNavHost(
                 editOpId = route.editOpId,
                 onBack = back,
                 onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                onOpenTags = { navController.navigate(CashTagsRoute) },
+                onOpenRules = { navController.navigate(CashRulesRoute) },
+                onOpenStandingOrders = {
+                    navController.navigate(StandingOrdersRoute(route.portfolioId))
+                },
+            )
+        }
+        // V5 S2c. The cash-classification layer and standing orders are
+        // server-only surfaces over portfolio data, so they ride the same
+        // paranoid guard as the rest of that family: a paranoid account has no
+        // server-side ledger to classify or schedule against.
+        composable<CashTagsRoute> {
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
+            at.bettertrack.app.ui.cash.CashTagsScreen(onBack = back)
+        }
+        composable<CashRulesRoute> {
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
+            at.bettertrack.app.ui.cash.CashRulesScreen(onBack = back)
+        }
+        composable<StandingOrdersRoute> { entry ->
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
+            val soRoute = entry.toRoute<StandingOrdersRoute>()
+            at.bettertrack.app.ui.standingorders.StandingOrdersScreen(
+                routePortfolioId = soRoute.portfolioId,
+                onBack = back,
             )
         }
         composable<CustomAssetsRoute> {

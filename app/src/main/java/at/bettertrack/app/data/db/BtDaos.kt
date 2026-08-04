@@ -166,6 +166,15 @@ interface CashDao {
     @Query("UPDATE cash_sources SET balanceEur = :balanceEur WHERE id = :sourceId")
     suspend fun updateSourceBalance(sourceId: String, balanceEur: Double)
 
+    /**
+     * Write a movement's v5 tag set straight into the cache after a successful
+     * `PUT /cash/movements/{id}/tags`, so the chips repaint from Room without a
+     * full ledger refetch. [tagIds] is always the output of
+     * [at.bettertrack.app.data.cash.encodeTagIds].
+     */
+    @Query("UPDATE cash_movements SET tagIds = :tagIds WHERE id = :movementId")
+    suspend fun updateMovementTags(movementId: String, tagIds: String)
+
     @Transaction
     suspend fun applyMovementDeletion(movementId: String, sourceId: String?, sourceBalanceEur: Double?) {
         deleteMovement(movementId)
@@ -184,6 +193,35 @@ interface CashDao {
         deleteMovementsForPortfolio(portfolioId)
         upsertSources(sources)
         insertMovements(movements)
+    }
+}
+
+/**
+ * The v5 cash-classification tag cache (per USER, not per portfolio). The server
+ * owns the set outright, so the only write path is a whole-set replace — there
+ * is no local create/edit to reconcile.
+ */
+@Dao
+interface CashTagDao {
+    /** User tags first, then the app-owned ones; alphabetical within each block. */
+    @Query("SELECT * FROM cash_tags ORDER BY system ASC, name COLLATE NOCASE ASC")
+    fun observeTags(): Flow<List<CashTagEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(tags: List<CashTagEntity>)
+
+    @Query("DELETE FROM cash_tags")
+    suspend fun deleteAll()
+
+    /**
+     * Mirror the server's tag set exactly. Delete-all + insert (not upsert) so a
+     * tag deleted on the web disappears here too; one transaction so an observer
+     * never sees the empty intermediate state.
+     */
+    @Transaction
+    suspend fun replaceAll(tags: List<CashTagEntity>) {
+        deleteAll()
+        insertAll(tags)
     }
 }
 

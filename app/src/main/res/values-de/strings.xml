@@ -1126,4 +1126,167 @@
     <string name="bt_notif_quiet_timezone_title">Zeitzone wählen</string>
     <string name="bt_notif_quiet_timezone_search">Zeitzonen suchen</string>
     <string name="bt_notif_quiet_set">Übernehmen</string>
+
+    <!-- ── V5 S2c: Cash-Klassifizierung (Tags / Budgets / Auto-Tag-Regeln) ─── -->
+    <string name="bt_cash_menu">Cash-Optionen</string>
+    <string name="bt_cash_menu_manage_tags">Tags verwalten</string>
+    <string name="bt_cash_menu_rules">Auto-Tag-Regeln</string>
+    <string name="bt_cash_menu_standing_orders">Daueraufträge</string>
+
+    <!-- Tags -->
+    <string name="bt_tags_title">Tags verwalten</string>
+    <string name="bt_tags_section_yours">Deine Tags</string>
+    <string name="bt_tags_section_builtin">Vorgegeben</string>
+    <string name="bt_tags_builtin_badge">Vorgegeben</string>
+    <string name="bt_tags_builtin_hint">Vorgegebene Tags werden automatisch vergeben. Du kannst sie umbenennen und umfärben, aber nicht löschen.</string>
+    <string name="bt_tags_empty_title">Noch keine Tags</string>
+    <string name="bt_tags_empty_message">Tags beschriften deine Cash-Buchungen, damit Budgets und Auswertungen sie gruppieren können.</string>
+    <string name="bt_tags_error_title">Tags konnten nicht geladen werden</string>
+    <string name="bt_tags_new">Neuer Tag</string>
+    <string name="bt_tags_new_title">Neuer Tag</string>
+    <string name="bt_tags_edit_title">Tag bearbeiten</string>
+    <string name="bt_tags_name">Name</string>
+    <string name="bt_tags_colour">Farbe</string>
+    <string name="bt_tags_create_action">Tag erstellen</string>
+    <string name="bt_tags_save_action">Änderungen speichern</string>
+    <string name="bt_tags_delete_title">Tag löschen?</string>
+    <string name="bt_tags_delete_message">„%1$s“ wird von allen Buchungen entfernt, die ihn tragen. Budgets und Regeln dafür werden ebenfalls gelöscht.</string>
+    <string name="bt_tags_delete_action">Tag löschen</string>
+    <string name="bt_tags_actions_cd">Tag-Aktionen</string>
+    <string name="bt_tags_name_required">Gib dem Tag einen Namen.</string>
+    <string name="bt_tags_system_protected">Vorgegebene Tags können nicht gelöscht werden.</string>
+    <string name="bt_tags_used_count">Verwendet bei %1$d</string>
+
+    <!-- Tags an einer Buchung -->
+    <string name="bt_cash_tags">Tags</string>
+    <string name="bt_cash_tags_edit">Tags bearbeiten</string>
+    <string name="bt_cash_tags_none">Keine Tags</string>
+    <string name="bt_cash_tags_none_hint">Wähle die Tags, die zu dieser Buchung passen.</string>
+    <string name="bt_cash_tags_save">Tags speichern</string>
+    <string name="bt_cash_tags_empty_catalog">Du hast noch keine Tags. Lege einen unter Cash-Optionen → Tags verwalten an.</string>
+    <string name="bt_cash_tags_suggested">Von deinen Regeln vorgeschlagen</string>
+
+    <!-- Budgets -->
+    <string name="bt_budgets_section">Budgets</string>
+    <string name="bt_budgets_empty_title">Diesen Monat keine Budgets</string>
+    <string name="bt_budgets_empty_message">Lege ein Monatsziel für einen Tag fest und behalte im Blick, was noch übrig ist.</string>
+    <string name="bt_budgets_error_title">Budgets konnten nicht geladen werden</string>
+    <string name="bt_budgets_new">Neues Budget</string>
+    <string name="bt_budgets_new_title">Neues Budget</string>
+    <string name="bt_budgets_edit_title">Budget bearbeiten</string>
+    <string name="bt_budgets_tag">Tag</string>
+    <string name="bt_budgets_amount">Monatsziel</string>
+    <string name="bt_budgets_period">Gilt für</string>
+    <string name="bt_budgets_period_recurring">Jeden Monat</string>
+    <string name="bt_budgets_period_single">Nur %1$s</string>
+    <string name="bt_budgets_recurring_badge">Jeden Monat</string>
+    <string name="bt_budgets_progress">%1$s von %2$s</string>
+    <string name="bt_budgets_remaining">%1$s übrig</string>
+    <string name="bt_budgets_exceeded">%1$s darüber</string>
+    <string name="bt_budgets_create_action">Budget erstellen</string>
+    <string name="bt_budgets_save_action">Budget speichern</string>
+    <string name="bt_budgets_delete_title">Budget löschen?</string>
+    <string name="bt_budgets_delete_message">Das Ziel für „%1$s“ wird entfernt. Deine Buchungen und deren Tags bleiben unverändert.</string>
+    <string name="bt_budgets_delete_action">Budget löschen</string>
+    <string name="bt_budgets_actions_cd">Budget-Aktionen</string>
+    <string name="bt_budgets_amount_required">Gib einen Betrag größer als null ein.</string>
+    <string name="bt_budgets_tag_required">Wähle einen Tag für das Budget.</string>
+    <string name="bt_budgets_duplicate">Für diesen Tag gibt es in diesem Zeitraum schon ein Budget.</string>
+    <string name="bt_budgets_prev_month_cd">Vorheriger Monat</string>
+    <string name="bt_budgets_next_month_cd">Nächster Monat</string>
+    <string name="bt_budgets_all_tags_budgeted">Alle Tags haben in diesem Zeitraum bereits ein Budget.</string>
+
+    <!-- Auto-Tag-Regeln -->
+    <string name="bt_rules_title">Auto-Tag-Regeln</string>
+    <string name="bt_rules_empty_title">Noch keine Regeln</string>
+    <string name="bt_rules_empty_message">Eine Regel liest die Notiz einer Buchung und vergibt Tags automatisch — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
+    <string name="bt_rules_error_title">Regeln konnten nicht geladen werden</string>
+    <string name="bt_rules_new">Neue Regel</string>
+    <string name="bt_rules_new_title">Neue Regel</string>
+    <string name="bt_rules_edit_title">Regel bearbeiten</string>
+    <string name="bt_rules_pattern">Suchtext</string>
+    <string name="bt_rules_match_type">Vergleich</string>
+    <string name="bt_rules_match_contains">Enthält</string>
+    <string name="bt_rules_match_equals">Ist genau</string>
+    <string name="bt_rules_match_starts_with">Beginnt mit</string>
+    <string name="bt_rules_match_regex">Regulärer Ausdruck</string>
+    <string name="bt_rules_tags">Diese Tags vergeben</string>
+    <string name="bt_rules_priority">Priorität</string>
+    <string name="bt_rules_priority_hint">Regeln laufen mit der niedrigsten Priorität zuerst, und die erste passende gewinnt.</string>
+    <string name="bt_rules_enabled">Aktiv</string>
+    <string name="bt_rules_create_action">Regel erstellen</string>
+    <string name="bt_rules_save_action">Regel speichern</string>
+    <string name="bt_rules_delete_title">Regel löschen?</string>
+    <string name="bt_rules_delete_message">Buchungen, die diese Regel schon getaggt hat, behalten ihre Tags.</string>
+    <string name="bt_rules_delete_action">Regel löschen</string>
+    <string name="bt_rules_actions_cd">Regel-Aktionen</string>
+    <string name="bt_rules_pattern_required">Gib den Suchtext ein.</string>
+    <string name="bt_rules_tags_required">Wähle mindestens einen Tag aus.</string>
+    <string name="bt_rules_apply_now">Auf bestehende Buchungen anwenden</string>
+    <string name="bt_rules_apply_none">Nichts Neues zu taggen.</string>
+    <string name="bt_rules_disabled_badge">Aus</string>
+    <string name="bt_rules_priority_badge">#%1$d</string>
+
+    <!-- Cash-Übersicht + Verlauf -->
+    <string name="bt_cash_summary_section">Dieser Monat</string>
+    <string name="bt_cash_summary_in">Zufluss</string>
+    <string name="bt_cash_summary_out">Abfluss</string>
+    <string name="bt_cash_summary_net">Netto</string>
+    <string name="bt_cash_summary_untagged">Ohne Tag</string>
+    <string name="bt_cash_summary_empty">Diesen Monat keine Buchungen.</string>
+    <string name="bt_cash_summary_overlap_hint">Eine Buchung mit mehreren Tags zählt bei jedem davon mit — die Zeilen können also mehr ergeben als die Summe.</string>
+    <string name="bt_cash_trends_section">Letzte Monate</string>
+
+    <!-- ── V5 S2c: Daueraufträge ───────────────────────────────────────────── -->
+    <string name="bt_so_title">Daueraufträge</string>
+    <string name="bt_so_subtitle">Wiederkehrende Käufe und Cash-Buchungen, die der Server für dich bucht.</string>
+    <string name="bt_so_empty_title">Keine Daueraufträge</string>
+    <string name="bt_so_empty_message">Richte einen wiederkehrenden Kauf oder einen regelmäßigen Eingang wie dein Gehalt ein — BetterTrack bucht ihn nach Plan.</string>
+    <string name="bt_so_error_title">Daueraufträge konnten nicht geladen werden</string>
+    <string name="bt_so_new">Neuer Dauerauftrag</string>
+    <string name="bt_so_new_title">Neuer Dauerauftrag</string>
+    <string name="bt_so_edit_title">Dauerauftrag bearbeiten</string>
+    <string name="bt_so_kind">Was passieren soll</string>
+    <string name="bt_so_kind_buy">Wertpapier kaufen</string>
+    <string name="bt_so_kind_cash_add">Geld einzahlen</string>
+    <string name="bt_so_kind_cash_deduct">Geld abbuchen</string>
+    <string name="bt_so_asset">Wertpapier</string>
+    <string name="bt_so_asset_pick">Wertpapier auswählen</string>
+    <string name="bt_so_amount_shares">Stückzahl</string>
+    <string name="bt_so_amount_cash">Betrag</string>
+    <string name="bt_so_label">Bezeichnung</string>
+    <string name="bt_so_label_hint">Optional — „Gehalt“, „Netflix“</string>
+    <string name="bt_so_cadence">Wiederholung</string>
+    <string name="bt_so_cadence_daily">Täglich</string>
+    <string name="bt_so_cadence_monthly">Monatlich</string>
+    <string name="bt_so_anchor_day">Tag im Monat</string>
+    <string name="bt_so_anchor_hint">In kürzeren Monaten wird am letzten Tag gebucht.</string>
+    <string name="bt_so_start_date">Beginnt</string>
+    <string name="bt_so_end_date">Endet</string>
+    <string name="bt_so_end_date_none">Kein Enddatum</string>
+    <string name="bt_so_next_run">Nächste %1$s</string>
+    <string name="bt_so_no_next_run">Nichts geplant</string>
+    <string name="bt_so_last_run">Zuletzt gebucht %1$s</string>
+    <string name="bt_so_status_active">Aktiv</string>
+    <string name="bt_so_status_paused">Pausiert</string>
+    <string name="bt_so_pause">Pausieren</string>
+    <string name="bt_so_resume">Fortsetzen</string>
+    <string name="bt_so_create_action">Dauerauftrag erstellen</string>
+    <string name="bt_so_save_action">Änderungen speichern</string>
+    <string name="bt_so_delete_title">Dauerauftrag löschen?</string>
+    <string name="bt_so_delete_message">Er wird ab sofort nicht mehr ausgeführt. Alles bereits Gebuchte bleibt in deinem Konto.</string>
+    <string name="bt_so_delete_action">Dauerauftrag löschen</string>
+    <string name="bt_so_actions_cd">Dauerauftrag-Aktionen</string>
+    <string name="bt_so_schedule_locked">Zeitplan und Wertpapier stehen fest, sobald ein Auftrag existiert. Zum Ändern lösche ihn und lege einen neuen an.</string>
+    <string name="bt_so_err_asset_required">Wähle das Wertpapier zum Kaufen.</string>
+    <string name="bt_so_err_anchor_required">Wähle den Tag im Monat für die Ausführung.</string>
+    <string name="bt_so_err_anchor_range">Wähle einen Tag zwischen 1 und 31.</string>
+    <string name="bt_so_err_amount">Gib einen Betrag größer als null ein.</string>
+    <string name="bt_so_err_end_before_start">Das Enddatum darf nicht vor dem Startdatum liegen.</string>
+    <string name="bt_so_err_label_long">Diese Bezeichnung ist zu lang.</string>
+    <plurals name="bt_rules_apply_done">
+        <item quantity="one">%1$d Buchung getaggt</item>
+        <item quantity="other">%1$d Buchungen getaggt</item>
+    </plurals>
+    <string name="bt_so_err_amount_large">Dieser Betrag ist zu groß.</string>
 </resources>

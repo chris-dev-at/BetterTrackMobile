@@ -1135,4 +1135,167 @@
     <string name="bt_notif_quiet_timezone_title">Choose a time zone</string>
     <string name="bt_notif_quiet_timezone_search">Search time zones</string>
     <string name="bt_notif_quiet_set">Set</string>
+
+    <!-- ── V5 S2c: cash classification (tags / budgets / auto-tag rules) ───── -->
+    <string name="bt_cash_menu">Cash options</string>
+    <string name="bt_cash_menu_manage_tags">Manage tags</string>
+    <string name="bt_cash_menu_rules">Auto-tag rules</string>
+    <string name="bt_cash_menu_standing_orders">Standing orders</string>
+
+    <!-- Tags -->
+    <string name="bt_tags_title">Manage tags</string>
+    <string name="bt_tags_section_yours">Your tags</string>
+    <string name="bt_tags_section_builtin">Built-in</string>
+    <string name="bt_tags_builtin_badge">Built-in</string>
+    <string name="bt_tags_builtin_hint">Built-in tags are assigned automatically. You can rename and recolour them, but not delete them.</string>
+    <string name="bt_tags_empty_title">No tags yet</string>
+    <string name="bt_tags_empty_message">Tags label your cash movements so budgets and reports can group them.</string>
+    <string name="bt_tags_error_title">Couldn\'t load tags</string>
+    <string name="bt_tags_new">New tag</string>
+    <string name="bt_tags_new_title">New tag</string>
+    <string name="bt_tags_edit_title">Edit tag</string>
+    <string name="bt_tags_name">Name</string>
+    <string name="bt_tags_colour">Colour</string>
+    <string name="bt_tags_create_action">Create tag</string>
+    <string name="bt_tags_save_action">Save changes</string>
+    <string name="bt_tags_delete_title">Delete tag?</string>
+    <string name="bt_tags_delete_message">“%1$s” is removed from every movement carrying it. Budgets and rules that target it are deleted too.</string>
+    <string name="bt_tags_delete_action">Delete tag</string>
+    <string name="bt_tags_actions_cd">Tag actions</string>
+    <string name="bt_tags_name_required">Give the tag a name.</string>
+    <string name="bt_tags_system_protected">Built-in tags can\'t be deleted.</string>
+    <string name="bt_tags_used_count">Used on %1$d</string>
+
+    <!-- Tags on a movement -->
+    <string name="bt_cash_tags">Tags</string>
+    <string name="bt_cash_tags_edit">Edit tags</string>
+    <string name="bt_cash_tags_none">No tags</string>
+    <string name="bt_cash_tags_none_hint">Pick the tags that describe this movement.</string>
+    <string name="bt_cash_tags_save">Save tags</string>
+    <string name="bt_cash_tags_empty_catalog">You have no tags yet. Create one from Cash options → Manage tags.</string>
+    <string name="bt_cash_tags_suggested">Suggested by your rules</string>
+
+    <!-- Budgets -->
+    <string name="bt_budgets_section">Budgets</string>
+    <string name="bt_budgets_empty_title">No budgets this month</string>
+    <string name="bt_budgets_empty_message">Set a monthly target for a tag and track what\'s left as you spend.</string>
+    <string name="bt_budgets_error_title">Couldn\'t load budgets</string>
+    <string name="bt_budgets_new">New budget</string>
+    <string name="bt_budgets_new_title">New budget</string>
+    <string name="bt_budgets_edit_title">Edit budget</string>
+    <string name="bt_budgets_tag">Tag</string>
+    <string name="bt_budgets_amount">Monthly target</string>
+    <string name="bt_budgets_period">Applies to</string>
+    <string name="bt_budgets_period_recurring">Every month</string>
+    <string name="bt_budgets_period_single">%1$s only</string>
+    <string name="bt_budgets_recurring_badge">Every month</string>
+    <string name="bt_budgets_progress">%1$s of %2$s</string>
+    <string name="bt_budgets_remaining">%1$s left</string>
+    <string name="bt_budgets_exceeded">%1$s over</string>
+    <string name="bt_budgets_create_action">Create budget</string>
+    <string name="bt_budgets_save_action">Save budget</string>
+    <string name="bt_budgets_delete_title">Delete budget?</string>
+    <string name="bt_budgets_delete_message">The target for “%1$s” is removed. Your movements and their tags are untouched.</string>
+    <string name="bt_budgets_delete_action">Delete budget</string>
+    <string name="bt_budgets_actions_cd">Budget actions</string>
+    <string name="bt_budgets_amount_required">Enter an amount greater than zero.</string>
+    <string name="bt_budgets_tag_required">Pick a tag to budget.</string>
+    <string name="bt_budgets_duplicate">That tag already has a budget for this period.</string>
+    <string name="bt_budgets_prev_month_cd">Previous month</string>
+    <string name="bt_budgets_next_month_cd">Next month</string>
+    <string name="bt_budgets_all_tags_budgeted">Every tag already has a budget for this period.</string>
+
+    <!-- Auto-tag rules -->
+    <string name="bt_rules_title">Auto-tag rules</string>
+    <string name="bt_rules_empty_title">No rules yet</string>
+    <string name="bt_rules_empty_message">A rule reads a movement\'s note and applies tags automatically — “REWE” could mean Groceries every time.</string>
+    <string name="bt_rules_error_title">Couldn\'t load rules</string>
+    <string name="bt_rules_new">New rule</string>
+    <string name="bt_rules_new_title">New rule</string>
+    <string name="bt_rules_edit_title">Edit rule</string>
+    <string name="bt_rules_pattern">Text to match</string>
+    <string name="bt_rules_match_type">Match</string>
+    <string name="bt_rules_match_contains">Contains</string>
+    <string name="bt_rules_match_equals">Is exactly</string>
+    <string name="bt_rules_match_starts_with">Starts with</string>
+    <string name="bt_rules_match_regex">Regular expression</string>
+    <string name="bt_rules_tags">Apply these tags</string>
+    <string name="bt_rules_priority">Priority</string>
+    <string name="bt_rules_priority_hint">Rules run lowest priority first, and the first one that matches wins.</string>
+    <string name="bt_rules_enabled">Enabled</string>
+    <string name="bt_rules_create_action">Create rule</string>
+    <string name="bt_rules_save_action">Save rule</string>
+    <string name="bt_rules_delete_title">Delete rule?</string>
+    <string name="bt_rules_delete_message">Movements this rule already tagged keep their tags.</string>
+    <string name="bt_rules_delete_action">Delete rule</string>
+    <string name="bt_rules_actions_cd">Rule actions</string>
+    <string name="bt_rules_pattern_required">Enter the text to match.</string>
+    <string name="bt_rules_tags_required">Pick at least one tag to apply.</string>
+    <string name="bt_rules_apply_now">Apply to existing movements</string>
+    <string name="bt_rules_apply_none">Nothing new to tag.</string>
+    <string name="bt_rules_disabled_badge">Off</string>
+    <string name="bt_rules_priority_badge">#%1$d</string>
+
+    <!-- Cash summary + trends -->
+    <string name="bt_cash_summary_section">This month</string>
+    <string name="bt_cash_summary_in">In</string>
+    <string name="bt_cash_summary_out">Out</string>
+    <string name="bt_cash_summary_net">Net</string>
+    <string name="bt_cash_summary_untagged">Untagged</string>
+    <string name="bt_cash_summary_empty">No movements this month.</string>
+    <string name="bt_cash_summary_overlap_hint">A movement with several tags counts towards each of them, so the rows can add up to more than the total.</string>
+    <string name="bt_cash_trends_section">Last months</string>
+
+    <!-- ── V5 S2c: standing orders ─────────────────────────────────────────── -->
+    <string name="bt_so_title">Standing orders</string>
+    <string name="bt_so_subtitle">Recurring buys and cash movements the server books for you.</string>
+    <string name="bt_so_empty_title">No standing orders</string>
+    <string name="bt_so_empty_message">Set up a recurring buy, or a regular deposit like your salary, and BetterTrack records it on schedule.</string>
+    <string name="bt_so_error_title">Couldn\'t load standing orders</string>
+    <string name="bt_so_new">New standing order</string>
+    <string name="bt_so_new_title">New standing order</string>
+    <string name="bt_so_edit_title">Edit standing order</string>
+    <string name="bt_so_kind">What should happen</string>
+    <string name="bt_so_kind_buy">Buy an asset</string>
+    <string name="bt_so_kind_cash_add">Add cash</string>
+    <string name="bt_so_kind_cash_deduct">Deduct cash</string>
+    <string name="bt_so_asset">Asset</string>
+    <string name="bt_so_asset_pick">Choose an asset</string>
+    <string name="bt_so_amount_shares">Quantity</string>
+    <string name="bt_so_amount_cash">Amount</string>
+    <string name="bt_so_label">Label</string>
+    <string name="bt_so_label_hint">Optional — “Salary”, “Netflix”</string>
+    <string name="bt_so_cadence">Repeats</string>
+    <string name="bt_so_cadence_daily">Daily</string>
+    <string name="bt_so_cadence_monthly">Monthly</string>
+    <string name="bt_so_anchor_day">Day of month</string>
+    <string name="bt_so_anchor_hint">In shorter months it books on the last day.</string>
+    <string name="bt_so_start_date">Starts</string>
+    <string name="bt_so_end_date">Ends</string>
+    <string name="bt_so_end_date_none">No end date</string>
+    <string name="bt_so_next_run">Next %1$s</string>
+    <string name="bt_so_no_next_run">Nothing scheduled</string>
+    <string name="bt_so_last_run">Last booked %1$s</string>
+    <string name="bt_so_status_active">Active</string>
+    <string name="bt_so_status_paused">Paused</string>
+    <string name="bt_so_pause">Pause</string>
+    <string name="bt_so_resume">Resume</string>
+    <string name="bt_so_create_action">Create standing order</string>
+    <string name="bt_so_save_action">Save changes</string>
+    <string name="bt_so_delete_title">Delete standing order?</string>
+    <string name="bt_so_delete_message">It stops firing from now on. Everything it already booked stays in your ledger.</string>
+    <string name="bt_so_delete_action">Delete standing order</string>
+    <string name="bt_so_actions_cd">Standing-order actions</string>
+    <string name="bt_so_schedule_locked">The schedule and asset are fixed once an order exists. Delete it and create a new one to change them.</string>
+    <string name="bt_so_err_asset_required">Pick the asset to buy.</string>
+    <string name="bt_so_err_anchor_required">Pick which day of the month it should run.</string>
+    <string name="bt_so_err_anchor_range">Pick a day between 1 and 31.</string>
+    <string name="bt_so_err_amount">Enter an amount greater than zero.</string>
+    <string name="bt_so_err_end_before_start">The end date can\'t be before the start date.</string>
+    <string name="bt_so_err_label_long">That label is too long.</string>
+    <plurals name="bt_rules_apply_done">
+        <item quantity="one">%1$d movement tagged</item>
+        <item quantity="other">%1$d movements tagged</item>
+    </plurals>
+    <string name="bt_so_err_amount_large">That amount is too large.</string>
 </resources>

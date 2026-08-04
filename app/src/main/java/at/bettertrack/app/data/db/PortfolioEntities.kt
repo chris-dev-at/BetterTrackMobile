@@ -196,7 +196,35 @@ data class CashMovementEntity(
      * unbadged rather than as an unknown source.
      */
     @ColumnInfo(defaultValue = "manual") val source: String = "manual",
+    /**
+     * v5 cash-classification tag ids, comma-separated, so the chips render
+     * offline from the cache alone. Encoded/decoded ONLY through
+     * [at.bettertrack.app.data.cash.encodeTagIds] /
+     * [at.bettertrack.app.data.cash.decodeTagIds] — hand-rolled `split(",")`
+     * turns the empty string into `listOf("")`, i.e. one phantom chip on every
+     * untagged row. Defaults to `""` (untagged) so rows cached before the v8
+     * migration keep rendering rather than crashing.
+     */
+    @ColumnInfo(defaultValue = "") val tagIds: String = "",
     @Embedded val mirror: RowMirror? = null,
+)
+
+/**
+ * One v5 cash-classification tag, cached so the ledger's chips have names and
+ * tints offline. Tags belong to the USER, not to a portfolio — the same merchant
+ * means the same thing in every ledger the user owns — so there is deliberately
+ * no `portfolioId` column and the table is refreshed as a whole set.
+ */
+@Entity(tableName = "cash_tags")
+data class CashTagEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    /** `#RRGGBB` tint. */
+    val color: String,
+    /** True for an app-owned tag: renameable and re-tintable, never deletable. */
+    val system: Boolean,
+    /** Stable identity of a system tag (`fees`, `tax`, …); null on every user tag. */
+    val systemKey: String?,
 )
 
 /**

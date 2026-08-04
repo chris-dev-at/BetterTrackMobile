@@ -4,6 +4,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +53,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,9 +76,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.dto.CashBudgetProgressDto
 import at.bettertrack.app.data.db.BtDatabase
+import at.bettertrack.app.data.cash.CashClassificationRepository
+import at.bettertrack.app.data.cash.decodeTagIds
 import at.bettertrack.app.data.db.CashMovementEntity
 import at.bettertrack.app.data.db.CashSourceEntity
+import at.bettertrack.app.data.db.CashTagEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.CashOpPayload
@@ -111,6 +118,8 @@ import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -125,6 +134,7 @@ import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.YearMonth
 import java.util.Locale
 
 /**
@@ -146,6 +156,26 @@ import java.util.Locale
 data class CashCorrectionNotice(val notEditable: Boolean, val message: String)
 
 /** Which sheet is open. */
+/**
+ * Debounce before asking the server what its rules would tag a note as.
+ *
+ * Long enough that typing "Groceries" is one request rather than nine, short
+ * enough that the chips feel like they answer the keystroke. The call is a read
+ * and fail-silent, so the cost of being slightly wrong here is invisible.
+ */
+private const val PREVIEW_DEBOUNCE_MS = 350L
+
+/**
+ * The budgets block's three honest states. A budget list is a network read that
+ * can legitimately be empty, so "no budgets" and "couldn't load" must never
+ * collapse into the same blank area.
+ */
+sealed interface BudgetsUi {
+    data object Loading : BudgetsUi
+    data class Ready(val rows: List<CashBudgetProgressDto>) : BudgetsUi
+    data object Failed : BudgetsUi
+}
+
 private sealed interface CashSheet {
     /** Create (or edit a queued) deposit / withdrawal / fee. */
     data class Entry(val kind: CashKind, val editOpId: Long? = null) : CashSheet
@@ -163,6 +193,12 @@ class CashViewModel(
     private val scheduler: SyncScheduler,
     private val json: Json,
     routePortfolioId: String?,
+    /**
+     * V5 S2c cash-classification layer (tags / budgets / rules). Server-only —
+     * it has no Drive equivalent yet, so it deliberately does NOT ride the
+     * storage-mode seam that [repo] goes through.
+     */
+    private val classification: CashClassificationRepository,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
@@ -308,6 +344,145 @@ class CashViewModel(
 
     fun clearCorrectionNotice() {
         _correctionNotice.value = null
+    }
+
+    // ── V5 S2c: cash classification (tags + live rule preview) ───────────────
+
+    /**
+     * The user's tag catalog, keyed by id for O(1) row lookups.
+     *
+     * Read from Room, not from the network: it is joined against EVERY ledger row
+     * on every recomposition, so it has to be a local, offline-capable read. The
+     * movement DTO carries tag IDS ONLY (verified on the wire — the census's
+     * "tags[] with systemKey" describes the tag resource, not the movement), so
+     * without this map a tagged row could render nothing but UUIDs.
+     */
+    val tagsById: StateFlow<Map<String, CashTagEntity>> = classification.observeTags()
+        .map { list -> list.associateBy { it.id } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val _tagBusy = MutableStateFlow(false)
+    val tagBusy: StateFlow<Boolean> = _tagBusy.asStateFlow()
+
+    /** Tag ids the user's rules WOULD apply to the note being typed. */
+    private val _previewTagIds = MutableStateFlow<List<String>>(emptyList())
+    val previewTagIds: StateFlow<List<String>> = _previewTagIds.asStateFlow()
+
+    private var previewJob: Job? = null
+
+    init {
+        // Warm the catalog once per screen open. Fail-soft: an offline open still
+        // renders whatever Room already holds.
+        viewModelScope.launch { classification.refreshTags() }
+    }
+
+    /**
+     * Ask the server what its rules would tag [note] as, debounced.
+     *
+     * Deliberately a round trip rather than a client-side matcher: the platform
+     * runs patterns through RE2 precisely so a pathological regex cannot stall
+     * anything, and a second implementation here would disagree with the server
+     * the first time a user wrote one. Fail-silent by contract — this is a
+     * decoration on a form that must stay usable offline, so an error clears the
+     * chips rather than surfacing anything.
+     */
+    fun previewNote(note: String) {
+        previewJob?.cancel()
+        val trimmed = note.trim()
+        if (trimmed.isEmpty()) {
+            _previewTagIds.value = emptyList()
+            return
+        }
+        previewJob = viewModelScope.launch {
+            delay(PREVIEW_DEBOUNCE_MS)
+            _previewTagIds.value = when (val r = classification.previewRules(trimmed)) {
+                is BtResult.Ok -> r.value
+                is BtResult.Err -> emptyList()
+            }
+        }
+    }
+
+    /** Drop any pending preview (sheet closed / submitted). */
+    fun clearPreview() {
+        previewJob?.cancel()
+        _previewTagIds.value = emptyList()
+    }
+
+    // ── V5 S2c: budgets ──────────────────────────────────────────────────────
+
+    /** The month the budgets block is showing; also the summary's bucket. */
+    private val _budgetMonth = MutableStateFlow(YearMonth.now())
+    val budgetMonth: StateFlow<YearMonth> = _budgetMonth.asStateFlow()
+
+    private val _budgets = MutableStateFlow<BudgetsUi>(BudgetsUi.Loading)
+    val budgets: StateFlow<BudgetsUi> = _budgets.asStateFlow()
+
+    private var budgetJob: Job? = null
+
+    fun stepBudgetMonth(delta: Long) {
+        _budgetMonth.value = _budgetMonth.value.plusMonths(delta)
+        loadBudgets()
+    }
+
+    /**
+     * Load the selected month's budgets for the selected portfolio.
+     *
+     * Network-only by design: a budget is an evaluated projection of the month's
+     * movements, not a stored figure, so a cached copy would go stale the moment
+     * anything is booked. The block therefore carries its own explicit
+     * loading/empty/error states rather than pretending to be offline data.
+     */
+    fun loadBudgets() {
+        val pid = portfolioId.value ?: return
+        val month = wireMonth(_budgetMonth.value)
+        budgetJob?.cancel()
+        budgetJob = viewModelScope.launch {
+            _budgets.value = BudgetsUi.Loading
+            _budgets.value = when (val r = classification.budgets(pid, month)) {
+                is BtResult.Ok -> BudgetsUi.Ready(r.value.budgets)
+                is BtResult.Err -> BudgetsUi.Failed
+            }
+        }
+    }
+
+    fun deleteBudget(id: String) {
+        viewModelScope.launch {
+            if (classification.deleteBudget(id) is BtResult.Ok) loadBudgets()
+        }
+    }
+
+    fun createBudget(tagId: String, amount: Double, recurring: Boolean, onDone: (Boolean) -> Unit) {
+        val pid = portfolioId.value ?: return onDone(false)
+        viewModelScope.launch {
+            val period = if (recurring) null else wireMonth(_budgetMonth.value)
+            val ok = classification.createBudget(pid, tagId, amount, period) is BtResult.Ok
+            if (ok) loadBudgets()
+            onDone(ok)
+        }
+    }
+
+    fun updateBudget(id: String, amount: Double, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = classification.updateBudgetAmount(id, amount) is BtResult.Ok
+            if (ok) loadBudgets()
+            onDone(ok)
+        }
+    }
+
+    /**
+     * Replace a movement's whole tag set. The repository writes the accepted ids
+     * straight back into the local row, so the chips repaint without a refetch.
+     */
+    fun setMovementTags(movementId: String, tagIds: List<String>, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _tagBusy.value = true
+            val ok = when (classification.setMovementTags(movementId, tagIds)) {
+                is BtResult.Ok -> true
+                is BtResult.Err -> false
+            }
+            _tagBusy.value = false
+            onDone(ok)
+        }
     }
 
     /** PATCH a synced movement. [onDone] true closes the sheet. */
@@ -472,6 +647,9 @@ fun CashScreen(
     editOpId: Long?,
     onBack: () -> Unit,
     onOpenPendingSync: () -> Unit,
+    onOpenTags: () -> Unit = {},
+    onOpenRules: () -> Unit = {},
+    onOpenStandingOrders: () -> Unit = {},
 ) {
     val vm: CashViewModel = viewModel {
         CashViewModel(
@@ -482,6 +660,7 @@ fun CashScreen(
             scheduler = AppGraph.syncScheduler,
             json = AppGraph.json,
             routePortfolioId = routePortfolioId,
+            classification = AppGraph.cashClassificationRepository,
         )
     }
 
@@ -510,6 +689,18 @@ fun CashScreen(
     var deleteTarget by remember { mutableStateOf<CashMovementEntity?>(null) }
     val correctionBusy by vm.correctionBusy.collectAsStateWithLifecycle()
     val correctionNotice by vm.correctionNotice.collectAsStateWithLifecycle()
+    val tagsById by vm.tagsById.collectAsStateWithLifecycle()
+    /** The synced movement whose tag set is being edited. */
+    var tagTarget by remember { mutableStateOf<CashMovementEntity?>(null) }
+    val budgets by vm.budgets.collectAsStateWithLifecycle()
+    val budgetMonth by vm.budgetMonth.collectAsStateWithLifecycle()
+    var newBudgetOpen by remember { mutableStateOf(false) }
+    var budgetTarget by remember { mutableStateOf<CashBudgetProgressDto?>(null) }
+
+    // The budgets block is a network read keyed on (portfolio, month), so it
+    // reloads when the resolved portfolio arrives or changes — not just once.
+    val resolvedPid by vm.portfolioId.collectAsStateWithLifecycle()
+    LaunchedEffect(resolvedPid) { if (resolvedPid != null) vm.loadBudgets() }
 
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
@@ -559,6 +750,38 @@ fun CashScreen(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = stringResource(R.string.bt_action_back),
                             tint = bt.textSecondary,
+                        )
+                    }
+                },
+                // V5 S2c. The three classification surfaces are per-account
+                // management screens, not per-visit actions, so they live behind
+                // one overflow rather than adding permanent chrome to a screen
+                // whose primary job is recording money.
+                actions = {
+                    var menuOpen by remember { mutableStateOf(false) }
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Outlined.MoreVert,
+                            contentDescription = stringResource(R.string.bt_cash_menu),
+                            tint = bt.textSecondary,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        containerColor = bt.surface,
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bt_cash_menu_manage_tags)) },
+                            onClick = { menuOpen = false; onOpenTags() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bt_cash_menu_rules)) },
+                            onClick = { menuOpen = false; onOpenRules() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bt_cash_menu_standing_orders)) },
+                            onClick = { menuOpen = false; onOpenStandingOrders() },
                         )
                     }
                 },
@@ -657,6 +880,63 @@ fun CashScreen(
                     }
 
                     // Sources (Main first), tap = filter movements.
+                    // V5 S2c budgets: month stepper + one bar per budgeted tag.
+                    // Placed above Sources because it answers "how am I doing
+                    // this month", which is the question the hero total raises.
+                    item(key = "budgets") {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.bt_budgets_section),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = bt.textPrimary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                CashMonthStepper(
+                                    month = budgetMonth,
+                                    onPrev = { vm.stepBudgetMonth(-1) },
+                                    onNext = { vm.stepBudgetMonth(1) },
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            when (val b = budgets) {
+                                is BudgetsUi.Loading -> Column(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    CashBudgetSkeletonRow()
+                                    CashBudgetSkeletonRow()
+                                }
+
+                                is BudgetsUi.Failed -> Text(
+                                    text = stringResource(R.string.bt_budgets_error_title),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = bt.loss,
+                                )
+
+                                is BudgetsUi.Ready -> if (b.rows.isEmpty()) {
+                                    CashBudgetsEmpty()
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        b.rows.forEach { row ->
+                                            CashBudgetRow(
+                                                budget = row,
+                                                locale = locale,
+                                                onEdit = { budgetTarget = row },
+                                                onDelete = { vm.deleteBudget(row.id) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            BtSecondaryButton(
+                                text = stringResource(R.string.bt_budgets_new),
+                                onClick = { newBudgetOpen = true },
+                                enabled = isOnline,
+                            )
+                        }
+                    }
+
                     item(key = "sources-header") {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -807,8 +1087,14 @@ fun CashScreen(
                             movement = m,
                             sourceNames = sourceNames,
                             locale = locale,
+                            tagsById = tagsById,
                             onEdit = if (correctable) {
                                 { sheet = CashSheet.EditSynced(m.id) }
+                            } else {
+                                null
+                            },
+                            onEditTags = if (isOnline) {
+                                { tagTarget = m }
                             } else {
                                 null
                             },
@@ -875,6 +1161,40 @@ fun CashScreen(
         }
 
         null -> Unit
+    }
+
+    tagTarget?.let { target ->
+        CashMovementTagsSheet(
+            vm = vm,
+            movement = target,
+            allTags = tagsById,
+            onDismiss = { tagTarget = null },
+        )
+    }
+
+    if (newBudgetOpen) {
+        CashBudgetSheet(
+            vm = vm,
+            existing = null,
+            allTags = tagsById,
+            // One budget per (portfolio, tag, period) — offering a tag that is
+            // already budgeted this month would only earn a 409, so filter them
+            // out of the picker instead of letting the user hit the wall.
+            takenTagIds = (budgets as? BudgetsUi.Ready)?.rows?.map { it.tagId }?.toSet().orEmpty(),
+            locale = locale,
+            onDismiss = { newBudgetOpen = false },
+        )
+    }
+
+    budgetTarget?.let { target ->
+        CashBudgetSheet(
+            vm = vm,
+            existing = target,
+            allTags = tagsById,
+            takenTagIds = emptySet(),
+            locale = locale,
+            onDismiss = { budgetTarget = null },
+        )
     }
 
     deleteTarget?.let { target ->
@@ -1080,18 +1400,282 @@ private fun SourceRow(
     }
 }
 
+/**
+ * Create or retarget a budget.
+ *
+ * On EDIT only the amount is offered, because portfolio, tag and period are
+ * fixed at creation server-side (moving a budget is delete + create) — showing
+ * a tag picker that silently could not move anything would be a lie.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun CashBudgetSheet(
+    vm: CashViewModel,
+    existing: CashBudgetProgressDto?,
+    allTags: Map<String, CashTagEntity>,
+    takenTagIds: Set<String>,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val editing = existing != null
+    var tagId by remember { mutableStateOf(existing?.tagId) }
+    var amount by remember { mutableStateOf(existing?.amount?.let { trimNumber(it) } ?: "") }
+    var recurring by remember { mutableStateOf(existing?.recurring ?: true) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<Int?>(null) }
+
+    val choosable = remember(allTags, takenTagIds) {
+        allTags.values
+            .filter { it.id !in takenTagIds }
+            .sortedWith(compareBy({ !it.system }, { it.name.lowercase() }))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = { if (!busy) onDismiss() },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = bt.surface,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    if (editing) R.string.bt_budgets_edit_title else R.string.bt_budgets_new_title,
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+            )
+
+            if (editing) {
+                // The immutable half, shown read-only so the row still reads as
+                // "this budget" rather than a bare amount box.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CashTagChip(name = existing.tagName, color = existing.tagColor)
+                }
+            } else if (choosable.isEmpty()) {
+                Text(
+                    text = stringResource(
+                        if (allTags.isEmpty()) {
+                            R.string.bt_cash_tags_empty_catalog
+                        } else {
+                            R.string.bt_budgets_all_tags_budgeted
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textSecondary,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.bt_budgets_tag),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = bt.textMuted,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    choosable.forEach { tag ->
+                        CashTagChip(
+                            name = tag.name,
+                            color = tag.color,
+                            selected = tag.id == tagId,
+                            onClick = { tagId = tag.id },
+                        )
+                    }
+                }
+            }
+
+            SheetNumberField(
+                value = amount,
+                onValue = { amount = it; error = null },
+                label = stringResource(R.string.bt_budgets_amount),
+                error = error == R.string.bt_budgets_amount_required,
+            )
+
+            if (!editing) {
+                // period null = the recurring monthly target; a YYYY-MM period is
+                // a one-month override. Both are real server states, so both are
+                // offered rather than defaulting silently.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BtChip(
+                        text = stringResource(R.string.bt_budgets_period_recurring),
+                        selected = recurring,
+                        onClick = { recurring = true },
+                    )
+                    BtChip(
+                        text = stringResource(R.string.bt_budgets_period_single),
+                        selected = !recurring,
+                        onClick = { recurring = false },
+                    )
+                }
+            }
+
+            error?.let { RejectionText(stringResource(it)) }
+
+            BtPrimaryButton(
+                text = stringResource(
+                    if (editing) R.string.bt_budgets_save_action else R.string.bt_budgets_create_action,
+                ),
+                onClick = {
+                    val parsed = amount.replace(',', '.').toDoubleOrNull()
+                    val chosen = tagId
+                    when {
+                        parsed == null || parsed <= 0.0 -> error = R.string.bt_budgets_amount_required
+                        !editing && chosen == null -> error = R.string.bt_budgets_tag_required
+                        else -> {
+                            busy = true
+                            if (editing) {
+                                vm.updateBudget(existing.id, parsed) { ok ->
+                                    busy = false
+                                    if (ok) onDismiss() else error = R.string.bt_budgets_duplicate
+                                }
+                            } else {
+                                vm.createBudget(chosen!!, parsed, recurring) { ok ->
+                                    busy = false
+                                    if (ok) onDismiss() else error = R.string.bt_budgets_duplicate
+                                }
+                            }
+                        }
+                    }
+                },
+                enabled = !busy && (editing || choosable.isNotEmpty()),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * Edit the tag set of one synced movement.
+ *
+ * The wire operation is a WHOLE-SET REPLACE (`PUT .../tags` with the full id
+ * list, `[]` to clear), so the sheet mirrors that exactly: a grid of every tag
+ * with the current ones selected, and one Save. Modelling it as add/remove
+ * deltas would need a round trip per chip and could leave the row half-applied
+ * if one failed; a single replace either lands or does not.
+ *
+ * Local selection is held in the sheet and only sent on Save, so tapping four
+ * chips is one request, and dismissing without saving changes nothing.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun CashMovementTagsSheet(
+    vm: CashViewModel,
+    movement: CashMovementEntity,
+    allTags: Map<String, CashTagEntity>,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val busy by vm.tagBusy.collectAsStateWithLifecycle()
+    // Keyed on the movement so reopening on another row starts from ITS tags.
+    var selected by remember(movement.id) {
+        mutableStateOf(decodeTagIds(movement.tagIds).toSet())
+    }
+    // System tags first is the catalog's own order; keep it stable so a chip
+    // does not jump under the finger when it is selected.
+    val ordered = remember(allTags) {
+        allTags.values.sortedWith(compareBy({ !it.system }, { it.name.lowercase() }))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = { if (!busy) onDismiss() },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = bt.surface,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.bt_cash_tags_edit),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+            )
+            Text(
+                text = movementLabel(movement, emptyMap()),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (ordered.isEmpty()) {
+                // No catalog yet — say where tags come from instead of showing a
+                // blank area with a dead Save button.
+                Text(
+                    text = stringResource(R.string.bt_cash_tags_empty_catalog),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textSecondary,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.bt_cash_tags_none_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ordered.forEach { tag ->
+                        CashTagChip(
+                            name = tag.name,
+                            color = tag.color,
+                            selected = tag.id in selected,
+                            onClick = {
+                                selected = if (tag.id in selected) {
+                                    selected - tag.id
+                                } else {
+                                    selected + tag.id
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+
+            BtPrimaryButton(
+                text = stringResource(R.string.bt_cash_tags_save),
+                onClick = {
+                    // Send in catalog order for a stable, diff-friendly body.
+                    val ids = ordered.map { it.id }.filter { it in selected }
+                    vm.setMovementTags(movement.id, ids) { ok -> if (ok) onDismiss() }
+                },
+                enabled = !busy && ordered.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun MovementRow(
     movement: CashMovementEntity,
     sourceNames: Map<String, String>,
     locale: Locale,
+    /** The tag catalog, for resolving this row's stored tag ids to name + tint. */
+    tagsById: Map<String, CashTagEntity>,
     /** Non-null only on a hand-typed row while online — derived rows get no menu. */
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    /**
+     * Non-null whenever tagging is possible (online). Unlike edit/delete this is
+     * offered on DERIVED rows too: a dividend or a tax settlement cannot be
+     * corrected, but it can absolutely be classified, and those are exactly the
+     * rows a budget wants to count.
+     */
+    onEditTags: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
-    val hasActions = onEdit != null && onDelete != null
+    val correctable = onEdit != null && onDelete != null
+    val hasActions = correctable || onEditTags != null
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(
@@ -1137,6 +1721,15 @@ private fun MovementRow(
                     Spacer(Modifier.height(2.dp))
                     MirrorAttributionChip(who)
                 }
+                // V5 S2c tag chips. Rendered only when the row actually carries
+                // tags (CashTagChipRow returns early otherwise), because most
+                // rows in a real ledger are untagged and an empty chip strip on
+                // every one of them would be pure noise.
+                val tagIds = decodeTagIds(movement.tagIds)
+                if (tagIds.isNotEmpty()) {
+                    Spacer(Modifier.height(5.dp))
+                    CashTagChipRow(tagIds = tagIds, tagsById = tagsById)
+                }
             }
             Spacer(Modifier.width(8.dp))
             MoneyText(
@@ -1158,20 +1751,35 @@ private fun MovementRow(
                     onDismissRequest = { menuOpen = false },
                     containerColor = bt.surface,
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary) },
-                        onClick = {
-                            menuOpen = false
-                            onEdit?.invoke()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_cash_delete), color = bt.loss) },
-                        onClick = {
-                            menuOpen = false
-                            onDelete?.invoke()
-                        },
-                    )
+                    onEditTags?.let { editTags ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.bt_cash_tags_edit),
+                                    color = bt.textPrimary,
+                                )
+                            },
+                            onClick = { menuOpen = false; editTags() },
+                        )
+                    }
+                    if (correctable) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onEdit?.invoke()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bt_cash_delete), color = bt.loss) },
+                            onClick = {
+                                menuOpen = false
+                                onDelete?.invoke()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -1396,6 +2004,13 @@ private fun CashEntrySheet(
     val sheetError by vm.sheetError.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    val previewTags by vm.previewTagIds.collectAsStateWithLifecycle()
+    val previewCatalog by vm.tagsById.collectAsStateWithLifecycle()
+
+    // A preview belongs to the note being typed in THIS sheet; leaving must not
+    // strand chips that outlive the text that produced them.
+    DisposableEffect(Unit) { onDispose { vm.clearPreview() } }
+
     var amountText by rememberSaveable { mutableStateOf(prefill?.amountEur?.let { trimNumber(it) } ?: "") }
     var noteText by rememberSaveable { mutableStateOf(prefill?.note ?: "") }
     var sourceId by rememberSaveable {
@@ -1526,12 +2141,28 @@ private fun CashEntrySheet(
 
             OutlinedTextField(
                 value = noteText,
-                onValueChange = { noteText = it.take(900) },
+                onValueChange = { noteText = it.take(900); vm.previewNote(it) },
                 label = { Text(stringResource(R.string.bt_txform_note)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = sheetFieldColors(),
             )
+
+            // Live auto-tag preview: what the user's rules WOULD apply to this
+            // note. Debounced and fail-silent in the VM, and purely advisory —
+            // the server does the real tagging when the movement is booked, so
+            // an offline or failed preview simply shows nothing rather than
+            // blocking an entry that is otherwise perfectly valid.
+            if (previewTags.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = stringResource(R.string.bt_cash_tags_suggested),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = bt.textMuted,
+                    )
+                    CashTagChipRow(tagIds = previewTags, tagsById = previewCatalog, max = 4)
+                }
+            }
 
             BtPrimaryButton(
                 text = stringResource(

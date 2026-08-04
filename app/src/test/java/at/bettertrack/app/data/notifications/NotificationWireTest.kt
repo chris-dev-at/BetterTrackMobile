@@ -201,25 +201,64 @@ class NotificationWireTest {
     }
 
     @Test
-    fun `every other mirror type is matched by prefix and grouped as social`() {
-        // The platform ships eight; the exact tails are not yet in the contract of
-        // record, so prefix-matching must cover whatever arrives.
+    fun `the seven informational mirror types are registered EXACTLY as documented`() {
+        // Pinned against platform docs/mobile-push.md §3.1 after the #1053 refresh.
+        // S2a could only prefix-match because the doc predated these names; the
+        // spellings matter (underscores, not dots — an earlier app-side guess had
+        // "mirror.member.joined", which no dispatcher ever sends).
+        val documented = setOf(
+            "mirror.member_joined",
+            "mirror.member_left",
+            "mirror.member_removed",
+            "mirror.removed",
+            "mirror.ownership_transferred",
+            "mirror.chain_dissolved",
+            "mirror.sync_stalled",
+        )
+        assertEquals(documented, NotifKind.MIRROR_EVENT_TYPES)
+        documented.forEach { type ->
+            val kind = NotifKind.fromType(type)
+            assertEquals("wrong kind for $type", NotifKind.MirrorEvent, kind)
+            assertEquals("wrong channel for $type", NotifChannels.SOCIAL, kind.channelId)
+            assertNull(
+                "expected inbox target for $type",
+                resolveDeepLink(type, payload("""{"chainId":"c1"}""")),
+            )
+        }
+        // The eighth documented type is the actionable one and must NOT be in the set.
+        assertEquals(false, NotifKind.MIRROR_EVENT_TYPES.contains("mirror.invite"))
+    }
+
+    @Test
+    fun `an undocumented future mirror type still falls back to the mirror family`() {
+        // The prefix match is kept ON PURPOSE behind the exact registrations, so a
+        // ninth type lands in SOCIAL with a sensible row instead of generic System.
         listOf(
-            "mirror.member.joined",
-            "mirror.member.left",
-            "mirror.member.kicked",
-            "mirror.chain.renamed",
-            "mirror.chain.dissolved",
-            "mirror.role.changed",
-            "mirror.ownership.transferred",
-            "mirror.copy.applied",
-            "mirror.some.type.invented.next.week",
+            "mirror.some_type_invented_next_week",
+            "mirror.role_changed",
+            "mirror.copy_applied",
         ).forEach { type ->
             val kind = NotifKind.fromType(type)
             assertEquals("wrong kind for $type", NotifKind.MirrorEvent, kind)
             assertEquals("wrong channel for $type", NotifChannels.SOCIAL, kind.channelId)
-            assertNull("expected inbox target for $type", resolveDeepLink(type, payload("""{"chainId":"c1"}""")))
         }
+    }
+
+    @Test
+    fun `the documented data keys and deep links for the v5 types still hold`() {
+        // mobile-push.md §3.1 data keys + §4 route matrix, re-verified after the
+        // #1053 doc refresh: dividend.event→asset detail, budget.exceeded→inbox,
+        // notifications.digest→inbox.
+        assertEquals(
+            NotifDeepLink.Asset("a1"),
+            resolveDeepLink("dividend.event", payload("""{"assetId":"a1"}""")),
+        )
+        // §4 fallback: no assetId ⇒ inbox, never a dead tap.
+        assertNull(resolveDeepLink("dividend.event", payload("""{}""")))
+        assertNull(
+            resolveDeepLink("budget.exceeded", payload("""{"categoryId":"c1","period":"2026-08"}""")),
+        )
+        assertNull(resolveDeepLink("notifications.digest", payload("""{"cadence":"weekly"}""")))
     }
 
     @Test

@@ -80,7 +80,33 @@ class BtApiError(
 
         /** V5: the account's portfolio family is server-blind (403). */
         const val PARANOID_MODE = "PARANOID_MODE"
+
+        // ── V5 cash classification (tags / budgets / rules) ──────────────────
+        /** 409 — DELETE on an app-owned tag. Renaming and re-tinting it still work. */
+        const val CASH_TAG_SYSTEM_PROTECTED = "CASH_TAG_SYSTEM_PROTECTED"
+        /** 409 — the caller already has a tag with that name (compared case-INSENSITIVELY). */
+        const val CASH_TAG_NAME_TAKEN = "CASH_TAG_NAME_TAKEN"
+        /** 400 — a referenced tag id isn't one of the caller's tags. */
+        const val CASH_TAG_REF_NOT_FOUND = "CASH_TAG_REF_NOT_FOUND"
+        /** 409 — that (portfolio, tag, period) triple already has a budget. */
+        const val CASH_BUDGET_EXISTS = "CASH_BUDGET_EXISTS"
+        /** 400 — a `regex` rule pattern the server's RE2 engine won't accept. */
+        const val CASH_RULE_REGEX_UNSUPPORTED = "CASH_RULE_REGEX_UNSUPPORTED"
     }
+
+    /**
+     * The server refused to delete an app-owned (system) tag. Distinguishable so
+     * the UI can answer with "built-in tags can't be deleted — rename it instead"
+     * rather than a generic failure; the server's own wording stays on
+     * [userMessage] because it already says exactly that.
+     */
+    val isCashTagSystemProtected: Boolean get() = code == Codes.CASH_TAG_SYSTEM_PROTECTED
+
+    /** The tag name collides with an existing one (case-insensitive). */
+    val isCashTagNameTaken: Boolean get() = code == Codes.CASH_TAG_NAME_TAKEN
+
+    /** That (portfolio, tag, period) already carries a budget. */
+    val isCashBudgetExists: Boolean get() = code == Codes.CASH_BUDGET_EXISTS
 
     /** True for the three 409 mirror-seam refusals that are PERMANENT for this attempt. */
     val isMirrorSeamConflict: Boolean get() = code in MIRROR_SEAM_CONFLICT_CODES

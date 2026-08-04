@@ -92,6 +92,7 @@ val SERVER_SCOPED_TABLES: List<String> = listOf(
     "portfolio_history",
     "cash_sources",
     "cash_movements",
+    "cash_tags",
     "custom_assets",
     "custom_asset_value_points",
     "watchlists",

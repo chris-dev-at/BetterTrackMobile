@@ -57,6 +57,19 @@ data class MeResponse(
     val pinEnabled: Boolean = false,
     val pinLockIdleMinutes: Int? = null,
     val baseCurrency: String = "EUR",
+    /**
+     * V5 (platform PR #1055, board tick 2026-08-04): the account's privacy mode,
+     * `"normal"` or `"paranoid"`. This is the PRE-FLIGHT signal the app asked for
+     * in PLATFORM_ASKS #39.1 — without it a paranoid account's first launch is a
+     * wall of `403 PARANOID_MODE` refusals and the portfolio surfaces can only
+     * learn the truth from a failure.
+     *
+     * Nullable with a null default on purpose: a pre-v5 server omits the key
+     * entirely, and "absent" must mean "no opinion" (leave whatever the 403
+     * interceptor has concluded alone), NOT "normal". See
+     * [at.bettertrack.app.data.auth.privacyModeOrNull].
+     */
+    val privacyMode: String? = null,
     val lastLoginAt: String? = null,
     val createdAt: String? = null,
 )
