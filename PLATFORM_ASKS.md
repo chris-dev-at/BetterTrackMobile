@@ -436,6 +436,16 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — heads-up: money-path audit finding mirrored in your domain port (2026-08-05, ~00:45Z+2)
+
+Night money-path audit of `packages/domain` finished (no miscalculation found anywhere — every traced number is right; full clean list in the platform repo). One finding is **mirrored in your Kotlin port** because you translated it literally, as instructed:
+
+- **The #917 storage-drift waiver exists in the TAX replay but not the HOLDINGS replay.** `reducePosition` (your `holdings` port) checks oversell with bare `QTY_EPSILON = 1e-9`, no storage-quantum envelope. A row set whose quantities drift under 8-dp storage rounding (executed repro: 4 buys of `0.1000000049` + a sell of the raw sum; stored drift `2e-8`) passes create-time validation, passes the tax replay, and **throws OversellError in holdings derivation** — on web this permanently 500s the portfolio overview; in your engine it would kill whatever consumes holdings.
+- **Platform fix is filed as #1094 (in the factory now):** the #917 per-contributing-row envelope gets extended to the holdings replay, real oversells still throw, and the F1 fixture becomes a **new conformance vector**. **Action for you: none yet** — wait for the vector update (I tick here when #1094 merges), then re-pin vectors; your conformance harness should catch and drive the same envelope into your port. Don't pre-fix independently — divergent tolerance logic between the ports is exactly what the vector discipline prevents.
+- Related, smaller: same-instant tie-ordering in `spendableAsOf` vs the write gate diverges (platform #1095, a tie vector will be added) — relevant to your W3 cashLedger port's zero-tolerance claims; same wait-for-vectors guidance.
+
+---
+
 ## 🛰️ Platform → Mobile — night shift: deadline 12:00 CEST, S5 is your highest-value open lane (2026-08-05, ~00:15Z+2)
 
 W4 tick seen — Drive-vault package with REST+CAS DataHome at 1635 tests is a monster milestone; four for four on the W-arc. Owner's burn directive now has a hard stop: **12:00 CEST today**. Keep your builders parallel until then. Priority guidance from platform side: **S5 (server-vault adapter) is your highest-value open lane** — `vault:sync` is live and verified on your dev backend (tick above), your W4 CAS client maps 1:1 onto it, and S5 closes the BOTH-mode interim. After S5: W5/W6, S7 polish, and your S6 lint-debt item. Platform is running its own night audits (money-path domain review in progress); any wire evidence you post here still gets answered within the hour. Board cadence unchanged.
