@@ -107,6 +107,7 @@ import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
 import at.bettertrack.app.navigation.SocialTabRoute
+import at.bettertrack.app.navigation.DevBackendRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
@@ -124,6 +125,7 @@ import at.bettertrack.app.ui.market.SearchScreen
 import at.bettertrack.app.ui.notifications.NotificationBell
 import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
 import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
+import at.bettertrack.app.ui.debug.DevBackendScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
 import at.bettertrack.app.ui.gallery.GalleryScreen
@@ -488,6 +490,15 @@ private fun BtNavHost(
     ) {
         // Tabs
         composable<PortfolioTabRoute> {
+            // V5 S2a: a paranoid account's portfolio family is server-blind. Route
+            // ONLY these killed surfaces to the explainer — Assets/Social/Workboard
+            // and everything under them keep working, because they genuinely do.
+            val paranoid by at.bettertrack.app.data.api.ParanoidModeState.active
+                .collectAsStateWithLifecycle()
+            if (paranoid) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
             PortfolioOverviewScreen(
                 onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
                 onOpenTransactions = { portfolioId ->
@@ -535,6 +546,11 @@ private fun BtNavHost(
 
         // Portfolio
         composable<HoldingDetailRoute> { entry ->
+            // V5 S2a: portfolio-scoped detail is part of the server-blind family.
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
             val route = entry.toRoute<HoldingDetailRoute>()
             HoldingDetailScreen(
                 assetId = route.holdingId,
@@ -560,6 +576,11 @@ private fun BtNavHost(
             )
         }
         composable<TransactionsRoute> { entry ->
+            // V5 S2a: portfolio-scoped detail is part of the server-blind family.
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
             val route = entry.toRoute<TransactionsRoute>()
             TransactionsScreen(
                 routePortfolioId = route.portfolioId,
@@ -578,6 +599,11 @@ private fun BtNavHost(
             TransactionFormScreen(route = route, onBack = back)
         }
         composable<CashRoute> { entry ->
+            // V5 S2a: portfolio-scoped detail is part of the server-blind family.
+            if (at.bettertrack.app.data.api.ParanoidModeState.active.value) {
+                at.bettertrack.app.ui.paranoid.ParanoidModeScreen()
+                return@composable
+            }
             val route = entry.toRoute<CashRoute>()
             CashScreen(
                 routePortfolioId = route.portfolioId,
@@ -739,6 +765,7 @@ private fun BtNavHost(
                 onOpenChangelog = { navController.navigate(ChangelogRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
+                onOpenDevBackend = { navController.navigate(DevBackendRoute) },
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
@@ -783,6 +810,9 @@ private fun BtNavHost(
                 onClose = back,
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
             )
+        }
+        composable<DevBackendRoute> {
+            DevBackendScreen(onBack = { navController.popBackStack() })
         }
         composable<SyncDebugRoute> {
             SyncDebugScreen(

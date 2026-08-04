@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay (V5 S1). Its ONLY job is to attach the debug
+  network-security config so a debug build can reach the local dev stack over
+  plain http (see res/xml/network_security_config.xml for the full rationale and
+  the exact host allowlist). Release builds never merge this file and therefore
+  keep Android's default "no cleartext, anywhere" policy.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+
+</manifest>

@@ -158,4 +158,95 @@ class NotificationWireTest {
         assertEquals(false, chat.push)
         assertEquals(true, chat.webpush)
     }
+
+    // ── V5 kinds (S2a d / PLATFORM_ASKS #39.2) ───────────────────────────────
+
+    /** FCM/inbox `data` payloads arrive as a JSON object. */
+    private fun payload(raw: String) = json.parseToJsonElement(raw)
+
+    @Test
+    fun `dividend event lands in the portfolio family and opens its asset`() {
+        val kind = NotifKind.fromType("dividend.event")
+        assertEquals(NotifKind.DividendEvent, kind)
+        assertEquals(NotifChannels.PORTFOLIO, kind.channelId)
+        assertEquals(
+            NotifDeepLink.Asset("MSFT"),
+            resolveDeepLink("dividend.event", payload("""{"assetId":"MSFT"}""")),
+        )
+    }
+
+    @Test
+    fun `a dividend without an assetId falls back to the inbox instead of a dead tap`() {
+        assertNull(resolveDeepLink("dividend.event", payload("""{"portfolioId":"p1"}""")))
+        assertNull(resolveDeepLink("dividend.event", null))
+    }
+
+    @Test
+    fun `budget exceeded is portfolio-family and opens the inbox for now`() {
+        val kind = NotifKind.fromType("budget.exceeded")
+        assertEquals(NotifKind.BudgetExceeded, kind)
+        assertEquals(NotifChannels.PORTFOLIO, kind.channelId)
+        assertNull(resolveDeepLink("budget.exceeded", payload("""{"categoryId":"c1","period":"2026-08"}""")))
+    }
+
+    @Test
+    fun `a mirror invite is social and lands on the Social requests area`() {
+        val kind = NotifKind.fromType("mirror.invite")
+        assertEquals(NotifKind.MirrorInvite, kind)
+        assertEquals(NotifChannels.SOCIAL, kind.channelId)
+        assertEquals(
+            NotifDeepLink.Social,
+            resolveDeepLink("mirror.invite", payload("""{"chainId":"c1","inviteId":"i1"}""")),
+        )
+    }
+
+    @Test
+    fun `every other mirror type is matched by prefix and grouped as social`() {
+        // The platform ships eight; the exact tails are not yet in the contract of
+        // record, so prefix-matching must cover whatever arrives.
+        listOf(
+            "mirror.member.joined",
+            "mirror.member.left",
+            "mirror.member.kicked",
+            "mirror.chain.renamed",
+            "mirror.chain.dissolved",
+            "mirror.role.changed",
+            "mirror.ownership.transferred",
+            "mirror.copy.applied",
+            "mirror.some.type.invented.next.week",
+        ).forEach { type ->
+            val kind = NotifKind.fromType(type)
+            assertEquals("wrong kind for $type", NotifKind.MirrorEvent, kind)
+            assertEquals("wrong channel for $type", NotifChannels.SOCIAL, kind.channelId)
+            assertNull("expected inbox target for $type", resolveDeepLink(type, payload("""{"chainId":"c1"}""")))
+        }
+    }
+
+    @Test
+    fun `the digest push is general-family and opens the inbox`() {
+        val kind = NotifKind.fromType("notifications.digest")
+        assertEquals(NotifKind.NotificationsDigest, kind)
+        assertEquals(NotifChannels.GENERAL, kind.channelId)
+        assertNull(resolveDeepLink("notifications.digest", payload("""{"cadence":"daily"}""")))
+    }
+
+    @Test
+    fun `the unknown-type fallback is untouched by the mirror prefix rule`() {
+        assertEquals(NotifKind.System, NotifKind.fromType("something.brand.new"))
+        assertEquals(NotifKind.System, NotifKind.fromType(null))
+        // "mirror" without the dot is NOT the mirror family.
+        assertEquals(NotifKind.System, NotifKind.fromType("mirrorless.event"))
+        assertEquals(NotifKind.System, NotifKind.fromType("mirror"))
+    }
+
+    @Test
+    fun `none of the new kinds enter the settings PATCH matrix`() {
+        listOf(
+            NotifKind.DividendEvent,
+            NotifKind.BudgetExceeded,
+            NotifKind.MirrorInvite,
+            NotifKind.MirrorEvent,
+            NotifKind.NotificationsDigest,
+        ).forEach { assertEquals("$it must not be serverModeled", false, it.serverModeled) }
+    }
 }

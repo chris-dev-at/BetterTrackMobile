@@ -29,6 +29,26 @@ object OAuthConfig {
     const val ALERTS_SCOPES_ENABLED: Boolean = true
 
     /**
+     * Whether to request the four v5 scopes `cash:read cash:write
+     * mirrorchain:read mirrorchain:write`. ON (2026-08-04): the platform's v5
+     * drop addendum shipped them (PRs #1046 cash-classification / #1048
+     * mirrorchain) and widened the BetterTrackMobile client's allowed-scope set
+     * server-side via migrations `0079`/`0080` — code-seeded, exactly the
+     * `0023`/`0027` precedent — so authorize accepts them and a re-login mints a
+     * token carrying them.
+     *
+     * Same guarded shape (and same hard-reject history) as
+     * [ALERTS_SCOPES_ENABLED]: requesting a scope the SERVING client row does
+     * not allow makes the authorize endpoint reject the WHOLE login ("This
+     * app's authorization request is invalid…"), it does not merely drop the
+     * scope. The dev stack carries the 0079/0080 seeds; **before a
+     * PROD-targeting release ships, prod must be on v5 with those seeds** — if
+     * login ever starts hard-rejecting, flip this to `false`, rebuild, re-verify
+     * (PLATFORM_ASKS #39.4).
+     */
+    const val V5_SCOPES_ENABLED: Boolean = true
+
+    /**
      * Space-separated coarse module scopes the app requests — the FULL allowed
      * set for the BetterTrackMobile client (PLATFORM_ASKS ⚡ ACTIVATION blesses
      * requesting the full set so future grants need no app change). A token
@@ -38,8 +58,16 @@ object OAuthConfig {
      * re-login. alerts:read/alerts:write (Workboard price-alerts CRUD; GET=read,
      * POST/PATCH/DELETE/re-arm=write, platform write-implies-read per PR #415)
      * are appended only when [ALERTS_SCOPES_ENABLED] — see that flag for why.
+     * cash:read/cash:write (the v5 classification layer: `/cash/tags`,
+     * `/cash/budgets`, `/cash/rules` + `/apply` + `/preview`, `/cash/summary`,
+     * `/cash/trends` — note the cash MOVEMENTS/sources under
+     * `/portfolios/{id}/cash/…` ride the portfolio scopes as before) and
+     * mirrorchain:read/mirrorchain:write (group-portfolio participation: chains,
+     * members, activity, invites read; invite accept/decline + chain leave
+     * write — chain ADMINISTRATION stays session-only this sprint) are appended
+     * only when [V5_SCOPES_ENABLED].
      */
-    val SCOPES: String = requestedScopes(ALERTS_SCOPES_ENABLED)
+    val SCOPES: String = requestedScopes(ALERTS_SCOPES_ENABLED, V5_SCOPES_ENABLED)
 
     /**
      * The authorize URL opened in a Custom Tab on the WEB origin:
@@ -74,9 +102,23 @@ private const val BASE_SCOPES =
 private const val ALERTS_SCOPES = "alerts:read alerts:write"
 
 /**
- * The scope string the app requests, with alerts:* appended only when
- * [alertsScopesEnabled]. Kept a pure top-level function so the on/off behaviour
- * is unit-testable without initializing [OAuthConfig] (which reads BuildConfig).
+ * The v5 drop's four scopes (cash classification + mirrorchain participation),
+ * appended to the request only once the platform has seeded them for the mobile
+ * client (see [OAuthConfig.V5_SCOPES_ENABLED]).
  */
-internal fun requestedScopes(alertsScopesEnabled: Boolean): String =
-    if (alertsScopesEnabled) "$BASE_SCOPES $ALERTS_SCOPES" else BASE_SCOPES
+private const val V5_SCOPES = "cash:read cash:write mirrorchain:read mirrorchain:write"
+
+/**
+ * The scope string the app requests, with alerts:* appended only when
+ * [alertsScopesEnabled] and the v5 four only when [v5ScopesEnabled]. Kept a pure
+ * top-level function so the on/off behaviour is unit-testable without
+ * initializing [OAuthConfig] (which reads BuildConfig).
+ */
+internal fun requestedScopes(
+    alertsScopesEnabled: Boolean,
+    v5ScopesEnabled: Boolean = false,
+): String = buildString {
+    append(BASE_SCOPES)
+    if (alertsScopesEnabled) append(' ').append(ALERTS_SCOPES)
+    if (v5ScopesEnabled) append(' ').append(V5_SCOPES)
+}

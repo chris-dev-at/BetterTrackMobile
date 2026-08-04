@@ -19,6 +19,7 @@ import at.bettertrack.app.data.notifications.DefaultNotificationRepository
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
+import at.bettertrack.app.data.prefs.DevOriginOverride
 import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.BuildInfoRepository
@@ -71,6 +72,9 @@ object AppGraph {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        // V5 S1: load the debug-only origin overrides SYNCHRONOUSLY, before any
+        // OkHttp/Retrofit instance below captures a base URL. No-op on release.
+        at.bettertrack.app.data.prefs.DevOriginOverride.init(appContext)
     }
 
     // Public: Step-8 screens encode/decode queue payloads with this same instance.
@@ -86,8 +90,14 @@ object AppGraph {
         json.asConverterFactory("application/json".toMediaType())
     }
 
+    /**
+     * The effective API base URL. Reads through [DevOriginOverride] so a debug
+     * build can be pointed at a local dev stack without a rebuild; release
+     * builds always resolve to `BuildConfig.API_ORIGIN`. Captured once per
+     * Retrofit instance ⇒ an override change applies on the next app start.
+     */
     private val apiBaseUrl: String
-        get() = BuildConfig.API_ORIGIN.trimEnd('/') + "/api/v1/"
+        get() = DevOriginOverride.apiOrigin.trimEnd('/') + "/api/v1/"
 
     private fun loggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply {
@@ -135,9 +145,27 @@ object AppGraph {
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor(tokenManager))
+            // V5 S2a: observe-only watcher for `403 PARANOID_MODE` (flips the
+            // app-level state that routes the portfolio surfaces to their
+            // explainer instead of a generic error or a fake €0 portfolio).
+            .addInterceptor(at.bettertrack.app.data.api.ParanoidModeInterceptor(json))
+            // V5 S2a: conditional GETs (If-None-Match) on the three endpoints the
+            // platform ETags — a 304 replays the stored body, so repos keep
+            // caching verbatim and no call site changes.
+            .addInterceptor(etagInterceptor)
             .authenticator(TokenAuthenticator(tokenManager))
             .apply { if (BuildConfig.DEBUG) addInterceptor(loggingInterceptor()) }
             .build()
+    }
+
+    /**
+     * Shared conditional-GET cache (V5 S2a). Held on the graph so the sync-queue
+     * debug screen and tests can inspect/clear it, and so it dies with the
+     * process (deliberately in-memory: an ETag is only usable while we still
+     * hold the body it belongs to).
+     */
+    val etagInterceptor: at.bettertrack.app.data.api.ConditionalGetInterceptor by lazy {
+        at.bettertrack.app.data.api.ConditionalGetInterceptor()
     }
 
     private val btApi: BtApi by lazy {
@@ -159,7 +187,7 @@ object AppGraph {
             btApi = btApi,
             store = secureStore,
             json = json,
-            webOrigin = BuildConfig.WEB_ORIGIN,
+            webOrigin = DevOriginOverride.webOrigin,
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
@@ -176,7 +204,13 @@ object AppGraph {
     val accountDataManager: AccountDataManager by lazy {
         AccountDataManager(
             db = database,
-            onWiped = { syncScheduler.cancelAll() },
+            onWiped = {
+                syncScheduler.cancelAll()
+                // V5 S2a: neither the paranoid flag nor any cached response body
+                // may outlive the account they belong to.
+                at.bettertrack.app.data.api.ParanoidModeState.clear()
+                etagInterceptor.clear()
+            },
         )
     }
 
@@ -206,7 +240,7 @@ object AppGraph {
     }
 
     val socialRepository: SocialRepository by lazy {
-        DefaultSocialRepository(api = btApi, json = json, webOrigin = BuildConfig.WEB_ORIGIN)
+        DefaultSocialRepository(api = btApi, json = json, webOrigin = DevOriginOverride.webOrigin)
     }
 
     /**
@@ -227,7 +261,7 @@ object AppGraph {
             api = btApi,
             json = json,
             gateway = SocketIoChatGateway(
-                apiOrigin = BuildConfig.API_ORIGIN,
+                apiOrigin = DevOriginOverride.apiOrigin,
                 client = wsClient,
                 tokenProvider = { tokenManager.currentAccessToken() },
                 json = json,

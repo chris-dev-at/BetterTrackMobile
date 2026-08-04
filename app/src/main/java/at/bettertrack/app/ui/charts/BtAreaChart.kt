@@ -31,11 +31,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.data.repo.HistoryPoint
+import at.bettertrack.app.data.repo.MILLIS_PER_DAY
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.theme.FONT_FEATURE_TABULAR
 import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
@@ -181,11 +184,15 @@ fun BtAreaChart(
                 if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
             }
         } else {
-            val tMin = series.first().epochDay
-            val tMax = series.last().epochDay
-            val tSpan = max(1L, tMax - tMin).toFloat()
+            // V5: x is keyed on epoch MILLIS, not epoch days — 1D/1W/1M come back
+            // as dense sub-daily curves and a day-key would collapse every point
+            // of a day onto one coordinate (a vertical picket fence). Span math
+            // stays in Double: a MAX range is ~7e11 ms, well past Float precision.
+            val tMin = series.first().epochMillis
+            val tMax = series.last().epochMillis
+            val tSpan = max(1L, tMax - tMin).toDouble()
             series.forEachIndexed { i, p ->
-                val x = plotW * ((p.epochDay - tMin) / tSpan)
+                val x = (plotW * ((p.epochMillis - tMin) / tSpan)).toFloat()
                 val y = plotH * (1f - scale.normalize(p.valueEur))
                 if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
             }
@@ -215,9 +222,9 @@ fun BtAreaChart(
 
         // ── x labels: first + last date, muted, in the reserved strip ──────
         if (!minimal) {
-            val spanDays = series.last().epochDay - series.first().epochDay
-            val startText = formatChartDate(series.first().epochDay, spanDays, locale)
-            val endText = formatChartDate(series.last().epochDay, spanDays, locale)
+            val spanMillis = series.last().epochMillis - series.first().epochMillis
+            val startText = formatChartAxisTime(series.first().epochMillis, spanMillis, locale)
+            val endText = formatChartAxisTime(series.last().epochMillis, spanMillis, locale)
             val startMeasured = textMeasurer.measure(startText, labelStyle)
             val endMeasured = textMeasurer.measure(endText, labelStyle)
             val labelY = size.height - startMeasured.size.height
@@ -235,9 +242,9 @@ fun BtAreaChart(
         if (sx != null && !morphing) {
             val nearest = nearestPoint(series, sx / plotW)
             onScrubState.value?.invoke(nearest)
-            val tMin = series.first().epochDay
-            val tSpan = max(1L, series.last().epochDay - tMin).toFloat()
-            val px = plotW * ((nearest.epochDay - tMin) / tSpan)
+            val tMin = series.first().epochMillis
+            val tSpan = max(1L, series.last().epochMillis - tMin).toDouble()
+            val px = (plotW * ((nearest.epochMillis - tMin) / tSpan)).toFloat()
             val py = plotH * (1f - scale.normalize(nearest.valueEur))
             drawLine(
                 color = bt.borderStrong,
@@ -281,33 +288,33 @@ private fun yScale(points: List<HistoryPoint>): YScale {
 
 /** Normalized (0..1) series value at x-fraction [frac], time-interpolated. */
 private fun normalizedValueAt(points: List<HistoryPoint>, frac: Float, scale: YScale): Float {
-    val tMin = points.first().epochDay
-    val tMax = points.last().epochDay
+    val tMin = points.first().epochMillis
+    val tMax = points.last().epochMillis
     if (tMax == tMin) return scale.normalize(points.last().valueEur)
     val t = tMin + (tMax - tMin) * frac.toDouble()
     var loIdx = 0
     var hiIdx = points.size - 1
     while (hiIdx - loIdx > 1) {
         val mid = (loIdx + hiIdx) / 2
-        if (points[mid].epochDay <= t) loIdx = mid else hiIdx = mid
+        if (points[mid].epochMillis <= t) loIdx = mid else hiIdx = mid
     }
     val a = points[loIdx]
     val b = points[hiIdx]
-    val segSpan = (b.epochDay - a.epochDay).toDouble()
+    val segSpan = (b.epochMillis - a.epochMillis).toDouble()
     val v = if (segSpan <= 0.0) {
         b.valueEur
     } else {
-        a.valueEur + (b.valueEur - a.valueEur) * ((t - a.epochDay) / segSpan)
+        a.valueEur + (b.valueEur - a.valueEur) * ((t - a.epochMillis) / segSpan)
     }
     return scale.normalize(v)
 }
 
 /** The series point whose time is nearest to x-fraction [frac]. */
 private fun nearestPoint(points: List<HistoryPoint>, frac: Float): HistoryPoint {
-    val tMin = points.first().epochDay
-    val tMax = points.last().epochDay
+    val tMin = points.first().epochMillis
+    val tMax = points.last().epochMillis
     val t = tMin + (tMax - tMin) * frac.coerceIn(0f, 1f).toDouble()
-    return points.minByOrNull { abs(it.epochDay - t) } ?: points.last()
+    return points.minByOrNull { abs(it.epochMillis - t) } ?: points.last()
 }
 
 // ── Label formatting (display-only) ─────────────────────────────────────────
@@ -349,4 +356,25 @@ internal fun formatChartDate(epochDay: Long, spanDays: Long, locale: Locale): St
     val date = LocalDate.ofEpochDay(epochDay)
     val pattern = if (spanDays > 95) "MMM yyyy" else "d MMM"
     return date.format(DateTimeFormatter.ofPattern(pattern, locale))
+}
+
+/**
+ * Axis label for an epoch-millis x-key. The DATA decides the granularity, not
+ * the selected range: a span inside a single day reads as time-of-day ("14:35"),
+ * a span of a few days carries both day and time ("2 Aug 14:35"), and anything
+ * longer falls back to the day-granular [formatChartDate] wording — so 1M+ keeps
+ * exactly the labels it had before intraday points existed.
+ */
+internal fun formatChartAxisTime(epochMillis: Long, spanMillis: Long, locale: Locale): String {
+    val zoned = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault())
+    val pattern = when {
+        spanMillis <= MILLIS_PER_DAY -> "HH:mm"
+        spanMillis <= 8L * MILLIS_PER_DAY -> "d MMM HH:mm"
+        else -> return formatChartDate(
+            Math.floorDiv(epochMillis, MILLIS_PER_DAY),
+            spanMillis / MILLIS_PER_DAY,
+            locale,
+        )
+    }
+    return zoned.format(DateTimeFormatter.ofPattern(pattern, locale))
 }

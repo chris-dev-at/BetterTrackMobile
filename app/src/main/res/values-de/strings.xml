@@ -104,6 +104,8 @@
     <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
     <string name="bt_overview_chart_cd">Diagramm des Portfoliowerts über die Zeit</string>
     <string name="bt_overview_graph_range_cd">%1$s Verlauf anzeigen</string>
+    <string name="bt_range_1d">1D</string>
+    <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
     <string name="bt_range_6m">6M</string>
     <string name="bt_range_1y">1J</string>
@@ -697,6 +699,8 @@
     <string name="bt_settings_dev_gallery_sub">Schaukasten des Designsystems</string>
     <string name="bt_settings_dev_sync">Sync-Warteschlange</string>
     <string name="bt_settings_dev_sync_sub">Die Offline-Warteschlange inspizieren</string>
+    <string name="bt_settings_dev_backend">Dev-Backend</string>
+    <string name="bt_settings_dev_backend_sub">API-/Web-Origin überschreiben</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
     <string name="bt_settings_dev_hint">Noch %1$d Mal tippen, um Entwickleroptionen freizuschalten</string>
 
@@ -1036,4 +1040,27 @@
     <string name="bt_social_public_ack_checkbox">Ich verstehe das und möchte einen öffentlichen Link</string>
     <string name="bt_social_create_public_link">Öffentlichen Link erstellen</string>
     <string name="bt_social_apply">Übernehmen</string>
+
+    <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
+    <string name="bt_paranoid_title">Dieses Konto ist im Paranoid-Modus</string>
+    <string name="bt_paranoid_body">Deine Portfolio-, Steuer- und Import-Daten liegen verschlüsselt in einem privaten Tresor, den die BetterTrack-Server nicht lesen können. Es geht nichts verloren — die App kann nur keine Zahlen zeigen, die sie nicht sehen darf.</string>
+    <string name="bt_paranoid_works_title">Funktioniert hier weiterhin</string>
+    <string name="bt_paranoid_works_social">Freunde, Teilen und Chat</string>
+    <string name="bt_paranoid_works_watchlists">Watchlists und Asset-Suche</string>
+    <string name="bt_paranoid_works_alerts">Kursalarme</string>
+    <string name="bt_paranoid_works_notifications">Benachrichtigungen</string>
+    <string name="bt_paranoid_web_hint">Portfolio-, Steuer- und Import-Funktionen liegen in der BetterTrack-Web-App, solange dein Tresor server-blind ist.</string>
+    <string name="bt_paranoid_open_web">Web-App öffnen</string>
+
+    <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
+    <string name="bt_notif_type_dividend">Dividende</string>
+    <string name="bt_notif_type_dividend_sub">Wenn eine Dividende gebucht wird</string>
+    <string name="bt_notif_type_budget">Budget überschritten</string>
+    <string name="bt_notif_type_budget_sub">Wenn ein Cash-Budget überschritten wird</string>
+    <string name="bt_notif_type_mirror_invite">Einladung zu Gruppen-Portfolio</string>
+    <string name="bt_notif_type_mirror_invite_sub">Wenn dich jemand zu einem Gruppen-Portfolio einlädt</string>
+    <string name="bt_notif_type_mirror_event">Gruppen-Portfolio</string>
+    <string name="bt_notif_type_mirror_event_sub">Aktivität in einem Gruppen-Portfolio</string>
+    <string name="bt_notif_type_digest">Zusammenfassung</string>
+    <string name="bt_notif_type_digest_sub">Deine tägliche oder wöchentliche Übersicht</string>
 </resources>

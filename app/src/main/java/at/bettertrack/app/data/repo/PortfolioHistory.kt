@@ -5,14 +5,17 @@ import at.bettertrack.app.data.api.dto.PerformancePointDto
 import at.bettertrack.app.data.db.PortfolioHistoryEntity
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeParseException
 
 /**
  * Parsed portfolio-history series (§6.1 graph) — a typed view over the verbatim
- * server JSON cached in [PortfolioHistoryEntity]. Parsing maps dates to epoch
- * days for the chart's x-axis; NO values are derived (server is the only
- * calculator, §7.1): the headline range performance is simply the last point of
- * the server's own `performance` series.
+ * server JSON cached in [PortfolioHistoryEntity]. Parsing maps each point to an
+ * epoch-millisecond x-key; NO values are derived (server is the only calculator,
+ * §7.1): the headline range performance is simply the last point of the server's
+ * own `performance` series.
  */
 data class PortfolioHistory(
     val portfolioId: String,
@@ -24,19 +27,44 @@ data class PortfolioHistory(
 ) {
     /** Server-computed performance % over the whole range (percent units). */
     val rangePerformancePct: Double? get() = performance.lastOrNull()?.pct
+
+    /**
+     * True when the series actually carries sub-daily resolution (more points
+     * than distinct days). Drives time-of-day axis/scrub labels — deliberately
+     * derived from the DATA rather than from [range], so a range the server
+     * happens to answer at day granularity still gets day labels.
+     */
+    val isSubDaily: Boolean
+        get() = points.size > 1 && points.distinctBy { it.epochDay }.size < points.size
 }
 
-data class HistoryPoint(val epochDay: Long, val valueEur: Double)
+/**
+ * One point of the value series. [epochMillis] is the authoritative x-key (V5:
+ * 1D/1W/1M come back sub-daily); [epochDay] stays available for day-granular
+ * label formatting.
+ */
+data class HistoryPoint(val epochMillis: Long, val valueEur: Double) {
+    val epochDay: Long get() = Math.floorDiv(epochMillis, MILLIS_PER_DAY)
+}
 
-data class PerformancePoint(val epochDay: Long, val pct: Double)
+data class PerformancePoint(val epochMillis: Long, val pct: Double) {
+    val epochDay: Long get() = Math.floorDiv(epochMillis, MILLIS_PER_DAY)
+}
+
+internal const val MILLIS_PER_DAY = 86_400_000L
 
 /**
- * The graph ranges the platform actually serves (`GET /portfolios/{id}/history`
- * is day-granular with range=1M|6M|1Y|MAX). The spec's finer 1D/1W/3M chips
- * need a server-side window that does not exist yet — platform gap in TODO.md;
- * the web app ships the same reduced set for the same reason.
+ * The graph ranges the platform serves on `GET /portfolios/{id}/history`.
+ *
+ * V5 (2026-08-04) added **1D** and **1W**, which return dense intraday curves
+ * (≥20 points, not two closes) — see the platform's v5 drop part 2. 3M is still
+ * not served for portfolios (asset history has it; portfolio history does not),
+ * so it stays out rather than being faked client-side (§7.1 forbids re-deriving
+ * performance locally).
  */
 enum class HistoryRange(val wire: String) {
+    D1("1D"),
+    W1("1W"),
     M1("1M"),
     M6("6M"),
     Y1("1Y"),
@@ -56,10 +84,10 @@ fun parsePortfolioHistory(entity: PortfolioHistoryEntity, json: Json): Portfolio
     return try {
         val points = json
             .decodeFromString(ListSerializer(HistoryPointDto.serializer()), entity.pointsJson)
-            .map { HistoryPoint(LocalDate.parse(it.date).toEpochDay(), it.valueEur) }
+            .map { HistoryPoint(historyEpochMillis(it.time, it.date), it.valueEur) }
         val performance = json
             .decodeFromString(ListSerializer(PerformancePointDto.serializer()), entity.performanceJson)
-            .map { PerformancePoint(LocalDate.parse(it.date).toEpochDay(), it.pct) }
+            .map { PerformancePoint(historyEpochMillis(it.time, it.date), it.pct) }
         PortfolioHistory(
             portfolioId = entity.portfolioId,
             range = range,
@@ -69,6 +97,39 @@ fun parsePortfolioHistory(entity: PortfolioHistoryEntity, json: Json): Portfolio
             syncedAtMs = entity.syncedAtMs,
         )
     } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * The x-key for a history point: the optional ISO-8601 [time] when the server
+ * sent one, else midnight UTC of the calendar [date].
+ *
+ * Accepts both instant forms the platform emits (`…Z` / offset, and a plain
+ * local `yyyy-MM-ddTHH:mm:ss` which is read as UTC — the series is a single
+ * server-side timeline, so a consistent zone is all the chart needs). A
+ * malformed [time] degrades to the date rather than dropping the point.
+ *
+ * @throws java.time.format.DateTimeParseException when [date] itself is unusable
+ *   (the caller treats that as a corrupt blob).
+ */
+internal fun historyEpochMillis(time: String?, date: String): Long {
+    if (!time.isNullOrBlank()) {
+        parseInstantMillis(time)?.let { return it }
+    }
+    return LocalDate.parse(date).toEpochDay() * MILLIS_PER_DAY
+}
+
+private fun parseInstantMillis(raw: String): Long? {
+    // Offset/Z form first (the documented shape), then a zone-less local form.
+    try {
+        return Instant.parse(raw).toEpochMilli()
+    } catch (_: DateTimeParseException) {
+        // fall through
+    }
+    return try {
+        java.time.LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC).toEpochMilli()
+    } catch (_: DateTimeParseException) {
         null
     }
 }

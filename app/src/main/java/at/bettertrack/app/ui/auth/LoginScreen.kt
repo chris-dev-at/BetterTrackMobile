@@ -37,6 +37,8 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.LoginError
 import at.bettertrack.app.data.auth.LoginPhase
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
@@ -55,6 +57,7 @@ fun LoginScreen(
     onNeedAccount: () -> Unit,
     onForgotPassword: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongPressWordmark: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -94,10 +97,21 @@ fun LoginScreen(
             modifier = Modifier.size(72.dp),
         )
         Spacer(Modifier.height(22.dp))
-        Wordmark(
-            fontSize = 40.sp,
-            edition = stringResource(R.string.bt_edition_app),
-        )
+        // Long-press = the hidden dev-backend screen on debug builds (V5 S1).
+        // Inert in release: BtRoot ignores the callback outside BuildConfig.DEBUG.
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onLongClick = onLongPressWordmark,
+                onClick = {},
+            ),
+        ) {
+            Wordmark(
+                fontSize = 40.sp,
+                edition = stringResource(R.string.bt_edition_app),
+            )
+        }
         Spacer(Modifier.height(12.dp))
         Text(
             text = stringResource(R.string.bt_login_tagline),

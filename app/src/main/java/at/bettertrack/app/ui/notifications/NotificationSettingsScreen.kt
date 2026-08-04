@@ -300,6 +300,11 @@ private fun notifKindTitle(kind: NotifKind): String = stringResource(
         NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created
         NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired
         NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice
+        NotifKind.DividendEvent -> R.string.bt_notif_type_dividend
+        NotifKind.BudgetExceeded -> R.string.bt_notif_type_budget
+        NotifKind.MirrorInvite -> R.string.bt_notif_type_mirror_invite
+        NotifKind.MirrorEvent -> R.string.bt_notif_type_mirror_event
+        NotifKind.NotificationsDigest -> R.string.bt_notif_type_digest
         NotifKind.System -> R.string.bt_notif_type_system
     },
 )
@@ -321,6 +326,11 @@ private fun notifKindSubtitle(kind: NotifKind): String = stringResource(
         NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created_sub
         NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired_sub
         NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice_sub
+        NotifKind.DividendEvent -> R.string.bt_notif_type_dividend_sub
+        NotifKind.BudgetExceeded -> R.string.bt_notif_type_budget_sub
+        NotifKind.MirrorInvite -> R.string.bt_notif_type_mirror_invite_sub
+        NotifKind.MirrorEvent -> R.string.bt_notif_type_mirror_event_sub
+        NotifKind.NotificationsDigest -> R.string.bt_notif_type_digest_sub
         NotifKind.System -> R.string.bt_notif_type_system_sub
     },
 )

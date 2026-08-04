@@ -97,12 +97,47 @@ enum class NotifKind(
     // family, deep-links to the notification-settings screen. Per-user dismissal is
     // server-tracked via normal read/archive — nothing special client-side.
     AccountNotice("account.notice", NotifChannels.GENERAL, serverModeled = false),
+
+    // ── V5 drop (PLATFORM_ASKS #39.2: types that exist in the dispatcher but
+    // predate mobile-push.md's §3.1 table) ───────────────────────────────────
+    /** A dividend was booked. `data.assetId` → the asset it came from. */
+    DividendEvent("dividend.event", NotifChannels.PORTFOLIO, serverModeled = false),
+    /** A cash budget was exceeded (`data.categoryId`, `data.period`). */
+    BudgetExceeded("budget.exceeded", NotifChannels.PORTFOLIO, serverModeled = false),
+    /** Mirrorchain invite (`data.chainId` + `data.inviteId`) — the one actionable mirror type. */
+    MirrorInvite("mirror.invite", NotifChannels.SOCIAL, serverModeled = false),
+    /**
+     * Every OTHER `mirror.*` event (member joined/left, chain renamed, roles
+     * changed, dissolved, …). Matched by **prefix** rather than by eight
+     * enumerated names: the platform ships eight today and the exact strings are
+     * not yet in the contract of record (mobile-push.md §3.1 is the pending doc
+     * refresh in #39.2), so pinning invented names would be worse than useless —
+     * a renamed or ninth type would silently fall through to the generic System
+     * row. Prefix-matching gives every mirror event the right channel, icon and
+     * inbox target no matter what the tail is.
+     */
+    MirrorEvent(null, NotifChannels.SOCIAL, serverModeled = false),
+    /**
+     * The synthetic digest push (`digestService.ts`, `data.cadence` =
+     * daily|weekly). Deliberately NOT in the platform's `NOTIFICATION_TYPES`, so
+     * it can only ever arrive over FCM — never as an inbox row from the server.
+     */
+    NotificationsDigest("notifications.digest", NotifChannels.GENERAL, serverModeled = false),
+
     System(null, NotifChannels.GENERAL, serverModeled = false),
     ;
 
     companion object {
-        fun fromType(type: String?): NotifKind =
-            entries.firstOrNull { it.typeKey != null && it.typeKey == type } ?: System
+        /** Wire prefix for the mirrorchain event family (see [MirrorEvent]). */
+        const val MIRROR_PREFIX = "mirror."
+
+        fun fromType(type: String?): NotifKind {
+            entries.firstOrNull { it.typeKey != null && it.typeKey == type }?.let { return it }
+            // Any unrecognised mirror.* still lands in the SOCIAL family with a
+            // sensible row; everything else keeps the existing System fallback.
+            if (type != null && type.startsWith(MIRROR_PREFIX)) return MirrorEvent
+            return System
+        }
     }
 }
 
@@ -214,6 +249,19 @@ fun resolveDeepLink(type: String?, payload: JsonElement?): NotifDeepLink? {
                 else -> NotifDeepLink.Asset(assetId)
             }
         }
+        // V5: a dividend row opens the asset it was paid on; without an assetId
+        // there is nothing specific to open, so the tap just lands on the inbox.
+        NotifKind.DividendEvent -> str("assetId", "asset_id")?.let { NotifDeepLink.Asset(it) }
+        // Budgets live in the cash-classification layer, which has no app screen
+        // yet (S2c) — inbox for now rather than a dead tap.
+        NotifKind.BudgetExceeded -> null
+        // A chain invite is a person-to-person request: the Social tab is where
+        // the app already collects incoming requests.
+        NotifKind.MirrorInvite -> NotifDeepLink.Social
+        // Other mirror events are informational; no chain screen exists yet (S2c).
+        NotifKind.MirrorEvent -> null
+        // The digest is a roll-up — its whole point is "go look at your inbox".
+        NotifKind.NotificationsDigest -> null
         NotifKind.AccountInvite -> NotifDeepLink.Settings
         NotifKind.AccountTempPassword -> NotifDeepLink.Security
         // Announcement: land on the notification-settings screen (web `/settings/notifications`).

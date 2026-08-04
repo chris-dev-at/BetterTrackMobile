@@ -89,9 +89,95 @@ class PortfolioHistoryParseTest {
 
     @Test
     fun `history range wire mapping is the platform contract set`() {
-        assertEquals(listOf("1M", "6M", "1Y", "MAX"), HistoryRange.entries.map { it.wire })
+        // V5 added 1D + 1W (dense intraday). 3M is still NOT served for portfolio
+        // history (only for asset history), so it must stay out — the app may not
+        // window a longer range client-side (§7.1: server is the only calculator).
+        assertEquals(listOf("1D", "1W", "1M", "6M", "1Y", "MAX"), HistoryRange.entries.map { it.wire })
         assertEquals(HistoryRange.MAX, HistoryRange.fromWire("MAX"))
-        assertNull(HistoryRange.fromWire("1D"))
+        assertEquals(HistoryRange.D1, HistoryRange.fromWire("1D"))
+        assertEquals(HistoryRange.W1, HistoryRange.fromWire("1W"))
+        assertNull(HistoryRange.fromWire("3M"))
         assertEquals(HistoryRange.M1, HistoryRange.DEFAULT)
+    }
+
+    // ── V5: optional sub-daily `time` on history/performance points ──────────
+
+    @Test
+    fun `a point without time keys on midnight UTC of its date`() {
+        val parsed = parsePortfolioHistory(
+            entity(
+                points = """[{"date":"2026-06-01","valueEur":100.0},{"date":"2026-06-02","valueEur":101.0}]""",
+                performance = """[{"date":"2026-06-01","pct":0.0}]""",
+            ),
+            json,
+        )!!
+        assertEquals(LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY, parsed.points[0].epochMillis)
+        assertEquals(LocalDate.parse("2026-06-01").toEpochDay(), parsed.points[0].epochDay)
+        assertEquals(false, parsed.isSubDaily)
+    }
+
+    @Test
+    fun `time wins over date and gives every intraday point its own x`() {
+        val parsed = parsePortfolioHistory(
+            entity(
+                points = """[
+                    {"date":"2026-06-01","time":"2026-06-01T09:00:00Z","valueEur":100.0},
+                    {"date":"2026-06-01","time":"2026-06-01T13:30:00Z","valueEur":102.0},
+                    {"date":"2026-06-01","time":"2026-06-01T17:45:00Z","valueEur":101.0}
+                ]""",
+                performance = """[{"date":"2026-06-01","time":"2026-06-01T17:45:00Z","pct":1.0}]""",
+                range = "1D",
+            ),
+            json,
+        )!!
+        // Three points, three DISTINCT x-keys — the picket-fence bug was all
+        // three collapsing onto one day key.
+        assertEquals(3, parsed.points.map { it.epochMillis }.distinct().size)
+        assertEquals(1, parsed.points.map { it.epochDay }.distinct().size)
+        assertEquals(true, parsed.isSubDaily)
+        val base = LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY
+        assertEquals(base + 9 * 3_600_000L, parsed.points[0].epochMillis)
+        assertEquals(base + 13 * 3_600_000L + 30 * 60_000L, parsed.points[1].epochMillis)
+        assertEquals(HistoryRange.D1, parsed.range)
+        assertEquals(base + 17 * 3_600_000L + 45 * 60_000L, parsed.performance[0].epochMillis)
+    }
+
+    @Test
+    fun `a zone-less local timestamp is read as UTC rather than dropped`() {
+        assertEquals(
+            LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY + 3_600_000L,
+            historyEpochMillis("2026-06-01T01:00:00", "2026-06-01"),
+        )
+    }
+
+    @Test
+    fun `a malformed time degrades to the date instead of losing the point`() {
+        assertEquals(
+            LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY,
+            historyEpochMillis("not-a-timestamp", "2026-06-01"),
+        )
+        assertEquals(
+            LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY,
+            historyEpochMillis("", "2026-06-01"),
+        )
+        assertEquals(
+            LocalDate.parse("2026-06-01").toEpochDay() * MILLIS_PER_DAY,
+            historyEpochMillis(null, "2026-06-01"),
+        )
+    }
+
+    @Test
+    fun `a dense day-granular series is not mistaken for sub-daily`() {
+        val parsed = parsePortfolioHistory(
+            entity(
+                points = """[
+                    {"date":"2026-06-01","time":"2026-06-01T00:00:00Z","valueEur":100.0},
+                    {"date":"2026-06-02","time":"2026-06-02T00:00:00Z","valueEur":101.0}
+                ]""",
+                performance = """[]""",
+            ),
+            json,
+        )!!
+        assertEquals(false, parsed.isSubDaily)
     }
 }

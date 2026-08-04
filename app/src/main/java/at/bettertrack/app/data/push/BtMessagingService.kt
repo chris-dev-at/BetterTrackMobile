@@ -79,14 +79,19 @@ class BtMessagingService : FirebaseMessagingService() {
 
         /** Debug helper: fire a couple of representative pushes to verify delivery. */
         fun debugSimulate(context: Context, index: Int) {
-            when (index % 6) {
+            when (index % 9) {
                 0 -> postIncoming(context, "friend.request", "New friend request", "@test_user wants to connect with you.", null)
                 1 -> postIncoming(context, "alert.triggered", "Price alert", "AAPL passed your €180,00 target.", "{\"assetId\":\"AAPL\"}")
                 2 -> postIncoming(context, "portfolio.shared", "Portfolio shared", "A friend shared a portfolio with you.", "{\"portfolioId\":\"shared-demo\"}")
                 // Task C: the three platform share/activity types (first-class rows).
                 3 -> postIncoming(context, "friend.activity", "New activity", "@test_user bought shares in their shared portfolio.", "{\"friendId\":\"demo-uid\",\"friendUsername\":\"test_user\"}")
                 4 -> postIncoming(context, "watchlist.shared", "Watchlist shared", "A friend shared a watchlist with you.", "{\"watchlistId\":\"wl-demo\"}")
-                else -> postIncoming(context, "conglomerate.shared", "Conglomerate shared", "A friend shared a conglomerate with you.", "{\"conglomerateId\":\"cg-demo\"}")
+                5 -> postIncoming(context, "conglomerate.shared", "Conglomerate shared", "A friend shared a conglomerate with you.", "{\"conglomerateId\":\"cg-demo\"}")
+                // V5 types (S2a d): a dividend deep-links to the asset, a mirror
+                // invite to Social, the digest to the inbox.
+                6 -> postIncoming(context, "dividend.event", "Dividend received", "MSFT paid a dividend into Main.", "{\"assetId\":\"MSFT\"}")
+                7 -> postIncoming(context, "mirror.invite", "Group portfolio invite", "@test_user invited you to a group portfolio.", "{\"chainId\":\"chain-demo\",\"inviteId\":\"inv-demo\"}")
+                else -> postIncoming(context, "notifications.digest", "Your daily digest", "3 things happened while you were away.", "{\"cadence\":\"daily\"}")
             }
         }
 

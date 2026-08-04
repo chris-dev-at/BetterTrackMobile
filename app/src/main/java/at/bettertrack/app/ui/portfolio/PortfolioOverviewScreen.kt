@@ -260,8 +260,11 @@ private fun OverviewContent(
             val s = scrub
             Column(inset) {
                 Text(
-                    text = if (s != null) formatChartScrubDate(s.epochDay, locale)
-                    else stringResource(R.string.bt_overview_net_worth),
+                    text = if (s != null) {
+                        formatChartScrubDate(s.epochMillis, history?.isSubDaily == true, locale)
+                    } else {
+                        stringResource(R.string.bt_overview_net_worth)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                 )
@@ -869,6 +872,8 @@ private fun categoryLabel(type: String): String = when (type) {
 
 @Composable
 internal fun rangeLabel(range: HistoryRange): String = when (range) {
+    HistoryRange.D1 -> stringResource(R.string.bt_range_1d)
+    HistoryRange.W1 -> stringResource(R.string.bt_range_1w)
     HistoryRange.M1 -> stringResource(R.string.bt_range_1m)
     HistoryRange.M6 -> stringResource(R.string.bt_range_6m)
     HistoryRange.Y1 -> stringResource(R.string.bt_range_1y)
@@ -882,6 +887,14 @@ internal fun deltaColor(value: Double) = when {
     else -> BtTheme.colors.textSecondary
 }
 
-private fun formatChartScrubDate(epochDay: Long, locale: Locale): String =
-    java.time.LocalDate.ofEpochDay(epochDay)
-        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", locale))
+/**
+ * Scrub readout stamp. Sub-daily series (V5 intraday 1D/1W/1M) add the
+ * time-of-day, otherwise the day-granular wording is kept verbatim — scrubbing a
+ * 1Y curve should not suddenly claim a meaningless "00:00".
+ */
+private fun formatChartScrubDate(epochMillis: Long, subDaily: Boolean, locale: Locale): String {
+    val pattern = if (subDaily) "d MMM yyyy, HH:mm" else "d MMM yyyy"
+    return java.time.Instant.ofEpochMilli(epochMillis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern(pattern, locale))
+}

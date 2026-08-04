@@ -87,6 +87,7 @@ fun SettingsScreen(
     onOpenChangelog: () -> Unit = {},
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},
+    onOpenDevBackend: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val context = LocalContext.current
@@ -247,6 +248,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.bt_settings_dev_sync),
                     subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
                     onClick = onOpenSyncDebug,
+                )
+                // V5 S1: point the installed debug build at any backend (dev stack).
+                SettingsNavRow(
+                    icon = Icons.Outlined.Code,
+                    title = stringResource(R.string.bt_settings_dev_backend),
+                    subtitle = stringResource(R.string.bt_settings_dev_backend_sub),
+                    onClick = onOpenDevBackend,
                 )
             }
 

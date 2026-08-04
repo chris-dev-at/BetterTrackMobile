@@ -74,17 +74,26 @@ data class PortfolioHistoryResponse(
 
 @Serializable
 data class HistoryPointDto(
-    /** Calendar date `yyyy-MM-dd`. */
+    /** Calendar date `yyyy-MM-dd` — always present, day granularity. */
     val date: String,
     val valueEur: Double,
+    /**
+     * V5: optional ISO-8601 instant for SUB-DAILY points (`1D`/`1W`/`1M` now come
+     * back as dense intraday curves rather than one close per day). When present
+     * it is the authoritative x-position; [date] alone would collapse every point
+     * of a day onto the same coordinate and draw a vertical picket fence.
+     */
+    val time: String? = null,
 )
 
 @Serializable
 data class PerformancePointDto(
-    /** Calendar date `yyyy-MM-dd`. */
+    /** Calendar date `yyyy-MM-dd` — always present, day granularity. */
     val date: String,
     /** Server-computed performance % since range start (percent units). */
     val pct: Double,
+    /** V5: optional ISO-8601 instant for sub-daily points (see [HistoryPointDto.time]). */
+    val time: String? = null,
 )
 
 // ── GET /portfolios/{id} — holdings + server-computed totals ────────────────

@@ -104,6 +104,8 @@
     <string name="bt_overview_chart_empty">Not enough history to draw yet</string>
     <string name="bt_overview_chart_cd">Portfolio value over time chart</string>
     <string name="bt_overview_graph_range_cd">Show %1$s history</string>
+    <string name="bt_range_1d">1D</string>
+    <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
     <string name="bt_range_6m">6M</string>
     <string name="bt_range_1y">1Y</string>
@@ -706,6 +708,8 @@
     <string name="bt_settings_dev_gallery_sub">Design system showcase</string>
     <string name="bt_settings_dev_sync">Sync queue</string>
     <string name="bt_settings_dev_sync_sub">Inspect the offline outbound queue</string>
+    <string name="bt_settings_dev_backend">Dev backend</string>
+    <string name="bt_settings_dev_backend_sub">Override the API / web origin</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
     <string name="bt_settings_dev_hint">%1$d more taps to unlock developer options</string>
 
@@ -1045,4 +1049,27 @@
     <string name="bt_social_public_ack_checkbox">I understand and want a public link</string>
     <string name="bt_social_create_public_link">Create public link</string>
     <string name="bt_social_apply">Apply</string>
+
+    <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
+    <string name="bt_paranoid_title">This account is in paranoid mode</string>
+    <string name="bt_paranoid_body">Your portfolio, tax and import data is encrypted in a private vault that the BetterTrack servers cannot read. Nothing is lost — the app simply cannot show numbers it is not allowed to see.</string>
+    <string name="bt_paranoid_works_title">Still working here</string>
+    <string name="bt_paranoid_works_social">Friends, sharing and chat</string>
+    <string name="bt_paranoid_works_watchlists">Watchlists and asset search</string>
+    <string name="bt_paranoid_works_alerts">Price alerts</string>
+    <string name="bt_paranoid_works_notifications">Notifications</string>
+    <string name="bt_paranoid_web_hint">Portfolio, tax and import features live on the BetterTrack web app while your vault is server-blind.</string>
+    <string name="bt_paranoid_open_web">Open the web app</string>
+
+    <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
+    <string name="bt_notif_type_dividend">Dividend</string>
+    <string name="bt_notif_type_dividend_sub">When a dividend is booked</string>
+    <string name="bt_notif_type_budget">Budget exceeded</string>
+    <string name="bt_notif_type_budget_sub">When a cash budget goes over</string>
+    <string name="bt_notif_type_mirror_invite">Group portfolio invite</string>
+    <string name="bt_notif_type_mirror_invite_sub">When someone invites you to a group portfolio</string>
+    <string name="bt_notif_type_mirror_event">Group portfolio</string>
+    <string name="bt_notif_type_mirror_event_sub">Activity in a group portfolio you are in</string>
+    <string name="bt_notif_type_digest">Digest</string>
+    <string name="bt_notif_type_digest_sub">Your daily or weekly summary</string>
 </resources>

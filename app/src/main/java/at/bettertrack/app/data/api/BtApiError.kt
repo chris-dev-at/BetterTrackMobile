@@ -20,6 +20,11 @@ class BtApiError(
     /** Human-readable, safe to surface (never a raw stack/string). */
     val userMessage: String,
     val details: JsonElement? = null,
+    /**
+     * The server's own message, when the app substituted its own copy for
+     * [userMessage] (V5 mirror seam). Null when the two are the same.
+     */
+    val serverMessage: String? = null,
 ) : Exception("HTTP $httpStatus [$code] $userMessage") {
 
     val isNetwork: Boolean get() = httpStatus == 0
@@ -62,7 +67,58 @@ class BtApiError(
         const val IDEMPOTENCY_KEY_MISMATCH = "IDEMPOTENCY_KEY_MISMATCH"
         /** 400 — the supplied key was not a UUID (regenerate once, then permanent). */
         const val IDEMPOTENCY_KEY_INVALID = "IDEMPOTENCY_KEY_INVALID"
+
+        // ── V5 mirror seam (group-portfolio copies) + cash correction semantics ──
+        /** 409 — the row moved under us (optimistic `baseSeq` lost). Refetch, then redo. */
+        const val MIRROR_CONFLICT = "MIRROR_CONFLICT"
+        /** 409 — the row this change targets no longer exists in the mirror. */
+        const val MIRROR_ROW_DELETED = "MIRROR_ROW_DELETED"
+        /** 409 — a DERIVED cash movement (trade leg, dividend, tax, transfer leg) is not editable. */
+        const val CASH_MOVEMENT_NOT_EDITABLE = "CASH_MOVEMENT_NOT_EDITABLE"
+        /** 503 — the mirror sync is stalled server-side. Transient: back off and retry. */
+        const val MIRROR_SYNC_STALLED = "MIRROR_SYNC_STALLED"
+
+        /** V5: the account's portfolio family is server-blind (403). */
+        const val PARANOID_MODE = "PARANOID_MODE"
     }
+
+    /** True for the three 409 mirror-seam refusals that are PERMANENT for this attempt. */
+    val isMirrorSeamConflict: Boolean get() = code in MIRROR_SEAM_CONFLICT_CODES
+
+    /** True for the transient 503 the queue must retry rather than park. */
+    val isMirrorSyncStalled: Boolean get() = code == Codes.MIRROR_SYNC_STALLED
+
+    val isParanoidMode: Boolean get() = code == Codes.PARANOID_MODE
+}
+
+/** The 409 refusals that mean "this attempt can never succeed as written". */
+internal val MIRROR_SEAM_CONFLICT_CODES = setOf(
+    BtApiError.Codes.MIRROR_CONFLICT,
+    BtApiError.Codes.MIRROR_ROW_DELETED,
+    BtApiError.Codes.CASH_MOVEMENT_NOT_EDITABLE,
+)
+
+/**
+ * App-authored one-line explanations for the V5 mirror-seam refusals.
+ *
+ * The server messages for these are written for the web app and lean on
+ * vocabulary ("mirror", "baseSeq", "derived row") that means nothing to a phone
+ * user mid-edit, so the app substitutes its own copy — same discipline as the
+ * queue's `MSG_*` constants in `SyncEngine`, and English for the same reason
+ * (the error-code→DE-string map is a tracked backlog item, not this batch).
+ *
+ * Returns null for every other code, so nothing else is ever rewritten.
+ */
+fun mirrorSeamMessageFor(code: String): String? = when (code) {
+    BtApiError.Codes.MIRROR_CONFLICT ->
+        "Someone else changed this shared entry first. Refresh and try again."
+    BtApiError.Codes.MIRROR_ROW_DELETED ->
+        "This entry was removed from the shared portfolio, so the change can't be applied."
+    BtApiError.Codes.CASH_MOVEMENT_NOT_EDITABLE ->
+        "This cash entry is created automatically from another entry — edit that one instead."
+    BtApiError.Codes.MIRROR_SYNC_STALLED ->
+        "The shared portfolio is still syncing. This will be retried automatically."
+    else -> null
 }
 
 /** Minimal success/failure result so callers never see raw exceptions. */
@@ -81,7 +137,16 @@ fun parseApiError(json: Json, httpStatus: Int, errorBody: ResponseBody?): BtApiE
     if (!raw.isNullOrBlank()) {
         try {
             val env = json.decodeFromString(ApiErrorEnvelope.serializer(), raw)
-            return BtApiError(httpStatus, env.error.code, env.error.message, env.error.details)
+            // V5: the mirror-seam refusals get app-authored copy (see
+            // [mirrorSeamMessageFor]); the server's own wording is preserved on
+            // [BtApiError.serverMessage] so nothing is lost for logs/diagnostics.
+            return BtApiError(
+                httpStatus = httpStatus,
+                code = env.error.code,
+                userMessage = mirrorSeamMessageFor(env.error.code) ?: env.error.message,
+                details = env.error.details,
+                serverMessage = env.error.message,
+            )
         } catch (_: Exception) {
             // Not the expected envelope — fall through to a generic mapping.
         }

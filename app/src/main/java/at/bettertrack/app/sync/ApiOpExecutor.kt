@@ -3,6 +3,7 @@ package at.bettertrack.app.sync
 import android.util.Log
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.MIRROR_SEAM_CONFLICT_CODES
 import at.bettertrack.app.data.api.dto.CashEntryRequest
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
@@ -184,7 +185,20 @@ class ApiOpExecutor(
             )
             resp.code() in 400..499 ->
                 classifyClientError(parseApiError(json, resp.code(), resp.errorBody()), op)
-            // 5xx — the server was reached; the effect is unknown.
+            // V5 mirror seam: 503 MIRROR_SYNC_STALLED is a KNOWN transient — the
+            // write was not applied because the mirror is catching up. Retry on
+            // the normal backoff (same idempotency key) instead of treating it as
+            // an unknown-effect 5xx, and never park it as needs-attention.
+            resp.code() == 503 -> {
+                val err = parseApiError(json, resp.code(), resp.errorBody())
+                if (err.isMirrorSyncStalled) {
+                    Log.d(TAG, "Mirror sync stalled for op#${op.id} — retrying with backoff")
+                    ExecResult.RetryableNotApplied(err.userMessage)
+                } else {
+                    ExecResult.Ambiguous(reachable = true)
+                }
+            }
+            // Other 5xx — the server was reached; the effect is unknown.
             else -> ExecResult.Ambiguous(reachable = true)
         }
     } catch (_: IOException) {
@@ -220,6 +234,14 @@ class ApiOpExecutor(
         // permanent op failure surfaced through needs-attention.
         BtApiError.Codes.IDEMPOTENCY_KEY_MISMATCH -> {
             Log.w(TAG, "Idempotency key MISMATCH for op#${op.id} (key=${op.clientId}, HTTP ${err.httpStatus}) — parking as needs-attention")
+            ExecResult.Rejected(err.userMessage)
+        }
+        // V5 mirror seam (409): the row moved, vanished, or is derived-and-not-
+        // editable. All three are permanent for THIS attempt, so park with the
+        // app-authored one-liner and let the user retry/remove from the
+        // pending-sync screen (same shape as MSG_ATTEMPT_TIMED_OUT).
+        in MIRROR_SEAM_CONFLICT_CODES -> {
+            Log.w(TAG, "Mirror-seam refusal ${err.code} for op#${op.id} (HTTP ${err.httpStatus}) — parking as needs-attention")
             ExecResult.Rejected(err.userMessage)
         }
         else -> ExecResult.Rejected(err.userMessage)

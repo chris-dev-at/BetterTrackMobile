@@ -251,6 +251,80 @@ class ApiOpExecutorTest {
         assertEquals("Insufficient cash balance.", (result as ExecResult.Rejected).message)
     }
 
+    // ── V5 mirror seam (S2a c) ───────────────────────────────────────────────
+
+    @Test
+    fun `409 MIRROR_CONFLICT parks with the app's own one-liner`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(409)
+                .setBody(envelope("MIRROR_CONFLICT", "baseSeq mismatch for mirror row")),
+        )
+
+        val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+
+        assertTrue("was $result", result is ExecResult.Rejected)
+        assertEquals(
+            "Someone else changed this shared entry first. Refresh and try again.",
+            (result as ExecResult.Rejected).message,
+        )
+    }
+
+    @Test
+    fun `409 MIRROR_ROW_DELETED parks`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(409)
+                .setBody(envelope("MIRROR_ROW_DELETED", "row gone")),
+        )
+
+        val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+
+        assertTrue("was $result", result is ExecResult.Rejected)
+        assertEquals(
+            "This entry was removed from the shared portfolio, so the change can't be applied.",
+            (result as ExecResult.Rejected).message,
+        )
+    }
+
+    @Test
+    fun `409 CASH_MOVEMENT_NOT_EDITABLE parks`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(409)
+                .setBody(envelope("CASH_MOVEMENT_NOT_EDITABLE", "derived movement")),
+        )
+
+        val result = executor.execute(op(OpType.CASH_DEPOSIT, CASH_PAYLOAD))
+
+        assertTrue("was $result", result is ExecResult.Rejected)
+        assertEquals(
+            "This cash entry is created automatically from another entry — edit that one instead.",
+            (result as ExecResult.Rejected).message,
+        )
+    }
+
+    @Test
+    fun `503 MIRROR_SYNC_STALLED is retryable and must NOT park`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(503)
+                .setBody(envelope("MIRROR_SYNC_STALLED", "mirror worker behind")),
+        )
+
+        val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+
+        // Retryable-not-applied: the engine backs off and replays the SAME
+        // idempotency key. Parking here would strand a write on a transient blip.
+        assertTrue("was $result", result is ExecResult.RetryableNotApplied)
+    }
+
+    @Test
+    fun `an ordinary 503 stays ambiguous rather than being treated as retryable`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(503).setBody("upstream unavailable"))
+
+        val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+
+        // Effect unknown ⇒ the reconcile path, not a blind resend.
+        assertTrue("was $result", result is ExecResult.Ambiguous)
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun op(type: OpType, payloadJson: String) = SyncOp(
