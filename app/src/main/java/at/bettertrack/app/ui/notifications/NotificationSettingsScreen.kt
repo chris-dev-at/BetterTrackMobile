@@ -82,6 +82,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
 
     val matrix by store.matrix.collectAsStateWithLifecycle()
     val availability by store.availability.collectAsStateWithLifecycle()
+    val delivery by store.delivery.collectAsStateWithLifecycle()
 
     // Best-effort: pull the server matrix + channel availability on open so the
     // in-app/email/telegram/discord columns reflect the web (v4 gates the extra columns).
@@ -140,6 +141,14 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 },
+            )
+
+            // v5 delivery: one compact cadence + quiet-hours block above the per-type
+            // grid (it is account-wide). Renders nothing at all on a pre-v5 server.
+            NotificationDeliverySection(
+                delivery = delivery,
+                onCadence = { cadence -> scope.launch { repo.setDigestCadence(cadence) } },
+                onQuietHours = { quietHours -> scope.launch { repo.setQuietHours(quietHours) } },
             )
 
             Text(

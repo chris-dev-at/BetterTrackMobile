@@ -260,6 +260,7 @@
     <string name="bt_pending_offline_hint">Wartet auf eine Verbindung — synchronisiert automatisch.</string>
     <string name="bt_pending_op_cash_deposit">Bargeld-Einzahlung</string>
     <string name="bt_pending_op_cash_withdraw">Bargeld-Auszahlung</string>
+    <string name="bt_pending_op_cash_fee">Bargeld-Gebühr</string>
     <string name="bt_pending_op_cash_transfer">Bargeld-Umbuchung</string>
     <string name="bt_pending_op_value_point">Wertaktualisierung eigener Wert</string>
     <string name="bt_offline_banner_tap_cd">Ausstehende Synchronisierung öffnen</string>
@@ -313,6 +314,46 @@
     <string name="bt_cash_kind_transfer_out">Umbuchung an %1$s</string>
     <string name="bt_cash_kind_transfer_in">Umbuchung von %1$s</string>
     <string name="bt_cash_pending_transfer">Umbuchung %1$s → %2$s</string>
+    <!-- v5-Cash-Arten — vor S2b als rohe Wire-Tokens dargestellt. -->
+    <string name="bt_cash_kind_fee">Gebühr</string>
+    <string name="bt_cash_kind_dividend">Dividende</string>
+    <string name="bt_cash_kind_tax_withholding">Einbehaltene Steuer</string>
+    <string name="bt_cash_kind_tax_refund">Steuererstattung</string>
+    <string name="bt_cash_fee_title">Gebühr erfassen</string>
+    <string name="bt_cash_fee_action">Gebühr erfassen</string>
+    <string name="bt_cash_fee_hint">Eine Gebühr ist ein Kostenposten und senkt damit deine Rendite. Eine Auszahlung verschiebt nur Geld und tut das nicht.</string>
+
+    <!-- v5-Cash-Korrekturen (synchronisierte Buchung bearbeiten / löschen) -->
+    <string name="bt_cash_movement_actions_cd">Aktionen für Buchung</string>
+    <string name="bt_cash_edit">Bearbeiten</string>
+    <string name="bt_cash_delete">Löschen</string>
+    <string name="bt_cash_edit_title">Cash-Buchung bearbeiten</string>
+    <string name="bt_cash_delete_title">Diese Buchung löschen?</string>
+    <string name="bt_cash_delete_message">Die Buchung wird entfernt und dein Saldo aus dem gesamten Verlauf neu berechnet.</string>
+    <string name="bt_cash_delete_action">Buchung löschen</string>
+    <string name="bt_cash_not_editable_title">Diese Buchung hängt an einer anderen</string>
+    <string name="bt_cash_not_editable_hint">BetterTrack erzeugt sie automatisch, damit sie immer zur übergeordneten Buchung passt. Ändere die Ursprungsbuchung, dann ändert sich diese mit.</string>
+    <string name="bt_cash_correction_failed_title">Änderung konnte nicht gespeichert werden</string>
+    <string name="bt_cash_edit_kind_label">Art</string>
+
+    <!-- v5-Herkunftskennzeichen für Zeilen -->
+    <string name="bt_source_standing_order">Dauerauftrag</string>
+    <string name="bt_source_import">Import · %1$s</string>
+    <string name="bt_source_sync">Sync · %1$s</string>
+    <string name="bt_source_sync_group">Aus Gruppe</string>
+    <string name="bt_source_filter_all">Alle Buchungen</string>
+    <string name="bt_source_filter_automatic">Nur automatische</string>
+
+    <!-- v5-Mirrorchain-Overlays (Gruppenportfolio) -->
+    <string name="bt_mirror_added_by">hinzugefügt von @%1$s</string>
+    <string name="bt_mirror_group_badge">Gruppe</string>
+    <string name="bt_mirror_members">%1$d Mitglieder</string>
+    <string name="bt_mirror_syncing">Synchronisiert %1$d%%</string>
+
+    <!-- v5 discreet mode -->
+    <string name="bt_settings_privacy_section">Privatsphäre</string>
+    <string name="bt_settings_discreet">Diskreter Modus</string>
+    <string name="bt_settings_discreet_sub">Blendet alle Beträge aus. Prozentwerte bleiben sichtbar. Halte deine Gesamtsumme gedrückt, um kurz hineinzusehen.</string>
 
     <!-- Eigene Werte (§6.4) -->
     <string name="bt_custom_title">Eigene Werte</string>
@@ -1063,4 +1104,26 @@
     <string name="bt_notif_type_mirror_event_sub">Aktivität in einem Gruppen-Portfolio</string>
     <string name="bt_notif_type_digest">Zusammenfassung</string>
     <string name="bt_notif_type_digest_sub">Deine tägliche oder wöchentliche Übersicht</string>
+
+    <!-- V5 Zustellung: Sammel-Rhythmus + Ruhezeiten (nur ausgehende Kanäle) -->
+    <string name="bt_notif_delivery_section">Zustellung</string>
+    <string name="bt_notif_delivery_inbox_hint">Dein Posteingang in der App wird nie verzögert oder pausiert. Sammel-Rhythmus und Ruhezeiten gelten nur für E-Mail, Push und verknüpfte Kanäle.</string>
+    <string name="bt_notif_cadence_title">Sammel-Rhythmus</string>
+    <string name="bt_notif_cadence_subtitle">Wie oft nicht dringende Benachrichtigungen verschickt werden</string>
+    <string name="bt_notif_cadence_instant">Sofort</string>
+    <string name="bt_notif_cadence_daily">Täglich</string>
+    <string name="bt_notif_cadence_weekly">Wöchentlich</string>
+    <string name="bt_notif_cadence_mixed">Diese Typen sind aktuell unterschiedlich eingestellt. Wähle eine Option, um sie für alle zu übernehmen.</string>
+    <string name="bt_notif_cadence_urgent_hint">Kursalarme, Sicherheitscodes, Chat-Nachrichten und Einladungen kommen immer sofort und werden nie gesammelt.</string>
+    <string name="bt_notif_quiet_title">Ruhezeiten</string>
+    <string name="bt_notif_quiet_subtitle">Ausgehende Benachrichtigungen in einem selbst gewählten Zeitfenster zurückhalten</string>
+    <string name="bt_notif_quiet_start">Beginn</string>
+    <string name="bt_notif_quiet_end">Ende</string>
+    <string name="bt_notif_quiet_window">%1$s → %2$s</string>
+    <string name="bt_notif_quiet_window_overnight">%1$s → %2$s (über Nacht)</string>
+    <string name="bt_notif_quiet_timezone">Zeitzone</string>
+    <string name="bt_notif_quiet_timezone_device">Von diesem Gerät</string>
+    <string name="bt_notif_quiet_timezone_title">Zeitzone wählen</string>
+    <string name="bt_notif_quiet_timezone_search">Zeitzonen suchen</string>
+    <string name="bt_notif_quiet_set">Übernehmen</string>
 </resources>

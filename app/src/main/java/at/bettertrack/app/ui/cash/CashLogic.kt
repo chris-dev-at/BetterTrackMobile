@@ -129,7 +129,7 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
     val type = OpType.fromWire(op.opType) ?: return null
     val status = OpStatus.fromWire(op.status)?.let(::pendingUiStatus) ?: return null
     return when (type) {
-        OpType.CASH_DEPOSIT, OpType.CASH_WITHDRAW -> {
+        OpType.CASH_DEPOSIT, OpType.CASH_WITHDRAW, OpType.CASH_FEE -> {
             val p = try {
                 json.decodeFromString(CashOpPayload.serializer(), op.payloadJson)
             } catch (_: Exception) {

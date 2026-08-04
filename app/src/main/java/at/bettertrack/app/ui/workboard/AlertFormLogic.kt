@@ -1,5 +1,7 @@
 package at.bettertrack.app.ui.workboard
 
+import at.bettertrack.app.ui.format.BT_MASKED_PLAIN
+import at.bettertrack.app.ui.format.BtDiscreetMode
 import at.bettertrack.app.data.repo.AlertKind
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import java.util.Currency
@@ -47,4 +49,12 @@ fun formatAlertNumber(v: Double, locale: Locale = Locale.getDefault()): String {
 
 /** "$150" / "€80.50" — symbol-prefixed price in the asset's native currency. */
 fun formatAlertPrice(v: Double, currency: String, locale: Locale = Locale.getDefault()): String =
-    currencySymbol(currency, locale) + formatAlertNumber(v, locale)
+    // An alert threshold is an absolute price the user set, so discreet mode
+    // hides it like any other amount. This helper predates the canonical
+    // formatter and still formats symbol-FIRST (a divergence tracked separately);
+    // the mask keeps that placement so the row's shape doesn't change.
+    if (BtDiscreetMode.masking) {
+        currencySymbol(currency, locale) + BT_MASKED_PLAIN
+    } else {
+        currencySymbol(currency, locale) + formatAlertNumber(v, locale)
+    }

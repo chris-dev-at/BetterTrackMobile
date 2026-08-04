@@ -64,7 +64,11 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.SourceBadge
+import at.bettertrack.app.ui.format.isBadgeWorthy
+import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
@@ -498,13 +502,21 @@ fun TransactionRow(
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = if (showAsset) tx.assetSymbol else formatTxDate(tx.executedAtMs, locale),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = bt.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (showAsset) tx.assetSymbol else formatTxDate(tx.executedAtMs, locale),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // v5 provenance — absent for the manual rows that dominate.
+                    if (parseRowSource(tx.source).isBadgeWorthy()) {
+                        Spacer(Modifier.width(8.dp))
+                        SourceBadge(tx.source)
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 val amountPrice =
                     "${formatQuantity(tx.quantity, locale)} × ${formatEur(tx.price, locale)}"
@@ -519,6 +531,10 @@ fun TransactionRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                tx.mirror?.mirrorAddedByName?.let { who ->
+                    Spacer(Modifier.height(2.dp))
+                    MirrorAttributionChip(who)
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {

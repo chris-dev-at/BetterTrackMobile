@@ -9,6 +9,7 @@ import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
 import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.NotificationItemDto
+import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,6 +104,20 @@ interface NotificationRepository {
     suspend fun loadServerSettings(): BtResult<Unit>
     /** PATCH the in-app/email/push columns to the server (best-effort; local persists). */
     suspend fun pushServerSettings(): BtResult<Unit>
+
+    // ── v5 delivery (digest cadence + quiet hours) ──────────────────────────────
+    /**
+     * Apply [cadence] to the digestible type group. Sends ONLY the types whose
+     * value actually changes; a no-op change never leaves the device (an empty
+     * PATCH body is a 400). Rolls the local cache back if the server rejects.
+     */
+    suspend fun setDigestCadence(cadence: DigestCadence): BtResult<Unit>
+    /**
+     * Apply a quiet-hours change. Sends ONLY the fields that differ from the last
+     * server state (`quietHours` is the one field-partial object in the schema).
+     * Rolls the local cache back if the server rejects.
+     */
+    suspend fun setQuietHours(next: QuietHours): BtResult<Unit>
 }
 
 class DefaultNotificationRepository(
@@ -253,7 +268,10 @@ class DefaultNotificationRepository(
                         discord = ch?.discord == true,
                     ),
                 )
-                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types; tg=${ch?.telegram == true} dc=${ch?.discord == true}).")
+                // v5 delivery: echoed verbatim. Absent (pre-v5) ⇒ null ⇒ the Delivery
+                // section stays hidden and neither key can reach a PATCH body.
+                settings.syncDeliveryFromServer(r.value.cadence, r.value.quietHours)
+                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types; tg=${ch?.telegram == true} dc=${ch?.discord == true}; cadence=${r.value.cadence != null} quietHours=${r.value.quietHours != null}).")
                 BtResult.Ok(Unit)
             }
             is BtResult.Err -> {
@@ -265,9 +283,11 @@ class DefaultNotificationRepository(
     override suspend fun pushServerSettings(): BtResult<Unit> {
         // Local persistence already happened in the store; mirror in-app / email /
         // push to the server (webpush echoed verbatim). Only per-type Mute stays local.
+        // `cadence`/`quietHours` are left null ⇒ dropped from the body: a matrix edit
+        // must never restate delivery settings it did not change.
         return when (val r = apiCall(json) {
             api.updateNotificationSettings(
-                at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest(settings.serverMatrixForPatch()),
+                UpdateNotificationSettingsRequest(matrix = settings.serverMatrixForPatch()),
             )
         }) {
             is BtResult.Ok -> BtResult.Ok(Unit)
@@ -275,6 +295,46 @@ class DefaultNotificationRepository(
                 Log.w(TAG, "PATCH /settings/notifications unavailable (HTTP ${r.error.httpStatus}); kept locally.")
                 if (r.error.isForbidden || r.error.isInsufficientScope || r.error.isNetwork) BtResult.Ok(Unit) else r.map()
             }
+        }
+    }
+
+    // ── v5 delivery (digest cadence + quiet hours) ──────────────────────────────
+
+    override suspend fun setDigestCadence(cadence: DigestCadence): BtResult<Unit> {
+        val before = settings.delivery.value
+        // Nothing to change (or a pre-v5 server) ⇒ no request at all: `{}` is a 400.
+        val patch = cadencePatch(before.cadence, cadence) ?: return BtResult.Ok(Unit)
+        settings.setDelivery(before.copy(cadence = before.cadence.orEmpty() + patch))
+        return patchDelivery(before, UpdateNotificationSettingsRequest(cadence = patch))
+    }
+
+    override suspend fun setQuietHours(next: QuietHours): BtResult<Unit> {
+        val before = settings.delivery.value
+        val current = before.quietHours ?: return BtResult.Ok(Unit)
+        val patch = quietHoursPatch(current, next) ?: return BtResult.Ok(Unit)
+        settings.setDelivery(before.copy(quietHours = next))
+        return patchDelivery(before, UpdateNotificationSettingsRequest(quietHours = patch))
+    }
+
+    /**
+     * Send a delivery PATCH. The response is the FULL settings shape, so a success
+     * re-seeds from the server rather than trusting the optimistic local write; a
+     * failure restores [rollbackTo] so the screen never shows a state the server
+     * does not hold.
+     */
+    private suspend fun patchDelivery(
+        rollbackTo: DeliveryState,
+        body: UpdateNotificationSettingsRequest,
+    ): BtResult<Unit> = when (val r = apiCall(json) { api.updateNotificationSettings(body) }) {
+        is BtResult.Ok -> {
+            settings.syncFromServer(r.value.matrix)
+            settings.syncDeliveryFromServer(r.value.cadence, r.value.quietHours)
+            BtResult.Ok(Unit)
+        }
+        is BtResult.Err -> {
+            settings.setDelivery(rollbackTo)
+            Log.w(TAG, "PATCH /settings/notifications (delivery) failed (HTTP ${r.error.httpStatus} ${r.error.code}); reverted.")
+            if (r.error.isForbidden || r.error.isInsufficientScope || r.error.isNetwork) BtResult.Ok(Unit) else r.map()
         }
     }
 

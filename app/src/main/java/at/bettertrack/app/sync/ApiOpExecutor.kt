@@ -5,6 +5,7 @@ import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.MIRROR_SEAM_CONFLICT_CODES
 import at.bettertrack.app.data.api.dto.CashEntryRequest
+import at.bettertrack.app.ui.cash.CashKind
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.PutValuePointsRequest
@@ -45,8 +46,9 @@ class ApiOpExecutor(
         Log.d(TAG, "execute ${op.type.wire} op#${op.id} Idempotency-Key=${op.clientId}")
         return when (op.type) {
             OpType.TX_BUY, OpType.TX_SELL -> executeTransaction(op)
-            OpType.CASH_DEPOSIT -> executeCash(op, deposit = true)
-            OpType.CASH_WITHDRAW -> executeCash(op, deposit = false)
+            OpType.CASH_DEPOSIT -> executeCash(op, CashKind.DEPOSIT)
+            OpType.CASH_WITHDRAW -> executeCash(op, CashKind.WITHDRAWAL)
+            OpType.CASH_FEE -> executeCash(op, CashKind.FEE)
             OpType.CASH_TRANSFER -> executeTransfer(op)
             OpType.CUSTOM_ASSET_VALUE_POINT -> executeValuePoint(op)
         }
@@ -82,9 +84,9 @@ class ApiOpExecutor(
         }
     }
 
-    // ── Cash (deposit / withdraw) ────────────────────────────────────────────
+    // ── Cash (deposit / withdraw / fee) ──────────────────────────────────────
 
-    private suspend fun executeCash(op: SyncOp, deposit: Boolean): ExecResult {
+    private suspend fun executeCash(op: SyncOp, kind: CashKind): ExecResult {
         val payload = decode(CashOpPayload.serializer(), op) ?: return malformed(op)
         val body = CashEntryRequest(
             amountEur = payload.amountEur,
@@ -94,10 +96,10 @@ class ApiOpExecutor(
         )
         val portfolioId = op.portfolioId ?: return malformed(op)
         return runMutation(op, {
-            if (deposit) {
-                api.cashDeposit(portfolioId, body, idempotencyKey = op.clientId)
-            } else {
-                api.cashWithdraw(portfolioId, body, idempotencyKey = op.clientId)
+            when (kind) {
+                CashKind.DEPOSIT -> api.cashDeposit(portfolioId, body, idempotencyKey = op.clientId)
+                CashKind.FEE -> api.cashFee(portfolioId, body, idempotencyKey = op.clientId)
+                else -> api.cashWithdraw(portfolioId, body, idempotencyKey = op.clientId)
             }
         }) { resp ->
             resultJson("movementIds", listOf(resp.movement.id))

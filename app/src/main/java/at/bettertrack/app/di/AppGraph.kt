@@ -210,6 +210,9 @@ object AppGraph {
                 // may outlive the account they belong to.
                 at.bettertrack.app.data.api.ParanoidModeState.clear()
                 etagInterceptor.clear()
+                // V5 S2b: discreet mode is per-account, so the next account must
+                // not inherit the previous one's masking preference.
+                discreetModeStore.clear()
             },
         )
     }
@@ -285,6 +288,14 @@ object AppGraph {
 
     val notificationRepository: NotificationRepository by lazy {
         DefaultNotificationRepository(api = btApi, json = json, settings = notificationSettingsStore)
+    }
+
+    /**
+     * v5 discreet mode. Constructed eagerly on first UI touch so the cached flag
+     * is applied to the renderer before any amount is drawn.
+     */
+    val discreetModeStore: at.bettertrack.app.data.prefs.DiscreetModeStore by lazy {
+        at.bettertrack.app.data.prefs.DiscreetModeStore(appContext)
     }
 
     val pushTokenManager: PushTokenManager by lazy {

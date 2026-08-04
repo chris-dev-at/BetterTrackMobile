@@ -29,6 +29,12 @@ import java.util.Locale
  *
  * STRICTLY display-only: nothing here parses input, mutates stored values, or
  * decides what goes on the wire.
+ *
+ * V5 adds one more rule, enforced in this file so it cannot be forgotten:
+ *  6. **Discreet mode** — when [BtDiscreetMode] is masking, every ABSOLUTE money
+ *     amount renders as "•••• €". Percentages, weights and quantities are
+ *     RELATIVE and stay live: they leak nothing about the size of a portfolio,
+ *     and blanking them would make the app useless rather than discreet.
  */
 
 /** Rendered in place of an absent or non-finite value (rule 1). */
@@ -71,6 +77,9 @@ internal fun btFormatMoneyCore(
     showSign: Boolean,
 ): String {
     if (!isFinite(value)) return BT_EM_DASH
+    // Discreet mode is enforced HERE, at the one function every money label in
+    // the app funnels through, so no screen can opt out by accident.
+    if (BtDiscreetMode.masking) return btMaskedMoney(currencyCode, locale)
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!)).setScale(2, RoundingMode.HALF_UP)
     val nf = NumberFormat.getNumberInstance(locale).apply {
         minimumFractionDigits = 2
@@ -89,6 +98,7 @@ internal fun btFormatMoneyCore(
  */
 internal fun btFormatUnitPriceCore(value: Double?, currencyCode: String, locale: Locale): String {
     if (!isFinite(value)) return BT_EM_DASH
+    if (BtDiscreetMode.masking) return btMaskedMoney(currencyCode, locale)
     val v = value!!
     val magnitude = kotlin.math.abs(v)
     if (magnitude > 0.0 && magnitude < 0.01) {

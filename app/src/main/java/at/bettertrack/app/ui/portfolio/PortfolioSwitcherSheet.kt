@@ -316,6 +316,43 @@ private fun SwitcherRow(
                             kind = BtBadgeKind.Neutral,
                         )
                     }
+                    // v5: a group (mirrorchain) portfolio is a materially different
+                    // thing to own — its rows come from other people — so it earns
+                    // a gold badge rather than a neutral one.
+                    if (portfolio.mirror?.mirrorChainId != null) {
+                        Spacer(Modifier.width(8.dp))
+                        BtBadge(
+                            text = stringResource(R.string.bt_mirror_group_badge),
+                            kind = BtBadgeKind.Gold,
+                        )
+                    }
+                }
+                portfolio.mirror?.let { m ->
+                    if (m.mirrorChainId != null) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = listOfNotNull(
+                                m.mirrorChainName,
+                                m.mirrorMemberCount?.let {
+                                    stringResource(R.string.bt_mirror_members, it)
+                                },
+                                // Only mention syncing when it is actually behind —
+                                // "100%" on every row would be noise.
+                                if (m.mirrorSynced == false) {
+                                    stringResource(
+                                        R.string.bt_mirror_syncing,
+                                        m.mirrorSyncPercent ?: 0,
+                                    )
+                                } else {
+                                    null
+                                },
+                            ).joinToString(" · "),
+                            style = BtTheme.type.numberCaption,
+                            color = bt.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(2.dp))
                 val totals = portfolio.totals

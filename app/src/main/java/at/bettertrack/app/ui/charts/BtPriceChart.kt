@@ -270,6 +270,9 @@ private fun nearestPoint(points: List<PricePoint>, frac: Float): PricePoint {
 
 /** Price axis label: compact k/M for big numbers, else 2-decimal locale money. */
 private fun priceAxisLabel(value: Double, locale: Locale, compact: Boolean): String {
+    if (at.bettertrack.app.ui.format.BtDiscreetMode.masking) {
+        return at.bettertrack.app.ui.format.BT_MASKED_PLAIN
+    }
     val nf = java.text.NumberFormat.getNumberInstance(locale)
     return when {
         compact && abs(value) >= 1_000_000 -> {

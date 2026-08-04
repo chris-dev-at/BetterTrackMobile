@@ -261,6 +261,7 @@
     <string name="bt_pending_offline_hint">Waiting for a connection — syncs automatically.</string>
     <string name="bt_pending_op_cash_deposit">Cash deposit</string>
     <string name="bt_pending_op_cash_withdraw">Cash withdrawal</string>
+    <string name="bt_pending_op_cash_fee">Cash fee</string>
     <string name="bt_pending_op_cash_transfer">Cash transfer</string>
     <string name="bt_pending_op_value_point">Custom-asset value update</string>
     <string name="bt_offline_banner_tap_cd">Open pending sync</string>
@@ -314,6 +315,46 @@
     <string name="bt_cash_kind_transfer_out">Transfer to %1$s</string>
     <string name="bt_cash_kind_transfer_in">Transfer from %1$s</string>
     <string name="bt_cash_pending_transfer">Transfer %1$s → %2$s</string>
+    <!-- v5 cash kinds — these rendered as raw wire tokens before S2b. -->
+    <string name="bt_cash_kind_fee">Fee</string>
+    <string name="bt_cash_kind_dividend">Dividend</string>
+    <string name="bt_cash_kind_tax_withholding">Tax withheld</string>
+    <string name="bt_cash_kind_tax_refund">Tax refund</string>
+    <string name="bt_cash_fee_title">Record a fee</string>
+    <string name="bt_cash_fee_action">Record fee</string>
+    <string name="bt_cash_fee_hint">A fee is a cost, so it lowers your return. A withdrawal just moves money out and doesn\'t.</string>
+
+    <!-- v5 cash corrections (edit / delete a synced movement) -->
+    <string name="bt_cash_movement_actions_cd">Entry actions</string>
+    <string name="bt_cash_edit">Edit</string>
+    <string name="bt_cash_delete">Delete</string>
+    <string name="bt_cash_edit_title">Edit cash entry</string>
+    <string name="bt_cash_delete_title">Delete this entry?</string>
+    <string name="bt_cash_delete_message">The entry is removed and your balance is recalculated from the whole ledger.</string>
+    <string name="bt_cash_delete_action">Delete entry</string>
+    <string name="bt_cash_not_editable_title">This entry follows another one</string>
+    <string name="bt_cash_not_editable_hint">BetterTrack creates it automatically, so it always matches its parent. Change the entry it comes from and this one updates with it.</string>
+    <string name="bt_cash_correction_failed_title">Couldn\'t save that change</string>
+    <string name="bt_cash_edit_kind_label">Type</string>
+
+    <!-- v5 row provenance badges -->
+    <string name="bt_source_standing_order">Standing order</string>
+    <string name="bt_source_import">Import · %1$s</string>
+    <string name="bt_source_sync">Sync · %1$s</string>
+    <string name="bt_source_sync_group">From group</string>
+    <string name="bt_source_filter_all">All entries</string>
+    <string name="bt_source_filter_automatic">Automatic only</string>
+
+    <!-- v5 mirrorchain (group portfolio) overlays -->
+    <string name="bt_mirror_added_by">added by @%1$s</string>
+    <string name="bt_mirror_group_badge">Group</string>
+    <string name="bt_mirror_members">%1$d members</string>
+    <string name="bt_mirror_syncing">Syncing %1$d%%</string>
+
+    <!-- v5 discreet mode -->
+    <string name="bt_settings_privacy_section">Privacy</string>
+    <string name="bt_settings_discreet">Discreet mode</string>
+    <string name="bt_settings_discreet_sub">Hide all amounts. Percentages stay visible. Press and hold your total to peek.</string>
 
     <!-- Step 10 — Custom assets (spec §6.4) -->
     <string name="bt_custom_title">Custom assets</string>
@@ -1072,4 +1113,26 @@
     <string name="bt_notif_type_mirror_event_sub">Activity in a group portfolio you are in</string>
     <string name="bt_notif_type_digest">Digest</string>
     <string name="bt_notif_type_digest_sub">Your daily or weekly summary</string>
+
+    <!-- V5 delivery: digest cadence + quiet hours (outbound channels only) -->
+    <string name="bt_notif_delivery_section">Delivery</string>
+    <string name="bt_notif_delivery_inbox_hint">Your in-app inbox is never delayed or paused. Digest and quiet hours only affect email, push and linked channels.</string>
+    <string name="bt_notif_cadence_title">Digest</string>
+    <string name="bt_notif_cadence_subtitle">How often non-urgent notifications are sent out</string>
+    <string name="bt_notif_cadence_instant">Instant</string>
+    <string name="bt_notif_cadence_daily">Daily</string>
+    <string name="bt_notif_cadence_weekly">Weekly</string>
+    <string name="bt_notif_cadence_mixed">Right now these types use different settings. Pick one to apply it to all of them.</string>
+    <string name="bt_notif_cadence_urgent_hint">Price alerts, security codes, chat messages and invitations always arrive instantly and are never batched.</string>
+    <string name="bt_notif_quiet_title">Quiet hours</string>
+    <string name="bt_notif_quiet_subtitle">Hold outgoing notifications during a window you choose</string>
+    <string name="bt_notif_quiet_start">Start</string>
+    <string name="bt_notif_quiet_end">End</string>
+    <string name="bt_notif_quiet_window">%1$s → %2$s</string>
+    <string name="bt_notif_quiet_window_overnight">%1$s → %2$s (overnight)</string>
+    <string name="bt_notif_quiet_timezone">Time zone</string>
+    <string name="bt_notif_quiet_timezone_device">From this device</string>
+    <string name="bt_notif_quiet_timezone_title">Choose a time zone</string>
+    <string name="bt_notif_quiet_timezone_search">Search time zones</string>
+    <string name="bt_notif_quiet_set">Set</string>
 </resources>

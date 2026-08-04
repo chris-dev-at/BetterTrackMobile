@@ -20,8 +20,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.NorthEast
+import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.SouthWest
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,6 +63,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,9 +95,13 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.format.isBadgeWorthy
+import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
@@ -122,10 +136,22 @@ import java.util.Locale
  * types enqueue through the M3 queue and work offline.
  */
 
+/**
+ * A refused correction, surfaced as a designed dialog rather than a toast.
+ *
+ * [notEditable] separates the ONE refusal that is not the user's mistake — the
+ * row is derived from a parent (trade, dividend, tax settlement, transfer) and
+ * must be corrected there — from ordinary failures like an insufficient balance.
+ */
+data class CashCorrectionNotice(val notEditable: Boolean, val message: String)
+
 /** Which sheet is open. */
 private sealed interface CashSheet {
-    data class Entry(val deposit: Boolean, val editOpId: Long? = null) : CashSheet
+    /** Create (or edit a queued) deposit / withdrawal / fee. */
+    data class Entry(val kind: CashKind, val editOpId: Long? = null) : CashSheet
     data class Transfer(val editOpId: Long? = null) : CashSheet
+    /** Edit an already-SYNCED movement via the v5 correction endpoints. */
+    data class EditSynced(val movementId: String) : CashSheet
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -260,6 +286,74 @@ class CashViewModel(
         }
     }
 
+    // ── Corrections on SYNCED movements (v5, online-only) ───────────────────
+    // Deliberately NOT queued. A correction is defined relative to a row that
+    // exists server-side, and the server re-checks solvency by replaying the
+    // whole ledger — so an offline correction could only be validated on
+    // arrival, long after the user walked away from the screen that could
+    // explain the refusal. Same call as the transaction editor makes.
+
+    private val _correctionBusy = MutableStateFlow(false)
+    val correctionBusy: StateFlow<Boolean> = _correctionBusy.asStateFlow()
+
+    private val _correctionNotice = MutableStateFlow<CashCorrectionNotice?>(null)
+    val correctionNotice: StateFlow<CashCorrectionNotice?> = _correctionNotice.asStateFlow()
+
+    /**
+     * One stable Idempotency-Key per movement id, minted on first use and reused
+     * across retries so a retry after a lost 200 replays the server's stored
+     * response instead of 404-ing on the already-deleted row.
+     */
+    private val deleteKeys = mutableMapOf<String, String>()
+
+    fun clearCorrectionNotice() {
+        _correctionNotice.value = null
+    }
+
+    /** PATCH a synced movement. [onDone] true closes the sheet. */
+    fun submitCorrection(movementId: String, intent: CashEditIntent, onDone: (Boolean) -> Unit) {
+        val pid = portfolioId.value ?: return
+        val patch = buildCashMovementPatch(intent)
+        if (patch == null) {
+            // Nothing actually changed — an empty body is a 400, so don't send one.
+            onDone(true)
+            return
+        }
+        runCorrection(onDone) {
+            // Fresh key per submission: the edit is field-absolute, so a resend of
+            // the SAME body replays, while a corrected retry is a new request.
+            repo.updateCashMovement(pid, movementId, patch, java.util.UUID.randomUUID().toString())
+        }
+    }
+
+    fun deleteCorrection(movementId: String, onDone: (Boolean) -> Unit) {
+        val pid = portfolioId.value ?: return
+        val key = deleteKeys.getOrPut(movementId) { java.util.UUID.randomUUID().toString() }
+        runCorrection(onDone) { repo.deleteCashMovement(pid, movementId, key) }
+    }
+
+    private fun runCorrection(onDone: (Boolean) -> Unit, action: suspend () -> BtResult<Unit>) {
+        if (_correctionBusy.value) return
+        viewModelScope.launch {
+            _correctionBusy.value = true
+            _correctionNotice.value = null
+            val r = action()
+            if (r is BtResult.Err) {
+                _correctionNotice.value = CashCorrectionNotice(
+                    // The server distinguishes four "why not" cases behind this one
+                    // code (trade / dividend / transfer / other). Its message names
+                    // the actual parent, so it is more useful than anything the app
+                    // could infer — carry it verbatim under our own heading.
+                    notEditable = r.error.code == at.bettertrack.app.data.api.BtApiError.Codes
+                        .CASH_MOVEMENT_NOT_EDITABLE,
+                    message = r.error.userMessage,
+                )
+            }
+            _correctionBusy.value = false
+            onDone(r is BtResult.Ok)
+        }
+    }
+
     // ── Movement writes (offline-capable via the queue, §7.2) ────────────────
 
     /**
@@ -267,7 +361,7 @@ class CashViewModel(
      * UUID — §7.3 edit-and-retry). Returns via [onDone]: true = sheet closes.
      */
     fun submitEntry(
-        deposit: Boolean,
+        kind: CashKind,
         amount: Double,
         sourceId: String?,
         note: String?,
@@ -288,7 +382,11 @@ class CashViewModel(
                 sourceId = sourceId,
             )
             val payloadJson = json.encodeToString(CashOpPayload.serializer(), payload)
-            val type = if (deposit) OpType.CASH_DEPOSIT else OpType.CASH_WITHDRAW
+            val type = when (kind) {
+                CashKind.DEPOSIT -> OpType.CASH_DEPOSIT
+                CashKind.FEE -> OpType.CASH_FEE
+                else -> OpType.CASH_WITHDRAW
+            }
             submitViaQueue(pid, type, payloadJson, editOpId, onDone)
             _submitting.value = false
         }
@@ -408,6 +506,10 @@ fun CashScreen(
     var archiveTarget by remember { mutableStateOf<CashSourceEntity?>(null) }
     /** Prefill when editing a queued op. */
     var editPrefill by remember { mutableStateOf<PendingCashRow?>(null) }
+    /** The synced movement awaiting delete confirmation. */
+    var deleteTarget by remember { mutableStateOf<CashMovementEntity?>(null) }
+    val correctionBusy by vm.correctionBusy.collectAsStateWithLifecycle()
+    val correctionNotice by vm.correctionNotice.collectAsStateWithLifecycle()
 
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
@@ -421,8 +523,9 @@ fun CashScreen(
                 editPrefill = row
                 sheet = when (row.type) {
                     OpType.CASH_TRANSFER -> CashSheet.Transfer(editOpId)
-                    OpType.CASH_WITHDRAW -> CashSheet.Entry(deposit = false, editOpId = editOpId)
-                    else -> CashSheet.Entry(deposit = true, editOpId = editOpId)
+                    OpType.CASH_WITHDRAW -> CashSheet.Entry(CashKind.WITHDRAWAL, editOpId)
+                    OpType.CASH_FEE -> CashSheet.Entry(CashKind.FEE, editOpId)
+                    else -> CashSheet.Entry(CashKind.DEPOSIT, editOpId)
                 }
             }
         }
@@ -507,34 +610,49 @@ fun CashScreen(
                         }
                     }
 
-                    // Deposit · Withdraw · Transfer (§6.3).
+                    // Deposit · Withdraw / Fee · Transfer (§6.3 + v5 fee).
+                    // Two rows rather than one row of four: at four-up the labels
+                    // ellipsize on a narrow phone, and pairing them keeps the two
+                    // money-in/out actions visually apart from the two "other" ones.
                     item(key = "actions") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BtSecondaryButton(
-                                text = stringResource(R.string.bt_cash_deposit),
-                                onClick = {
-                                    editPrefill = null
-                                    sheet = CashSheet.Entry(deposit = true)
-                                },
-                                modifier = Modifier.weight(1f).height(44.dp),
-                            )
-                            BtSecondaryButton(
-                                text = stringResource(R.string.bt_cash_withdraw),
-                                onClick = {
-                                    editPrefill = null
-                                    sheet = CashSheet.Entry(deposit = false)
-                                },
-                                modifier = Modifier.weight(1f).height(44.dp),
-                            )
-                            BtSecondaryButton(
-                                text = stringResource(R.string.bt_cash_transfer),
-                                onClick = {
-                                    editPrefill = null
-                                    sheet = CashSheet.Transfer()
-                                },
-                                enabled = active.size >= 2,
-                                modifier = Modifier.weight(1f).height(44.dp),
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                BtSecondaryButton(
+                                    text = stringResource(R.string.bt_cash_deposit),
+                                    onClick = {
+                                        editPrefill = null
+                                        sheet = CashSheet.Entry(CashKind.DEPOSIT)
+                                    },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                )
+                                BtSecondaryButton(
+                                    text = stringResource(R.string.bt_cash_withdraw),
+                                    onClick = {
+                                        editPrefill = null
+                                        sheet = CashSheet.Entry(CashKind.WITHDRAWAL)
+                                    },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                BtSecondaryButton(
+                                    text = stringResource(R.string.bt_cash_kind_fee),
+                                    onClick = {
+                                        editPrefill = null
+                                        sheet = CashSheet.Entry(CashKind.FEE)
+                                    },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                )
+                                BtSecondaryButton(
+                                    text = stringResource(R.string.bt_cash_transfer),
+                                    onClick = {
+                                        editPrefill = null
+                                        sheet = CashSheet.Transfer()
+                                    },
+                                    enabled = active.size >= 2,
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                )
+                            }
                         }
                     }
 
@@ -644,8 +762,9 @@ fun CashScreen(
                                         editPrefill = row
                                         sheet = when (row.type) {
                                             OpType.CASH_TRANSFER -> CashSheet.Transfer(row.opId)
-                                            OpType.CASH_WITHDRAW -> CashSheet.Entry(false, row.opId)
-                                            else -> CashSheet.Entry(true, row.opId)
+                                            OpType.CASH_WITHDRAW -> CashSheet.Entry(CashKind.WITHDRAWAL, row.opId)
+                                            OpType.CASH_FEE -> CashSheet.Entry(CashKind.FEE, row.opId)
+                                            else -> CashSheet.Entry(CashKind.DEPOSIT, row.opId)
                                         }
                                     }
                                 },
@@ -679,7 +798,26 @@ fun CashScreen(
                         }
                     }
                     items(count = movements.size, key = { movements[it].id }) { i ->
-                        MovementRow(movements[i], sourceNames, locale)
+                        val m = movements[i]
+                        // Corrections are online-only and exist only for the three
+                        // hand-typed kinds — a derived row gets no menu at all
+                        // rather than a menu that is certain to be refused.
+                        val correctable = isEditableCashKind(m.kind) && isOnline
+                        MovementRow(
+                            movement = m,
+                            sourceNames = sourceNames,
+                            locale = locale,
+                            onEdit = if (correctable) {
+                                { sheet = CashSheet.EditSynced(m.id) }
+                            } else {
+                                null
+                            },
+                            onDelete = if (correctable) {
+                                { deleteTarget = m }
+                            } else {
+                                null
+                            },
+                        )
                     }
                 }
             }
@@ -691,7 +829,7 @@ fun CashScreen(
     when (val s = sheet) {
         is CashSheet.Entry -> CashEntrySheet(
             vm = vm,
-            deposit = s.deposit,
+            kind = s.kind,
             sources = active,
             prefill = editPrefill,
             editOpId = s.editOpId,
@@ -716,7 +854,93 @@ fun CashScreen(
             },
         )
 
+        is CashSheet.EditSynced -> {
+            val target = movements.firstOrNull { it.id == s.movementId }
+            if (target == null) {
+                // The row vanished under us (a refresh landed while the sheet was
+                // opening). Close rather than show an editor for nothing.
+                sheet = null
+            } else {
+                CashCorrectionSheet(
+                    vm = vm,
+                    movement = target,
+                    sources = active,
+                    locale = locale,
+                    onDismiss = {
+                        sheet = null
+                        vm.clearCorrectionNotice()
+                    },
+                )
+            }
+        }
+
         null -> Unit
+    }
+
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { if (!correctionBusy) deleteTarget = null },
+            containerColor = bt.surface,
+            title = { Text(stringResource(R.string.bt_cash_delete_title), color = bt.textPrimary) },
+            text = {
+                Text(stringResource(R.string.bt_cash_delete_message), color = bt.textSecondary)
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !correctionBusy,
+                    onClick = {
+                        vm.deleteCorrection(target.id) { ok -> if (ok) deleteTarget = null }
+                    },
+                ) {
+                    Text(stringResource(R.string.bt_cash_delete_action), color = bt.loss)
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !correctionBusy, onClick = { deleteTarget = null }) {
+                    Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+                }
+            },
+        )
+    }
+
+    // A refusal the user cannot fix by retrying gets its own designed state, not
+    // a red line under a form field.
+    correctionNotice?.let { notice ->
+        AlertDialog(
+            onDismissRequest = { vm.clearCorrectionNotice() },
+            containerColor = bt.surface,
+            title = {
+                Text(
+                    text = stringResource(
+                        if (notice.notEditable) {
+                            R.string.bt_cash_not_editable_title
+                        } else {
+                            R.string.bt_cash_correction_failed_title
+                        },
+                    ),
+                    color = bt.textPrimary,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (notice.notEditable) {
+                        Text(
+                            text = stringResource(R.string.bt_cash_not_editable_hint),
+                            color = bt.textSecondary,
+                        )
+                    }
+                    // The server's own sentence names the actual parent
+                    // ("belongs to a trade", "…to a dividend"), which is more
+                    // specific than anything the app could work out.
+                    Text(text = notice.message, color = bt.textMuted)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.clearCorrectionNotice() }) {
+                    Text(stringResource(R.string.bt_action_done), color = bt.gold)
+                }
+            },
+        )
     }
 
     if (newSourceOpen) {
@@ -861,21 +1085,45 @@ private fun MovementRow(
     movement: CashMovementEntity,
     sourceNames: Map<String, String>,
     locale: Locale,
+    /** Non-null only on a hand-typed row while online — derived rows get no menu. */
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasActions = onEdit != null && onDelete != null
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+            modifier = Modifier.fillMaxWidth().padding(
+                start = 14.dp,
+                end = if (hasActions) 4.dp else 14.dp,
+                top = 11.dp,
+                bottom = 11.dp,
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                imageVector = movementIcon(movement.kind),
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = movementLabel(movement, sourceNames),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = bt.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = movementLabel(movement, sourceNames),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (parseRowSource(movement.source).isBadgeWorthy()) {
+                        Spacer(Modifier.width(8.dp))
+                        SourceBadge(movement.source)
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = listOfNotNull(
@@ -885,13 +1133,47 @@ private fun MovementRow(
                     style = BtTheme.type.numberCaption,
                     color = bt.textMuted,
                 )
+                movement.mirror?.mirrorAddedByName?.let { who ->
+                    Spacer(Modifier.height(2.dp))
+                    MirrorAttributionChip(who)
+                }
             }
+            Spacer(Modifier.width(8.dp))
             MoneyText(
                 value = movement.amountEur,
                 style = BtTheme.type.moneySmall,
                 colorMode = MoneyColorMode.GainLoss,
                 showSign = true,
             )
+            if (hasActions) {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = stringResource(R.string.bt_cash_movement_actions_cd),
+                        tint = bt.textSecondary,
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    containerColor = bt.surface,
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary) },
+                        onClick = {
+                            menuOpen = false
+                            onEdit?.invoke()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bt_cash_delete), color = bt.loss) },
+                        onClick = {
+                            menuOpen = false
+                            onDelete?.invoke()
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -923,7 +1205,11 @@ private fun PendingCashRowCard(
                 }
                 Spacer(Modifier.width(10.dp))
                 MoneyText(
-                    value = if (row.type == OpType.CASH_WITHDRAW) -row.amountEur else row.amountEur,
+                    value = if (row.type == OpType.CASH_WITHDRAW || row.type == OpType.CASH_FEE) {
+                        -row.amountEur
+                    } else {
+                        row.amountEur
+                    },
                     style = BtTheme.type.moneySmall,
                     colorMode = if (row.type == OpType.CASH_TRANSFER) MoneyColorMode.Neutral else MoneyColorMode.GainLoss,
                     showSign = row.type != OpType.CASH_TRANSFER,
@@ -945,11 +1231,160 @@ private fun PendingCashRowCard(
 
 // ── Sheets ───────────────────────────────────────────────────────────────────
 
+/**
+ * Edit an already-SYNCED cash movement (v5 `PATCH .../cash/movements/{id}`).
+ *
+ * Separate from [CashEntrySheet] because the two do genuinely different things:
+ * the entry sheet enqueues a new op that works offline, this one PATCHes a row
+ * that already exists server-side and can only run online. It also sends a
+ * DIFF — only the fields the user actually touched — because the server schema
+ * is strict and an empty body is an error.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CashCorrectionSheet(
+    vm: CashViewModel,
+    movement: CashMovementEntity,
+    sources: List<CashSourceEntity>,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val busy by vm.correctionBusy.collectAsStateWithLifecycle()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val originalKind = remember(movement.id) { editableKindOrNull(movement.kind) ?: CashKind.DEPOSIT }
+    val originalAmount = remember(movement.id) { editAmountMagnitude(movement.amountEur) }
+    val originalNote = movement.note.orEmpty()
+
+    var kind by rememberSaveable(movement.id) { mutableStateOf(originalKind) }
+    var amountText by rememberSaveable(movement.id) { mutableStateOf(trimNumber(originalAmount)) }
+    var noteText by rememberSaveable(movement.id) { mutableStateOf(originalNote) }
+    var sourceId by rememberSaveable(movement.id) { mutableStateOf(movement.sourceId) }
+
+    val amount = parseLocalizedDecimal(amountText)
+    val selectedSource = sources.firstOrNull { it.id == sourceId }
+    val amountValid = amount != null && amount > 0.0
+
+    // Only send what changed. Note the deliberate asymmetry on `note`: cleared
+    // text must travel as an explicit JSON null, blank-to-blank must not travel
+    // at all.
+    val intent = CashEditIntent(
+        kind = kind.takeIf { it != originalKind },
+        amountEur = amount?.takeIf { it != originalAmount },
+        sourceId = sourceId?.takeIf { it != movement.sourceId },
+        note = noteText.trim().takeIf { it.isNotEmpty() && it != originalNote },
+        clearNote = noteText.isBlank() && originalNote.isNotEmpty(),
+        baseSeq = movement.mirror?.mirrorVersion,
+    )
+    val dirty = buildCashMovementPatch(intent) != null
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = bt.surface,
+        contentColor = bt.textPrimary,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScrollIfNeeded()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.bt_cash_edit_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+            )
+
+            // Kind is editable between the three hand-typed kinds — the server
+            // accepts exactly that set, so a wrongly-booked withdrawal can become
+            // a fee without deleting and re-entering it.
+            Text(
+                text = stringResource(R.string.bt_cash_edit_kind_label),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CASH_ENTRY_KINDS.forEach { candidate ->
+                    BtChip(
+                        text = stringResource(cashKindLabelRes(candidate)),
+                        selected = kind == candidate,
+                        onClick = { kind = candidate },
+                    )
+                }
+            }
+            if (kind == CashKind.FEE) {
+                Text(
+                    text = stringResource(R.string.bt_cash_fee_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+
+            SheetNumberField(
+                value = amountText,
+                onValue = { amountText = sanitizeDecimalInput(it, maxDecimals = 2) },
+                label = stringResource(R.string.bt_cash_amount),
+                error = amountText.isNotEmpty() && !amountValid,
+            )
+
+            Text(
+                text = stringResource(R.string.bt_cash_source_picker),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+            SourceChips(sources = sources, selectedId = sourceId, onSelect = { sourceId = it })
+
+            selectedSource?.let {
+                Text(
+                    text = stringResource(
+                        R.string.bt_txform_cash_balance,
+                        formatEur(it.balanceEur, locale),
+                    ),
+                    style = BtTheme.type.numberCaption,
+                    color = bt.textSecondary,
+                )
+            }
+
+            OutlinedTextField(
+                value = noteText,
+                onValueChange = { noteText = it.take(900) },
+                label = { Text(stringResource(R.string.bt_txform_note)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = sheetFieldColors(),
+            )
+
+            BtPrimaryButton(
+                text = stringResource(R.string.bt_txform_save),
+                onClick = {
+                    vm.submitCorrection(movement.id, intent) { ok -> if (ok) onDismiss() }
+                },
+                enabled = dirty && amountValid && !busy,
+                loading = busy,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            )
+        }
+    }
+}
+
+/** Label resource for one of the three hand-typed kinds. */
+private fun cashKindLabelRes(kind: CashKind): Int = when (kind) {
+    CashKind.DEPOSIT -> R.string.bt_cash_kind_deposit
+    CashKind.WITHDRAWAL -> R.string.bt_cash_kind_withdrawal
+    else -> R.string.bt_cash_kind_fee
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CashEntrySheet(
     vm: CashViewModel,
-    deposit: Boolean,
+    kind: CashKind,
     sources: List<CashSourceEntity>,
     prefill: PendingCashRow?,
     editOpId: Long?,
@@ -982,9 +1417,11 @@ private fun CashEntrySheet(
 
     val amount = parseLocalizedDecimal(amountText)
     val selectedSource = sources.firstOrNull { it.id == sourceId }
-    val validation = validateCashEntry(amount, deposit, selectedSource?.balanceEur)
+    // A fee is an outflow like a withdrawal — same overdraw gate, same preview.
+    val inflow = kind == CashKind.DEPOSIT
+    val validation = validateCashEntry(amount, inflow, selectedSource?.balanceEur)
     val after = if (amount != null && selectedSource != null) {
-        balanceAfterEntry(selectedSource.balanceEur, amount, deposit)
+        balanceAfterEntry(selectedSource.balanceEur, amount, inflow)
     } else {
         null
     }
@@ -1007,11 +1444,24 @@ private fun CashEntrySheet(
         ) {
             Text(
                 text = stringResource(
-                    if (deposit) R.string.bt_cash_deposit_title else R.string.bt_cash_withdraw_title,
+                    when (kind) {
+                        CashKind.DEPOSIT -> R.string.bt_cash_deposit_title
+                        CashKind.FEE -> R.string.bt_cash_fee_title
+                        else -> R.string.bt_cash_withdraw_title
+                    },
                 ),
                 style = MaterialTheme.typography.titleMedium,
                 color = bt.textPrimary,
             )
+            // The one thing a user cannot infer: a fee is a COST and drags
+            // performance, whereas a withdrawal is just money leaving.
+            if (kind == CashKind.FEE) {
+                Text(
+                    text = stringResource(R.string.bt_cash_fee_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
             sheetError?.let { RejectionText(it) }
 
             SheetNumberField(
@@ -1087,13 +1537,14 @@ private fun CashEntrySheet(
                 text = stringResource(
                     when {
                         editOpId != null -> R.string.bt_txform_save
-                        deposit -> R.string.bt_cash_deposit_action
+                        kind == CashKind.DEPOSIT -> R.string.bt_cash_deposit_action
+                        kind == CashKind.FEE -> R.string.bt_cash_fee_action
                         else -> R.string.bt_cash_withdraw_action
                     },
                 ),
                 onClick = {
                     val a = amount ?: return@BtPrimaryButton
-                    vm.submitEntry(deposit, a, sourceId, noteText, pickedDate, editOpId) { ok ->
+                    vm.submitEntry(kind, a, sourceId, noteText, pickedDate, editOpId) { ok ->
                         if (ok) onDismiss()
                     }
                 },
@@ -1407,31 +1858,54 @@ fun sourceTypeLabel(kind: String): String = when (kind) {
     else -> kind.replaceFirstChar { it.uppercase() }
 }
 
+/**
+ * Localized label for a ledger row. Every wire kind the v5 backend can emit is
+ * mapped; an UNKNOWN (future) kind falls back to its raw token rather than
+ * crashing or rendering blank — a forward-compat escape hatch, not the norm.
+ */
 @Composable
 private fun movementLabel(m: CashMovementEntity, sourceNames: Map<String, String>): String =
-    when (m.kind) {
-        "deposit" -> stringResource(R.string.bt_cash_kind_deposit)
-        "withdrawal" -> stringResource(R.string.bt_cash_kind_withdrawal)
-        "buy" -> stringResource(R.string.bt_cash_kind_buy)
-        "sell_proceeds" -> stringResource(R.string.bt_cash_kind_sell)
-        "transfer_out" -> stringResource(
+    when (CashKind.fromWire(m.kind)) {
+        CashKind.DEPOSIT -> stringResource(R.string.bt_cash_kind_deposit)
+        CashKind.WITHDRAWAL -> stringResource(R.string.bt_cash_kind_withdrawal)
+        CashKind.FEE -> stringResource(R.string.bt_cash_kind_fee)
+        CashKind.BUY -> stringResource(R.string.bt_cash_kind_buy)
+        CashKind.SELL_PROCEEDS -> stringResource(R.string.bt_cash_kind_sell)
+        CashKind.DIVIDEND -> stringResource(R.string.bt_cash_kind_dividend)
+        CashKind.TAX_WITHHOLDING -> stringResource(R.string.bt_cash_kind_tax_withholding)
+        CashKind.TAX_REFUND -> stringResource(R.string.bt_cash_kind_tax_refund)
+        CashKind.TRANSFER_OUT -> stringResource(
             R.string.bt_cash_kind_transfer_out,
             m.counterpartSourceId?.let { sourceNames[it] } ?: "…",
         )
 
-        "transfer_in" -> stringResource(
+        CashKind.TRANSFER_IN -> stringResource(
             R.string.bt_cash_kind_transfer_in,
             m.counterpartSourceId?.let { sourceNames[it] } ?: "…",
         )
 
-        else -> m.kind
+        null -> m.kind
     }
+
+/** Leading glyph for a ledger row; unknown kinds get a neutral placeholder. */
+private fun movementIcon(kind: String): ImageVector = when (CashKind.fromWire(kind)) {
+    CashKind.DEPOSIT -> Icons.Outlined.SouthWest
+    CashKind.WITHDRAWAL -> Icons.Outlined.NorthEast
+    CashKind.FEE -> Icons.Outlined.Receipt
+    CashKind.BUY -> Icons.Outlined.ShoppingCart
+    CashKind.SELL_PROCEEDS -> Icons.Outlined.Sell
+    CashKind.DIVIDEND -> Icons.Outlined.Savings
+    CashKind.TAX_WITHHOLDING, CashKind.TAX_REFUND -> Icons.Outlined.AccountBalance
+    CashKind.TRANSFER_OUT, CashKind.TRANSFER_IN -> Icons.Outlined.SwapHoriz
+    null -> Icons.AutoMirrored.Outlined.HelpOutline
+}
 
 @Composable
 private fun pendingCashLabel(row: PendingCashRow, sourceNames: Map<String, String>): String =
     when (row.type) {
         OpType.CASH_DEPOSIT -> stringResource(R.string.bt_cash_kind_deposit)
         OpType.CASH_WITHDRAW -> stringResource(R.string.bt_cash_kind_withdrawal)
+        OpType.CASH_FEE -> stringResource(R.string.bt_cash_kind_fee)
         OpType.CASH_TRANSFER -> stringResource(
             R.string.bt_cash_pending_transfer,
             row.sourceId?.let { sourceNames[it] } ?: "…",

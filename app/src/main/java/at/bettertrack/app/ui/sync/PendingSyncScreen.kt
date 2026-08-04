@@ -486,6 +486,7 @@ private fun PendingOpCard(
 private fun genericOpLabel(opType: String): String = when (OpType.fromWire(opType)) {
     OpType.CASH_DEPOSIT -> stringResource(R.string.bt_pending_op_cash_deposit)
     OpType.CASH_WITHDRAW -> stringResource(R.string.bt_pending_op_cash_withdraw)
+    OpType.CASH_FEE -> stringResource(R.string.bt_pending_op_cash_fee)
     OpType.CASH_TRANSFER -> stringResource(R.string.bt_pending_op_cash_transfer)
     OpType.CUSTOM_ASSET_VALUE_POINT -> stringResource(R.string.bt_pending_op_value_point)
     else -> opType

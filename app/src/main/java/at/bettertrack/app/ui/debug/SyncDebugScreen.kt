@@ -721,6 +721,7 @@ private fun opTypeLabel(wire: String): String = when (OpType.fromWire(wire)) {
     OpType.TX_SELL -> "Sell transaction"
     OpType.CASH_DEPOSIT -> "Cash deposit"
     OpType.CASH_WITHDRAW -> "Cash withdrawal"
+    OpType.CASH_FEE -> "Cash fee"
     OpType.CASH_TRANSFER -> "Cash transfer"
     OpType.CUSTOM_ASSET_VALUE_POINT -> "Custom-asset value point"
     null -> wire

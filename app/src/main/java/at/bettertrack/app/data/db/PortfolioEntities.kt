@@ -34,6 +34,23 @@ data class PortfolioEntity(
     @Embedded(prefix = "totals_") val totals: PortfolioTotals?,
     /** Wall-clock ms of the last successful detail sync; null = list-only. */
     val detailSyncedAtMs: Long?,
+    /**
+     * v5 mirrorchain badge — present only when this portfolio is a chain copy.
+     * Served on the SUMMARY endpoints only (`GET /portfolios` and friends), never
+     * on `GET /portfolios/{id}`, so a detail refresh must not clear it.
+     */
+    @Embedded val mirror: PortfolioMirror? = null,
+)
+
+/** Chain badge for a group portfolio, flattened into [PortfolioEntity]. */
+data class PortfolioMirror(
+    val mirrorChainId: String?,
+    val mirrorChainName: String?,
+    /** "owner" | "manager" | "member". */
+    val mirrorRole: String?,
+    val mirrorMemberCount: Int?,
+    val mirrorSyncPercent: Int?,
+    val mirrorSynced: Boolean?,
 )
 
 /** Server-computed portfolio totals, embedded in [PortfolioEntity]. */
@@ -101,6 +118,9 @@ data class TransactionEntity(
     val assetCurrency: String,
     val assetType: String,
     val assetIsCustom: Boolean,
+    /** v5 provenance — see [CashMovementEntity.source]. */
+    @ColumnInfo(defaultValue = "manual") val source: String = "manual",
+    @Embedded val mirror: RowMirror? = null,
 )
 
 /**
@@ -164,8 +184,30 @@ data class CashMovementEntity(
     val transferId: String?,
     /** Step 9: the other source of a transfer leg. */
     val counterpartSourceId: String?,
+    /** v5: set on a `dividend` row — identifies the parent to edit instead. */
+    val dividendId: String? = null,
     val executedAt: String,
     val executedAtMs: Long,
     val note: String?,
     val createdAt: String,
+    /**
+     * v5 provenance: "manual" | "standing-order" | "import:<slug>" | "sync:<slug>".
+     * Defaults to "manual" so rows cached before the v6 migration keep rendering
+     * unbadged rather than as an unknown source.
+     */
+    @ColumnInfo(defaultValue = "manual") val source: String = "manual",
+    @Embedded val mirror: RowMirror? = null,
+)
+
+/**
+ * Mirrorchain provenance for one cached content row, flattened into the owning
+ * table. All fields nullable so the whole block reads as absent on the rows of
+ * any portfolio that is not a chain copy.
+ */
+data class RowMirror(
+    val mirrorId: String?,
+    /** Latest op seq — echoed back as `baseSeq` for optimistic concurrency. */
+    val mirrorVersion: Int?,
+    val mirrorAddedByName: String?,
+    val mirrorAddedByIcon: String?,
 )

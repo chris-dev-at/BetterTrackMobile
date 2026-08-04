@@ -2,6 +2,7 @@ package at.bettertrack.app.data.notifications
 
 import android.content.Context
 import at.bettertrack.app.data.api.dto.ChannelPrefsDto
+import at.bettertrack.app.data.api.dto.QuietHoursDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -159,6 +160,14 @@ class NotificationSettingsStore(context: Context) {
     private val _availability = MutableStateFlow(loadAvailability())
     val availability: StateFlow<ChannelAvailability> = _availability.asStateFlow()
 
+    /**
+     * v5 delivery settings (digest cadence + quiet hours), cached so the Delivery
+     * section renders instantly offline with the same visibility it had last time.
+     * A `null` member means the server never modelled it (pre-v5) ⇒ hidden.
+     */
+    private val _delivery = MutableStateFlow(loadDelivery())
+    val delivery: StateFlow<DeliveryState> = _delivery.asStateFlow()
+
     fun prefs(kind: NotifKind): TypePrefs = _matrix.value.prefs(kind)
 
     /** The live delivery decision for an incoming notification of [type]. */
@@ -219,6 +228,21 @@ class NotificationSettingsStore(context: Context) {
             .apply()
     }
 
+    /**
+     * Seed the delivery state from a server response. Both arguments are echoed
+     * verbatim: `null` in ⇒ `null` held ⇒ the section stays hidden and neither key
+     * can ever appear in a PATCH body.
+     */
+    fun syncDeliveryFromServer(cadence: Map<String, String>?, quietHours: QuietHoursDto?) {
+        setDelivery(DeliveryState(cadence = cadence, quietHours = quietHours?.toQuietHours()))
+    }
+
+    /** Replace the delivery state (optimistic write, server echo, or rollback). */
+    fun setDelivery(state: DeliveryState) {
+        _delivery.value = state
+        persistDelivery(state)
+    }
+
     private fun load(): NotifMatrix {
         val rows = configurableKinds.associateWith { kind ->
             val k = kind.name
@@ -257,8 +281,47 @@ class NotificationSettingsStore(context: Context) {
         e.apply()
     }
 
+    /**
+     * Persist the delivery cache. The tri-state is kept durable exactly like the
+     * telegram/discord cells: a `null` member stores NO key, so a cold open on a
+     * pre-v5 server reads back `null` (hidden) instead of a fabricated default.
+     */
+    private fun persistDelivery(state: DeliveryState) {
+        val e = prefs.edit()
+        if (state.cadence != null) e.putStringSet(KEY_CADENCE, encodeCadence(state.cadence)) else e.remove(KEY_CADENCE)
+        val qh = state.quietHours
+        if (qh != null) {
+            e.putBoolean(KEY_QH_ENABLED, qh.enabled)
+                .putInt(KEY_QH_START, qh.startMinute)
+                .putInt(KEY_QH_END, qh.endMinute)
+            if (qh.timezone != null) e.putString(KEY_QH_TZ, qh.timezone) else e.remove(KEY_QH_TZ)
+        } else {
+            e.remove(KEY_QH_ENABLED).remove(KEY_QH_START).remove(KEY_QH_END).remove(KEY_QH_TZ)
+        }
+        e.apply()
+    }
+
+    private fun loadDelivery(): DeliveryState = DeliveryState(
+        cadence = decodeCadence(prefs.getStringSet(KEY_CADENCE, null)),
+        quietHours = if (prefs.contains(KEY_QH_ENABLED)) {
+            QuietHours(
+                enabled = prefs.getBoolean(KEY_QH_ENABLED, false),
+                startMinute = prefs.getInt(KEY_QH_START, QUIET_HOURS_DEFAULT_START),
+                endMinute = prefs.getInt(KEY_QH_END, QUIET_HOURS_DEFAULT_END),
+                timezone = prefs.getString(KEY_QH_TZ, null),
+            )
+        } else {
+            null
+        },
+    )
+
     private companion object {
         const val KEY_AVAIL_TELEGRAM = "avail.telegram"
         const val KEY_AVAIL_DISCORD = "avail.discord"
+        const val KEY_CADENCE = "delivery.cadence"
+        const val KEY_QH_ENABLED = "delivery.qh.enabled"
+        const val KEY_QH_START = "delivery.qh.start"
+        const val KEY_QH_END = "delivery.qh.end"
+        const val KEY_QH_TZ = "delivery.qh.tz"
     }
 }

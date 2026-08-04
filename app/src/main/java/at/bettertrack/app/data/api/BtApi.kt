@@ -1,5 +1,6 @@
 package at.bettertrack.app.data.api
 
+import at.bettertrack.app.data.api.dto.CashDeletionResponse
 import at.bettertrack.app.data.api.dto.CashEntryRequest
 import at.bettertrack.app.data.api.dto.CashMovementResponse
 import at.bettertrack.app.data.api.dto.CashMovementsResponse
@@ -103,6 +104,7 @@ import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.dto.WorkboardListResponse
 import retrofit2.Response
 import retrofit2.http.Body
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.HTTP
@@ -399,6 +401,42 @@ interface BtApi {
         @Body body: CashEntryRequest,
         @Header("Idempotency-Key") idempotencyKey: String? = null,
     ): Response<CashMovementResponse>
+
+    /**
+     * v5: a standalone COST. Mechanically identical to a withdrawal (same
+     * overdraw gate) but kept apart because a fee drags performance and a
+     * withdrawal does not.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("portfolios/{portfolioId}/cash/fee")
+    suspend fun cashFee(
+        @Path("portfolioId") portfolioId: String,
+        @Body body: CashEntryRequest,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
+    ): Response<CashMovementResponse>
+
+    /**
+     * v5 correction op. Only hand-typed kinds (deposit/withdrawal/fee) may be
+     * patched — a derived row answers 409 `CASH_MOVEMENT_NOT_EDITABLE`. The body
+     * is a raw [JsonObject] so the app can send exactly the changed keys and can
+     * express `"note": null` (clear) distinctly from an omitted note (leave).
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("portfolios/{portfolioId}/cash/movements/{movementId}")
+    suspend fun updateCashMovement(
+        @Path("portfolioId") portfolioId: String,
+        @Path("movementId") movementId: String,
+        @Body body: JsonObject,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
+    ): Response<CashMovementResponse>
+
+    /** v5 correction op — answers **200** with fresh balances, not 204. */
+    @DELETE("portfolios/{portfolioId}/cash/movements/{movementId}")
+    suspend fun deleteCashMovement(
+        @Path("portfolioId") portfolioId: String,
+        @Path("movementId") movementId: String,
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
+    ): Response<CashDeletionResponse>
 
     /** Full-replace of a custom asset's value points (the only write the API has). */
     @Headers("Content-Type: application/json")

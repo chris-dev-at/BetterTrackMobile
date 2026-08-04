@@ -14,6 +14,12 @@ enum class OpType(val wire: String) {
     TX_SELL("tx_sell"),
     CASH_DEPOSIT("cash_deposit"),
     CASH_WITHDRAW("cash_withdraw"),
+    /**
+     * v5: a standalone cost. Queued exactly like a withdrawal (same payload,
+     * same overdraw gate) but kept a distinct op because the server books a
+     * different `kind` — and a fee drags performance where a withdrawal does not.
+     */
+    CASH_FEE("cash_fee"),
     /** Atomic source-to-source transfer (real endpoint since Step 9). */
     CASH_TRANSFER("cash_transfer"),
     CUSTOM_ASSET_VALUE_POINT("custom_asset_value_point"),

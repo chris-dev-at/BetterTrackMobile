@@ -38,6 +38,10 @@ data class PortfolioDto(
     val isDefault: Boolean,
     val defaultPayFromCash: Boolean,
     val archivedAt: String? = null,
+    /** v5: present when this portfolio is a mirrorchain (group) copy. */
+    val mirror: PortfolioMirrorBadgeDto? = null,
+    /** v5: present when it USED to be one. Mutually exclusive with [mirror]. */
+    val mirrorFork: PortfolioMirrorForkDto? = null,
 )
 
 /** POST /portfolios — used by the Step-5 debug screen's E2E test-data setup. */
@@ -149,6 +153,10 @@ data class TransactionDto(
     val executedAt: String,
     val note: String? = null,
     val asset: AssetDto,
+    /** v5 provenance — see [CashMovementDto.source]. */
+    val source: String? = null,
+    /** v5: chain provenance when this portfolio is a mirror copy. */
+    val mirror: MirrorRowInfoDto? = null,
 )
 
 /** Single-transaction create body (the queue drains ops one at a time, §7.3). */
@@ -230,8 +238,12 @@ data class CashMovementsResponse(
 @Serializable
 data class CashMovementDto(
     val id: String,
-    /** "deposit" | "withdrawal" | "buy" | "sell_proceeds" | "transfer_out" | "transfer_in". */
+    /**
+     * One of the 10 `cash_movement_kind` values — see [at.bettertrack.app.ui.cash.CashKind],
+     * which owns the label/icon/editability mapping.
+     */
     val kind: String,
+    /** SIGNED: inflow positive, outflow negative. Requests carry a positive magnitude. */
     val amountEur: Double,
     /** Owning source (Step 9 — every movement belongs to a source). */
     val sourceId: String? = null,
@@ -240,9 +252,26 @@ data class CashMovementDto(
     val transferId: String? = null,
     /** The other source of a transfer leg. */
     val counterpartSourceId: String? = null,
+    /** v5: set on a `dividend` row — the parent to edit instead. */
+    val dividendId: String? = null,
+    /** v5: set on `tax_withholding` / `tax_refund` rows. */
+    val taxYear: Int? = null,
     val executedAt: String,
     val note: String? = null,
     val createdAt: String,
+    /**
+     * v5 provenance: "manual" | "standing-order" | "import:<slug>" | "sync:<slug>".
+     * Server-assigned and never client-settable. Modelled as a plain String on
+     * purpose — the platform validates it with a REGEX, not a closed enum, so a
+     * new import/sync slug must not break parsing.
+     */
+    val source: String? = null,
+    /** v5 cash-classification tag ids. Present on the list endpoint, absent on write responses. */
+    val tags: List<String>? = null,
+    /** v5: chain provenance when this portfolio is a mirror copy. */
+    val mirror: MirrorRowInfoDto? = null,
+    /** v5: original currency when the movement was booked in something other than EUR. */
+    val originalCurrency: String? = null,
 )
 
 @Serializable
@@ -257,6 +286,17 @@ data class CashEntryRequest(
 @Serializable
 data class CashMovementResponse(
     val movement: CashMovementDto,
+    /** Balance of the movement's OWN source after the write (v5). */
+    val sourceBalanceEur: Double? = null,
+    /** Portfolio-wide roll-up across all sources. */
+    val balanceEur: Double,
+)
+
+/** DELETE /portfolios/{id}/cash/movements/{movementId} — 200 with balances to repaint from. */
+@Serializable
+data class CashDeletionResponse(
+    val sourceId: String? = null,
+    val sourceBalanceEur: Double? = null,
     val balanceEur: Double,
 )
 

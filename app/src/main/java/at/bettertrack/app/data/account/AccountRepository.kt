@@ -113,6 +113,30 @@ class AccountRepository(
             is BtResult.Err -> r
         }
 
+    // ── Discreet mode (v5 — server stores the flag, the client does the hiding) ──
+
+    /** Read the account's stored discreet-mode flag. */
+    suspend fun discreetMode(): BtResult<Boolean> =
+        when (val r = apiCall(json) { api.accountSettings() }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.discreetMode)
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Persist the flag. Sends ONLY `discreetMode` — the schema is strict and
+     * echoing back `locale`/`baseCurrency` we happen to have cached would risk
+     * clobbering a change made on the web since our last read.
+     */
+    suspend fun updateDiscreetMode(enabled: Boolean): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.updateAccountSettings(UpdateAccountSettingsRequest(discreetMode = enabled))
+            }
+        ) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
     // ── Delete account (irreversible — double-gated) ─────────────────────────
     /**
      * Hard-delete the account. Refused BEFORE any network call unless

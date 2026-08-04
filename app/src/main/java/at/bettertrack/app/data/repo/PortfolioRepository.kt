@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.time.Instant
 import java.time.OffsetDateTime
 
@@ -139,6 +140,7 @@ class PortfolioRepository(
                         baseCurrency = null,
                         totals = null,
                         detailSyncedAtMs = null,
+                        mirror = p.mirror.toPortfolioMirror(),
                     )
                 }
                 db.portfolioDao().replaceListPreservingTotals(fresh)
@@ -262,10 +264,13 @@ class PortfolioRepository(
                         transactionId = m.transactionId,
                         transferId = m.transferId,
                         counterpartSourceId = m.counterpartSourceId,
+                        dividendId = m.dividendId,
                         executedAt = m.executedAt,
                         executedAtMs = parseIsoMs(m.executedAt),
                         note = m.note,
                         createdAt = m.createdAt,
+                        source = m.source ?: "manual",
+                        mirror = m.mirror.toRowMirror(),
                     )
                 }
                 db.cashDao().replaceForPortfolio(portfolioId, sources, movements)
@@ -275,6 +280,79 @@ class PortfolioRepository(
 
             is BtResult.Err -> {
                 Log.w(TAG, "refreshCash($portfolioId) failed: ${r.error.message}")
+                r
+            }
+        }
+
+    // ── Cash corrections (v5 — online-only, same rule as transaction edits) ──
+
+    /**
+     * PATCH one hand-typed cash movement.
+     *
+     * [patch] carries ONLY the changed keys (see
+     * [at.bettertrack.app.ui.cash.buildCashMovementPatch]) because the server
+     * schema is `.strict()` and rejects both unknown keys and an empty body.
+     * [idempotencyKey] is a per-submission UUID so an in-form resend replays the
+     * server's stored 2xx instead of applying the edit twice.
+     *
+     * Expected refusals, all surfaced verbatim to the caller: 409
+     * `CASH_MOVEMENT_NOT_EDITABLE` on a derived row, 400 `INSUFFICIENT_CASH`
+     * when the full-ledger replay says the edit would have overdrawn, 409
+     * `MIRROR_CONFLICT` when `baseSeq` is stale.
+     */
+    suspend fun updateCashMovement(
+        portfolioId: String,
+        movementId: String,
+        patch: JsonObject,
+        idempotencyKey: String? = null,
+    ): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.updateCashMovement(portfolioId, movementId, patch, idempotencyKey)
+            }
+        ) {
+            is BtResult.Ok -> {
+                afterDrain(setOf(portfolioId))
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> {
+                Log.w(TAG, "updateCashMovement($movementId) failed: ${r.error.message}")
+                r
+            }
+        }
+
+    /**
+     * DELETE one hand-typed cash movement. Answers 200 with fresh balances, so
+     * the row and its source are repainted from the RESPONSE (no refetch needed
+     * for the ledger itself); a scope refresh still follows to reconcile the
+     * portfolio totals the removal also moved.
+     *
+     * [idempotencyKey] is stable per movement so a retry after a lost 200
+     * replays the stored 2xx rather than 404-ing on the already-removed row.
+     */
+    suspend fun deleteCashMovement(
+        portfolioId: String,
+        movementId: String,
+        idempotencyKey: String? = null,
+    ): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.deleteCashMovement(portfolioId, movementId, idempotencyKey)
+            }
+        ) {
+            is BtResult.Ok -> {
+                db.cashDao().applyMovementDeletion(
+                    movementId = movementId,
+                    sourceId = r.value.sourceId,
+                    sourceBalanceEur = r.value.sourceBalanceEur,
+                )
+                afterDrain(setOf(portfolioId))
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> {
+                Log.w(TAG, "deleteCashMovement($movementId) failed: ${r.error.message}")
                 r
             }
         }
@@ -660,6 +738,7 @@ class PortfolioRepository(
                     baseCurrency = old?.baseCurrency,
                     totals = old?.totals,
                     detailSyncedAtMs = old?.detailSyncedAtMs,
+                    mirror = p.mirror.toPortfolioMirror(),
                 ),
             ),
         )
@@ -790,4 +869,6 @@ private fun TransactionDto.toEntity(portfolioId: String): TransactionEntity =
         assetCurrency = asset.currency,
         assetType = asset.type,
         assetIsCustom = asset.isCustom,
+        source = source ?: "manual",
+        mirror = mirror.toRowMirror(),
     )

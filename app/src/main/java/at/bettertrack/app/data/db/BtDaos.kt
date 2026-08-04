@@ -155,6 +155,25 @@ interface CashDao {
     @Query("DELETE FROM cash_movements WHERE portfolioId = :portfolioId")
     suspend fun deleteMovementsForPortfolio(portfolioId: String)
 
+    /**
+     * Drop one movement and repaint its source balance from the DELETE response,
+     * so a correction lands instantly without waiting on a refetch. A full
+     * refresh still follows to reconcile portfolio totals.
+     */
+    @Query("DELETE FROM cash_movements WHERE id = :movementId")
+    suspend fun deleteMovement(movementId: String)
+
+    @Query("UPDATE cash_sources SET balanceEur = :balanceEur WHERE id = :sourceId")
+    suspend fun updateSourceBalance(sourceId: String, balanceEur: Double)
+
+    @Transaction
+    suspend fun applyMovementDeletion(movementId: String, sourceId: String?, sourceBalanceEur: Double?) {
+        deleteMovement(movementId)
+        if (sourceId != null && sourceBalanceEur != null) {
+            updateSourceBalance(sourceId, sourceBalanceEur)
+        }
+    }
+
     @Transaction
     suspend fun replaceForPortfolio(
         portfolioId: String,

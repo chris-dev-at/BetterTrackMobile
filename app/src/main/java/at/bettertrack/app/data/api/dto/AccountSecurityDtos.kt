@@ -122,9 +122,23 @@ data class AccountSettingsResponse(
     val defaultPortfolioVisibility: String = "private",
     val locale: String = "en",
     val baseCurrency: String = "EUR",
+    /**
+     * v5 discreet mode. The server ONLY persists this flag — hiding amounts is
+     * entirely a client rendering rule (see
+     * [at.bettertrack.app.ui.format.BtDiscreetMode]). Defaults false so a pre-v5
+     * server, which omits the key, reads as "off" rather than crashing.
+     */
+    val discreetMode: Boolean = false,
 )
 
+/**
+ * PATCH /settings/account. The schema is `.strict()` and requires at least one
+ * field, so every property is nullable and `explicitNulls = false` drops the
+ * ones the caller didn't set — a locale change never silently rewrites the
+ * user's discreet-mode flag, and vice versa.
+ */
 @Serializable
 data class UpdateAccountSettingsRequest(
     val locale: String? = null,
+    val discreetMode: Boolean? = null,
 )

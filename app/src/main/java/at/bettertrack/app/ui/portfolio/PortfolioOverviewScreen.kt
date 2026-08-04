@@ -1,5 +1,8 @@
 package at.bettertrack.app.ui.portfolio
 
+import at.bettertrack.app.ui.format.BtDiscreetMode
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -258,7 +261,27 @@ private fun OverviewContent(
         // chart, the big number + label become the touched point's value + date.
         item(key = "hero") {
             val s = scrub
-            Column(inset) {
+            // Discreet mode: press and hold the hero to peek at the real numbers,
+            // release to re-hide. Only armed while masking, so it costs a normal
+            // user nothing — and it is bound to the gesture, never a latch that
+            // could be left on by accident.
+            val heroPeek = if (BtDiscreetMode.enabled) {
+                Modifier.pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            BtDiscreetMode.setRevealing(true)
+                            try {
+                                awaitRelease()
+                            } finally {
+                                BtDiscreetMode.setRevealing(false)
+                            }
+                        },
+                    )
+                }
+            } else {
+                Modifier
+            }
+            Column(inset.then(heroPeek)) {
                 Text(
                     text = if (s != null) {
                         formatChartScrubDate(s.epochMillis, history?.isSubDaily == true, locale)

@@ -1,5 +1,9 @@
 package at.bettertrack.app.ui.settings
 
+import kotlinx.coroutines.launch
+import at.bettertrack.app.data.api.BtResult
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.outlined.VisibilityOff
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -101,6 +105,14 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) { auth.refreshUser() }
 
+    // Reconcile discreet mode with the account: the device cache decides what is
+    // rendered (so masking survives a cold or offline start), the server decides
+    // what the user actually chose — e.g. after flipping it on the web.
+    LaunchedEffect(Unit) {
+        val r = AppGraph.accountRepository.discreetMode()
+        if (r is BtResult.Ok) AppGraph.discreetModeStore.set(r.value)
+    }
+
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     // Hidden developer menu: multi-tap the version row (debug builds only).
@@ -189,6 +201,42 @@ fun SettingsScreen(
                 checked = orientationLocked,
                 onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
             )
+
+            Spacer(Modifier.height(4.dp))
+
+            // ── PRIVACY ──────────────────────────────────────────────────────
+            SectionLabel(stringResource(R.string.bt_settings_privacy_section))
+            val discreet by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
+            val scope = rememberCoroutineScope()
+            var discreetError by remember { mutableStateOf<String?>(null) }
+            SettingsToggleRow(
+                icon = Icons.Outlined.VisibilityOff,
+                title = stringResource(R.string.bt_settings_discreet),
+                subtitle = stringResource(R.string.bt_settings_discreet_sub),
+                checked = discreet,
+                onCheckedChange = { wanted ->
+                    // Flip locally FIRST: the whole point is that amounts vanish
+                    // the instant the user asks, not a round-trip later. If the
+                    // server refuses, roll back and say so.
+                    AppGraph.discreetModeStore.set(wanted)
+                    discreetError = null
+                    scope.launch {
+                        val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
+                        if (r is BtResult.Err) {
+                            AppGraph.discreetModeStore.set(!wanted)
+                            discreetError = r.error.userMessage
+                        }
+                    }
+                },
+            )
+            discreetError?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BtTheme.colors.loss,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
 
             Spacer(Modifier.height(4.dp))
 

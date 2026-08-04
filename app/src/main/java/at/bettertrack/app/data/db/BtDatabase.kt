@@ -33,7 +33,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOpEntity::class,
         MetaEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -93,9 +93,50 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6 (S2b): v5 row provenance + mirrorchain overlays.
+         *
+         * `source` is NOT NULL DEFAULT 'manual' — that is exactly what the server
+         * does for pre-v5 rows, so a cached row keeps rendering as manual (i.e.
+         * with no badge) until the next refresh replaces it with the real value.
+         * The mirror columns are nullable: absent means "not a chain row", which
+         * is the correct reading for every portfolio that is not a chain copy.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `cash_movements` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'",
+                )
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `dividendId` TEXT")
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorId` TEXT")
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorVersion` INTEGER")
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorAddedByName` TEXT")
+                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorAddedByIcon` TEXT")
+                db.execSQL(
+                    "ALTER TABLE `transactions` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'",
+                )
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorId` TEXT")
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorVersion` INTEGER")
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorAddedByName` TEXT")
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorAddedByIcon` TEXT")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorChainId` TEXT")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorChainName` TEXT")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorRole` TEXT")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorMemberCount` INTEGER")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorSyncPercent` INTEGER")
+                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorSynced` INTEGER")
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .build()
     }
 }

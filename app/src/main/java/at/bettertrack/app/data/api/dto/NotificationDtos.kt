@@ -124,26 +124,71 @@ data class NotificationChannelsDto(
 )
 
 /**
+ * Quiet hours (v5 `quietHoursSchema`): an outbound-only delivery window.
+ *
+ * Every field is nullable/optional because this ONE object is field-partial on the
+ * PATCH side (`quietHours: { enabled?, startMinute?, endMinute?, timezone? }`) —
+ * unlike `matrix`/`cadence`, whose maps are strict. A v5 GET always carries all
+ * four ([timezone] possibly as an explicit `null` ⇒ the server falls back to UTC),
+ * so decoding needs the nullability anyway (the shared Json has no
+ * `coerceInputValues`).
+ *
+ * Minutes are 0..1439 minute-of-day. `startMinute > endMinute` is an OVERNIGHT
+ * window (the default is 1320→420, i.e. 22:00→07:00). [timezone] is an IANA id
+ * validated server-side. Because the shared Json runs `explicitNulls = false`, a
+ * DTO built with only the CHANGED fields serializes to exactly those keys — which
+ * is how the app never sends a quiet-hours field it does not mean to change.
+ */
+@Serializable
+data class QuietHoursDto(
+    val enabled: Boolean? = null,
+    val startMinute: Int? = null,
+    val endMinute: Int? = null,
+    val timezone: String? = null,
+)
+
+/**
  * `GET /settings/notifications`. The live schema also returns a global `muted`
  * flag and `webPushPublicKey` — neither of which the app surfaces (there is no
  * app-side global-mute or web-push UI), so they are left unmodeled and skipped by
  * `ignoreUnknownKeys`. The per-type app matrix (in-app / email / push / telegram /
  * discord) round-trips through [matrix]; [channels] gates which optional columns
  * (telegram / discord) the settings screen shows (absent ⇒ pre-v4 ⇒ hidden).
+ *
+ * [cadence] + [quietHours] are the v5 delivery additions and follow the same
+ * echo-verbatim rule as telegram/discord: NULLABLE, so a pre-v5 GET (which carries
+ * neither) leaves them `null` — the app then HIDES the whole Delivery section and
+ * never puts either key in a PATCH body (a pre-v5 `.strict()` schema would 400 on
+ * an unknown top-level key).
  */
 @Serializable
 data class NotificationSettingsResponse(
     val matrix: Map<String, ChannelPrefsDto> = emptyMap(),
+    /** v5-only: `{<type>: "instant"|"daily"|"weekly"}` for EVERY type. `null` ⇒ pre-v5. */
+    val cadence: Map<String, String>? = null,
+    /** v5-only outbound quiet window. `null` ⇒ pre-v5. */
+    val quietHours: QuietHoursDto? = null,
     val channels: NotificationChannelsDto? = null,
 )
 
 /**
- * `PATCH /settings/notifications`. We send only [matrix] (a subset of types is
- * allowed; each cell echoes exactly the channel keys the last GET carried — four
- * pre-v4, six on v4). We deliberately never send the global `muted` — the app's
- * per-type mute is local and must not clobber the account-wide server mute.
+ * `PATCH /settings/notifications` — the body is `.strict()` at EVERY level, and an
+ * empty `{}` is a 400, so the app sends exactly the keys it means to change and
+ * never fires a no-op patch.
+ *
+ * All three fields are nullable and default `null`: with the shared Json's
+ * `explicitNulls = false` an untouched field is simply DROPPED from the body. That
+ * is what makes one request type serve a matrix-only patch (pre-v4/v4/v5 servers
+ * alike), a cadence-only patch, and a quiet-hours-only patch.
+ *
+ * [matrix] cells must carry ALL channel keys the server modelled (six on v4+);
+ * [cadence] is a strict map, so only types the last GET actually carried may
+ * appear. We deliberately never send the global `muted` — the app's per-type mute
+ * is local and must not clobber the account-wide server mute.
  */
 @Serializable
 data class UpdateNotificationSettingsRequest(
-    val matrix: Map<String, ChannelPrefsDto>,
+    val matrix: Map<String, ChannelPrefsDto>? = null,
+    val cadence: Map<String, String>? = null,
+    val quietHours: QuietHoursDto? = null,
 )

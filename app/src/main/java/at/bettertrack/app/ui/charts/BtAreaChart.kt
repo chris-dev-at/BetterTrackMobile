@@ -40,6 +40,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import at.bettertrack.app.ui.format.BT_MASKED_PLAIN
+import at.bettertrack.app.ui.format.BtDiscreetMode
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -324,6 +326,9 @@ private fun nearestPoint(points: List<HistoryPoint>, frac: Float): HistoryPoint 
  * magnitude: 1,2M · 12,4k (locale separators) — or plain integers otherwise.
  */
 internal fun axisMoney(value: Double, locale: Locale, compact: Boolean): String {
+    // A value axis is absolute money, so discreet mode has to blank it too —
+    // otherwise the chart gridlines simply spell out the portfolio's size.
+    if (BtDiscreetMode.masking) return BT_MASKED_PLAIN
     val nf = NumberFormat.getNumberInstance(locale)
     return when {
         abs(value) < 0.5 -> "0"
