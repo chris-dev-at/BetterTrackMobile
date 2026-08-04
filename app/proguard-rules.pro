@@ -35,9 +35,17 @@
 }
 
 # ── WorkManager ──────────────────────────────────────────────────────────────
-# The sync worker is instantiated reflectively by the default WorkerFactory;
-# keep its class + the (Context, WorkerParameters) constructor.
+# Workers are instantiated reflectively by the default WorkerFactory, from the
+# class NAME persisted in WorkManager's own database. R8 renaming a worker is
+# therefore not caught by the build — it breaks at runtime, and specifically for
+# work that was enqueued by a PREVIOUS version of the app (the persisted name no
+# longer resolves after the obfuscation map changes). So every worker class needs
+# an explicit keep, and adding a worker without one is a silent release-only bug.
 -keep class at.bettertrack.app.sync.SyncWorker { <init>(...); }
+# V5 W4 — the coalescing Drive vault push. Same reasoning; and this one carries
+# the user's only unsynced copy of a Drive-mode edit, so a worker that cannot be
+# instantiated means data that never leaves the device.
+-keep class at.bettertrack.app.vault.VaultSyncWorker { <init>(...); }
 
 # ── Optional transitive deps we never ship (OkHttp/BouncyCastle probes) ───────
 # These are compile-time optional in OkHttp; without them R8 emits missing-class
