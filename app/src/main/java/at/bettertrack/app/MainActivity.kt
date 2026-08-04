@@ -13,13 +13,12 @@ import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.browser.customtabs.CustomTabColorSchemeParams
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import at.bettertrack.app.data.auth.AuthRepository
 import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.shell.BtRoot
 import kotlinx.serialization.json.Json
 import at.bettertrack.app.ui.theme.BetterTrackTheme
@@ -174,21 +173,12 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun launchCustomTab(url: Uri) {
-        val colors = CustomTabColorSchemeParams.Builder()
-            .setToolbarColor(BRAND_BG)
-            .setNavigationBarColor(BRAND_BG)
-            .build()
-        val customTabs = CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .setUrlBarHidingEnabled(true)
-            .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
-            .setDefaultColorSchemeParams(colors)
-            .build()
-        try {
-            customTabs.launchUrl(this, url)
-        } catch (e: ActivityNotFoundException) {
-            Log.w(TAG, "No Custom Tabs / browser available; falling back to ACTION_VIEW.", e)
-            openInBrowser(url.toString())
+        // The tab's chrome and its browser fallback live in [BtCustomTab] — this
+        // was the original of the three copies that had grown apart. The only
+        // thing added here is the log line, because a failed OAuth hand-off is
+        // worth knowing about in a way a failed news link is not.
+        if (!BtCustomTab.open(this, url)) {
+            Log.w(TAG, "No Custom Tabs / browser available to open the authorize URL.")
         }
     }
 
@@ -204,6 +194,5 @@ class MainActivity : FragmentActivity() {
         const val TAG = "BtMainActivity"
         const val REDIRECT_SCHEME = "bettertrack"
         const val REDIRECT_HOST = "oauth"
-        val BRAND_BG = AndroidColor.parseColor("#0B0E14")
     }
 }

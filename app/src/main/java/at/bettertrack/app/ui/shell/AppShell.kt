@@ -92,6 +92,9 @@ import at.bettertrack.app.navigation.CustomAssetsRoute
 import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
+import at.bettertrack.app.navigation.FriendGroupsRoute
+import at.bettertrack.app.navigation.IdeaDetailRoute
+import at.bettertrack.app.navigation.MarketIntelRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
 import at.bettertrack.app.navigation.owningTab
 import at.bettertrack.app.navigation.PendingSyncRoute
@@ -142,6 +145,9 @@ import at.bettertrack.app.ui.screens.WorkboardTabScreen
 import at.bettertrack.app.ui.workboard.WorkboardEntry
 import at.bettertrack.app.ui.chat.ChatListScreen
 import at.bettertrack.app.ui.chat.ChatThreadScreen
+import at.bettertrack.app.ui.ideas.IdeaDetailScreen
+import at.bettertrack.app.ui.market.MarketIntelScreen
+import at.bettertrack.app.ui.social.FriendGroupsScreen
 import at.bettertrack.app.ui.social.FriendOverviewScreen
 import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
@@ -583,6 +589,7 @@ private fun BtNavHost(
                 onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                 onAddToWatchlist = { navController.navigate(SearchRoute) },
+                onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
             )
         }
         composable<SocialTabRoute> {
@@ -594,13 +601,18 @@ private fun BtNavHost(
                 onOpenChatWith = { friendUserId, username ->
                     navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
                 },
+                onOpenGroups = { navController.navigate(FriendGroupsRoute) },
             )
+        }
+        composable<FriendGroupsRoute> {
+            FriendGroupsScreen(onBack = back)
         }
         composable<WorkboardTabRoute> {
             WorkboardTabScreen(
                 onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
                 onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
             )
         }
 
@@ -746,10 +758,27 @@ private fun BtNavHost(
                 },
             )
         }
+        // V5 S2c: portfolio-wide market intel (earnings + dividend calendars,
+        // projected income, news digest) — reached from the Assets tab.
+        composable<MarketIntelRoute> {
+            MarketIntelScreen(
+                onBack = back,
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+            )
+        }
         // Workboard
         // S6 P2-19: ConglomerateListRoute is gone — the list is a SEGMENT of the
         // Workboard tab (WorkboardScreen composes ConglomerateListScreen directly),
-        // never a route of its own.
+        // never a route of its own. V5 S2c added an Ideas segment the same way;
+        // only the idea DETAIL is a destination.
+        composable<IdeaDetailRoute> { entry ->
+            val route = entry.toRoute<IdeaDetailRoute>()
+            IdeaDetailScreen(
+                ideaId = route.ideaId,
+                onBack = back,
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+            )
+        }
         composable<ConglomerateBuilderRoute> { entry ->
             val route = entry.toRoute<ConglomerateBuilderRoute>()
             ConglomerateBuilderScreen(

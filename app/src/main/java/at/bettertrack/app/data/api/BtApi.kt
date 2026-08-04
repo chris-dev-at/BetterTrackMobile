@@ -54,8 +54,34 @@ import at.bettertrack.app.data.api.dto.AlertDto
 import at.bettertrack.app.data.api.dto.AlertsListResponse
 import at.bettertrack.app.data.api.dto.CreateAlertRequest
 import at.bettertrack.app.data.api.dto.UpdateAlertRequest
+import at.bettertrack.app.data.api.dto.AddGroupMemberRequest
 import at.bettertrack.app.data.api.dto.AudienceMutationResponse
 import at.bettertrack.app.data.api.dto.AudienceStateDto
+import at.bettertrack.app.data.api.dto.CommentThreadResponse
+import at.bettertrack.app.data.api.dto.CreateCommentRequest
+import at.bettertrack.app.data.api.dto.DividendCalendarResponse
+import at.bettertrack.app.data.api.dto.DividendProjectionResponse
+import at.bettertrack.app.data.api.dto.DividendsResponse
+import at.bettertrack.app.data.api.dto.EarningsCalendarResponse
+import at.bettertrack.app.data.api.dto.EarningsResponse
+import at.bettertrack.app.data.api.dto.FriendGroupDto
+import at.bettertrack.app.data.api.dto.FriendGroupListResponse
+import at.bettertrack.app.data.api.dto.FriendGroupNameRequest
+import at.bettertrack.app.data.api.dto.IdeaListResponse
+import at.bettertrack.app.data.api.dto.IdeaResponse
+import at.bettertrack.app.data.api.dto.ItemCommentDto
+import at.bettertrack.app.data.api.dto.MarketIntelStatusResponse
+import at.bettertrack.app.data.api.dto.MirrorAcceptInviteResponse
+import at.bettertrack.app.data.api.dto.MirrorActivityResponse
+import at.bettertrack.app.data.api.dto.MirrorChainListResponse
+import at.bettertrack.app.data.api.dto.MirrorInviteListResponse
+import at.bettertrack.app.data.api.dto.MirrorMemberListResponse
+import at.bettertrack.app.data.api.dto.MirrorOkResponse
+import at.bettertrack.app.data.api.dto.NewsDigestResponse
+import at.bettertrack.app.data.api.dto.NewsResponse
+import at.bettertrack.app.data.api.dto.ReactionListResponse
+import at.bettertrack.app.data.api.dto.SplitsResponse
+import at.bettertrack.app.data.api.dto.ToggleReactionRequest
 import at.bettertrack.app.data.api.dto.CreateFriendRequestRequest
 import at.bettertrack.app.data.api.dto.CreateWatchlistRequest
 import at.bettertrack.app.data.api.dto.RenameWatchlistRequest
@@ -288,6 +314,58 @@ interface BtApi {
     /** Daily closes — the date→price source for the buy/sell form's date link. */
     @GET("assets/{id}/daily-closes")
     suspend fun assetDailyCloses(@Path("id") id: String): Response<DailyClosesResponse>
+
+    // ── V5: market intel (`market:read`) ─────────────────────────────────────
+    // Mounted on the same `/assets` base as the block above. Note every path
+    // carries an `/intel` segment — there is no `GET /assets/{id}/dividends`.
+    //
+    // NONE of these ever fail loudly: a disabled feature flag, a provider that
+    // lacks the capability (every custom asset), and an upstream timeout all
+    // answer **200** with the "unavailable" body. So the app reads the flag and
+    // hides the surface; there is no error path to design here. What it must
+    // NOT do is conflate `available:false` (we can't tell you) with
+    // `available:true, []` (there is nothing to tell) — the first hides the
+    // block, the second shows an empty state.
+    //
+    // The three `/assets/portfolio/*` reads are killed in paranoid mode
+    // (403 PARANOID_MODE, caught by the global interceptor); the per-asset
+    // intel reads and the earnings calendar survive it.
+
+    /** Is intel on at all, and which of the four capabilities this asset supports. */
+    @GET("assets/{id}/intel")
+    suspend fun assetIntel(@Path("id") id: String): Response<MarketIntelStatusResponse>
+
+    /** Dividend history + announced upcoming + forward yield (a FRACTION, not %). */
+    @GET("assets/{id}/intel/dividends")
+    suspend fun assetDividends(@Path("id") id: String): Response<DividendsResponse>
+
+    /** Next report + recent reports, with EPS estimate/actual. */
+    @GET("assets/{id}/intel/earnings")
+    suspend fun assetEarnings(@Path("id") id: String): Response<EarningsResponse>
+
+    /** Up to 20 provider headlines (10-minute server cache). */
+    @GET("assets/{id}/intel/news")
+    suspend fun assetNews(@Path("id") id: String): Response<NewsResponse>
+
+    /** Historical splits (`upcoming` is always empty with today's provider). */
+    @GET("assets/{id}/intel/splits")
+    suspend fun assetSplits(@Path("id") id: String): Response<SplitsResponse>
+
+    /** Earnings dates across everything I hold or watch, ascending. */
+    @GET("assets/intel/earnings-calendar")
+    suspend fun earningsCalendar(): Response<EarningsCalendarResponse>
+
+    /** Upcoming dividends across holdings + watchlists, today onwards. */
+    @GET("assets/portfolio/dividend-calendar")
+    suspend fun dividendCalendar(): Response<DividendCalendarResponse>
+
+    /** Projected dividend income in EUR — all-or-nothing if any FX leg fails. */
+    @GET("assets/portfolio/dividend-projection")
+    suspend fun dividendProjection(): Response<DividendProjectionResponse>
+
+    /** Headlines grouped by held/watched asset, newest group first. */
+    @GET("assets/portfolio/news-digest")
+    suspend fun newsDigest(): Response<NewsDigestResponse>
 
     // ── Step 11/12 + V3-P5: named watchlists (§6.6) ──────────────────────────
 
@@ -845,6 +923,188 @@ interface BtApi {
         @Path("subjectId") subjectId: String,
         @Body body: SetActivityAlertRequest,
     ): Response<ActivityAlertStateDto>
+
+    // ── V5 social: comments + emoji reactions on shared items ────────────────
+    // `{kind}` is the full share ladder INCLUDING `idea`. Authorization is
+    // re-derived per request from the item's current audience, and a caller who
+    // may not read the item gets **404, never 403** — so a thread screen treats
+    // 404 as "not shared with you", exactly like the shared detail views.
+    // Writes ride the shared social rate limiter (30/hour → 429 RATE_LIMITED).
+
+    /** Comments (oldest first, unpaged) + the item-level reaction tally. [social:read] */
+    @GET("social/items/{kind}/{subjectId}/thread")
+    suspend fun itemThread(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+    ): Response<CommentThreadResponse>
+
+    /** Post a comment (server trims, then enforces 1..2000). 201 → the new comment. [social:write] */
+    @Headers("Content-Type: application/json")
+    @POST("social/items/{kind}/{subjectId}/comments")
+    suspend fun createItemComment(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+        @Body body: CreateCommentRequest,
+    ): Response<ItemCommentDto>
+
+    /** Toggle one of the six emojis on the ITEM; answers the fresh full tally. [social:write] */
+    @Headers("Content-Type: application/json")
+    @POST("social/items/{kind}/{subjectId}/reactions")
+    suspend fun toggleItemReaction(
+        @Path("kind") kind: String,
+        @Path("subjectId") subjectId: String,
+        @Body body: ToggleReactionRequest,
+    ): Response<ReactionListResponse>
+
+    /** Toggle an emoji on one COMMENT; answers that comment's fresh tally. [social:write] */
+    @Headers("Content-Type: application/json")
+    @POST("social/comments/{commentId}/reactions")
+    suspend fun toggleCommentReaction(
+        @Path("commentId") commentId: String,
+        @Body body: ToggleReactionRequest,
+    ): Response<ReactionListResponse>
+
+    /**
+     * Delete a comment — own comment, or any comment on an item you own
+     * (moderation). 204. A comment you may not delete answers **404
+     * COMMENT_NOT_FOUND**, deliberately indistinguishable from a missing one.
+     * [social:write]
+     */
+    @DELETE("social/comments/{commentId}")
+    suspend fun deleteComment(@Path("commentId") commentId: String): Response<Unit>
+
+    // ── V5 social: friend groups as sharing audiences ────────────────────────
+    // Note the asymmetry the platform chose: adding a member PUTs the user id in
+    // the BODY, removing puts it in the PATH, and removal answers 200 with the
+    // refreshed group rather than 204.
+
+    /** The caller's friend groups, each with its full member roster. [social:read] */
+    @GET("social/groups")
+    suspend fun friendGroups(): Response<FriendGroupListResponse>
+
+    /** Create a group (name trimmed, 1..60; names are NOT unique). 201. [social:write] */
+    @Headers("Content-Type: application/json")
+    @POST("social/groups")
+    suspend fun createFriendGroup(@Body body: FriendGroupNameRequest): Response<FriendGroupDto>
+
+    /** Rename a group. [social:write] */
+    @Headers("Content-Type: application/json")
+    @PATCH("social/groups/{groupId}")
+    suspend fun renameFriendGroup(
+        @Path("groupId") groupId: String,
+        @Body body: FriendGroupNameRequest,
+    ): Response<FriendGroupDto>
+
+    /** Delete a group. 204. Items shared to it then resolve to nobody. [social:write] */
+    @DELETE("social/groups/{groupId}")
+    suspend fun deleteFriendGroup(@Path("groupId") groupId: String): Response<Unit>
+
+    /**
+     * Add an accepted friend to a group (idempotent). A non-friend is refused
+     * with 400 `GROUP_MEMBER_NOT_FRIEND`. Answers the refreshed group. [social:write]
+     */
+    @Headers("Content-Type: application/json")
+    @POST("social/groups/{groupId}/members")
+    suspend fun addFriendGroupMember(
+        @Path("groupId") groupId: String,
+        @Body body: AddGroupMemberRequest,
+    ): Response<FriendGroupDto>
+
+    /** Remove a member — **200 with the refreshed group**, not 204. [social:write] */
+    @DELETE("social/groups/{groupId}/members/{userId}")
+    suspend fun removeFriendGroupMember(
+        @Path("groupId") groupId: String,
+        @Path("userId") userId: String,
+    ): Response<FriendGroupDto>
+
+    // ── V5: mirrorchain participation (group portfolios) ─────────────────────
+    // ONLY these seven routes accept a bearer — chain administration (create,
+    // rename, invite, revoke, roles, transfer, kick, dissolve) is session-only
+    // by a deliberate method-aware allowlist and answers 403 API_KEY_FORBIDDEN.
+    // The app therefore never renders those actions at all. [mirrorchain:*]
+
+    /** Chains I participate in, each with MY role and MY catch-up state. */
+    @GET("mirrorchain/chains")
+    suspend fun mirrorChains(): Response<MirrorChainListResponse>
+
+    /** Roster + roles + per-member sync for one chain. */
+    @GET("mirrorchain/chains/{chainId}/members")
+    suspend fun mirrorChainMembers(
+        @Path("chainId") chainId: String,
+    ): Response<MirrorMemberListResponse>
+
+    /** Newest-first activity page; pass the previous `nextCursor` as [before]. */
+    @GET("mirrorchain/chains/{chainId}/activity")
+    suspend fun mirrorChainActivity(
+        @Path("chainId") chainId: String,
+        @Query("before") before: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): Response<MirrorActivityResponse>
+
+    /** Pending invites in both directions (expired ones are already filtered out). */
+    @GET("mirrorchain/invites")
+    suspend fun mirrorInvites(): Response<MirrorInviteListResponse>
+
+    /** Accept an invite — materializes a local copy and returns its portfolio id. */
+    @POST("mirrorchain/invites/{inviteId}/accept")
+    suspend fun acceptMirrorInvite(
+        @Path("inviteId") inviteId: String,
+    ): Response<MirrorAcceptInviteResponse>
+
+    /** Decline an invite. */
+    @POST("mirrorchain/invites/{inviteId}/decline")
+    suspend fun declineMirrorInvite(@Path("inviteId") inviteId: String): Response<MirrorOkResponse>
+
+    /**
+     * Leave a chain. Ownership succeeds to the oldest manager, or the chain
+     * dissolves — there is no last-admin refusal any more (the contract's
+     * `MIRROR_OWNER_TRANSFER_REQUIRED` is deprecated and never emitted). The
+     * departing member keeps an un-synced fork of the portfolio.
+     */
+    @POST("mirrorchain/chains/{chainId}/leave")
+    suspend fun leaveMirrorChain(@Path("chainId") chainId: String): Response<MirrorOkResponse>
+
+    // ── V5: workboard ideas (saved backtest analyses) ────────────────────────
+    // Bearer-reachable under the same `workboard:*` pair as conglomerates and
+    // backtest (its own MODULE_POLICIES row). Write bodies are composed as
+    // JsonObject because the state schema is a strict discriminated union with a
+    // required-but-nullable benchmark — see IdeaDtos for the full reasoning.
+
+    /** The caller's ideas, newest first. Unpaged. [workboard:read] */
+    @GET("ideas")
+    suspend fun ideas(): Response<IdeaListResponse>
+
+    /** One idea — **owner only**; a friend's shared idea 404s here. [workboard:read] */
+    @GET("ideas/{ideaId}")
+    suspend fun idea(@Path("ideaId") ideaId: String): Response<IdeaResponse>
+
+    /** Create an idea. 201. [workboard:write] */
+    @Headers("Content-Type: application/json")
+    @POST("ideas")
+    suspend fun createIdea(@Body body: JsonObject): Response<IdeaResponse>
+
+    /**
+     * Update an idea. Omitting `thesis` leaves it untouched; sending it as an
+     * explicit null clears it — which is exactly why this body is a JsonObject.
+     * [workboard:write]
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("ideas/{ideaId}")
+    suspend fun updateIdea(
+        @Path("ideaId") ideaId: String,
+        @Body body: JsonObject,
+    ): Response<IdeaResponse>
+
+    /** Delete an idea. 204. [workboard:write] */
+    @DELETE("ideas/{ideaId}")
+    suspend fun deleteIdea(@Path("ideaId") ideaId: String): Response<Unit>
+
+    /**
+     * Clone a friend's shared idea into my own list (the only way a non-owner
+     * ever reads an idea's full state). 201. [workboard:write]
+     */
+    @POST("ideas/{ideaId}/clone")
+    suspend fun cloneIdea(@Path("ideaId") ideaId: String): Response<IdeaResponse>
 
     // ── Step 16: notifications (§6.11 — LIVE on Notifications-v2, PR #427) ────
     // Bearer-auth: `notifications:read` (GETs) / `notifications:write` (writes) —

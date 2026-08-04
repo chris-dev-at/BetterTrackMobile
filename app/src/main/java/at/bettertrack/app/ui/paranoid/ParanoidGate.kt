@@ -1,10 +1,6 @@
 package at.bettertrack.app.ui.paranoid
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabColorSchemeParams
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -25,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.ParanoidModeState
 import at.bettertrack.app.data.prefs.DevOriginOverride
+import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -111,31 +108,10 @@ fun ParanoidGate(
  * production.
  */
 internal fun openBtWebApp(context: Context, path: String = "/") {
-    val uri = Uri.parse(btWebUrl(DevOriginOverride.webOrigin, path))
-    // Parsed here, not in a top-level val: a file-level Android call would run
-    // in the JVM unit tests that exercise btWebUrl below.
-    val tabBg = android.graphics.Color.parseColor("#0B0E14")
-    val colors = CustomTabColorSchemeParams.Builder()
-        .setToolbarColor(tabBg)
-        .setNavigationBarColor(tabBg)
-        .build()
-    val customTabs = CustomTabsIntent.Builder()
-        .setShowTitle(true)
-        .setUrlBarHidingEnabled(true)
-        .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
-        .setDefaultColorSchemeParams(colors)
-        .build()
-    val launched = runCatching { customTabs.launchUrl(context, uri) }.isSuccess
-    if (!launched) {
-        // No Custom Tabs provider (or a non-activity context): a plain VIEW
-        // intent still gets the user there. Fail-soft — a missing browser must
-        // never crash the explainer.
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
-    }
+    // The URL is this function's job; the tab itself is [BtCustomTab]'s (which
+    // keeps the fail-soft browser fallback — a missing browser must never crash
+    // the explainer).
+    BtCustomTab.open(context, btWebUrl(DevOriginOverride.webOrigin, path))
 }
 
 /**

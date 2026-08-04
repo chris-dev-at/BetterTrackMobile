@@ -165,6 +165,15 @@ data class CashCorrectionNotice(val notEditable: Boolean, val message: String)
 private const val PREVIEW_DEBOUNCE_MS = 350L
 
 /**
+ * How many months the trend chart asks for (server allows 1..24).
+ *
+ * Six is what fits legibly across a ~360dp phone as paired bars with readable
+ * month labels; asking for more and cropping would just mean paying for data the
+ * chart cannot show.
+ */
+private const val TREND_MONTHS = 6
+
+/**
  * The budgets block's three honest states. A budget list is a network read that
  * can legitimately be empty, so "no budgets" and "couldn't load" must never
  * collapse into the same blank area.
@@ -421,6 +430,7 @@ class CashViewModel(
     fun stepBudgetMonth(delta: Long) {
         _budgetMonth.value = _budgetMonth.value.plusMonths(delta)
         loadBudgets()
+        loadSummary()
     }
 
     /**
@@ -465,6 +475,48 @@ class CashViewModel(
             val ok = classification.updateBudgetAmount(id, amount) is BtResult.Ok
             if (ok) loadBudgets()
             onDone(ok)
+        }
+    }
+
+    // ── V5 S2c: month summary + inflow/outflow trends ────────────────────────
+    //
+    // Both are server-computed analytics over the same movements the ledger
+    // shows, and — like budgets — they are evaluated, not stored, so they are
+    // network-only with their own loading/empty/error states. The summary shares
+    // the budgets' month stepper (one month control governs the whole block);
+    // the trend window is fixed and portfolio-keyed, so it survives stepping.
+
+    private val _summary = MutableStateFlow<CashSummaryUi>(CashSummaryUi.Loading)
+    val summary: StateFlow<CashSummaryUi> = _summary.asStateFlow()
+
+    private val _trends = MutableStateFlow<CashTrendsUi>(CashTrendsUi.Loading)
+    val trends: StateFlow<CashTrendsUi> = _trends.asStateFlow()
+
+    private var summaryJob: Job? = null
+    private var trendsJob: Job? = null
+
+    fun loadSummary() {
+        val pid = portfolioId.value ?: return
+        val month = wireMonth(_budgetMonth.value)
+        summaryJob?.cancel()
+        summaryJob = viewModelScope.launch {
+            _summary.value = CashSummaryUi.Loading
+            _summary.value = when (val r = classification.summary(pid, month)) {
+                is BtResult.Ok -> CashSummaryUi.Ready(r.value)
+                is BtResult.Err -> CashSummaryUi.Failed
+            }
+        }
+    }
+
+    fun loadTrends() {
+        val pid = portfolioId.value ?: return
+        trendsJob?.cancel()
+        trendsJob = viewModelScope.launch {
+            _trends.value = CashTrendsUi.Loading
+            _trends.value = when (val r = classification.trends(pid, TREND_MONTHS)) {
+                is BtResult.Ok -> CashTrendsUi.Ready(r.value.points)
+                is BtResult.Err -> CashTrendsUi.Failed
+            }
         }
     }
 
@@ -695,11 +747,20 @@ fun CashScreen(
     val budgetMonth by vm.budgetMonth.collectAsStateWithLifecycle()
     var newBudgetOpen by remember { mutableStateOf(false) }
     var budgetTarget by remember { mutableStateOf<CashBudgetProgressDto?>(null) }
+    val summary by vm.summary.collectAsStateWithLifecycle()
+    val trends by vm.trends.collectAsStateWithLifecycle()
 
     // The budgets block is a network read keyed on (portfolio, month), so it
     // reloads when the resolved portfolio arrives or changes — not just once.
+    // The summary and trend analytics are the same kind of read and load with it.
     val resolvedPid by vm.portfolioId.collectAsStateWithLifecycle()
-    LaunchedEffect(resolvedPid) { if (resolvedPid != null) vm.loadBudgets() }
+    LaunchedEffect(resolvedPid) {
+        if (resolvedPid != null) {
+            vm.loadBudgets()
+            vm.loadSummary()
+            vm.loadTrends()
+        }
+    }
 
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
@@ -939,6 +1000,50 @@ fun CashScreen(
                                 onClick = { newBudgetOpen = true },
                                 enabled = isOnline,
                             )
+                        }
+                    }
+
+                    // The month summary deliberately carries NO stepper of its
+                    // own: it reads the same month as the budgets block directly
+                    // above, and a second month control on one screen would be
+                    // two sources of truth for one question.
+                    item(key = "cash-summary") {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.bt_cash_summary_section),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = bt.textPrimary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            when (val s = summary) {
+                                is CashSummaryUi.Loading -> CashSummarySkeleton()
+                                is CashSummaryUi.Failed -> CashAnalyticsError(
+                                    text = stringResource(R.string.bt_cash_summary_error),
+                                    onRetry = { vm.loadSummary() },
+                                )
+
+                                is CashSummaryUi.Ready -> CashSummaryBlock(s.summary, locale)
+                            }
+                        }
+                    }
+
+                    item(key = "cash-trends") {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.bt_cash_trends_section),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = bt.textPrimary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            when (val t = trends) {
+                                is CashTrendsUi.Loading -> CashTrendsSkeleton()
+                                is CashTrendsUi.Failed -> CashAnalyticsError(
+                                    text = stringResource(R.string.bt_cash_trends_error),
+                                    onRetry = { vm.loadTrends() },
+                                )
+
+                                is CashTrendsUi.Ready -> CashTrendsBlock(t.points, locale)
+                            }
                         }
                     }
 
