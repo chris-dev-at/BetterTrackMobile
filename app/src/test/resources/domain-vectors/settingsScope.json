@@ -1,0 +1,213 @@
+{
+ "module": "settingsScope",
+ "vectors": [
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "takes the portfolio override when it is set (highest precedence)",
+   "input": {
+    "override": {
+     "present": true,
+     "value": {
+      "mode": "override"
+     }
+    },
+    "userDefault": {
+     "present": true,
+     "value": {
+      "mode": "user"
+     }
+    },
+    "systemDefault": {
+     "mode": "none"
+    }
+   },
+   "output": {
+    "value": {
+     "mode": "override"
+    },
+    "source": "portfolio"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "falls back to the user default when no override is set",
+   "input": {
+    "override": {
+     "present": false,
+     "undefinedInTs": false
+    },
+    "userDefault": {
+     "present": true,
+     "value": {
+      "mode": "user"
+     }
+    },
+    "systemDefault": {
+     "mode": "none"
+    }
+   },
+   "output": {
+    "value": {
+     "mode": "user"
+    },
+    "source": "user"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "falls back to the system default when neither is set",
+   "input": {
+    "override": {
+     "present": false,
+     "undefinedInTs": false
+    },
+    "userDefault": {
+     "present": false,
+     "undefinedInTs": false
+    },
+    "systemDefault": {
+     "mode": "none"
+    }
+   },
+   "output": {
+    "value": {
+     "mode": "none"
+    },
+    "source": "system"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "treats undefined like null at both layers",
+   "input": {
+    "override": {
+     "present": false,
+     "undefinedInTs": true
+    },
+    "userDefault": {
+     "present": false,
+     "undefinedInTs": true
+    },
+    "systemDefault": {
+     "mode": "none"
+    }
+   },
+   "output": {
+    "value": {
+     "mode": "none"
+    },
+    "source": "system"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "undefined override with a user default",
+   "input": {
+    "override": {
+     "present": false,
+     "undefinedInTs": true
+    },
+    "userDefault": {
+     "present": true,
+     "value": {
+      "mode": "user"
+     }
+    },
+    "systemDefault": {
+     "mode": "none"
+    }
+   },
+   "output": {
+    "value": {
+     "mode": "user"
+    },
+    "source": "user"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "honours a falsy-but-present override value (0)",
+   "input": {
+    "override": {
+     "present": true,
+     "value": 0
+    },
+    "userDefault": {
+     "present": true,
+     "value": 5
+    },
+    "systemDefault": 9
+   },
+   "output": {
+    "value": 0,
+    "source": "portfolio"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "honours a falsy-but-present override value ('')",
+   "input": {
+    "override": {
+     "present": true,
+     "value": ""
+    },
+    "userDefault": {
+     "present": true,
+     "value": "u"
+    },
+    "systemDefault": "s"
+   },
+   "output": {
+    "value": "",
+    "source": "portfolio"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "honours a falsy-but-present override value (false)",
+   "input": {
+    "override": {
+     "present": true,
+     "value": false
+    },
+    "userDefault": {
+     "present": true,
+     "value": true
+    },
+    "systemDefault": true
+   },
+   "output": {
+    "value": false,
+    "source": "portfolio"
+   },
+   "throws": null
+  },
+  {
+   "fn": "resolvePortfolioSetting",
+   "case": "honours a falsy-but-present user default when the override is unset",
+   "input": {
+    "override": {
+     "present": false,
+     "undefinedInTs": false
+    },
+    "userDefault": {
+     "present": true,
+     "value": 0
+    },
+    "systemDefault": 9
+   },
+   "output": {
+    "value": 0,
+    "source": "user"
+   },
+   "throws": null
+  }
+ ]
+}

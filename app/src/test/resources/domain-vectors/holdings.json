@@ -1,0 +1,3774 @@
+{
+ "module": "holdings",
+ "vectors": [
+  {
+   "fn": "reducePosition",
+   "case": "single buy, no fee",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 10,
+    "avgCost": 100,
+    "realizedPnl": 0,
+    "realizations": []
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "single buy capitalises the fee",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 5,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 10,
+    "avgCost": 100.5,
+    "realizedPnl": 0,
+    "realizations": []
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "two buys re-average with fees",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 5,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 120,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 15,
+    "avgCost": 107,
+    "realizedPnl": 0,
+    "realizations": []
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "realized P/L = qty*(price-avg) - fee; avg unchanged",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 5,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 120,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 130,
+      "fee": 2,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 11,
+    "avgCost": 107,
+    "realizedPnl": 90,
+    "realizations": [
+     {
+      "index": 2,
+      "realizedPnl": 90
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "interleaved buy/sell: the running average drives realized P/L",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 200,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 10,
+    "avgCost": 150,
+    "realizedPnl": 50,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 50
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "orders by executedAt, not input order; realization index points at the input row",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 200,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 10,
+    "avgCost": 150,
+    "realizedPnl": 50,
+    "realizations": [
+     {
+      "index": 2,
+      "realizedPnl": 50
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "buy with fee: avg = (8*100.25 + 2)/8 = 100.5 exactly",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 8,
+      "price": 100.25,
+      "fee": 2,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 8,
+    "avgCost": 100.5,
+    "realizedPnl": 0,
+    "realizations": []
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "re-average: (4*100.5 + 4*101.5 + 1)/8 = 101.125 exactly",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 4,
+      "price": 100.5,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 4,
+      "price": 101.5,
+      "fee": 1,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 8,
+    "avgCost": 101.125,
+    "realizedPnl": 0,
+    "realizations": []
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "sell: realized = 4*(130.75-100.5) - 2.5 = 118.5 exactly; avg unchanged",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 8,
+      "price": 100.25,
+      "fee": 2,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 130.75,
+      "fee": 2.5,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 4,
+    "avgCost": 100.5,
+    "realizedPnl": 118.5,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 118.5
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "sell at avg cost: realized = -fee exactly",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 50.25,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 50.25,
+      "fee": 1.25,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 1,
+    "avgCost": 50.25,
+    "realizedPnl": -1.25,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": -1.25
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "handles 6-dp fractional quantities: closing lands on exactly 0",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.123456,
+      "price": 81,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 0.123456,
+      "price": 90,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 1.1111039999999999,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 1.1111039999999999
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "selling exactly the held quantity flattens to 0 and resets avg",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 3.5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 3.5,
+      "price": 12,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 7,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 7
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "floating-point dust from a sell-everything clamps to exactly 0",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.2,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 0.3,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 5.329070518200751e-16,
+    "realizations": [
+     {
+      "index": 2,
+      "realizedPnl": 5.329070518200751e-16
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects a sell that would push held quantity negative",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 11,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 11 units of A: only 10 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects selling with nothing held",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 1 units of A: only 0 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "OversellError carries the requested and held quantities",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 3.5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 4 units of A: only 3.5 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects an oversell of one stored quantity unit (1e-8)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5.00000001,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 5.00000001 units of A: only 5 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects an oversell after partial sells reduced the held quantity",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 6,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4.001,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 4.001 units of A: only 4 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "allows a sell within QTY_EPSILON of the held quantity",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5.0000000005,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 0,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 0
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: zero holding at sale-price basis -> 0 realized, closes at 0",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z",
+      "allowUncovered": true
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 0,
+    "realizations": [
+     {
+      "index": 0,
+      "realizedPnl": 0
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: zero-holding sell with a fee realizes exactly minus the fee",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 50,
+      "fee": 3,
+      "executedAt": "2026-01-01T00:00:00Z",
+      "allowUncovered": true
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": -3,
+    "realizations": [
+     {
+      "index": 0,
+      "realizedPnl": -3
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: partial-cover sell splits covered gain from uncovered 0%",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 40,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z",
+      "allowUncovered": true
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 120,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 120
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: uses a supplied entry price for the uncovered portion",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 40,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPrice": 60
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 440,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 440
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: still throws OversellError when the flag is absent",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 1 units of A: only 0 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: no shorts — a later buy rebuilds from 0, not a debt",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z",
+      "allowUncovered": true
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 3,
+      "price": 20,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 3,
+    "avgCost": 20,
+    "realizedPnl": 0,
+    "realizations": [
+     {
+      "index": 0,
+      "realizedPnl": 0
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "uncovered: rejects a non-finite supplied entry price",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPrice": -1
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "Transaction uncovered entry price must be a finite non-negative number, got -1"
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "a sell 500ms after its buy is valid even though it sorts first as a string",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 12,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00.500Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 10,
+    "realizations": [
+     {
+      "index": 0,
+      "realizedPnl": 10
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "a sell truly 500ms before its buy oversells regardless of string order",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00.500Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 12,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 5 units of A: only 0 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "compares instants across zone offsets, not string forms",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 2,
+      "price": 11,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00.250Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-05T12:00:00+02:00"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 2,
+    "realizations": [
+     {
+      "index": 0,
+      "realizedPnl": 2
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "the same instant rendered two ways ties, and input order breaks the tie",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00.000Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 0,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 0
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects an unparseable executedAt instead of mis-sorting it",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "not-a-date"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "Transaction executedAt must be an ISO-8601 date/time, got not-a-date"
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects a zero/negative quantity",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "Transaction quantity must be a finite positive number, got 0"
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects a negative price",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": -1,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "Transaction price must be a finite non-negative number, got -1"
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "rejects transactions spanning multiple assets",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "B",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "reducePosition received transactions for multiple assets (A, B); group by asset first."
+   }
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "derives qty, avg cost, market value, unrealized P/L and day change",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "B",
+      "side": "buy",
+      "quantity": 5,
+      "price": 200,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 120,
+       "prevClose": 110
+      }
+     },
+     {
+      "assetId": "B",
+      "currency": "USD",
+      "quote": {
+       "price": 220,
+       "prevClose": 210
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "A",
+     "currency": "EUR",
+     "quantity": 10,
+     "avgCost": 100,
+     "realizedPnl": 0,
+     "price": 120,
+     "marketValueEur": 1200,
+     "costBasisEur": 1000,
+     "unrealizedPnlEur": 200,
+     "unrealizedPnlPct": 20,
+     "dayChangeEur": 100,
+     "dayChangePct": 9.090909090909092
+    },
+    {
+     "assetId": "B",
+     "currency": "USD",
+     "quantity": 5,
+     "avgCost": 200,
+     "realizedPnl": 0,
+     "price": 220,
+     "marketValueEur": 990,
+     "costBasisEur": 900,
+     "unrealizedPnlEur": 90,
+     "unrealizedPnlPct": 10,
+     "dayChangeEur": 45,
+     "dayChangePct": 4.761904761904762
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "handles a loss position (negative P/L and day change convert correctly)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "D",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "D",
+      "currency": "EUR",
+      "quote": {
+       "price": 90,
+       "prevClose": 95
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "D",
+     "currency": "EUR",
+     "quantity": 10,
+     "avgCost": 100,
+     "realizedPnl": 0,
+     "price": 90,
+     "marketValueEur": 900,
+     "costBasisEur": 1000,
+     "unrealizedPnlEur": -100,
+     "unrealizedPnlPct": -10,
+     "dayChangeEur": -50,
+     "dayChangePct": -5.263157894736842
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "keeps the open position when there is no quote (EUR figures null)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 4,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": null
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "A",
+     "currency": "EUR",
+     "quantity": 4,
+     "avgCost": 50,
+     "realizedPnl": 0,
+     "price": null,
+     "marketValueEur": null,
+     "costBasisEur": null,
+     "unrealizedPnlEur": null,
+     "unrealizedPnlPct": null,
+     "dayChangeEur": null,
+     "dayChangePct": null
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "omits day change when prev close is missing but keeps unrealized P/L",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 60
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "A",
+     "currency": "EUR",
+     "quantity": 2,
+     "avgCost": 50,
+     "realizedPnl": 0,
+     "price": 60,
+     "marketValueEur": 120,
+     "costBasisEur": 100,
+     "unrealizedPnlEur": 20,
+     "unrealizedPnlPct": 20,
+     "dayChangeEur": null,
+     "dayChangePct": null
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "includes a fully-closed position with realized P/L but null market figures",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 14,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 14,
+       "prevClose": 13
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "A",
+     "currency": "EUR",
+     "quantity": 0,
+     "avgCost": 0,
+     "realizedPnl": 20,
+     "price": 14,
+     "marketValueEur": null,
+     "costBasisEur": null,
+     "unrealizedPnlEur": null,
+     "unrealizedPnlPct": null,
+     "dayChangeEur": null,
+     "dayChangePct": null
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "throws when a transacted asset has no currency/quote input",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "Z",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 12
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "deriveHoldings: transactions reference assets with no currency/quote input: Z."
+   }
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "preserves the asset input order and skips assets with no transactions",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "B",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 1
+      }
+     },
+     {
+      "assetId": "B",
+      "currency": "EUR",
+      "quote": {
+       "price": 12
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "B",
+     "currency": "EUR",
+     "quantity": 1,
+     "avgCost": 10,
+     "realizedPnl": 0,
+     "price": 12,
+     "marketValueEur": 12,
+     "costBasisEur": 10,
+     "unrealizedPnlEur": 2,
+     "unrealizedPnlPct": 20,
+     "dayChangeEur": null,
+     "dayChangePct": null
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "reconstructs a multi-asset, multi-currency series with a carried-forward custom asset",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "C",
+      "side": "buy",
+      "quantity": 2,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     },
+     {
+      "assetId": "X",
+      "side": "buy",
+      "quantity": 1,
+      "price": 1000,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 100
+       },
+       {
+        "date": "2026-01-02",
+        "close": 102
+       },
+       {
+        "date": "2026-01-03",
+        "close": 101
+       },
+       {
+        "date": "2026-01-04",
+        "close": 105
+       },
+       {
+        "date": "2026-01-05",
+        "close": 110
+       }
+      ]
+     },
+     {
+      "assetId": "C",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-03",
+        "close": 50
+       },
+       {
+        "date": "2026-01-04",
+        "close": 52
+       },
+       {
+        "date": "2026-01-05",
+        "close": 51
+       }
+      ]
+     },
+     {
+      "assetId": "X",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1000
+       },
+       {
+        "date": "2026-01-04",
+        "close": 1200
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 2000
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 2020
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 2100
+    },
+    {
+     "date": "2026-01-04",
+     "valueEur": 2343.6
+    },
+    {
+     "date": "2026-01-05",
+     "valueEur": 2391.8
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "carries a custom asset value forward between sparse points (step function)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "X",
+      "side": "buy",
+      "quantity": 1,
+      "price": 1000,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "X",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1000
+       },
+       {
+        "date": "2026-01-03",
+        "close": 1500
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 1000
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 1500
+    },
+    {
+     "date": "2026-01-04",
+     "valueEur": 1500
+    },
+    {
+     "date": "2026-01-05",
+     "valueEur": 1500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "values a position at zero on days before its first price point",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-03",
+        "close": 10
+       },
+       {
+        "date": "2026-01-04",
+        "close": 11
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-04",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 0
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 0
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 20
+    },
+    {
+     "date": "2026-01-04",
+     "valueEur": 22
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "drops to zero after the position is fully sold",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 4,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 10
+       },
+       {
+        "date": "2026-01-02",
+        "close": 12
+       },
+       {
+        "date": "2026-01-03",
+        "close": 11
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-03",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 40
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 48
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "an uncovered sell never goes short: a later buy rebuilds from 0 (issue #369)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 5,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-02T00:00:00Z",
+      "allowUncovered": true
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 4,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 10
+       },
+       {
+        "date": "2026-01-02",
+        "close": 10
+       },
+       {
+        "date": "2026-01-03",
+        "close": 10
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-03",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 20
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 0
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 40
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "applies each day's historical FX rate — carry-forward with a mid-series sell",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "C",
+      "side": "buy",
+      "quantity": 2,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "C",
+      "side": "sell",
+      "quantity": 1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-03T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "C",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 50
+       },
+       {
+        "date": "2026-01-04",
+        "close": 52
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "dated",
+     "ratesByDate": {
+      "USD": {
+       "2026-01-01": 0.9,
+       "2026-01-02": 0.85,
+       "2026-01-03": 0.8,
+       "2026-01-04": 0.75,
+       "2026-01-05": 0.7
+      }
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 90
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 85
+    },
+    {
+     "date": "2026-01-03",
+     "valueEur": 40
+    },
+    {
+     "date": "2026-01-04",
+     "valueEur": 39
+    },
+    {
+     "date": "2026-01-05",
+     "valueEur": 36.4
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "coalesces FX to one conversion per (currency, day) across same-currency assets",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "C",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     },
+     {
+      "assetId": "D",
+      "side": "buy",
+      "quantity": 2,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "C",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 100
+       },
+       {
+        "date": "2026-01-02",
+        "close": 110
+       }
+      ]
+     },
+     {
+      "assetId": "D",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 50
+       },
+       {
+        "date": "2026-01-02",
+        "close": 60
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-02",
+    "fx": {
+     "kind": "dated",
+     "ratesByDate": {
+      "USD": {
+       "2026-01-01": 0.9,
+       "2026-01-02": 0.8
+      }
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "valueEur": 180
+    },
+    {
+     "date": "2026-01-02",
+     "valueEur": 184
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "throws on an invalid FX rate instead of producing a wrong value",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "C",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "C",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 10
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-01",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0
+     }
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "Invalid FX rate 0 for USD on 2026-01-01"
+   }
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "rejects a malformed price point date even when it is the only point",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-1-3",
+        "close": 10
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "price point date must be ISO YYYY-MM-DD, got 2026-1-3"
+   }
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "returns an empty series when there are no transactions",
+   "input": {
+    "transactions": [],
+    "assets": [],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "returns an empty series when the first transaction is after today",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-02-01T00:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-02-01",
+        "close": 10
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "throws when a transaction references an asset with no price/currency input",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "Z",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "assets": [],
+    "today": "2026-01-02",
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "valueOverTime: transaction references asset Z with no price/currency input."
+   }
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "returns an empty series without transactions",
+   "input": {
+    "transactions": [],
+    "assets": [],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "returns an empty series when the first transaction is after today",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-10T10:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-10",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-05",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "capitalises the fee into the basis and carries it forward daily",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 2,
+      "price": 100,
+      "fee": 10,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-03",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 210
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 210
+    },
+    {
+     "date": "2026-01-03",
+     "costBasisEur": 210
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "gates each asset on its first known price, mirroring the value series",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-03",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-04",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 0
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 0
+    },
+    {
+     "date": "2026-01-03",
+     "costBasisEur": 100
+    },
+    {
+     "date": "2026-01-04",
+     "costBasisEur": 100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "keeps the average on a partial sell and zeroes the basis on a full close",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 4,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     },
+     {
+      "assetId": "a1",
+      "side": "sell",
+      "quantity": 2,
+      "price": 150,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00.000Z"
+     },
+     {
+      "assetId": "a1",
+      "side": "sell",
+      "quantity": 2,
+      "price": 150,
+      "fee": 0,
+      "executedAt": "2026-01-03T10:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-04",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 400
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 200
+    },
+    {
+     "date": "2026-01-03",
+     "costBasisEur": 0
+    },
+    {
+     "date": "2026-01-04",
+     "costBasisEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "re-averages a re-entry from scratch and books same-day interleaving at EOD",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 2,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T09:00:00.000Z"
+     },
+     {
+      "assetId": "a1",
+      "side": "sell",
+      "quantity": 2,
+      "price": 120,
+      "fee": 0,
+      "executedAt": "2026-01-01T12:00:00.000Z"
+     },
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 1,
+      "price": 300,
+      "fee": 0,
+      "executedAt": "2026-01-01T15:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-02",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 300
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 300
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "closes an acknowledged uncovered sell at exactly zero basis",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     },
+     {
+      "assetId": "a1",
+      "side": "sell",
+      "quantity": 5,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00.000Z",
+      "allowUncovered": true
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "a1",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-03",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 100
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 0
+    },
+    {
+     "date": "2026-01-03",
+     "costBasisEur": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "converts each day at that day's historical FX rate and sums across assets",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "eur",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     },
+     {
+      "assetId": "usd",
+      "side": "buy",
+      "quantity": 2,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "eur",
+      "currency": "EUR",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     },
+     {
+      "assetId": "usd",
+      "currency": "USD",
+      "prices": [
+       {
+        "date": "2026-01-01",
+        "close": 1
+       }
+      ]
+     }
+    ],
+    "today": "2026-01-02",
+    "fx": {
+     "kind": "dated",
+     "ratesByDate": {
+      "USD": {
+       "2026-01-01": 0.5,
+       "2026-01-02": 0.8
+      }
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "costBasisEur": 200
+    },
+    {
+     "date": "2026-01-02",
+     "costBasisEur": 260
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "costBasisOverTime",
+   "case": "fails loud on a transaction with no asset input",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "a1",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00.000Z"
+     }
+    ],
+    "assets": [],
+    "today": "2026-01-02",
+    "fx": {
+     "kind": "identity"
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "costBasisOverTime: transaction references asset a1 with no price/currency input."
+   }
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "expands sparse closes to one point per calendar day, carrying forward over gaps",
+   "input": {
+    "prices": [
+     {
+      "date": "2026-01-01",
+      "close": 100
+     },
+     {
+      "date": "2026-01-05",
+      "close": 110
+     }
+    ],
+    "startDay": "2026-01-01",
+    "endDay": "2026-01-06"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "close": 100
+    },
+    {
+     "date": "2026-01-02",
+     "close": 100
+    },
+    {
+     "date": "2026-01-03",
+     "close": 100
+    },
+    {
+     "date": "2026-01-04",
+     "close": 100
+    },
+    {
+     "date": "2026-01-05",
+     "close": 110
+    },
+    {
+     "date": "2026-01-06",
+     "close": 110
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "omits days before the first known close instead of inventing prices",
+   "input": {
+    "prices": [
+     {
+      "date": "2026-01-03",
+      "close": 50
+     }
+    ],
+    "startDay": "2026-01-01",
+    "endDay": "2026-01-04"
+   },
+   "output": [
+    {
+     "date": "2026-01-03",
+     "close": 50
+    },
+    {
+     "date": "2026-01-04",
+     "close": 50
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "sorts unsorted input and lets a later duplicate of a date win",
+   "input": {
+    "prices": [
+     {
+      "date": "2026-01-02",
+      "close": 20
+     },
+     {
+      "date": "2026-01-01",
+      "close": 10
+     },
+     {
+      "date": "2026-01-02",
+      "close": 22
+     }
+    ],
+    "startDay": "2026-01-01",
+    "endDay": "2026-01-02"
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "close": 10
+    },
+    {
+     "date": "2026-01-02",
+     "close": 22
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "returns empty for no prices",
+   "input": {
+    "prices": [],
+    "startDay": "2026-01-01",
+    "endDay": "2026-01-05"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "returns empty for an inverted window",
+   "input": {
+    "prices": [
+     {
+      "date": "2026-01-01",
+      "close": 1
+     }
+    ],
+    "startDay": "2026-01-05",
+    "endDay": "2026-01-01"
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "rejects a malformed price date",
+   "input": {
+    "prices": [
+     {
+      "date": "01.02.2026",
+      "close": 1
+     }
+    ],
+    "startDay": "2026-01-01",
+    "endDay": "2026-01-02"
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "price point date must be ISO YYYY-MM-DD, got 01.02.2026"
+   }
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "rejects a malformed startDay",
+   "input": {
+    "prices": [
+     {
+      "date": "2026-01-01",
+      "close": 1
+     }
+    ],
+    "startDay": "nope",
+    "endDay": "2026-01-02"
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "startDay must be ISO YYYY-MM-DD, got nope"
+   }
+  },
+  {
+   "fn": "netFlowsOverTime",
+   "case": "signs flows correctly: buys (cost + fee) in, sells (proceeds - fee) out",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 5,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 4,
+      "price": 110,
+      "fee": 3,
+      "executedAt": "2026-01-03T10:00:00Z"
+     }
+    ],
+    "currencyByAsset": {
+     "A": "EUR",
+     "U": "USD"
+    },
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "flowEur": 1005
+    },
+    {
+     "date": "2026-01-03",
+     "flowEur": -437
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netFlowsOverTime",
+   "case": "aggregates same-day transactions into one point and sorts ascending",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-02-01T12:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 2,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-02-01T09:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 10,
+      "fee": 0,
+      "executedAt": "2026-01-15T09:00:00Z"
+     }
+    ],
+    "currencyByAsset": {
+     "A": "EUR",
+     "U": "USD"
+    },
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-15",
+     "flowEur": 10
+    },
+    {
+     "date": "2026-02-01",
+     "flowEur": 150
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netFlowsOverTime",
+   "case": "converts native flows at that day's historical rate, coalesced per (currency, day)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "U",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "U",
+      "side": "buy",
+      "quantity": 5,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T15:00:00Z"
+     },
+     {
+      "assetId": "U",
+      "side": "buy",
+      "quantity": 10,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ],
+    "currencyByAsset": {
+     "A": "EUR",
+     "U": "USD"
+    },
+    "fx": {
+     "kind": "dated",
+     "ratesByDate": {
+      "USD": {
+       "2026-01-01": 0.9,
+       "2026-01-02": 0.8
+      }
+     }
+    }
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "flowEur": 1350
+    },
+    {
+     "date": "2026-01-02",
+     "flowEur": 800
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "netFlowsOverTime",
+   "case": "fails loud on a transaction whose asset has no currency input",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "X",
+      "side": "buy",
+      "quantity": 1,
+      "price": 1,
+      "fee": 0,
+      "executedAt": "2026-01-01T00:00:00Z"
+     }
+    ],
+    "currencyByAsset": {
+     "A": "EUR",
+     "U": "USD"
+    },
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "netFlowsOverTime: transaction references asset X with no currency input."
+   }
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a deposit causes NO jump: buying more at the current price leaves the curve flat",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 2000
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 2200
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "the issue-#125 scenario: investing more after a loss shows the loss, not the deposit",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 4000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 3000
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 4000
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 4000
+     },
+     {
+      "date": "2026-01-03",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": -25
+    },
+    {
+     "date": "2026-01-03",
+     "pct": -25
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "chains market moves across a deposit multiplicatively",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 1100
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 2200
+     },
+     {
+      "date": "2026-01-04",
+      "valueEur": 2420
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-03",
+      "flowEur": 1100
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-04",
+     "pct": 21.000000000000018
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "books a full liquidation final day correctly (outflows count end-of-day)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 4000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 0
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 4000
+     },
+     {
+      "date": "2026-01-02",
+      "flowEur": -3900
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": -2.500000000000002
+    },
+    {
+     "date": "2026-01-03",
+     "pct": -2.500000000000002
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "captures the first day execution->close move (inflows count start-of-day)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1040
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 4.0000000000000036
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "fees drag performance (flows are gross of fee, value is not)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1010
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": -0.990099009900991
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a PARTIAL withdrawal does not move the line either",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 600
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 660
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "flowEur": -400
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "invariance: lean portfolio on the market path",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 1100
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 1100
+     },
+     {
+      "date": "2026-01-04",
+      "valueEur": 1210
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-04",
+     "pct": 21.000000000000018
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "invariance: topped-up portfolio on the same market path",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 1100
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 6100
+     },
+     {
+      "date": "2026-01-04",
+      "valueEur": 6710
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-03",
+      "flowEur": 5000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2026-01-04",
+     "pct": 21.000000000000018
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "treats a same-day inflow as invested from the open (daily-TWR flow-timing limit)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 6100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "flowEur": 5000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 1.6666666666666607
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a zero-value day from missing price data links flat and recovers — never -100%",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "seeds the basis from a pre-price inflow (issue #218)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1200
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 19.999999999999996
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "accumulates several pre-price inflows into the basis",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 1800
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "flowEur": 500
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-07",
+     "pct": 19.999999999999996
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "books a full pre-price liquidation against the seeded basis and resets it",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-05",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-06",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-07",
+      "valueEur": 0
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-05",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-06",
+      "flowEur": -450
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-05",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-06",
+     "pct": -55.00000000000001
+    },
+    {
+     "date": "2026-01-07",
+     "pct": -55.00000000000001
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "a mid-series zero-value gap does not swallow the move across it",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 1100
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "re-entering after a full liquidation measures from the new money",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-03",
+      "valueEur": 0
+     },
+     {
+      "date": "2026-01-04",
+      "valueEur": 550
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-01-02",
+      "flowEur": -1000
+     },
+     {
+      "date": "2026-01-04",
+      "flowEur": 500
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-03",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-04",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "ignores flows outside the value window (future-dated transaction)",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     },
+     {
+      "date": "2026-02-01",
+      "flowEur": 500
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "sorts unsorted value input",
+   "input": {
+    "values": [
+     {
+      "date": "2026-01-02",
+      "valueEur": 1100
+     },
+     {
+      "date": "2026-01-01",
+      "valueEur": 1000
+     }
+    ],
+    "flows": [
+     {
+      "date": "2026-01-01",
+      "flowEur": 1000
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-01-02",
+     "pct": 10.000000000000009
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "rejects a malformed value point date",
+   "input": {
+    "values": [
+     {
+      "date": "01.02.2026",
+      "valueEur": 1
+     }
+    ],
+    "flows": []
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "value point date must be ISO YYYY-MM-DD, got 01.02.2026"
+   }
+  },
+  {
+   "fn": "rebasePerformance",
+   "case": "re-bases by compounding, not subtraction",
+   "input": {
+    "points": [
+     {
+      "date": "2026-03-01",
+      "pct": 25
+     },
+     {
+      "date": "2026-03-02",
+      "pct": 12.5
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2026-03-01",
+     "pct": 0
+    },
+    {
+     "date": "2026-03-02",
+     "pct": -9.999999999999998
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "rebasePerformance",
+   "case": "handles the empty slice",
+   "input": {
+    "points": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "rebasePerformance",
+   "case": "rejects a corrupt (<= -100%) base",
+   "input": {
+    "points": [
+     {
+      "date": "2026-01-01",
+      "pct": -100
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "rebasePerformance: non-positive base index 0 at 2026-01-01"
+   }
+  }
+ ]
+}

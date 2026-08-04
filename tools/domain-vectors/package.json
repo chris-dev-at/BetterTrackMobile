@@ -1,0 +1,10 @@
+{
+  "name": "@bettertrack-app/domain-vectors",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Generator-only: replays the pinned packages/domain snapshot and emits JSON conformance vectors for the Kotlin port. No dependencies, no node_modules, never shipped.",
+  "scripts": {
+    "generate": "node --experimental-strip-types generate.ts"
+  }
+}

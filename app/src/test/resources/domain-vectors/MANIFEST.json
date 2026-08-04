@@ -1,0 +1,70 @@
+{
+ "generatedFrom": "tools/domain-vectors/vendor (see PINNED_AT)",
+ "pinnedAt": "cb530f7e30a2ce3502e708f4b05711d1d0bde685",
+ "note": "Regenerate with: node --experimental-strip-types tools/domain-vectors/generate.ts",
+ "counts": {
+  "holdings": 95,
+  "seriesStats": 41,
+  "settingsScope": 9,
+  "serverTwrParity": 4
+ },
+ "byFunction": {
+  "holdings": {
+   "reducePosition": 34,
+   "deriveHoldings": 7,
+   "valueOverTime": 12,
+   "costBasisOverTime": 9,
+   "dailyCloseSeries": 7,
+   "netFlowsOverTime": 4,
+   "timeWeightedReturn": 19,
+   "rebasePerformance": 3
+  },
+  "seriesStats": {
+   "computeSeriesStats": 10,
+   "toPerformanceSeries": 4,
+   "deflateSeries": 8,
+   "indexAveragePctPerYear": 5,
+   "computeContributions": 5,
+   "compareSeriesStats": 9
+  },
+  "settingsScope": {
+   "resolvePortfolioSetting": 9
+  },
+  "serverTwrParity": {
+   "timeWeightedReturn": 4
+  }
+ },
+ "totalVectors": 149,
+ "skipped": [
+  {
+   "fn": "reducePosition",
+   "case": "OversellError carries the requested and held quantities (field assertions)",
+   "reason": "asserts err.requested / err.held / err.assetId, not just that it threw — hand-ported in DomainHandPortedTest (\"OversellError carries the requested and held quantities\")"
+  },
+  {
+   "fn": "valueOverTime/deriveHoldings",
+   "case": "FX coalescing call counts",
+   "reason": "vi.fn() toHaveBeenCalledTimes/-With assertions are interaction, not data — hand-ported in DomainHandPortedTest against a counting CurrencyConverter fake (valueOverTime x3, netFlowsOverTime, costBasisOverTime)"
+  },
+  {
+   "fn": "valueOverTime",
+   "case": "rejects a non-finite price point close",
+   "reason": "input carries Number.NaN, which JSON cannot represent — hand-ported in DomainHandPortedTest (non-finite input section)"
+  },
+  {
+   "fn": "dailyCloseSeries",
+   "case": "rejects a non-finite close",
+   "reason": "input carries Number.NaN, which JSON cannot represent — hand-ported in DomainHandPortedTest (non-finite input section)"
+  },
+  {
+   "fn": "timeWeightedReturn",
+   "case": "rejects a non-finite value / a non-finite flow",
+   "reason": "inputs carry Number.NaN and Number.POSITIVE_INFINITY, which JSON cannot represent — hand-ported in DomainHandPortedTest (non-finite input section)"
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "returns a FRESH array / fresh points (not.toBe identity checks)",
+   "reason": "referential-identity assertion; the Kotlin port returns new lists by construction, so there is nothing to replay"
+  }
+ ]
+}

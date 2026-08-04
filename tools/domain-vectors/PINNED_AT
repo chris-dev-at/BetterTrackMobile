@@ -1,0 +1,18 @@
+commit  = cb530f7e30a2ce3502e708f4b05711d1d0bde685
+date    = 2026-08-04 09:24:39 +0200
+repo    = BetterTrack platform monorepo (apps/web + packages/*)
+ref     = origin/main
+copied  = 2026-08-04
+
+# Paths vendored under vendor/ (read-only snapshot, `git show origin/main:<path>`)
+#   packages/domain/**                                        -> vendor/domain/**
+#   apps/web/src/user/vault/engine/serverTwrParity.fixture.json -> vendor/fixtures/
+#   apps/web/src/user/vault/engine/clientMoney.fixture.json     -> vendor/fixtures/
+#
+# NOTE on the plan's pin (docs/S3S4_STORAGE_PLAN.md §3.1 says `439d0d5d`):
+# origin/main had moved on to cb530f7e by the time W2 was built, but
+#   git diff --stat 439d0d5d origin/main -- packages/domain \
+#       apps/web/src/user/vault/engine/serverTwrParity.fixture.json
+# is EMPTY: every vendored path is byte-identical between the two commits.
+# The last commit that touched packages/domain is 4b3f3ce9 (2026-07-30), which
+# predates both. The pin in the plan therefore still holds for this snapshot.

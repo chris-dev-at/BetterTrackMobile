@@ -1,0 +1,1584 @@
+{
+ "module": "seriesStats",
+ "vectors": [
+  {
+   "fn": "computeSeriesStats",
+   "case": "flat series (five days at 100)",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": 100
+     },
+     {
+      "date": "2024-01-03",
+      "value": 100
+     },
+     {
+      "date": "2024-01-04",
+      "value": 100
+     },
+     {
+      "date": "2024-01-05",
+      "value": 100
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": 0,
+    "maxDrawdownPct": 0,
+    "bestDay": {
+     "date": "2024-01-02",
+     "returnPct": 0
+    },
+    "worstDay": {
+     "date": "2024-01-02",
+     "returnPct": 0
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "monotonic-up series (100, 110, 121)",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": 110
+     },
+     {
+      "date": "2024-01-03",
+      "value": 121
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 20.999999999999996,
+    "cagrPct": 131425081207735420,
+    "maxDrawdownPct": 0,
+    "bestDay": {
+     "date": "2024-01-02",
+     "returnPct": 10.000000000000009
+    },
+    "worstDay": {
+     "date": "2024-01-02",
+     "returnPct": 10.000000000000009
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "drawdown-then-recover (100, 80, 100)",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": 80
+     },
+     {
+      "date": "2024-01-03",
+      "value": 100
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": 0,
+    "maxDrawdownPct": -19.999999999999996,
+    "bestDay": {
+     "date": "2024-01-03",
+     "returnPct": 25
+    },
+    "worstDay": {
+     "date": "2024-01-02",
+     "returnPct": -19.999999999999996
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "CAGR over exactly 4 years (1461 days incl. one leap day)",
+   "input": {
+    "series": [
+     {
+      "date": "2020-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-01",
+      "value": 146.41
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 46.41,
+    "cagrPct": 10.000000000000009,
+    "maxDrawdownPct": 0,
+    "bestDay": {
+     "date": "2024-01-01",
+     "returnPct": 46.41
+    },
+    "worstDay": {
+     "date": "2024-01-01",
+     "returnPct": 46.41
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "empty series",
+   "input": {
+    "series": []
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": null,
+    "maxDrawdownPct": 0,
+    "bestDay": null,
+    "worstDay": null
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "zero first value",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 0
+     },
+     {
+      "date": "2024-01-02",
+      "value": 50
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": null,
+    "maxDrawdownPct": 0,
+    "bestDay": null,
+    "worstDay": null
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "negative first value",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": -5
+     },
+     {
+      "date": "2024-01-02",
+      "value": 50
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": null,
+    "maxDrawdownPct": 0,
+    "bestDay": null,
+    "worstDay": null
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "single-point series",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": 0,
+    "cagrPct": null,
+    "maxDrawdownPct": 0,
+    "bestDay": null,
+    "worstDay": null
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "skips the daily return over a non-positive PREVIOUS value mid-series",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": 0
+     },
+     {
+      "date": "2024-01-03",
+      "value": 50
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": -50,
+    "cagrPct": -100,
+    "maxDrawdownPct": -100,
+    "bestDay": {
+     "date": "2024-01-02",
+     "returnPct": -100
+    },
+    "worstDay": {
+     "date": "2024-01-02",
+     "returnPct": -100
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "computeSeriesStats",
+   "case": "skips the daily return over a NEGATIVE previous value as well",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": -50
+     },
+     {
+      "date": "2024-01-03",
+      "value": 25
+     }
+    ]
+   },
+   "output": {
+    "totalReturnPct": -75,
+    "cagrPct": -100,
+    "maxDrawdownPct": -150,
+    "bestDay": {
+     "date": "2024-01-02",
+     "returnPct": -150
+    },
+    "worstDay": {
+     "date": "2024-01-02",
+     "returnPct": -150
+    }
+   },
+   "throws": null
+  },
+  {
+   "fn": "toPerformanceSeries",
+   "case": "rebases to cumulative % from the first point",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-01-02",
+      "value": 110
+     },
+     {
+      "date": "2024-01-03",
+      "value": 95
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2024-01-02",
+     "pct": 10.000000000000009
+    },
+    {
+     "date": "2024-01-03",
+     "pct": -5.000000000000004
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "toPerformanceSeries",
+   "case": "returns [] for an empty series",
+   "input": {
+    "series": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "toPerformanceSeries",
+   "case": "zero base -> every point emitted as 0 %",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 0
+     },
+     {
+      "date": "2024-01-02",
+      "value": 50
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2024-01-02",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "toPerformanceSeries",
+   "case": "negative base -> every point emitted as 0 %",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": -10
+     },
+     {
+      "date": "2024-01-02",
+      "value": 5
+     }
+    ]
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "pct": 0
+    },
+    {
+     "date": "2024-01-02",
+     "pct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "flat: slopes a flat nominal series downward at 10 %/yr over ~2 years",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 1000
+     },
+     {
+      "date": "2024-07-01",
+      "value": 1000
+     },
+     {
+      "date": "2025-01-01",
+      "value": 1000
+     },
+     {
+      "date": "2025-07-01",
+      "value": 1000
+     },
+     {
+      "date": "2026-01-01",
+      "value": 1000
+     }
+    ],
+    "deflator": {
+     "kind": "flat",
+     "pctPerYear": 10
+    }
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "value": 1000
+    },
+    {
+     "date": "2024-07-01",
+     "value": 953.6181027665147
+    },
+    {
+     "date": "2025-01-01",
+     "value": 908.9130094196512
+    },
+    {
+     "date": "2025-07-01",
+     "value": 866.9821047971052
+    },
+    {
+     "date": "2026-01-01",
+     "value": 826.3384594923721
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "flat: a 0 %/yr rate is the identity",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 1000
+     },
+     {
+      "date": "2024-07-01",
+      "value": 1000
+     },
+     {
+      "date": "2025-01-01",
+      "value": 1000
+     },
+     {
+      "date": "2025-07-01",
+      "value": 1000
+     },
+     {
+      "date": "2026-01-01",
+      "value": 1000
+     }
+    ],
+    "deflator": {
+     "kind": "flat",
+     "pctPerYear": 0
+    }
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "value": 1000
+    },
+    {
+     "date": "2024-07-01",
+     "value": 1000
+    },
+    {
+     "date": "2025-01-01",
+     "value": 1000
+    },
+    {
+     "date": "2025-07-01",
+     "value": 1000
+    },
+    {
+     "date": "2026-01-01",
+     "value": 1000
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "flat: returns [] for an empty series",
+   "input": {
+    "series": [],
+    "deflator": {
+     "kind": "flat",
+     "pctPerYear": 10
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "index: interpolates between anchors + extrapolates past the last one (#468)",
+   "input": {
+    "series": [
+     {
+      "date": "2023-12-15",
+      "value": 500
+     },
+     {
+      "date": "2024-01-15",
+      "value": 500
+     },
+     {
+      "date": "2024-02-15",
+      "value": 500
+     },
+     {
+      "date": "2024-03-15",
+      "value": 500
+     },
+     {
+      "date": "2024-05-15",
+      "value": 500
+     }
+    ],
+    "deflator": {
+     "kind": "index",
+     "monthly": [
+      {
+       "month": "2024-02",
+       "value": 101
+      },
+      {
+       "month": "2024-04",
+       "value": 103
+      },
+      {
+       "month": "2024-01",
+       "value": 100
+      }
+     ]
+    }
+   },
+   "output": [
+    {
+     "date": "2023-12-15",
+     "value": 500
+    },
+    {
+     "date": "2024-01-15",
+     "value": 500
+    },
+    {
+     "date": "2024-02-15",
+     "value": 495.049504950495
+    },
+    {
+     "date": "2024-03-15",
+     "value": 490.19607843137254
+    },
+    {
+     "date": "2024-05-15",
+     "value": 480.7692307692308
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "index: deflates a window whose whole span sits PAST the last anchor",
+   "input": {
+    "series": [
+     {
+      "date": "2025-07-15",
+      "value": 1000
+     },
+     {
+      "date": "2026-07-15",
+      "value": 1000
+     }
+    ],
+    "deflator": {
+     "kind": "index",
+     "monthly": [
+      {
+       "month": "2023-01",
+       "value": 100
+      },
+      {
+       "month": "2024-01",
+       "value": 105
+      },
+      {
+       "month": "2025-01",
+       "value": 110
+      }
+     ]
+    }
+   },
+   "output": [
+    {
+     "date": "2025-07-15",
+     "value": 1000
+    },
+    {
+     "date": "2026-07-15",
+     "value": 957.4468085106383
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "index: a single-anchor index carries that level everywhere",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-15",
+      "value": 500
+     },
+     {
+      "date": "2024-06-15",
+      "value": 500
+     },
+     {
+      "date": "2024-12-15",
+      "value": 500
+     }
+    ],
+    "deflator": {
+     "kind": "index",
+     "monthly": [
+      {
+       "month": "2024-01",
+       "value": 100
+      }
+     ]
+    }
+   },
+   "output": [
+    {
+     "date": "2024-01-15",
+     "value": 500
+    },
+    {
+     "date": "2024-06-15",
+     "value": 500
+    },
+    {
+     "date": "2024-12-15",
+     "value": 500
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "index: an empty monthly index returns the series unchanged",
+   "input": {
+    "series": [
+     {
+      "date": "2024-01-01",
+      "value": 100
+     },
+     {
+      "date": "2024-02-01",
+      "value": 120
+     }
+    ],
+    "deflator": {
+     "kind": "index",
+     "monthly": []
+    }
+   },
+   "output": [
+    {
+     "date": "2024-01-01",
+     "value": 100
+    },
+    {
+     "date": "2024-02-01",
+     "value": 120
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deflateSeries",
+   "case": "index: returns [] for an empty series",
+   "input": {
+    "series": [],
+    "deflator": {
+     "kind": "index",
+     "monthly": [
+      {
+       "month": "2024-02",
+       "value": 101
+      },
+      {
+       "month": "2024-04",
+       "value": 103
+      },
+      {
+       "month": "2024-01",
+       "value": 100
+      }
+     ]
+    }
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "indexAveragePctPerYear",
+   "case": "returns the CAGR from first to last anchor",
+   "input": {
+    "monthly": [
+     {
+      "month": "2020-01",
+      "value": 100
+     },
+     {
+      "month": "2022-01",
+      "value": 121
+     }
+    ]
+   },
+   "output": 10.000000000000009,
+   "throws": null
+  },
+  {
+   "fn": "indexAveragePctPerYear",
+   "case": "reproduces a realistic HICP-style series (100 -> 137 over 10 y)",
+   "input": {
+    "monthly": [
+     {
+      "month": "2015-01",
+      "value": 100
+     },
+     {
+      "month": "2025-01",
+      "value": 137
+     }
+    ]
+   },
+   "output": 3.198184410593008,
+   "throws": null
+  },
+  {
+   "fn": "indexAveragePctPerYear",
+   "case": "empty -> null",
+   "input": {
+    "monthly": []
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "indexAveragePctPerYear",
+   "case": "single-anchor -> null",
+   "input": {
+    "monthly": [
+     {
+      "month": "2020-01",
+      "value": 100
+     }
+    ]
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "indexAveragePctPerYear",
+   "case": "non-positive base -> null",
+   "input": {
+    "monthly": [
+     {
+      "month": "2020-01",
+      "value": 0
+     },
+     {
+      "month": "2021-01",
+      "value": 105
+     }
+    ]
+   },
+   "output": null,
+   "throws": null
+  },
+  {
+   "fn": "computeContributions",
+   "case": "rows sum to the filtered total return and weights sum to 1",
+   "input": {
+    "inputs": [
+     {
+      "assetId": "a",
+      "startValue": 1000,
+      "endValue": 1200,
+      "currentValue": 1300
+     },
+     {
+      "assetId": "b",
+      "startValue": 500,
+      "endValue": 450,
+      "currentValue": 480
+     },
+     {
+      "assetId": "c",
+      "startValue": 250,
+      "endValue": 300,
+      "currentValue": 0
+     }
+    ]
+   },
+   "output": [
+    {
+     "assetId": "a",
+     "weight": 0.7303370786516854,
+     "contributionPct": 11.428571428571429
+    },
+    {
+     "assetId": "b",
+     "weight": 0.2696629213483146,
+     "contributionPct": -2.857142857142857
+    },
+    {
+     "assetId": "c",
+     "weight": 0,
+     "contributionPct": 2.857142857142857
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "computeContributions",
+   "case": "computes each row against the COMMON totals (hand-computed)",
+   "input": {
+    "inputs": [
+     {
+      "assetId": "a",
+      "startValue": 1000,
+      "endValue": 1200,
+      "currentValue": 1300
+     },
+     {
+      "assetId": "b",
+      "startValue": 500,
+      "endValue": 450,
+      "currentValue": 480
+     },
+     {
+      "assetId": "c",
+      "startValue": 250,
+      "endValue": 300,
+      "currentValue": 0
+     }
+    ]
+   },
+   "output": [
+    {
+     "assetId": "a",
+     "weight": 0.7303370786516854,
+     "contributionPct": 11.428571428571429
+    },
+    {
+     "assetId": "b",
+     "weight": 0.2696629213483146,
+     "contributionPct": -2.857142857142857
+    },
+    {
+     "assetId": "c",
+     "weight": 0,
+     "contributionPct": 2.857142857142857
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "computeContributions",
+   "case": "returns [] for empty input",
+   "input": {
+    "inputs": []
+   },
+   "output": [],
+   "throws": null
+  },
+  {
+   "fn": "computeContributions",
+   "case": "zero current total -> all weights 0",
+   "input": {
+    "inputs": [
+     {
+      "assetId": "a",
+      "startValue": 100,
+      "endValue": 150,
+      "currentValue": 0
+     }
+    ]
+   },
+   "output": [
+    {
+     "assetId": "a",
+     "weight": 0,
+     "contributionPct": 50
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "computeContributions",
+   "case": "start total within +-1e-9 of zero -> contributions 0",
+   "input": {
+    "inputs": [
+     {
+      "assetId": "a",
+      "startValue": 100,
+      "endValue": 150,
+      "currentValue": 50
+     },
+     {
+      "assetId": "b",
+      "startValue": -100,
+      "endValue": -100,
+      "currentValue": 50
+     }
+    ]
+   },
+   "output": [
+    {
+     "assetId": "a",
+     "weight": 0.5,
+     "contributionPct": 0
+    },
+    {
+     "assetId": "b",
+     "weight": 0.5,
+     "contributionPct": 0
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "for N=2 reproduces the V4-P7 basket-benchmark delta exactly",
+   "input": {
+    "inputs": [
+     {
+      "id": "basket",
+      "metrics": {
+       "totalReturnPct": 15,
+       "cagrPct": 11,
+       "maxDrawdownPct": -8,
+       "volatilityPct": 14,
+       "bestDayPct": 4,
+       "worstDayPct": -6
+      }
+     },
+     {
+      "id": "bench",
+      "metrics": {
+       "totalReturnPct": 9,
+       "cagrPct": 7,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 10,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "basket"
+   },
+   "output": {
+    "baselineId": "basket",
+    "series": [
+     {
+      "id": "basket",
+      "metrics": {
+       "totalReturnPct": 15,
+       "cagrPct": 11,
+       "maxDrawdownPct": -8,
+       "volatilityPct": 14,
+       "bestDayPct": 4,
+       "worstDayPct": -6
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "bench",
+      "metrics": {
+       "totalReturnPct": 9,
+       "cagrPct": 7,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 10,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": -6,
+       "cagrPct": -4,
+       "maxDrawdownPct": 3,
+       "volatilityPct": -4,
+       "bestDayPct": -1,
+       "worstDayPct": 2
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "the baseline series deltas against itself: every metric is 0",
+   "input": {
+    "inputs": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 20,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "a"
+   },
+   "output": {
+    "baselineId": "a",
+    "series": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 20,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 10,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "compares three series in one call, preserving input order",
+   "input": {
+    "inputs": [
+     {
+      "id": "x",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "y",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "z",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "x"
+   },
+   "output": {
+    "baselineId": "x",
+    "series": [
+     {
+      "id": "x",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "y",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 15,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "z",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": -5,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "re-picking the baseline: vs a",
+   "input": {
+    "inputs": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "c",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "a"
+   },
+   "output": {
+    "baselineId": "a",
+    "series": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 15,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "c",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": -5,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "re-picking the baseline: vs b",
+   "input": {
+    "inputs": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "c",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "b"
+   },
+   "output": {
+    "baselineId": "b",
+    "series": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": -15,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 25,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "c",
+      "metrics": {
+       "totalReturnPct": 5,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": -20,
+       "cagrPct": 0,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "a null metric on either side yields a null delta",
+   "input": {
+    "inputs": [
+     {
+      "id": "base",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": null,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "other",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": null,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "base"
+   },
+   "output": {
+    "baselineId": "base",
+    "series": [
+     {
+      "id": "base",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": null,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": null,
+       "maxDrawdownPct": 0,
+       "volatilityPct": 0,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     },
+     {
+      "id": "other",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": null,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      },
+      "deltas": {
+       "totalReturnPct": 0,
+       "cagrPct": null,
+       "maxDrawdownPct": 0,
+       "volatilityPct": null,
+       "bestDayPct": 0,
+       "worstDayPct": 0
+      }
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "rejects an empty set",
+   "input": {
+    "inputs": [],
+    "baselineId": "a"
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "compareSeriesStats requires at least one series"
+   }
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "rejects an unknown baseline",
+   "input": {
+    "inputs": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "b",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "zzz"
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "compareSeriesStats: baselineId zzz is not among the series"
+   }
+  },
+  {
+   "fn": "compareSeriesStats",
+   "case": "rejects duplicate ids",
+   "input": {
+    "inputs": [
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     },
+     {
+      "id": "a",
+      "metrics": {
+       "totalReturnPct": 10,
+       "cagrPct": 8,
+       "maxDrawdownPct": -5,
+       "volatilityPct": 12,
+       "bestDayPct": 3,
+       "worstDayPct": -4
+      }
+     }
+    ],
+    "baselineId": "a"
+   },
+   "output": null,
+   "throws": {
+    "name": "Error",
+    "message": "compareSeriesStats: duplicate series id a"
+   }
+  }
+ ]
+}
