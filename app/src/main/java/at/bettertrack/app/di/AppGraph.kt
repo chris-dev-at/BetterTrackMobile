@@ -38,11 +38,13 @@ import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.session.SessionInitializer
 import at.bettertrack.app.data.storage.ApiMarketDataSource
 import at.bettertrack.app.data.storage.MarketDataSource
+import at.bettertrack.app.data.storage.NoLivePricesMarketDataSource
 import at.bettertrack.app.data.storage.PortfolioBackend
 import at.bettertrack.app.data.storage.ServerPortfolioBackend
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.StorageModeStore
 import at.bettertrack.app.data.storage.effective
+import at.bettertrack.app.data.storage.holdsVault
 import at.bettertrack.app.data.storage.isDriveOnly
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.data.update.UpdatePrefs
@@ -86,6 +88,11 @@ object AppGraph {
         // V5 S1: load the debug-only origin overrides SYNCHRONOUSLY, before any
         // OkHttp/Retrofit instance below captures a base URL. No-op on release.
         at.bettertrack.app.data.prefs.DevOriginOverride.init(appContext)
+        // V5 W4: the debug-only Drive-mode gate, read on the same synchronous
+        // path for the same reason — `storageMode` below is a gated read and it
+        // is consulted while this graph is still being wired. No-op on release,
+        // which is what makes "flag off ⇒ release build unchanged" a fact.
+        at.bettertrack.app.data.prefs.DriveModeGate.init(appContext)
     }
 
     // Public: Step-8 screens encode/decode queue payloads with this same instance.
@@ -225,8 +232,14 @@ object AppGraph {
      */
     val storageModeStore: StorageModeStore by lazy { StorageModeStore(appContext) }
 
-    /** The mode every rule branches on (UNSET behaves as SERVER — plan §1.4). */
-    private val storageMode: () -> StorageMode = { storageModeStore.modeNow().effective }
+    /**
+     * The mode every rule branches on (UNSET behaves as SERVER — plan §1.4),
+     * filtered through the W4 debug gate: a release build resolves a stored
+     * DRIVE/BOTH to SERVER, so the Drive medium is unreachable there however the
+     * prefs got written.
+     */
+    private val storageMode: () -> StorageMode =
+        { at.bettertrack.app.data.prefs.DriveModeGate.gatedMode(storageModeStore.modeNow()).effective }
 
     val accountDataManager: AccountDataManager by lazy {
         AccountDataManager(
@@ -246,11 +259,19 @@ object AppGraph {
     }
 
     /**
-     * The active storage backend (S3/S4 plan §1.2). One `when` on the mode is
-     * all a Drive-backed install will need here — `VaultPortfolioBackend` lands
-     * in W4; today every mode resolves to the server implementation.
+     * The active storage backend (S3/S4 plan §1.2).
+     *
+     * The `when` resolves ONCE, at first touch, from the gated mode: a mode
+     * change is restart-applied exactly like the S1 origin override, and W5's
+     * wizard sets the mode before the graph is used for the first time. A
+     * release build can never take the vault arm — [storageMode] has already
+     * gated DRIVE/BOTH down to SERVER by then.
      */
     val portfolioBackend: PortfolioBackend by lazy {
+        if (storageMode().isDriveOnly) vaultPortfolioBackend else serverPortfolioBackend
+    }
+
+    private val serverPortfolioBackend: PortfolioBackend by lazy {
         ServerPortfolioBackend(api = btApi, db = database, json = json)
     }
 
@@ -258,9 +279,15 @@ object AppGraph {
         PortfolioRepository(db = database, json = json, backend = portfolioBackend)
     }
 
-    /** Prices/quotes/search seam (plan §1.3); W6 adds the no-live-prices source. */
+    /**
+     * Prices/quotes/search seam (plan §1.3).
+     *
+     * Drive-only gets [NoLivePricesMarketDataSource]: there is no BetterTrack
+     * account to ask for a quote, and inventing one would put a wrong number on
+     * the money path. W6 adds manual price entry and the opt-in lookup toggle.
+     */
     val marketDataSource: MarketDataSource by lazy {
-        ApiMarketDataSource(api = btApi, json = json)
+        if (storageMode().isDriveOnly) noLivePricesMarketDataSource else ApiMarketDataSource(api = btApi, json = json)
     }
 
     val marketRepository: MarketRepository by lazy {
@@ -445,6 +472,10 @@ object AppGraph {
                     api = btApi,
                     json = json,
                 ),
+                // V5 W4: the vault arm. Reachable only for VAULT-tagged ops,
+                // which only a gated Drive mode can stamp — so on a release build
+                // this executor exists and is never entered.
+                vault = vaultOpExecutor,
             ),
             refresher = portfolioRepository,
             // Mode-aware session gate: a Drive-only install has no bearer, so
@@ -480,6 +511,131 @@ object AppGraph {
                 hasDbOwner = hasDbOwner,
             )
         }
+    }
+
+    // ── V5 W4: the Drive medium (S3/S4 plan §2, debug-gated) ─────────────────
+    //
+    // Everything below is constructed lazily, so a SERVER-mode install never
+    // touches it: no vault key is generated, no Drive client is built, no
+    // encrypted prefs file is created. `DriveModeGate` guarantees a release
+    // build stays on that path.
+
+    val vaultStore: at.bettertrack.app.vault.VaultStore by lazy {
+        at.bettertrack.app.vault.VaultStore(database.vaultDao())
+    }
+
+    val vaultKeyCustody: at.bettertrack.app.vault.VaultKeyCustody by lazy {
+        at.bettertrack.app.vault.VaultKeyCustody.create(appContext)
+    }
+
+    /** The on-device encrypted cache — app-private storage, one file per vault scope. */
+    private val localDataHome: at.bettertrack.app.vault.LocalDataHome by lazy {
+        at.bettertrack.app.vault.LocalDataHome(
+            directory = java.io.File(appContext.filesDir, "vault"),
+            scope = "primary",
+        )
+    }
+
+    /**
+     * The Google token source.
+     *
+     * [at.bettertrack.app.vault.drive.SignedOutGoogleAuthProvider] until the
+     * OAuth client for `at.bettertrack.app` exists (owner action, plan §6.8):
+     * pushes then fail as `consent-required`, which is a designed, visible state
+     * ("Sign in to Google to sync"), not a crash — local writes keep working.
+     */
+    var googleAuthProvider: at.bettertrack.app.vault.drive.GoogleAuthProvider =
+        at.bettertrack.app.vault.drive.SignedOutGoogleAuthProvider
+
+    /**
+     * A BARE OkHttp client for Google.
+     *
+     * Deliberately not [authedClient]: that one attaches a BetterTrack bearer
+     * token and the ETag interceptor to every request it makes. Sending a
+     * BetterTrack credential to `googleapis.com` would be a real credential leak,
+     * and it is exactly the kind of thing a shared client makes easy to do by
+     * accident. Drive gets its own client and its own token, from
+     * [googleAuthProvider], and nothing else.
+     */
+    private val driveClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Volatile
+    private var driveDataHomeInstance: at.bettertrack.app.vault.DataHome? = null
+
+    private suspend fun driveDataHome(): at.bettertrack.app.vault.DataHome {
+        driveDataHomeInstance?.let { return it }
+        val accountId = vaultStore.vaultAccountId()
+        return at.bettertrack.app.vault.drive.DriveDataHome(
+            accountId = accountId,
+            auth = googleAuthProvider,
+            client = driveClient,
+        ).also { driveDataHomeInstance = it }
+    }
+
+    val vaultSyncScheduler: at.bettertrack.app.vault.VaultSyncScheduler by lazy {
+        at.bettertrack.app.vault.VaultSyncScheduler(appContext)
+    }
+
+    /**
+     * Nullable and NOT lazily forced: [at.bettertrack.app.vault.VaultSyncWorker]
+     * reads it and must be able to answer "there is no vault here" without
+     * building one, because WorkManager can start the worker in a process where
+     * Drive mode is off.
+     */
+    val vaultSyncCoordinator: at.bettertrack.app.vault.VaultSyncCoordinator?
+        get() = if (storageMode().holdsVault) vaultSyncCoordinatorInstance else null
+
+    private val vaultSyncCoordinatorInstance: at.bettertrack.app.vault.VaultSyncCoordinator by lazy {
+        at.bettertrack.app.vault.VaultSyncCoordinator(
+            scope = appScope,
+            store = vaultStore,
+            custody = vaultKeyCustody,
+            local = localDataHome,
+            remote = { driveDataHome() },
+        )
+    }
+
+    private val noLivePricesMarketDataSource: NoLivePricesMarketDataSource by lazy {
+        NoLivePricesMarketDataSource(database.priceCacheDao())
+    }
+
+    private val vaultProjector: at.bettertrack.app.data.storage.VaultProjector by lazy {
+        at.bettertrack.app.data.storage.VaultProjector(json)
+    }
+
+    private val vaultPortfolioBackend: at.bettertrack.app.data.storage.VaultPortfolioBackend by lazy {
+        at.bettertrack.app.data.storage.VaultPortfolioBackend(
+            db = database,
+            store = vaultStore,
+            projector = vaultProjector,
+            market = noLivePricesMarketDataSource,
+            onVaultChanged = { vaultSyncCoordinator?.requestPush() },
+        )
+    }
+
+    private val vaultOpExecutor: at.bettertrack.app.sync.VaultOpExecutor by lazy {
+        at.bettertrack.app.sync.VaultOpExecutor(
+            store = vaultStore,
+            json = json,
+            toEur = { amount, currency, date ->
+                // EUR is identity; anything else needs a rate this install may
+                // not have. `null` becomes a user-visible refusal rather than a
+                // guessed conversion (plan §1.3).
+                runCatching {
+                    at.bettertrack.app.data.storage.EurOnlyCurrencyConverter().toBase(amount, currency, date)
+                }.getOrNull()
+            },
+            onApplied = {
+                vaultPortfolioBackend.deriveAll()
+                vaultSyncCoordinator?.requestPush()
+            },
+        )
     }
 
     val syncDebugController: SyncDebugController by lazy {

@@ -32,8 +32,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ConglomeratePositionEntity::class,
         SyncOpEntity::class,
         MetaEntity::class,
+        VaultEntityRow::class,
+        VaultMetaRow::class,
+        PriceCacheRow::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -47,6 +50,8 @@ abstract class BtDatabase : RoomDatabase() {
     abstract fun conglomerateDao(): ConglomerateDao
     abstract fun syncOpDao(): SyncOpDao
     abstract fun metaDao(): MetaDao
+    abstract fun vaultDao(): VaultDao
+    abstract fun priceCacheDao(): PriceCacheDao
 
     companion object {
         /** v1 → v2 (Step 6): the portfolio_history cache table. */
@@ -145,6 +150,58 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 → v8 (V5 W4, S3/S4 plan §2.4 + §1.3): the Drive-mode working store.
+         *
+         * **Integration note for the coordinator:** this object is named for what
+         * it does, not for the version numbers it happens to bridge, because the
+         * main tree may bump the schema again before W4 merges. If it does,
+         * renumber `Migration(7, 8)` and the [BtDatabase] `version` together and
+         * nothing else changes — the three `CREATE TABLE`s are additive and
+         * order-independent with respect to every other migration.
+         *
+         * Purely additive: no existing table is touched, so a SERVER-mode install
+         * that updates in place gains three empty tables and behaves identically.
+         * The tables use `IF NOT EXISTS` so a re-run is harmless.
+         *
+         * The column definitions must match what Room's compiler generates for
+         * [VaultEntityRow], [VaultMetaRow] and [PriceCacheRow] exactly — including
+         * the indices and the backtick-quoted `key`, which is an SQL keyword —
+         * or `validateMigration` fails at startup on the first upgraded device.
+         */
+        internal val MIGRATION_VAULT_TABLES = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vault_entities` (" +
+                        "`kind` TEXT NOT NULL, " +
+                        "`id` TEXT NOT NULL, " +
+                        "`rev` INTEGER NOT NULL, " +
+                        "`editedAt` TEXT NOT NULL, " +
+                        "`editedBy` TEXT NOT NULL, " +
+                        "`deletedAt` TEXT, " +
+                        "`dataJson` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`kind`, `id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_entities_kind` ON `vault_entities` (`kind`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vault_meta` (" +
+                        "`key` TEXT NOT NULL, " +
+                        "`value` TEXT, " +
+                        "PRIMARY KEY(`key`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `price_cache` (" +
+                        "`assetId` TEXT NOT NULL, " +
+                        "`date` TEXT NOT NULL, " +
+                        "`close` REAL NOT NULL, " +
+                        "`currency` TEXT NOT NULL, " +
+                        "`syncedAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`assetId`, `date`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_price_cache_assetId` ON `price_cache` (`assetId`)")
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
                 .addMigrations(
@@ -154,6 +211,7 @@ abstract class BtDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_VAULT_TABLES,
                 )
                 .build()
     }
