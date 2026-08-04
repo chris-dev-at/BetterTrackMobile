@@ -2,7 +2,6 @@ package at.bettertrack.app.data.repo
 
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtResult
-import at.bettertrack.app.data.api.PARANOID_MODE_CODE
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.DividendCalendarResponse
 import at.bettertrack.app.data.api.dto.DividendProjectionResponse
@@ -131,48 +130,28 @@ class MarketIntelRepository(
     // renderings — which is the whole reason they aren't flattened here.
 
     suspend fun earningsCalendar(): BtResult<EarningsCalendarResponse> =
-        paranoidAsUnavailable(apiCall(json) { api.earningsCalendar() }) {
-            EarningsCalendarResponse(available = false)
-        }
+        apiCall(json) { api.earningsCalendar() }
 
     suspend fun dividendCalendar(): BtResult<DividendCalendarResponse> =
-        paranoidAsUnavailable(apiCall(json) { api.dividendCalendar() }) {
-            DividendCalendarResponse(available = false)
-        }
+        apiCall(json) { api.dividendCalendar() }
 
     suspend fun dividendProjection(): BtResult<DividendProjectionResponse> =
-        paranoidAsUnavailable(apiCall(json) { api.dividendProjection() }) {
-            DividendProjectionResponse(available = false)
-        }
+        apiCall(json) { api.dividendProjection() }
 
     suspend fun newsDigest(): BtResult<NewsDigestResponse> =
-        paranoidAsUnavailable(apiCall(json) { api.newsDigest() }) {
-            NewsDigestResponse(available = false)
-        }
+        apiCall(json) { api.newsDigest() }
 
-    /**
-     * Turn a paranoid-mode refusal into an honest "unavailable" body.
-     *
-     * Three of the four roll-ups read the caller's HOLDINGS, so a paranoid
-     * account — whose portfolio data the server deliberately cannot see — gets
-     * `403 PARANOID_MODE` from them. Surfacing that as an error with a Retry
-     * button would be doubly wrong: retrying can never succeed, and the copy
-     * would blame the network for a deliberate privacy setting.
-     *
-     * `available:false` is *precisely* what that situation means on this
-     * surface — "the server can't tell you about this" — so the block simply
-     * isn't shown, and the paranoid explainer on the Portfolio tab is where the
-     * user is told why. The global [at.bettertrack.app.data.api.ParanoidModeInterceptor]
-     * still sees the 403 and flips that state, because this mapping happens
-     * downstream of it.
-     */
-    private inline fun <T : Any> paranoidAsUnavailable(
-        result: BtResult<T>,
-        unavailable: () -> T,
-    ): BtResult<T> = when {
-        result is BtResult.Err && result.error.code == PARANOID_MODE_CODE -> BtResult.Ok(unavailable())
-        else -> result
-    }
+    // A note on PARANOID MODE, because the obvious "improvement" here is a
+    // regression: three of these four roll-ups read the caller's HOLDINGS, so a
+    // paranoid account gets `403 PARANOID_MODE` from them, and it is tempting to
+    // translate that into an `available:false` body so the blocks just vanish.
+    //
+    // They must NOT vanish. `available:false` renders as an absent block with no
+    // explanation, and a paranoid user would simply find their dividend calendar
+    // missing. The error path instead carries the SERVER'S OWN sentence about
+    // paranoid mode to the screen, so the user is told why. A futile Retry button
+    // is the smaller flaw; silence is the bigger one. Pinned by
+    // `MarketIntelRepositoryTest`.
 
     /**
      * Map one read into a section: an error, or a body whose own `available`

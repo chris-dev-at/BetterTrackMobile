@@ -254,39 +254,14 @@ class MarketIntelRepositoryTest {
             assertEquals(403, (r as BtResult.Err).error.httpStatus)
         }
 
-    // ── Paranoid mode (S2c-2 integration) ───────────────────────────────────
-
     /**
-     * A paranoid account's server genuinely cannot see its holdings, so the
-     * three holdings-derived roll-ups answer `403 PARANOID_MODE`. That is a
-     * permanent, deliberate "we can't tell you" — the exact meaning of
-     * `available:false` on this surface — so it must reach the UI as an absent
-     * block, never as an error the user is invited to retry forever.
+     * The companion to the paranoid case above: an ORDINARY failure is an error
+     * too. Both stay errors, which is what lets the screen show the server's own
+     * sentence — the paranoid explanation included — instead of a block that
+     * silently isn't there.
      */
     @Test
-    fun `a paranoid-mode refusal reads as unavailable, not as a retryable error`() = runBlocking {
-        val refusal = MockResponse().setResponseCode(403).setBody(
-            """{"error":{"code":"PARANOID_MODE","message":"Portfolio data is not accessible."}}""",
-        )
-        dispatcher.stub(DIVIDEND_CAL, refusal)
-        dispatcher.stub(PROJECTION, refusal)
-        dispatcher.stub(DIGEST, refusal)
-
-        val calendar = repo.dividendCalendar()
-        val projection = repo.dividendProjection()
-        val digest = repo.newsDigest()
-
-        assertTrue(calendar is BtResult.Ok)
-        assertFalse((calendar as BtResult.Ok).value.available)
-        assertTrue(projection is BtResult.Ok)
-        assertFalse((projection as BtResult.Ok).value.available)
-        assertTrue(digest is BtResult.Ok)
-        assertFalse((digest as BtResult.Ok).value.available)
-    }
-
-    /** Any OTHER failure stays an error — only the paranoid code is translated. */
-    @Test
-    fun `an ordinary failure on a roll-up is still an error`() = runBlocking {
+    fun `an ordinary failure on a roll-up is an error, like the paranoid one`() = runBlocking {
         dispatcher.stub(
             PROJECTION,
             MockResponse().setResponseCode(500).setBody(
