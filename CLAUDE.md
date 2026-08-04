@@ -10,4 +10,4 @@ Non-negotiables (duplicated from the handoff for safety):
 - Never write the test-account credentials into any file, log, or commit.
 - No `git init`/commits unless Christian asks; no AI-attribution text anywhere.
 - Every milestone leaves the installed app fully working, logged out at the login screen, phone stay-awake restored, test data cleaned from the production account.
-- The server is the only calculator; never invent API endpoints — stub behind a flag, note in `docs/TODO.md`, and tell Christian.
+- In server mode the server is the only calculator; in Drive-autonomous mode the calculator is the platform's audited `packages/domain` engine ported as LITERAL translation with its test vectors (owner mandate 2026-08-04, holiday-sprint drop; plan in `docs/S3S4_STORAGE_PLAN.md`) — never a hand-written reimplementation. Never invent API endpoints — stub behind a flag, note in `docs/TODO.md`, and tell Christian.
