@@ -1402,6 +1402,34 @@
     <string name="bt_vault_sync_offline">Offline — changes saved on this device</string>
     <string name="bt_vault_sync_locked">Vault locked — changes saved on this device</string>
     <string name="bt_vault_sync_attention">Needs your attention</string>
+    <!-- S5: the BetterTrack server medium (vault:sync) -->
+    <string name="bt_server_vault_title">BetterTrack</string>
+    <string name="bt_server_vault_checking">Checking…</string>
+    <string name="bt_server_vault_signed_out">Not signed in to BetterTrack.</string>
+    <string name="bt_server_vault_unreachable">BetterTrack could not be reached — your changes are saved on this device.</string>
+    <string name="bt_server_vault_unreadable">The copy stored here can\'t be opened. It has been left untouched.</string>
+    <string name="bt_server_vault_absent_normal">No vault here — this account keeps your portfolio on BetterTrack the normal way. Paranoid mode is switched on in the web app.</string>
+    <string name="bt_server_vault_absent_drive_only">This vault lives only in your Google Drive.</string>
+    <string name="bt_server_vault_absent_pending">No copy stored here yet.</string>
+    <string name="bt_server_vault_absent_unknown">No copy stored here.</string>
+    <string name="bt_server_vault_scope_hint">Sign out and back in — your sign-in is from before vault sync existed.</string>
+    <string name="bt_server_vault_check_again">Check again</string>
+    <string name="bt_server_vault_history">Earlier versions</string>
+    <string name="bt_server_vault_history_loading">Loading earlier versions…</string>
+    <string name="bt_server_vault_history_empty">No earlier versions kept yet.</string>
+    <string name="bt_server_vault_history_mode">Earlier versions are kept only for vaults stored on BetterTrack.</string>
+    <string name="bt_server_vault_history_failed">The list of earlier versions could not be loaded.</string>
+    <string name="bt_server_vault_history_version">Version %1$d</string>
+    <string name="bt_server_vault_setup_title">Set up vault sync</string>
+    <string name="bt_server_vault_setup_body">Your vault is stored on BetterTrack as encrypted data only. Unlock it with your vault passphrase and your portfolio appears here.</string>
+    <string name="bt_server_vault_setup_pass_hint">The passphrase you chose in the web app — not your BetterTrack password.</string>
+    <string name="bt_server_vault_setup_action">Unlock my vault</string>
+    <string name="bt_server_vault_adopted">Your vault is open on this device.</string>
+    <string name="bt_server_vault_wrong_pass">That passphrase doesn\'t open this vault.</string>
+    <string name="bt_server_vault_update_required">This vault was saved by a newer version of BetterTrack. Update the app to open it.</string>
+    <string name="bt_server_vault_failed">Your vault could not be opened right now.</string>
+    <string name="bt_medium_synced_server">Backed up to BetterTrack</string>
+    <string name="bt_medium_sign_in_server">Sign out and back in to sync with BetterTrack</string>
     <string name="bt_vault_sync_pending_google">Not connected to Google yet — your vault lives on this device</string>
     <string name="bt_vault_sync_unpushed">This device has changes Drive has not seen yet.</string>
 

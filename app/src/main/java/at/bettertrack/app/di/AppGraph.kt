@@ -63,6 +63,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -646,9 +647,80 @@ object AppGraph {
             store = vaultStore,
             custody = vaultKeyCustody,
             local = localDataHome,
-            remote = { driveDataHome() },
+            media = { connectedVaultMedia() },
         )
     }
+
+    // ── V5 S5: the server medium (`vault:sync` over bearer) ──────────────────
+
+    /**
+     * The BetterTrack blob store as a [at.bettertrack.app.vault.DataHome].
+     *
+     * On [authedClient] — the opposite decision from [driveClient], and for the
+     * same reason: this endpoint IS BetterTrack, so the app's own bearer belongs
+     * on it, and reusing the authenticated client means `TokenAuthenticator`'s
+     * 401-refresh applies to vault sync for free.
+     */
+    private val serverVaultDataHome: at.bettertrack.app.vault.server.ServerVaultDataHome by lazy {
+        at.bettertrack.app.vault.server.ServerVaultDataHome(
+            client = authedClient,
+            apiBase = apiBaseUrl.toHttpUrl(),
+            json = json,
+            hasSession = { tokenManager.hasTokens() },
+        )
+    }
+
+    /**
+     * Whether BetterTrack is currently one of this vault's storage places.
+     *
+     * Public because "Where your data lives" renders its status and offers the
+     * one action that can change it (sign out and back in, when the token
+     * predates `vault:sync`).
+     */
+    val serverVaultConnection: at.bettertrack.app.vault.server.ServerVaultConnection by lazy {
+        at.bettertrack.app.vault.server.ServerVaultConnection(
+            home = { serverVaultDataHome },
+            hasSession = { tokenManager.hasTokens() },
+        )
+    }
+
+    /**
+     * The media set for one sync pass — Drive when a Google account is connected,
+     * BetterTrack when the account actually has a server vault.
+     *
+     * Re-evaluated per pass rather than cached because both answers change while
+     * the app runs: a Google sign-in adds one, a logout removes the other. The
+     * order is stable so the UI's rows never jump.
+     */
+    private suspend fun connectedVaultMedia(): List<at.bettertrack.app.vault.DataHome> {
+        val media = mutableListOf<at.bettertrack.app.vault.DataHome>()
+        if (isGoogleConnected) media += driveDataHome()
+        serverVaultConnection.connectedMedium()?.let { media += it }
+        return media
+    }
+
+    /**
+     * The paranoid payoff (S5): unlock a web-created vault with its own
+     * passphrase and hydrate this device from the server copy.
+     */
+    val serverVaultAdoption: at.bettertrack.app.vault.server.ServerVaultAdoption by lazy {
+        at.bettertrack.app.vault.server.ServerVaultAdoption(
+            home = { if (tokenManager.hasTokens()) serverVaultDataHome else null },
+            custody = vaultKeyCustody,
+            store = vaultStore,
+            deriveProjections = { vaultPortfolioBackend.deriveAll() },
+        )
+    }
+
+    /** The restore picker's data layer — `GET /vault/history[/{version}]`. */
+    suspend fun serverVaultHistory(): at.bettertrack.app.vault.server.ServerVaultHistoryResult =
+        if (tokenManager.hasTokens()) {
+            serverVaultDataHome.history()
+        } else {
+            at.bettertrack.app.vault.server.ServerVaultHistoryResult.Failure(
+                at.bettertrack.app.vault.DataHomeTransportFailure("You are not signed in to BetterTrack.")
+            )
+        }
 
     private val noLivePricesMarketDataSource: NoLivePricesMarketDataSource by lazy {
         NoLivePricesMarketDataSource(database.priceCacheDao())

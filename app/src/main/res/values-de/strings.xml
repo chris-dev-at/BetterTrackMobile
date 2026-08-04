@@ -1390,6 +1390,34 @@
     <string name="bt_vault_sync_offline">Offline — Änderungen liegen auf diesem Gerät</string>
     <string name="bt_vault_sync_locked">Tresor gesperrt — Änderungen liegen auf diesem Gerät</string>
     <string name="bt_vault_sync_attention">Braucht deine Aufmerksamkeit</string>
+    <!-- S5: das BetterTrack-Servermedium (vault:sync) -->
+    <string name="bt_server_vault_title">BetterTrack</string>
+    <string name="bt_server_vault_checking">Wird geprüft…</string>
+    <string name="bt_server_vault_signed_out">Nicht bei BetterTrack angemeldet.</string>
+    <string name="bt_server_vault_unreachable">BetterTrack war nicht erreichbar — deine Änderungen sind auf diesem Gerät gespeichert.</string>
+    <string name="bt_server_vault_unreadable">Die hier gespeicherte Kopie lässt sich nicht öffnen. Sie wurde unverändert gelassen.</string>
+    <string name="bt_server_vault_absent_normal">Kein Tresor hier — dieses Konto speichert dein Portfolio ganz normal bei BetterTrack. Der Paranoid-Modus wird in der Web-App eingeschaltet.</string>
+    <string name="bt_server_vault_absent_drive_only">Dieser Tresor liegt nur in deinem Google Drive.</string>
+    <string name="bt_server_vault_absent_pending">Hier ist noch keine Kopie gespeichert.</string>
+    <string name="bt_server_vault_absent_unknown">Hier ist keine Kopie gespeichert.</string>
+    <string name="bt_server_vault_scope_hint">Melde dich ab und wieder an — deine Anmeldung stammt aus der Zeit vor der Tresor-Synchronisierung.</string>
+    <string name="bt_server_vault_check_again">Erneut prüfen</string>
+    <string name="bt_server_vault_history">Frühere Versionen</string>
+    <string name="bt_server_vault_history_loading">Frühere Versionen werden geladen…</string>
+    <string name="bt_server_vault_history_empty">Noch keine früheren Versionen vorhanden.</string>
+    <string name="bt_server_vault_history_mode">Frühere Versionen werden nur für Tresore aufbewahrt, die bei BetterTrack liegen.</string>
+    <string name="bt_server_vault_history_failed">Die Liste früherer Versionen konnte nicht geladen werden.</string>
+    <string name="bt_server_vault_history_version">Version %1$d</string>
+    <string name="bt_server_vault_setup_title">Tresor-Synchronisierung einrichten</string>
+    <string name="bt_server_vault_setup_body">Dein Tresor liegt bei BetterTrack ausschließlich als verschlüsselte Daten. Entsperre ihn mit deiner Tresor-Passphrase und dein Portfolio erscheint hier.</string>
+    <string name="bt_server_vault_setup_pass_hint">Die Passphrase, die du in der Web-App gewählt hast — nicht dein BetterTrack-Passwort.</string>
+    <string name="bt_server_vault_setup_action">Meinen Tresor entsperren</string>
+    <string name="bt_server_vault_adopted">Dein Tresor ist auf diesem Gerät geöffnet.</string>
+    <string name="bt_server_vault_wrong_pass">Mit dieser Passphrase lässt sich der Tresor nicht öffnen.</string>
+    <string name="bt_server_vault_update_required">Dieser Tresor wurde mit einer neueren BetterTrack-Version gespeichert. Aktualisiere die App, um ihn zu öffnen.</string>
+    <string name="bt_server_vault_failed">Dein Tresor konnte gerade nicht geöffnet werden.</string>
+    <string name="bt_medium_synced_server">Bei BetterTrack gesichert</string>
+    <string name="bt_medium_sign_in_server">Zum Synchronisieren mit BetterTrack ab- und wieder anmelden</string>
     <string name="bt_vault_sync_pending_google">Noch nicht mit Google verbunden — dein Tresor liegt auf diesem Gerät</string>
     <string name="bt_vault_sync_unpushed">Dieses Gerät hat Änderungen, die Drive noch nicht kennt.</string>
 

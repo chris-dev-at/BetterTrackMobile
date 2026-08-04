@@ -251,6 +251,49 @@ class VaultKeyCustody(
         return serializeRecoveryKit(RecoveryKit(id, key, VaultContract.FORMAT_VERSION))
     }
 
+    /**
+     * Adopts a vault that already exists **somewhere else** — the S5 paranoid
+     * payoff, where the passphrase was chosen in the web app and this device is
+     * meeting the vault for the first time.
+     *
+     * The difference from [unlock] is which wrapper is used. [unlock] reads the
+     * wrapper this device stored; there is none here, so the wrapper travels
+     * *inside the envelope header* the server just handed us
+     * (`header.wrappedKeys`, `VaultContracts.kt:287`). Deriving with the
+     * envelope's own KDF parameters rather than this build's defaults is what
+     * makes the result byte-compatible with the web vault: the salt and cost were
+     * fixed when the browser created the vault, and re-deriving under different
+     * ones would simply produce a key that opens nothing.
+     *
+     * On success the wrapper is persisted, so from the next launch this is an
+     * ordinary [unlock] with no server round trip.
+     *
+     * @return false on a wrong passphrase — an ordinary user event, not an
+     *   exception, exactly as [unlock] treats it.
+     */
+    suspend fun adopt(wrapped: VaultWrappedKey, passphrase: String): Boolean =
+        withContext(kdfDispatcher) {
+            var kek: ByteArray? = null
+            try {
+                kek = deriveVaultKek(passphrase, wrapped.kdf, argon2)
+                val vk = unwrapVaultKey(wrapped, wrapped.keyId, kek)
+                prefs.edit()
+                    .putString(KEY_ID, wrapped.keyId)
+                    .putString(KEY_SALT, wrapped.kdf.salt)
+                    .putString(KEY_WRAPPED, wrapped.wrappedVk)
+                    .apply()
+                vaultKey = vk
+                _locked.value = false
+                true
+            } catch (cause: VaultCryptoError) {
+                // Presence-only diagnostics: never the passphrase, never key bytes.
+                Log.d(TAG, "vault adoption rejected: ${cause.code}")
+                false
+            } finally {
+                kek?.let { zeroBytes(it) }
+            }
+        }
+
     /** Forgets this device's key material entirely. Only "delete everything" calls this. */
     fun forget() {
         lock()

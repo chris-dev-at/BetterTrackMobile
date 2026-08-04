@@ -77,7 +77,7 @@ class VaultSyncCoordinatorTest {
         store = store,
         custody = custody,
         local = local,
-        remote = { remote },
+        media = { listOfNotNull(remote) },
         now = { 1_754_300_000_000L },
         nowIso = { "2026-08-04T12:00:00.000Z" },
         newWriteId = { "018f0000-0000-7000-8000-0000000005%02d".format(idCounter++) },

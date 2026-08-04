@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.theme.BtTheme
@@ -106,6 +107,22 @@ fun ParanoidModeScreen(
                 WorksRow(stringResource(R.string.bt_paranoid_works_alerts))
                 WorksRow(stringResource(R.string.bt_paranoid_works_notifications))
             }
+        }
+
+        // S5 — the way out of this screen.
+        //
+        // Until `vault:sync` shipped this was a dead end by construction: the
+        // kill-rail refuses every portfolio call for a paranoid account, so the
+        // only truthful thing the app could say was "use the web app". The bytes
+        // were never the obstacle — they sit in BetterTrack's blind store,
+        // encrypted with a key only this user has. Now the app can fetch and open
+        // them, so the offer belongs exactly here, where the user is standing.
+        //
+        // Offered only when this device holds no vault yet; once it does, the
+        // ordinary unlock gate takes over and a second passphrase prompt here
+        // would be a confusing duplicate.
+        if (!AppGraph.vaultKeyCustody.hasVault) {
+            at.bettertrack.app.ui.storage.ServerVaultSetupCard()
         }
 
         Text(

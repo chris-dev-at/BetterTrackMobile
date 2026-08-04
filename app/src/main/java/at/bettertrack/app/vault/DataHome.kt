@@ -37,7 +37,11 @@ enum class DataHomeMedium(val wire: String) {
     LOCAL("local"),
     DRIVE("drive"),
 
-    /** The platform's server medium. Reserved: `vault:sync` is not shipped (plan §6.4). */
+    /**
+     * The platform's blind server blob store, reached over the `vault:sync`
+     * bearer surface (S5). Shipped 2026-08-04 as platform PR #1049; the plan's
+     * §6.4 reservation is discharged.
+     */
     SERVER("server"),
     ;
 
@@ -78,6 +82,39 @@ enum class DataHomeFailureCode(val wire: String) {
 
     /** App-side extension — see the enum doc. Drive `storageQuotaExceeded`. */
     QUOTA_EXCEEDED("quota-exceeded"),
+
+    /**
+     * App-side extension for the S5 server medium: the bearer is valid but was
+     * minted before `vault:sync` existed, so the platform answers
+     * `403 INSUFFICIENT_SCOPE` naming the missing scope (verified on the dev
+     * backend, 2026-08-05).
+     *
+     * It is deliberately **not** [PERMISSION_DENIED]. A denied permission is a
+     * consent problem the user solves in a picker; this one is solved by exactly
+     * one act — signing out and back in, so the token is re-minted with the
+     * scope. Collapsing the two would send the user to a screen that cannot fix
+     * it.
+     */
+    SCOPE_MISSING("scope-missing"),
+
+    /**
+     * App-side extension: `403 VAULT_PARANOID_MODE_REQUIRED` — the route exists
+     * and the scope is held, but this account is not in paranoid mode. Only
+     * `/vault/history` answers this way (`vaultRoutes.ts:100-111`); it is a
+     * designed explainer, never an error the user can retry into.
+     */
+    MODE_REQUIRED("mode-required"),
+
+    /**
+     * App-side extension: `409 VAULT_SERVER_MEDIUM_INACTIVE` — the account is
+     * paranoid and holds a vault, but has not activated the *server* medium, so
+     * bytes may only be staged as a candidate (a session-only flow, web-side).
+     * Writing anyway is impossible; saying so is the designed state.
+     */
+    MEDIUM_INACTIVE("medium-inactive"),
+
+    /** App-side extension: `413 VAULT_TOO_LARGE` — the envelope exceeds the server cap. */
+    TOO_LARGE("too-large"),
     API_FAILURE("api-failure"),
 }
 

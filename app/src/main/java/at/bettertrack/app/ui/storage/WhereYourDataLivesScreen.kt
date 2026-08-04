@@ -171,6 +171,10 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
     if (effective.holdsVault) {
         SectionLabel(stringResource(R.string.bt_storage_section_backup))
         VaultSyncCard()
+        // S5: BetterTrack as a second storage place. Its own row, because with a
+        // media set "is my data safe?" stops having one answer — see
+        // `ServerVaultSection`'s doc.
+        ServerVaultSection()
 
         SectionLabel(stringResource(R.string.bt_storage_section_vault))
         StorageNavRow(
@@ -181,6 +185,15 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
         )
         NewRecoveryKitRow()
         LockVaultRow()
+    } else if (at.bettertrack.app.data.api.ParanoidModeState.active.collectAsStateWithLifecycle().value &&
+        !AppGraph.vaultKeyCustody.hasVault
+    ) {
+        // S5 §1.5 → the real media set: a paranoid account on a device with no
+        // vault. Server mode has nothing to render for this user — the kill-rail
+        // blacked out every portfolio surface — so the honest offer is the way in,
+        // not an empty backup section.
+        SectionLabel(stringResource(R.string.bt_storage_section_backup))
+        ServerVaultSetupCard()
     }
 
     // ── Change where it lives ───────────────────────────────────────────────
@@ -349,6 +362,20 @@ private fun VaultSyncCard() {
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
                         color = bt.gold,
+                    )
+                }
+            }
+            // S5: with a media set the headline above is only the honest FLOOR
+            // across every storage place. One row per medium is what stops a
+            // successful Drive push from reassuring a user whose BetterTrack copy
+            // is stale — the two are independent facts and must read as two.
+            if (state.mediaRows.size > 1) {
+                Spacer(Modifier.height(10.dp))
+                state.mediaRows.forEach { row ->
+                    Text(
+                        text = stringResource(row.status.mediumSentenceRes(row.medium)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (row.status == VaultSyncStatus.SYNCED) bt.textSecondary else bt.textMuted,
                     )
                 }
             }
