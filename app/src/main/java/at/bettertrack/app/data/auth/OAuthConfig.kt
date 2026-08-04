@@ -2,6 +2,7 @@ package at.bettertrack.app.data.auth
 
 import android.net.Uri
 import at.bettertrack.app.BuildConfig
+import at.bettertrack.app.data.prefs.DevOriginOverride
 
 /**
  * Static OAuth client configuration (spec §4). Client id + redirect URI come from
@@ -29,26 +30,6 @@ object OAuthConfig {
     const val ALERTS_SCOPES_ENABLED: Boolean = true
 
     /**
-     * Whether to request the four v5 scopes `cash:read cash:write
-     * mirrorchain:read mirrorchain:write`. ON (2026-08-04): the platform's v5
-     * drop addendum shipped them (PRs #1046 cash-classification / #1048
-     * mirrorchain) and widened the BetterTrackMobile client's allowed-scope set
-     * server-side via migrations `0079`/`0080` — code-seeded, exactly the
-     * `0023`/`0027` precedent — so authorize accepts them and a re-login mints a
-     * token carrying them.
-     *
-     * Same guarded shape (and same hard-reject history) as
-     * [ALERTS_SCOPES_ENABLED]: requesting a scope the SERVING client row does
-     * not allow makes the authorize endpoint reject the WHOLE login ("This
-     * app's authorization request is invalid…"), it does not merely drop the
-     * scope. The dev stack carries the 0079/0080 seeds; **before a
-     * PROD-targeting release ships, prod must be on v5 with those seeds** — if
-     * login ever starts hard-rejecting, flip this to `false`, rebuild, re-verify
-     * (PLATFORM_ASKS #39.4).
-     */
-    const val V5_SCOPES_ENABLED: Boolean = true
-
-    /**
      * Space-separated coarse module scopes the app requests — the FULL allowed
      * set for the BetterTrackMobile client (PLATFORM_ASKS ⚡ ACTIVATION blesses
      * requesting the full set so future grants need no app change). A token
@@ -65,9 +46,17 @@ object OAuthConfig {
      * mirrorchain:read/mirrorchain:write (group-portfolio participation: chains,
      * members, activity, invites read; invite accept/decline + chain leave
      * write — chain ADMINISTRATION stays session-only this sprint) are appended
-     * only when [V5_SCOPES_ENABLED].
+     * only when the EFFECTIVE backend has the seeds — see [v5ScopesAllowedFor].
+     *
+     * A computed property, not a constant: the effective API origin is a runtime
+     * value on debug builds ([DevOriginOverride]), so the scope set must be read
+     * per authorize call rather than frozen at class-init.
      */
-    val SCOPES: String = requestedScopes(ALERTS_SCOPES_ENABLED, V5_SCOPES_ENABLED)
+    val SCOPES: String
+        get() = requestedScopes(
+            alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
+            v5ScopesEnabled = v5ScopesAllowedFor(DevOriginOverride.apiOrigin),
+        )
 
     /**
      * The authorize URL opened in a Custom Tab on the WEB origin:
@@ -103,10 +92,44 @@ private const val ALERTS_SCOPES = "alerts:read alerts:write"
 
 /**
  * The v5 drop's four scopes (cash classification + mirrorchain participation),
- * appended to the request only once the platform has seeded them for the mobile
- * client (see [OAuthConfig.V5_SCOPES_ENABLED]).
+ * appended to the request only against a backend that has seeded them (see
+ * [v5ScopesAllowedFor]).
  */
 private const val V5_SCOPES = "cash:read cash:write mirrorchain:read mirrorchain:write"
+
+/** The production API origin — the one backend that is NOT known to be v5-seeded. */
+const val PROD_API_ORIGIN = "https://api.bettertrack.at"
+
+/**
+ * **Per-backend** gate for the four v5 scopes (board #42.1), superseding the
+ * flat `V5_SCOPES_ENABLED` boolean this file carried on 2026-08-04.
+ *
+ * Why per-backend rather than per-build: requesting a scope the SERVING OAuth
+ * client row does not allow makes the authorize endpoint reject the WHOLE login
+ * ("This app's authorization request is invalid…") — it does not merely drop the
+ * scope. That is the same hard-reject the alerts scopes taught us
+ * ([OAuthConfig.ALERTS_SCOPES_ENABLED], held `false` until migration 0030
+ * landed). The v5 seeds (migrations `0079`/`0080`, from the v5 drop addendum —
+ * PRs #1046 cash-classification / #1048 mirrorchain) are live on the LOCAL DEV
+ * stack and **not yet confirmed on prod**, which was deliberately offline for
+ * the holiday sprint. A single flat flag therefore cannot be right for both
+ * backends at once: on it breaks a prod login, off it costs the sprint its
+ * `cash:*` / `mirrorchain:*` work.
+ *
+ * So: any origin that is not production requests the full 18; production keeps
+ * requesting the proven 14 until the prod 0079/0080 seed is confirmed. **When it
+ * is, this function is the one place that changes** (return `true`
+ * unconditionally, or delete the gate) — and re-verify a real prod login before
+ * shipping.
+ *
+ * Pure + top-level so both branches are unit-testable without touching
+ * BuildConfig or the debug-only origin override.
+ */
+internal fun v5ScopesAllowedFor(effectiveApiOrigin: String): Boolean =
+    canonicalOrigin(effectiveApiOrigin) != canonicalOrigin(PROD_API_ORIGIN)
+
+/** Case/trailing-slash-insensitive origin identity (never a URL parse). */
+private fun canonicalOrigin(origin: String): String = origin.trim().trimEnd('/').lowercase()
 
 /**
  * The scope string the app requests, with alerts:* appended only when

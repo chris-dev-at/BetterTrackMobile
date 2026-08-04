@@ -1,6 +1,9 @@
 package at.bettertrack.app.data.db
 
 import android.util.Log
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.WipeScope
+import at.bettertrack.app.data.storage.logoutWipeScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -17,8 +20,17 @@ interface LocalAccountData {
      */
     suspend fun onSessionEstablished(userId: String)
 
-    /** Explicit logout / hard account gate: wipe EVERYTHING local. */
+    /** Hard account gate (admin/disabled account): wipe EVERYTHING local. */
     suspend fun wipeAll()
+
+    /**
+     * Explicit logout. Wipes as much as the active
+     * [at.bettertrack.app.data.storage.StorageMode] allows: everything in SERVER
+     * mode (today's behaviour, unchanged), server-scoped data only when the
+     * install also holds a Drive vault — logging out of a BetterTrack account
+     * must never destroy a vault the user still owns (S3/S4 plan §4.4).
+     */
+    suspend fun wipeForLogout()
 }
 
 /** What [resolveOwnerAction] decided about the DB's current content. */
@@ -65,6 +77,50 @@ fun resolveOwnerAction(storedOwner: String?, sessionUserId: String): OwnerAction
 
 const val LOCAL_KEY_PREFIX = "local-"
 
+// ── Wipe scoping (S3/S4 plan §4.4) ──────────────────────────────────────────
+
+/**
+ * Every table an explicit logout may clear because it holds BetterTrack-account
+ * data: the read-model caches, the outbound queue, and the account-scoped meta
+ * KV. Kept as literal names so the list is reviewable next to the `@Database`
+ * entity list — a new table must be classified deliberately, not by default.
+ */
+val SERVER_SCOPED_TABLES: List<String> = listOf(
+    "portfolios",
+    "holdings",
+    "transactions",
+    "portfolio_history",
+    "cash_sources",
+    "cash_movements",
+    "custom_assets",
+    "custom_asset_value_points",
+    "watchlists",
+    "watchlist_items",
+    "conglomerates",
+    "conglomerate_positions",
+    "sync_ops",
+    "meta",
+)
+
+/**
+ * Tables that belong to the user's own Drive vault and therefore survive a
+ * logout in any mode that holds one. **Empty until W4** creates `vault_entities`
+ * / `vault_meta` — which is precisely why W1's two wipe scopes are behaviourally
+ * identical today.
+ */
+val VAULT_SCOPED_TABLES: List<String> = emptyList()
+
+/**
+ * Which tables a [WipeScope] clears. `null` means "all of them" and maps to
+ * Room's [BtDatabase.clearAllTables] — the exact call the app has always made on
+ * logout, kept as its own path so today's behaviour is not merely equivalent but
+ * identical.
+ */
+fun tablesToClear(scope: WipeScope): List<String>? = when (scope) {
+    WipeScope.EVERYTHING -> null
+    WipeScope.SERVER_ONLY -> SERVER_SCOPED_TABLES - VAULT_SCOPED_TABLES.toSet()
+}
+
 private fun newLocalOwnerKey(): String = LOCAL_KEY_PREFIX + UUID.randomUUID().toString()
 
 /**
@@ -73,6 +129,8 @@ private fun newLocalOwnerKey(): String = LOCAL_KEY_PREFIX + UUID.randomUUID().to
  */
 class AccountDataManager(
     private val db: BtDatabase,
+    /** The active storage mode — decides how much an explicit logout destroys. */
+    private val storageMode: () -> StorageMode = { StorageMode.SERVER },
     /** Extra wipe side effects (cancel WorkManager sync work, …). */
     private val onWiped: () -> Unit,
 ) : LocalAccountData {
@@ -98,11 +156,41 @@ class AccountDataManager(
         }
     }
 
-    override suspend fun wipeAll() {
+    override suspend fun wipeAll() = wipe(WipeScope.EVERYTHING)
+
+    override suspend fun wipeForLogout() = wipe(logoutWipeScope(storageMode()))
+
+    /**
+     * The scoped wipe W4 extends. [WipeScope.EVERYTHING] is the historic
+     * `clearAllTables()` path, byte-for-byte; [WipeScope.SERVER_ONLY] clears the
+     * server-scoped tables one by one and leaves [VAULT_SCOPED_TABLES] standing.
+     *
+     * SERVER_ONLY is unreachable in W1 (no mode that holds a vault can be
+     * selected yet) and the vault table list is empty, so the two scopes touch
+     * exactly the same rows today — the difference only becomes real when W4
+     * adds `vault_entities` / `vault_meta` to [VAULT_SCOPED_TABLES].
+     */
+    private suspend fun wipe(scope: WipeScope) {
         withContext(Dispatchers.IO) {
-            db.clearAllTables()
+            val tables = tablesToClear(scope)
+            if (tables == null) {
+                db.clearAllTables()
+            } else {
+                // One transaction so a crash mid-wipe can't leave a half-cleared
+                // cache. Room's invalidation triggers fire on these DELETEs, so
+                // the observing Flows repaint exactly as they do after a
+                // clearAllTables().
+                val sqlite = db.openHelper.writableDatabase
+                sqlite.beginTransaction()
+                try {
+                    tables.forEach { sqlite.execSQL("DELETE FROM `$it`") }
+                    sqlite.setTransactionSuccessful()
+                } finally {
+                    sqlite.endTransaction()
+                }
+            }
             onWiped()
-            Log.i(TAG, "Local account data wiped (caches + sync queue).")
+            Log.i(TAG, "Local account data wiped (scope=$scope).")
         }
     }
 

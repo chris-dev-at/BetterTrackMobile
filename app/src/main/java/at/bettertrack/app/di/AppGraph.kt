@@ -36,17 +36,28 @@ import at.bettertrack.app.data.repo.SocketIoChatGateway
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.data.session.SessionInitializer
+import at.bettertrack.app.data.storage.ApiMarketDataSource
+import at.bettertrack.app.data.storage.MarketDataSource
+import at.bettertrack.app.data.storage.PortfolioBackend
+import at.bettertrack.app.data.storage.ServerPortfolioBackend
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.StorageModeStore
+import at.bettertrack.app.data.storage.effective
+import at.bettertrack.app.data.storage.isDriveOnly
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.data.update.UpdatePrefs
 import at.bettertrack.app.debug.SyncDebugController
 import at.bettertrack.app.sync.ApiOpExecutor
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.sync.ModeRoutingOpExecutor
 import at.bettertrack.app.sync.RoomOpStore
 import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -192,7 +203,12 @@ object AppGraph {
             scope = appScope,
             localAccountData = accountDataManager,
             // Register the FCM device token on login; deregister before logout wipe.
-            onSessionAuthenticated = { pushTokenManager.onLoggedIn() },
+            // The everSignedIn flag is the §4.3 grandfathering signal that
+            // outlives both the token store and the Room wipe.
+            onSessionAuthenticated = {
+                storageModeStore.markSignedIn()
+                pushTokenManager.onLoggedIn()
+            },
             onBeforeLogout = { pushTokenManager.deregisterCurrentToken() },
         )
     }
@@ -201,9 +217,21 @@ object AppGraph {
 
     val database: BtDatabase by lazy { BtDatabase.create(appContext) }
 
+    /**
+     * V5 W1 — where this install's data lives (S3/S4 plan §1.4). Plain
+     * SharedPreferences so it survives the logout wipe and is readable
+     * synchronously while this graph wires the sync engine. Hard-resolves to
+     * SERVER behaviour until W5 ships the wizard.
+     */
+    val storageModeStore: StorageModeStore by lazy { StorageModeStore(appContext) }
+
+    /** The mode every rule branches on (UNSET behaves as SERVER — plan §1.4). */
+    private val storageMode: () -> StorageMode = { storageModeStore.modeNow().effective }
+
     val accountDataManager: AccountDataManager by lazy {
         AccountDataManager(
             db = database,
+            storageMode = storageMode,
             onWiped = {
                 syncScheduler.cancelAll()
                 // V5 S2a: neither the paranoid flag nor any cached response body
@@ -217,12 +245,26 @@ object AppGraph {
         )
     }
 
+    /**
+     * The active storage backend (S3/S4 plan §1.2). One `when` on the mode is
+     * all a Drive-backed install will need here — `VaultPortfolioBackend` lands
+     * in W4; today every mode resolves to the server implementation.
+     */
+    val portfolioBackend: PortfolioBackend by lazy {
+        ServerPortfolioBackend(api = btApi, db = database, json = json)
+    }
+
     val portfolioRepository: PortfolioRepository by lazy {
-        PortfolioRepository(api = btApi, db = database, json = json)
+        PortfolioRepository(db = database, json = json, backend = portfolioBackend)
+    }
+
+    /** Prices/quotes/search seam (plan §1.3); W6 adds the no-live-prices source. */
+    val marketDataSource: MarketDataSource by lazy {
+        ApiMarketDataSource(api = btApi, json = json)
     }
 
     val marketRepository: MarketRepository by lazy {
-        MarketRepository(api = btApi, db = database, json = json)
+        MarketRepository(api = btApi, db = database, json = json, data = marketDataSource)
     }
 
     val watchlistRepository: WatchlistRepository by lazy {
@@ -394,14 +436,50 @@ object AppGraph {
     val syncEngine: SyncEngine by lazy {
         SyncEngine(
             store = RoomOpStore(database.syncOpDao()),
-            executor = ApiOpExecutor(
-                api = btApi,
-                json = json,
+            // V5 W1: one engine for every storage mode. The router dispatches on
+            // each op's own persisted backendTag, so a mode switch never
+            // re-points work that is already queued (S3/S4 plan §1.2) and no
+            // process restart is needed.
+            executor = ModeRoutingOpExecutor(
+                server = ApiOpExecutor(
+                    api = btApi,
+                    json = json,
+                ),
             ),
             refresher = portfolioRepository,
-            hasSession = { tokenManager.hasTokens() },
+            // Mode-aware session gate: a Drive-only install has no bearer, so
+            // waiting for one would stall its drain forever.
+            hasSession = { storageMode().isDriveOnly || tokenManager.hasTokens() },
             ownerKey = { accountDataManager.currentOwnerKey() },
+            storageMode = storageMode,
         )
+    }
+
+    /**
+     * V5 W1 — the §4.3 grandfathering pass, fired once per process from
+     * [at.bettertrack.app.BetterTrackApplication].
+     *
+     * An install that has ever held a session resolves UNSET → SERVER and the
+     * result is persisted, so it never meets the W5 first-run wizard. A
+     * genuinely clean install stays UNSET — which behaves identically to SERVER
+     * everywhere ([StorageMode.effective]) until that wizard ships.
+     *
+     * Deliberately async: the DB owner-key probe is IO, and nothing depends on
+     * the outcome yet (both UNSET and SERVER behave the same today), so no
+     * startup path is blocked on it.
+     */
+    fun grandfatherStorageMode() {
+        appScope.launch {
+            val hasDbOwner = withContext(Dispatchers.IO) {
+                runCatching { database.metaDao().get(at.bettertrack.app.data.db.MetaEntity.KEY_OWNER) != null }
+                    .getOrDefault(false)
+            }
+            storageModeStore.grandfather(
+                hasTokens = tokenManager.hasTokens(),
+                hasCachedUser = secureStore.loadUser() != null,
+                hasDbOwner = hasDbOwner,
+            )
+        }
     }
 
     val syncDebugController: SyncDebugController by lazy {

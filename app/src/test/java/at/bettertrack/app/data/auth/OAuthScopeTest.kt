@@ -1,5 +1,6 @@
 package at.bettertrack.app.data.auth
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,10 +81,55 @@ class OAuthScopeTest {
         assertTrue(scopes.split(" ").toSet().size == 18) // no duplicates
     }
 
+    // ── Per-backend v5 gate (board #42.1, supersedes the flat flag) ──────────
+    // History: 2026-08-04 the v5 scopes shipped behind a flat V5_SCOPES_ENABLED
+    // boolean, flipped ON for the dev stack (migrations 0079/0080). That flag
+    // could not be right for both backends at once — ON breaks a PROD login with
+    // the whole-request hard-reject the alerts scopes taught us, OFF costs the
+    // sprint its cash:*/mirrorchain:* work. It is now decided per EFFECTIVE API
+    // origin instead; prod keeps the proven 14 until its seed is confirmed.
+
     @Test
-    fun `the shipped flag has v5 scopes enabled now the platform seeds are live`() {
-        // Flip 2026-08-04 per the v5 drop addendum: migrations 0079/0080 widened
-        // the client's allowed-scope set. Same tripwire discipline as alerts.
-        assertTrue(OAuthConfig.V5_SCOPES_ENABLED)
+    fun `production origin is held to the proven 14 scopes`() {
+        assertFalse(v5ScopesAllowedFor(PROD_API_ORIGIN))
+        val scopes = requestedScopes(
+            alertsScopesEnabled = true,
+            v5ScopesEnabled = v5ScopesAllowedFor(PROD_API_ORIGIN),
+        )
+        assertFalse(scopes.contains("cash:"))
+        assertFalse(scopes.contains("mirrorchain:"))
+        assertTrue(scopes.contains("alerts:read"))
+        assertEquals(14, scopes.split(" ").size)
+    }
+
+    @Test
+    fun `a non-production origin requests all 18`() {
+        // The sprint's live target: the local dev stack through adb reverse.
+        assertTrue(v5ScopesAllowedFor("http://localhost:3000"))
+        assertTrue(v5ScopesAllowedFor("http://192.168.0.114:3000"))
+        assertTrue(v5ScopesAllowedFor("https://staging.bettertrack.at"))
+        val scopes = requestedScopes(
+            alertsScopesEnabled = true,
+            v5ScopesEnabled = v5ScopesAllowedFor("http://localhost:3000"),
+        )
+        assertTrue(scopes.contains("cash:read"))
+        assertTrue(scopes.contains("mirrorchain:write"))
+        assertEquals(18, scopes.split(" ").size)
+    }
+
+    @Test
+    fun `the prod gate is not defeated by case or a trailing slash`() {
+        // The override normalizes what a developer types, but the gate must be
+        // the thing that is robust here — a miss means requesting un-seeded
+        // scopes against prod, which hard-rejects the whole login.
+        assertFalse(v5ScopesAllowedFor("https://api.bettertrack.at/"))
+        assertFalse(v5ScopesAllowedFor("HTTPS://API.BetterTrack.at"))
+        assertFalse(v5ScopesAllowedFor("  https://api.bettertrack.at  "))
+    }
+
+    @Test
+    fun `a lookalike host is not treated as production`() {
+        assertTrue(v5ScopesAllowedFor("https://api.bettertrack.at.evil.test"))
+        assertTrue(v5ScopesAllowedFor("http://api.bettertrack.at"))
     }
 }

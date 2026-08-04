@@ -1,5 +1,6 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.storage.BackendTag
 import kotlinx.serialization.Serializable
 
 /**
@@ -90,6 +91,16 @@ data class SyncOp(
      * edit, or a Retry). Bounds the replay-reconcile window (see [clientId]).
      */
     val firstAttemptAtMs: Long = 0L,
+    /**
+     * The storage backend this op was enqueued FOR (S3/S4 plan §1.2). Stamped
+     * from the active [at.bettertrack.app.data.storage.StorageMode] at enqueue
+     * time and persisted, because [ModeRoutingOpExecutor] dispatches on the op's
+     * OWN tag: a mode change must never hand an already-queued server mutation
+     * to the vault, or vice versa. Defaults to
+     * [at.bettertrack.app.data.storage.BackendTag.SERVER] — every op that
+     * existed before DB v7 was a server op.
+     */
+    val backendTag: BackendTag = BackendTag.SERVER,
 )
 
 // ── Op payloads (kotlinx-serialized into SyncOp.payloadJson) ─────────────────

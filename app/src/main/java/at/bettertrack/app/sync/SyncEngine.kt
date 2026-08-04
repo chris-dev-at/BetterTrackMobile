@@ -1,5 +1,7 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.backendTag
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -50,10 +52,22 @@ class SyncEngine(
     private val store: OpStore,
     private val executor: OpExecutor,
     private val refresher: PostSyncRefresher,
-    /** Session gate — drains are a no-op when logged out. */
+    /**
+     * Session gate — drains are a no-op when logged out. Mode-aware since V5 W1:
+     * a Drive-only install has no bearer to wait for, so the gate is
+     * `{ mode.isDriveOnly || tokenManager.hasTokens() }` (S3/S4 plan §1.2) —
+     * otherwise a Drive-mode drain would no-op forever.
+     */
     private val hasSession: () -> Boolean,
     /** Owner key stamped on enqueued ops (defense-in-depth; DB is single-owner). */
     private val ownerKey: suspend () -> String,
+    /**
+     * The storage mode enqueue stamps onto new ops. Read per enqueue (not
+     * captured once) so a mode switch applies without a process restart; the
+     * DRAIN never consults it — [ModeRoutingOpExecutor] routes on the op's own
+     * persisted tag.
+     */
+    private val storageMode: () -> StorageMode = { StorageMode.SERVER },
     private val now: () -> Long = System::currentTimeMillis,
     /**
      * Hard cap on a single online attempt — the send AND its reconcile lookup.
@@ -75,6 +89,7 @@ class SyncEngine(
             payloadJson = payloadJson,
             accountKey = ownerKey(),
             nowMs = now(),
+            backendTag = storageMode().backendTag(),
         )
 
     /** Needs-attention → pending again (fresh attempt counter). */

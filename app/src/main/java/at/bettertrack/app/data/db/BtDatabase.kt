@@ -33,7 +33,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOpEntity::class,
         MetaEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -128,6 +128,23 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v6 → v7 (V5 W1, S3/S4 plan §1.2): which storage backend a queued op
+         * belongs to.
+         *
+         * `NOT NULL DEFAULT 'server'` gives every existing row the only value it
+         * could ever have had — the app has never written anywhere but the
+         * BetterTrack API — so an update in place keeps the whole outbound queue
+         * routed exactly as before. The explicit UPDATE is belt-and-braces for
+         * any row a future ALTER could leave unset; it is a no-op today.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `backendTag` TEXT NOT NULL DEFAULT 'server'")
+                db.execSQL("UPDATE `sync_ops` SET `backendTag` = 'server' WHERE `backendTag` IS NULL OR `backendTag` = ''")
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
                 .addMigrations(
@@ -136,6 +153,7 @@ abstract class BtDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
     }

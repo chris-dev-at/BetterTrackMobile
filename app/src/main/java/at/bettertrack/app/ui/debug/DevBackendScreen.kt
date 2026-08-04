@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +36,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.data.auth.OAuthConfig
+import at.bettertrack.app.data.auth.v5ScopesAllowedFor
 import at.bettertrack.app.data.prefs.DevOriginOverride
+import at.bettertrack.app.data.storage.effective
+import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
@@ -72,6 +76,16 @@ fun DevBackendScreen(onBack: () -> Unit) {
     val effectiveApi = remember(revision) { DevOriginOverride.apiOrigin }
     val effectiveWeb = remember(revision) { DevOriginOverride.webOrigin }
     val overridden = remember(revision) { DevOriginOverride.isOverridden }
+    val v5ScopesOn = remember(revision) { v5ScopesAllowedFor(DevOriginOverride.apiOrigin) }
+    val requestedScopeCount = remember(revision) { OAuthConfig.SCOPES.split(" ").size }
+
+    // V5 W1 (S3/S4 plan §1.2/§1.4): the active storage mode and the classes
+    // actually serving reads/writes. The class NAMES are the point — this is the
+    // one-glance proof that a debug build is on the backend you think it is.
+    val storedMode = AppGraph.storageModeStore.mode.collectAsState().value
+    val storageModeLabel = "${storedMode.effective.name} (stored: ${storedMode.name})"
+    val backendName = remember { AppGraph.portfolioBackend::class.java.simpleName }
+    val marketSourceName = remember { AppGraph.marketDataSource::class.java.simpleName }
 
     Scaffold(
         containerColor = bt.bg,
@@ -119,7 +133,39 @@ fun DevBackendScreen(onBack: () -> Unit) {
                         color = bt.textMuted,
                     )
                     Text(
-                        "Requested scopes: ${OAuthConfig.SCOPES}",
+                        "Requested scopes (${requestedScopeCount}): ${OAuthConfig.SCOPES}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                    )
+                    Text(
+                        if (v5ScopesOn) {
+                            "v5 scopes (cash:* mirrorchain:*): ON — effective API origin is not production."
+                        } else {
+                            "v5 scopes (cash:* mirrorchain:*): OFF — production origin keeps the proven 14."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (v5ScopesOn) bt.gold else bt.textMuted,
+                    )
+                }
+            }
+
+            // ── V5 W1: which storage backend is serving this install ──────────
+            BtCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "Storage",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = bt.textSecondary,
+                    )
+                    MonoRow("Mode", storageModeLabel)
+                    MonoRow("Backend", backendName)
+                    MonoRow("Prices", marketSourceName)
+                    Text(
+                        "UNSET behaves exactly as SERVER until the first-run wizard ships (W5); " +
+                            "an existing install is grandfathered to SERVER once, at startup.",
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.textMuted,
                     )

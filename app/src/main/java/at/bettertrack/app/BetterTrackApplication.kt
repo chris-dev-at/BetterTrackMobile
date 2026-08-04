@@ -28,6 +28,11 @@ class BetterTrackApplication : Application() {
         super.onCreate()
         AppGraph.init(this)
 
+        // V5 W1 (S3/S4 plan §4.3): resolve an existing install's storage mode to
+        // SERVER exactly once, so an upgrade-in-place never meets the W5
+        // first-run wizard. A clean install stays UNSET and behaves as SERVER.
+        AppGraph.grandfatherStorageMode()
+
         // Step 16 (LIVE on Notifications-v2): create the FCM notification channels
         // (before any push) and obtain the device token (logs presence only — never
         // the value). Registration is bearer-gated inside the manager: it fires now

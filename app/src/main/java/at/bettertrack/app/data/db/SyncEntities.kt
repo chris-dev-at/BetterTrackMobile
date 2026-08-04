@@ -50,6 +50,15 @@ data class SyncOpEntity(
      * instead of blind-replaying past the server's dedupe TTL. Added in DB v5.
      */
     val firstAttemptAtMs: Long = 0L,
+    /**
+     * Which storage backend this op was enqueued FOR — one of
+     * [at.bettertrack.app.data.storage.BackendTag]'s wire names. The router
+     * dispatches on this, never on the mode that happens to be active when the
+     * op finally drains, so switching storage mode never re-points work that was
+     * queued for the other backend (S3/S4 plan §1.2). Added in DB v7; every
+     * pre-v7 row is backfilled `'server'`, which is what it was.
+     */
+    val backendTag: String = "server",
 )
 
 /**

@@ -2,6 +2,7 @@ package at.bettertrack.app.sync
 
 import at.bettertrack.app.data.db.SyncOpDao
 import at.bettertrack.app.data.db.SyncOpEntity
+import at.bettertrack.app.data.storage.BackendTag
 
 /**
  * Persistence port of the sync engine — pure interface so the queue state
@@ -17,6 +18,8 @@ interface OpStore {
         payloadJson: String,
         accountKey: String,
         nowMs: Long,
+        /** The backend this op is FOR — persisted, and what the router dispatches on. */
+        backendTag: BackendTag,
     ): SyncOp
 
     /** Head of the FIFO queue: the oldest pending or in-flight op. */
@@ -70,6 +73,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
         payloadJson: String,
         accountKey: String,
         nowMs: Long,
+        backendTag: BackendTag,
     ): SyncOp {
         val entity = SyncOpEntity(
             clientId = clientId,
@@ -84,6 +88,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             accountKey = accountKey,
             createdAtMs = nowMs,
             updatedAtMs = nowMs,
+            backendTag = backendTag.wire,
         )
         val id = dao.insert(entity)
         return entity.copy(id = id).toModel()
@@ -213,4 +218,5 @@ fun SyncOpEntity.toModel(): SyncOp = SyncOp(
     createdAtMs = createdAtMs,
     updatedAtMs = updatedAtMs,
     firstAttemptAtMs = firstAttemptAtMs,
+    backendTag = BackendTag.fromWire(backendTag),
 )

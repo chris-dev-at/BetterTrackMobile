@@ -1,0 +1,94 @@
+package at.bettertrack.app.data.storage
+
+import at.bettertrack.app.data.db.SERVER_SCOPED_TABLES
+import at.bettertrack.app.data.db.VAULT_SCOPED_TABLES
+import at.bettertrack.app.data.db.tablesToClear
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The logout wipe rule (S3/S4 plan §4.4, row 2).
+ *
+ * Today `logout()` destroys every local table. Once a Drive vault can exist that
+ * would delete data the user still owns and the server never had — so the wipe
+ * became mode-scoped. The tests below pin **both** halves: the new rule for the
+ * modes W5 unlocks, and the guarantee that the modes reachable TODAY still take
+ * the identical full-wipe path.
+ */
+class LogoutWipeRuleTest {
+
+    // ── The rule ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `logging out of a server-only install still wipes everything`() {
+        assertEquals(WipeScope.EVERYTHING, logoutWipeScope(StorageMode.SERVER))
+    }
+
+    @Test
+    fun `unset wipes everything too — it behaves as server`() {
+        assertEquals(WipeScope.EVERYTHING, logoutWipeScope(StorageMode.UNSET))
+    }
+
+    @Test
+    fun `a mode holding a vault never lets logout destroy it`() {
+        assertEquals(WipeScope.SERVER_ONLY, logoutWipeScope(StorageMode.BOTH))
+        assertEquals(WipeScope.SERVER_ONLY, logoutWipeScope(StorageMode.DRIVE))
+    }
+
+    @Test
+    fun `every mode has a defined wipe scope`() {
+        for (mode in StorageMode.entries) assertNotNull(logoutWipeScope(mode))
+    }
+
+    // ── W1 behaviour equivalence ────────────────────────────────────────────
+
+    @Test
+    fun `every mode reachable today takes the historic clearAllTables path`() {
+        // Only SERVER and UNSET can be stored until the W5 wizard ships, and
+        // `null` is precisely "call BtDatabase.clearAllTables()" — the same call
+        // AuthRepository.logout has always made. This is the byte-identical
+        // behaviour claim of W1, expressed as a test.
+        for (mode in listOf(StorageMode.UNSET, StorageMode.SERVER)) {
+            assertNull(tablesToClear(logoutWipeScope(mode)))
+        }
+    }
+
+    @Test
+    fun `the vault table list is empty until W4 creates those tables`() {
+        // A guard on the claim above: if W4 adds vault tables without revisiting
+        // this file, the assertion below fails and forces the decision to be
+        // made deliberately.
+        assertTrue(VAULT_SCOPED_TABLES.isEmpty())
+    }
+
+    // ── The scoped wipe W4 extends ──────────────────────────────────────────
+
+    @Test
+    fun `a scoped wipe clears the server tables and spares the vault ones`() {
+        val cleared = tablesToClear(WipeScope.SERVER_ONLY)!!
+        assertTrue(cleared.containsAll(SERVER_SCOPED_TABLES - VAULT_SCOPED_TABLES.toSet()))
+        for (vaultTable in VAULT_SCOPED_TABLES) {
+            assertTrue("$vaultTable must survive logout", vaultTable !in cleared)
+        }
+    }
+
+    @Test
+    fun `the scoped wipe still takes the outbound queue and the account caches`() {
+        // Scoping the wipe must not accidentally leave one account's queued
+        // mutations to drain under the next account's session.
+        val cleared = tablesToClear(WipeScope.SERVER_ONLY)!!
+        assertTrue("sync_ops" in cleared)
+        assertTrue("meta" in cleared)
+        assertTrue("portfolios" in cleared)
+        assertTrue("transactions" in cleared)
+        assertTrue("cash_movements" in cleared)
+    }
+
+    @Test
+    fun `the server table list has no duplicates`() {
+        assertEquals(SERVER_SCOPED_TABLES.size, SERVER_SCOPED_TABLES.toSet().size)
+    }
+}

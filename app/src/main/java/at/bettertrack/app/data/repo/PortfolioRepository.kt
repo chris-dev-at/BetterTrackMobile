@@ -1,22 +1,7 @@
 package at.bettertrack.app.data.repo
 
-import android.util.Log
-import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtResult
-import at.bettertrack.app.data.api.apiCall
-import at.bettertrack.app.data.api.dto.CashSourceRequest
-import at.bettertrack.app.data.api.dto.CreateCustomAssetRequest
 import at.bettertrack.app.data.api.dto.CustomAssetInitialPurchase
-import at.bettertrack.app.data.api.dto.CreatePortfolioRequest
-import at.bettertrack.app.data.api.dto.HistoryPointDto
-import at.bettertrack.app.data.api.dto.PutValuePointsRequest
-import at.bettertrack.app.data.api.dto.UpdateCustomAssetRequest
-import at.bettertrack.app.data.api.dto.ValuePointDto
-import at.bettertrack.app.data.api.dto.PerformancePointDto
-import at.bettertrack.app.data.api.dto.PortfolioDetailResponse
-import at.bettertrack.app.data.api.dto.PortfolioDto
-import at.bettertrack.app.data.api.dto.TransactionDto
-import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.CashMovementEntity
@@ -26,13 +11,11 @@ import at.bettertrack.app.data.db.ValuePointEntity
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.MetaEntity
 import at.bettertrack.app.data.db.PortfolioEntity
-import at.bettertrack.app.data.db.PortfolioHistoryEntity
-import at.bettertrack.app.data.db.PortfolioTotals
 import at.bettertrack.app.data.db.TransactionEntity
+import at.bettertrack.app.data.storage.PortfolioBackend
 import at.bettertrack.app.sync.PostSyncRefresher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.time.Instant
@@ -40,16 +23,24 @@ import java.time.OffsetDateTime
 
 /**
  * Portfolio-scope repository (spec §7.1): screens read ONLY from Room via the
- * exposed Flows; the refresh methods pull the API and overwrite Room with
- * server truth (the server is the only calculator — nothing is computed here).
+ * exposed Flows; the refresh methods fill Room with backend truth (in server
+ * mode the server is the only calculator — nothing is computed here).
  * Step 5 wired the plumbing; Step 6 adds selection, history and the switcher
  * mutations; Step 7 adds ledger paging + per-asset reads.
+ *
+ * **V5 W1 (S3/S4 plan §1.2)** split this class in two without touching a single
+ * ViewModel: everything that talks to a *store* moved behind [PortfolioBackend]
+ * ([at.bettertrack.app.data.storage.ServerPortfolioBackend] is today's network
+ * bodies, moved verbatim), while this class kept what is store-agnostic — the
+ * Room reads, the portfolio selection, the post-drain refetch and the cache
+ * purge — and delegates the rest one line each. The class stays concrete and
+ * stays injected into every VM exactly as before, so the swap to a Drive-backed
+ * backend (W4) needs no UI change at all.
  */
 class PortfolioRepository(
-    private val api: BtApi,
     private val db: BtDatabase,
     private val json: Json,
-    private val now: () -> Long = System::currentTimeMillis,
+    private val backend: PortfolioBackend,
 ) : PostSyncRefresher {
 
     // ── Room-first reads ─────────────────────────────────────────────────────
@@ -122,52 +113,14 @@ class PortfolioRepository(
         db.metaDao().put(MetaEntity(MetaEntity.keyCashCouplingDefault(portfolioId), value.toString()))
     }
 
-    // ── Network → Room refresh paths ─────────────────────────────────────────
+    // ── Backend → Room refresh paths (one-line delegation) ───────────────────
 
-    /** Refresh the portfolio LIST (`GET /portfolios`, archived included). */
-    suspend fun refreshPortfolios(): BtResult<Unit> =
-        when (val r = apiCall(json) { api.portfolios() }) {
-            is BtResult.Ok -> {
-                val fresh = r.value.portfolios.map { p ->
-                    PortfolioEntity(
-                        id = p.id,
-                        name = p.name,
-                        visibility = p.visibility,
-                        sortOrder = p.sortOrder,
-                        isDefault = p.isDefault,
-                        defaultPayFromCash = p.defaultPayFromCash,
-                        archivedAt = p.archivedAt,
-                        baseCurrency = null,
-                        totals = null,
-                        detailSyncedAtMs = null,
-                        mirror = p.mirror.toPortfolioMirror(),
-                    )
-                }
-                db.portfolioDao().replaceListPreservingTotals(fresh)
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
+    /** Refresh the portfolio LIST (archived included). */
+    suspend fun refreshPortfolios(): BtResult<Unit> = backend.refreshPortfolios()
 
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshPortfolios failed: ${r.error.message}")
-                r
-            }
-        }
-
-    /** Refresh holdings + server-computed totals for one portfolio. */
+    /** Refresh holdings + totals for one portfolio. */
     suspend fun refreshPortfolioDetail(portfolioId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.portfolioDetail(portfolioId) }) {
-            is BtResult.Ok -> {
-                applyDetail(portfolioId, r.value)
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshPortfolioDetail($portfolioId) failed: ${r.error.message}")
-                r
-            }
-        }
+        backend.refreshPortfolioDetail(portfolioId)
 
     /**
      * Refresh the newest ledger page (replaces the cache; resets any deeper
@@ -175,119 +128,26 @@ class PortfolioRepository(
      * next-page cursor, null when the ledger is fully cached.
      */
     suspend fun refreshTransactions(portfolioId: String): BtResult<String?> =
-        when (val r = apiCall(json) { api.transactions(portfolioId) }) {
-            is BtResult.Ok -> {
-                val rows = r.value.items.map { it.toEntity(portfolioId) }
-                db.transactionDao().replaceForPortfolio(portfolioId, rows)
-                touchSyncedAt()
-                BtResult.Ok(r.value.nextCursor)
-            }
-
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshTransactions($portfolioId) failed: ${r.error.message}")
-                r
-            }
-        }
+        backend.refreshTransactions(portfolioId)
 
     /**
      * Fetch the next (older) ledger page after [cursor] and APPEND it to the
      * cache (§6.2 incremental load). Returns the following cursor.
      */
     suspend fun loadMoreTransactions(portfolioId: String, cursor: String): BtResult<String?> =
-        when (val r = apiCall(json) { api.transactions(portfolioId, cursor = cursor) }) {
-            is BtResult.Ok -> {
-                db.transactionDao().insertAll(r.value.items.map { it.toEntity(portfolioId) })
-                BtResult.Ok(r.value.nextCursor)
-            }
+        backend.loadMoreTransactions(portfolioId, cursor)
 
-            is BtResult.Err -> {
-                Log.w(TAG, "loadMoreTransactions($portfolioId) failed: ${r.error.message}")
-                r
-            }
-        }
-
-    /** Refresh the §6.1 graph series for one portfolio × range (stored verbatim). */
+    /** Refresh the §6.1 graph series for one portfolio × range. */
     suspend fun refreshHistory(portfolioId: String, range: HistoryRange): BtResult<Unit> =
-        when (val r = apiCall(json) { api.portfolioHistory(portfolioId, range.wire) }) {
-            is BtResult.Ok -> {
-                db.portfolioHistoryDao().upsert(
-                    PortfolioHistoryEntity(
-                        portfolioId = portfolioId,
-                        range = range.wire,
-                        baseCurrency = r.value.baseCurrency,
-                        pointsJson = json.encodeToString(
-                            ListSerializer(HistoryPointDto.serializer()),
-                            r.value.points,
-                        ),
-                        performanceJson = json.encodeToString(
-                            ListSerializer(PerformancePointDto.serializer()),
-                            r.value.performance,
-                        ),
-                        syncedAtMs = now(),
-                    ),
-                )
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
+        backend.refreshHistory(portfolioId, range)
 
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshHistory($portfolioId, ${range.wire}) failed: ${r.error.message}")
-                r
-            }
-        }
-
-    /**
-     * Refresh cash for one portfolio (Step 9): real named sources (Main first,
-     * per-source balances) + the full movement stream, mirrored verbatim.
-     */
-    suspend fun refreshCash(portfolioId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.cash(portfolioId) }) {
-            is BtResult.Ok -> {
-                val sources = r.value.sources.map { s ->
-                    CashSourceEntity(
-                        id = s.id,
-                        portfolioId = portfolioId,
-                        name = s.name,
-                        kind = s.type,
-                        isMain = s.isMain,
-                        balanceEur = s.balanceEur,
-                        archivedAt = s.archivedAt,
-                    )
-                }
-                val movements = r.value.movements.map { m ->
-                    CashMovementEntity(
-                        id = m.id,
-                        portfolioId = portfolioId,
-                        sourceId = m.sourceId ?: sources.firstOrNull { it.isMain }?.id ?: "main",
-                        kind = m.kind,
-                        amountEur = m.amountEur,
-                        transactionId = m.transactionId,
-                        transferId = m.transferId,
-                        counterpartSourceId = m.counterpartSourceId,
-                        dividendId = m.dividendId,
-                        executedAt = m.executedAt,
-                        executedAtMs = parseIsoMs(m.executedAt),
-                        note = m.note,
-                        createdAt = m.createdAt,
-                        source = m.source ?: "manual",
-                        mirror = m.mirror.toRowMirror(),
-                    )
-                }
-                db.cashDao().replaceForPortfolio(portfolioId, sources, movements)
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshCash($portfolioId) failed: ${r.error.message}")
-                r
-            }
-        }
+    /** Refresh cash for one portfolio: named sources + the full movement stream. */
+    suspend fun refreshCash(portfolioId: String): BtResult<Unit> = backend.refreshCash(portfolioId)
 
     // ── Cash corrections (v5 — online-only, same rule as transaction edits) ──
 
     /**
-     * PATCH one hand-typed cash movement.
+     * PATCH one hand-typed cash movement, then refetch the scope.
      *
      * [patch] carries ONLY the changed keys (see
      * [at.bettertrack.app.ui.cash.buildCashMovementPatch]) because the server
@@ -306,27 +166,20 @@ class PortfolioRepository(
         patch: JsonObject,
         idempotencyKey: String? = null,
     ): BtResult<Unit> =
-        when (
-            val r = apiCall(json) {
-                api.updateCashMovement(portfolioId, movementId, patch, idempotencyKey)
-            }
-        ) {
+        when (val r = backend.updateCashMovement(portfolioId, movementId, patch, idempotencyKey)) {
             is BtResult.Ok -> {
                 afterDrain(setOf(portfolioId))
                 BtResult.Ok(Unit)
             }
 
-            is BtResult.Err -> {
-                Log.w(TAG, "updateCashMovement($movementId) failed: ${r.error.message}")
-                r
-            }
+            is BtResult.Err -> r
         }
 
     /**
-     * DELETE one hand-typed cash movement. Answers 200 with fresh balances, so
-     * the row and its source are repainted from the RESPONSE (no refetch needed
-     * for the ledger itself); a scope refresh still follows to reconcile the
-     * portfolio totals the removal also moved.
+     * DELETE one hand-typed cash movement. The backend repaints the row and its
+     * source from the response (no refetch needed for the ledger itself); a
+     * scope refresh still follows to reconcile the portfolio totals the removal
+     * also moved.
      *
      * [idempotencyKey] is stable per movement so a retry after a lost 200
      * replays the stored 2xx rather than 404-ing on the already-removed row.
@@ -336,74 +189,33 @@ class PortfolioRepository(
         movementId: String,
         idempotencyKey: String? = null,
     ): BtResult<Unit> =
-        when (
-            val r = apiCall(json) {
-                api.deleteCashMovement(portfolioId, movementId, idempotencyKey)
-            }
-        ) {
+        when (val r = backend.deleteCashMovement(portfolioId, movementId, idempotencyKey)) {
             is BtResult.Ok -> {
-                db.cashDao().applyMovementDeletion(
-                    movementId = movementId,
-                    sourceId = r.value.sourceId,
-                    sourceBalanceEur = r.value.sourceBalanceEur,
-                )
                 afterDrain(setOf(portfolioId))
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> {
-                Log.w(TAG, "deleteCashMovement($movementId) failed: ${r.error.message}")
-                r
-            }
-        }
-
-    // ── Cash-source management (Step 9, §6.3 — online-only per §7.2) ────────
-
-    suspend fun createCashSource(portfolioId: String, name: String, type: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.createCashSource(portfolioId, CashSourceRequest(name, type)) }) {
-            is BtResult.Ok -> {
-                refreshCash(portfolioId)
                 BtResult.Ok(Unit)
             }
 
             is BtResult.Err -> r
         }
+
+    // ── Cash-source management (Step 9, §6.3 — online-only per §7.2) ────────
+
+    suspend fun createCashSource(portfolioId: String, name: String, type: String): BtResult<Unit> =
+        backend.createCashSource(portfolioId, name, type)
 
     suspend fun updateCashSource(
         portfolioId: String,
         sourceId: String,
         name: String?,
         type: String?,
-    ): BtResult<Unit> =
-        when (val r = apiCall(json) { api.updateCashSource(portfolioId, sourceId, CashSourceRequest(name, type)) }) {
-            is BtResult.Ok -> {
-                refreshCash(portfolioId)
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> r
-        }
+    ): BtResult<Unit> = backend.updateCashSource(portfolioId, sourceId, name, type)
 
     /** Archive a source — the SERVER rejects Main and non-zero balances. */
     suspend fun archiveCashSource(portfolioId: String, sourceId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.archiveCashSource(portfolioId, sourceId) }) {
-            is BtResult.Ok -> {
-                refreshCash(portfolioId)
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> r
-        }
+        backend.archiveCashSource(portfolioId, sourceId)
 
     suspend fun restoreCashSource(portfolioId: String, sourceId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.restoreCashSource(portfolioId, sourceId) }) {
-            is BtResult.Ok -> {
-                refreshCash(portfolioId)
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> r
-        }
+        backend.restoreCashSource(portfolioId, sourceId)
 
     fun cashSources(portfolioId: String): Flow<List<CashSourceEntity>> =
         db.cashDao().observeSources(portfolioId)
@@ -417,56 +229,20 @@ class PortfolioRepository(
     fun valuePoints(assetId: String): Flow<List<ValuePointEntity>> =
         db.customAssetDao().observeValuePoints(assetId)
 
-    /** Refresh a custom asset's value points (verbatim server truth, §7.1). */
+    /** Refresh a custom asset's value points. */
     suspend fun refreshValuePoints(assetId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.valuePoints(assetId) }) {
-            is BtResult.Ok -> {
-                db.customAssetDao().replaceValuePoints(
-                    assetId,
-                    r.value.points.map { ValuePointEntity(assetId, it.date, it.value) },
-                )
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
+        backend.refreshValuePoints(assetId)
 
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshValuePoints($assetId) failed: ${r.error.message}")
-                r
-            }
-        }
+    /**
+     * The authoritative custom-asset list (#387) — replaces holdings inference so
+     * a custom asset with NO holding still appears.
+     */
+    suspend fun refreshCustomAssets(): BtResult<Unit> = backend.refreshCustomAssets()
 
     /**
      * Create a custom asset (online-only §7.2); optionally with an initial buy
-     * into [portfolioId]. Caches the identity (incl. category) immediately.
+     * into [portfolioId], whose scope is refetched afterwards.
      */
-    /**
-     * The authoritative custom-asset list (#387) — replaces holdings inference so a
-     * custom asset with NO holding still appears. On success we upsert every entry
-     * and reconcile the cache to the server set; on failure the cache is untouched
-     * (offline shows the last-known list).
-     */
-    suspend fun refreshCustomAssets(): BtResult<Unit> =
-        when (val r = apiCall(json) { api.customAssets() }) {
-            is BtResult.Ok -> {
-                val assets = r.value.assets
-                db.customAssetDao().upsertAll(
-                    assets.map {
-                        CustomAssetEntity(it.id, it.symbol, it.name, it.category, it.currency, it.smoothing)
-                    },
-                )
-                val keep = assets.map { it.id }
-                if (keep.isEmpty()) db.customAssetDao().deleteAllCustomAssets()
-                else db.customAssetDao().deleteNotIn(keep)
-                touchSyncedAt()
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> {
-                Log.w(TAG, "refreshCustomAssets failed: ${r.error.message}")
-                r
-            }
-        }
-
     suspend fun createCustomAsset(
         name: String,
         category: String,
@@ -474,20 +250,10 @@ class PortfolioRepository(
         initial: CustomAssetInitialPurchase?,
         portfolioId: String?,
     ): BtResult<String> =
-        when (
-            val r = apiCall(json) {
-                api.createCustomAsset(
-                    CreateCustomAssetRequest(name.trim(), category, smoothing = smoothing, initialPurchase = initial),
-                )
-            }
-        ) {
+        when (val r = backend.createCustomAsset(name, category, smoothing, initial)) {
             is BtResult.Ok -> {
-                val a = r.value.asset
-                db.customAssetDao().upsertAll(
-                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency, a.smoothing)),
-                )
                 if (initial != null && portfolioId != null) afterDrain(setOf(portfolioId))
-                BtResult.Ok(a.id)
+                r
             }
 
             is BtResult.Err -> r
@@ -498,58 +264,18 @@ class PortfolioRepository(
         name: String?,
         category: String?,
         smoothing: Boolean?,
-    ): BtResult<Unit> =
-        when (
-            val r = apiCall(json) {
-                api.updateCustomAsset(id, UpdateCustomAssetRequest(name?.trim(), category, smoothing))
-            }
-        ) {
-            is BtResult.Ok -> {
-                val a = r.value.asset
-                db.customAssetDao().upsertAll(
-                    listOf(CustomAssetEntity(a.id, a.symbol, a.name, a.category, a.currency, a.smoothing)),
-                )
-                BtResult.Ok(Unit)
-            }
+    ): BtResult<Unit> = backend.updateCustomAsset(id, name, category, smoothing)
 
-            is BtResult.Err -> r
-        }
-
-    suspend fun deleteCustomAsset(id: String): BtResult<Unit> {
-        val resp = try {
-            api.deleteCustomAsset(id)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
-        }
-        return if (resp.isSuccessful) {
-            db.customAssetDao().delete(id)
-            BtResult.Ok(Unit)
-        } else {
-            BtResult.Err(at.bettertrack.app.data.api.parseApiError(json, resp.code(), resp.errorBody()))
-        }
-    }
+    suspend fun deleteCustomAsset(id: String): BtResult<Unit> = backend.deleteCustomAsset(id)
 
     /**
-     * Edit/delete value points (online-only PUT full-replace, §7.2 — offline
-     * ADD goes through the queue). [points] is the full desired set.
+     * Edit/delete value points (online-only full-replace, §7.2 — offline ADD
+     * goes through the queue). [points] is the full desired set; the selected
+     * portfolio's detail is refreshed after so custom holding values update.
      */
     suspend fun putValuePoints(assetId: String, points: List<ValuePointEntity>): BtResult<Unit> =
-        when (
-            val r = apiCall(json) {
-                api.putValuePoints(
-                    assetId,
-                    PutValuePointsRequest(points.map { ValuePointDto(it.date, it.value) }.sortedBy { it.date }),
-                )
-            }
-        ) {
+        when (val r = backend.putValuePoints(assetId, points)) {
             is BtResult.Ok -> {
-                refreshValuePoints(assetId)
                 refreshPortfoliosDetailForCustom()
                 BtResult.Ok(Unit)
             }
@@ -559,21 +285,21 @@ class PortfolioRepository(
 
     /** Refresh detail of the selected portfolio so custom holding values update. */
     private suspend fun refreshPortfoliosDetailForCustom() {
-        selectedPortfolioIdNow()?.let { refreshPortfolioDetail(it) }
+        selectedPortfolioIdNow()?.let { backend.refreshPortfolioDetail(it) }
     }
 
-    /** Refetch-and-reconcile after a drain (§7.3) — server truth replaces local. */
+    /** Refetch-and-reconcile after a drain (§7.3) — backend truth replaces local. */
     override suspend fun afterDrain(portfolioIds: Set<String>) {
         for (pid in portfolioIds) {
-            refreshPortfolioDetail(pid)
-            refreshTransactions(pid)
-            refreshCash(pid)
+            backend.refreshPortfolioDetail(pid)
+            backend.refreshTransactions(pid)
+            backend.refreshCash(pid)
         }
     }
 
     // ── Synced-transaction edit / delete (Step 8, §6.2) ─────────────────────
     // ONLINE-ONLY by spec (§7.2 — the queue stays append-only in v1): direct
-    // API call, then refetch the portfolio scope so Room mirrors server truth.
+    // backend call, then refetch the portfolio scope so Room mirrors truth.
 
     /**
      * PATCH a synced transaction; refreshes ledger + totals + cash on success.
@@ -586,20 +312,17 @@ class PortfolioRepository(
         body: UpdateTransactionRequest,
         idempotencyKey: String? = null,
     ): BtResult<Unit> =
-        when (val r = apiCall(json) { api.updateTransaction(portfolioId, txId, body, idempotencyKey) }) {
+        when (val r = backend.updateTransaction(portfolioId, txId, body, idempotencyKey)) {
             is BtResult.Ok -> {
                 afterDrain(setOf(portfolioId))
                 BtResult.Ok(Unit)
             }
 
-            is BtResult.Err -> {
-                Log.w(TAG, "updateTransaction($txId) failed: ${r.error.message}")
-                r
-            }
+            is BtResult.Err -> r
         }
 
     /**
-     * DELETE a synced transaction (204, no body); refreshes the scope after.
+     * DELETE a synced transaction; refreshes the scope after.
      * [idempotencyKey] is a per-delete UUID so a retry after a lost 204 replays
      * the stored 2xx rather than 404-ing on the already-removed row.
      */
@@ -607,107 +330,61 @@ class PortfolioRepository(
         portfolioId: String,
         txId: String,
         idempotencyKey: String? = null,
-    ): BtResult<Unit> {
-        val resp = try {
-            api.deleteTransaction(portfolioId, txId, idempotencyKey)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
+    ): BtResult<Unit> =
+        when (val r = backend.deleteTransaction(portfolioId, txId, idempotencyKey)) {
+            is BtResult.Ok -> {
+                afterDrain(setOf(portfolioId))
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> r
         }
-        return if (resp.isSuccessful) {
-            afterDrain(setOf(portfolioId))
-            BtResult.Ok(Unit)
-        } else {
-            val err = at.bettertrack.app.data.api.parseApiError(json, resp.code(), resp.errorBody())
-            Log.w(TAG, "deleteTransaction($txId) failed: ${err.message}")
-            BtResult.Err(err)
-        }
-    }
 
     // ── Switcher management (§6.1 — create/rename/archive/restore) ──────────
-    // Online-only by spec (§7.2): these call the API directly and mirror the
-    // response into Room; the UI disables them offline with a clear state.
+    // Online-only by spec (§7.2); the UI disables them offline with a clear state.
 
     /** Create a portfolio; selects it as the current one. Returns its id. */
     suspend fun createPortfolio(name: String): BtResult<String> =
-        when (val r = apiCall(json) { api.createPortfolio(CreatePortfolioRequest(name)) }) {
+        when (val r = backend.createPortfolio(name)) {
             is BtResult.Ok -> {
-                upsertFromDto(r.value.portfolio)
-                selectPortfolio(r.value.portfolio.id)
-                BtResult.Ok(r.value.portfolio.id)
+                selectPortfolio(r.value)
+                r
             }
 
             is BtResult.Err -> r
         }
 
     suspend fun renamePortfolio(portfolioId: String, name: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.updatePortfolio(portfolioId, UpdatePortfolioRequest(name = name)) }) {
-            is BtResult.Ok -> {
-                upsertFromDto(r.value.portfolio)
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> r
-        }
+        backend.renamePortfolio(portfolioId, name)
 
     suspend fun archivePortfolio(portfolioId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.archivePortfolio(portfolioId) }) {
-            is BtResult.Ok -> {
-                upsertFromDto(r.value.portfolio)
-                BtResult.Ok(Unit)
-            }
-
-            is BtResult.Err -> r
-        }
+        backend.archivePortfolio(portfolioId)
 
     suspend fun restorePortfolio(portfolioId: String): BtResult<Unit> =
-        when (val r = apiCall(json) { api.restorePortfolio(portfolioId) }) {
+        backend.restorePortfolio(portfolioId)
+
+    /**
+     * Hard-delete a portfolio (platform #412, online-only §7.2). On success →
+     * purge the local cache for that portfolio, then re-pull the LIST so Room
+     * mirrors server truth (the server cascades everything and auto-promotes the
+     * derived default — no client bookkeeping). The server rejects the last
+     * ACTIVE portfolio with `400 LAST_ACTIVE_PORTFOLIO`; archived ones are always
+     * deletable. Selection re-resolution (if the deleted one was current) is
+     * handled by the caller.
+     */
+    suspend fun deletePortfolio(portfolioId: String): BtResult<Unit> =
+        when (val r = backend.deletePortfolio(portfolioId)) {
             is BtResult.Ok -> {
-                upsertFromDto(r.value.portfolio)
+                purgePortfolioCache(portfolioId)
+                // The list refresh reconciles the portfolios table (promoted default,
+                // the deleted row gone). Best-effort: a purged cache already reflects
+                // the delete even if this refresh can't reach the network.
+                backend.refreshPortfolios()
                 BtResult.Ok(Unit)
             }
 
             is BtResult.Err -> r
         }
-
-    /**
-     * Hard-delete a portfolio (platform #412, online-only §7.2). 204 → purge the
-     * local cache for that portfolio, then re-pull the LIST so Room mirrors server
-     * truth (the server cascades everything and auto-promotes the derived default —
-     * no client bookkeeping). The server rejects the last ACTIVE portfolio with
-     * `400 LAST_ACTIVE_PORTFOLIO`; archived ones are always deletable. Selection
-     * re-resolution (if the deleted one was current) is handled by the caller.
-     */
-    suspend fun deletePortfolio(portfolioId: String): BtResult<Unit> {
-        val resp = try {
-            api.deletePortfolio(portfolioId)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
-        }
-        return if (resp.isSuccessful) {
-            purgePortfolioCache(portfolioId)
-            // The list refresh reconciles the portfolios table (promoted default,
-            // the deleted row gone). Best-effort: a purged cache already reflects
-            // the delete even if this refresh can't reach the network.
-            refreshPortfolios()
-            BtResult.Ok(Unit)
-        } else {
-            val err = at.bettertrack.app.data.api.parseApiError(json, resp.code(), resp.errorBody())
-            Log.w(TAG, "deletePortfolio($portfolioId) failed: ${err.message}")
-            BtResult.Err(err)
-        }
-    }
 
     /** Drop every cached row that belonged to a hard-deleted portfolio (no orphans). */
     private suspend fun purgePortfolioCache(portfolioId: String) {
@@ -720,107 +397,7 @@ class PortfolioRepository(
         db.metaDao().delete(MetaEntity.keyCashCouplingDefault(portfolioId))
     }
 
-    // ── Internals ────────────────────────────────────────────────────────────
-
-    /** Mirror a mutation response row into Room, preserving synced totals. */
-    private suspend fun upsertFromDto(p: PortfolioDto) {
-        val old = db.portfolioDao().getById(p.id)
-        db.portfolioDao().upsertAll(
-            listOf(
-                PortfolioEntity(
-                    id = p.id,
-                    name = p.name,
-                    visibility = p.visibility,
-                    sortOrder = p.sortOrder,
-                    isDefault = p.isDefault,
-                    defaultPayFromCash = p.defaultPayFromCash,
-                    archivedAt = p.archivedAt,
-                    baseCurrency = old?.baseCurrency,
-                    totals = old?.totals,
-                    detailSyncedAtMs = old?.detailSyncedAtMs,
-                    mirror = p.mirror.toPortfolioMirror(),
-                ),
-            ),
-        )
-    }
-
-    private suspend fun applyDetail(portfolioId: String, detail: PortfolioDetailResponse) {
-        val holdings = detail.holdings.map { h ->
-            HoldingEntity(
-                portfolioId = portfolioId,
-                assetId = h.asset.id,
-                assetSymbol = h.asset.symbol,
-                assetName = h.asset.name,
-                assetExchange = h.asset.exchange,
-                assetCurrency = h.asset.currency,
-                assetType = h.asset.type,
-                assetIsCustom = h.asset.isCustom,
-                quantity = h.quantity,
-                avgCost = h.avgCost,
-                realizedPnl = h.realizedPnl,
-                price = h.price,
-                marketValueEur = h.marketValueEur,
-                costBasisEur = h.costBasisEur,
-                unrealizedPnlEur = h.unrealizedPnlEur,
-                unrealizedPnlPct = h.unrealizedPnlPct,
-                dayChangeEur = h.dayChangeEur,
-                dayChangePct = h.dayChangePct,
-            )
-        }
-        db.holdingDao().replaceForPortfolio(portfolioId, holdings)
-
-        // Custom-asset identities ride along on holdings (§6.4; the API has no
-        // list endpoint) — cache them for the Step-10 screens, preserving any
-        // category we already learned from a create/edit (holdings omit it).
-        val customHoldings = detail.holdings.filter { it.asset.isCustom }
-        for (h in customHoldings) {
-            // Preserve category + smoothing already learned from the list/create/edit
-            // (holdings omit them) so a portfolio refresh never wipes them.
-            val existing = db.customAssetDao().getById(h.asset.id)
-            db.customAssetDao().upsertAll(
-                listOf(
-                    CustomAssetEntity(
-                        id = h.asset.id,
-                        symbol = h.asset.symbol,
-                        name = h.asset.name,
-                        category = existing?.category,
-                        currency = h.asset.currency,
-                        smoothing = existing?.smoothing ?: false,
-                    ),
-                ),
-            )
-        }
-
-        val existing = db.portfolioDao().getById(portfolioId)
-        if (existing != null) {
-            db.portfolioDao().upsertAll(
-                listOf(
-                    existing.copy(
-                        baseCurrency = detail.baseCurrency,
-                        totals = PortfolioTotals(
-                            marketValueEur = detail.totals.marketValueEur,
-                            investedEur = detail.totals.investedEur,
-                            unrealizedPnlEur = detail.totals.unrealizedPnlEur,
-                            unrealizedPnlPct = detail.totals.unrealizedPnlPct,
-                            dayChangeEur = detail.totals.dayChangeEur,
-                            dayChangePct = detail.totals.dayChangePct,
-                            cashEur = detail.totals.cashEur,
-                            totalValueEur = detail.totals.totalValueEur,
-                        ),
-                        detailSyncedAtMs = now(),
-                    ),
-                ),
-            )
-        }
-    }
-
-    private suspend fun touchSyncedAt() {
-        db.metaDao().put(MetaEntity(MetaEntity.KEY_PORTFOLIO_SYNCED_AT, now().toString()))
-    }
-
     companion object {
-        private const val TAG = "BtPortfolioRepo"
-
         /**
          * Selection rule (§6.1): the stored choice while it exists and is active
          * → the platform default → the first active portfolio → null (no active
@@ -849,26 +426,3 @@ class PortfolioRepository(
         }
     }
 }
-
-/** Wire row → Room read model (asset identity flattened). */
-private fun TransactionDto.toEntity(portfolioId: String): TransactionEntity =
-    TransactionEntity(
-        id = id,
-        portfolioId = portfolioId,
-        assetId = assetId,
-        side = side,
-        quantity = quantity,
-        price = price,
-        fee = fee,
-        executedAt = executedAt,
-        executedAtMs = PortfolioRepository.parseIsoMs(executedAt),
-        note = note,
-        assetSymbol = asset.symbol,
-        assetName = asset.name,
-        assetExchange = asset.exchange,
-        assetCurrency = asset.currency,
-        assetType = asset.type,
-        assetIsCustom = asset.isCustom,
-        source = source ?: "manual",
-        mirror = mirror.toRowMirror(),
-    )

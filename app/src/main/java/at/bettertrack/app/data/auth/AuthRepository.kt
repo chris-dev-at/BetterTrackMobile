@@ -234,8 +234,12 @@ class AuthRepository(
         onBeforeLogout()
         revokeGrantBestEffort()
         // Explicit logout wipes the account-keyed Room data too: caches AND the
-        // outbound sync queue, plus any scheduled sync work (§7.3).
-        localAccountData.wipeAll()
+        // outbound sync queue, plus any scheduled sync work (§7.3). The wipe is
+        // storage-mode aware (S3/S4 plan §4.4): in SERVER mode — the only mode
+        // reachable today — it is the same full wipe as always, but once a Drive
+        // vault can exist, logging out of the BetterTrack account must not
+        // destroy data the user still owns.
+        localAccountData.wipeForLogout()
         store.wipeAll()
         _authState.value = AuthState.LoggedOut
         _loginPhase.value = LoginPhase.Idle

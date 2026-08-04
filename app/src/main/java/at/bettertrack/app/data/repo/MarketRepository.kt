@@ -10,6 +10,7 @@ import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
+import at.bettertrack.app.data.storage.MarketDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -85,11 +86,19 @@ enum class AssetRange(val wire: String, val label: String) {
  * asset reads are transient (never cached — they are online-only surfaces);
  * watchlist MEMBERSHIP is cached in Room so the star state renders offline.
  * The server is the only price source — nothing here computes a price.
+ *
+ * **V5 W1 (S3/S4 plan §1.3):** the market-DATA half now sits behind
+ * [MarketDataSource] ([at.bettertrack.app.data.storage.ApiMarketDataSource] is
+ * today's bodies, moved verbatim) because that is the half a Drive-autonomous
+ * install cannot satisfy from a BetterTrack account. Watchlist membership —
+ * which is Room-backed and mode-independent — stayed here, and every call site
+ * is unchanged.
  */
 class MarketRepository(
     private val api: BtApi,
     private val db: BtDatabase,
     private val json: Json,
+    private val data: MarketDataSource,
 ) {
     // ── Watchlist (workboard) membership — cached ────────────────────────────
 
@@ -101,71 +110,21 @@ class MarketRepository(
     val watchlistItems: Flow<List<WatchlistItemEntity>> =
         db.watchlistDao().observeItems(WatchlistEntity.WORKBOARD_ID)
 
-    // ── Search (§6.5) ────────────────────────────────────────────────────────
+    // ── Market data (§6.5) — one line each into the active [MarketDataSource] ─
 
-    suspend fun search(query: String): BtResult<SearchOutcome> =
-        when (val r = apiCall(json) { api.search(query) }) {
-            is BtResult.Ok -> BtResult.Ok(
-                SearchOutcome(
-                    results = r.value.results.map {
-                        MarketAsset(it.id, it.symbol, it.name, it.exchange, it.type, it.currency, it.isCustom)
-                    },
-                    enriching = r.value.enriching,
-                ),
-            )
+    suspend fun search(query: String): BtResult<SearchOutcome> = data.search(query)
 
-            is BtResult.Err -> r
-        }
-
-    // ── Asset detail + history (§6.5) ────────────────────────────────────────
-
-    suspend fun assetDetail(assetId: String): BtResult<AssetSnapshot> =
-        when (val r = apiCall(json) { api.assetDetail(assetId) }) {
-            is BtResult.Ok -> {
-                val a = r.value.asset
-                BtResult.Ok(
-                    AssetSnapshot(
-                        asset = MarketAsset(a.id, a.symbol, a.name, a.exchange, a.type, a.currency, a.isCustom),
-                        nativePrice = r.value.quote?.price,
-                        quoteCurrency = r.value.quote?.currency ?: a.currency,
-                        dayChangePct = r.value.quote?.dayChangePct,
-                        prevClose = r.value.quote?.prevClose,
-                        eurPrice = r.value.eurPrice,
-                        asOf = r.value.asOf ?: r.value.quote?.asOf,
-                        stale = r.value.stale,
-                    ),
-                )
-            }
-
-            is BtResult.Err -> r
-        }
+    suspend fun assetDetail(assetId: String): BtResult<AssetSnapshot> = data.assetDetail(assetId)
 
     /** Daily closes (ascending by time) — feeds the form's date→price link. */
     suspend fun assetDailyCloses(assetId: String): BtResult<List<PricePoint>> =
-        when (val r = apiCall(json) { api.assetDailyCloses(assetId) }) {
-            is BtResult.Ok -> BtResult.Ok(
-                r.value.points.mapNotNull { p -> parseIsoToMs(p.time)?.let { PricePoint(it, p.close) } }
-                    .sortedBy { it.timeMs },
-            )
-
-            is BtResult.Err -> r
-        }
+        data.assetDailyCloses(assetId)
 
     suspend fun assetHistory(assetId: String, range: AssetRange): BtResult<AssetPriceSeries> =
-        when (val r = apiCall(json) { api.assetHistory(assetId, range.wire) }) {
-            is BtResult.Ok -> {
-                val serverRange = AssetRange.fromWire(r.value.range) ?: range
-                val points = r.value.points.mapNotNull { p ->
-                    parseIsoToMs(p.time)?.let { PricePoint(it, p.close) }
-                }.sortedBy { it.timeMs }
-                BtResult.Ok(AssetPriceSeries(serverRange, points))
-            }
-
-            is BtResult.Err -> r
-        }
+        data.assetHistory(assetId, range)
 
     /** Latest quote for one asset (watchlist rows, §6.6). */
-    suspend fun quote(assetId: String): BtResult<AssetSnapshot> = assetDetail(assetId)
+    suspend fun quote(assetId: String): BtResult<AssetSnapshot> = data.quote(assetId)
 
     // ── Workboard watchlist mutations (§6.6, online-only) ────────────────────
 

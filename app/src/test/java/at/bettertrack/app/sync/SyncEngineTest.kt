@@ -32,6 +32,7 @@ class SyncEngineTest {
             payloadJson: String,
             accountKey: String,
             nowMs: Long,
+            backendTag: at.bettertrack.app.data.storage.BackendTag,
         ): SyncOp {
             val op = SyncOp(
                 id = nextId++,
@@ -48,6 +49,7 @@ class SyncEngineTest {
                 createdAtMs = nowMs,
                 updatedAtMs = nowMs,
                 firstAttemptAtMs = 0L,
+                backendTag = backendTag,
             )
             ops += op
             return op
@@ -463,7 +465,7 @@ class SyncEngineTest {
         val executor = FakeExecutor()
         // Crash mid-drain: the row persisted IN_FLIGHT (streak stamped) and the
         // send had actually landed server-side before the process died.
-        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
+        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L, at.bettertrack.app.data.storage.BackendTag.SERVER)
         store.markInFlight(crashed.id, 2L)
         executor.serverApplied += "c1"
 
@@ -800,7 +802,7 @@ class SyncEngineTest {
     fun `a hung replay of a crash-ambiguous op parks as timed out instead of wedging`() = runTest {
         val store = FakeOpStore()
         val executor = FakeExecutor()
-        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L)
+        val crashed = store.append("c1", OpType.TX_BUY, "p1", "{}", "user-1", 1L, at.bettertrack.app.data.storage.BackendTag.SERVER)
         store.markInFlight(crashed.id, 2L)           // ambiguous from a crash
         val h = Harness(store = store, executor = executor)
         executor.execHangsFor = { true }             // the reconcile replay hangs too
