@@ -59,6 +59,18 @@ copied  = 2026-08-04
 #       apps/web/src/user/vault packages/contracts/src/vault.ts
 # is EMPTY. Every W2 and W3 vendored path is identical at cb530f7e and aee03a6c.
 #
+# Re-verified at the DEFERRED TAX PORT (2026-08-04, plan §3.2 third row):
+# origin/main had advanced again, to 8ac3c6a2545eebef2c23ed89c2181d95bf8ce2fb, and
+#   git diff --stat cb530f7e origin/main -- packages/domain
+# is EMPTY. `packages/domain/src/tax.ts` and the four suites the tax vectors are
+# generated from were ALREADY inside the W2 `packages/domain/**` vendoring — no
+# re-vendoring was needed, and nothing under packages/domain has moved since the
+# snapshot was taken. The tax generator additionally reads
+#   vendor/domain/src/__tests__/deTaxFixtures.ts   (1109 lines of #576 fixture data)
+# and emits it verbatim to app/src/test/resources/domain-vectors/deTaxFixtures.json,
+# because deTaxFixtures.test.ts asserts the DATA's internal consistency rather than
+# an engine result — those 15 cases are hand-ported against that JSON.
+#
 # ── A dependency-VERSION trap worth remembering ─────────────────────────────
 # `packages/contracts` declares zod "^3.24.1", but that range resolves to 3.25.x,
 # and the two disagree about `z.string().datetime()`: 3.24.1 requires seconds

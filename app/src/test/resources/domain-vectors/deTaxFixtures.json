@@ -1,0 +1,758 @@
+{
+ "source": "packages/domain/src/__tests__/deTaxFixtures.ts",
+ "scenarios": [
+  {
+   "id": "de-simple-gain",
+   "title": "Simple gain — one lot, fees on both legs, allowance then 25 % + Soli",
+   "ruleRefs": [
+    "§32d Abs. 1 EStG",
+    "§20 Abs. 4 Satz 1 EStG",
+    "§20 Abs. 9 EStG",
+    "§4 SolzG"
+   ],
+   "description": "Baseline: a single fully-sold lot; buy fee capitalized, sell fee deducted; the €1,000 allowance comes off first, then 25 % KapESt + 5.5 % Soli-on-tax.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 10,
+     "priceEur": 100,
+     "feeEur": 5,
+     "executedAt": "2024-02-05T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 600,
+     "feeEur": 5,
+     "executedAt": "2024-09-12T12:00:00.000Z"
+    }
+   ],
+   "dividends": [],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 5995,
+     "fifoCostBasisEur": 1005,
+     "realizedPnlEur": 4990
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2024,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 4990,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 0,
+     "taxableBeforeAllowanceEur": 4990,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 3990,
+     "kapestEur": 997.5,
+     "soliEur": 54.86,
+     "totalTaxEur": 1052.36,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 1052.36,
+       "heldAfterEur": 1052.36
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-fifo-multi-lot",
+   "title": "Multi-lot sell — FIFO consumption, provably ≠ moving average",
+   "ruleRefs": [
+    "§20 Abs. 4 Satz 7 EStG",
+    "§32d Abs. 1 EStG",
+    "§4 SolzG"
+   ],
+   "description": "Two lots at different prices, partial sells across them: FIFO realizes +8,500 where the AT moving average would realize +6,000. The fixture states both; the DE engine must produce the FIFO numbers.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 100,
+     "priceEur": 100,
+     "feeEur": 0,
+     "executedAt": "2024-01-10T12:00:00.000Z"
+    },
+    {
+     "id": "b2",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 100,
+     "priceEur": 200,
+     "feeEur": 0,
+     "executedAt": "2024-03-15T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 100,
+     "priceEur": 180,
+     "feeEur": 0,
+     "executedAt": "2024-06-20T12:00:00.000Z"
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 50,
+     "priceEur": 210,
+     "feeEur": 0,
+     "executedAt": "2024-11-05T12:00:00.000Z"
+    }
+   ],
+   "dividends": [],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 18000,
+     "fifoCostBasisEur": 10000,
+     "realizedPnlEur": 8000,
+     "movingAveragePnlEur": 3000
+    },
+    {
+     "id": "s2",
+     "category": "aktien",
+     "proceedsEur": 10500,
+     "fifoCostBasisEur": 10000,
+     "realizedPnlEur": 500,
+     "movingAveragePnlEur": 3000
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2024,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 8500,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 0,
+     "taxableBeforeAllowanceEur": 8500,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 7500,
+     "kapestEur": 1875,
+     "soliEur": 103.12,
+     "totalTaxEur": 1978.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 1846.25,
+       "heldAfterEur": 1846.25
+      },
+      {
+       "eventId": "s2",
+       "deltaEur": 131.87,
+       "heldAfterEur": 1978.12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-allowance-exhaustion",
+   "title": "Dividends exhaust the Sparer-Pauschbetrag partially, then fully",
+   "ruleRefs": [
+    "§20 Abs. 9 EStG",
+    "§20 Abs. 1 Nr. 1 EStG",
+    "§43a Abs. 3 EStG",
+    "§4 SolzG"
+   ],
+   "description": "Three dividends walk the €1,000 allowance down: the first is tax-free inside it, the second straddles its exhaustion (only the excess is taxed), the third is taxed in full.",
+   "transactions": [],
+   "dividends": [
+    {
+     "id": "d1",
+     "assetId": "de-stock-b",
+     "grossEur": 600,
+     "executedAt": "2025-03-14T12:00:00.000Z"
+    },
+    {
+     "id": "d2",
+     "assetId": "de-stock-b",
+     "grossEur": 700,
+     "executedAt": "2025-06-16T12:00:00.000Z"
+    },
+    {
+     "id": "d3",
+     "assetId": "de-stock-b",
+     "grossEur": 400,
+     "executedAt": "2025-09-15T12:00:00.000Z"
+    }
+   ],
+   "expectedSells": [],
+   "expectedYears": [
+    {
+     "year": 2025,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 0,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 1700,
+     "taxableBeforeAllowanceEur": 1700,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 700,
+     "kapestEur": 175,
+     "soliEur": 9.62,
+     "totalTaxEur": 184.62,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "d1",
+       "deltaEur": 0,
+       "heldAfterEur": 0
+      },
+      {
+       "eventId": "d2",
+       "deltaEur": 79.12,
+       "heldAfterEur": 79.12
+      },
+      {
+       "eventId": "d3",
+       "deltaEur": 105.5,
+       "heldAfterEur": 184.62
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-aktien-loss-ringfenced",
+   "title": "Aktien loss is ring-fenced — it never offsets a dividend",
+   "ruleRefs": [
+    "§20 Abs. 6 Satz 4 EStG",
+    "§20 Abs. 1 Nr. 1 EStG",
+    "§20 Abs. 9 EStG"
+   ],
+   "description": "A −1,500 share-sale loss and a +2,000 dividend in one year: the dividend is taxed over the allowance while the loss carries out in the Aktien pot.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 10,
+     "priceEur": 300,
+     "feeEur": 0,
+     "executedAt": "2024-01-08T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 150,
+     "feeEur": 0,
+     "executedAt": "2024-05-20T12:00:00.000Z"
+    }
+   ],
+   "dividends": [
+    {
+     "id": "d1",
+     "assetId": "de-stock-b",
+     "grossEur": 2000,
+     "executedAt": "2024-07-01T12:00:00.000Z"
+    }
+   ],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 1500,
+     "fifoCostBasisEur": 3000,
+     "realizedPnlEur": -1500
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2024,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": -1500,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 2000,
+     "taxableBeforeAllowanceEur": 2000,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1000,
+     "kapestEur": 250,
+     "soliEur": 13.75,
+     "totalTaxEur": 263.75,
+     "aktienPotOutEur": 1500,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 0,
+       "heldAfterEur": 0
+      },
+      {
+       "eventId": "d1",
+       "deltaEur": 263.75,
+       "heldAfterEur": 263.75
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-sonstige-loss-cross-offset",
+   "title": "Sonstige loss offsets dividends and Aktien gains (cross-offset)",
+   "ruleRefs": [
+    "§20 Abs. 6 EStG",
+    "§20 Abs. 6 Satz 4 EStG",
+    "§43a Abs. 3 Satz 2 EStG",
+    "§4 SolzG"
+   ],
+   "description": "An ETF sale loss (general pot) offsets both a dividend and a share-sale gain — the direction §20 Abs. 6 Satz 4 permits — and, arriving after tax was already withheld, triggers an intra-year refund delta.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 10,
+     "priceEur": 100,
+     "feeEur": 0,
+     "executedAt": "2024-01-05T12:00:00.000Z"
+    },
+    {
+     "id": "b2",
+     "assetId": "de-etf-a",
+     "category": "sonstige",
+     "side": "buy",
+     "quantity": 20,
+     "priceEur": 150,
+     "feeEur": 0,
+     "executedAt": "2024-02-01T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 400,
+     "feeEur": 0,
+     "executedAt": "2024-04-10T12:00:00.000Z"
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "category": "sonstige",
+     "side": "sell",
+     "quantity": 20,
+     "priceEur": 90,
+     "feeEur": 0,
+     "executedAt": "2024-08-19T12:00:00.000Z"
+    }
+   ],
+   "dividends": [
+    {
+     "id": "d1",
+     "assetId": "de-stock-b",
+     "grossEur": 500,
+     "executedAt": "2024-05-15T12:00:00.000Z"
+    }
+   ],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 4000,
+     "fifoCostBasisEur": 1000,
+     "realizedPnlEur": 3000
+    },
+    {
+     "id": "s2",
+     "category": "sonstige",
+     "proceedsEur": 1800,
+     "fifoCostBasisEur": 3000,
+     "realizedPnlEur": -1200
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2024,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 3000,
+     "sonstigeSalePnlEur": -1200,
+     "dividendsEur": 500,
+     "taxableBeforeAllowanceEur": 2300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1300,
+     "kapestEur": 325,
+     "soliEur": 17.87,
+     "totalTaxEur": 342.87,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 527.5,
+       "heldAfterEur": 527.5
+      },
+      {
+       "eventId": "d1",
+       "deltaEur": 131.87,
+       "heldAfterEur": 659.37
+      },
+      {
+       "eventId": "s2",
+       "deltaEur": -316.5,
+       "heldAfterEur": 342.87
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-rounding-truncation",
+   "title": "KapESt and Soli cent-floor — fractional cents are dropped, never rounded up",
+   "ruleRefs": [
+    "§32d Abs. 1 EStG",
+    "§4 Satz 2 SolzG"
+   ],
+   "description": "A base of €1,344.42 makes 25 % land on 336.105 (→ 336.10) and the Soli on 18.4855 (→ 18.48): both quantizations floor, per the statutory Soli rule and the app-wide #370 floor-toward-zero money policy.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 2,
+     "priceEur": 1000,
+     "feeEur": 0,
+     "executedAt": "2025-01-09T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 2,
+     "priceEur": 2172.21,
+     "feeEur": 0,
+     "executedAt": "2025-07-21T12:00:00.000Z"
+    }
+   ],
+   "dividends": [],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 4344.42,
+     "fifoCostBasisEur": 2000,
+     "realizedPnlEur": 2344.42
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2025,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 2344.42,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 0,
+     "taxableBeforeAllowanceEur": 2344.42,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 1344.42,
+     "kapestEur": 336.1,
+     "soliEur": 18.48,
+     "totalTaxEur": 354.58,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 354.58,
+       "heldAfterEur": 354.58
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-year-boundary-carry",
+   "title": "Year boundary — pots carry forward, the Sparer-Pauschbetrag resets",
+   "ruleRefs": [
+    "§20 Abs. 6 Sätze 2–3 EStG",
+    "§20 Abs. 9 EStG",
+    "§4 SolzG"
+   ],
+   "description": "A pure-loss 2024 carries both pots into 2025 while its unused allowance is lost; 2025 nets gains against the carried pots and a fresh €1,000 allowance.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 10,
+     "priceEur": 200,
+     "feeEur": 0,
+     "executedAt": "2024-02-12T12:00:00.000Z"
+    },
+    {
+     "id": "b2",
+     "assetId": "de-etf-a",
+     "category": "sonstige",
+     "side": "buy",
+     "quantity": 10,
+     "priceEur": 100,
+     "feeEur": 0,
+     "executedAt": "2024-03-05T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 120,
+     "feeEur": 0,
+     "executedAt": "2024-06-10T12:00:00.000Z"
+    },
+    {
+     "id": "s2",
+     "assetId": "de-etf-a",
+     "category": "sonstige",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 70,
+     "feeEur": 0,
+     "executedAt": "2024-10-14T12:00:00.000Z"
+    },
+    {
+     "id": "b3",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 5,
+     "priceEur": 100,
+     "feeEur": 0,
+     "executedAt": "2025-01-20T12:00:00.000Z"
+    },
+    {
+     "id": "s3",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 5,
+     "priceEur": 500,
+     "feeEur": 0,
+     "executedAt": "2025-05-11T12:00:00.000Z"
+    }
+   ],
+   "dividends": [
+    {
+     "id": "d1",
+     "assetId": "de-stock-b",
+     "grossEur": 400,
+     "executedAt": "2025-06-15T12:00:00.000Z"
+    }
+   ],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 1200,
+     "fifoCostBasisEur": 2000,
+     "realizedPnlEur": -800
+    },
+    {
+     "id": "s2",
+     "category": "sonstige",
+     "proceedsEur": 700,
+     "fifoCostBasisEur": 1000,
+     "realizedPnlEur": -300
+    },
+    {
+     "id": "s3",
+     "category": "aktien",
+     "proceedsEur": 2500,
+     "fifoCostBasisEur": 500,
+     "realizedPnlEur": 2000
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2024,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": -800,
+     "sonstigeSalePnlEur": -300,
+     "dividendsEur": 0,
+     "taxableBeforeAllowanceEur": 0,
+     "allowanceUsedEur": 0,
+     "allowanceRemainingEur": 1000,
+     "taxableBaseEur": 0,
+     "kapestEur": 0,
+     "soliEur": 0,
+     "totalTaxEur": 0,
+     "aktienPotOutEur": 800,
+     "sonstigePotOutEur": 300,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 0,
+       "heldAfterEur": 0
+      },
+      {
+       "eventId": "s2",
+       "deltaEur": 0,
+       "heldAfterEur": 0
+      }
+     ]
+    },
+    {
+     "year": 2025,
+     "aktienPotInEur": 800,
+     "sonstigePotInEur": 300,
+     "aktienSalePnlEur": 2000,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 400,
+     "taxableBeforeAllowanceEur": 1300,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 300,
+     "kapestEur": 75,
+     "soliEur": 4.12,
+     "totalTaxEur": 79.12,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s3",
+       "deltaEur": 0,
+       "heldAfterEur": 0
+      },
+      {
+       "eventId": "d1",
+       "deltaEur": 79.12,
+       "heldAfterEur": 79.12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "de-intra-year-refund",
+   "title": "A later same-year loss refunds tax already withheld",
+   "ruleRefs": [
+    "§43a Abs. 3 Satz 2 EStG",
+    "§20 Abs. 6 EStG",
+    "§4 SolzG"
+   ],
+   "description": "A March gain withholds €263.75; a September loss on the same stock nets the year down and the settlement refunds €197.82 of it — the intra-year refund the German paying-agent rules mandate.",
+   "transactions": [
+    {
+     "id": "b1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "buy",
+     "quantity": 20,
+     "priceEur": 100,
+     "feeEur": 0,
+     "executedAt": "2025-01-15T12:00:00.000Z"
+    },
+    {
+     "id": "s1",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 300,
+     "feeEur": 0,
+     "executedAt": "2025-03-10T12:00:00.000Z"
+    },
+    {
+     "id": "s2",
+     "assetId": "de-stock-a",
+     "category": "aktien",
+     "side": "sell",
+     "quantity": 10,
+     "priceEur": 25,
+     "feeEur": 0,
+     "executedAt": "2025-09-22T12:00:00.000Z"
+    }
+   ],
+   "dividends": [],
+   "expectedSells": [
+    {
+     "id": "s1",
+     "category": "aktien",
+     "proceedsEur": 3000,
+     "fifoCostBasisEur": 1000,
+     "realizedPnlEur": 2000
+    },
+    {
+     "id": "s2",
+     "category": "aktien",
+     "proceedsEur": 250,
+     "fifoCostBasisEur": 1000,
+     "realizedPnlEur": -750
+    }
+   ],
+   "expectedYears": [
+    {
+     "year": 2025,
+     "aktienPotInEur": 0,
+     "sonstigePotInEur": 0,
+     "aktienSalePnlEur": 1250,
+     "sonstigeSalePnlEur": 0,
+     "dividendsEur": 0,
+     "taxableBeforeAllowanceEur": 1250,
+     "allowanceUsedEur": 1000,
+     "allowanceRemainingEur": 0,
+     "taxableBaseEur": 250,
+     "kapestEur": 62.5,
+     "soliEur": 3.43,
+     "totalTaxEur": 65.93,
+     "aktienPotOutEur": 0,
+     "sonstigePotOutEur": 0,
+     "steps": [
+      {
+       "eventId": "s1",
+       "deltaEur": 263.75,
+       "heldAfterEur": 263.75
+      },
+      {
+       "eventId": "s2",
+       "deltaEur": -197.82,
+       "heldAfterEur": 65.93
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
