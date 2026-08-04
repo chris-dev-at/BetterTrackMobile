@@ -1436,4 +1436,45 @@
     <string name="bt_storage_both_blocked_body">„Beides“ heißt, deine Daten liegen an zwei Orten — und der zweite braucht eine Google-Verbindung, die diese Version noch nicht herstellen kann. Wir tragen keine Sicherung ein, die es nicht gibt: Wähle unten eine der beiden Möglichkeiten, die andere kannst du später in den Einstellungen ergänzen.</string>
     <string name="bt_storage_both_settle_server">Nur mit BetterTrack weitermachen</string>
     <string name="bt_storage_both_settle_drive">Stattdessen nur Google Drive</string>
+
+    <!-- ── V5 W6 — manuelle Kurse + ehrliche Zustände ohne Live-Kurse ─────── -->
+    <string name="bt_price_manual_badge">manuell</string>
+    <string name="bt_price_none">Noch kein Kurs</string>
+    <string name="bt_price_add">Kurs eintragen</string>
+    <string name="bt_price_update">Kurs ändern</string>
+    <string name="bt_price_none_hint">Noch kein Kurs — trag einen ein</string>
+    <string name="bt_price_sheet_title">Kurs für %1$s</string>
+    <string name="bt_price_sheet_body">In diesem Modus gibt es keine Live-Kurse. Trag einen Kurs ein, den du kennst, und BetterTrack bewertet diese Position damit — genauso wie bei einem eigenen Wert.</string>
+    <string name="bt_price_field_value">Kurs</string>
+    <string name="bt_price_field_date">Datum</string>
+    <string name="bt_price_field_currency">Währung</string>
+    <string name="bt_price_save">Kurs speichern</string>
+    <string name="bt_price_history_title">Von dir eingetragene Kurse</string>
+    <string name="bt_price_history_empty">Noch nichts eingetragen.</string>
+    <string name="bt_price_delete_title">Diesen Kurs entfernen?</string>
+    <string name="bt_price_delete_body">%1$s vom %2$s wird entfernt und dieses Portfolio sofort neu berechnet.</string>
+    <string name="bt_price_delete_confirm">Entfernen</string>
+    <string name="bt_price_err_number">Gib den Kurs als Zahl ein.</string>
+    <string name="bt_price_err_positive">Ein Kurs muss größer als null sein. Wenn du ihn nicht kennst, lass ihn weg — BetterTrack sagt lieber nichts, als zu raten.</string>
+    <string name="bt_price_err_large">Das sieht zu groß aus. Prüf das Dezimaltrennzeichen.</string>
+    <string name="bt_price_err_future">Ein Kurs kann nicht aus der Zukunft kommen.</string>
+    <string name="bt_price_err_currency">Nimm einen dreibuchstabigen Währungscode, zum Beispiel EUR.</string>
+    <string name="bt_price_err_rate">Auf diesem Gerät gibt es keinen Kurs %1$s → %2$s, deshalb lässt sich ein Preis in %1$s hier nicht verwenden. Trag ihn in %2$s ein.</string>
+    <string name="bt_price_unpriced_title">Noch keine Kurse</string>
+    <string name="bt_price_unpriced_body">Deine Buchungen und dein Bargeld liegen sicher auf diesem Gerät. Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
+    <plurals name="bt_price_unpriced_note">
+        <item quantity="one">Ohne %1$d Position ohne Kurs</item>
+        <item quantity="other">Ohne %1$d Positionen ohne Kurs</item>
+    </plurals>
+    <string name="bt_price_search_title">Suche braucht Kursabfragen</string>
+    <string name="bt_price_search_body">In diesem Modus liegt kein Wertpapier-Verzeichnis auf dem Gerät, es gibt also nichts zu durchsuchen. Du kannst jeden Wert weiterhin selbst anlegen und selbst bewerten.</string>
+    <string name="bt_price_asset_unavailable">Diese Wertpapierseite braucht Live-Kurse, die es in diesem Modus nicht gibt. Die Kurse, die du selbst eingetragen hast, stehen bei der Position.</string>
+
+    <!-- ── V5 W6 — Opt-in „nur für Kurse“ ────────────────────────────────── -->
+    <string name="bt_prices_section">Kurse</string>
+    <string name="bt_prices_toggle_title">BetterTrack nur für Kurse nutzen</string>
+    <string name="bt_prices_toggle_subtitle">BetterTrack würde sehen, welche Werte du nachschlägst — nie, was du besitzt.</string>
+    <string name="bt_prices_toggle_on_note">An. Suche und Kurse laufen über BetterTrack; Portfolio, Buchungen und Bargeld bleiben auf diesem Gerät.</string>
+    <string name="bt_prices_toggle_off_note">Aus. Nichts verlässt dieses Gerät, und als Kurse gelten die, die du selbst einträgst.</string>
+    <string name="bt_prices_toggle_needs_account">Kursabfragen sind angemeldete Anfragen, dafür braucht es ein BetterTrack-Konto. Füg unter „Wo deine Daten liegen“ eines hinzu — dein Portfolio bleibt trotzdem in Drive.</string>
 </resources>

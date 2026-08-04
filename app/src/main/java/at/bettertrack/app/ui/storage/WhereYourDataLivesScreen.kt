@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
@@ -31,6 +32,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -49,6 +52,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
+import at.bettertrack.app.data.storage.PriceLookupAvailability
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.StorageTransition
 import at.bettertrack.app.data.storage.SwitchResult
@@ -59,6 +63,7 @@ import at.bettertrack.app.data.storage.availableTransitions
 import at.bettertrack.app.data.storage.effective
 import at.bettertrack.app.data.storage.evaluateTransition
 import at.bettertrack.app.data.storage.holdsVault
+import at.bettertrack.app.data.storage.priceLookupAvailability
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
@@ -182,6 +187,9 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
         NewRecoveryKitRow()
         LockVaultRow()
     }
+
+    // ── Prices (W6) ─────────────────────────────────────────────────────────
+    PricesSection(effective)
 
     // ── Change where it lives ───────────────────────────────────────────────
     val transitions = availableTransitions(effective)
@@ -637,6 +645,99 @@ private fun DeleteEverythingSection(onDone: () -> Unit) {
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(stringResource(R.string.bt_storage_delete_action))
+        }
+    }
+}
+
+/**
+ * The **"Use BetterTrack for prices only"** opt-in (S3/S4 plan §5 W6, item 3).
+ *
+ * Absent in SERVER mode — there prices already come from BetterTrack because
+ * everything does, and a switch with nothing on the other side of it is clutter
+ * (plan §4.5, "absent, not greyed").
+ *
+ * Present but **disabled** in Drive mode with no account. That is the one place
+ * this screen deliberately greys rather than hides: "absent, not greyed" governs
+ * features a mode does not have, and this is a feature it *could* have — the
+ * user is one account away, and hiding the option would hide the trade rather
+ * than let them judge it. The disabled subtitle says exactly what is missing and
+ * where to fix it.
+ *
+ * The subtitle under the title is the plan's own sentence, verbatim, because it
+ * is the whole offer: *"BetterTrack would see which assets you look up, never
+ * what you own."* It is true by construction — the market seam and the portfolio
+ * seam are separate routers, and the toggle can only reach the first.
+ */
+@Composable
+private fun PricesSection(effective: StorageMode) {
+    val availability = priceLookupAvailability(
+        mode = effective,
+        hasSession = AppGraph.hasServerSession(),
+    )
+    if (availability == PriceLookupAvailability.NOT_APPLICABLE) return
+
+    val bt = BtTheme.colors
+    val enabled by AppGraph.priceLookupStore.enabled.collectAsStateWithLifecycle()
+    val offerable = availability == PriceLookupAvailability.AVAILABLE
+    // A stored `true` on an install with no session is consent without
+    // capability: it routes nowhere, so the switch must not claim it is on.
+    val checked = enabled && offerable
+
+    SectionLabel(stringResource(R.string.bt_prices_section))
+    Surface(
+        color = bt.surface,
+        border = BorderStroke(1.dp, bt.border),
+        shape = BtShapes.card,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.QueryStats,
+                    contentDescription = null,
+                    tint = if (offerable) bt.textSecondary else bt.textMuted,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.bt_prices_toggle_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (offerable) bt.textPrimary else bt.textMuted,
+                    )
+                    Text(
+                        stringResource(R.string.bt_prices_toggle_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Switch(
+                    checked = checked,
+                    onCheckedChange = { AppGraph.priceLookupStore.set(it) },
+                    enabled = offerable,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = bt.onGold,
+                        checkedTrackColor = bt.gold,
+                        checkedBorderColor = bt.gold,
+                        uncheckedThumbColor = bt.textMuted,
+                        uncheckedTrackColor = bt.surface,
+                        uncheckedBorderColor = bt.border,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(
+                    when {
+                        !offerable -> R.string.bt_prices_toggle_needs_account
+                        checked -> R.string.bt_prices_toggle_on_note
+                        else -> R.string.bt_prices_toggle_off_note
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
         }
     }
 }

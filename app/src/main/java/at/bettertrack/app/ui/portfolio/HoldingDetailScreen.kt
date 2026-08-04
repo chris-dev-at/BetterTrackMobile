@@ -172,6 +172,23 @@ fun HoldingDetailScreen(
         )
     }
 
+    // W6 — manual price entry. Drive-only: it is the one mode whose valuation
+    // reads `price_cache`, so it is the only mode where a typed price changes
+    // anything on screen.
+    val manualPricesAvailable = at.bettertrack.app.ui.prices.manualEntryAvailable(
+        AppGraph.gatedStorageMode(AppGraph.storageModeStore.mode.collectAsStateWithLifecycle().value),
+    )
+    val priceVm: at.bettertrack.app.ui.prices.ManualPriceViewModel = viewModel(key = "price-$assetId") {
+        at.bettertrack.app.ui.prices.ManualPriceViewModel(
+            assetId = assetId,
+            store = AppGraph.manualPriceStore,
+            recompute = { AppGraph.recomputeAfterPriceChange() },
+        )
+    }
+    val manualPricePoints by priceVm.points.collectAsStateWithLifecycle()
+    val priceSheetOpen by priceVm.sheetOpen.collectAsStateWithLifecycle()
+    val priceBusy by priceVm.busy.collectAsStateWithLifecycle()
+
     val bt = BtTheme.colors
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val holding by vm.holding.collectAsStateWithLifecycle()
@@ -250,6 +267,9 @@ fun HoldingDetailScreen(
                         transactions = transactions,
                         pendingRows = pendingRows,
                         locale = locale,
+                        manualPricesAvailable = manualPricesAvailable,
+                        manualPricePoints = manualPricePoints,
+                        onAddPrice = { priceVm.openSheet() },
                         onEditSynced = onEditSynced,
                         onEditQueued = onEditQueued,
                         onOpenCustomAsset = onOpenCustomAsset,
@@ -294,6 +314,26 @@ fun HoldingDetailScreen(
             }
         }
     }
+
+    if (priceSheetOpen && manualPricesAvailable) {
+        val h = holding
+        at.bettertrack.app.ui.prices.ManualPriceSheet(
+            assetSymbol = h?.assetSymbol ?: assetId,
+            assetId = assetId,
+            // The currency the projector will actually value this asset in. Not
+            // a default the user may freely override into a silent mis-valuation
+            // — see ManualPriceError.NO_RATE.
+            valuationCurrency = h?.assetCurrency ?: "EUR",
+            points = manualPricePoints,
+            busy = priceBusy,
+            locale = locale,
+            onSubmit = { date, value, currency ->
+                priceVm.record(date, value, currency, h?.assetCurrency ?: "EUR")
+            },
+            onDelete = { priceVm.delete(it) },
+            onDismiss = { priceVm.closeSheet() },
+        )
+    }
 }
 
 @Composable
@@ -302,6 +342,9 @@ private fun HoldingContent(
     transactions: List<TransactionEntity>,
     pendingRows: List<PendingTxRow>,
     locale: Locale,
+    manualPricesAvailable: Boolean,
+    manualPricePoints: List<at.bettertrack.app.data.storage.ManualPricePoint>,
+    onAddPrice: () -> Unit,
     onEditSynced: (String) -> Unit,
     onEditQueued: (Long) -> Unit,
     onOpenCustomAsset: (String) -> Unit,
@@ -326,6 +369,14 @@ private fun HoldingContent(
                 Spacer(Modifier.height(2.dp))
                 if (holding.marketValueEur != null) {
                     MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneyLarge)
+                } else if (manualPricesAvailable) {
+                    // W6: in Drive mode a missing value has a cause the user can
+                    // act on, so it says so instead of showing a bare dash.
+                    Text(
+                        text = stringResource(R.string.bt_price_none_hint),
+                        style = BtTheme.type.moneyMedium,
+                        color = bt.textMuted,
+                    )
                 } else {
                     Text(
                         text = stringResource(R.string.bt_switcher_value_pending),
@@ -354,6 +405,53 @@ private fun HoldingContent(
                             text = " · " + stringResource(R.string.bt_overview_today),
                             style = BtTheme.type.numberCaption,
                             color = bt.textMuted,
+                        )
+                    }
+                }
+            }
+        }
+
+        // W6 — the manual price book for this asset (Drive mode only).
+        //
+        // Placed directly under the hero because it is the *cause* of whatever
+        // the hero just said: either the price that produced the value, or the
+        // absence that produced the empty state. Putting it further down would
+        // make the user hunt for the explanation of the number they are looking at.
+        if (manualPricesAvailable) {
+            item(key = "manual-price") {
+                val latest = manualPricePoints.maxByOrNull { it.dateIso }
+                BtCard(modifier = Modifier.fillMaxWidth(), onClick = onAddPrice) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.bt_price_history_title),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = bt.textMuted,
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            at.bettertrack.app.ui.prices.AssetPriceLine(
+                                state = at.bettertrack.app.ui.prices.assetPriceState(
+                                    mode = at.bettertrack.app.data.storage.StorageMode.DRIVE,
+                                    livePrice = null,
+                                    liveCurrency = null,
+                                    liveAsOfIso = null,
+                                    manualPrice = latest?.close,
+                                    manualCurrency = latest?.currency,
+                                    manualAsOfIso = latest?.dateIso,
+                                ),
+                                locale = locale,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(
+                                if (latest == null) R.string.bt_price_add else R.string.bt_price_update,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = bt.gold,
                         )
                     }
                 }

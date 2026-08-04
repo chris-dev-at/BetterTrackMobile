@@ -224,6 +224,10 @@ fun SearchScreen(
         SearchViewModel(AppGraph.marketRepository, AppGraph.portfolioRepository, AppGraph.connectivityMonitor)
     }
     val bt = BtTheme.colors
+    // W6: this mode has no live quotes and no on-device asset catalogue.
+    val noLivePrices = at.bettertrack.app.ui.prices.manualEntryAvailable(
+        AppGraph.gatedStorageMode(AppGraph.storageModeStore.mode.collectAsStateWithLifecycle().value),
+    )
     val query by vm.query.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
@@ -295,12 +299,25 @@ fun SearchScreen(
                     CircularProgressIndicator(color = bt.gold)
                 }
 
-                SearchUiState.Empty -> BtEmptyState(
-                    icon = Icons.Outlined.Search,
-                    title = stringResource(R.string.bt_search_no_results_title),
-                    message = stringResource(R.string.bt_search_no_results_message),
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                // W6: in Drive mode `search` returns an empty result by design —
+                // there is no catalogue on the device to search. Rendering that as
+                // "no results found" would blame the query for a limitation of the
+                // mode, and would send the user retyping forever.
+                SearchUiState.Empty -> if (noLivePrices) {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Search,
+                        title = stringResource(R.string.bt_price_search_title),
+                        message = stringResource(R.string.bt_price_search_body),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                } else {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Search,
+                        title = stringResource(R.string.bt_search_no_results_title),
+                        message = stringResource(R.string.bt_search_no_results_message),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
 
                 SearchUiState.OfflineState -> BtEmptyState(
                     icon = Icons.Outlined.Search,

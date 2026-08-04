@@ -334,8 +334,56 @@ object AppGraph {
             mode = storageMode,
             server = { apiMarketDataSource },
             offline = { noLivePricesMarketDataSource },
+            // W6: the opt-in moves ONLY the market seam. `portfolioBackend` is a
+            // different router and is not reachable from here, which is what makes
+            // "never what you own" structural rather than a promise.
+            lookupsActive = {
+                at.bettertrack.app.data.storage.priceLookupActive(
+                    mode = storageMode(),
+                    hasSession = hasServerSession(),
+                    enabled = priceLookupStore.enabledNow(),
+                )
+            },
         )
     }
+
+    /**
+     * The "Use BetterTrack for prices only" consent (W6). Plain prefs, survives
+     * logout, default OFF.
+     */
+    val priceLookupStore: at.bettertrack.app.data.storage.PriceLookupStore by lazy {
+        at.bettertrack.app.data.storage.PriceLookupStore(appContext)
+    }
+
+    /**
+     * Whether a BetterTrack bearer exists at all.
+     *
+     * Distinct from the sync engine's `hasSession` at line ~532, which
+     * deliberately reports `true` for Drive-only so the op drain is not gated on
+     * an account that mode does not have. Price lookups need the opposite
+     * question — *is there a token to authenticate `/search` with* — and
+     * answering it with the sync-engine flavour would send unauthenticated calls.
+     */
+    fun hasServerSession(): Boolean = tokenManager.hasTokens()
+
+    /**
+     * Manual price entry (W6). Writes the only production rows `price_cache`
+     * holds — see the provenance invariant on [at.bettertrack.app.data.storage.ManualPriceStore].
+     */
+    val manualPriceStore: at.bettertrack.app.data.storage.ManualPriceStore by lazy {
+        at.bettertrack.app.data.storage.ManualPriceStore(database.priceCacheDao())
+    }
+
+    /**
+     * Recomputes every projection after the price book changed.
+     *
+     * Routed through [at.bettertrack.app.data.storage.VaultPortfolioBackend.onPricesChanged]
+     * rather than `deriveAll` because a delete can leave the price watermark
+     * unmoved, and the cached derivation would then survive a change to its own
+     * inputs.
+     */
+    suspend fun recomputeAfterPriceChange(): at.bettertrack.app.data.api.BtResult<Unit> =
+        vaultPortfolioBackend.onPricesChanged()
 
     private val apiMarketDataSource: MarketDataSource by lazy { ApiMarketDataSource(api = btApi, json = json) }
 

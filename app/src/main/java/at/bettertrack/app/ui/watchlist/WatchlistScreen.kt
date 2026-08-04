@@ -78,6 +78,12 @@ class WatchlistViewModel(
     private val watchlist: WatchlistRepository,
     private val market: MarketRepository,
     connectivity: ConnectivityMonitor,
+    /**
+     * W6 — true in a mode with no live quotes. Injected rather than read from
+     * [at.bettertrack.app.di.AppGraph] so the panel's notice rule stays testable
+     * and this class keeps its single dependency direction.
+     */
+    private val noLivePrices: () -> Boolean = { false },
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
@@ -133,6 +139,13 @@ class WatchlistViewModel(
         }.await()
         val ok = results.filterNotNull()
         _quotes.value = _quotes.value + ok.toMap()
+        // W6: in a mode with no live prices, a failed quote is not a refresh
+        // problem — it is the mode working as designed. Raising "couldn't
+        // refresh" on every row every time would make a permanent banner out of
+        // a permanent condition, and a warning that is always on is a warning
+        // nobody reads on the day it means something. The rows themselves
+        // already carry the honest per-asset state.
+        if (noLivePrices()) return
         // Any row that failed to quote makes the panel's prices partly stale —
         // one honest notice beats a silently frozen number on a live-looking row.
         _refreshNotice.value = if (ok.size == results.size) {
@@ -182,6 +195,11 @@ fun WatchlistPanel(
             AppGraph.watchlistRepository,
             AppGraph.marketRepository,
             AppGraph.connectivityMonitor,
+            noLivePrices = {
+                at.bettertrack.app.ui.prices.manualEntryAvailable(
+                    AppGraph.gatedStorageMode(AppGraph.storageModeStore.modeNow()),
+                )
+            },
         )
     }
     val bt = BtTheme.colors
