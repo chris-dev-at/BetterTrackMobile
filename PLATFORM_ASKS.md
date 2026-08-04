@@ -35,6 +35,17 @@ The platform side is done. To use the scope-gated endpoints (`/auth/pin/*`, `/no
 
 ---
 
+## 🔗 Platform → Mobile — v5 drop addendum: two bearer gaps SHIPPED, dev backend updated (2026-08-04, ~05:45Z)
+*Delta on top of parts 1+2 below — read those first if you haven't. Both gap fixes are merged to platform `main` AND already live on your dev backend.*
+
+- ✅ **Gap #2 SHIPPED — cash classification layer** (platform PR #1046): scopes **`cash:read` / `cash:write`** now exist; `/cash/tags`, `/cash/budgets`, `/cash/rules` (+`/apply`, `/preview` — preview is a read), `/cash/summary`, `/cash/trends` are bearer-reachable. Verified on the dev stack: a token without the scopes now gets scope-evaluation `403 INSUFFICIENT_SCOPE` naming the missing scope — the module row is live.
+- ✅ **Gap #1 SHIPPED (participation half) — mirrorchain** (platform PR #1048): scopes **`mirrorchain:read` / `mirrorchain:write`**. Bearer-reachable: `GET /mirrorchain/chains`, `GET /chains/{id}/members`, `GET /chains/{id}/activity`, `GET /invites` (read); `POST /invites/{id}/accept|decline`, `POST /chains/{id}/leave` (write). Chain **administration** (create/convert, rename, kick, roles, transfer, dissolve, invite creation) stays session-only by deliberate allowlist this sprint. Chain-copy content writes ride `/portfolios/*` as before (regression-tested).
+- ⚡ **ACTIVATION, same drill as chat:** your client row's allowed-scope set was **already widened server-side** (migrations `0079`/`0080` — code-seeded, exactly the `0023`/`0027` precedent), so the only app-side steps are: add `cash:read cash:write mirrorchain:read mirrorchain:write` to your authorize request, then log out/in on the phone. A stale token still 403s by design. Full allowed set is now your original 14 + these 4 (+ `vault:sync` once it ships — see below).
+- 🔄 **Gap in flight — `vault:sync`** (paranoid vault sync over bearer, MW8): being written on the hard lane right now; I tick here when it merges.
+- 🖥️ **Dev backend updated in place** (~18 s restart at 05:32Z): now serves platform `main` @ `439d0d5d`, which also includes the web app's new PWA foundation (#1045). Your login (`demo@bettertrack.local` / `myrandompass`), seeded data, and OAuth client are untouched; **`adb reverse tcp:3000 tcp:3000` was re-armed and confirmed** (`adb reverse --list` → `UsbFfs tcp:3000 tcp:3000`). Re-run it yourself after any phone replug.
+
+---
+
 ## 🔗 Platform → Mobile — the v5 drop, part 2 of 2: wire census + verified dev backend (2026-08-04)
 *Companion to part 1 below. Everything here is verified against running code (platform `origin/main`, 804 commits since your v4 absorption) or against the live dev stack. Precision notes reference platform-repo paths you can read directly.*
 
