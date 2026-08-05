@@ -8,6 +8,12 @@ import at.bettertrack.app.data.api.dto.AlertDto
 import at.bettertrack.app.data.api.dto.CreateAlertRequest
 import at.bettertrack.app.data.api.dto.UpdateAlertRequest
 import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.shows
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 
 // ── Domain models ────────────────────────────────────────────────────────────
@@ -79,6 +85,19 @@ internal fun AlertDto.toDomainOrNull(): PriceAlert? {
 }
 
 /**
+ * How many of these alerts have actually FIRED.
+ *
+ * A free function rather than a method so the one counting rule that now feeds
+ * three surfaces — the Workbench segment badge, the Workbench tab dot and Home's
+ * "Needs you" row — is stated once and unit-tested once. `Disabled` alerts are
+ * deliberately not counted even if they fired before they were switched off:
+ * the number answers "is something waiting for me?", not "what happened here
+ * historically?".
+ */
+fun countTriggered(alerts: List<PriceAlert>): Int =
+    alerts.count { it.status == AlertStatus.Triggered }
+
+/**
  * Price alerts repository (owner ask 2026-07-10 — Workboard tab). Online-only
  * management per §7.2 (like conglomerates): the server owns evaluation, the
  * reference price and the trigger state (§7.1); the app renders and mutates.
@@ -87,6 +106,43 @@ class AlertsRepository(
     private val api: BtApi,
     private val json: Json,
 ) {
+
+    // ── The shell-visible triggered count (R-arc R1) ─────────────────────────
+    //
+    // The mandate moves the alerts signal OUT of the top bar and into two places
+    // that are not the alerts screen: a dot on the Workbench tab and a row on
+    // Home. Both need the same number, and neither can reach the Workboard's
+    // nav-entry-scoped `AlertsViewModel` that computed it until now. So the
+    // count is cached here — one fetch, two readers — rather than fetched twice
+    // by two composables that would then be free to disagree.
+    private val _triggered = MutableStateFlow(0)
+
+    /** How many alerts have actually FIRED. Zero until [refreshTriggered] runs. */
+    val triggered: StateFlow<Int> = _triggered.asStateFlow()
+
+    /**
+     * Refresh the cached [triggered] count.
+     *
+     * Gated on the mode INSIDE the repository rather than at each call site: a
+     * Drive-only install has no alert engine (§4.5 `ALERTS_NOTIFICATIONS` is
+     * ABSENT), so asking would be a guaranteed failed request on every launch,
+     * and two call sites gating it independently is exactly the drift the
+     * surfaces table exists to prevent.
+     *
+     * A failed fetch keeps the last known count rather than zeroing it: "we
+     * could not reach the server" is not "your alerts stopped firing", and a dot
+     * that vanishes on a flaky connection is worse than a slightly stale one.
+     */
+    suspend fun refreshTriggered(mode: StorageMode) {
+        if (!mode.shows(BtSurface.ALERTS_NOTIFICATIONS)) {
+            _triggered.value = 0
+            return
+        }
+        when (val r = list()) {
+            is BtResult.Ok -> _triggered.value = countTriggered(r.value)
+            is BtResult.Err -> Unit
+        }
+    }
 
     suspend fun list(): BtResult<List<PriceAlert>> =
         when (val r = apiCall(json) { api.alerts() }) {

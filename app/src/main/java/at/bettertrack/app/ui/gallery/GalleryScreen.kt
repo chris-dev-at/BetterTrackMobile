@@ -17,8 +17,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PieChart
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -45,6 +51,7 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.ListCard
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
@@ -53,6 +60,7 @@ import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import java.util.Locale
 
@@ -291,6 +299,47 @@ private fun ChipBadgeSection() {
             BtBadge("+3.2%", kind = BtBadgeKind.Gain)
             BtBadge("−1.1%", kind = BtBadgeKind.Loss)
         }
+        TabBadgeRow()
+    }
+}
+
+/**
+ * The R-arc bottom-navigation badge, in its real context.
+ *
+ * The mandate moved the chat-unread and triggered-alert signals off the top bar
+ * and onto their owning tabs as DOTS, not counts — so the gallery shows the dot
+ * where it actually lives (on a 24dp glyph, over the nav-bar surface), because
+ * the only question worth checking on this component is whether it reads at that
+ * size against that background without swallowing the icon.
+ */
+@Composable
+private fun TabBadgeRow() {
+    val bt = BtTheme.colors
+    Text(
+        text = "Tab badge dot — People (unread) · Workbench (alerts) · unbadged",
+        style = MaterialTheme.typography.labelSmall,
+        color = bt.textMuted,
+    )
+    Surface(color = bt.surface, shape = BtShapes.card) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            GalleryTabIcon(Icons.Outlined.People, badged = true)
+            GalleryTabIcon(Icons.Outlined.Dashboard, badged = true)
+            GalleryTabIcon(Icons.Outlined.PieChart, badged = false)
+        }
+    }
+}
+
+@Composable
+private fun GalleryTabIcon(icon: ImageVector, badged: Boolean) {
+    Box {
+        Icon(icon, contentDescription = null, tint = BtTheme.colors.textMuted)
+        BtTabBadgeDot(
+            show = badged,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-3).dp),
+        )
     }
 }
 

@@ -120,9 +120,18 @@ class StorageSurfacesTest {
     // ── The bottom bar ──────────────────────────────────────────────────────
 
     @Test
-    fun `the server bar keeps all four tabs in order`() {
+    fun `the server bar is the mandate's five tabs in bar order`() {
+        // R-arc mandate §2, verbatim: Home · Portfolio · Workbench · Markets ·
+        // People. CONGLOMERATES is the Workbench tab's surface — the constant
+        // keeps the storage plan's name (decision O-2) while the label changed.
         assertEquals(
-            listOf(BtSurface.PORTFOLIO, BtSurface.MARKET, BtSurface.SOCIAL, BtSurface.CONGLOMERATES),
+            listOf(
+                BtSurface.HOME,
+                BtSurface.PORTFOLIO,
+                BtSurface.CONGLOMERATES,
+                BtSurface.MARKET,
+                BtSurface.SOCIAL,
+            ),
             visibleTabSurfaces(StorageMode.SERVER),
         )
         assertEquals(visibleTabSurfaces(StorageMode.SERVER), visibleTabSurfaces(StorageMode.BOTH))
@@ -130,20 +139,47 @@ class StorageSurfacesTest {
     }
 
     @Test
-    fun `the drive bar is portfolio and assets only`() {
+    fun `the drive bar is home, portfolio and markets`() {
+        // Drive-only gains a real front door in R1. Workbench and People stay
+        // absent because a Drive install has no BetterTrack account — those are
+        // features that CANNOT exist for it, not features it is missing.
         assertEquals(
-            listOf(BtSurface.PORTFOLIO, BtSurface.MARKET),
+            listOf(BtSurface.HOME, BtSurface.PORTFOLIO, BtSurface.MARKET),
             visibleTabSurfaces(StorageMode.DRIVE),
         )
     }
 
     @Test
-    fun `every mode keeps the portfolio tab first`() {
+    fun `every mode keeps HOME first`() {
         // It is the NavHost's start destination in every mode; a bar whose first
         // entry was not the start destination would open on a tab the user did
-        // not pick.
+        // not pick. This is strictly stronger than the pre-R1 version of this
+        // guard, which pinned PORTFOLIO: Portfolio was FULL everywhere by
+        // happenstance, HOME is FULL by construction (see below).
         for (mode in StorageMode.entries) {
-            assertEquals(mode.name, BtSurface.PORTFOLIO, visibleTabSurfaces(mode).first())
+            assertEquals(mode.name, BtSurface.HOME, visibleTabSurfaces(mode).first())
+        }
+    }
+
+    @Test
+    fun `home is full in every mode because it is an index, not a feature`() {
+        // Home shows whatever this install has. There is no mode in which it can
+        // be absent or degraded, and nothing gated behind it — so if this ever
+        // fails, the bar has acquired a first entry that some install cannot use.
+        for (mode in StorageMode.entries) {
+            assertEquals(mode.name, SurfaceAvailability.FULL, surfaceAvailability(mode, BtSurface.HOME))
+            assertTrue(mode.name, mode.shows(BtSurface.HOME))
+        }
+    }
+
+    @Test
+    fun `every bar is a subsequence of the full bar`() {
+        // Gating removes tabs; it never reorders them. A Drive user and a server
+        // user must be able to describe the bar to each other.
+        val full = visibleTabSurfaces(StorageMode.SERVER)
+        for (mode in StorageMode.entries) {
+            val bar = visibleTabSurfaces(mode)
+            assertEquals(mode.name, bar, full.filter { it in bar })
         }
     }
 }

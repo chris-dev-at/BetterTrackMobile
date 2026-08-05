@@ -28,6 +28,19 @@ package at.bettertrack.app.data.storage
  * caller reads it.
  */
 enum class BtSurface {
+    /**
+     * The Home tab (R-arc R1).
+     *
+     * Home is not a feature — it is an INDEX over whatever this mode has, so it
+     * can never be absent and it is `FULL` in every branch of the table below by
+     * construction. It gets a surface anyway, rather than being special-cased
+     * into [visibleTabSurfaces], for one reason: the shell's invariant is that
+     * "the bars and the routes below cannot disagree about what this install can
+     * do", and that invariant only holds while EVERY tab is gated through this
+     * one table. A tab that bypassed it would be the first crack in it.
+     */
+    HOME,
+
     /** Portfolios, holdings, transactions, cash, custom assets. */
     PORTFOLIO,
 
@@ -88,6 +101,10 @@ enum class SurfaceAvailability {
 fun surfaceAvailability(mode: StorageMode, surface: BtSurface): SurfaceAvailability =
     when (mode.effective) {
         StorageMode.DRIVE -> when (surface) {
+            // An index over a smaller set of things is still an index. Drive-only
+            // is in fact the mode that gains the most from having a front door:
+            // it is the one whose bar has the fewest tabs.
+            BtSurface.HOME -> SurfaceAvailability.FULL
             BtSurface.PORTFOLIO -> SurfaceAvailability.FULL
             BtSurface.HISTORY -> SurfaceAvailability.FULL
             // Quotes need a price source this mode does not have yet (W6).
@@ -128,13 +145,25 @@ fun StorageMode.shows(surface: BtSurface): Boolean =
 /**
  * The bottom-navigation tabs this mode may show, in bar order.
  *
+ * Bar order is the R-arc mandate's verbatim order — Home · Portfolio ·
+ * Workbench · Markets · People — mapped onto the surfaces that gate them.
+ * [BtSurface.CONGLOMERATES] is the Workbench tab's surface: the constant keeps
+ * its storage-plan name (§4.5) because renaming it would drift this table from
+ * the document it mirrors for no user-visible gain; the shell's `TabSpec`
+ * documents the mapping instead.
+ *
  * Returned as [BtSurface] rather than the navigation `BtTab` so the rule stays in
  * the data layer and unit-tests without Compose or the nav graph; the shell maps
  * these onto its own tab specs.
  */
 fun visibleTabSurfaces(mode: StorageMode): List<BtSurface> =
-    listOf(BtSurface.PORTFOLIO, BtSurface.MARKET, BtSurface.SOCIAL, BtSurface.CONGLOMERATES)
-        .filter { mode.shows(it) }
+    listOf(
+        BtSurface.HOME,
+        BtSurface.PORTFOLIO,
+        BtSurface.CONGLOMERATES,
+        BtSurface.MARKET,
+        BtSurface.SOCIAL,
+    ).filter { mode.shows(it) }
 
 // ── The root gate (plan §4.1) ───────────────────────────────────────────────
 

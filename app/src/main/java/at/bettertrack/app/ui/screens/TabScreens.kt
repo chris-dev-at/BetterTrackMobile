@@ -2,7 +2,6 @@ package at.bettertrack.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,108 +11,57 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.EventNote
-import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.ui.unit.dp
-import at.bettertrack.app.ui.components.btPressScale
-import at.bettertrack.app.ui.theme.BtShapes
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
-import at.bettertrack.app.ui.components.BtEmptyState
-import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
- * Placeholder tab screens with the pull-to-refresh scaffold (spec §6.13 —
- * pull-to-refresh on every list/overview screen). Refresh is a visual no-op
- * until real data lands. Portfolio became real in Step 6 (ui/portfolio/);
- * TODO(step 11/13/14): replace the remaining tabs.
+ * The two tab hosts that are thin enough to live outside their own package.
+ *
+ * R-arc R1 dead-code sweep: this file used to open with a pull-to-refresh
+ * scaffold wrapped around a branded empty state, plus the People-tab stub that
+ * was its last caller. Both were Step-3 scaffolding for tabs that have been real
+ * screens for many milestones — People has had `SocialScreen` since Step 14 — so
+ * they rendered "Invest together / friends live here" for nobody. Verified zero
+ * call sites, then deleted, together with the generic under-construction
+ * destination screen, which was the same idea one level up. ~200 lines.
  */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RefreshableTabScreen(
-    icon: ImageVector,
-    title: String,
-    message: String,
-    action: (@Composable () -> Unit)? = null,
-) {
-    val bt = BtTheme.colors
-    val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
-    val state = rememberPullToRefreshState()
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            // TODO(step 5+): trigger a real repository refresh.
-            scope.launch {
-                refreshing = true
-                delay(800)
-                refreshing = false
-            }
-        },
-        state = state,
-        modifier = Modifier.fillMaxSize(),
-        indicator = {
-            PullToRefreshDefaults.Indicator(
-                state = state,
-                isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
-                containerColor = bt.surface,
-                color = bt.gold,
-            )
-        },
-    ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item {
-                Box(
-                    modifier = Modifier.fillParentMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    BtEmptyState(icon = icon, title = title, message = message, action = action)
-                }
-            }
-        }
-    }
-}
 
+/**
+ * The **Markets** tab (mandate §2 renamed it from Assets — "it reads clearer").
+ *
+ * Search + watchlists, with custom-asset management and market intel one row
+ * away. The in-content search field is this tab's search entry and, after R1,
+ * its ONLY one: the top bar's duplicate Search icon is gone here, which is the
+ * S6 P1-11 duplication killed at the root rather than restyled.
+ */
 @Composable
-fun AssetsTabScreen(
+fun MarketsTabScreen(
     onOpenSearch: () -> Unit = {},
     onOpenCustomAssets: () -> Unit = {},
     onOpenAsset: (String) -> Unit = {},
     onAddToWatchlist: () -> Unit = {},
     onOpenMarketIntel: () -> Unit = {},
 ) {
-    // Step 12 (§6.6): the Assets tab is search + watchlists. Custom-asset
-    // management (§6.4) stays reachable via the link.
     val bt = BtTheme.colors
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
@@ -145,7 +93,7 @@ fun AssetsTabScreen(
 }
 
 /**
- * The Assets tab's entry into the portfolio-wide market intel screen.
+ * The Markets tab's entry into the portfolio-wide market intel screen.
  *
  * A single row rather than a card: it is a doorway, and the tab's content is the
  * watchlists below it. The chevron and the button role carry the affordance;
@@ -205,17 +153,20 @@ private fun MarketIntelEntryRow(onClick: () -> Unit) {
 }
 
 /**
- * The Assets tab's search entry.
+ * The Markets tab's search entry.
  *
  * S6 P1-11 — design call, both halves of the audited option taken: the field
  * SHAPE stays (a full-width input silhouette is the single strongest "you can
- * search here" signal on Android, and the top bar's 20dp glyph competes with two
- * neighbours for the same job), but it stops pretending to BE an input:
+ * search here" signal on Android), but it stops pretending to BE an input:
  *  · semantics declare it a button with a spoken label, so TalkBack no longer
  *    announces an editable text field that cannot be edited;
- *  · [SearchScreen] now raises the keyboard itself on entry, so tapping this
- *    behaves exactly like tapping a real field would — one tap, caret blinking,
- *    keyboard up. That was the actual broken promise; the styling never was.
+ *  · [at.bettertrack.app.ui.market.SearchScreen] raises the keyboard itself on
+ *    entry, so tapping this behaves exactly like tapping a real field would —
+ *    one tap, caret blinking, keyboard up. That was the actual broken promise;
+ *    the styling never was.
+ *
+ * R1 completes the fix by removing the *other* half of the duplication: the top
+ * bar no longer carries a competing Search glyph on this tab.
  */
 @Composable
 private fun SearchBarButton(onClick: () -> Unit) {
@@ -251,24 +202,21 @@ private fun SearchBarButton(onClick: () -> Unit) {
     }
 }
 
+/**
+ * The **Workbench** tab (mandate §2 renamed it from Workboard).
+ *
+ * Conglomerates · ideas · alerts behind the segmented host. The rename is a
+ * label change only: the surface constant stays `BtSurface.CONGLOMERATES`
+ * because that name mirrors the storage plan's §4.5 table, and drifting the app
+ * from the document it implements would cost more than it buys.
+ */
 @Composable
-fun SocialTabScreen() {
-    RefreshableTabScreen(
-        icon = Icons.Outlined.People,
-        title = stringResource(R.string.bt_tab_social_empty_title),
-        message = stringResource(R.string.bt_tab_social_empty_message),
-    )
-}
-
-@Composable
-fun WorkboardTabScreen(
+fun WorkbenchTabScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
     onOpenIdea: (String) -> Unit,
 ) {
-    // Step-13 conglomerates + the price-alerts manager + (V5 S2c) saved ideas,
-    // behind the Workboard segmented host (owner ask 2026-07-10).
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
