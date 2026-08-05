@@ -1206,6 +1206,7 @@
     <!-- Budgets -->
     <string name="bt_budgets_section">Budgets</string>
     <string name="bt_budgets_empty_title">No budgets this month</string>
+    <string name="bt_budgets_empty_message">Set a monthly target for a tag and track what\'s left as you spend.</string>
     <string name="bt_budgets_new">New budget</string>
     <string name="bt_budgets_new_title">New budget</string>
     <string name="bt_budgets_edit_title">Edit budget</string>

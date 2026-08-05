@@ -1163,6 +1163,7 @@
     <!-- Budgets -->
     <string name="bt_budgets_section">Budgets</string>
     <string name="bt_budgets_empty_title">Diesen Monat keine Budgets</string>
+    <string name="bt_budgets_empty_message">Lege ein Monatsziel für ein Tag fest und behalte im Blick, was noch übrig ist.</string>
     <string name="bt_budgets_new">Neues Budget</string>
     <string name="bt_budgets_new_title">Neues Budget</string>
     <string name="bt_budgets_edit_title">Budget bearbeiten</string>

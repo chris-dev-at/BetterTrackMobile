@@ -299,5 +299,9 @@ fun CashBudgetsEmpty(modifier: Modifier = Modifier) {
     BtInlineEmpty(
         text = stringResource(R.string.bt_budgets_empty_title),
         modifier = modifier,
+        // The sentence that says what a budget IS. A section is empty most often
+        // because the feature has never been used, so this is the line that has
+        // to survive the conversion, not the first casualty of it.
+        message = stringResource(R.string.bt_budgets_empty_message),
     )
 }
