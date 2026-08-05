@@ -33,6 +33,11 @@ android {
     // (before defaultConfig) so defaultConfig + buildTypes can both use them.
     val apiOriginDebug = providers.gradleProperty("btApiOrigin").getOrElse("http://10.0.2.2:3000")
     val webOriginDebug = providers.gradleProperty("btWebOrigin").getOrElse("http://10.0.2.2:8090")
+    // The "Local dev" preset offered by Settings → Server. It is shown ONLY in
+    // debug builds (a release APK must not advertise someone's LAN box), and it
+    // is a gradle property so a different dev machine needs no code edit.
+    val devPresetApiOrigin = providers.gradleProperty("btDevPresetApiOrigin").getOrElse("http://192.168.0.114:3000")
+    val devPresetWebOrigin = providers.gradleProperty("btDevPresetWebOrigin").getOrElse("http://192.168.0.114:6771")
     // OAUTH_CLIENT_ID: the production-registered first-party PUBLIC client id (§4).
     // A public identifier (not a secret), so it is baked in as the default for
     // BOTH build types; still overridable via -PbtOauthClientId=btc_… .
@@ -142,6 +147,14 @@ android {
         // says "do not ship a direct-provider adapter by default" in those words.
         // `DirectProviderMarketDataSource` is scaffolding until he answers.
         buildConfigField("boolean", "DIRECT_PROVIDER_PRICES", "false")
+
+        // Settings → Server (owner ask 2026-08-04): the origin the app talks to
+        // is a user-visible setting in the `github` flavor. The DEFAULT here is
+        // `false` so a new flavor is fixed-endpoint until it opts in explicitly
+        // — `github` sets it true below, `play` restates false for the reader.
+        buildConfigField("boolean", "SERVER_SETTING_ENABLED", "false")
+        buildConfigField("String", "DEV_PRESET_API_ORIGIN", "\"$devPresetApiOrigin\"")
+        buildConfigField("String", "DEV_PRESET_WEB_ORIGIN", "\"$devPresetWebOrigin\"")
     }
 
     buildTypes {
@@ -190,6 +203,11 @@ android {
         create("github") {
             dimension = "distribution"
             buildConfigField("boolean", "SELF_UPDATE_ENABLED", "true")
+            // Settings → Server is a github-flavor feature, debug AND release:
+            // the people who install a github APK run it against dev stacks and
+            // self-hosted backends, and they must be able to pick one BEFORE
+            // signing in. See [ServerOrigins].
+            buildConfigField("boolean", "SERVER_SETTING_ENABLED", "true")
             // Unchanged github signing: stable BT dev key when present, else debug.
             signingConfig = if (btSigning != null) {
                 signingConfigs.getByName("btDev")
@@ -200,6 +218,10 @@ android {
         create("play") {
             dimension = "distribution"
             buildConfigField("boolean", "SELF_UPDATE_ENABLED", "false")
+            // A Play install talks to the official BetterTrack endpoints and
+            // nothing else: no Server screen, no login affordance, and any
+            // stored override is ignored at read time ([ServerOrigins]).
+            buildConfigField("boolean", "SERVER_SETTING_ENABLED", "false")
             // Play RELEASE is signed with the real upload key when it is available
             // on this machine (~/.bettertrack); otherwise the build still succeeds
             // with the debug key (no shippable .aab is produced without the key).
@@ -294,6 +316,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Real SQLite on the JVM so BtDatabaseMigrationTest can actually RUN the
+    // migration chain against historical schemas and compare the result with
+    // what Room's compiler expects. Test-only — never on the app classpath.
+    testImplementation(libs.sqlite.jdbc)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
