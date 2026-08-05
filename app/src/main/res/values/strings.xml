@@ -1712,4 +1712,45 @@
         <item quantity="one">%1$d asset</item>
         <item quantity="other">%1$d assets</item>
     </plurals>
+
+    <!-- ── V5 W6 — manual prices + honest no-live-prices states ───────────── -->
+    <string name="bt_price_manual_badge">manual</string>
+    <string name="bt_price_none">No price yet</string>
+    <string name="bt_price_add">Add a price</string>
+    <string name="bt_price_update">Update price</string>
+    <string name="bt_price_none_hint">No price yet — add one</string>
+    <string name="bt_price_sheet_title">Price for %1$s</string>
+    <string name="bt_price_sheet_body">There are no live prices in this mode. Record a price you know and BetterTrack values this holding with it — the same way it values a custom asset.</string>
+    <string name="bt_price_field_value">Price</string>
+    <string name="bt_price_field_date">Date</string>
+    <string name="bt_price_field_currency">Currency</string>
+    <string name="bt_price_save">Save price</string>
+    <string name="bt_price_history_title">Prices you entered</string>
+    <string name="bt_price_history_empty">Nothing entered yet.</string>
+    <string name="bt_price_delete_title">Remove this price?</string>
+    <string name="bt_price_delete_body">%1$s from %2$s is removed and this portfolio is recalculated straight away.</string>
+    <string name="bt_price_delete_confirm">Remove</string>
+    <string name="bt_price_err_number">Enter the price as a number.</string>
+    <string name="bt_price_err_positive">A price has to be greater than zero. If you do not know it, leave it out — BetterTrack would rather say nothing than guess.</string>
+    <string name="bt_price_err_large">That looks too large. Check the decimal separator.</string>
+    <string name="bt_price_err_future">A price cannot come from the future.</string>
+    <string name="bt_price_err_currency">Use a three-letter currency code, for example EUR.</string>
+    <string name="bt_price_err_rate">This device has no %1$s → %2$s exchange rate, so a price in %1$s cannot be used here. Enter it in %2$s.</string>
+    <string name="bt_price_unpriced_title">No prices yet</string>
+    <string name="bt_price_unpriced_body">Your transactions and cash are safe on this device. Add a price per asset and BetterTrack values the portfolio — it will not show a zero it cannot stand behind.</string>
+    <plurals name="bt_price_unpriced_note">
+        <item quantity="one">Excludes %1$d holding with no price</item>
+        <item quantity="other">Excludes %1$d holdings with no price</item>
+    </plurals>
+    <string name="bt_price_search_title">Search needs price lookups</string>
+    <string name="bt_price_search_body">In this mode BetterTrack holds no asset catalogue on the device, so there is nothing to search. You can still add any asset by hand, and price it yourself.</string>
+    <string name="bt_price_asset_unavailable">This asset page needs live prices, which this mode does not have. The prices you entered yourself are on the holding.</string>
+
+    <!-- ── V5 W6 — the "prices only" opt-in ──────────────────────────────── -->
+    <string name="bt_prices_section">Prices</string>
+    <string name="bt_prices_toggle_title">Use BetterTrack for prices only</string>
+    <string name="bt_prices_toggle_subtitle">BetterTrack would see which assets you look up, never what you own.</string>
+    <string name="bt_prices_toggle_on_note">On. Searches and quotes go to BetterTrack; your portfolio, transactions and cash stay on this device.</string>
+    <string name="bt_prices_toggle_off_note">Off. Nothing leaves this device, and prices are the ones you enter yourself.</string>
+    <string name="bt_prices_toggle_needs_account">Price lookups are signed-in requests, so this needs a BetterTrack account. Add one under “Change where it lives” — your portfolio still stays in Drive.</string>
 </resources>

@@ -132,6 +132,16 @@ android {
         }
         // Deep-link scheme for the OAuth callback intent-filter (see manifest).
         manifestPlaceholders["oauthRedirectScheme"] = oauthRedirectScheme
+
+        // V5 W6 — direct market-data provider adapter (S3/S4 plan §6 risk 6).
+        // OFF, and it lives in defaultConfig rather than per-buildType so no
+        // flavour or build type can turn it on by accident: there is exactly one
+        // place to change, and changing it is an OWNER decision, not a build one.
+        // Shipping scraped/unlicensed quotes in a Play-distributed app is a ToS
+        // and Data-Safety exposure the app may not take on his behalf; the plan
+        // says "do not ship a direct-provider adapter by default" in those words.
+        // `DirectProviderMarketDataSource` is scaffolding until he answers.
+        buildConfigField("boolean", "DIRECT_PROVIDER_PRICES", "false")
     }
 
     buildTypes {

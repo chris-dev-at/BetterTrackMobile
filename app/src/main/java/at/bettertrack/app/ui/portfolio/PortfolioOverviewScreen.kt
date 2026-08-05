@@ -263,6 +263,19 @@ private fun OverviewContent(
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     val totals = portfolio.totals
 
+    // W6: true when this mode has no live quotes, so an absent price is a state
+    // the user can act on rather than a transient server gap.
+    val noLivePrices = at.bettertrack.app.ui.prices.manualEntryAvailable(
+        at.bettertrack.app.di.AppGraph.gatedStorageMode(
+            at.bettertrack.app.di.AppGraph.storageModeStore.mode.collectAsStateWithLifecycle().value,
+        ),
+    )
+
+    // How much of this portfolio could be priced at all. Hoisted to the content
+    // scope because three separate places need it — the hero, its day-change
+    // sub-line and the holdings-value roll-up — and all three must agree.
+    val coverage = at.bettertrack.app.ui.prices.priceCoverage(holdings)
+
     // Scrub state is hoisted here so touching the hero chart updates the big
     // Net-Worth readout (Robinhood-style). A fresh selection/range clears it.
     var scrub by remember { mutableStateOf<HistoryPoint?>(null) }
@@ -319,15 +332,41 @@ private fun OverviewContent(
                     color = bt.textMuted,
                 )
                 Spacer(Modifier.height(2.dp))
-                if (totals != null || s != null) {
+                // ── W6: never a €0 lie ──────────────────────────────────────
+                //
+                // `PortfolioTotals` is non-nullable and the vault projector sums
+                // unpriced holdings as `?: 0.0`, so a Drive user with nothing
+                // priced and no cash arrives here with a perfectly confident
+                // 0.00. The coverage is recovered from the holdings this screen
+                // already has, and decides whether a figure may be shown at all.
+                val worth = totals?.let {
+                    at.bettertrack.app.ui.prices.netWorthState(
+                        totalValueEur = it.totalValueEur,
+                        cashEur = it.cashEur,
+                        coverage = coverage,
+                    )
+                }
+                if (s == null && worth is at.bettertrack.app.ui.prices.NetWorthState.Unpriceable) {
+                    at.bettertrack.app.ui.prices.NoPricesHero()
+                } else if (totals != null || s != null) {
                     MoneyText(
                         value = s?.valueEur ?: totals!!.totalValueEur,
                         style = BtTheme.type.moneyLarge,
                     )
+                    if (s == null) {
+                        at.bettertrack.app.ui.prices.UnpricedNote(
+                            coverage = coverage,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     // Reserve the sub-line height so scrubbing never shifts layout.
                     Box(Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                        if (s == null && totals != null) {
+                        // W6: with nothing priced, `dayChangeEur` is a sum of
+                        // zeroes and would render "+0,00 € · today" — which reads
+                        // as "no movement" when the truth is "not known". Same
+                        // €0 lie, one line lower down.
+                        if (s == null && totals != null && !coverage.nothingPriced) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 MoneyText(
                                     value = totals.dayChangeEur,
@@ -388,6 +427,10 @@ private fun OverviewContent(
                 RollupCard(
                     label = stringResource(R.string.bt_overview_holdings_value),
                     value = totals?.marketValueEur,
+                    // W6: "Holdings value 0,00 €" next to a list of real holdings
+                    // is the €0 lie in miniature. When nothing could be priced,
+                    // the card says so instead of printing the empty sum.
+                    unpriced = coverage.nothingPriced,
                     modifier = Modifier.weight(1f),
                 )
                 RollupCard(
@@ -447,6 +490,7 @@ private fun OverviewContent(
                         holding = h,
                         weightOfPortfolioPct = weightPct(h.marketValueEur, portfolio.totals?.marketValueEur),
                         locale = locale,
+                        noLivePrices = noLivePrices,
                         onClick = { onOpenHolding(h.assetId) },
                     )
                 }
@@ -609,6 +653,8 @@ private fun RollupCard(
     label: String,
     value: Double?,
     modifier: Modifier = Modifier,
+    /** W6 — the value exists but covers nothing; render the honest state. */
+    unpriced: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
@@ -620,10 +666,15 @@ private fun RollupCard(
                 color = bt.textMuted,
             )
             Spacer(Modifier.height(2.dp))
-            if (value != null) {
-                MoneyText(value = value, style = BtTheme.type.moneyMedium)
-            } else {
-                BtSkeleton(Modifier.width(90.dp).height(22.dp))
+            when {
+                unpriced -> Text(
+                    text = stringResource(R.string.bt_price_none),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textMuted,
+                )
+
+                value != null -> MoneyText(value = value, style = BtTheme.type.moneyMedium)
+                else -> BtSkeleton(Modifier.width(90.dp).height(22.dp))
             }
         }
     }
@@ -710,6 +761,7 @@ private fun HoldingRow(
     holding: HoldingEntity,
     weightOfPortfolioPct: Double?,
     locale: Locale,
+    noLivePrices: Boolean,
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -744,9 +796,17 @@ private fun HoldingRow(
                 if (holding.marketValueEur != null) {
                     MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneySmall)
                 } else {
+                    // W6: a dash says "nothing here". In Drive mode the truth is
+                    // "no price yet", which is a different and fixable statement.
                     Text(
-                        text = stringResource(R.string.bt_switcher_value_pending),
-                        style = BtTheme.type.moneySmall,
+                        text = stringResource(
+                            if (noLivePrices) R.string.bt_price_none else R.string.bt_switcher_value_pending,
+                        ),
+                        style = if (noLivePrices) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            BtTheme.type.moneySmall
+                        },
                         color = bt.textMuted,
                     )
                 }

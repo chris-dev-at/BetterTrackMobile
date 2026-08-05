@@ -149,14 +149,36 @@ class ModeRoutingPortfolioBackend(
  * process that had already touched `MarketRepository` would keep hitting the API
  * with no bearer, producing a stream of 401s instead of the designed
  * "no live prices" state.
+ *
+ * ## W6: the price-lookup opt-in
+ *
+ * [lookupsActive] is the "Use BetterTrack for prices only" switch
+ * ([PriceLookupStore]). When a Drive-mode user turns it on **and** a session
+ * exists to authenticate with, the market seam — and only the market seam — moves
+ * to the server. [ModeRoutingPortfolioBackend] above is untouched by it, which is
+ * what makes the promise in the settings copy structurally true rather than a
+ * claim: *"BetterTrack would see which assets you look up, never what you own."*
+ * Holdings, transactions and cash keep routing to the vault because a different
+ * router decides those, and this one cannot reach it.
+ *
+ * The session half of the condition is not politeness. `/search` and `/assets`
+ * require the OAuth bearer (`market:read`), so calling them without one produces
+ * 401s — the exact failure this class was split out to prevent. See
+ * [priceLookupActive].
  */
 class ModeRoutingMarketDataSource(
     private val mode: () -> StorageMode,
     private val server: () -> MarketDataSource,
     private val offline: () -> MarketDataSource,
+    /**
+     * Whether server price lookups are opted in AND authenticable right now.
+     * Defaults to "never", so every existing caller keeps W5 behaviour exactly.
+     */
+    private val lookupsActive: () -> Boolean = { false },
 ) : MarketDataSource {
 
-    private fun active(): MarketDataSource = if (mode().isDriveOnly) offline() else server()
+    private fun active(): MarketDataSource =
+        if (mode().isDriveOnly && !lookupsActive()) offline() else server()
 
     override suspend fun search(query: String): BtResult<at.bettertrack.app.data.repo.SearchOutcome> =
         active().search(query)

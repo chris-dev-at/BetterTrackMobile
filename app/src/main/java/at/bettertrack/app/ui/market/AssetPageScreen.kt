@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,11 +76,25 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 
+/** The error code [at.bettertrack.app.data.storage.NoLivePricesMarketDataSource] raises. */
+private const val NO_LIVE_PRICES_CODE = "NO_LIVE_PRICES"
+
 sealed interface AssetDetailUiState {
     data object Loading : AssetDetailUiState
     data class Loaded(val snapshot: AssetSnapshot) : AssetDetailUiState
     data object OfflineState : AssetDetailUiState
     data class Error(val message: String) : AssetDetailUiState
+
+    /**
+     * W6 — this mode has no live quotes, so there is no asset page to render.
+     *
+     * Its own state rather than an [Error] carrying
+     * `NoLivePricesMarketDataSource.MSG_NO_PRICES`: that message is a hardcoded
+     * English constant on the data layer, and a designed, translated state is
+     * what plan §5 W6 asks for. It also correctly drops the Retry button — there
+     * is nothing to retry, and offering one would promise a fix that cannot come.
+     */
+    data object NoLivePrices : AssetDetailUiState
 }
 
 sealed interface AssetHistoryUiState {
@@ -128,9 +143,11 @@ class AssetPageViewModel(
             _detail.value = AssetDetailUiState.Loading
             when (val r = market.assetDetail(assetId)) {
                 is BtResult.Ok -> _detail.value = AssetDetailUiState.Loaded(r.value)
-                is BtResult.Err -> _detail.value =
-                    if (r.error.isNetwork) AssetDetailUiState.OfflineState
-                    else AssetDetailUiState.Error(r.error.userMessage)
+                is BtResult.Err -> _detail.value = when {
+                    r.error.isNetwork -> AssetDetailUiState.OfflineState
+                    r.error.code == NO_LIVE_PRICES_CODE -> AssetDetailUiState.NoLivePrices
+                    else -> AssetDetailUiState.Error(r.error.userMessage)
+                }
             }
         }
     }
@@ -242,6 +259,13 @@ fun AssetPageScreen(
                 is AssetDetailUiState.Error -> BtErrorState(
                     message = d.message,
                     onRetry = { vm.load() },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+
+                AssetDetailUiState.NoLivePrices -> BtEmptyState(
+                    icon = Icons.Outlined.QueryStats,
+                    title = stringResource(R.string.bt_price_none),
+                    message = stringResource(R.string.bt_price_asset_unavailable),
                     modifier = Modifier.align(Alignment.Center),
                 )
 

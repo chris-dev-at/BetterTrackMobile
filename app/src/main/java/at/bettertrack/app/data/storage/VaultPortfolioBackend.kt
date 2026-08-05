@@ -374,6 +374,26 @@ class VaultPortfolioBackend(
 
     // ── Derivation ──────────────────────────────────────────────────────────
 
+    /**
+     * Re-derives everything after the manual price book changed (W6).
+     *
+     * A price edit does not touch the vault, so `vaultVersion` does not move and
+     * the [ProjectionCacheKey] would otherwise have to rely on `priceWatermark`
+     * alone. That works for an *insert* — a new row carries `syncedAtMs = now()`,
+     * so `MAX` advances — but **not for a delete**: removing anything other than
+     * the newest row leaves `MAX(syncedAtMs)` exactly where it was, the cache key
+     * compares equal, and [derive] early-returns with the deleted price still
+     * valued in Room. The user would delete a wrong price and watch nothing
+     * happen.
+     *
+     * Dropping the cache key first makes the recompute unconditional, which is
+     * the only correct answer here: the inputs demonstrably changed.
+     */
+    suspend fun onPricesChanged(): BtResult<Unit> {
+        cacheKey = null
+        return deriveAll()
+    }
+
     /** Re-derives every portfolio in the vault. */
     suspend fun deriveAll(): BtResult<Unit> {
         val portfolioIds = store.snapshot().graph.live(VaultKinds.PORTFOLIO).map { it.id }
@@ -413,41 +433,6 @@ class VaultPortfolioBackend(
         BtResult.Ok(Unit)
     }
 
-    /**
-     * Market inputs per transacted asset.
-     *
-     * A custom asset's "prices" are the user's own value points — that is what
-     * makes a manually-valued asset participate in the same curve as a quoted
-     * one, with no special case anywhere downstream.
-     */
-    private fun buildMarketInputs(
-        graph: VaultEntityGraph,
-        cached: Map<String, List<at.bettertrack.app.domain.PricePoint>>,
-    ): Map<String, AssetMarketData> {
-        val valuePoints = graph.live(VaultKinds.CUSTOM_ASSET_VALUE)
-            .groupBy { it.text("assetId").orEmpty() }
-            .mapValues { (_, rows) ->
-                rows.mapNotNull { row ->
-                    val date = row.text("date") ?: return@mapNotNull null
-                    val value = row.decimal("value") ?: return@mapNotNull null
-                    at.bettertrack.app.domain.PricePoint(date, value)
-                }.sortedBy { it.date }
-            }
-
-        val assetIds = (cached.keys + valuePoints.keys).toSet()
-        return assetIds.associateWith { assetId ->
-            val prices = valuePoints[assetId]?.takeIf { it.isNotEmpty() } ?: cached[assetId].orEmpty()
-            AssetMarketData(
-                prices = prices,
-                // Today's close IS the live quote when there is no live source.
-                // prevClose is the day before, so the day-change column is honest
-                // rather than absent.
-                quote = prices.lastOrNull()?.let { last ->
-                    HoldingQuote(price = last.close, prevClose = prices.dropLast(1).lastOrNull()?.close)
-                },
-            )
-        }
-    }
 
     private suspend fun writeProjection(portfolioId: String, projected: ProjectedPortfolioData) {
         db.portfolioDao().upsertAll(projected.portfolios)
@@ -502,6 +487,59 @@ class VaultPortfolioBackend(
             userMessage = cause.message ?: "This portfolio's data could not be calculated on this device.",
             details = null,
             serverMessage = cause.message,
+        )
+    }
+}
+
+/**
+ * Market inputs per transacted asset.
+ *
+ * A custom asset's "prices" are the user's own value points — that is what makes
+ * a manually-valued asset participate in the same curve as a quoted one, with no
+ * special case anywhere downstream.
+ *
+ * **W6: this is also where a manually-entered price for a NORMAL asset enters the
+ * money path**, and it needed no change to do it. [cached] is `price_cache`
+ * grouped by asset ([NoLivePricesMarketDataSource.cachedPrices]), so a row the
+ * user typed for `AAPL` arrives here as an ordinary price series, becomes an
+ * ordinary [HoldingQuote], and is valued by the same ported engine that values
+ * everything else. The plan's "reuse the value-point machinery" turns out to be
+ * literal: the machinery was already general, and only the *writer* was missing.
+ *
+ * Precedence is deliberate — vault value points beat the price cache. A custom
+ * asset's value points are vault content the user maintains and that syncs to
+ * Drive; a `price_cache` row is a device-local convenience. When both exist for
+ * one id, the durable, portable one is the truth.
+ *
+ * Top-level and `internal` (rather than a private method) so the composition
+ * `price_cache → market inputs → projector → Room` can be asserted in a pure-JVM
+ * unit test without standing up Room. It reads nothing but its arguments.
+ */
+internal fun buildMarketInputs(
+    graph: VaultEntityGraph,
+    cached: Map<String, List<at.bettertrack.app.domain.PricePoint>>,
+): Map<String, AssetMarketData> {
+    val valuePoints = graph.live(VaultKinds.CUSTOM_ASSET_VALUE)
+        .groupBy { it.text("assetId").orEmpty() }
+        .mapValues { (_, rows) ->
+            rows.mapNotNull { row ->
+                val date = row.text("date") ?: return@mapNotNull null
+                val value = row.decimal("value") ?: return@mapNotNull null
+                at.bettertrack.app.domain.PricePoint(date, value)
+            }.sortedBy { it.date }
+        }
+
+    val assetIds = (cached.keys + valuePoints.keys).toSet()
+    return assetIds.associateWith { assetId ->
+        val prices = valuePoints[assetId]?.takeIf { it.isNotEmpty() } ?: cached[assetId].orEmpty()
+        AssetMarketData(
+            prices = prices,
+            // Today's close IS the live quote when there is no live source.
+            // prevClose is the day before, so the day-change column is honest
+            // rather than absent.
+            quote = prices.lastOrNull()?.let { last ->
+                HoldingQuote(price = last.close, prevClose = prices.dropLast(1).lastOrNull()?.close)
+            },
         )
     }
 }
