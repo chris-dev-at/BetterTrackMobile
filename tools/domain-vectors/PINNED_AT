@@ -1,8 +1,9 @@
-commit  = cb530f7e30a2ce3502e708f4b05711d1d0bde685
-date    = 2026-08-04 09:24:39 +0200
+commit  = fc970e8a84ce70d35a095316aefdc7e0ac2ec72e
+date    = 2026-08-05 (fetched 2026-08-05)
 repo    = BetterTrack platform monorepo (apps/web + packages/*)
 ref     = origin/main
-copied  = 2026-08-04
+copied  = 2026-08-05
+previous= cb530f7e30a2ce3502e708f4b05711d1d0bde685 (2026-08-04 09:24:39 +0200)
 
 # Paths vendored under vendor/ (read-only snapshot, `git show origin/main:<path>`)
 #
@@ -70,6 +71,58 @@ copied  = 2026-08-04
 # and emits it verbatim to app/src/test/resources/domain-vectors/deTaxFixtures.json,
 # because deTaxFixtures.test.ts asserts the DATA's internal consistency rather than
 # an engine result — those 15 cases are hand-ported against that JSON.
+#
+# ── RE-PIN cb530f7e → fc970e8a (2026-08-05): the #1094/#1095 money wave ──────
+#
+# WHY: platform's night money-path audit found the #917 storage-drift waiver
+# living in the TAX replay but NOT the HOLDINGS replay — a row set drifting
+# under 8-dp storage rounding passed create-time validation, priced fine for
+# tax, and threw OversellError in holdings derivation (a permanent 500 on
+# web's portfolio overview). Filed as #1094, which extends the
+# per-contributing-row envelope to `holdings.reducePosition` and publishes the
+# F1 fixture as a SHARED conformance vector. #1095 rode along: `spendableAsOf`
+# broke same-instant ties credits-before-debits while the write gate breaks
+# them by input order, so the two disagreed whenever a tied withdrawal
+# preceded a deposit. Platform's instruction on the board (2026-08-05 ~00:45Z)
+# was explicit: do NOT pre-fix independently — wait for the vectors and let the
+# harness drive the envelope into the port. That is exactly what happened.
+#
+# CHANGED under packages/domain between the two commits (nothing else moved):
+#   src/holdings.ts                       QTY_STORAGE_QUANTUM + reducePosition
+#                                         (driftRows counter, storageDrift branch,
+#                                         reset-on-close)
+#   src/cashLedger.ts                     orderCashMovements() extracted; four
+#                                         call sites; spendableAsOf adopts the
+#                                         gate's tie order
+#   src/__tests__/storageDriftVectors.ts  NEW — the shared F1 vectors
+#   src/__tests__/holdings.test.ts        new waiver suite; the 1e-8 oversell
+#                                         case re-pointed to 3e-8
+#   src/__tests__/cashLedger.test.ts      tie conformance vector; one rename
+#   src/__tests__/tax.test.ts             pins the shared vector on the tax side
+#
+# The harness caught the divergence before any code was touched: regenerating
+# against the new engine and replaying produced 5 failures out of 622 —
+# 4× OversellError where the vectors expect a clean flat position (incl. the
+# deriveHoldings path the audit reported) and spendableAsOf returning 100.0
+# where the tie vector expects 0.0. The Kotlin fixes are literal translations
+# of the two TypeScript diffs; no new tolerance was introduced (the envelope is
+# comparisons and epsilon arithmetic, and the F1 realized P/L lands on exactly
+# 4.0), so the exact-0.0 discipline is unchanged.
+#
+# NOTE on the Kotlin constant name. `holdings.ts` now declares its own
+# `QTY_STORAGE_QUANTUM` while `tax.ts` already had one; Kotlin has no module
+# scope inside a package, so the MIRRORING declaration takes the prefix in both
+# directions — `Tax.kt` keeps `TAX_QTY_EPSILON` (holdings owns the epsilon) and
+# `Holdings.kt` gained `HOLDINGS_QTY_STORAGE_QUANTUM` (tax owns the quantum, as
+# the new holdings.ts KDoc itself states). The bare name always marks the origin
+# module. StorageDriftVectorsHandPortedTest pins the two quanta equal.
+#
+# Vendored paths OUTSIDE packages/domain were re-checked and are UNCHANGED at
+# fc970e8a: every W3 `apps/web/src/user/vault/*` file, `packages/contracts/src/
+# vault.ts`, and both published fixtures. `apps/web/src/user/vault/engine/
+# clientMoney.test.ts` did change (+79 lines: two new #1094 cases), but it was
+# never vendored — it builds its documents dynamically, and the fixture JSON it
+# reads is byte-identical. `ui/ParanoidSurfaceGate.*` also moved; web-only.
 #
 # ── A dependency-VERSION trap worth remembering ─────────────────────────────
 # `packages/contracts` declares zod "^3.24.1", but that range resolves to 3.25.x,

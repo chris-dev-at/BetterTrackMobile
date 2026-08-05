@@ -533,7 +533,7 @@
   },
   {
    "fn": "reducePosition",
-   "case": "rejects an oversell of one stored quantity unit (1e-8)",
+   "case": "rejects an oversell just past the storage-drift envelope (#1094)",
    "input": {
     "transactions": [
      {
@@ -547,7 +547,7 @@
      {
       "assetId": "A",
       "side": "sell",
-      "quantity": 5.00000001,
+      "quantity": 5.00000003,
       "price": 10,
       "fee": 0,
       "executedAt": "2026-01-02T00:00:00Z"
@@ -557,7 +557,7 @@
    "output": null,
    "throws": {
     "name": "OversellError",
-    "message": "Cannot sell 5.00000001 units of A: only 5 held."
+    "message": "Cannot sell 5.00000003 units of A: only 5 held."
    }
   },
   {
@@ -846,6 +846,1144 @@
     "name": "Error",
     "message": "Transaction uncovered entry price must be a finite non-negative number, got -1"
    }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "derives the F1 conformance vector cleanly — position exactly 0, no throw",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-04T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 0.40000002,
+      "price": 60,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 4,
+    "realizations": [
+     {
+      "index": 4,
+      "realizedPnl": 4
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "still throws on the beyond-envelope F1 vector — never a blanket loosening",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-04T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 0.40000006,
+      "price": 60,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 0.40000006 units of A: only 0.4 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "waives a same-batch one-quantum shortfall and closes the position",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 10,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 10
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "fails closed beyond the per-row envelope",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1.00000003,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 1.00000003 units of A: only 1 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "resets the envelope when a position closes exactly",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1.00000003,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-02-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 1.00000003 units of A: only 1 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "a later buy after a waived close rebuilds a clean average",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-02-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1,
+      "price": 70,
+      "fee": 0,
+      "executedAt": "2026-03-01T10:00:00Z"
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": 30,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": 10
+     },
+     {
+      "index": 3,
+      "realizedPnl": 20
+     }
+    ]
+   },
+   "throws": null
+  },
+  {
+   "fn": "reducePosition",
+   "case": "a real oversell still throws regardless of the row count",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 101,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "OversellError",
+    "message": "Cannot sell 101 units of A: only 100 held."
+   }
+  },
+  {
+   "fn": "reducePosition",
+   "case": "an acknowledged uncovered sell keeps its own basis semantics, not the waiver",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 1,
+      "price": 100,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 1.00000001,
+      "price": 110,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z",
+      "allowUncovered": true,
+      "uncoveredEntryPrice": 10000000000
+     }
+    ]
+   },
+   "output": {
+    "quantity": 0,
+    "avgCost": 0,
+    "realizedPnl": -89.99999829225291,
+    "realizations": [
+     {
+      "index": 1,
+      "realizedPnl": -89.99999829225291
+     }
+    ]
+   },
+   "throws": null
   },
   {
    "fn": "reducePosition",
@@ -1152,6 +2290,87 @@
      "unrealizedPnlPct": 10,
      "dayChangeEur": 45,
      "dayChangePct": 4.761904761904762
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "deriveHoldings",
+   "case": "derives holdings for the F1 vector (the portfolio-overview path)",
+   "input": {
+    "transactions": [
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-01T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-02T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-03T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "buy",
+      "quantity": 0.1,
+      "price": 50,
+      "fee": 0,
+      "executedAt": "2026-01-04T10:00:00Z"
+     },
+     {
+      "assetId": "A",
+      "side": "sell",
+      "quantity": 0.40000002,
+      "price": 60,
+      "fee": 0,
+      "executedAt": "2026-01-05T10:00:00Z"
+     }
+    ],
+    "assets": [
+     {
+      "assetId": "A",
+      "currency": "EUR",
+      "quote": {
+       "price": 60
+      }
+     }
+    ],
+    "fx": {
+     "kind": "flat",
+     "rates": {
+      "EUR": 1,
+      "USD": 0.9
+     }
+    }
+   },
+   "output": [
+    {
+     "assetId": "A",
+     "currency": "EUR",
+     "quantity": 0,
+     "avgCost": 0,
+     "realizedPnl": 4,
+     "price": 60,
+     "marketValueEur": null,
+     "costBasisEur": null,
+     "unrealizedPnlEur": null,
+     "unrealizedPnlPct": null,
+     "dayChangeEur": null,
+     "dayChangePct": null
     }
    ],
    "throws": null

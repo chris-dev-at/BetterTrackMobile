@@ -32,7 +32,9 @@ import kotlin.math.min
  *    precision; display rounding lives in the display layer, never here.
  *  - **Quantity comparisons use a tolerance** ([QTY_EPSILON]) so that selling
  *    exactly the held quantity is allowed despite floating-point dust, while a
- *    genuine over-sell is rejected.
+ *    genuine over-sell is rejected. Stored-rounding drift within the
+ *    per-contributing-row [HOLDINGS_QTY_STORAGE_QUANTUM] envelope (#917/#1094)
+ *    is likewise not an over-sell.
  *
  * Translation notes (plan §3.3): arithmetic expressions keep the original
  * operation order; every keyed traversal that feeds a floating-point sum uses a
@@ -56,6 +58,27 @@ import kotlin.math.min
  * Contract constant — copied, never re-derived (plan §3.3 rule 7).
  */
 const val QTY_EPSILON: Double = 1e-9
+
+/**
+ * One scale-8 storage quantum (#917, extended to holdings by #1094). Quantities
+ * persist as `numeric(20,8)`: the write path epsilon-validates the raw client
+ * values, then PostgreSQL rounds each row independently to scale 8, so every
+ * stored row can sit up to one quantum away from the raw value that was
+ * validated. A replayed position can therefore show a spurious shortfall bounded
+ * by one quantum per contributing stored row — [reducePosition] waives exactly
+ * that envelope; anything beyond it fails closed as a genuine oversell.
+ *
+ * §3.3 rules 3 + 7, the mirror of [TAX_QTY_EPSILON]'s situation: `holdings.ts`
+ * **re-declares** `QTY_STORAGE_QUANTUM` locally rather than importing it (the
+ * `packages/domain` purity rule forbids value imports), and its KDoc names
+ * `tax.QTY_STORAGE_QUANTUM` as the original. Kotlin has no module scope inside a
+ * package, so the *mirroring* declaration takes the prefix in both directions:
+ * `tax.ts`'s copy of the epsilon is [TAX_QTY_EPSILON], and `holdings.ts`'s copy
+ * of the quantum is this. The bare name always marks the origin module —
+ * [QTY_EPSILON] here, [QTY_STORAGE_QUANTUM] in `Tax.kt`. `DomainHandPortedTest`
+ * pins the two quanta equal, which is what the TypeScript comment claims.
+ */
+const val HOLDINGS_QTY_STORAGE_QUANTUM: Double = 1e-8
 
 /**
  * EUR value comparison tolerance for the performance series: below this a day's
@@ -181,7 +204,14 @@ private class OrderedTransaction(
  *    the fee is capitalised into the cost basis.
  *  - **SELL** realizes `qty·(price − avg) − fee` and reduces the quantity; the
  *    average cost is unchanged. A SELL exceeding the held quantity (beyond
- *    [QTY_EPSILON]) throws [OversellError].
+ *    [QTY_EPSILON]) throws [OversellError]. One exception (#917/#1094): a
+ *    shortfall within one [HOLDINGS_QTY_STORAGE_QUANTUM] per contributing stored
+ *    row is `numeric(20,8)` rounding drift, not an oversell — the write path
+ *    validated the raw values before PostgreSQL rounded the rows apart. Such a
+ *    sell closes the position like an exact one: the held shares realize against
+ *    the running average, the dust remainder takes the sale price (0 gain). The
+ *    envelope is per-row, never a blanket loosening — a shortfall beyond it
+ *    still fails closed.
  *
  * The input may contain transactions for a single asset; mixing assets is a
  * programming error and throws.
@@ -209,6 +239,7 @@ fun reducePosition(transactions: List<Transaction>): PositionState {
     var held = 0.0
     var avg = 0.0
     var realizedPnl = 0.0
+    var driftRows = 0
     val realizations = mutableListOf<SellRealization>()
 
     for (entry in ordered) {
@@ -232,13 +263,36 @@ fun reducePosition(transactions: List<Transaction>): PositionState {
         assertFiniteNonNegative(t.price, "Transaction price")
         assertFiniteNonNegative(t.fee, "Transaction fee")
 
+        // Every stored row of the open position — the current one included — can
+        // carry up to one quantum of numeric(20,8) rounding drift (#917/#1094).
+        driftRows += 1
+
         if (t.side == TransactionSide.BUY) {
             val newHeld = held + t.quantity
             // newHeld > 0 always (held ≥ 0, quantity > 0), so the division is safe.
             avg = (held * avg + t.quantity * t.price + t.fee) / newHeld
             held = newHeld
         } else {
-            if (t.quantity > held + QTY_EPSILON) {
+            val oversell = t.quantity > held + QTY_EPSILON
+            // Storage-rounding drift (#917, extended here by #1094): the write path
+            // validated the raw values, then numeric(20,8) rounded each row
+            // independently — a shortfall within one quantum per contributing stored
+            // row is a persistence artifact. It closes the position like an exact
+            // sell; beyond the envelope it is a genuine oversell and fails closed.
+            val storageDrift =
+                oversell &&
+                    t.allowUncovered != true &&
+                    t.quantity - held <= driftRows * HOLDINGS_QTY_STORAGE_QUANTUM + QTY_EPSILON
+            if (storageDrift) {
+                // The held shares realize against the running average; the dust
+                // remainder takes the sale price (0 gain) — it is rounding residue of
+                // covered shares, not a phantom acquisition. The fee applies once.
+                val pnl = held * (t.price - avg) - t.fee
+                realizedPnl += pnl
+                realizations.add(SellRealization(index, pnl))
+                held = 0.0
+                avg = 0.0
+            } else if (oversell) {
                 // Over-selling the held quantity: rejected unless the caller explicitly
                 // acknowledged an uncovered sell.
                 if (t.allowUncovered != true) {
@@ -274,6 +328,11 @@ fun reducePosition(transactions: List<Transaction>): PositionState {
                     held = 0.0
                     avg = 0.0
                 }
+            }
+            // A closed position starts the next round trip clean — including its
+            // storage-drift envelope (#917/#1094).
+            if (held == 0.0) {
+                driftRows = 0
             }
         }
     }

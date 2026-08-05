@@ -476,13 +476,39 @@ fun applyCashMovement(balanceEur: Double, movement: CashMovement): Double {
 
 /**
  * §3.3 rule 1: the TypeScript sorts an array of anonymous
- * `{ movement, index, ms }` records; Kotlin needs a name for the shape.
+ * `{ movement, index, ms }` records; Kotlin needs a name for the shape. Generic
+ * over the movement type exactly like `orderCashMovements<T extends CashMovement>`,
+ * so the by-source callers keep their [SourcedCashMovement] without a downcast.
  */
-private class OrderedMovement(
-    val movement: CashMovement,
+private class OrderedMovement<out T : CashMovement>(
+    val movement: T,
     val index: Int,
     val ms: Double,
 )
+
+/**
+ * Chronological replay order shared by every cash derivation: oldest first, with
+ * same-instant movements retaining their input order.
+ *
+ * #1095 extracted this from [projectCashLedger] so [spendableAsOf] could adopt
+ * the write gate's *exact* order — it previously settled ties credits-before-
+ * debits, which disagreed with the gate whenever a same-instant withdrawal
+ * preceded a deposit in input order.
+ *
+ * §3.3 rule 5: `a.ms - b.ms || a.index - b.index` is a JS numeric comparator;
+ * Kotlin's must return an Int, so the double difference is reduced to its sign
+ * and the index difference supplies the (stable) tie-break — identical ordering,
+ * and `sortedWith` is stable exactly like `Array.prototype.sort`.
+ */
+private fun <T : CashMovement> orderCashMovements(movements: List<T>): List<OrderedMovement<T>> =
+    movements
+        .mapIndexed { index, movement ->
+            OrderedMovement(movement, index, occurredAtToMs(movement.occurredAt))
+        }
+        .sortedWith { a, b ->
+            val delta = a.ms - b.ms
+            if (delta < 0.0) -1 else if (delta > 0.0) 1 else a.index - b.index
+        }
 
 /**
  * Replay a movement history chronologically (`occurredAt` ascending, ties broken
@@ -498,18 +524,7 @@ private class OrderedMovement(
  */
 fun projectCashLedger(movements: List<CashMovement>): List<CashLedgerEntry> {
     movements.forEachIndexed { i, movement -> assertValidMovement(movement, i) }
-    // §3.3 rule 5: `a.ms - b.ms || a.index - b.index` is a JS numeric comparator;
-    // Kotlin's must return an Int, so the double difference is reduced to its sign
-    // and the index difference supplies the (stable) tie-break — identical
-    // ordering, and `sortedWith` is stable exactly like `Array.prototype.sort`.
-    val ordered = movements
-        .mapIndexed { index, movement ->
-            OrderedMovement(movement, index, occurredAtToMs(movement.occurredAt))
-        }
-        .sortedWith { a, b ->
-            val delta = a.ms - b.ms
-            if (delta < 0.0) -1 else if (delta > 0.0) 1 else a.index - b.index
-        }
+    val ordered = orderCashMovements(movements)
 
     val entries = mutableListOf<CashLedgerEntry>()
     var balanceEur = 0.0
@@ -519,11 +534,6 @@ fun projectCashLedger(movements: List<CashMovement>): List<CashLedgerEntry> {
     }
     return entries
 }
-
-/**
- * §3.3 rule 1: the anonymous `{ ms, amountEur }` record [spendableAsOf] sorts.
- */
-private class TimedAmount(val ms: Double, val amountEur: Double)
 
 /**
  * The maximum outflow that can be applied at instant `occurredAt` on a **single
@@ -548,34 +558,19 @@ private class TimedAmount(val ms: Double, val amountEur: Double)
 fun spendableAsOf(movements: List<CashMovement>, occurredAt: String): Double {
     movements.forEachIndexed { i, movement -> assertValidMovement(movement, i) }
     val eMs = occurredAtToMs(occurredAt)
-    // Ascending by time; ties settle credits (positive) before debits (negative),
-    // mirroring `projectCashLedger`'s replay order for same-instant movements.
-    // §3.3 rule 5: the same numeric-comparator reduction as projectCashLedger,
-    // here for `a.ms - b.ms || b.amountEur - a.amountEur`.
-    val ordered = movements
-        .map { movement -> TimedAmount(occurredAtToMs(movement.occurredAt), movement.amountEur) }
-        .sortedWith { a, b ->
-            val delta = a.ms - b.ms
-            if (delta < 0.0) {
-                -1
-            } else if (delta > 0.0) {
-                1
-            } else {
-                val byAmount = b.amountEur - a.amountEur
-                if (byAmount < 0.0) -1 else if (byAmount > 0.0) 1 else 0
-            }
-        }
+    // Use the gate's exact replay order, including input-order timestamp ties.
+    val ordered = orderCashMovements(movements)
 
     // Floor: the balance at and before `e` (the buy applies after all of these).
     var floor = 0.0
-    for (m in ordered) if (m.ms <= eMs) floor += m.amountEur
+    for (entry in ordered) if (entry.ms <= eMs) floor += entry.movement.amountEur
     // Then the lowest the balance dips at strictly-later instants — the spend,
     // which shifts every one of them down by its cost, must clear the minimum.
     var running = floor
     var minFromE = floor
-    for (m in ordered) {
-        if (m.ms > eMs) {
-            running += m.amountEur
+    for (entry in ordered) {
+        if (entry.ms > eMs) {
+            running += entry.movement.amountEur
             if (running < minFromE) minFromE = running
         }
     }
@@ -688,14 +683,7 @@ fun cashBySourceOverTime(
     }
 
     val endMs = isoDayToMs(endDay)
-    val ordered = movements
-        .mapIndexed { index, movement ->
-            OrderedMovement(movement, index, occurredAtToMs(movement.occurredAt))
-        }
-        .sortedWith { a, b ->
-            val delta = a.ms - b.ms
-            if (delta < 0.0) -1 else if (delta > 0.0) 1 else a.index - b.index
-        }
+    val ordered = orderCashMovements(movements)
         // Movements dated after the grid end never enter (netWorthSeries's rule).
         .filter { isoDayToMs(dayOf(it.movement.occurredAt)) <= endMs }
     val first = ordered.firstOrNull() ?: return emptyList()
@@ -709,7 +697,9 @@ fun cashBySourceOverTime(
         while (idx < ordered.size) {
             val entry = ordered[idx]
             if (isoDayToMs(dayOf(entry.movement.occurredAt)) > ms) break
-            val movement = entry.movement as SourcedCashMovement
+            // The generic `orderCashMovements` preserves SourcedCashMovement — the
+            // downcast this line used to need is gone.
+            val movement = entry.movement
             running[movement.sourceId] = (running[movement.sourceId] ?: 0.0) + movement.amountEur
             idx += 1
         }
@@ -900,14 +890,7 @@ fun netWorthSeries(input: NetWorthSeriesInput): List<ValuePoint> {
     // Sparse end-of-day balances: chronological replay (ties by input order,
     // mirroring projectCashLedger), plain running sum — see docstring for why the
     // insufficient-cash gate deliberately does not apply here.
-    val ordered = movements
-        .mapIndexed { index, movement ->
-            OrderedMovement(movement, index, occurredAtToMs(movement.occurredAt))
-        }
-        .sortedWith { a, b ->
-            val delta = a.ms - b.ms
-            if (delta < 0.0) -1 else if (delta > 0.0) 1 else a.index - b.index
-        }
+    val ordered = orderCashMovements(movements)
     val eodBalances = mutableListOf<EodBalance>()
     var balanceEur = 0.0
     for (entry in ordered) {

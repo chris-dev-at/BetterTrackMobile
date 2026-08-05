@@ -1305,6 +1305,89 @@
   },
   {
    "fn": "projectCashLedger",
+   "case": "the withdrawal-then-deposit tie replays cleanly without the buy",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": [
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     "balanceEur": 100
+    },
+    {
+     "movement": {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     "balanceEur": 0
+    },
+    {
+     "movement": {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     "balanceEur": 100
+    }
+   ],
+   "throws": null
+  },
+  {
+   "fn": "projectCashLedger",
+   "case": "gate: the withdrawal-then-deposit tie conformance vector rejects a backdated 100 buy",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     {
+      "kind": "buy",
+      "amountEur": -100,
+      "occurredAt": "2026-01-03T00:00:00.000Z"
+     }
+    ]
+   },
+   "output": null,
+   "throws": {
+    "name": "InsufficientCashError",
+    "message": "Insufficient cash: withdrawal of -100 € at 2026-01-05T00:00:00.000Z exceeds the available balance of 0 € by 100 €."
+   }
+  },
+  {
+   "fn": "projectCashLedger",
    "case": "gate: a 400 buy backdated before the deposit overdraws",
    "input": {
     "movements": [
@@ -1807,7 +1890,7 @@
   },
   {
    "fn": "spendableAsOf",
-   "case": "counts a same-instant deposit as available (credits before debits)",
+   "case": "counts an existing same-instant deposit before the appended buy",
    "input": {
     "movements": [
      {
@@ -1819,6 +1902,32 @@
     "occurredAt": "2025-06-01T00:00:00.000Z"
    },
    "output": 400,
+   "throws": null
+  },
+  {
+   "fn": "spendableAsOf",
+   "case": "matches the gate on the withdrawal-then-deposit tie conformance vector",
+   "input": {
+    "movements": [
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-01T00:00:00.000Z"
+     },
+     {
+      "kind": "withdrawal",
+      "amountEur": -100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     },
+     {
+      "kind": "deposit",
+      "amountEur": 100,
+      "occurredAt": "2026-01-05T00:00:00.000Z"
+     }
+    ],
+    "occurredAt": "2026-01-03T00:00:00.000Z"
+   },
+   "output": 0,
    "throws": null
   },
   {

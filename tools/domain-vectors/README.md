@@ -67,6 +67,7 @@ Outputs, all overwritten in place:
 | `app/src/test/resources/domain-vectors/settingsScope.json` | vectors for `resolvePortfolioSetting` |
 | `app/src/test/resources/domain-vectors/cashLedger.json` | vectors for `floorCents`, `cashBalance`, `applyCashMovement`, `projectCashLedger`, `spendableAsOf`, `cashBalanceOverTime`, `cashBalancesBySource`, `projectCashLedgerBySource`, `cashBySourceOverTime` (the ledger half of `dailySnapshotSeries.test.ts`), `pairedTransferMovements`, `setBalanceDelta`, `setBalanceMovement`, `netWorthSeries`, `isExternalCashMovement`, `externalCashFlowsForTwr`, the three exported constants, and the `timeWeightedReturn` compositions the ledger feeds |
 | `app/src/test/resources/domain-vectors/serverTwrParity.json` | the server-generated TWR golden, reshaped as `timeWeightedReturn` inputs |
+| `app/src/test/resources/domain-vectors/storageDriftVectors.json` | #1094's two shared storage-drift vectors, emitted **verbatim** — rows *and* the `expected` block that declares what every replay of them must produce |
 | `app/src/test/resources/domain-vectors/MANIFEST.json` | per-module counts + every case the generator deliberately skipped, with a reason |
 
 `holdings.json`, `seriesStats.json`, `settingsScope.json` and `serverTwrParity.json`
@@ -137,6 +138,15 @@ tests in `app/src/test/java/at/bettertrack/app/domain/DomainHandPortedTest.kt`
 - **signed zero** — `Object.is(floorCents(-0.005), 0)` separates `+0` from `−0`;
   JSON does not, and the generator refuses to emit a `−0` at all
 - "does not mutate the input array" — a property of the call, not of its output
+- **a fixture's own DECLARED expectations.** `storageDriftVectors.ts` (#1094)
+  ships each vector's rows *next to* an `expected` block stating what a correct
+  replay must return. The generator records what the engine **returned**, so a
+  `{fn, input, output}` vector would faithfully copy any drift between the
+  platform's engine and its own declaration and stay green. The declaration is
+  emitted verbatim instead and asserted in `StorageDriftVectorsHandPortedTest`,
+  which drives both replays (`reducePosition`, `realizedSellsEur` under both
+  cost-basis strategies) against the declared values — the closing half of the
+  fixture header's "both vectors must replay identically there"
 
 ---
 

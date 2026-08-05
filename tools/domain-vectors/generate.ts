@@ -46,6 +46,17 @@ import {
   type StatSeriesPoint,
 } from './vendor/domain/src/seriesStats.ts';
 import { resolvePortfolioSetting } from './vendor/domain/src/settingsScope.ts';
+// #1094's shared storage-drift conformance vectors. Pure data + types, imported
+// rather than retyped so the vector JSON carries the platform's own literals —
+// `holdings.test.ts` and `tax.test.ts` pin the exact same two constants.
+import {
+  F1_BEYOND_ENVELOPE_VECTOR,
+  F1_RAW_BUY_QUANTITY,
+  F1_RAW_SELL_QUANTITY,
+  F1_STORED_DRIFT_VECTOR,
+  STORAGE_DRIFT_VECTORS,
+  type StorageDriftVector,
+} from './vendor/domain/src/__tests__/storageDriftVectors.ts';
 import {
   applyCashMovement,
   CASH_MOVEMENT_KINDS,
@@ -253,6 +264,35 @@ function tx(
   };
 }
 
+/**
+ * holdings.test.ts `vectorTxns()` — a #1094 storage-drift vector's stored rows
+ * as `reducePosition` input. The row ids are not part of a `Transaction`, so
+ * only side/quantity/price/fee/executedAt travel.
+ */
+function vectorTxns(vector: StorageDriftVector): Transaction[] {
+  return vector.rows.map((row) =>
+    tx({
+      side: row.side,
+      quantity: row.quantity,
+      price: row.price,
+      fee: row.fee,
+      executedAt: row.executedAt,
+    }),
+  );
+}
+
+/**
+ * holdings.test.ts `quantumPair()` — the numeric(20,8) storage oracle: raw
+ * 1.0000000046 / 1.0000000051 pass the write path's 1e-9 epsilon, then persist
+ * one quantum apart as 1.00000000 / 1.00000001.
+ */
+function quantumPair(sellQuantity: number): Transaction[] {
+  return [
+    tx({ side: 'buy', quantity: 1.0, price: 100, executedAt: '2026-01-01T10:00:00Z' }),
+    tx({ side: 'sell', quantity: sellQuantity, price: 110, executedAt: '2026-01-02T10:00:00Z' }),
+  ];
+}
+
 /** dailySnapshotSeries.test.ts `txn()` */
 function txn(overrides: Partial<Transaction> & { executedAt: string }): Transaction {
   return { assetId: 'a1', side: 'buy', quantity: 1, price: 100, fee: 0, ...overrides };
@@ -370,9 +410,11 @@ function genReducePosition(): void {
     'OversellError carries the requested and held quantities (field assertions)',
     'asserts err.requested / err.held / err.assetId, not just that it threw — hand-ported in DomainHandPortedTest ("OversellError carries the requested and held quantities")',
   );
-  reduce('rejects an oversell of one stored quantity unit (1e-8)', [
+  // #1094 renamed and re-pointed this case: two contributing rows grant a 2e-8
+  // waiver, so a 1e-8 shortfall is storage drift now; one more quantum still throws.
+  reduce('rejects an oversell just past the storage-drift envelope (#1094)', [
     tx({ side: 'buy', quantity: 5, price: 10, executedAt: '2026-01-01T00:00:00Z' }),
-    tx({ side: 'sell', quantity: 5 + 1e-8, price: 10, executedAt: '2026-01-02T00:00:00Z' }),
+    tx({ side: 'sell', quantity: 5 + 3e-8, price: 10, executedAt: '2026-01-02T00:00:00Z' }),
   ]);
   reduce('rejects an oversell after partial sells reduced the held quantity', [
     tx({ side: 'buy', quantity: 10, price: 10, executedAt: '2026-01-01T00:00:00Z' }),
@@ -434,6 +476,47 @@ function genReducePosition(): void {
     tx({ side: 'sell', quantity: 5, price: 100, allowUncovered: true, uncoveredEntryPrice: -1 }),
   ]);
 
+  // --- storage-quantum shortfall waiver (#1094, extends #917) ---
+  // holdings.test.ts's `vectorTxns` / `quantumPair`, case-for-case.
+  reduce(
+    'derives the F1 conformance vector cleanly — position exactly 0, no throw',
+    vectorTxns(F1_STORED_DRIFT_VECTOR),
+  );
+  reduce(
+    'still throws on the beyond-envelope F1 vector — never a blanket loosening',
+    vectorTxns(F1_BEYOND_ENVELOPE_VECTOR),
+  );
+  reduce('waives a same-batch one-quantum shortfall and closes the position', quantumPair(1.00000001));
+  reduce('fails closed beyond the per-row envelope', quantumPair(1.00000003));
+  reduce('resets the envelope when a position closes exactly', [
+    tx({ side: 'buy', quantity: 1, price: 100, executedAt: '2026-01-01T10:00:00Z' }),
+    tx({ side: 'sell', quantity: 1, price: 110, executedAt: '2026-01-02T10:00:00Z' }),
+    tx({ side: 'buy', quantity: 1, price: 100, executedAt: '2026-02-01T10:00:00Z' }),
+    tx({ side: 'sell', quantity: 1.00000003, price: 110, executedAt: '2026-02-02T10:00:00Z' }),
+  ]);
+  reduce('a later buy after a waived close rebuilds a clean average', [
+    ...quantumPair(1.00000001),
+    tx({ side: 'buy', quantity: 1, price: 50, executedAt: '2026-02-01T10:00:00Z' }),
+    tx({ side: 'sell', quantity: 1, price: 70, executedAt: '2026-03-01T10:00:00Z' }),
+  ]);
+  reduce('a real oversell still throws regardless of the row count', [
+    ...Array.from({ length: 100 }, () =>
+      tx({ side: 'buy', quantity: 1, price: 100, executedAt: '2026-01-01T10:00:00Z' }),
+    ),
+    tx({ side: 'sell', quantity: 101, price: 110, executedAt: '2026-01-02T10:00:00Z' }),
+  ]);
+  reduce('an acknowledged uncovered sell keeps its own basis semantics, not the waiver', [
+    tx({ side: 'buy', quantity: 1, price: 100, executedAt: '2026-01-01T10:00:00Z' }),
+    tx({
+      side: 'sell',
+      quantity: 1.00000001,
+      price: 110,
+      executedAt: '2026-01-02T10:00:00Z',
+      allowUncovered: true,
+      uncoveredEntryPrice: 10_000_000_000,
+    }),
+  ]);
+
   // --- chronological ordering across timestamp renderings (issue #218) ---
   reduce('a sell 500ms after its buy is valid even though it sorts first as a string', [
     tx({ side: 'sell', quantity: 5, price: 12, executedAt: '2026-01-05T10:00:00.500Z' }),
@@ -491,6 +574,14 @@ async function genDeriveHoldings(): Promise<void> {
     'valueOverTime/deriveHoldings',
     'FX coalescing call counts',
     'vi.fn() toHaveBeenCalledTimes/-With assertions are interaction, not data — hand-ported in DomainHandPortedTest against a counting CurrencyConverter fake (valueOverTime x3, netFlowsOverTime, costBasisOverTime)',
+  );
+  // #1094: the portfolio-overview path over the F1 vector — the finding the
+  // platform audit reported was a 500 here, not in reducePosition itself.
+  await run(
+    'derives holdings for the F1 vector (the portfolio-overview path)',
+    vectorTxns(F1_STORED_DRIFT_VECTOR),
+    [{ assetId: 'A', currency: 'EUR', quote: { price: 60 } }],
+    FX_STUB,
   );
   await run(
     'handles a loss position (negative P/L and day change convert correctly)',
@@ -1702,6 +1793,24 @@ function genProjectCashLedger(): void {
   const gate = (name: string, movements: CashMovement[], cost: number, at: string): void =>
     run(`gate: ${name}`, [...movements, mv('buy', -cost, at)]);
 
+  // #1095's tie conformance vector, through the gate itself: the accepted
+  // ledger replays without throwing, but the backdated 100 buy must overdraw at
+  // the tied withdrawal. `spendableAsOf` must agree (it returns 0 above).
+  run('the withdrawal-then-deposit tie replays cleanly without the buy', [
+    mv('deposit', 100, '2026-01-01T00:00:00.000Z'),
+    mv('withdrawal', -100, '2026-01-05T00:00:00.000Z'),
+    mv('deposit', 100, '2026-01-05T00:00:00.000Z'),
+  ]);
+  gate(
+    'the withdrawal-then-deposit tie conformance vector rejects a backdated 100 buy',
+    [
+      mv('deposit', 100, '2026-01-01T00:00:00.000Z'),
+      mv('withdrawal', -100, '2026-01-05T00:00:00.000Z'),
+      mv('deposit', 100, '2026-01-05T00:00:00.000Z'),
+    ],
+    100,
+    '2026-01-03T00:00:00.000Z',
+  );
   gate(
     'a 400 buy backdated before the deposit overdraws',
     [mv('deposit', 500, '2026-02-01T00:00:00.000Z')],
@@ -1819,10 +1928,26 @@ function genSpendableAsOf(): void {
     ],
     '2026-01-01T00:00:00.000Z',
   );
+  // #1095 renamed this: the tie is broken by INPUT ORDER (the gate's own replay
+  // order), not by credits-before-debits. A lone pre-existing deposit still
+  // precedes the appended buy, so the value is unchanged — the rename is the point.
   run(
-    'counts a same-instant deposit as available (credits before debits)',
+    'counts an existing same-instant deposit before the appended buy',
     [mv('deposit', 400, '2025-06-01T00:00:00.000Z')],
     '2025-06-01T00:00:00.000Z',
+  );
+  // #1095's tie conformance vector: at 2026-01-05 the withdrawal precedes the
+  // tied deposit by input order, so the ledger touches 0 and a backdated 100
+  // buy must be rejected. The retired credits-before-debits comparator would
+  // have replayed +100 first, never dipped below 100, and wrongly accepted.
+  run(
+    'matches the gate on the withdrawal-then-deposit tie conformance vector',
+    [
+      mv('deposit', 100, '2026-01-01T00:00:00.000Z'),
+      mv('withdrawal', -100, '2026-01-05T00:00:00.000Z'),
+      mv('deposit', 100, '2026-01-05T00:00:00.000Z'),
+    ],
+    '2026-01-03T00:00:00.000Z',
   );
   run(
     'a buy dated at/after the newest movement yields the current balance',
@@ -3001,6 +3126,25 @@ function genRealizedSellsEur(): void {
     ...Array.from({ length: 100 }, (_, i) => T(`b${i}`, 'buy', 1, 100, '2026-01-01T10:00:00Z')),
     T('s1', 'sell', 101, 110, '2026-01-02T10:00:00Z'),
   ]);
+
+  // --- #1094's shared F1 conformance vector, replayed on the TAX side too ----
+  // tax.test.ts's "replays the #1094 F1 conformance vector byte-identically":
+  // the holdings replay adopted this envelope in #1094, so the tax replay's
+  // pre-existing #917 behavior on the SAME rows is now a pinned regression.
+  const vectorRows = (vector: StorageDriftVector): TaxableTransaction[] =>
+    vector.rows.map((row) => T(row.id, row.side, row.quantity, row.price, row.executedAt, row.fee));
+
+  sells('#1094: the shared F1 conformance vector (moving-average)', vectorRows(F1_STORED_DRIFT_VECTOR));
+  sells('#1094: the shared F1 conformance vector (fifo)', vectorRows(F1_STORED_DRIFT_VECTOR), 'fifo');
+  sells(
+    '#1094: the beyond-envelope F1 vector throws (moving-average)',
+    vectorRows(F1_BEYOND_ENVELOPE_VECTOR),
+  );
+  sells(
+    '#1094: the beyond-envelope F1 vector throws (fifo)',
+    vectorRows(F1_BEYOND_ENVELOPE_VECTOR),
+    'fifo',
+  );
 }
 
 // --- the AT engine ---------------------------------------------------------
@@ -3905,6 +4049,22 @@ function skipDeFixtureShapeSuite(): void {
   for (const [fn, name] of cases) skip(`deTaxFixtures/${fn}`, name, reason);
 }
 
+// --- storageDriftVectors.ts: the DECLARED half of #1094's shared vectors -----
+
+function skipStorageDriftDeclarations(): void {
+  const reason =
+    "the #1094 vectors' `expected` block (throws / quantity / realizedPnl / realizedPnlTolerance) is fixture DATA the platform suites assert the engine against, not an engine result a {fn, input, output} vector can carry — the generator records what the engine RETURNED, so a vector alone could never catch the engine and the declaration drifting apart. Emitted verbatim as storageDriftVectors.json and hand-ported in StorageDriftVectorsHandPortedTest, which replays both row sets through reducePosition and realizedSellsEur (both strategies) against the DECLARED values.";
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    [
+      'holdings/reducePosition',
+      "the F1 vector's declared expected.quantity / .realizedPnl / .realizedPnlTolerance",
+    ],
+    ['holdings/reducePosition', "the beyond-envelope vector's declared expected.throws"],
+    ['tax/realizedSellsEur', 'replays the #1094 F1 conformance vector byte-identically (regression pin)'],
+  ];
+  for (const [fn, name] of cases) skip(fn, name, reason);
+}
+
 // ===========================================================================
 // Emit
 // ===========================================================================
@@ -3958,6 +4118,7 @@ async function main(): Promise<void> {
   genDeUnitCases();
   genCustomEngine();
   skipDeFixtureShapeSuite();
+  skipStorageDriftDeclarations();
   genServerTwrParity();
 
   mkdirSync(OUT_DIR, { recursive: true });
@@ -3969,6 +4130,20 @@ async function main(): Promise<void> {
   writeFileSync(
     join(OUT_DIR, 'deTaxFixtures.json'),
     `${JSON.stringify({ source: 'packages/domain/src/__tests__/deTaxFixtures.ts', scenarios: DE_TAX_FIXTURES }, null, 1)}\n`,
+  );
+
+  // #1094's shared storage-drift vectors verbatim. The {fn, input, output}
+  // vectors above already replay both row sets through reducePosition,
+  // deriveHoldings and realizedSellsEur — but they record what the TS engine
+  // RETURNED, whereas `storageDriftVectors.ts` also DECLARES what it must
+  // return (`expected.throws` / `.quantity` / `.realizedPnl` /
+  // `.realizedPnlTolerance`). Asserting the Kotlin engine against those declared
+  // values is the closing half of "both vectors must replay identically there",
+  // and it is a data assertion rather than an engine call — hand-ported in
+  // StorageDriftVectorsHandPortedTest against this file.
+  writeFileSync(
+    join(OUT_DIR, 'storageDriftVectors.json'),
+    `${JSON.stringify({ source: 'packages/domain/src/__tests__/storageDriftVectors.ts', rawBuyQuantity: F1_RAW_BUY_QUANTITY, rawSellQuantity: F1_RAW_SELL_QUANTITY, vectors: STORAGE_DRIFT_VECTORS }, null, 1)}\n`,
   );
 
   // The raw server-generated golden, copied byte-identically so the Kotlin

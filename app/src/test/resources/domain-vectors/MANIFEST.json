@@ -3,17 +3,17 @@
  "pinnedAt": "cb530f7e30a2ce3502e708f4b05711d1d0bde685",
  "note": "Regenerate with: node --experimental-strip-types tools/domain-vectors/generate.ts",
  "counts": {
-  "holdings": 95,
+  "holdings": 104,
   "seriesStats": 41,
   "settingsScope": 9,
-  "cashLedger": 188,
-  "tax": 269,
+  "cashLedger": 191,
+  "tax": 273,
   "serverTwrParity": 4
  },
  "byFunction": {
   "holdings": {
-   "reducePosition": 34,
-   "deriveHoldings": 7,
+   "reducePosition": 42,
+   "deriveHoldings": 8,
    "valueOverTime": 12,
    "costBasisOverTime": 9,
    "dailyCloseSeries": 7,
@@ -36,9 +36,9 @@
    "floorCents": 19,
    "cashBalance": 18,
    "applyCashMovement": 16,
-   "projectCashLedger": 22,
+   "projectCashLedger": 24,
    "cashBalanceOverTime": 5,
-   "spendableAsOf": 7,
+   "spendableAsOf": 8,
    "CASH_MOVEMENT_KINDS": 1,
    "CASH_MOVEMENT_SIGN": 1,
    "EXTERNAL_CASH_MOVEMENT_KINDS": 1,
@@ -59,7 +59,7 @@
    "costBasisStrategyForCountry": 6,
    "floorCents": 32,
    "viennaYearOf": 6,
-   "realizedSellsEur": 57,
+   "realizedSellsEur": 61,
    "atYearTargetEur": 8,
    "settleAtYear": 25,
    "taxMovementForDelta": 5,
@@ -78,7 +78,7 @@
    "timeWeightedReturn": 4
   }
  },
- "totalVectors": 606,
+ "totalVectors": 622,
  "skipped": [
   {
    "fn": "reducePosition",
@@ -294,6 +294,21 @@
    "fn": "deTaxFixtures/acceptance pins (#576)",
    "case": "Soli is 5.5 % of the (floored) KapESt, floored — never rounded up",
    "reason": "deTaxFixtures.test.ts asserts the hand-computed FIXTURE DATA is internally consistent (ids unique, no oversell in the log, proceeds = qty·price − fee, year aggregates reconcile with the per-event inputs, the §16 year-target formula, pot chaining, settlement steps summing to the year target) — it is not a call into the engine, so a {fn, case, input, output} vector cannot express it. The fixture data is emitted verbatim as deTaxFixtures.json and the whole suite is hand-ported in DeTaxFixturesHandPortedTest."
+  },
+  {
+   "fn": "holdings/reducePosition",
+   "case": "the F1 vector's declared expected.quantity / .realizedPnl / .realizedPnlTolerance",
+   "reason": "the #1094 vectors' `expected` block (throws / quantity / realizedPnl / realizedPnlTolerance) is fixture DATA the platform suites assert the engine against, not an engine result a {fn, input, output} vector can carry — the generator records what the engine RETURNED, so a vector alone could never catch the engine and the declaration drifting apart. Emitted verbatim as storageDriftVectors.json and hand-ported in StorageDriftVectorsHandPortedTest, which replays both row sets through reducePosition and realizedSellsEur (both strategies) against the DECLARED values."
+  },
+  {
+   "fn": "holdings/reducePosition",
+   "case": "the beyond-envelope vector's declared expected.throws",
+   "reason": "the #1094 vectors' `expected` block (throws / quantity / realizedPnl / realizedPnlTolerance) is fixture DATA the platform suites assert the engine against, not an engine result a {fn, input, output} vector can carry — the generator records what the engine RETURNED, so a vector alone could never catch the engine and the declaration drifting apart. Emitted verbatim as storageDriftVectors.json and hand-ported in StorageDriftVectorsHandPortedTest, which replays both row sets through reducePosition and realizedSellsEur (both strategies) against the DECLARED values."
+  },
+  {
+   "fn": "tax/realizedSellsEur",
+   "case": "replays the #1094 F1 conformance vector byte-identically (regression pin)",
+   "reason": "the #1094 vectors' `expected` block (throws / quantity / realizedPnl / realizedPnlTolerance) is fixture DATA the platform suites assert the engine against, not an engine result a {fn, input, output} vector can carry — the generator records what the engine RETURNED, so a vector alone could never catch the engine and the declaration drifting apart. Emitted verbatim as storageDriftVectors.json and hand-ported in StorageDriftVectorsHandPortedTest, which replays both row sets through reducePosition and realizedSellsEur (both strategies) against the DECLARED values."
   }
  ]
 }
