@@ -488,6 +488,13 @@ data class PendingTxRow(
     val note: String?,
     val cashCoupled: Boolean,
     val status: PendingUiStatus,
+    /**
+     * The two halves of a park reason, carried together so the row can render it
+     * through `rememberParkReason` (S6 P0-4): [errorCode] is the stable code the
+     * translated sentence comes from, [serverError] the diagnostic detail — or,
+     * for rows parked before DB v10, the original English prose with no code.
+     */
+    val errorCode: String?,
     val serverError: String?,
     val createdAtMs: Long,
     val payload: TxOpPayload,
@@ -535,6 +542,7 @@ fun decodePendingTxRow(op: SyncOpEntity, json: Json): PendingTxRow? {
         note = payload.note,
         cashCoupled = (payload.payFromCash == true) || (payload.addProceedsToCash == true),
         status = pendingUiStatus(status),
+        errorCode = op.errorCode,
         serverError = op.serverError,
         createdAtMs = op.createdAtMs,
         payload = payload,

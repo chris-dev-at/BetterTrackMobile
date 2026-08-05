@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,8 +52,8 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.btFieldColors
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.ZoneId
-import java.util.Locale
 
 /**
  * The v5 "Delivery" block of the notification settings screen: one digest-cadence
@@ -187,7 +186,7 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
     val bt = BtTheme.colors
     val context = LocalContext.current
     val use24Hour = DateFormat.is24HourFormat(context)
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val deviceZone = remember { ZoneId.systemDefault().id }
     // What the window is actually evaluated in. The server stores null until a zone
     // is set (it then falls back to UTC); the device zone is the honest fill-in.

@@ -39,7 +39,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.Conglomerate
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.di.AppGraph
@@ -60,7 +62,7 @@ sealed interface ConglomerateListState {
     data object Loading : ConglomerateListState
     data class Loaded(val items: List<Conglomerate>) : ConglomerateListState
     data object OfflineState : ConglomerateListState
-    data class Error(val message: String) : ConglomerateListState
+    data class Error(val message: BtMessage) : ConglomerateListState
 }
 
 class ConglomerateListViewModel(
@@ -81,7 +83,7 @@ class ConglomerateListViewModel(
             _state.value = when (val r = repo.list()) {
                 is BtResult.Ok -> ConglomerateListState.Loaded(r.value)
                 is BtResult.Err -> if (r.error.isNetwork) ConglomerateListState.OfflineState
-                else ConglomerateListState.Error(r.error.userMessage)
+                else ConglomerateListState.Error(r.error.asMessage())
             }
         }
     }

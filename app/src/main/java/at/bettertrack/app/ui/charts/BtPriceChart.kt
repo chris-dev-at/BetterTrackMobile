@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +31,7 @@ import at.bettertrack.app.data.repo.PricePoint
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.theme.FONT_FEATURE_TABULAR
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -60,7 +60,7 @@ fun BtPriceChart(
     val bt = BtTheme.colors
     val reducedMotion = rememberReducedMotion()
     val textMeasurer = rememberTextMeasurer()
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
 
     val progress = remember { Animatable(1f) }
     var currentPoints by remember { mutableStateOf(points) }

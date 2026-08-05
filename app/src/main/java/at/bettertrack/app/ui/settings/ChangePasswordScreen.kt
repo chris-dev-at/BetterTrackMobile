@@ -38,19 +38,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.rememberCoroutineScope
 import at.bettertrack.app.R
 import at.bettertrack.app.data.account.PasswordPolicy
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
 
 /**
  * Settings → Account → Change password (spec §6.12). Voluntary change: current +
- * new + confirm, an inline strength hint, and the server's own error surfaced
- * inline (`POST /auth/change-password`; a wrong current password → 401
- * "Current password is incorrect."). On success the session cookie rotates
- * server-side; the app keeps its bearer.
+ * new + confirm, an inline strength hint, and the refusal surfaced inline in the
+ * app's own words (`POST /auth/change-password`; a wrong current password → 401,
+ * which `BtErrorCopy` answers in the user's language). On success the session
+ * cookie rotates server-side; the app keeps its bearer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +67,7 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
     var newPw by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var submitting by remember { mutableStateOf(false) }
-    var serverError by remember { mutableStateOf<String?>(null) }
+    var serverError by remember { mutableStateOf<BtMessage?>(null) }
     var done by remember { mutableStateOf(false) }
 
     val validationError = PasswordPolicy.validateChange(current, newPw, confirm)
@@ -130,8 +133,9 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                 isError = confirm.isNotEmpty() && validationError == PasswordPolicy.Error.MISMATCH,
             )
 
-            // Inline validation / server messages.
-            val inlineMsg = serverError ?: when (validationError) {
+            // Inline validation / server messages. The server's refusal is resolved
+            // here, at the one point where a BtMessage becomes text the user reads.
+            val inlineMsg = serverError?.resolveWithDiagnostic() ?: when (validationError) {
                 PasswordPolicy.Error.TOO_SHORT -> if (newPw.isNotEmpty()) stringResource(R.string.bt_cp_err_too_short) else null
                 PasswordPolicy.Error.TOO_LONG -> stringResource(R.string.bt_cp_err_too_long)
                 PasswordPolicy.Error.MISMATCH -> if (confirm.isNotEmpty()) stringResource(R.string.bt_cp_err_mismatch) else null
@@ -157,7 +161,7 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                     scope.launch {
                         when (val r = repo.changePassword(current, newPw)) {
                             is BtResult.Ok -> { done = true; submitting = false; onBack() }
-                            is BtResult.Err -> { serverError = r.error.userMessage; submitting = false }
+                            is BtResult.Err -> { serverError = r.error.asMessage(); submitting = false }
                         }
                     }
                 },

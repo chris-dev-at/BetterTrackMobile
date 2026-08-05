@@ -17,15 +17,15 @@ import java.io.IOException
 class BtApiError(
     val httpStatus: Int,
     val code: String,
-    /** Human-readable, safe to surface (never a raw stack/string). */
-    val userMessage: String,
-    val details: JsonElement? = null,
     /**
-     * The server's own message, when the app substituted its own copy for
-     * [userMessage] (V5 mirror seam). Null when the two are the same.
+     * The server's (or the JVM's) OWN words — English, written for the web app,
+     * occasionally a raw exception string. **Never** the primary user-facing
+     * line: [code] is, via `BtErrorCopy`. This is a dim secondary diagnostic,
+     * surfaced only for codes the catalog does not cover (S6 P0-4).
      */
-    val serverMessage: String? = null,
-) : Exception("HTTP $httpStatus [$code] $userMessage") {
+    val diagnostic: String? = null,
+    val details: JsonElement? = null,
+) : Exception("HTTP $httpStatus [$code] ${diagnostic.orEmpty()}") {
 
     val isNetwork: Boolean get() = httpStatus == 0
     val isUnauthorized: Boolean get() = httpStatus == 401
@@ -92,6 +92,18 @@ class BtApiError(
         const val CASH_BUDGET_EXISTS = "CASH_BUDGET_EXISTS"
         /** 400 — a `regex` rule pattern the server's RE2 engine won't accept. */
         const val CASH_RULE_REGEX_UNSUPPORTED = "CASH_RULE_REGEX_UNSUPPORTED"
+
+        // ── Ledger invariants. The Drive-mode engine raises the SAME refusals
+        // the server does, so `VaultOpExecutor` parks them under these codes and
+        // a Drive-mode park reads identically to a server-mode one.
+        /** 400 — selling more of an asset than the portfolio holds. */
+        const val OVERSELL = "OVERSELL"
+        /** 400 — the cash source cannot cover this entry. */
+        const val INSUFFICIENT_CASH = "INSUFFICIENT_CASH"
+        /** 400 — the change would overdraw the cash ledger at a later date. */
+        const val CASH_LEDGER_WOULD_GO_NEGATIVE = "CASH_LEDGER_WOULD_GO_NEGATIVE"
+        /** 400 — the default watchlist cannot be renamed or deleted (also enforced app-side). */
+        const val WATCHLIST_DEFAULT_LOCKED = "WATCHLIST_DEFAULT_LOCKED"
     }
 
     /**
@@ -124,29 +136,6 @@ internal val MIRROR_SEAM_CONFLICT_CODES = setOf(
     BtApiError.Codes.CASH_MOVEMENT_NOT_EDITABLE,
 )
 
-/**
- * App-authored one-line explanations for the V5 mirror-seam refusals.
- *
- * The server messages for these are written for the web app and lean on
- * vocabulary ("mirror", "baseSeq", "derived row") that means nothing to a phone
- * user mid-edit, so the app substitutes its own copy — same discipline as the
- * queue's `MSG_*` constants in `SyncEngine`, and English for the same reason
- * (the error-code→DE-string map is a tracked backlog item, not this batch).
- *
- * Returns null for every other code, so nothing else is ever rewritten.
- */
-fun mirrorSeamMessageFor(code: String): String? = when (code) {
-    BtApiError.Codes.MIRROR_CONFLICT ->
-        "Someone else changed this shared entry first. Refresh and try again."
-    BtApiError.Codes.MIRROR_ROW_DELETED ->
-        "This entry was removed from the shared portfolio, so the change can't be applied."
-    BtApiError.Codes.CASH_MOVEMENT_NOT_EDITABLE ->
-        "This cash entry is created automatically from another entry — edit that one instead."
-    BtApiError.Codes.MIRROR_SYNC_STALLED ->
-        "The shared portfolio is still syncing. This will be retried automatically."
-    else -> null
-}
-
 /** Minimal success/failure result so callers never see raw exceptions. */
 sealed interface BtResult<out T> {
     data class Ok<T>(val value: T) : BtResult<T>
@@ -163,21 +152,20 @@ fun parseApiError(json: Json, httpStatus: Int, errorBody: ResponseBody?): BtApiE
     if (!raw.isNullOrBlank()) {
         try {
             val env = json.decodeFromString(ApiErrorEnvelope.serializer(), raw)
-            // V5: the mirror-seam refusals get app-authored copy (see
-            // [mirrorSeamMessageFor]); the server's own wording is preserved on
-            // [BtApiError.serverMessage] so nothing is lost for logs/diagnostics.
+            // The code IS the message: `BtErrorCopy` owns the sentence the user
+            // reads, in their language. The server's own wording rides along as
+            // the diagnostic so an UNMAPPED code still says something concrete.
             return BtApiError(
                 httpStatus = httpStatus,
                 code = env.error.code,
-                userMessage = mirrorSeamMessageFor(env.error.code) ?: env.error.message,
+                diagnostic = env.error.message,
                 details = env.error.details,
-                serverMessage = env.error.message,
             )
         } catch (_: Exception) {
             // Not the expected envelope — fall through to a generic mapping.
         }
     }
-    return BtApiError(httpStatus, BtApiError.Codes.UNKNOWN, "Request failed (HTTP $httpStatus).")
+    return BtApiError(httpStatus, BtErrorCopy.AppCodes.HTTP_FAILED, "HTTP $httpStatus")
 }
 
 /**
@@ -194,7 +182,7 @@ suspend fun <T : Any> apiCall(json: Json, call: suspend () -> Response<T>): BtRe
                 BtResult.Ok(body)
             } else {
                 BtResult.Err(
-                    BtApiError(resp.code(), BtApiError.Codes.UNKNOWN, "Empty response body."),
+                    BtApiError(resp.code(), BtErrorCopy.AppCodes.EMPTY_RESPONSE),
                 )
             }
         } else {
@@ -202,12 +190,8 @@ suspend fun <T : Any> apiCall(json: Json, call: suspend () -> Response<T>): BtRe
         }
     } catch (_: IOException) {
         BtResult.Err(
-            BtApiError(
-                0,
-                BtApiError.Codes.NETWORK,
-                "No connection. Check your network and try again.",
-            ),
+            BtApiError(0, BtApiError.Codes.NETWORK),
         )
     } catch (e: Exception) {
-        BtResult.Err(BtApiError(-1, BtApiError.Codes.UNKNOWN, e.message ?: "Unexpected error."))
+        BtResult.Err(BtApiError(-1, BtErrorCopy.AppCodes.UNEXPECTED, e.message))
     }

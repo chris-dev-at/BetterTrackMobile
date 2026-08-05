@@ -53,11 +53,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.IDEA_ADHOC_MAX
 import at.bettertrack.app.data.api.dto.IDEA_BENCHMARK_PRESETS
 import at.bettertrack.app.data.api.dto.IDEA_MODES
@@ -82,7 +84,15 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,12 +100,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -113,7 +117,7 @@ internal sealed interface IdeasUiState {
         val conglomerateNames: Map<String, String>,
     ) : IdeasUiState
 
-    data class Failed(val message: String) : IdeasUiState
+    data class Failed(val message: BtMessage) : IdeasUiState
 }
 
 @OptIn(FlowPreview::class)
@@ -173,7 +177,7 @@ internal class IdeasViewModel(
             }
             _state.value = when (ideas) {
                 is BtResult.Ok -> IdeasUiState.Loaded(ideas.value, names)
-                is BtResult.Err -> IdeasUiState.Failed(ideas.error.userMessage)
+                is BtResult.Err -> IdeasUiState.Failed(ideas.error.asMessage())
             }
         }
     }
@@ -186,7 +190,7 @@ internal class IdeasViewModel(
     }
 
     /** onDone(null) = created; onDone(message) = inline error, sheet stays open. */
-    fun create(name: String, thesis: String?, state: IdeaState, onDone: (String?) -> Unit) {
+    fun create(name: String, thesis: String?, state: IdeaState, onDone: (BtMessage?) -> Unit) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
@@ -198,7 +202,7 @@ internal class IdeasViewModel(
                     load()
                 }
 
-                is BtResult.Err -> onDone(r.error.userMessage)
+                is BtResult.Err -> onDone(r.error.asMessage())
             }
         }
     }
@@ -320,7 +324,7 @@ private fun IdeaRow(
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -413,7 +417,7 @@ private fun IdeaCreateSheet(vm: IdeasViewModel, onDismiss: () -> Unit) {
     var rebalance by rememberSaveable { mutableStateOf(IDEA_REBALANCES.first()) }
     var mode by rememberSaveable { mutableStateOf(IDEA_MODES.first()) }
     var benchmark by rememberSaveable { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<BtMessage?>(null) }
 
     val sourceValid = when (kind) {
         SourceKind.Conglomerate -> conglomerateId != null
@@ -657,7 +661,11 @@ private fun IdeaCreateSheet(vm: IdeasViewModel, onDismiss: () -> Unit) {
 
             error?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                Text(
+                    it.resolveWithDiagnostic(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
             }
 
             Spacer(Modifier.height(18.dp))

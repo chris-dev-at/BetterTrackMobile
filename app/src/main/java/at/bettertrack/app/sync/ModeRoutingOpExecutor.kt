@@ -1,5 +1,6 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.storage.BackendTag
 
 /**
@@ -40,7 +41,8 @@ class ModeRoutingOpExecutor(
  * — far worse — sending a vault-tagged mutation to the server.
  */
 object UnavailableVaultOpExecutor : OpExecutor {
-    override suspend fun execute(op: SyncOp): ExecResult = ExecResult.Unsupported(MSG_NO_VAULT)
+    override suspend fun execute(op: SyncOp): ExecResult =
+        ExecResult.Unsupported(BtErrorCopy.AppCodes.OP_NO_VAULT)
 
     const val MSG_NO_VAULT =
         "This change was saved for your Google Drive vault, which this version of the app can't open. " +

@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
@@ -58,6 +59,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.mirrorchain.ChainDetailSheet
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -79,7 +81,7 @@ fun PortfolioSwitcherSheet(
     selectedId: String?,
     isOnline: Boolean,
     busy: Boolean,
-    error: String?,
+    error: BtMessage?,
     /**
      * Ids whose value prefetch gave up (S6 P1-6). A row that is neither loaded
      * nor in this set is still in flight and shimmers.
@@ -160,7 +162,7 @@ fun PortfolioSwitcherSheet(
 
             if (error != null) {
                 Text(
-                    text = error,
+                    text = error.resolveWithDiagnostic(),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.loss,
                 )
@@ -611,8 +613,8 @@ private fun DeletePortfolioDialog(
 ) {
     val bt = BtTheme.colors
     var typed by rememberSaveable(portfolio.id) { mutableStateOf("") }
-    var inlineError by remember(portfolio.id) { mutableStateOf<String?>(null) }
-    val lastActiveMsg = stringResource(R.string.bt_switcher_delete_last_active_error)
+    var inlineError by remember(portfolio.id) { mutableStateOf<BtMessage?>(null) }
+    val lastActiveMsg = BtMessage(R.string.bt_switcher_delete_last_active_error)
     val canConfirm = deleteConfirmationMatches(portfolio.name, typed) && !busy
 
     AlertDialog(
@@ -647,10 +649,10 @@ private fun DeletePortfolioDialog(
                         errorLabelColor = bt.loss,
                     ),
                 )
-                if (inlineError != null) {
+                inlineError?.let { shown ->
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = inlineError!!,
+                        text = shown.resolveWithDiagnostic(),
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.loss,
                     )

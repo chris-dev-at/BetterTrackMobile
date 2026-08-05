@@ -61,27 +61,30 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtErrorCopy
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CashBudgetProgressDto
-import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.cash.CashClassificationRepository
 import at.bettertrack.app.data.cash.decodeTagIds
+import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.CashMovementEntity
 import at.bettertrack.app.data.db.CashSourceEntity
 import at.bettertrack.app.data.db.CashTagEntity
+import at.bettertrack.app.data.db.SyncOpEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.CashOpPayload
@@ -106,6 +109,8 @@ import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.rememberParkReason
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
@@ -116,6 +121,12 @@ import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -130,11 +141,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.YearMonth
-import java.util.Locale
 
 /**
  * The Step-9 cash screen (spec §6.3): Main + named sources with per-source
@@ -152,7 +158,7 @@ import java.util.Locale
  * row is derived from a parent (trade, dividend, tax settlement, transfer) and
  * must be corrected there — from ordinary failures like an insufficient balance.
  */
-data class CashCorrectionNotice(val notEditable: Boolean, val message: String)
+data class CashCorrectionNotice(val notEditable: Boolean, val message: BtMessage)
 
 /** Which sheet is open. */
 /**
@@ -258,14 +264,14 @@ class CashViewModel(
     /** Busy/error state of the online-only source-management actions. */
     private val _manageBusy = MutableStateFlow(false)
     val manageBusy: StateFlow<Boolean> = _manageBusy.asStateFlow()
-    private val _manageError = MutableStateFlow<String?>(null)
-    val manageError: StateFlow<String?> = _manageError.asStateFlow()
+    private val _manageError = MutableStateFlow<BtMessage?>(null)
+    val manageError: StateFlow<BtMessage?> = _manageError.asStateFlow()
 
     /** Sheet submission state. */
     private val _submitting = MutableStateFlow(false)
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
-    private val _sheetError = MutableStateFlow<String?>(null)
-    val sheetError: StateFlow<String?> = _sheetError.asStateFlow()
+    private val _sheetError = MutableStateFlow<BtMessage?>(null)
+    val sheetError: StateFlow<BtMessage?> = _sheetError.asStateFlow()
 
     private var refreshedOnce = false
 
@@ -324,7 +330,7 @@ class CashViewModel(
             _manageBusy.value = true
             _manageError.value = null
             val r = action()
-            if (r is BtResult.Err) _manageError.value = r.error.userMessage
+            if (r is BtResult.Err) _manageError.value = r.error.asMessage()
             _manageBusy.value = false
             onDone(r is BtResult.Ok)
         }
@@ -566,13 +572,14 @@ class CashViewModel(
             val r = action()
             if (r is BtResult.Err) {
                 _correctionNotice.value = CashCorrectionNotice(
-                    // The server distinguishes four "why not" cases behind this one
-                    // code (trade / dividend / transfer / other). Its message names
-                    // the actual parent, so it is more useful than anything the app
-                    // could infer — carry it verbatim under our own heading.
+                    // The server folds four "why not" cases (trade / dividend /
+                    // transfer / other) behind this one code, and only its English
+                    // sentence named which. The dialog now answers with the app's
+                    // translated copy plus its own hint — a specific sentence in a
+                    // language the user does not read is not the better trade.
                     notEditable = r.error.code == at.bettertrack.app.data.api.BtApiError.Codes
                         .CASH_MOVEMENT_NOT_EDITABLE,
-                    message = r.error.userMessage,
+                    message = r.error.asMessage(),
                 )
             }
             _correctionBusy.value = false
@@ -671,7 +678,7 @@ class CashViewModel(
         val after = db.syncOpDao().getById(opId)
         when (after?.status) {
             OpStatus.NEEDS_ATTENTION.wire -> {
-                _sheetError.value = after.serverError ?: "BetterTrack rejected this entry."
+                _sheetError.value = after.rejectionMessage()
                 onDone(false)
             }
 
@@ -688,6 +695,19 @@ class CashViewModel(
     suspend fun loadPendingRow(opId: Long): PendingCashRow? =
         db.syncOpDao().getById(opId)?.let { decodePendingCashRow(it, json) }
 }
+
+/**
+ * Why the queue parked the op the sheet just submitted, as app-owned copy.
+ *
+ * The row stores a CODE since DB v10, so the sentence is resolved from resources
+ * here rather than replayed from whatever English the server sent. A row parked
+ * before that migration has no code: its prose rides along as the diagnostic so
+ * the sheet still says something true, just untranslated.
+ */
+private fun SyncOpEntity.rejectionMessage(): BtMessage = BtMessage(
+    res = BtErrorCopy.resFor(errorCode) ?: R.string.bt_err_app_rejected,
+    diagnostic = if (errorCode == null) serverError else null,
+)
 
 // ═════════════════════════════════ UI ═══════════════════════════════════════
 
@@ -716,7 +736,7 @@ fun CashScreen(
     }
 
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val portfolioName by vm.portfolioName.collectAsStateWithLifecycle()
     val totalCashEur by vm.totalCashEur.collectAsStateWithLifecycle()
@@ -1065,10 +1085,10 @@ fun CashScreen(
                             )
                         }
                     }
-                    if (manageError != null) {
+                    manageError?.let { message ->
                         item(key = "manage-error") {
                             Text(
-                                text = manageError!!,
+                                text = message.resolveWithDiagnostic(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.loss,
                             )
@@ -1359,10 +1379,7 @@ fun CashScreen(
                             color = bt.textSecondary,
                         )
                     }
-                    // The server's own sentence names the actual parent
-                    // ("belongs to a trade", "…to a dividend"), which is more
-                    // specific than anything the app could work out.
-                    Text(text = notice.message, color = bt.textMuted)
+                    Text(text = notice.message.resolveWithDiagnostic(), color = bt.textMuted)
                 }
             },
             confirmButton = {
@@ -1933,10 +1950,14 @@ private fun PendingCashRowCard(
                     showSign = row.type != OpType.CASH_TRANSFER,
                 )
             }
-            if (row.status == PendingUiStatus.NEEDS_ATTENTION && row.serverError != null) {
+            // Resolved from the stored code at render time, so a row parked in
+            // another language still reads in the phone's current one.
+            if (row.status == PendingUiStatus.NEEDS_ATTENTION &&
+                (row.errorCode != null || row.serverError != null)
+            ) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = row.serverError,
+                    text = rememberParkReason(row.errorCode, row.serverError),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.lossSoft,
                     maxLines = 2,
@@ -2187,7 +2208,7 @@ private fun CashEntrySheet(
                     color = bt.textMuted,
                 )
             }
-            sheetError?.let { RejectionText(it) }
+            sheetError?.let { RejectionText(it.resolveWithDiagnostic()) }
 
             SheetNumberField(
                 value = amountText,
@@ -2363,7 +2384,7 @@ private fun TransferSheet(
                 style = MaterialTheme.typography.titleMedium,
                 color = bt.textPrimary,
             )
-            sheetError?.let { RejectionText(it) }
+            sheetError?.let { RejectionText(it.resolveWithDiagnostic()) }
 
             SheetNumberField(
                 value = amountText,

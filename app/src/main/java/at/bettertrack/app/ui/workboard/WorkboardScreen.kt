@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
@@ -53,21 +54,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.AlertKind
 import at.bettertrack.app.data.repo.AlertStatus
 import at.bettertrack.app.data.repo.AlertsRepository
@@ -83,11 +84,12 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.ideas.IdeasSection
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
-import java.util.Locale
+import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -232,7 +234,7 @@ sealed interface AlertsState {
     data object Loading : AlertsState
     data class Loaded(val items: List<PriceAlert>) : AlertsState
     data object OfflineState : AlertsState
-    data class Error(val message: String) : AlertsState
+    data class Error(val message: BtMessage) : AlertsState
 }
 
 @OptIn(FlowPreview::class)
@@ -286,7 +288,7 @@ class AlertsViewModel(
                 is BtResult.Ok -> AlertsState.Loaded(r.value)
                 is BtResult.Err ->
                     if (r.error.isNetwork) AlertsState.OfflineState
-                    else AlertsState.Error(r.error.userMessage)
+                    else AlertsState.Error(r.error.asMessage())
             }
         }
     }
@@ -319,17 +321,17 @@ class AlertsViewModel(
         kind: AlertKind,
         threshold: Double,
         repeat: Boolean,
-        onDone: (String?) -> Unit,
+        onDone: (BtMessage?) -> Unit,
     ) = mutate(onDone) { repo.create(assetId, kind, threshold, repeat) }
 
-    fun saveEdit(id: String, threshold: Double?, repeat: Boolean?, onDone: (String?) -> Unit) =
+    fun saveEdit(id: String, threshold: Double?, repeat: Boolean?, onDone: (BtMessage?) -> Unit) =
         mutate(onDone) { repo.update(id, threshold, repeat) }
 
-    fun delete(id: String, onDone: (String?) -> Unit) = mutate(onDone) { repo.delete(id) }
+    fun delete(id: String, onDone: (BtMessage?) -> Unit) = mutate(onDone) { repo.delete(id) }
 
     fun rearm(id: String) = mutate(onDone = {}) { repo.rearm(id) }
 
-    private fun mutate(onDone: (String?) -> Unit, action: suspend () -> BtResult<*>) {
+    private fun mutate(onDone: (BtMessage?) -> Unit, action: suspend () -> BtResult<*>) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
@@ -340,7 +342,7 @@ class AlertsViewModel(
                     onDone(null)
                     load()
                 }
-                is BtResult.Err -> onDone(r.error.userMessage)
+                is BtResult.Err -> onDone(r.error.asMessage())
             }
         }
     }
@@ -579,16 +581,23 @@ private fun AlertRow(
     }
 }
 
+/**
+ * S6 P2-20: gold is the app's ONE accent, so it belongs to the state that wants
+ * attention — the alert that FIRED. An armed alert is merely watching; it is the
+ * resting state of every row on this screen and reads neutral. The previous
+ * mapping had it backwards, and it also spent the gain green on "triggered",
+ * which says nothing about whether the move was good news.
+ */
 @Composable
 private fun AlertStatusBadge(status: AlertStatus) {
     when (status) {
         AlertStatus.Active -> BtBadge(
             text = stringResource(R.string.bt_alert_status_active),
-            kind = BtBadgeKind.Gold,
+            kind = BtBadgeKind.Neutral,
         )
         AlertStatus.Triggered -> BtBadge(
             text = stringResource(R.string.bt_alert_status_triggered),
-            kind = BtBadgeKind.Gain,
+            kind = BtBadgeKind.Gold,
         )
         AlertStatus.Disabled -> BtBadge(
             text = stringResource(R.string.bt_alert_status_disabled),
@@ -600,7 +609,7 @@ private fun AlertStatusBadge(status: AlertStatus) {
 /** Localized "Above $150" / "Rises 5% from $120" / "Falls 3% in a day" line. */
 @Composable
 private fun conditionLine(alert: PriceAlert): String {
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val pct = formatAlertNumber(alert.threshold, locale)
     return when (alert.kind) {
         AlertKind.PriceAbove -> stringResource(
@@ -646,7 +655,7 @@ private fun AlertCreateSheet(
     onDismiss: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val query by vm.query.collectAsStateWithLifecycle()
@@ -657,7 +666,7 @@ private fun AlertCreateSheet(
     var kind by remember { mutableStateOf(AlertKind.PriceAbove) }
     var thresholdRaw by remember { mutableStateOf("") }
     var repeat by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<BtMessage?>(null) }
 
     val threshold = parseAlertThreshold(thresholdRaw)
     val valid = picked != null && alertThresholdValid(kind, threshold)
@@ -871,7 +880,11 @@ private fun AlertCreateSheet(
 
                 error?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                    Text(
+                        it.resolveWithDiagnostic(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.loss,
+                    )
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -900,18 +913,18 @@ private fun AlertCreateSheet(
 private fun AlertEditSheet(
     alert: PriceAlert,
     busy: Boolean,
-    onSave: (threshold: Double?, repeat: Boolean?, onErr: (String) -> Unit) -> Unit,
+    onSave: (threshold: Double?, repeat: Boolean?, onErr: (BtMessage) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var thresholdRaw by remember {
         mutableStateOf(formatAlertNumber(alert.threshold, locale))
     }
     var repeat by remember { mutableStateOf(alert.repeat) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<BtMessage?>(null) }
 
     val threshold = parseAlertThreshold(thresholdRaw)
     val valid = alertThresholdValid(alert.kind, threshold)
@@ -988,7 +1001,11 @@ private fun AlertEditSheet(
 
             error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                Text(
+                    it.resolveWithDiagnostic(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
             }
 
             Spacer(Modifier.height(14.dp))

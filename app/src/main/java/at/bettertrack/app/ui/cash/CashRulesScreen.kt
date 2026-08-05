@@ -33,8 +33,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -51,7 +49,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -62,7 +59,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CASH_RULE_PATTERN_MAX
 import at.bettertrack.app.data.api.dto.CashRuleDto
 import at.bettertrack.app.data.api.dto.CashRuleMatchTypes
@@ -78,6 +77,8 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -118,8 +119,8 @@ data class CashRuleDraft(
 data class CashRuleApplyOutcome(
     /** Movements that gained a tag; null when the run failed. */
     val movementsTagged: Int?,
-    /** The server's own sentence when the run failed. */
-    val errorMessage: String?,
+    /** The app's sentence for the refusal when the run failed. */
+    val errorMessage: BtMessage?,
 )
 
 /** Upper bound the platform accepts for a rule's priority (0..10000). */
@@ -177,14 +178,14 @@ class CashRulesViewModel(
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
-    private val _loadError = MutableStateFlow<String?>(null)
-    val loadError: StateFlow<String?> = _loadError.asStateFlow()
+    private val _loadError = MutableStateFlow<BtMessage?>(null)
+    val loadError: StateFlow<BtMessage?> = _loadError.asStateFlow()
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
-    private val _writeError = MutableStateFlow<String?>(null)
-    val writeError: StateFlow<String?> = _writeError.asStateFlow()
+    private val _writeError = MutableStateFlow<BtMessage?>(null)
+    val writeError: StateFlow<BtMessage?> = _writeError.asStateFlow()
 
     /** Ids whose enabled-switch is mid-flight (the row's switch goes inert). */
     private val _togglingIds = MutableStateFlow<Set<String>>(emptySet())
@@ -213,7 +214,7 @@ class CashRulesViewModel(
                     _loadError.value = null
                 }
 
-                is BtResult.Err -> _loadError.value = r.error.userMessage
+                is BtResult.Err -> _loadError.value = r.error.asMessage()
             }
             _loading.value = false
         }
@@ -240,7 +241,7 @@ class CashRulesViewModel(
                 // silently stays flipped would misdescribe the server.
                 is BtResult.Err -> {
                     _rules.value = toggleCashRuleEnabled(_rules.value, rule.id, rule.enabled)
-                    _writeError.value = r.error.userMessage
+                    _writeError.value = r.error.asMessage()
                 }
             }
             _togglingIds.value = _togglingIds.value - rule.id
@@ -280,7 +281,7 @@ class CashRulesViewModel(
             _applying.value = true
             _applyOutcome.value = when (val r = repo.applyRules()) {
                 is BtResult.Ok -> CashRuleApplyOutcome(movementsTagged = r.value, errorMessage = null)
-                is BtResult.Err -> CashRuleApplyOutcome(movementsTagged = null, errorMessage = r.error.userMessage)
+                is BtResult.Err -> CashRuleApplyOutcome(movementsTagged = null, errorMessage = r.error.asMessage())
             }
             _applying.value = false
         }
@@ -298,7 +299,7 @@ class CashRulesViewModel(
             _writeError.value = null
             val r = action()
             if (r is BtResult.Err) {
-                _writeError.value = r.error.userMessage
+                _writeError.value = r.error.asMessage()
             } else {
                 when (val reread = repo.rules()) {
                     is BtResult.Ok -> _rules.value = reread.value
@@ -330,7 +331,9 @@ fun CashRulesScreen(onBack: () -> Unit) {
     val rules by vm.rules.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
-    val loadError by vm.loadError.collectAsStateWithLifecycle()
+    // Read as a plain val rather than a `by` delegate: the error state takes the
+    // message itself, and a delegated property cannot smart-cast to non-null.
+    val loadError = vm.loadError.collectAsStateWithLifecycle().value
     val busy by vm.busy.collectAsStateWithLifecycle()
     val writeError by vm.writeError.collectAsStateWithLifecycle()
     val togglingIds by vm.togglingIds.collectAsStateWithLifecycle()
@@ -342,28 +345,31 @@ fun CashRulesScreen(onBack: () -> Unit) {
     var sheet by remember { mutableStateOf<CashRuleSheetTarget?>(null) }
     var deleteTarget by remember { mutableStateOf<CashRuleDto?>(null) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    // Captured in composition, not inside the effect: the controller is read
+    // from a CompositionLocal, and the app-level host in AppShell is the only
+    // snackbar in the app (S6 P1-9 — this screen used to run its own).
+    val snackbar = LocalBtSnackbar.current
     // The apply result is a MOVEMENT COUNT, not a label count: a movement three
     // tags matched is one movement. Zero is its own designed sentence — an
     // idempotent second run reporting 0 is correct, not a failure — so it never
-    // renders as an error.
-    val outcome = applyOutcome
-    val tagged = outcome?.movementsTagged ?: 0
-    val applyMessage: String? = when {
-        outcome == null -> null
-        outcome.errorMessage != null -> outcome.errorMessage
-        tagged > 0 -> pluralStringResource(R.plurals.bt_rules_apply_done, tagged, tagged)
-        else -> stringResource(R.string.bt_rules_apply_none)
-    }
+    // renders as an error. The count goes to the plural resource as a NUMBER;
+    // building the sentence here would get German's one/other split wrong.
     LaunchedEffect(applyOutcome) {
-        val message = applyMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
+        val outcome = applyOutcome ?: return@LaunchedEffect
+        val tagged = outcome.movementsTagged ?: 0
+        when {
+            outcome.errorMessage != null ->
+                // Re-applying rules is idempotent, so Retry is always safe here.
+                snackbar.showError(outcome.errorMessage, onRetry = { vm.applyNow() })
+
+            tagged > 0 -> snackbar.showQuantity(R.plurals.bt_rules_apply_done, tagged)
+            else -> snackbar.show(R.string.bt_rules_apply_none)
+        }
         vm.consumeApplyOutcome()
     }
 
     Scaffold(
         containerColor = bt.bg,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -435,7 +441,7 @@ fun CashRulesScreen(onBack: () -> Unit) {
                     loadError?.let { message ->
                         item(key = "load-error") {
                             Text(
-                                text = message,
+                                text = message.resolveWithDiagnostic(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.lossSoft,
                             )
@@ -444,7 +450,7 @@ fun CashRulesScreen(onBack: () -> Unit) {
                     writeError?.let { message ->
                         item(key = "write-error") {
                             Text(
-                                text = message,
+                                text = message.resolveWithDiagnostic(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.lossSoft,
                             )
@@ -673,7 +679,7 @@ private fun CashRuleSheet(
     initial: CashRuleDraft,
     tags: List<CashTagEntity>,
     busy: Boolean,
-    error: String?,
+    error: BtMessage?,
     onSubmit: (CashRuleDraft) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -837,7 +843,7 @@ private fun CashRuleSheet(
 
             error?.let {
                 Text(
-                    text = it,
+                    text = it.resolveWithDiagnostic(),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.lossSoft,
                 )

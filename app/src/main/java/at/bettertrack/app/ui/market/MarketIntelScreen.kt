@@ -36,7 +36,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +45,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.DividendCalendarEntryDto
 import at.bettertrack.app.data.api.dto.DividendCalendarResponse
 import at.bettertrack.app.data.api.dto.DividendProjectionResponse
@@ -67,13 +68,14 @@ import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * V5 S2c-2 — **portfolio-wide market intel**: what's about to happen across
@@ -118,7 +120,7 @@ sealed interface IntelBlockUi<out T> {
     data object Unavailable : IntelBlockUi<Nothing>
 
     /** The request failed (offline / 401 / paranoid 403) — render a retry. */
-    data class Failed(val message: String) : IntelBlockUi<Nothing>
+    data class Failed(val message: BtMessage) : IntelBlockUi<Nothing>
 }
 
 /**
@@ -137,7 +139,7 @@ fun <T : Any> intelBlockOf(result: BtResult<T>, available: (T) -> Boolean): Inte
             IntelBlockUi.Unavailable
         }
 
-        is BtResult.Err -> IntelBlockUi.Failed(result.error.userMessage)
+        is BtResult.Err -> IntelBlockUi.Failed(result.error.asMessage())
     }
 
 /**
@@ -259,7 +261,7 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
         MarketIntelViewModel(AppGraph.marketIntelRepository)
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val state by vm.state.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
 
@@ -373,7 +375,7 @@ private fun <T> LazyListScope.intelSection(
     when (state) {
         IntelBlockUi.Loading -> item(key = "$key-loading") { IntelRowsSkeleton() }
         is IntelBlockUi.Failed -> item(key = "$key-error") {
-            IntelInlineError(text = state.message, onRetry = onRetry)
+            IntelInlineError(message = state.message, onRetry = onRetry)
         }
 
         is IntelBlockUi.Ready -> rows(state.value)

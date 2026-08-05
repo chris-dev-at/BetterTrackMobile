@@ -50,12 +50,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.COMMENT_BODY_MAX
 import at.bettertrack.app.data.repo.ItemComment
 import at.bettertrack.app.data.repo.REACTION_EMOJIS
@@ -72,11 +74,11 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import java.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.Instant
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Pure, Compose-free logic
@@ -172,7 +174,7 @@ data class ItemThreadUi(
     val loading: Boolean = true,
     /** 404 — the item is no longer shared with me. A state, never an error. */
     val notShared: Boolean = false,
-    val error: String? = null,
+    val error: BtMessage? = null,
     val reactions: List<ReactionTally> = emptyList(),
     val comments: List<ItemComment> = emptyList(),
     val sending: Boolean = false,
@@ -214,7 +216,7 @@ class ItemThreadViewModel(
                 ThreadOutcome.NotShared -> _state.value = ItemThreadUi(loading = false, notShared = true)
                 is ThreadOutcome.Failed -> _state.value = _state.value.copy(
                     loading = false,
-                    error = r.error.userMessage,
+                    error = r.error.asMessage(),
                 )
             }
         }
@@ -330,7 +332,7 @@ class ItemThreadViewModel(
         when {
             classifySocialWriteFailure(error) == SocialWriteFailure.RateLimited ->
                 SocialToast.Res(R.string.bt_thread_rate_limited)
-            error.isNetwork || fallback == null -> SocialToast.Raw(error.userMessage)
+            error.isNetwork || fallback == null -> SocialToast.Failure(error.asMessage())
             else -> SocialToast.Res(fallback)
         }
 }
@@ -357,7 +359,9 @@ fun ItemThreadSection(kind: ShareableKind, subjectId: String, modifier: Modifier
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    // A `by` delegate never smart-casts, so the nullable load error is read into
+    // a local before the branch that hands it to BtErrorState.
+    val loadError = ui.error
 
     var input by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf<ItemComment?>(null) }
@@ -365,13 +369,9 @@ fun ItemThreadSection(kind: ShareableKind, subjectId: String, modifier: Modifier
     // comment is a choice; six chips under every comment is wallpaper.
     var pickerFor by remember { mutableStateOf<String?>(null) }
 
-    val toastText = toast?.resolve()
-    LaunchedEffect(toast) {
-        toastText?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
-            vm.consumeToast()
-        }
-    }
+    // One feedback idiom (S6 P1-9): the same app-level snackbar every other
+    // social surface uses, instead of this section's own system Toast.
+    SocialToastEffect(toast) { vm.consumeToast() }
 
     Column(modifier = modifier.fillMaxWidth()) {
         when {
@@ -386,9 +386,9 @@ fun ItemThreadSection(kind: ShareableKind, subjectId: String, modifier: Modifier
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
             )
 
-            ui.error != null && ui.isBlank -> BtErrorState(
+            loadError != null && ui.isBlank -> BtErrorState(
                 title = stringResource(R.string.bt_thread_error_title),
-                message = ui.error,
+                message = loadError,
                 onRetry = { vm.load() },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             )

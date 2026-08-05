@@ -43,7 +43,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,13 +50,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtErrorCopy
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.CustomAssetEntity
+import at.bettertrack.app.data.db.SyncOpEntity
 import at.bettertrack.app.data.db.ValuePointEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
@@ -77,6 +80,8 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.rememberParkReason
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.formatTxDate
@@ -84,6 +89,10 @@ import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -93,9 +102,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Locale
 
 /**
  * Custom-asset detail (Step 10, §6.4): the value-point step-line chart, the
@@ -130,8 +136,8 @@ class CustomAssetDetailViewModel(
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<BtMessage?>(null)
+    val error: StateFlow<BtMessage?> = _error.asStateFlow()
 
     init {
         refresh()
@@ -178,7 +184,7 @@ class CustomAssetDetailViewModel(
             val after = db.syncOpDao().getById(op.id)
             when (after?.status) {
                 OpStatus.NEEDS_ATTENTION.wire ->
-                    _error.value = after.serverError ?: "BetterTrack rejected this value."
+                    _error.value = after.rejectionMessage()
 
                 OpStatus.DONE.wire ->
                     // Synced immediately (online): pull the persisted point into
@@ -204,7 +210,7 @@ class CustomAssetDetailViewModel(
             _error.value = null
             val remaining = points.value.filter { it.date != date }
             val r = repo.putValuePoints(assetId, remaining)
-            if (r is BtResult.Err) _error.value = r.error.userMessage
+            if (r is BtResult.Err) _error.value = r.error.asMessage()
             _busy.value = false
             onDone(r is BtResult.Ok)
         }
@@ -216,7 +222,7 @@ class CustomAssetDetailViewModel(
             _busy.value = true
             _error.value = null
             val r = repo.updateCustomAsset(assetId, name, category, smoothing)
-            if (r is BtResult.Err) _error.value = r.error.userMessage
+            if (r is BtResult.Err) _error.value = r.error.asMessage()
             _busy.value = false
             onDone(r is BtResult.Ok)
         }
@@ -228,7 +234,7 @@ class CustomAssetDetailViewModel(
             _busy.value = true
             _error.value = null
             val r = repo.deleteCustomAsset(assetId)
-            if (r is BtResult.Err) _error.value = r.error.userMessage
+            if (r is BtResult.Err) _error.value = r.error.asMessage()
             _busy.value = false
             onDone(r is BtResult.Ok)
         }
@@ -238,6 +244,18 @@ class CustomAssetDetailViewModel(
         _error.value = null
     }
 }
+
+/**
+ * Why the queue parked the value point just submitted, as app-owned copy.
+ *
+ * The code is what resolves to the sentence (DB v10 onwards), so the sheet's
+ * refusal is translated. A pre-migration row has no code — its English prose
+ * rides along as the diagnostic rather than being thrown away.
+ */
+private fun SyncOpEntity.rejectionMessage(): BtMessage = BtMessage(
+    res = BtErrorCopy.resFor(errorCode) ?: R.string.bt_err_app_rejected,
+    diagnostic = if (errorCode == null) serverError else null,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -257,7 +275,7 @@ fun CustomAssetDetailScreen(
         )
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val asset by vm.asset.collectAsStateWithLifecycle()
     val points by vm.points.collectAsStateWithLifecycle()
     val pending by vm.pending.collectAsStateWithLifecycle()
@@ -426,9 +444,14 @@ fun CustomAssetDetailScreen(
                                         Spacer(Modifier.width(8.dp))
                                         PendingStatusBadge(p.status)
                                     }
-                                    if (p.status == PendingUiStatus.NEEDS_ATTENTION && p.serverError != null) {
+                                    // Resolved from the stored code, so the reason
+                                    // follows the phone's language, not the one the
+                                    // op happened to park in.
+                                    if (p.status == PendingUiStatus.NEEDS_ATTENTION &&
+                                        (p.errorCode != null || p.serverError != null)
+                                    ) {
                                         Text(
-                                            text = p.serverError,
+                                            text = rememberParkReason(p.errorCode, p.serverError),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = bt.lossSoft,
                                         )
@@ -569,7 +592,7 @@ fun CustomAssetDetailScreen(
 @Composable
 private fun UpdateValueSheet(
     busy: Boolean,
-    error: String?,
+    error: BtMessage?,
     locale: Locale,
     onSubmit: (LocalDate, Double) -> Unit,
     onDismiss: () -> Unit,
@@ -630,7 +653,11 @@ private fun UpdateValueSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (error != null) {
-                Text(text = error, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                Text(
+                    text = error.resolveWithDiagnostic(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
             }
             BtPrimaryButton(
                 text = stringResource(R.string.bt_custom_record_value),

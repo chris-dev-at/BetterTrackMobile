@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -124,6 +125,9 @@ import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
 import at.bettertrack.app.navigation.WorkboardTabRoute
 import at.bettertrack.app.ui.components.BtBadgeOverlay
+import at.bettertrack.app.ui.components.BtSnackbarHost
+import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.rememberBtSnackbarState
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
@@ -326,12 +330,18 @@ fun BtApp() {
         if (showSocialSurfaces) AppGraph.chatRepository.refreshConversations()
     }
 
+    // One feedback idiom for the whole app (S6 P1-9). Hoisted here so every
+    // screen — top-level or pushed, inside a sheet or not — answers the same
+    // way, in the app's own dark/gold styling, with room for a Retry action.
+    val snackbar = rememberBtSnackbarState()
+
     Scaffold(
         containerColor = bt.bg,
         // The bars below consume their own system-bar insets; full-screen
         // destinations (gallery, settings, placeholders) run their own Scaffold.
         // Zeroing here prevents double status-bar padding on those routes.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { BtSnackbarHost(snackbar.hostState) },
         topBar = {
             if (isTopLevel) {
                 // Portfolio-tab: show the current-portfolio selector beside the
@@ -395,6 +405,7 @@ fun BtApp() {
             }
         },
     ) { innerPadding ->
+        CompositionLocalProvider(LocalBtSnackbar provides snackbar.controller) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -413,6 +424,7 @@ fun BtApp() {
                 )
             }
             BtNavHost(navController, navigateDeepLink)
+        }
         }
     }
 }

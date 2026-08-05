@@ -54,7 +54,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.SharedConglomerateSummary
 import at.bettertrack.app.data.repo.SharedPortfolioSummary
 import at.bettertrack.app.data.repo.SharedWatchlistSummary
@@ -75,7 +77,7 @@ import kotlinx.coroutines.launch
 
 data class FriendOverviewUi(
     val loading: Boolean = true,
-    val error: String? = null,
+    val error: BtMessage? = null,
     val since: String? = null,
     val stillFriend: Boolean = true,
     val portfolios: List<SharedPortfolioSummary> = emptyList(),
@@ -114,7 +116,7 @@ class FriendOverviewViewModel(
             val shared = (sharedR as? BtResult.Ok)?.value
             val err = listOf(friendsR, sharedR).filterIsInstance<BtResult.Err>().firstOrNull { !it.error.isNetwork }
             if (shared == null) {
-                _state.value = _state.value.copy(loading = false, error = err?.error?.userMessage)
+                _state.value = _state.value.copy(loading = false, error = err?.error?.asMessage())
                 return@launch
             }
             val ps = shared.portfolios.filter { it.ownerId == friendUserId }
@@ -148,7 +150,9 @@ class FriendOverviewViewModel(
                 is BtResult.Ok -> _toast.value = SocialToast.Res(if (next) R.string.bt_social_toast_alerts_on else R.string.bt_social_toast_alerts_off)
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(activity = _state.value.activity + (subjectId to current))
-                    _toast.value = SocialToast.Raw(r.error.userMessage)
+                    // The switch has already sprung back, so "Try again" re-issues
+                    // the same intent the user expressed by flipping it.
+                    _toast.value = SocialToast.Failure(r.error.asMessage(), onRetry = { toggleActivity(kind, subjectId) })
                 }
             }
         }
@@ -161,7 +165,9 @@ class FriendOverviewViewModel(
                 is BtResult.Ok -> _state.value = _state.value.copy(removing = false, removed = true)
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(removing = false)
-                    _toast.value = SocialToast.Raw(r.error.userMessage)
+                    // The confirmation dialog is already behind us and the screen
+                    // is still open, so re-issuing is the whole retry.
+                    _toast.value = SocialToast.Failure(r.error.asMessage(), onRetry = { removeFriend() })
                 }
             }
         }
@@ -187,14 +193,10 @@ fun FriendOverviewScreen(
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
-    val context = androidx.compose.ui.platform.LocalContext.current
     var confirmRemove by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(ui.removed) { if (ui.removed) onBack() }
-    val toastText = toast?.let { it.resolve() }
-    androidx.compose.runtime.LaunchedEffect(toast) {
-        toastText?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show(); vm.consumeToast() }
-    }
+    SocialToastEffect(toast) { vm.consumeToast() }
 
     Scaffold(
         containerColor = bt.bg,

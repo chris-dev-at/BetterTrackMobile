@@ -78,7 +78,13 @@ data class SyncOp(
     val status: OpStatus,
     val attemptCount: Int,
     val nextAttemptAtMs: Long,
+    /** Diagnostic half of a park reason (or the legacy English prose). */
     val serverError: String?,
+    /**
+     * Stable code behind a park reason; null for rows parked before DB v10,
+     * which fall back to rendering [serverError] verbatim.
+     */
+    val errorCode: String? = null,
     val serverResultJson: String?,
     val accountKey: String,
     val createdAtMs: Long,
@@ -204,8 +210,15 @@ sealed interface ExecResult {
     /** 2xx — provably applied. */
     data class Success(val serverResultJson: String?) : ExecResult
 
-    /** Business 4xx — provably NOT applied; the server's human-readable reason. */
-    data class Rejected(val message: String) : ExecResult
+    /**
+     * Business 4xx — provably NOT applied.
+     *
+     * Carries the error CODE, not a sentence (S6 P0-4): the reason is stored in
+     * the queue and may be read weeks later, on a device whose language has
+     * changed since. [diagnostic] is the server's own words, kept for the codes
+     * the app has no copy for, or the format argument for the codes that take one.
+     */
+    data class Rejected(val code: String, val diagnostic: String? = null) : ExecResult
 
     /** 408/429 — provably not applied, worth retrying with backoff. */
     data class RetryableNotApplied(val message: String) : ExecResult
@@ -221,7 +234,7 @@ sealed interface ExecResult {
     data object AuthFailure : ExecResult
 
     /** The platform has no endpoint for this op yet — parked as needs-attention. */
-    data class Unsupported(val message: String) : ExecResult
+    data class Unsupported(val code: String, val diagnostic: String? = null) : ExecResult
 
     /**
      * 400 `IDEMPOTENCY_KEY_INVALID` (platform #432): the server rejected the

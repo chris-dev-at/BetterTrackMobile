@@ -321,9 +321,13 @@ class VaultOpExecutorTest {
         )
 
         val rejected = result as? ExecResult.Rejected ?: throw AssertionError("got $result")
+        // The user-facing sentence now comes from the OVERSELL catalogue entry;
+        // the engine's own words are kept as the diagnostic so the specific
+        // shortfall is not lost for support/debugging.
+        assertEquals(at.bettertrack.app.data.api.BtApiError.Codes.OVERSELL, rejected.code)
         assertTrue(
-            "the engine's own sentence reaches the needs-attention UI: ${rejected.message}",
-            rejected.message.contains("only 3 held"),
+            "the engine's own sentence survives as the diagnostic: ${rejected.diagnostic}",
+            rejected.diagnostic.orEmpty().contains("only 3 held"),
         )
         assertEquals("still one transaction", 1, store.snapshot().graph.live(VaultKinds.TRANSACTION).size)
         assertEquals("the CAS token did not move", versionBefore, store.vaultVersion())
@@ -357,9 +361,10 @@ class VaultOpExecutorTest {
         )
 
         val rejected = result as? ExecResult.Rejected ?: throw AssertionError("got $result")
+        assertEquals(at.bettertrack.app.data.api.BtApiError.Codes.INSUFFICIENT_CASH, rejected.code)
         assertTrue(
-            "the shortfall is named: ${rejected.message}",
-            rejected.message.contains("Insufficient cash"),
+            "the shortfall is named: ${rejected.diagnostic}",
+            rejected.diagnostic.orEmpty().contains("Insufficient cash"),
         )
         assertEquals("only the seeded deposit remains", 1, store.snapshot().graph.live(VaultKinds.CASH_MOVEMENT).size)
         assertEquals(versionBefore, store.vaultVersion())
@@ -477,7 +482,10 @@ class VaultOpExecutorTest {
             )
         )
         val rejected = result as? ExecResult.Rejected ?: throw AssertionError("got $result")
-        assertTrue("names the currency: ${rejected.message}", rejected.message.contains("USD"))
+        // The currency is now the copy's FORMAT ARGUMENT rather than baked into
+        // an English sentence, so the German string names it too.
+        assertEquals(at.bettertrack.app.data.api.BtErrorCopy.AppCodes.OP_NO_RATE, rejected.code)
+        assertTrue("names the currency: ${rejected.diagnostic}", rejected.diagnostic.orEmpty().contains("USD"))
     }
 
     @Test

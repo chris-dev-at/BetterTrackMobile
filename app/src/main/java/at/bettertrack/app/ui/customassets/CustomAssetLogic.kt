@@ -73,6 +73,12 @@ data class PendingValuePoint(
     val date: String,
     val value: Double,
     val status: PendingUiStatus,
+    /**
+     * Park reason, both halves (S6 P0-4): [errorCode] resolves to the translated
+     * sentence at render time, [serverError] carries the diagnostic detail — or
+     * the original English for rows parked before DB v10 stored codes.
+     */
+    val errorCode: String?,
     val serverError: String?,
 )
 
@@ -93,7 +99,9 @@ fun decodePendingValuePoints(
         }
         if (p.customAssetId != customAssetId) return@mapNotNull null
         val status = OpStatus.fromWire(op.status)?.let(::pendingUiStatus) ?: return@mapNotNull null
-        PendingValuePoint(op.id, p.customAssetId, p.date, p.value, status, op.serverError)
+        PendingValuePoint(
+            op.id, p.customAssetId, p.date, p.value, status, op.errorCode, op.serverError,
+        )
     }
     .sortedByDescending { it.opId }
     .toList()

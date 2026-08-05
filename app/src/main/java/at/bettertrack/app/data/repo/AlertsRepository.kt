@@ -2,6 +2,7 @@ package at.bettertrack.app.data.repo
 
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AlertDto
@@ -123,11 +124,7 @@ class AlertsRepository(
         is BtResult.Ok -> value.toDomainOrNull()
             ?.let { BtResult.Ok(it) }
             ?: BtResult.Err(
-                BtApiError(
-                    200,
-                    BtApiError.Codes.UNKNOWN,
-                    "BetterTrack returned an alert kind this app version doesn't know.",
-                ),
+                BtApiError(200, BtErrorCopy.AppCodes.UNKNOWN_ALERT_KIND),
             )
         is BtResult.Err -> this
     }

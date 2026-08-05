@@ -472,21 +472,18 @@ class VaultPortfolioBackend(
     companion object {
         const val MAIN_SOURCE_NAME = "Main"
 
+        // NO_EXCHANGE_RATE takes the currency pair as its format argument, so the
+        // translated sentence names the same currencies the English one did.
         private fun noRateError(cause: NoExchangeRateException) = BtApiError(
             httpStatus = 0,
             code = "NO_EXCHANGE_RATE",
-            userMessage = "BetterTrack has no ${cause.from} → ${cause.to} rate on this device, " +
-                "so this portfolio can't be valued in ${cause.to} yet.",
-            details = null,
-            serverMessage = null,
+            diagnostic = "${cause.from} → ${cause.to}",
         )
 
         private fun derivationError(cause: at.bettertrack.app.domain.DomainException) = BtApiError(
             httpStatus = 0,
             code = "VAULT_DERIVATION_FAILED",
-            userMessage = cause.message ?: "This portfolio's data could not be calculated on this device.",
-            details = null,
-            serverMessage = cause.message,
+            diagnostic = cause.message,
         )
     }
 }

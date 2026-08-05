@@ -57,7 +57,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.CustomAssetEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
@@ -66,6 +68,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,8 +93,8 @@ class CustomAssetsViewModel(
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<BtMessage?>(null)
+    val error: StateFlow<BtMessage?> = _error.asStateFlow()
 
     init { refresh() }
 
@@ -110,7 +113,7 @@ class CustomAssetsViewModel(
             _busy.value = true
             _error.value = null
             val r = repo.createCustomAsset(name, category, smoothing, initial = null, portfolioId = null)
-            if (r is BtResult.Err) _error.value = r.error.userMessage
+            if (r is BtResult.Err) _error.value = r.error.asMessage()
             _busy.value = false
             onDone(r is BtResult.Ok)
         }
@@ -271,7 +274,7 @@ fun CustomAssetDialog(
     initialCategory: String,
     initialSmoothing: Boolean,
     busy: Boolean,
-    error: String?,
+    error: BtMessage?,
     onConfirm: (name: String, category: String, smoothing: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -346,7 +349,11 @@ fun CustomAssetDialog(
                     }
                 }
                 if (error != null) {
-                    Text(text = error, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                    Text(
+                        text = error.resolveWithDiagnostic(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.loss,
+                    )
                 }
             }
         },

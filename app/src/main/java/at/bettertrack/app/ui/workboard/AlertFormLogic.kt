@@ -1,8 +1,7 @@
 package at.bettertrack.app.ui.workboard
 
-import at.bettertrack.app.ui.format.BT_MASKED_PLAIN
-import at.bettertrack.app.ui.format.BtDiscreetMode
 import at.bettertrack.app.data.repo.AlertKind
+import at.bettertrack.app.ui.market.formatPrice
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import java.util.Currency
 import java.util.Locale
@@ -47,14 +46,16 @@ fun formatAlertNumber(v: Double, locale: Locale = Locale.getDefault()): String {
     return nf.format(v)
 }
 
-/** "$150" / "€80.50" — symbol-prefixed price in the asset's native currency. */
+/**
+ * "150,00 $" / "80,50 €" — a threshold or reference price in the asset's native
+ * currency.
+ *
+ * S6 P2-20: this used to build the string itself, symbol-FIRST and capped at two
+ * decimals. That put every alert row at odds with the rest of the app (which
+ * writes the symbol last), collapsed a sub-cent crypto threshold to "$0.00", and
+ * carried its own copy of the discreet-mode mask. Delegating to the canonical
+ * unit-price formatter fixes all three at once — masking included, because
+ * [formatPrice] enforces it at the one place every money label funnels through.
+ */
 fun formatAlertPrice(v: Double, currency: String, locale: Locale = Locale.getDefault()): String =
-    // An alert threshold is an absolute price the user set, so discreet mode
-    // hides it like any other amount. This helper predates the canonical
-    // formatter and still formats symbol-FIRST (a divergence tracked separately);
-    // the mask keeps that placement so the row's shape doesn't change.
-    if (BtDiscreetMode.masking) {
-        currencySymbol(currency, locale) + BT_MASKED_PLAIN
-    } else {
-        currencySymbol(currency, locale) + formatAlertNumber(v, locale)
-    }
+    formatPrice(v, currency, locale)

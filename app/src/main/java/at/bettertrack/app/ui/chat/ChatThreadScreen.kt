@@ -59,7 +59,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -70,7 +69,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CHAT_MESSAGE_MAX
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.ShareChip
@@ -81,6 +82,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,8 +105,8 @@ class ChatThreadViewModel(
     private val _attachables = MutableStateFlow<List<ShareChip>>(emptyList())
     val attachables: StateFlow<List<ShareChip>> = _attachables
 
-    private val _toast = MutableStateFlow<String?>(null)
-    val toast: StateFlow<String?> = _toast
+    private val _toast = MutableStateFlow<BtMessage?>(null)
+    val toast: StateFlow<BtMessage?> = _toast
 
     private var loadJob: Job? = null
 
@@ -156,7 +158,7 @@ class ChatThreadViewModel(
                 _state.value = _state.value.copy(
                     loading = false,
                     availability = if (r.error.httpStatus == 404) ThreadAvailability.NotAvailable else ThreadAvailability.Available,
-                    error = if (r.error.httpStatus == 404) null else r.error.userMessage,
+                    error = if (r.error.httpStatus == 404) null else r.error.asMessage(),
                 )
                 null
             }
@@ -168,14 +170,14 @@ class ChatThreadViewModel(
         val body = text.trim().take(CHAT_MESSAGE_MAX)
         if (body.isBlank()) return
         viewModelScope.launch {
-            (chat.send(id, body, null) as? BtResult.Err)?.let { _toast.value = it.error.userMessage }
+            (chat.send(id, body, null) as? BtResult.Err)?.let { _toast.value = it.error.asMessage() }
         }
     }
 
     fun sendChip(chip: ShareChip) {
         val id = conversationId ?: return
         viewModelScope.launch {
-            (chat.send(id, null, chip) as? BtResult.Err)?.let { _toast.value = it.error.userMessage }
+            (chat.send(id, null, chip) as? BtResult.Err)?.let { _toast.value = it.error.asMessage() }
         }
     }
 
@@ -209,7 +211,7 @@ fun ChatThreadScreen(
         ChatThreadViewModel(AppGraph.chatRepository, conversationId, friendUserId, friendUsername)
     }
     val bt = BtTheme.colors
-    val context = LocalContext.current
+    val snackbar = LocalBtSnackbar.current
     val state by vm.state.collectAsStateWithLifecycle()
     val attachables by vm.attachables.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
@@ -218,10 +220,19 @@ fun ChatThreadScreen(
     val listState = rememberLazyListState()
 
     val headerName = state.friendUsername.ifEmpty { friendUsername }
+    // Blank from both the thread and the nav argument ⇒ the other participant
+    // deleted their account (#362). Labelled, never rendered as an @handle.
+    val peerDeleted = headerName.isBlank()
+    // Plain local so the null check narrows it for BtErrorState — `by` never smart-casts.
+    val loadFailure = state.error
 
+    // A failed send is transient feedback, not thread state, so it goes to the one
+    // app snackbar (S6 P1-9) instead of a system toast. No Retry action: the send
+    // was fire-and-forget and the composer already cleared, so there is nothing
+    // left to re-send — offering the button would be a lie.
     LaunchedEffect(toast) {
         toast?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            snackbar.showError(it)
             vm.consumeToast()
         }
     }
@@ -268,7 +279,12 @@ fun ChatThreadScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BtAvatar(name = headerName, size = 34.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("@$headerName", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (peerDeleted) stringResource(R.string.bt_chat_deleted_user) else "@$headerName",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (peerDeleted) bt.textSecondary else bt.textPrimary,
+                        )
                     }
                 },
                 navigationIcon = {
@@ -287,7 +303,7 @@ fun ChatThreadScreen(
             when {
                 // While the full-screen load error is up, a live composer would invite
                 // sends into a thread we couldn't even load — hide it until Retry works.
-                state.error != null && state.messages.isEmpty() -> Unit
+                loadFailure != null && state.messages.isEmpty() -> Unit
                 state.availability == ThreadAvailability.Available -> MessageInputBar(
                     value = input,
                     onValueChange = { input = it.take(CHAT_MESSAGE_MAX) },
@@ -317,8 +333,8 @@ fun ChatThreadScreen(
 
                 // A failed load with nothing cached is an ERROR, not an empty thread —
                 // never render "Say hi" over a thread that may well have history.
-                state.error != null && state.messages.isEmpty() -> BtErrorState(
-                    message = state.error,
+                loadFailure != null && state.messages.isEmpty() -> BtErrorState(
+                    message = loadFailure,
                     onRetry = vm::retry,
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
@@ -331,7 +347,13 @@ fun ChatThreadScreen(
                     BtAvatar(name = headerName, size = 64.dp)
                     Spacer(Modifier.size(16.dp))
                     Text(
-                        stringResource(R.string.bt_chat_say_hi, headerName),
+                        // "Say hi to @…" needs a name to greet; a deleted account
+                        // has none, so it gets the label on its own.
+                        if (peerDeleted) {
+                            stringResource(R.string.bt_chat_deleted_user)
+                        } else {
+                            stringResource(R.string.bt_chat_say_hi, headerName)
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = bt.textPrimary,

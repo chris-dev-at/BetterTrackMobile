@@ -248,7 +248,10 @@ class ApiOpExecutorTest {
         val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
 
         assertTrue("was $result", result is ExecResult.Rejected)
-        assertEquals("Insufficient cash balance.", (result as ExecResult.Rejected).message)
+        // The queue now stores the CODE; the server's sentence rides along as
+        // the diagnostic, and the translated copy is picked at render time.
+        assertEquals("VALIDATION_ERROR", (result as ExecResult.Rejected).code)
+        assertEquals("Insufficient cash balance.", result.diagnostic)
     }
 
     // ── V5 mirror seam (S2a c) ───────────────────────────────────────────────
@@ -263,10 +266,8 @@ class ApiOpExecutorTest {
         val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
 
         assertTrue("was $result", result is ExecResult.Rejected)
-        assertEquals(
-            "Someone else changed this shared entry first. Refresh and try again.",
-            (result as ExecResult.Rejected).message,
-        )
+        assertEquals("MIRROR_CONFLICT", (result as ExecResult.Rejected).code)
+        assertEquals("baseSeq mismatch for mirror row", result.diagnostic)
     }
 
     @Test
@@ -279,10 +280,7 @@ class ApiOpExecutorTest {
         val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
 
         assertTrue("was $result", result is ExecResult.Rejected)
-        assertEquals(
-            "This entry was removed from the shared portfolio, so the change can't be applied.",
-            (result as ExecResult.Rejected).message,
-        )
+        assertEquals("MIRROR_ROW_DELETED", (result as ExecResult.Rejected).code)
     }
 
     @Test
@@ -295,10 +293,7 @@ class ApiOpExecutorTest {
         val result = executor.execute(op(OpType.CASH_DEPOSIT, CASH_PAYLOAD))
 
         assertTrue("was $result", result is ExecResult.Rejected)
-        assertEquals(
-            "This cash entry is created automatically from another entry — edit that one instead.",
-            (result as ExecResult.Rejected).message,
-        )
+        assertEquals("CASH_MOVEMENT_NOT_EDITABLE", (result as ExecResult.Rejected).code)
     }
 
     @Test

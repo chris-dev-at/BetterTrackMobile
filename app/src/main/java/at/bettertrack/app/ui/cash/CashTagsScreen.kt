@@ -60,7 +60,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CASH_TAG_NAME_MAX
 import at.bettertrack.app.data.cash.CashClassificationRepository
 import at.bettertrack.app.data.db.CashTagEntity
@@ -72,6 +74,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -102,11 +105,11 @@ import kotlinx.coroutines.launch
 /**
  * A refused tag write.
  *
- * [systemProtected] separates the one refusal the app can phrase better than the
- * server (deleting an app-owned tag) from everything else, whose message is
- * already user-ready and travels verbatim.
+ * [systemProtected] separates the one refusal the app answers with its own
+ * dedicated sentence (deleting an app-owned tag) from everything else, which
+ * renders through the shared error catalog.
  */
-data class CashTagFailure(val systemProtected: Boolean, val message: String)
+data class CashTagFailure(val systemProtected: Boolean, val message: BtMessage)
 
 /**
  * Split the catalog into the two rendered sections, preserving the DAO's order
@@ -131,8 +134,8 @@ class CashTagsViewModel(
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
-    private val _loadError = MutableStateFlow<String?>(null)
-    val loadError: StateFlow<String?> = _loadError.asStateFlow()
+    private val _loadError = MutableStateFlow<BtMessage?>(null)
+    val loadError: StateFlow<BtMessage?> = _loadError.asStateFlow()
 
     /** One write at a time — create, rename and delete all share the flag. */
     private val _busy = MutableStateFlow(false)
@@ -149,7 +152,7 @@ class CashTagsViewModel(
         viewModelScope.launch {
             _loading.value = true
             val r = repo.refreshTags()
-            _loadError.value = (r as? BtResult.Err)?.error?.userMessage
+            _loadError.value = (r as? BtResult.Err)?.error?.asMessage()
             _loading.value = false
         }
     }
@@ -176,7 +179,7 @@ class CashTagsViewModel(
             if (r is BtResult.Err) {
                 _writeError.value = CashTagFailure(
                     systemProtected = r.error.isCashTagSystemProtected,
-                    message = r.error.userMessage,
+                    message = r.error.asMessage(),
                 )
             }
             _busy.value = false
@@ -203,7 +206,9 @@ fun CashTagsScreen(onBack: () -> Unit) {
     val bt = BtTheme.colors
     val tags by vm.tags.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
-    val loadError by vm.loadError.collectAsStateWithLifecycle()
+    // Read as a plain val rather than a `by` delegate: the error state takes the
+    // message itself, and a delegated property cannot smart-cast to non-null.
+    val loadError = vm.loadError.collectAsStateWithLifecycle().value
     val busy by vm.busy.collectAsStateWithLifecycle()
     val writeError by vm.writeError.collectAsStateWithLifecycle()
 
@@ -290,7 +295,7 @@ fun CashTagsScreen(onBack: () -> Unit) {
                     loadError?.let { message ->
                         item(key = "load-error") {
                             Text(
-                                text = message,
+                                text = message.resolveWithDiagnostic(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.lossSoft,
                             )
@@ -400,7 +405,7 @@ fun CashTagsScreen(onBack: () -> Unit) {
                             text = if (failure.systemProtected) {
                                 stringResource(R.string.bt_tags_system_protected)
                             } else {
-                                failure.message
+                                failure.message.resolveWithDiagnostic()
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = bt.lossSoft,
@@ -609,7 +614,7 @@ private fun CashTagSheet(
                     text = if (it.systemProtected) {
                         stringResource(R.string.bt_tags_system_protected)
                     } else {
-                        it.message
+                        it.message.resolveWithDiagnostic()
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.lossSoft,

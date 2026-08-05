@@ -65,12 +65,24 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.rememberParkReason
+import at.bettertrack.app.ui.format.BT_EM_DASH
 import at.bettertrack.app.ui.shell.formatAsOf
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+/**
+ * S6 P2-22: `GET /version` answers `"unknown"` for every field when the running
+ * deployment has no build env vars injected — still true on prod and dev
+ * (PLATFORM_ASKS 2026-07-10, re-confirmed #41.4). That sentinel means "no
+ * value", and this app writes no-value as [BT_EM_DASH], so it is normalised at
+ * the render edge instead of being echoed back as English prose.
+ */
+private fun String.knownOrNull(): String? =
+    takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
 
 /**
  * Step-5 debug screen (spec Step 5: "debug screen showing queue contents and a
@@ -158,14 +170,14 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
                         Text("API build (live server)", style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
                         val info = apiBuild
                         val line = if (info == null) {
-                            "—"
+                            BT_EM_DASH
                         } else {
-                            val sc = info.shortCommit.ifBlank { info.commit.take(7) }
-                            val d = formatApiBuiltAtDate(info.builtAt)
-                            if (d.isBlank()) sc else "$sc · $d"
+                            val sc = info.shortCommit.ifBlank { info.commit.take(7) }.knownOrNull()
+                            val d = formatApiBuiltAtDate(info.builtAt).knownOrNull()
+                            listOfNotNull(sc, d).joinToString(" · ").ifEmpty { BT_EM_DASH }
                         }
                         Text(line, style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary, fontFamily = FontFamily.Monospace)
-                        info?.commit?.takeIf { it.isNotBlank() }?.let {
+                        info?.commit?.knownOrNull()?.let {
                             Text(it, style = MaterialTheme.typography.labelSmall, color = bt.textMuted, fontFamily = FontFamily.Monospace)
                         }
                     }
@@ -291,7 +303,7 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
     if (showApiCheck) {
         val pid = testPortfolioId
         ApiCheckDialog(
-            portfolioName = portfolios.firstOrNull { it.id == pid }?.name ?: "—",
+            portfolioName = portfolios.firstOrNull { it.id == pid }?.name ?: BT_EM_DASH,
             fetch = {
                 if (pid == null) {
                     at.bettertrack.app.data.api.BtResult.Ok(emptyList())
@@ -476,7 +488,7 @@ private fun ApiCheckDialog(
                 null -> Text("Fetching GET /transactions…")
 
                 is at.bettertrack.app.data.api.BtResult.Err ->
-                    Text("Failed: HTTP ${s.error.httpStatus} ${s.error.code} — ${s.error.userMessage}", color = bt.loss)
+                    Text("Failed: HTTP ${s.error.httpStatus} ${s.error.code} — ${s.error.diagnostic.orEmpty()}", color = bt.loss)
 
                 is at.bettertrack.app.data.api.BtResult.Ok -> Column(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -492,7 +504,7 @@ private fun ApiCheckDialog(
                     s.value.take(8).forEach { tx ->
                         Text(
                             text = "${tx.id.take(8)}… ${tx.side} ${tx.quantity} × ${tx.price} " +
-                                "${tx.asset.symbol}\n  asset: ${tx.assetId}\n  note: ${tx.note ?: "—"}",
+                                "${tx.asset.symbol}\n  asset: ${tx.assetId}\n  note: ${tx.note ?: BT_EM_DASH}",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
@@ -599,9 +611,15 @@ private fun OpCard(
                 color = bt.textSecondary,
                 maxLines = 3,
             )
-            if (status == OpStatus.NEEDS_ATTENTION && op.serverError != null) {
+            if (status == OpStatus.NEEDS_ATTENTION &&
+                (op.errorCode != null || op.serverError != null)
+            ) {
+                // Same gate and same resolver as the user-facing §7.4 screen: a
+                // code with no diagnostic is a complete reason on its own since
+                // the catalog owns the sentence, and gating on the prose alone
+                // would hide Retry/Discard for exactly those parks.
                 Text(
-                    text = op.serverError,
+                    text = rememberParkReason(op.errorCode, op.serverError),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.loss,
                 )

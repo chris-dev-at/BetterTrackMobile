@@ -60,7 +60,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,7 +71,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.STANDING_ORDER_LABEL_MAX
 import at.bettertrack.app.data.api.dto.StandingOrderDto
 import at.bettertrack.app.data.repo.MarketAsset
@@ -99,6 +100,7 @@ import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.customassets.dialogFieldColors
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
 import at.bettertrack.app.ui.portfolio.formatQuantity
@@ -106,6 +108,14 @@ import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -116,13 +126,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
-import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * The v5 **standing orders** screen: the recurring buys and cash movements a
@@ -292,22 +295,22 @@ class StandingOrdersViewModel(
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
     /** Non-null only when the LIST itself could not be read (drives [BtErrorState]). */
-    private val _loadError = MutableStateFlow<String?>(null)
-    val loadError: StateFlow<String?> = _loadError.asStateFlow()
+    private val _loadError = MutableStateFlow<BtMessage?>(null)
+    val loadError: StateFlow<BtMessage?> = _loadError.asStateFlow()
 
     /** The order id whose pause / resume / delete is in flight. */
     private val _rowBusyId = MutableStateFlow<String?>(null)
     val rowBusyId: StateFlow<String?> = _rowBusyId.asStateFlow()
 
-    private val _rowError = MutableStateFlow<String?>(null)
-    val rowError: StateFlow<String?> = _rowError.asStateFlow()
+    private val _rowError = MutableStateFlow<BtMessage?>(null)
+    val rowError: StateFlow<BtMessage?> = _rowError.asStateFlow()
 
     /** Create / save state of the open sheet. */
     private val _submitting = MutableStateFlow(false)
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
 
-    private val _sheetError = MutableStateFlow<String?>(null)
-    val sheetError: StateFlow<String?> = _sheetError.asStateFlow()
+    private val _sheetError = MutableStateFlow<BtMessage?>(null)
+    val sheetError: StateFlow<BtMessage?> = _sheetError.asStateFlow()
 
     // ── Asset search (buy-asset only) ───────────────────────────────────────
     private val _query = MutableStateFlow("")
@@ -370,9 +373,9 @@ class StandingOrdersViewModel(
                 // A failed REFRESH keeps whatever is on screen and reports itself
                 // as a row-level problem; only a failed FIRST load owns the screen.
                 is BtResult.Err -> if (initial) {
-                    _loadError.value = r.error.userMessage
+                    _loadError.value = r.error.asMessage()
                 } else {
-                    _rowError.value = r.error.userMessage
+                    _rowError.value = r.error.asMessage()
                 }
             }
             _loading.value = false
@@ -406,7 +409,7 @@ class StandingOrdersViewModel(
             when (val r = action()) {
                 // The endpoint answers the FULL updated order — repaint from it.
                 is BtResult.Ok -> _orders.value = applyUpdatedOrder(_orders.value, r.value)
-                is BtResult.Err -> _rowError.value = r.error.userMessage
+                is BtResult.Err -> _rowError.value = r.error.asMessage()
             }
             _rowBusyId.value = null
         }
@@ -420,7 +423,7 @@ class StandingOrdersViewModel(
             val r = repo.delete(id)
             when (r) {
                 is BtResult.Ok -> _orders.value = _orders.value.filterNot { it.id == id }
-                is BtResult.Err -> _rowError.value = r.error.userMessage
+                is BtResult.Err -> _rowError.value = r.error.asMessage()
             }
             _rowBusyId.value = null
             onDone(r is BtResult.Ok)
@@ -442,7 +445,7 @@ class StandingOrdersViewModel(
                 }
 
                 is BtResult.Err -> {
-                    _sheetError.value = r.error.userMessage
+                    _sheetError.value = r.error.asMessage()
                     _submitting.value = false
                     onDone(false)
                 }
@@ -469,7 +472,7 @@ class StandingOrdersViewModel(
             )
             when (r) {
                 is BtResult.Ok -> _orders.value = applyUpdatedOrder(_orders.value, r.value)
-                is BtResult.Err -> _sheetError.value = r.error.userMessage
+                is BtResult.Err -> _sheetError.value = r.error.asMessage()
             }
             _submitting.value = false
             onDone(r is BtResult.Ok)
@@ -501,7 +504,7 @@ fun StandingOrdersScreen(
     }
 
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val portfolioId by vm.portfolioId.collectAsStateWithLifecycle()
     val portfolioName by vm.portfolioName.collectAsStateWithLifecycle()
     val orders by vm.orders.collectAsStateWithLifecycle()
@@ -555,13 +558,17 @@ fun StandingOrdersScreen(
         },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            // Plain locals so the null checks narrow the type at the render sites —
+            // a `by` delegate never smart-casts.
+            val listFailure = loadError
+            val actionFailure = rowError
             when {
                 loading && orders.isEmpty() -> LoadingList()
 
-                loadError != null && orders.isEmpty() -> BtErrorState(
+                listFailure != null && orders.isEmpty() -> BtErrorState(
                     modifier = Modifier.fillMaxSize(),
                     title = stringResource(R.string.bt_so_error_title),
-                    message = loadError,
+                    message = listFailure,
                     onRetry = { vm.retry() },
                 )
 
@@ -600,10 +607,10 @@ fun StandingOrdersScreen(
                                 )
                             }
 
-                            if (rowError != null) {
+                            if (actionFailure != null) {
                                 item(key = "row-error") {
                                     Text(
-                                        text = rowError!!,
+                                        text = actionFailure.resolveWithDiagnostic(),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = bt.lossSoft,
                                     )
@@ -1493,9 +1500,9 @@ private fun FieldError(problem: StandingOrderProblem?, visible: Boolean) {
 }
 
 @Composable
-private fun SheetError(message: String) {
+private fun SheetError(message: BtMessage) {
     Text(
-        text = message,
+        text = message.resolveWithDiagnostic(),
         style = MaterialTheme.typography.bodySmall,
         color = BtTheme.colors.lossSoft,
     )

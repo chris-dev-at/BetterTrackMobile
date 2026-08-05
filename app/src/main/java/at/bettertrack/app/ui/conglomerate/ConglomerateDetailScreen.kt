@@ -12,9 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -47,11 +46,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.AllocateMode
 import at.bettertrack.app.data.repo.Allocation
 import at.bettertrack.app.data.repo.Backtest
@@ -71,10 +72,13 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.portfolio.executedAtIso
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,8 +87,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import java.time.LocalDate
-import java.util.Locale
 
 sealed interface BacktestUiState {
     data object Loading : BacktestUiState
@@ -117,8 +119,22 @@ class ConglomerateDetailViewModel(
     val calculating: StateFlow<Boolean> = _calculating.asStateFlow()
     private val _committing = MutableStateFlow(false)
     val committing: StateFlow<Boolean> = _committing.asStateFlow()
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    /** A server refusal, in the app's own words (S6 P0-4). */
+    private val _error = MutableStateFlow<BtMessage?>(null)
+    val error: StateFlow<BtMessage?> = _error.asStateFlow()
+
+    /**
+     * The commit outcome, which is NOT a server refusal — it is this screen
+     * reporting on a queue that drained only partly, and it has no error code to
+     * look one up with. It stays raw English prose for now rather than borrowing
+     * a catalogued sentence that means something else; the two lines below are
+     * the remaining hardcoded copy on this screen.
+     *
+     * Kept in its own slot so that at most one of the two can be on screen: every
+     * writer clears both, exactly as the single slot behaved before.
+     */
+    private val _commitNotice = MutableStateFlow<String?>(null)
+    val commitNotice: StateFlow<String?> = _commitNotice.asStateFlow()
 
     val selectedPortfolioName: StateFlow<String?> =
         kotlinx.coroutines.flow.combine(portfolioRepo.portfolios, portfolioRepo.selectedPortfolioId) { all, sel ->
@@ -162,10 +178,11 @@ class ConglomerateDetailViewModel(
         if (_calculating.value) return
         viewModelScope.launch {
             _calculating.value = true
-            _message.value = null
+            _error.value = null
+            _commitNotice.value = null
             when (val r = repo.allocate(conglomerateId, budgetEur, mode, atLeastOneShare, step)) {
                 is BtResult.Ok -> _allocation.value = r.value
-                is BtResult.Err -> _message.value = r.error.userMessage
+                is BtResult.Err -> _error.value = r.error.asMessage()
             }
             _calculating.value = false
         }
@@ -178,10 +195,11 @@ class ConglomerateDetailViewModel(
         if (_committing.value || buyable.isEmpty()) return
         viewModelScope.launch {
             _committing.value = true
-            _message.value = null
+            _error.value = null
+            _commitNotice.value = null
             val pid = portfolioRepo.selectedPortfolioIdNow()
                 ?: portfolioRepo.portfolios.first().firstOrNull { it.isDefault }?.id
-            if (pid == null) { _message.value = "No portfolio selected."; _committing.value = false; onDone(false); return@launch }
+            if (pid == null) { _commitNotice.value = "No portfolio selected."; _committing.value = false; onDone(false); return@launch }
             val opIds = buyable.map { line ->
                 val payload = TxOpPayload(
                     assetId = line.assetId,
@@ -207,10 +225,10 @@ class ConglomerateDetailViewModel(
             val statuses = opIds.mapNotNull { db.syncOpDao().getById(it)?.status }
             val done = statuses.count { it == at.bettertrack.app.sync.OpStatus.DONE.wire }
             if (done == buyable.size) {
-                _message.value = null
+                _commitNotice.value = null
                 onDone(true)
             } else {
-                _message.value = "Added $done of ${buyable.size}. The rest need attention — open Pending sync."
+                _commitNotice.value = "Added $done of ${buyable.size}. The rest need attention — open Pending sync."
                 onDone(false)
             }
         }
@@ -241,14 +259,15 @@ fun ConglomerateDetailScreen(
         )
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val detail by vm.detail.collectAsStateWithLifecycle()
     val backtest by vm.backtest.collectAsStateWithLifecycle()
     val range by vm.range.collectAsStateWithLifecycle()
     val allocation by vm.allocation.collectAsStateWithLifecycle()
     val calculating by vm.calculating.collectAsStateWithLifecycle()
     val committing by vm.committing.collectAsStateWithLifecycle()
-    val message by vm.message.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    val commitNotice by vm.commitNotice.collectAsStateWithLifecycle()
     val portfolioName by vm.selectedPortfolioName.collectAsStateWithLifecycle()
 
     var budgetText by remember { mutableStateOf("") }
@@ -465,7 +484,14 @@ fun ConglomerateDetailScreen(
                 }
             }
 
-            message?.let { item(key = "msg") { Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss) } }
+            // One line under the buy list, so a diagnostic (only ever present for
+            // a code this build has no copy for) trails the app's own sentence.
+            error?.let { failure ->
+                item(key = "msg") {
+                    Text(failure.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                }
+            }
+            commitNotice?.let { item(key = "commit-msg") { Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss) } }
         }
     }
 

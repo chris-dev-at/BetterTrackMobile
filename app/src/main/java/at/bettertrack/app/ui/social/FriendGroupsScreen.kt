@@ -42,7 +42,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -62,7 +60,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.FRIEND_GROUP_NAME_MAX
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendGroup
@@ -101,7 +101,7 @@ enum class FriendGroupFailure {
     /** 429 `RATE_LIMITED` — the shared 30-writes-per-hour social limiter. */
     RateLimited,
 
-    /** Anything else: the server's own message is the honest thing to show. */
+    /** Anything else: let the shared error-code catalog speak for the code. */
     Generic,
 }
 
@@ -121,7 +121,7 @@ fun classifyFriendGroupFailure(error: BtApiError): FriendGroupFailure = when {
     else -> FriendGroupFailure.Generic
 }
 
-/** The string a [FriendGroupFailure] speaks with, or null to use the server's own. */
+/** The string a [FriendGroupFailure] speaks with, or null to fall back to the code catalog. */
 fun friendGroupFailureRes(failure: FriendGroupFailure): Int? = when (failure) {
     FriendGroupFailure.NotFriend -> R.string.bt_groups_err_not_friend
     FriendGroupFailure.NotFound -> R.string.bt_groups_err_not_found
@@ -153,7 +153,7 @@ fun addableFriends(friends: List<Friend>, group: FriendGroup): List<Friend> {
 
 data class FriendGroupsUi(
     val loading: Boolean = true,
-    val error: String? = null,
+    val error: BtMessage? = null,
     val groups: List<FriendGroup> = emptyList(),
     val friends: List<Friend> = emptyList(),
     /** Groups with a write in flight (their row shows a spinner and stops taking taps). */
@@ -183,7 +183,7 @@ class FriendGroupsViewModel(
                 loading = false,
                 // The friends call only feeds the add-member picker, so its failure
                 // must not blank the screen — only the groups read can.
-                error = (groupsR as? BtResult.Err)?.error?.userMessage,
+                error = (groupsR as? BtResult.Err)?.error?.asMessage(),
                 groups = (groupsR as? BtResult.Ok)?.value ?: _state.value.groups,
                 friends = (friendsR as? BtResult.Ok)?.value ?: _state.value.friends,
             )
@@ -201,7 +201,7 @@ class FriendGroupsViewModel(
                 }
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(creating = false)
-                    _toast.value = failureToast(r.error)
+                    _toast.value = failureToast(r.error) { create(clean) }
                 }
             }
         }
@@ -235,7 +235,7 @@ class FriendGroupsViewModel(
                 }
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(busy = _state.value.busy - groupId)
-                    _toast.value = failureToast(r.error)
+                    _toast.value = failureToast(r.error) { delete(groupId) }
                 }
             }
         }
@@ -267,7 +267,10 @@ class FriendGroupsViewModel(
                 }
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(busy = _state.value.busy - groupId)
-                    _toast.value = failureToast(r.error)
+                    // Every write here is a plain re-issue of the same call, so
+                    // the snackbar can offer a real way out rather than just a
+                    // verdict — re-running `write` repeats it verbatim.
+                    _toast.value = failureToast(r.error) { write(groupId, okRes, args, block) }
                     // A group that vanished under us is gone from the list too —
                     // leaving a phantom row would invite a second failing tap.
                     if (classifyFriendGroupFailure(r.error) == FriendGroupFailure.NotFound) {
@@ -278,10 +281,23 @@ class FriendGroupsViewModel(
         }
     }
 
-    private fun failureToast(error: BtApiError): SocialToast =
-        friendGroupFailureRes(classifyFriendGroupFailure(error))
-            ?.let { SocialToast.Res(it) }
-            ?: SocialToast.Raw(error.userMessage)
+    /**
+     * The refusal the user reads: this screen's own copy where it has some, and
+     * otherwise the shared error-code catalog — never the server's English prose,
+     * which now survives only as [BtMessage.diagnostic] for an uncatalogued code.
+     */
+    private fun failureToast(error: BtApiError, retry: () -> Unit): SocialToast {
+        val failure = classifyFriendGroupFailure(error)
+        // No "Try again" where trying again cannot work: a group that is gone has
+        // just had its row dropped, and the hourly write budget is already spent.
+        val onRetry = retry.takeIf {
+            failure != FriendGroupFailure.NotFound && failure != FriendGroupFailure.RateLimited
+        }
+        return SocialToast.Failure(
+            friendGroupFailureRes(failure)?.let { BtMessage(it) } ?: error.asMessage(),
+            onRetry,
+        )
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -304,7 +320,6 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
     val bt = BtTheme.colors
     val ui by vm.state.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     var expanded by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf<String?>(null) }
@@ -312,13 +327,7 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
     var renaming by remember { mutableStateOf<FriendGroup?>(null) }
     var confirmDelete by remember { mutableStateOf<FriendGroup?>(null) }
 
-    val toastText = toast?.resolve()
-    LaunchedEffect(toast) {
-        toastText?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
-            vm.consumeToast()
-        }
-    }
+    SocialToastEffect(toast) { vm.consumeToast() }
 
     Scaffold(
         containerColor = bt.bg,
@@ -341,6 +350,9 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
             )
         },
     ) { pad ->
+        // Bound outside the `when` so it smart-casts: the load error is a
+        // BtMessage now, and BtErrorState takes it non-null.
+        val loadError = ui.error
         when {
             ui.loading -> Column(
                 modifier = Modifier.fillMaxSize().padding(pad).padding(16.dp),
@@ -350,9 +362,9 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
                 repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card) }
             }
 
-            ui.error != null && ui.groups.isEmpty() -> BtErrorState(
+            loadError != null && ui.groups.isEmpty() -> BtErrorState(
                 title = stringResource(R.string.bt_groups_error_title),
-                message = ui.error,
+                message = loadError,
                 onRetry = { vm.load() },
                 modifier = Modifier.fillMaxSize().padding(pad),
             )

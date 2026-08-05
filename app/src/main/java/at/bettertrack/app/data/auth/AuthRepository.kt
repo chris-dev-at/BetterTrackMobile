@@ -142,9 +142,12 @@ class AuthRepository(
             when (val exchanged = tokenManager.exchange(code, pending.first)) {
                 is BtResult.Err -> {
                     store.clearPending()
+                    // `detail` is a diagnostic the login screen never renders (it
+                    // shows app copy keyed off LoginError), so this stays the
+                    // server's raw words rather than going through BtErrorCopy.
                     _loginPhase.value = LoginPhase.Failed(
                         if (exchanged.error.isNetwork) LoginError.NETWORK else LoginError.EXCHANGE_FAILED,
-                        exchanged.error.userMessage,
+                        exchanged.error.diagnostic,
                     )
                 }
 

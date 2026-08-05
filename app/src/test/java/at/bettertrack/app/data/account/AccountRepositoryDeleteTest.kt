@@ -84,7 +84,7 @@ class AccountRepositoryDeleteTest {
 
         assertTrue("was $result", result is BtResult.Err)
         val err = (result as BtResult.Err).error
-        assertEquals("Password is incorrect.", err.userMessage)
+        assertEquals("Password is incorrect.", err.diagnostic)
         assertTrue(err.isUnauthorized)
         assertFalse(err.isNetwork)
     }
@@ -101,7 +101,7 @@ class AccountRepositoryDeleteTest {
 
         assertTrue(result is BtResult.Err)
         val err = (result as BtResult.Err).error
-        assertEquals("Too many attempts. Try again later.", err.userMessage)
+        assertEquals("Too many attempts. Try again later.", err.diagnostic)
         assertEquals(429, err.httpStatus)
     }
 }

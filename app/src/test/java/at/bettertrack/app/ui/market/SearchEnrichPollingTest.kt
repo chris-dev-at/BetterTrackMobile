@@ -145,7 +145,7 @@ class SearchEnrichPollingTest {
         val search = ScriptedSearch(
             listOf(
                 ok(listOf(asset("a")), enriching = true),
-                BtResult.Err(BtApiError(httpStatus = 500, code = "X", userMessage = "boom")),
+                BtResult.Err(BtApiError(httpStatus = 500, code = "X", diagnostic = "boom")),
             ),
         )
 
@@ -164,7 +164,7 @@ class SearchEnrichPollingTest {
     fun `a network error on the first fetch surfaces the offline state`() = runTest {
         val states = states()
         val search = ScriptedSearch(
-            listOf(BtResult.Err(BtApiError(httpStatus = 0, code = "NETWORK_ERROR", userMessage = "x"))),
+            listOf(BtResult.Err(BtApiError(httpStatus = 0, code = "NETWORK_ERROR", diagnostic = "x"))),
         )
 
         searchWithEnrichPolling("q", search.fn) { states += it }

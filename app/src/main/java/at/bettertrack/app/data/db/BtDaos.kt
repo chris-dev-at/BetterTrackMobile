@@ -351,7 +351,8 @@ interface SyncOpDao {
     @Query(
         "UPDATE sync_ops SET status = :status, attemptCount = :attemptCount, " +
             "nextAttemptAtMs = :nextAttemptAtMs, serverError = :serverError, " +
-            "serverResultJson = :serverResultJson, updatedAtMs = :updatedAtMs WHERE id = :id",
+            "errorCode = :errorCode, serverResultJson = :serverResultJson, " +
+            "updatedAtMs = :updatedAtMs WHERE id = :id",
     )
     suspend fun updateState(
         id: Long,
@@ -359,6 +360,7 @@ interface SyncOpDao {
         attemptCount: Int,
         nextAttemptAtMs: Long,
         serverError: String?,
+        errorCode: String?,
         serverResultJson: String?,
         updatedAtMs: Long,
     )
@@ -369,7 +371,7 @@ interface SyncOpDao {
      */
     @Query(
         "UPDATE sync_ops SET payloadJson = :payloadJson, status = :status, attemptCount = 0, " +
-            "nextAttemptAtMs = 0, serverError = NULL, serverResultJson = NULL, " +
+            "nextAttemptAtMs = 0, serverError = NULL, errorCode = NULL, serverResultJson = NULL, " +
             "updatedAtMs = :updatedAtMs WHERE id = :id",
     )
     suspend fun updatePayload(id: Long, payloadJson: String, status: String, updatedAtMs: Long)

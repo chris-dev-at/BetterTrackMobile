@@ -40,18 +40,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.IDEA_NAME_MAX
 import at.bettertrack.app.data.api.dto.IDEA_THESIS_MAX
 import at.bettertrack.app.data.repo.ConglomerateRepository
@@ -63,14 +64,17 @@ import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.ShareableKind
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.ui.social.ItemThreadSection
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.social.ItemThreadSection
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -78,7 +82,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +91,7 @@ internal sealed interface IdeaDetailUiState {
 
     /** 404 — deleted, or it belongs to someone else (`GET /ideas/{id}` is owner-only). */
     data object Gone : IdeaDetailUiState
-    data class Failed(val message: String) : IdeaDetailUiState
+    data class Failed(val message: BtMessage) : IdeaDetailUiState
 }
 
 /**
@@ -132,7 +135,7 @@ internal class IdeaDetailViewModel(
                 is BtResult.Err -> _state.value = if (r.error.httpStatus == 404) {
                     IdeaDetailUiState.Gone
                 } else {
-                    IdeaDetailUiState.Failed(r.error.userMessage)
+                    IdeaDetailUiState.Failed(r.error.asMessage())
                 }
             }
         }
@@ -182,7 +185,7 @@ internal class IdeaDetailViewModel(
         }
 
     /** onDone(null) = saved; onDone(message) = inline error. */
-    fun save(name: String?, thesis: String?, clearThesis: Boolean, onDone: (String?) -> Unit) {
+    fun save(name: String?, thesis: String?, clearThesis: Boolean, onDone: (BtMessage?) -> Unit) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
@@ -194,7 +197,7 @@ internal class IdeaDetailViewModel(
                     onDone(null)
                 }
 
-                is BtResult.Err -> onDone(r.error.userMessage)
+                is BtResult.Err -> onDone(r.error.asMessage())
             }
         }
     }
@@ -235,7 +238,7 @@ fun IdeaDetailScreen(ideaId: String, onBack: () -> Unit, onOpenAsset: (String) -
         )
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val state by vm.state.collectAsStateWithLifecycle()
     val refs by vm.refs.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -534,7 +537,7 @@ private fun IdeaEditSheet(
         name: String?,
         thesis: String?,
         clearThesis: Boolean,
-        onErr: (String) -> Unit,
+        onErr: (BtMessage) -> Unit,
     ) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -542,7 +545,7 @@ private fun IdeaEditSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember(idea.id) { mutableStateOf(idea.name) }
     var thesis by remember(idea.id) { mutableStateOf(idea.thesis.orEmpty()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<BtMessage?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -588,7 +591,11 @@ private fun IdeaEditSheet(
 
             error?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                Text(
+                    it.resolveWithDiagnostic(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
             }
 
             Spacer(Modifier.height(18.dp))

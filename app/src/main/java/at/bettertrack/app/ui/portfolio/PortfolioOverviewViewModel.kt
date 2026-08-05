@@ -3,7 +3,9 @@ package at.bettertrack.app.ui.portfolio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
@@ -99,8 +101,8 @@ class PortfolioOverviewViewModel(
     // Switcher action state (create/rename/archive/restore).
     private val _switcherBusy = MutableStateFlow(false)
     val switcherBusy: StateFlow<Boolean> = _switcherBusy.asStateFlow()
-    private val _switcherError = MutableStateFlow<String?>(null)
-    val switcherError: StateFlow<String?> = _switcherError.asStateFlow()
+    private val _switcherError = MutableStateFlow<BtMessage?>(null)
+    val switcherError: StateFlow<BtMessage?> = _switcherError.asStateFlow()
 
     /**
      * Whether the switcher sheet is open. Hoisted into the VM (not local screen
@@ -304,7 +306,7 @@ class PortfolioOverviewViewModel(
             _switcherBusy.value = true
             _switcherError.value = null
             val result = action()
-            if (result is BtResult.Err) _switcherError.value = result.error.userMessage
+            if (result is BtResult.Err) _switcherError.value = result.error.asMessage()
             _switcherBusy.value = false
             onDone(result is BtResult.Ok)
         }

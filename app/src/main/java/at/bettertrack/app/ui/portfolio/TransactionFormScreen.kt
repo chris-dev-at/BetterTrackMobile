@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,10 +32,13 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,9 +48,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -66,25 +66,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtErrorCopy
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
+import at.bettertrack.app.data.db.SyncOpEntity
 import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
@@ -102,14 +106,22 @@ import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
-import androidx.compose.ui.text.font.FontWeight
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatMoney
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -127,13 +139,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
-import java.util.UUID
 
 /**
  * The Step-8 buy/sell form (spec §6.2) — phone-first, number-first, primary
@@ -434,8 +439,8 @@ class TransactionFormViewModel(
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
 
     /** Server rejection (needs-attention reason / PATCH error) shown inline. */
-    private val _serverError = MutableStateFlow<String?>(null)
-    val serverError: StateFlow<String?> = _serverError.asStateFlow()
+    private val _serverError = MutableStateFlow<BtMessage?>(null)
+    val serverError: StateFlow<BtMessage?> = _serverError.asStateFlow()
 
     private val _events = MutableStateFlow<TxFormEvent?>(null)
     val events: StateFlow<TxFormEvent?> = _events.asStateFlow()
@@ -523,7 +528,12 @@ class TransactionFormViewModel(
                     _date.value = epochMsToLocalDate(row.executedAtMs)
                     _noteText.value = row.note.orEmpty()
                     _cashCoupled.value = row.cashCoupled
-                    _serverError.value = op.serverError
+                    // Only when the op actually carries a park reason: a merely
+                    // PENDING op has nothing to answer for, and the fallback
+                    // sentence would invent a rejection that never happened.
+                    _serverError.value = op
+                        .takeIf { it.errorCode != null || it.serverError != null }
+                        ?.rejectionMessage()
                     refineAssetFromHoldings(row.assetId)
                 }
             }
@@ -999,13 +1009,13 @@ class TransactionFormViewModel(
             // resubmit IN PLACE. The bound op keeps its client UUID, so the retry
             // is the SAME entry (edit-and-retry, exactly-once — §7.3).
             after.status == OpStatus.NEEDS_ATTENTION.wire ->
-                _serverError.value = after.serverError ?: DEFAULT_REJECTION_MESSAGE
+                _serverError.value = after.rejectionMessage()
 
-            // Online and still open but already carrying a server reason: never
+            // Online and still open but already carrying a park reason: never
             // dump it into the needs-attention screen behind the user's back —
             // show it here so they can fix it in place.
-            isOnline.value && after.serverError != null ->
-                _serverError.value = after.serverError
+            isOnline.value && (after.errorCode != null || after.serverError != null) ->
+                _serverError.value = after.rejectionMessage()
 
             // Offline enqueue, or an online outcome we couldn't confirm yet with
             // no reason attached: the durable pending row IS the record. Park the
@@ -1059,7 +1069,7 @@ class TransactionFormViewModel(
         val key = UUID.randomUUID().toString()
         when (val r = repo.updateTransaction(m.portfolioId, m.txId, body, key)) {
             is BtResult.Ok -> _events.value = TxFormEvent.Close
-            is BtResult.Err -> _serverError.value = r.error.userMessage
+            is BtResult.Err -> _serverError.value = r.error.asMessage()
         }
     }
 
@@ -1076,7 +1086,7 @@ class TransactionFormViewModel(
                             ?: UUID.randomUUID().toString().also { syncedDeleteKey = it }
                         when (val r = repo.deleteTransaction(m.portfolioId, m.txId, key)) {
                             is BtResult.Ok -> _events.value = TxFormEvent.Close
-                            is BtResult.Err -> _serverError.value = r.error.userMessage
+                            is BtResult.Err -> _serverError.value = r.error.asMessage()
                         }
                     }
                 }
@@ -1106,10 +1116,6 @@ class TransactionFormViewModel(
         get() = isEditSynced || isEditQueued
 
     private companion object {
-        /** Fallback when the server rejects an op without a readable reason. */
-        // TODO(step 19 i18n): externalize to strings.xml.
-        const val DEFAULT_REJECTION_MESSAGE = "BetterTrack rejected this entry."
-
         /** Plain editable number: no grouping, up to 8 decimals, dot separator. */
         fun editNumber(value: Double): String =
             java.math.BigDecimal(value).setScale(8, java.math.RoundingMode.HALF_UP)
@@ -1126,6 +1132,19 @@ class TransactionFormViewModel(
 
 /** Tiny tuple helper for the nested combine above. */
 private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
+/**
+ * Why the queue refused the bound op, as app-owned copy.
+ *
+ * The stored CODE is what the sentence comes from (DB v10 onwards), so the
+ * rejection card is translated even for an op parked weeks ago. A pre-migration
+ * row has no code: its English prose becomes the diagnostic rather than being
+ * dropped, since it is still the only thing that explains the refusal.
+ */
+private fun SyncOpEntity.rejectionMessage(): BtMessage = BtMessage(
+    res = BtErrorCopy.resFor(errorCode) ?: R.string.bt_err_app_rejected,
+    diagnostic = if (errorCode == null) serverError else null,
+)
 
 // ═════════════════════════════════ UI ═══════════════════════════════════════
 
@@ -1149,7 +1168,7 @@ fun TransactionFormScreen(
     }
 
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
 
     val loading by vm.loading.collectAsStateWithLifecycle()
     val targetMissing by vm.targetMissing.collectAsStateWithLifecycle()
@@ -2072,7 +2091,7 @@ private fun UncoveredSellCard(
 }
 
 @Composable
-private fun RejectionCard(message: String, isQueuedRetry: Boolean) {
+private fun RejectionCard(message: BtMessage, isQueuedRetry: Boolean) {
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.card,
@@ -2097,7 +2116,7 @@ private fun RejectionCard(message: String, isQueuedRetry: Boolean) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = message,
+                    text = message.resolveWithDiagnostic(),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textSecondary,
                 )

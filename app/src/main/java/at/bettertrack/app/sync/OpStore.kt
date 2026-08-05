@@ -34,7 +34,12 @@ interface OpStore {
 
     suspend fun markDone(id: Long, serverResultJson: String?, nowMs: Long)
 
-    suspend fun markNeedsAttention(id: Long, error: String, nowMs: Long)
+    /**
+     * Park an op with a stable [errorCode] (resolved to translated copy at
+     * render time) and an optional [diagnostic] — the server's own words, or the
+     * format argument for the codes that take one.
+     */
+    suspend fun markNeedsAttention(id: Long, errorCode: String, diagnostic: String?, nowMs: Long)
 
     suspend fun markPending(id: Long, attemptCount: Int, nextAttemptAtMs: Long, nowMs: Long)
 
@@ -84,6 +89,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             attemptCount = 0,
             nextAttemptAtMs = 0L,
             serverError = null,
+            errorCode = null,
             serverResultJson = null,
             accountKey = accountKey,
             createdAtMs = nowMs,
@@ -106,6 +112,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             attemptCount = op.attemptCount,
             nextAttemptAtMs = op.nextAttemptAtMs,
             serverError = null,
+            errorCode = null,
             serverResultJson = null,
             updatedAtMs = nowMs,
         )
@@ -132,6 +139,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             attemptCount = attemptCount,
             nextAttemptAtMs = nextAttemptAtMs,
             serverError = null,
+            errorCode = null,
             serverResultJson = null,
             updatedAtMs = nowMs,
         )
@@ -145,19 +153,26 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             attemptCount = op.attemptCount,
             nextAttemptAtMs = 0L,
             serverError = null,
+            errorCode = null,
             serverResultJson = serverResultJson,
             updatedAtMs = nowMs,
         )
     }
 
-    override suspend fun markNeedsAttention(id: Long, error: String, nowMs: Long) {
+    override suspend fun markNeedsAttention(
+        id: Long,
+        errorCode: String,
+        diagnostic: String?,
+        nowMs: Long,
+    ) {
         val op = dao.getById(id) ?: return
         dao.updateState(
             id = id,
             status = OpStatus.NEEDS_ATTENTION.wire,
             attemptCount = op.attemptCount,
             nextAttemptAtMs = 0L,
-            serverError = error,
+            serverError = diagnostic,
+            errorCode = errorCode,
             serverResultJson = null,
             updatedAtMs = nowMs,
         )
@@ -175,6 +190,7 @@ class RoomOpStore(private val dao: SyncOpDao) : OpStore {
             attemptCount = attemptCount,
             nextAttemptAtMs = nextAttemptAtMs,
             serverError = null,
+            errorCode = null,
             serverResultJson = null,
             updatedAtMs = nowMs,
         )
@@ -213,6 +229,7 @@ fun SyncOpEntity.toModel(): SyncOp = SyncOp(
     attemptCount = attemptCount,
     nextAttemptAtMs = nextAttemptAtMs,
     serverError = serverError,
+    errorCode = errorCode,
     serverResultJson = serverResultJson,
     accountKey = accountKey,
     createdAtMs = createdAtMs,

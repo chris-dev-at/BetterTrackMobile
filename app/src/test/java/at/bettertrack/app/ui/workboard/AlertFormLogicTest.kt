@@ -74,8 +74,8 @@ class AlertFormLogicTest {
     }
 
     @Test
-    fun `price prefixes the native currency symbol to the formatted number`() {
-        assertEquals("$150", formatAlertPrice(150.0, "USD", Locale.US))
-        assertEquals("€80,50", formatAlertPrice(80.5, "EUR", Locale.GERMANY))
+    fun `price suffixes the native currency symbol, matching the app's money convention`() {
+        assertEquals("150.00 $", formatAlertPrice(150.0, "USD", Locale.US))
+        assertEquals("80,50 €", formatAlertPrice(80.5, "EUR", Locale.GERMANY))
     }
 }

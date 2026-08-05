@@ -43,13 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
@@ -67,13 +66,14 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
+import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
-import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.shell.RefreshFailedBanner
 import at.bettertrack.app.ui.shell.RefreshNoticeState
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -85,7 +85,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * Per-portfolio transaction history (Step 7, spec §6.2 read-only; Step 8 adds
@@ -520,7 +519,7 @@ fun TransactionRow(
     onClick: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val isBuy = tx.side == "buy"
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(

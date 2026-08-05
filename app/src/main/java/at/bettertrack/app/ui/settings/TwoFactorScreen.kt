@@ -60,11 +60,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.account.TwoFactorEnrollment
 import at.bettertrack.app.data.account.TwoFactorState
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtQrCode
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -88,13 +91,13 @@ fun TwoFactorScreen(onBack: () -> Unit) {
 
     var loading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf<TwoFactorState?>(null) }
-    var loadError by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<BtMessage?>(null) }
 
     // Enrollment (TOTP) inline flow.
     var enrollment by remember { mutableStateOf<TwoFactorEnrollment?>(null) }
     var totpCode by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var actionError by remember { mutableStateOf<String?>(null) }
+    var actionError by remember { mutableStateOf<BtMessage?>(null) }
 
     // Email-method inline flow.
     var emailSetup by remember { mutableStateOf(false) }
@@ -110,7 +113,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
     suspend fun reload() {
         when (val r = repo.twoFactorStatus()) {
             is BtResult.Ok -> { status = r.value; loadError = null }
-            is BtResult.Err -> loadError = r.error.userMessage
+            is BtResult.Err -> loadError = r.error.asMessage()
         }
         loading = false
     }
@@ -149,7 +152,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                 return@Column
             }
             loadError?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = bt.loss)
+                Text(it.resolveWithDiagnostic(), style = MaterialTheme.typography.bodyMedium, color = bt.loss)
                 return@Column
             }
             val s = status ?: return@Column
@@ -177,7 +180,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                 }
             }
 
-            actionError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss) }
+            actionError?.let { Text(it.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss) }
 
             // ── Authenticator app (TOTP) ─────────────────────────────────────
             MethodCard(
@@ -200,7 +203,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.twoFactorEnroll()) {
                                 is BtResult.Ok -> { enrollment = r.value; totpCode = "" }
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false
                             reload()
@@ -226,7 +229,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                                     r.value?.let { recoveryCodes = it }
                                     reload()
                                 }
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false
                         }
@@ -250,7 +253,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.twoFactorEmailDisable()) {
                                 is BtResult.Ok -> {}
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false; reload()
                         }
@@ -259,7 +262,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.twoFactorEmailEnroll()) {
                                 is BtResult.Ok -> { emailSetup = true; emailCode = "" }
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false
                         }
@@ -285,7 +288,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                                 scope.launch {
                                     when (val r = repo.twoFactorEmailConfirm(emailCode)) {
                                         is BtResult.Ok -> { emailSetup = false; r.value?.let { recoveryCodes = it }; reload() }
-                                        is BtResult.Err -> actionError = r.error.userMessage
+                                        is BtResult.Err -> actionError = r.error.asMessage()
                                     }
                                     busy = false
                                 }
@@ -312,7 +315,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.regenerateRecoveryCodes()) {
                                 is BtResult.Ok -> { recoveryCodes = r.value; reload() }
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false
                         }
@@ -354,7 +357,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.twoFactorDisable(disableCode)) {
                                 is BtResult.Ok -> { showDisable = false; disableCode = ""; reload() }
-                                is BtResult.Err -> actionError = r.error.userMessage
+                                is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false
                         }

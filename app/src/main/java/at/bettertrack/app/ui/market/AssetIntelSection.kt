@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +33,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.DividendEventDto
 import at.bettertrack.app.data.api.dto.DividendsResponse
 import at.bettertrack.app.data.api.dto.EarningsEventDto
@@ -54,17 +55,19 @@ import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.theme.BtTheme
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * V5 S2c-2 — the **market-intel block on the asset page**: dividends, earnings,
@@ -267,7 +270,7 @@ sealed interface AssetIntelUiState {
     data class Ready(val intel: AssetIntel) : AssetIntelUiState
 
     /** The capability probe itself failed — nothing here can be claimed. */
-    data class Failed(val message: String) : AssetIntelUiState
+    data class Failed(val message: BtMessage) : AssetIntelUiState
 }
 
 class AssetIntelViewModel(
@@ -287,7 +290,7 @@ class AssetIntelViewModel(
             _state.value = AssetIntelUiState.Loading
             _state.value = when (val r = repo.assetIntel(assetId)) {
                 is BtResult.Ok -> AssetIntelUiState.Ready(r.value)
-                is BtResult.Err -> AssetIntelUiState.Failed(r.error.userMessage)
+                is BtResult.Err -> AssetIntelUiState.Failed(r.error.asMessage())
             }
         }
     }
@@ -305,13 +308,13 @@ fun AssetIntelSection(assetId: String, modifier: Modifier = Modifier) {
         AssetIntelViewModel(AppGraph.marketIntelRepository, assetId)
     }
     val state by vm.state.collectAsStateWithLifecycle()
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
 
     when (val s = state) {
         AssetIntelUiState.Loading -> IntelSectionSkeleton(modifier)
 
         is AssetIntelUiState.Failed -> IntelInlineError(
-            text = s.message,
+            message = s.message,
             onRetry = { vm.load() },
             modifier = modifier,
         )
@@ -703,9 +706,13 @@ internal fun IntelEmptyLine(text: String, modifier: Modifier = Modifier) {
  * chart) is already on screen — same reasoning as `CashAnalyticsError`. The
  * retry is not optional though; without it the only cure for a dropped request
  * is to leave the page and come back.
+ *
+ * One line of copy is all this row has, so the diagnostic (present only for a
+ * code this build has no copy for) rides along after an em dash rather than
+ * claiming a second line the compact layout does not have.
  */
 @Composable
-internal fun IntelInlineError(text: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+internal fun IntelInlineError(message: BtMessage, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     val bt = BtTheme.colors
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -719,7 +726,7 @@ internal fun IntelInlineError(text: String, onRetry: () -> Unit, modifier: Modif
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            text = text,
+            text = message.resolveWithDiagnostic(),
             style = MaterialTheme.typography.bodyMedium,
             color = bt.textSecondary,
             modifier = Modifier.weight(1f),

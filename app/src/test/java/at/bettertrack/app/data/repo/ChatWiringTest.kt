@@ -278,7 +278,9 @@ class ChatWiringTest {
         val conv = resp.conversations.single().toDomain(myUserId = "me")
         assertEquals("c9", conv.id)
         assertEquals("", conv.friendUserId) // empty id ⇒ read-only computation kicks in
-        assertEquals("deleted", conv.friendUsername)
+        // A deleted participant has no handle at all; the UI substitutes a
+        // translated "Deleted user" label rather than showing "@deleted".
+        assertEquals("", conv.friendUsername)
         assertEquals(1, conv.unread)
     }
 }
