@@ -1,5 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!--
+        ═══════════════════════════════════════════════════════════════════════
+        GLOSSARY — one noun per concept (S6 P1-13)
+        ═══════════════════════════════════════════════════════════════════════
+        Before this sweep a single cash row was called a "movement" in the list,
+        an "entry" in the edit sheet and a "Buchung" in German — three names for
+        one object inside one flow. Pick a word here BEFORE writing new copy, and
+        use only that word.
+
+          Movement    (DE: Bewegung)      one row in the cash ledger: a deposit,
+                                          withdrawal, fee, transfer leg, or the
+                                          cash side of a trade or dividend.
+          Transaction (DE: Transaktion)   a buy or sell of an asset.
+          Dividend    (DE: Dividende)     a payout recorded against a holding.
+          Holding     (DE: Position)      an asset position inside a portfolio.
+          Cash source (DE: Bargeldquelle) a named pot cash sits in.
+          Net worth   (DE: Vermögen)      the overview headline total. NOT
+                                          "portfolio value" — one screen, one noun.
+          Queued entry (DE: Eintrag)      an unsent write in the offline queue.
+                                          Deliberately NOT "movement": it is the
+                                          pending write, not the ledger row.
+          Basket      (DE: Korb)          a conglomerate.
+          Circle      (DE: Kreis)         a friend group.
+
+        Error copy: every `bt_err_*` key is generated from the catalogue in
+        `data/api/BtErrorCopy.kt`. Add codes there and in BOTH files, or
+        `BtErrorCopyTest` and `StringParityTest` fail.
+    -->
     <string name="app_name">BetterTrack</string>
 
     <!-- Shared component strings -->
@@ -106,7 +135,7 @@
     <string name="bt_overview_no_portfolio_message">A portfolio tracks your holdings, cash and performance.</string>
     <string name="bt_overview_create_portfolio">Create portfolio</string>
     <string name="bt_overview_chart_empty">Not enough history to draw yet</string>
-    <string name="bt_overview_chart_cd">Portfolio value over time chart</string>
+    <string name="bt_overview_chart_cd">Net worth over time chart</string>
     <string name="bt_overview_graph_range_cd">Show %1$s history</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
@@ -135,13 +164,13 @@
     <string name="bt_switcher_archive_title">Archive portfolio?</string>
     <string name="bt_switcher_archive_message">\u201c%1$s\u201d moves to Archived. You can restore it any time.</string>
     <string name="bt_switcher_archive_action">Archive</string>
-    <string name="bt_switcher_requires_connection">Requires a connection \u2014 you\u2019re offline</string>
-    <string name="bt_switcher_value_pending">\u2014</string>
+    <string name="bt_switcher_requires_connection">Requires a connection — you\u2019re offline</string>
+    <string name="bt_switcher_value_pending">—</string>
     <string name="bt_switcher_archived_expand">Show archived portfolios</string>
     <string name="bt_switcher_archived_collapse">Hide archived portfolios</string>
     <string name="bt_switcher_delete">Delete</string>
     <string name="bt_switcher_delete_title">Delete portfolio?</string>
-    <string name="bt_switcher_delete_warning">Deleting \u201c%1$s\u201d permanently removes its entire transaction history, cash and dividends. This can\u2019t be undone \u2014 your historical and tax figures will change.</string>
+    <string name="bt_switcher_delete_warning">Deleting \u201c%1$s\u201d permanently removes its entire transaction history, cash and dividends. This can\u2019t be undone — your historical and tax figures will change.</string>
     <string name="bt_switcher_delete_confirm_label">Type the portfolio name to confirm</string>
     <string name="bt_switcher_delete_action">Delete portfolio</string>
     <string name="bt_switcher_delete_last_active_error">You can\u2019t delete your last active portfolio. Create or restore another one first.</string>
@@ -332,15 +361,15 @@
     <string name="bt_cash_fee_hint">A fee is a cost, so it lowers your return. A withdrawal just moves money out and doesn\'t.</string>
 
     <!-- v5 cash corrections (edit / delete a synced movement) -->
-    <string name="bt_cash_movement_actions_cd">Entry actions</string>
+    <string name="bt_cash_movement_actions_cd">Movement actions</string>
     <string name="bt_cash_edit">Edit</string>
     <string name="bt_cash_delete">Delete</string>
-    <string name="bt_cash_edit_title">Edit cash entry</string>
-    <string name="bt_cash_delete_title">Delete this entry?</string>
-    <string name="bt_cash_delete_message">The entry is removed and your balance is recalculated from the whole ledger.</string>
-    <string name="bt_cash_delete_action">Delete entry</string>
-    <string name="bt_cash_not_editable_title">This entry follows another one</string>
-    <string name="bt_cash_not_editable_hint">BetterTrack creates it automatically, so it always matches its parent. Change the entry it comes from and this one updates with it.</string>
+    <string name="bt_cash_edit_title">Edit cash movement</string>
+    <string name="bt_cash_delete_title">Delete this movement?</string>
+    <string name="bt_cash_delete_message">The movement is removed and your balance is recalculated from the whole ledger.</string>
+    <string name="bt_cash_delete_action">Delete movement</string>
+    <string name="bt_cash_not_editable_title">This movement follows another one</string>
+    <string name="bt_cash_not_editable_hint">BetterTrack creates it automatically, so it always matches its parent. Change the transaction or dividend it comes from and this one updates with it.</string>
     <string name="bt_cash_correction_failed_title">Couldn\'t save that change</string>
     <string name="bt_cash_edit_kind_label">Type</string>
 
@@ -349,7 +378,7 @@
     <string name="bt_source_import">Import · %1$s</string>
     <string name="bt_source_sync">Sync · %1$s</string>
     <string name="bt_source_sync_group">From group</string>
-    <string name="bt_source_filter_all">All entries</string>
+    <string name="bt_source_filter_all">All movements</string>
     <string name="bt_source_filter_automatic">Automatic only</string>
 
     <!-- v5 mirrorchain (group portfolio) overlays -->
@@ -760,7 +789,8 @@
     <string name="bt_settings_dev_backend">Dev backend</string>
     <string name="bt_settings_dev_backend_sub">Override the API / web origin</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
-    <string name="bt_settings_dev_hint">%1$d more taps to unlock developer options</string>
+    <!-- %1$s, not %1$d: the app snackbar carries a single STRING format argument. -->
+    <string name="bt_settings_dev_hint">%1$s more taps to unlock developer options</string>
 
     <!-- Change password -->
     <string name="bt_dest_change_password">Change password</string>
@@ -888,10 +918,12 @@
     <string name="bt_alert_actions_cd">Alert actions</string>
     <string name="bt_alert_cond_above">Above %1$s</string>
     <string name="bt_alert_cond_below">Below %1$s</string>
-    <string name="bt_alert_cond_up_from">Up %1$s %% from %2$s</string>
-    <string name="bt_alert_cond_down_from">Down %1$s %% from %2$s</string>
-    <string name="bt_alert_cond_day_up">Up %1$s %% in a day</string>
-    <string name="bt_alert_cond_day_down">Down %1$s %% in a day</string>
+    <!-- S6 P2-20: English writes no gap before "%" (the DE strings keep
+         theirs) — number rule 2, the same split btFormatPercentCore applies. -->
+    <string name="bt_alert_cond_up_from">Up %1$s%% from %2$s</string>
+    <string name="bt_alert_cond_down_from">Down %1$s%% from %2$s</string>
+    <string name="bt_alert_cond_day_up">Up %1$s%% in a day</string>
+    <string name="bt_alert_cond_day_down">Down %1$s%% in a day</string>
 
     <!-- Row actions -->
     <string name="bt_alert_edit">Edit</string>
@@ -954,6 +986,8 @@
     <string name="bt_chat_kind_conglomerate">Conglomerate</string>
     <!-- Fallback label for an unmodeled/unknown share-chip kind (never navigates). -->
     <string name="bt_chat_kind_unknown">Shared item</string>
+    <!-- Stands in for a participant who deleted their account — a label, never an @handle. -->
+    <string name="bt_chat_deleted_user">Deleted user</string>
 
     <!-- Social (§6.9–§6.12) — externalized in the Step-19 i18n audit -->
     <!-- Messages header + tabs -->
@@ -1816,4 +1850,255 @@
     <string name="bt_overview_alloc_see_all">See all</string>
     <string name="bt_overview_alloc_less">Show less</string>
     <string name="bt_overview_alloc_bar_cd">Allocation across your holdings</string>
+    <!-- ===== API error-code copy (EN) — generated catalog, see BtErrorCopy.kt ===== -->
+
+    <!-- Generic envelope + transport -->
+    <string name="bt_err_unknown">Something went wrong. Please try again in a moment.</string>
+    <string name="bt_err_internal">Something went wrong on our side. Please try again in a moment.</string>
+    <string name="bt_err_network_error">No connection. Check your network and try again.</string>
+    <string name="bt_err_validation_error">Some of the details weren\'t accepted. Please check your entries.</string>
+    <string name="bt_err_bad_request">That request couldn\'t be processed as sent.</string>
+    <string name="bt_err_conflict">That change collides with the current state. Refresh and try again.</string>
+    <string name="bt_err_unprocessable">That change can\'t be applied as entered.</string>
+    <string name="bt_err_unauthenticated">Your session has expired. Please sign in again.</string>
+    <string name="bt_err_forbidden">You don\'t have access to this.</string>
+    <string name="bt_err_not_found">This isn\'t available anymore.</string>
+    <string name="bt_err_rate_limited">Too many requests. Please wait a moment and try again.</string>
+    <string name="bt_err_upstream_unavailable">Market data is temporarily unavailable. Please try again shortly.</string>
+    <string name="bt_err_payload_too_large">That\'s too large to send.</string>
+    <string name="bt_err_feature_disabled">This feature isn\'t available right now.</string>
+    <string name="bt_err_csrf_header_required">This request couldn\'t be verified. Please sign in again.</string>
+    <string name="bt_err_csrf_origin_rejected">This request came from an address we don\'t accept.</string>
+
+    <!-- Authentication: credentials + account state -->
+    <string name="bt_err_invalid_credentials">Wrong e-mail, username or password.</string>
+    <string name="bt_err_account_disabled">This account has been suspended. Please contact your administrator.</string>
+    <string name="bt_err_user_disabled">This account has been suspended. Please contact your administrator.</string>
+    <string name="bt_err_admin_account_kind">BetterTrack App is for personal accounts only.</string>
+    <string name="bt_err_password_change_required">You need to set a new password before you can continue.</string>
+    <string name="bt_err_admin_2fa_setup_required">This account must set up two-factor authentication first.</string>
+    <string name="bt_err_weak_password">That password isn\'t strong enough. Choose a longer, less common one.</string>
+    <string name="bt_err_confirmation_mismatch">The confirmation doesn\'t match.</string>
+    <string name="bt_err_email_taken">An account already exists for this e-mail address.</string>
+    <string name="bt_err_username_taken">That username is already taken.</string>
+    <string name="bt_err_user_not_found">We couldn\'t find that user.</string>
+    <string name="bt_err_invalid_reset">This reset link is invalid or has expired.</string>
+    <string name="bt_err_invalid_invite">This invite link is invalid or has expired.</string>
+    <string name="bt_err_invalid_registration_token">This registration token is invalid or has expired.</string>
+    <string name="bt_err_registration_token_required">A registration token is required to sign up.</string>
+    <string name="bt_err_registration_closed">Self-service registration is switched off on this server.</string>
+
+    <!-- Authentication: two-factor, PIN, passkeys, Google -->
+    <string name="bt_err_two_factor_pending_invalid">Your verification session has expired. Please sign in again.</string>
+    <string name="bt_err_two_factor_invalid_code">That code is incorrect or has expired.</string>
+    <string name="bt_err_two_factor_already_enabled">Two-factor authentication is already switched on.</string>
+    <string name="bt_err_two_factor_not_enabled">Two-factor authentication isn\'t switched on.</string>
+    <string name="bt_err_two_factor_not_pending">Start the two-factor setup before confirming it.</string>
+    <string name="bt_err_two_factor_email_unavailable">E-mail codes can\'t be sent from this server. Use an authenticator app instead.</string>
+    <string name="bt_err_invalid_pin">Incorrect PIN.</string>
+    <string name="bt_err_pin_not_enabled">No PIN is set for this account.</string>
+    <string name="bt_err_pin_fallback_login">Too many incorrect PIN attempts. Please sign in with your password.</string>
+    <string name="bt_err_remember_device_unknown">This device isn\'t remembered anymore. Please sign in again.</string>
+    <string name="bt_err_passkey_challenge_invalid">That passkey request expired. Please start again.</string>
+    <string name="bt_err_passkey_verification_failed">That passkey couldn\'t be verified. Try another sign-in method.</string>
+    <string name="bt_err_passkey_already_registered">That passkey is already registered.</string>
+    <string name="bt_err_passkey_not_found">We couldn\'t find that passkey.</string>
+    <string name="bt_err_passkey_counter_regression">This passkey couldn\'t be used. Try another sign-in method.</string>
+    <string name="bt_err_google_failed">Google sign-in failed. Please try again.</string>
+    <string name="bt_err_google_verify_failed">Google verification failed. Please try again.</string>
+    <string name="bt_err_google_admin_unsupported">Google sign-in isn\'t available for this account. Use your password.</string>
+    <string name="bt_err_google_already_linked">This Google account is already linked to another BetterTrack account.</string>
+    <string name="bt_err_google_email_mismatch">That Google account uses a different e-mail address than your account.</string>
+    <string name="bt_err_google_not_linked">No Google account is linked.</string>
+    <string name="bt_err_google_only_sign_in">Set a password before unlinking Google — it\'s your only way in.</string>
+    <string name="bt_err_google_register_ticket_invalid">Your Google sign-up session expired. Please connect Google again.</string>
+    <string name="bt_err_api_key_invalid">This access token is invalid or was revoked.</string>
+    <string name="bt_err_api_key_forbidden">This action isn\'t available with an access token.</string>
+    <string name="bt_err_insufficient_scope">This app doesn\'t have permission for that action.</string>
+
+    <!-- Portfolios, transactions, dividends, tax -->
+    <string name="bt_err_portfolio_not_found">We couldn\'t find that portfolio.</string>
+    <string name="bt_err_portfolio_name_taken">A portfolio with that name already exists.</string>
+    <string name="bt_err_portfolio_already_archived">This portfolio is already archived.</string>
+    <string name="bt_err_portfolio_not_archived">This portfolio isn\'t archived.</string>
+    <string name="bt_err_last_active_portfolio">This is your only active portfolio, so it can\'t be removed.</string>
+    <string name="bt_err_portfolio_visibility_guard_required">Change who can see this portfolio from its sharing settings.</string>
+    <string name="bt_err_transaction_not_found">We couldn\'t find that transaction.</string>
+    <string name="bt_err_transaction_taxed">This transaction carries recorded tax. Delete it and add it again to change the numbers.</string>
+    <string name="bt_err_transaction_affects_taxed">Editing this would change the realised gains of already taxed sells. Delete it and add it again instead.</string>
+    <string name="bt_err_transaction_cash_linked">This transaction is linked to your cash balance. Delete it and add it again to change the amount.</string>
+    <string name="bt_err_oversell">You don\'t hold that many shares.</string>
+    <string name="bt_err_empty_batch">There are no transactions to add.</string>
+    <string name="bt_err_dividend_not_found">We couldn\'t find that dividend.</string>
+    <string name="bt_err_dividend_asset_not_held">Dividends can only be recorded on assets this portfolio holds.</string>
+    <string name="bt_err_dividend_amount_too_small">That dividend amount rounds down to zero.</string>
+    <string name="bt_err_tax_entry_invalid">Manual tax entries apply only to sells.</string>
+    <string name="bt_err_tax_entry_not_allowed">Manual tax entries need the manual per-trade tax mode.</string>
+    <string name="bt_err_tax_fx_unavailable">Taxing this trade needs a currency conversion that isn\'t available right now.</string>
+    <string name="bt_err_base_fx_unavailable">Exchange rates for your base currency aren\'t available right now.</string>
+
+    <!-- Cash: sources, movements, tags, budgets, rules -->
+    <string name="bt_err_cash_source_not_found">We couldn\'t find that cash source.</string>
+    <string name="bt_err_cash_source_name_taken">A cash source with that name already exists.</string>
+    <string name="bt_err_cash_source_archived">This cash source is archived. Restore it before recording new movements.</string>
+    <string name="bt_err_cash_source_already_archived">This cash source is already archived.</string>
+    <string name="bt_err_cash_source_not_archived">This cash source isn\'t archived.</string>
+    <string name="bt_err_cash_source_is_main">The main cash source can\'t be archived.</string>
+    <string name="bt_err_cash_source_not_empty">Only a cash source with a zero balance can be archived. Move or withdraw the rest first.</string>
+    <string name="bt_err_cash_movement_not_found">We couldn\'t find that movement.</string>
+    <string name="bt_err_cash_movement_not_editable">This movement comes from a trade or dividend — edit that one instead.</string>
+    <string name="bt_err_cash_ledger_would_go_negative">This would overdraw your cash balance on a later date. Add cash or remove the dependent movements first.</string>
+    <string name="bt_err_insufficient_cash">There isn\'t enough cash in that source.</string>
+    <string name="bt_err_cash_flag_mismatch">That cash option doesn\'t apply to this kind of entry.</string>
+    <string name="bt_err_cash_fx_unavailable">Cash-linked entries need a currency conversion that isn\'t available right now.</string>
+    <string name="bt_err_cash_transfer_same_source">A transfer needs two different cash sources.</string>
+    <string name="bt_err_cash_transfer_invalid">That transfer can\'t be recorded as entered.</string>
+    <string name="bt_err_cash_tag_not_found">We couldn\'t find that tag.</string>
+    <string name="bt_err_cash_tag_name_taken">You already have a tag with that name.</string>
+    <string name="bt_err_cash_tag_system_protected">Built-in tags can\'t be deleted — rename it instead.</string>
+    <string name="bt_err_cash_tag_ref_not_found">One of those tags doesn\'t exist anymore.</string>
+    <string name="bt_err_cash_rule_not_found">We couldn\'t find that rule.</string>
+    <string name="bt_err_cash_rule_regex_unsupported">That pattern isn\'t a supported regular expression.</string>
+    <string name="bt_err_cash_budget_not_found">We couldn\'t find that budget.</string>
+    <string name="bt_err_cash_budget_exists">That tag already has a budget for this period.</string>
+    <string name="bt_err_standing_order_asset_not_found">We couldn\'t find that asset for the standing order.</string>
+    <string name="bt_err_standing_order_end_before_start">The end date must be on or after the start date.</string>
+    <string name="bt_err_standing_order_insufficient_cash">There isn\'t enough cash to cover this standing order.</string>
+
+    <!-- Assets, baskets, watchlists, workboard, alerts, AI -->
+    <string name="bt_err_asset_not_found">We couldn\'t find that asset.</string>
+    <string name="bt_err_custom_asset_not_found">We couldn\'t find that custom asset.</string>
+    <string name="bt_err_duplicate_value_point">There is already a value for that date.</string>
+    <string name="bt_err_manual_asset_not_found">We couldn\'t find that custom asset.</string>
+    <string name="bt_err_manual_asset_empty">This custom asset has no values yet.</string>
+    <string name="bt_err_quote_unavailable">We couldn\'t read a current price. Please try again shortly.</string>
+    <string name="bt_err_no_quote">There is no current price for that asset.</string>
+    <string name="bt_err_conglomerate_not_found">We couldn\'t find that basket.</string>
+    <string name="bt_err_conglomerate_name_taken">A basket with that name already exists.</string>
+    <string name="bt_err_conglomerate_in_use">This basket is part of another basket — remove it there first.</string>
+    <string name="bt_err_conglomerate_visibility_guard_required">Change who can see this basket from its sharing settings.</string>
+    <string name="bt_err_duplicate_asset">An asset may only appear once in a basket.</string>
+    <string name="bt_err_duplicate_child">A basket may only appear once inside another basket.</string>
+    <string name="bt_err_nesting_cycle">A basket can\'t contain itself.</string>
+    <string name="bt_err_nesting_too_deep">These baskets are nested too deeply.</string>
+    <string name="bt_err_too_many_positions">This basket has reached its maximum number of positions.</string>
+    <string name="bt_err_activation_invalid">This basket needs at least one position, and its weights must total 100 percent, before it can be activated.</string>
+    <string name="bt_err_allocation_no_positions">This basket has no positions to spread a budget over.</string>
+    <string name="bt_err_allocation_invalid">That allocation can\'t be calculated as entered.</string>
+    <string name="bt_err_backtest_unavailable">There isn\'t enough data to run this backtest.</string>
+    <string name="bt_err_no_price_history">There is no price history for this backtest.</string>
+    <string name="bt_err_fx_unavailable">A currency conversion this backtest needs isn\'t available right now.</string>
+    <string name="bt_err_sandbox_private_asset">A private custom asset can\'t be backtested in a shared sandbox.</string>
+    <string name="bt_err_sandbox_positions_mismatch">The weights must cover exactly the shared basket\'s positions.</string>
+    <string name="bt_err_watchlist_not_found">We couldn\'t find that watchlist.</string>
+    <string name="bt_err_watchlist_name_taken">A watchlist with that name already exists.</string>
+    <string name="bt_err_watchlist_default_locked">The default watchlist can\'t be renamed or deleted.</string>
+    <string name="bt_err_already_watching">That asset is already on this watchlist.</string>
+    <string name="bt_err_item_not_found">We couldn\'t find that workboard item.</string>
+    <string name="bt_err_idea_conglomerate_not_found">The basket this idea refers to no longer exists.</string>
+    <string name="bt_err_alert_not_found">We couldn\'t find that alert.</string>
+    <string name="bt_err_alert_sharing_ack_required">Sharing your alerts shows followers which assets you watch and your price targets. Confirm this to switch it on.</string>
+    <string name="bt_err_ai_no_data">This portfolio has no priced holdings to analyse.</string>
+    <string name="bt_err_ai_unavailable">The AI assistant isn\'t available right now.</string>
+    <string name="bt_err_ai_cap_exceeded">You have reached today\'s AI limit. Please try again tomorrow.</string>
+    <string name="bt_err_ai_provider_error">The AI assistant didn\'t respond. Please try again.</string>
+
+    <!-- Group portfolios (mirror seam) -->
+    <string name="bt_err_mirror_chain_not_found">We couldn\'t find that group portfolio.</string>
+    <string name="bt_err_mirror_forbidden">Your role in this group portfolio doesn\'t allow that.</string>
+    <string name="bt_err_mirror_member_not_found">That person isn\'t a member of this group portfolio.</string>
+    <string name="bt_err_mirror_already_member">That person is already a member of this group portfolio.</string>
+    <string name="bt_err_mirror_already_synced">This portfolio is already a group portfolio.</string>
+    <string name="bt_err_mirror_no_members">This group portfolio has no active copies to join.</string>
+    <string name="bt_err_mirror_not_friends">You can only share a group portfolio with your friends.</string>
+    <string name="bt_err_mirror_cannot_invite_self">You can\'t invite yourself.</string>
+    <string name="bt_err_mirror_member_cap_reached">This group portfolio is full.</string>
+    <string name="bt_err_mirror_invite_exists">That person already has a pending invite.</string>
+    <string name="bt_err_mirror_invite_not_found">This invite is no longer valid.</string>
+    <string name="bt_err_mirror_conflict">Someone else changed this shared entry first. Refresh and try again.</string>
+    <string name="bt_err_mirror_row_deleted">This entry was removed from the shared portfolio, so the change can\'t be applied.</string>
+    <string name="bt_err_mirror_busy">This group portfolio is busy applying another change. Please try again shortly.</string>
+    <string name="bt_err_mirror_sync_stalled">The shared portfolio is still syncing. This will be retried automatically.</string>
+    <string name="bt_err_mirror_asset_not_syncable">Custom assets can\'t go into a group portfolio — other members wouldn\'t see them. Use one of your own portfolios.</string>
+    <string name="bt_err_mirror_owner_transfer_required">Hand over ownership of this group portfolio first.</string>
+
+    <!-- Social, sharing and chat -->
+    <string name="bt_err_friend_request_not_found">We couldn\'t find that friend request.</string>
+    <string name="bt_err_friendship_not_found">You aren\'t friends with that person.</string>
+    <string name="bt_err_friend_group_not_found">We couldn\'t find that circle.</string>
+    <string name="bt_err_group_member_not_friend">Only your friends can be added to a circle.</string>
+    <string name="bt_err_group_audience_invalid">Sharing with a circle needs one of your own circles.</string>
+    <string name="bt_err_follow_not_found">You aren\'t following that person.</string>
+    <string name="bt_err_cannot_follow_self">You can\'t follow yourself.</string>
+    <string name="bt_err_item_follow_not_found">You aren\'t following that item.</string>
+    <string name="bt_err_cannot_follow_own_item">You can\'t follow your own item.</string>
+    <string name="bt_err_link_not_found">This shared link is no longer available.</string>
+    <string name="bt_err_profile_not_found">This profile isn\'t available.</string>
+    <string name="bt_err_invalid_profile_icon">That profile icon doesn\'t exist.</string>
+    <string name="bt_err_public_profile_ack_required">A public profile shows anyone the items you have made public. Confirm this to switch it on.</string>
+    <string name="bt_err_public_link_ack_required">A public link shows your holdings and net worth to anyone who has it. Confirm this to continue.</string>
+    <string name="bt_err_comment_not_found">We couldn\'t find that comment.</string>
+    <string name="bt_err_chat_banned">You can\'t send messages right now.</string>
+    <string name="bt_err_chat_chip_not_owned">You can only share an item you own.</string>
+
+    <!-- Notifications and delivery -->
+    <string name="bt_err_notification_not_found">We couldn\'t find that notification.</string>
+    <string name="bt_err_web_push_endpoint_unsafe">That push address was rejected as unsafe.</string>
+    <string name="bt_err_web_push_subscription_limit_reached">You have reached the maximum number of push devices.</string>
+    <string name="bt_err_webhook_not_found">We couldn\'t find that webhook.</string>
+    <string name="bt_err_webhook_limit_reached">You have reached the maximum number of webhooks.</string>
+
+    <!-- Data export -->
+    <string name="bt_err_export_token_required">This download needs a valid token.</string>
+    <string name="bt_err_export_not_found">This export is no longer available.</string>
+    <string name="bt_err_export_rate_limited">You can request one data export per day. Please try again later.</string>
+
+    <!-- Offline queue: idempotency keys -->
+    <string name="bt_err_idempotency_key_invalid">This change couldn\'t be submitted (its sync key was rejected). Remove it and create it again.</string>
+    <string name="bt_err_idempotency_key_mismatch">This change was already submitted in a different form. Remove it and create it again.</string>
+    <string name="bt_err_idempotency_in_progress">This change is still being processed. It will be retried automatically.</string>
+
+    <!-- Paranoid mode and the vault -->
+    <string name="bt_err_paranoid_mode">This feature is unavailable while paranoid mode is on.</string>
+    <string name="bt_err_paranoid_not_enabled">Paranoid mode isn\'t switched on.</string>
+    <string name="bt_err_paranoid_media_not_ready">Your vault storage isn\'t ready yet.</string>
+    <string name="bt_err_paranoid_mirrorchain_active">Leave your group portfolios before changing paranoid mode.</string>
+    <string name="bt_err_paranoid_import_in_flight">An import is still running. Wait for it to finish and try again.</string>
+    <string name="bt_err_paranoid_export_in_flight">An export is still running. Wait for it to finish and try again.</string>
+    <string name="bt_err_paranoid_transition_conflict">Another device is changing paranoid mode right now. Please try again shortly.</string>
+    <string name="bt_err_paranoid_normal_data_changed">Your data changed while this was being prepared. Please start again.</string>
+    <string name="bt_err_paranoid_rehydration_invalid">That restore file couldn\'t be validated.</string>
+    <string name="bt_err_vault_not_found">No vault data was found.</string>
+    <string name="bt_err_vault_paranoid_mode_required">This is only available while paranoid mode is on.</string>
+    <string name="bt_err_vault_precondition_required">This vault write is missing its safety check.</string>
+    <string name="bt_err_vault_precondition_failed">Your vault changed on another device. Refresh and try again.</string>
+    <string name="bt_err_vault_too_large">Your vault has grown past the size this server accepts.</string>
+    <string name="bt_err_vault_malformed">That vault data couldn\'t be read.</string>
+    <string name="bt_err_vault_server_medium_inactive">Server-side vault storage isn\'t active.</string>
+    <string name="bt_err_vault_media_state_conflict">Your vault storage changed on another device. Refresh and try again.</string>
+    <string name="bt_err_vault_media_verification_failed">We couldn\'t verify your vault storage. Please try again.</string>
+    <string name="bt_err_vault_retired_server_proof_required">This change needs a storage proof that isn\'t available yet.</string>
+    <string name="bt_err_vault_retired_server_proof_invalid">That storage proof couldn\'t be verified.</string>
+    <string name="bt_err_vault_retired_server_conflict">That storage change conflicts with your retained recovery data.</string>
+    <string name="bt_err_vault_retired_server_retention">The recovery window for the old server copy hasn\'t passed yet.</string>
+
+    <!-- App-local refusals (never sent by the server) -->
+    <string name="bt_err_app_http_failed">The server refused that request. Please try again.</string>
+    <string name="bt_err_app_empty_response">The server sent an empty answer. Please try again.</string>
+    <string name="bt_err_app_unexpected">Something unexpected happened. Please try again.</string>
+    <string name="bt_err_app_rejected">BetterTrack rejected this entry.</string>
+    <string name="bt_err_app_op_malformed_submit">This queued entry is malformed and can\'t be submitted.</string>
+    <string name="bt_err_app_op_malformed_vault">This queued entry is malformed and can\'t be applied to your vault.</string>
+    <string name="bt_err_app_op_replay_window_expired">We couldn\'t confirm whether this change reached the server. Check your transactions before retrying.</string>
+    <string name="bt_err_app_op_attempt_timed_out">This change timed out — the server didn\'t answer. Retry it, or remove it.</string>
+    <string name="bt_err_app_op_no_vault">This change is waiting for your vault to be unlocked.</string>
+    <string name="bt_err_app_op_no_cash_source">This portfolio has no cash source yet, so the cash side of this entry can\'t be recorded.</string>
+    <string name="bt_err_app_op_zero_amount">This amount rounds to zero, so there is nothing to record.</string>
+    <string name="bt_err_app_op_no_rate">This device has no %1$s exchange rate, so the cash side of this trade can\'t be valued. Connect to the internet, or record the trade without paying from cash.</string>
+    <string name="bt_err_no_live_prices">BetterTrack has no price for this asset on this device. Add a value yourself, or turn on price lookups in Settings.</string>
+    <string name="bt_err_direct_provider_disabled">Direct price lookups aren\'t switched on in this build.</string>
+    <string name="bt_err_no_exchange_rate">This device has no %1$s exchange rate, so this portfolio can\'t be valued yet.</string>
+    <string name="bt_err_vault_derivation_failed">This portfolio\'s figures couldn\'t be calculated on this device.</string>
+    <string name="bt_err_delete_disabled">Account deletion is switched off in this build.</string>
+    <string name="bt_err_app_unknown_alert_kind">This alert uses a type your app version doesn\'t know yet. Update BetterTrack to see it.</string>
 </resources>

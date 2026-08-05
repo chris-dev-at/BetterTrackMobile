@@ -1,10 +1,11 @@
 package at.bettertrack.app.ui.settings
 
 import kotlinx.coroutines.launch
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.outlined.VisibilityOff
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +72,8 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.update.UpdateAvailableRow
@@ -99,7 +102,7 @@ fun SettingsScreen(
     onOpenDevBackend: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
-    val context = LocalContext.current
+    val snackbar = LocalBtSnackbar.current
     val auth = AppGraph.authRepository
     val authState by auth.authState.collectAsStateWithLifecycle()
     // V5 W5: Settings adapts to where the data lives (S3/S4 plan §4.5). A
@@ -235,7 +238,7 @@ fun SettingsScreen(
             SectionLabel(stringResource(R.string.bt_settings_privacy_section))
             val discreet by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
-            var discreetError by remember { mutableStateOf<String?>(null) }
+            var discreetError by remember { mutableStateOf<BtMessage?>(null) }
             SettingsToggleRow(
                 icon = Icons.Outlined.VisibilityOff,
                 title = stringResource(R.string.bt_settings_discreet),
@@ -251,14 +254,14 @@ fun SettingsScreen(
                         val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
                         if (r is BtResult.Err) {
                             AppGraph.discreetModeStore.set(!wanted)
-                            discreetError = r.error.userMessage
+                            discreetError = r.error.asMessage()
                         }
                     }
                 },
             )
             discreetError?.let {
                 Text(
-                    text = it,
+                    text = it.resolveWithDiagnostic(),
                     style = MaterialTheme.typography.bodySmall,
                     color = BtTheme.colors.loss,
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -281,10 +284,10 @@ fun SettingsScreen(
                                     versionTaps++
                                     if (versionTaps >= DEV_TAP_THRESHOLD && !devUnlocked) {
                                         devUnlocked = true
-                                        Toast.makeText(context, context.getString(R.string.bt_settings_dev_unlocked), Toast.LENGTH_SHORT).show()
+                                        snackbar.show(R.string.bt_settings_dev_unlocked)
                                     } else if (versionTaps in DEV_TAP_HINT_AT until DEV_TAP_THRESHOLD) {
                                         val left = DEV_TAP_THRESHOLD - versionTaps
-                                        Toast.makeText(context, context.getString(R.string.bt_settings_dev_hint, left), Toast.LENGTH_SHORT).show()
+                                        snackbar.show(R.string.bt_settings_dev_hint, left.toString())
                                     }
                                 }
                             } else {

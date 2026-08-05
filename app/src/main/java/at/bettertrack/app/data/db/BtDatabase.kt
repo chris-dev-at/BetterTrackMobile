@@ -37,7 +37,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         VaultMetaRow::class,
         PriceCacheRow::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -230,6 +230,25 @@ abstract class BtDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v9 → v10 (S6 P0-4): park a sync op's REASON as a stable code instead of
+         * an English sentence.
+         *
+         * Purely additive — one nullable column. Existing parked rows keep their
+         * `serverError` prose and get `errorCode = NULL`, which the render path
+         * reads as "legacy: show this text as-is". No back-fill is attempted:
+         * deriving a code from a sentence would be pattern-matching on prose, and
+         * a wrong match would tell the user something untrue about a queued
+         * change to their own money. Showing the original English is honest and
+         * self-correcting — the row is re-parked with a real code the moment it
+         * is retried, and the queue holds at most a handful of rows anyway.
+         */
+        internal val MIGRATION_SYNC_ERROR_CODE = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `errorCode` TEXT")
+            }
+        }
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
                 .addMigrations(
@@ -241,6 +260,7 @@ abstract class BtDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_VAULT_TABLES,
+                    MIGRATION_SYNC_ERROR_CODE,
                 )
                 .build()
     }

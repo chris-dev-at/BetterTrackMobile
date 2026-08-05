@@ -45,7 +45,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Conversation
 import at.bettertrack.app.data.repo.Friend
@@ -73,8 +75,8 @@ class ChatListViewModel(
     val friends: StateFlow<List<Friend>> = _friends
 
     /** Last refresh failure (user message) — an errored empty list is NOT "no messages yet". */
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
+    private val _error = MutableStateFlow<BtMessage?>(null)
+    val error: StateFlow<BtMessage?> = _error
 
     init {
         chat.connectRealtime()
@@ -83,7 +85,7 @@ class ChatListViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            _error.value = (chat.refreshConversations() as? BtResult.Err)?.error?.userMessage
+            _error.value = (chat.refreshConversations() as? BtResult.Err)?.error?.asMessage()
         }
         viewModelScope.launch {
             (social.friends() as? BtResult.Ok)?.let { _friends.value = it.value }
@@ -139,10 +141,13 @@ fun ChatListScreen(
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
+            // Held in a plain local so the null check narrows the type for the
+            // BtErrorState call — a `by` delegate never smart-casts.
+            val failure = error
             when {
                 // A failed refresh with nothing cached is an ERROR, not an empty inbox.
-                error != null && conversations.isEmpty() -> BtErrorState(
-                    message = error,
+                failure != null && conversations.isEmpty() -> BtErrorState(
+                    message = failure,
                     onRetry = vm::refresh,
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
@@ -177,6 +182,11 @@ fun ChatListScreen(
 @Composable
 private fun ConversationRow(c: Conversation, onClick: () -> Unit) {
     val bt = BtTheme.colors
+    // A blank username means the other participant deleted their account (#362).
+    // It gets a translated LABEL, not a handle: no "@", no primary-text weight —
+    // "@deleted" read like a username you could look up, and in German it read
+    // like an English one.
+    val deleted = c.friendUsername.isBlank()
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
@@ -187,10 +197,10 @@ private fun ConversationRow(c: Conversation, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "@${c.friendUsername}",
+                        if (deleted) stringResource(R.string.bt_chat_deleted_user) else "@${c.friendUsername}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (c.unread > 0) FontWeight.Bold else FontWeight.SemiBold,
-                        color = bt.textPrimary,
+                        color = if (deleted) bt.textSecondary else bt.textPrimary,
                         modifier = Modifier.weight(1f),
                     )
                     Text(relativeTime(c.lastAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)

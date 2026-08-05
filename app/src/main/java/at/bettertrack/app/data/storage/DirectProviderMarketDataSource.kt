@@ -84,13 +84,7 @@ class DirectProviderMarketDataSource : MarketDataSource {
      * mean picking the provider, which is precisely the decision that is pending.
      */
     private fun <T> notImplemented(): BtResult<T> = BtResult.Err(
-        BtApiError(
-            httpStatus = 0,
-            code = ERROR_CODE,
-            userMessage = DISABLED_MESSAGE,
-            details = null,
-            serverMessage = null,
-        ),
+        BtApiError(httpStatus = 0, code = ERROR_CODE),
     )
 
     companion object {

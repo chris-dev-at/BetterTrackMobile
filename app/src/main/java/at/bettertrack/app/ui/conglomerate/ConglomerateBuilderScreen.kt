@@ -54,7 +54,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
@@ -62,6 +64,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.market.assetTypeLabel
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
@@ -92,8 +95,8 @@ class ConglomerateBuilderViewModel(
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<BtMessage?>(null)
+    val error: StateFlow<BtMessage?> = _error.asStateFlow()
     private val _loading = MutableStateFlow(conglomerateId != null)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -130,7 +133,7 @@ class ConglomerateBuilderViewModel(
                     }
                 }
 
-                is BtResult.Err -> _error.value = r.error.userMessage
+                is BtResult.Err -> _error.value = r.error.asMessage()
             }
             _loading.value = false
         }
@@ -184,12 +187,12 @@ class ConglomerateBuilderViewModel(
             } else {
                 when (val c = repo.create(_name.value, null)) {
                     is BtResult.Ok -> c.value.id
-                    is BtResult.Err -> { _error.value = c.error.userMessage; _busy.value = false; onDone(null); return@launch }
+                    is BtResult.Err -> { _error.value = c.error.asMessage(); _busy.value = false; onDone(null); return@launch }
                 }
             }
             val r = repo.replacePositions(id, weights)
             _busy.value = false
-            if (r is BtResult.Err) { _error.value = r.error.userMessage; onDone(null) } else onDone(id)
+            if (r is BtResult.Err) { _error.value = r.error.asMessage(); onDone(null) } else onDone(id)
         }
     }
 
@@ -274,8 +277,13 @@ fun ConglomerateBuilderScreen(
                     }
                 }
             }
-            if (error != null) {
-                item(key = "error") { Text(error!!, style = MaterialTheme.typography.bodySmall, color = bt.loss) }
+            error?.let { failure ->
+                // Inline, one line, next to the Save button that produced it —
+                // so the diagnostic (when the code is one this build has no copy
+                // for) trails the app's own sentence rather than taking a row.
+                item(key = "error") {
+                    Text(failure.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss)
+                }
             }
             item(key = "save") {
                 BtPrimaryButton(

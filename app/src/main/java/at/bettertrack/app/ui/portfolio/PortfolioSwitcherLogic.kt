@@ -1,6 +1,8 @@
 package at.bettertrack.app.ui.portfolio
 
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.PORTFOLIO_TOTALS_PREFETCH_CONCURRENCY
 
@@ -65,7 +67,7 @@ sealed interface PortfolioDeleteResult {
     data object LastActive : PortfolioDeleteResult
 
     /** Any other failure (network/unknown) — surfaced inline with the message. */
-    data class Failed(val message: String) : PortfolioDeleteResult
+    data class Failed(val message: BtMessage) : PortfolioDeleteResult
 }
 
 /** Map a delete [BtResult] into the dialog outcome (LAST_ACTIVE gets its own case). */
@@ -75,7 +77,7 @@ fun portfolioDeleteResult(result: BtResult<Unit>): PortfolioDeleteResult = when 
         if (result.error.isLastActivePortfolio) {
             PortfolioDeleteResult.LastActive
         } else {
-            PortfolioDeleteResult.Failed(result.error.userMessage)
+            PortfolioDeleteResult.Failed(result.error.asMessage())
         }
 }
 

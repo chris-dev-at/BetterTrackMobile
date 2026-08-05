@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.ui.charts.BtChartPalette
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
@@ -67,10 +68,10 @@ import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
-import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.util.Locale
 
 /**
@@ -400,7 +401,7 @@ private fun AllocationBarSection() {
 @Composable
 private fun StatCardSection() {
     val bt = BtTheme.colors
-    val locale = Locale.getDefault()
+    val locale = rememberBtLocale()
     GallerySection("Stat cards") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatCard(

@@ -87,7 +87,7 @@ class ModeRoutingOpExecutorTest {
     fun `the executor's verdict is passed through untouched`() = runBlocking {
         // The router must not reclassify outcomes — the engine's state machine
         // depends on the exact ExecResult (Rejected parks, Ambiguous replays…).
-        val rejected = ExecResult.Rejected("nope")
+        val rejected = ExecResult.Rejected("NOPE")
         val router = ModeRoutingOpExecutor(
             server = RecordingExecutor(result = rejected),
             vault = RecordingExecutor(),
@@ -106,7 +106,10 @@ class ModeRoutingOpExecutorTest {
 
         assertTrue(server.seen.isEmpty())
         assertTrue(result is ExecResult.Unsupported)
-        assertEquals(UnavailableVaultOpExecutor.MSG_NO_VAULT, (result as ExecResult.Unsupported).message)
+        assertEquals(
+            at.bettertrack.app.data.api.BtErrorCopy.AppCodes.OP_NO_VAULT,
+            (result as ExecResult.Unsupported).code,
+        )
     }
 
     @Test

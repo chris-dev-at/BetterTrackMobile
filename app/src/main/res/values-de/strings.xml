@@ -106,7 +106,7 @@
     <string name="bt_overview_no_portfolio_message">Ein Portfolio verfolgt deine Bestände, dein Bargeld und deine Performance.</string>
     <string name="bt_overview_create_portfolio">Portfolio anlegen</string>
     <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
-    <string name="bt_overview_chart_cd">Diagramm des Portfoliowerts über die Zeit</string>
+    <string name="bt_overview_chart_cd">Diagramm des Vermögens über die Zeit</string>
     <string name="bt_overview_graph_range_cd">%1$s Verlauf anzeigen</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
@@ -327,16 +327,16 @@
     <string name="bt_cash_fee_action">Gebühr erfassen</string>
     <string name="bt_cash_fee_hint">Eine Gebühr ist ein Kostenposten und senkt damit deine Rendite. Eine Auszahlung verschiebt nur Geld und tut das nicht.</string>
 
-    <!-- v5-Cash-Korrekturen (synchronisierte Buchung bearbeiten / löschen) -->
-    <string name="bt_cash_movement_actions_cd">Aktionen für Buchung</string>
+    <!-- v5-Cash-Korrekturen (synchronisierte Bewegung bearbeiten / löschen) -->
+    <string name="bt_cash_movement_actions_cd">Aktionen für Bewegung</string>
     <string name="bt_cash_edit">Bearbeiten</string>
     <string name="bt_cash_delete">Löschen</string>
-    <string name="bt_cash_edit_title">Cash-Buchung bearbeiten</string>
-    <string name="bt_cash_delete_title">Diese Buchung löschen?</string>
-    <string name="bt_cash_delete_message">Die Buchung wird entfernt und dein Saldo aus dem gesamten Verlauf neu berechnet.</string>
-    <string name="bt_cash_delete_action">Buchung löschen</string>
-    <string name="bt_cash_not_editable_title">Diese Buchung hängt an einer anderen</string>
-    <string name="bt_cash_not_editable_hint">BetterTrack erzeugt sie automatisch, damit sie immer zur übergeordneten Buchung passt. Ändere die Ursprungsbuchung, dann ändert sich diese mit.</string>
+    <string name="bt_cash_edit_title">Bargeldbewegung bearbeiten</string>
+    <string name="bt_cash_delete_title">Diese Bewegung löschen?</string>
+    <string name="bt_cash_delete_message">Die Bewegung wird entfernt und dein Saldo aus dem gesamten Verlauf neu berechnet.</string>
+    <string name="bt_cash_delete_action">Bewegung löschen</string>
+    <string name="bt_cash_not_editable_title">Diese Bewegung hängt an einer anderen</string>
+    <string name="bt_cash_not_editable_hint">BetterTrack erzeugt sie automatisch, damit sie immer zur übergeordneten Position passt. Ändere die Transaktion oder Dividende, aus der sie stammt, dann ändert sich diese mit.</string>
     <string name="bt_cash_correction_failed_title">Änderung konnte nicht gespeichert werden</string>
     <string name="bt_cash_edit_kind_label">Art</string>
 
@@ -345,7 +345,7 @@
     <string name="bt_source_import">Import · %1$s</string>
     <string name="bt_source_sync">Sync · %1$s</string>
     <string name="bt_source_sync_group">Aus Gruppe</string>
-    <string name="bt_source_filter_all">Alle Buchungen</string>
+    <string name="bt_source_filter_all">Alle Bewegungen</string>
     <string name="bt_source_filter_automatic">Nur automatische</string>
 
     <!-- v5-Mirrorchain-Overlays (Gruppenportfolio) -->
@@ -748,7 +748,7 @@
     <string name="bt_settings_dev_backend">Dev-Backend</string>
     <string name="bt_settings_dev_backend_sub">API-/Web-Origin überschreiben</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
-    <string name="bt_settings_dev_hint">Noch %1$d Mal tippen, um Entwickleroptionen freizuschalten</string>
+    <string name="bt_settings_dev_hint">Noch %1$s Mal tippen, um Entwickleroptionen freizuschalten</string>
 
     <!-- Passwort ändern -->
     <string name="bt_dest_change_password">Passwort ändern</string>
@@ -942,6 +942,8 @@
     <string name="bt_chat_kind_conglomerate">Konglomerat</string>
     <!-- Fallback-Label für eine unbekannte Chip-Art (nie anklickbar). -->
     <string name="bt_chat_kind_unknown">Geteiltes Element</string>
+    <!-- Steht für ein gelöschtes Konto — ein Label, nie ein @Name. -->
+    <string name="bt_chat_deleted_user">Gelöschtes Konto</string>
 
     <!-- Social (§6.9–§6.12) — externalisiert im Step-19-i18n-Audit -->
     <!-- Nachrichten-Kopf + Tabs -->
@@ -1148,7 +1150,7 @@
     <string name="bt_tags_builtin_badge">Vorgegeben</string>
     <string name="bt_tags_builtin_hint">Vorgegebene Tags werden automatisch vergeben. Du kannst sie umbenennen und umfärben, aber nicht löschen.</string>
     <string name="bt_tags_empty_title">Noch keine Tags</string>
-    <string name="bt_tags_empty_message">Tags beschriften deine Cash-Buchungen, damit Budgets und Auswertungen sie gruppieren können.</string>
+    <string name="bt_tags_empty_message">Tags beschriften deine Bargeldbewegungen, damit Budgets und Auswertungen sie gruppieren können.</string>
     <string name="bt_tags_error_title">Tags konnten nicht geladen werden</string>
     <string name="bt_tags_new">Neuer Tag</string>
     <string name="bt_tags_new_title">Neuer Tag</string>
@@ -1158,18 +1160,18 @@
     <string name="bt_tags_create_action">Tag erstellen</string>
     <string name="bt_tags_save_action">Änderungen speichern</string>
     <string name="bt_tags_delete_title">Tag löschen?</string>
-    <string name="bt_tags_delete_message">„%1$s“ wird von allen Buchungen entfernt, die ihn tragen. Budgets und Regeln dafür werden ebenfalls gelöscht.</string>
+    <string name="bt_tags_delete_message">„%1$s“ wird von allen Bewegungen entfernt, die ihn tragen. Budgets und Regeln dafür werden ebenfalls gelöscht.</string>
     <string name="bt_tags_delete_action">Tag löschen</string>
     <string name="bt_tags_actions_cd">Tag-Aktionen</string>
     <string name="bt_tags_name_required">Gib dem Tag einen Namen.</string>
     <string name="bt_tags_system_protected">Vorgegebene Tags können nicht gelöscht werden.</string>
     <string name="bt_tags_used_count">Verwendet bei %1$d</string>
 
-    <!-- Tags an einer Buchung -->
+    <!-- Tags an einer Bewegung -->
     <string name="bt_cash_tags">Tags</string>
     <string name="bt_cash_tags_edit">Tags bearbeiten</string>
     <string name="bt_cash_tags_none">Keine Tags</string>
-    <string name="bt_cash_tags_none_hint">Wähle die Tags, die zu dieser Buchung passen.</string>
+    <string name="bt_cash_tags_none_hint">Wähle die Tags, die zu dieser Bewegung passen.</string>
     <string name="bt_cash_tags_save">Tags speichern</string>
     <string name="bt_cash_tags_empty_catalog">Du hast noch keine Tags. Lege einen unter Cash-Optionen → Tags verwalten an.</string>
     <string name="bt_cash_tags_suggested">Von deinen Regeln vorgeschlagen</string>
@@ -1194,7 +1196,7 @@
     <string name="bt_budgets_create_action">Budget erstellen</string>
     <string name="bt_budgets_save_action">Budget speichern</string>
     <string name="bt_budgets_delete_title">Budget löschen?</string>
-    <string name="bt_budgets_delete_message">Das Ziel für „%1$s“ wird entfernt. Deine Buchungen und deren Tags bleiben unverändert.</string>
+    <string name="bt_budgets_delete_message">Das Ziel für „%1$s“ wird entfernt. Deine Bewegungen und deren Tags bleiben unverändert.</string>
     <string name="bt_budgets_delete_action">Budget löschen</string>
     <string name="bt_budgets_actions_cd">Budget-Aktionen</string>
     <string name="bt_budgets_amount_required">Gib einen Betrag größer als null ein.</string>
@@ -1207,7 +1209,7 @@
     <!-- Auto-Tag-Regeln -->
     <string name="bt_rules_title">Auto-Tag-Regeln</string>
     <string name="bt_rules_empty_title">Noch keine Regeln</string>
-    <string name="bt_rules_empty_message">Eine Regel liest die Notiz einer Buchung und vergibt Tags automatisch — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
+    <string name="bt_rules_empty_message">Eine Regel liest die Notiz einer Bewegung und vergibt Tags automatisch — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
     <string name="bt_rules_error_title">Regeln konnten nicht geladen werden</string>
     <string name="bt_rules_new">Neue Regel</string>
     <string name="bt_rules_new_title">Neue Regel</string>
@@ -1225,12 +1227,12 @@
     <string name="bt_rules_create_action">Regel erstellen</string>
     <string name="bt_rules_save_action">Regel speichern</string>
     <string name="bt_rules_delete_title">Regel löschen?</string>
-    <string name="bt_rules_delete_message">Buchungen, die diese Regel schon getaggt hat, behalten ihre Tags.</string>
+    <string name="bt_rules_delete_message">Bewegungen, die diese Regel schon getaggt hat, behalten ihre Tags.</string>
     <string name="bt_rules_delete_action">Regel löschen</string>
     <string name="bt_rules_actions_cd">Regel-Aktionen</string>
     <string name="bt_rules_pattern_required">Gib den Suchtext ein.</string>
     <string name="bt_rules_tags_required">Wähle mindestens einen Tag aus.</string>
-    <string name="bt_rules_apply_now">Auf bestehende Buchungen anwenden</string>
+    <string name="bt_rules_apply_now">Auf bestehende Bewegungen anwenden</string>
     <string name="bt_rules_apply_none">Nichts Neues zu taggen.</string>
     <string name="bt_rules_disabled_badge">Aus</string>
     <string name="bt_rules_priority_badge">#%1$d</string>
@@ -1241,12 +1243,12 @@
     <string name="bt_cash_summary_out">Abfluss</string>
     <string name="bt_cash_summary_net">Netto</string>
     <string name="bt_cash_summary_untagged">Ohne Tag</string>
-    <string name="bt_cash_summary_empty">Diesen Monat keine Buchungen.</string>
-    <string name="bt_cash_summary_overlap_hint">Eine Buchung mit mehreren Tags zählt bei jedem davon mit — die Zeilen können also mehr ergeben als die Summe.</string>
+    <string name="bt_cash_summary_empty">Diesen Monat keine Bewegungen.</string>
+    <string name="bt_cash_summary_overlap_hint">Eine Bewegung mit mehreren Tags zählt bei jedem davon mit — die Zeilen können also mehr ergeben als die Summe.</string>
     <string name="bt_cash_summary_error">Monatsübersicht konnte nicht geladen werden.</string>
     <plurals name="bt_cash_summary_movements">
-        <item quantity="one">%1$d Buchung</item>
-        <item quantity="other">%1$d Buchungen</item>
+        <item quantity="one">%1$d Bewegung</item>
+        <item quantity="other">%1$d Bewegungen</item>
     </plurals>
     <string name="bt_cash_trends_section">Letzte Monate</string>
     <string name="bt_cash_trends_empty">Noch kein Verlauf vorhanden.</string>
@@ -1254,7 +1256,7 @@
 
     <!-- ── V5 S2c: Daueraufträge ───────────────────────────────────────────── -->
     <string name="bt_so_title">Daueraufträge</string>
-    <string name="bt_so_subtitle">Wiederkehrende Käufe und Cash-Buchungen, die der Server für dich bucht.</string>
+    <string name="bt_so_subtitle">Wiederkehrende Käufe und Bargeldbewegungen, die der Server für dich bucht.</string>
     <string name="bt_so_empty_title">Keine Daueraufträge</string>
     <string name="bt_so_empty_message">Richte einen wiederkehrenden Kauf oder einen regelmäßigen Eingang wie dein Gehalt ein — BetterTrack bucht ihn nach Plan.</string>
     <string name="bt_so_error_title">Daueraufträge konnten nicht geladen werden</string>
@@ -1300,8 +1302,8 @@
     <string name="bt_so_err_end_before_start">Das Enddatum darf nicht vor dem Startdatum liegen.</string>
     <string name="bt_so_err_label_long">Diese Bezeichnung ist zu lang.</string>
     <plurals name="bt_rules_apply_done">
-        <item quantity="one">%1$d Buchung getaggt</item>
-        <item quantity="other">%1$d Buchungen getaggt</item>
+        <item quantity="one">%1$d Bewegung getaggt</item>
+        <item quantity="other">%1$d Bewegungen getaggt</item>
     </plurals>
     <string name="bt_so_err_amount_large">Dieser Betrag ist zu groß.</string>
 
@@ -1725,7 +1727,7 @@
     <string name="bt_price_err_currency">Nimm einen dreibuchstabigen Währungscode, zum Beispiel EUR.</string>
     <string name="bt_price_err_rate">Auf diesem Gerät gibt es keinen Kurs %1$s → %2$s, deshalb lässt sich ein Preis in %1$s hier nicht verwenden. Trag ihn in %2$s ein.</string>
     <string name="bt_price_unpriced_title">Noch keine Kurse</string>
-    <string name="bt_price_unpriced_body">Deine Buchungen und dein Bargeld liegen sicher auf diesem Gerät. Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
+    <string name="bt_price_unpriced_body">Deine Transaktionen und dein Bargeld liegen sicher auf diesem Gerät. Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
     <plurals name="bt_price_unpriced_note">
         <item quantity="one">Ohne %1$d Position ohne Kurs</item>
         <item quantity="other">Ohne %1$d Positionen ohne Kurs</item>
@@ -1738,7 +1740,7 @@
     <string name="bt_prices_section">Kurse</string>
     <string name="bt_prices_toggle_title">BetterTrack nur für Kurse nutzen</string>
     <string name="bt_prices_toggle_subtitle">BetterTrack würde sehen, welche Werte du nachschlägst — nie, was du besitzt.</string>
-    <string name="bt_prices_toggle_on_note">An. Suche und Kurse laufen über BetterTrack; Portfolio, Buchungen und Bargeld bleiben auf diesem Gerät.</string>
+    <string name="bt_prices_toggle_on_note">An. Suche und Kurse laufen über BetterTrack; Portfolio, Transaktionen und Bargeld bleiben auf diesem Gerät.</string>
     <string name="bt_prices_toggle_off_note">Aus. Nichts verlässt dieses Gerät, und als Kurse gelten die, die du selbst einträgst.</string>
     <string name="bt_prices_toggle_needs_account">Kursabfragen sind angemeldete Anfragen, dafür braucht es ein BetterTrack-Konto. Füg unter „Wo deine Daten liegen“ eines hinzu — dein Portfolio bleibt trotzdem in Drive.</string>
 
@@ -1797,4 +1799,255 @@
     <string name="bt_overview_alloc_see_all">Alle anzeigen</string>
     <string name="bt_overview_alloc_less">Weniger anzeigen</string>
     <string name="bt_overview_alloc_bar_cd">Aufteilung über deine Positionen</string>
+    <!-- ===== API error-code copy (DE) — generated catalog, see BtErrorCopy.kt ===== -->
+
+    <!-- Allgemeine Hülle + Transport -->
+    <string name="bt_err_unknown">Etwas ist schiefgelaufen. Bitte versuche es gleich noch einmal.</string>
+    <string name="bt_err_internal">Auf unserer Seite ist etwas schiefgelaufen. Bitte versuche es gleich noch einmal.</string>
+    <string name="bt_err_network_error">Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.</string>
+    <string name="bt_err_validation_error">Einige Angaben wurden nicht akzeptiert. Bitte überprüfe deine Eingaben.</string>
+    <string name="bt_err_bad_request">Diese Anfrage konnte so nicht verarbeitet werden.</string>
+    <string name="bt_err_conflict">Diese Änderung steht im Konflikt mit dem aktuellen Stand. Aktualisiere und versuche es erneut.</string>
+    <string name="bt_err_unprocessable">Diese Änderung lässt sich so nicht anwenden.</string>
+    <string name="bt_err_unauthenticated">Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.</string>
+    <string name="bt_err_forbidden">Dafür fehlt dir die Berechtigung.</string>
+    <string name="bt_err_not_found">Das ist nicht mehr verfügbar.</string>
+    <string name="bt_err_rate_limited">Zu viele Anfragen. Bitte warte kurz und versuche es erneut.</string>
+    <string name="bt_err_upstream_unavailable">Marktdaten sind vorübergehend nicht verfügbar. Bitte versuche es in Kürze erneut.</string>
+    <string name="bt_err_payload_too_large">Das ist zu groß zum Senden.</string>
+    <string name="bt_err_feature_disabled">Diese Funktion ist derzeit nicht verfügbar.</string>
+    <string name="bt_err_csrf_header_required">Diese Anfrage konnte nicht verifiziert werden. Bitte melde dich erneut an.</string>
+    <string name="bt_err_csrf_origin_rejected">Diese Anfrage kam von einer Adresse, die wir nicht akzeptieren.</string>
+
+    <!-- Anmeldung: Zugangsdaten + Kontostatus -->
+    <string name="bt_err_invalid_credentials">Falsche E-Mail-Adresse, falscher Benutzername oder falsches Passwort.</string>
+    <string name="bt_err_account_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administratorin oder deinen Administrator.</string>
+    <string name="bt_err_user_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administratorin oder deinen Administrator.</string>
+    <string name="bt_err_admin_account_kind">Die BetterTrack App ist ausschließlich für persönliche Konten.</string>
+    <string name="bt_err_password_change_required">Du musst ein neues Passwort festlegen, bevor du fortfahren kannst.</string>
+    <string name="bt_err_admin_2fa_setup_required">Für dieses Konto muss zuerst die Zwei-Faktor-Authentifizierung eingerichtet werden.</string>
+    <string name="bt_err_weak_password">Dieses Passwort ist nicht sicher genug. Wähle ein längeres, weniger gebräuchliches.</string>
+    <string name="bt_err_confirmation_mismatch">Die Bestätigung stimmt nicht überein.</string>
+    <string name="bt_err_email_taken">Für diese E-Mail-Adresse existiert bereits ein Konto.</string>
+    <string name="bt_err_username_taken">Dieser Benutzername ist bereits vergeben.</string>
+    <string name="bt_err_user_not_found">Diese Person konnten wir nicht finden.</string>
+    <string name="bt_err_invalid_reset">Dieser Link zum Zurücksetzen ist ungültig oder abgelaufen.</string>
+    <string name="bt_err_invalid_invite">Dieser Einladungslink ist ungültig oder abgelaufen.</string>
+    <string name="bt_err_invalid_registration_token">Dieser Registrierungs-Token ist ungültig oder abgelaufen.</string>
+    <string name="bt_err_registration_token_required">Für die Registrierung wird ein Registrierungs-Token benötigt.</string>
+    <string name="bt_err_registration_closed">Die Selbstregistrierung ist auf diesem Server deaktiviert.</string>
+
+    <!-- Anmeldung: Zwei-Faktor, PIN, Passkeys, Google -->
+    <string name="bt_err_two_factor_pending_invalid">Deine Bestätigungssitzung ist abgelaufen. Bitte melde dich erneut an.</string>
+    <string name="bt_err_two_factor_invalid_code">Dieser Code ist falsch oder abgelaufen.</string>
+    <string name="bt_err_two_factor_already_enabled">Die Zwei-Faktor-Authentifizierung ist bereits aktiviert.</string>
+    <string name="bt_err_two_factor_not_enabled">Die Zwei-Faktor-Authentifizierung ist nicht aktiviert.</string>
+    <string name="bt_err_two_factor_not_pending">Starte die Zwei-Faktor-Einrichtung, bevor du sie bestätigst.</string>
+    <string name="bt_err_two_factor_email_unavailable">Dieser Server kann keine E-Mail-Codes versenden. Nutze stattdessen eine Authenticator-App.</string>
+    <string name="bt_err_invalid_pin">Falsche PIN.</string>
+    <string name="bt_err_pin_not_enabled">Für dieses Konto ist keine PIN hinterlegt.</string>
+    <string name="bt_err_pin_fallback_login">Zu viele falsche PIN-Versuche. Bitte melde dich mit deinem Passwort an.</string>
+    <string name="bt_err_remember_device_unknown">Dieses Gerät ist nicht mehr gespeichert. Bitte melde dich erneut an.</string>
+    <string name="bt_err_passkey_challenge_invalid">Diese Passkey-Anfrage ist abgelaufen. Bitte starte erneut.</string>
+    <string name="bt_err_passkey_verification_failed">Dieser Passkey konnte nicht verifiziert werden. Versuche eine andere Anmeldemethode.</string>
+    <string name="bt_err_passkey_already_registered">Dieser Passkey ist bereits registriert.</string>
+    <string name="bt_err_passkey_not_found">Diesen Passkey konnten wir nicht finden.</string>
+    <string name="bt_err_passkey_counter_regression">Dieser Passkey konnte nicht verwendet werden. Versuche eine andere Anmeldemethode.</string>
+    <string name="bt_err_google_failed">Die Google-Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.</string>
+    <string name="bt_err_google_verify_failed">Die Google-Verifizierung ist fehlgeschlagen. Bitte versuche es erneut.</string>
+    <string name="bt_err_google_admin_unsupported">Für dieses Konto ist keine Google-Anmeldung möglich. Verwende dein Passwort.</string>
+    <string name="bt_err_google_already_linked">Dieses Google-Konto ist bereits mit einem anderen BetterTrack-Konto verknüpft.</string>
+    <string name="bt_err_google_email_mismatch">Dieses Google-Konto nutzt eine andere E-Mail-Adresse als dein Konto.</string>
+    <string name="bt_err_google_not_linked">Es ist kein Google-Konto verknüpft.</string>
+    <string name="bt_err_google_only_sign_in">Lege ein Passwort fest, bevor du Google trennst — es ist dein einziger Zugang.</string>
+    <string name="bt_err_google_register_ticket_invalid">Deine Google-Registrierung ist abgelaufen. Bitte verbinde Google erneut.</string>
+    <string name="bt_err_api_key_invalid">Dieses Zugriffstoken ist ungültig oder wurde widerrufen.</string>
+    <string name="bt_err_api_key_forbidden">Diese Aktion ist mit einem Zugriffstoken nicht möglich.</string>
+    <string name="bt_err_insufficient_scope">Dieser App fehlt die Berechtigung für diese Aktion.</string>
+
+    <!-- Portfolios, Transaktionen, Dividenden, Steuern -->
+    <string name="bt_err_portfolio_not_found">Dieses Portfolio konnten wir nicht finden.</string>
+    <string name="bt_err_portfolio_name_taken">Ein Portfolio mit diesem Namen existiert bereits.</string>
+    <string name="bt_err_portfolio_already_archived">Dieses Portfolio ist bereits archiviert.</string>
+    <string name="bt_err_portfolio_not_archived">Dieses Portfolio ist nicht archiviert.</string>
+    <string name="bt_err_last_active_portfolio">Das ist dein einziges aktives Portfolio und kann daher nicht entfernt werden.</string>
+    <string name="bt_err_portfolio_visibility_guard_required">Ändere die Sichtbarkeit dieses Portfolios in den Freigabe-Einstellungen.</string>
+    <string name="bt_err_transaction_not_found">Diese Transaktion konnten wir nicht finden.</string>
+    <string name="bt_err_transaction_taxed">Zu dieser Transaktion ist Steuer erfasst. Lösche sie und lege sie neu an, um die Zahlen zu ändern.</string>
+    <string name="bt_err_transaction_affects_taxed">Eine Änderung würde die realisierten Gewinne bereits versteuerter Verkäufe verändern. Lösche sie und lege sie stattdessen neu an.</string>
+    <string name="bt_err_transaction_cash_linked">Diese Transaktion ist mit deinem Bargeldbestand verknüpft. Lösche sie und lege sie neu an, um den Betrag zu ändern.</string>
+    <string name="bt_err_oversell">So viele Anteile hältst du nicht.</string>
+    <string name="bt_err_empty_batch">Es gibt keine Transaktionen zum Hinzufügen.</string>
+    <string name="bt_err_dividend_not_found">Diese Dividende konnten wir nicht finden.</string>
+    <string name="bt_err_dividend_asset_not_held">Dividenden lassen sich nur für Werte erfassen, die dieses Portfolio hält.</string>
+    <string name="bt_err_dividend_amount_too_small">Dieser Dividendenbetrag wird auf null abgerundet.</string>
+    <string name="bt_err_tax_entry_invalid">Manuelle Steuereinträge gelten nur für Verkäufe.</string>
+    <string name="bt_err_tax_entry_not_allowed">Manuelle Steuereinträge erfordern den manuellen Steuermodus pro Trade.</string>
+    <string name="bt_err_tax_fx_unavailable">Für die Besteuerung dieses Trades fehlt derzeit eine Währungsumrechnung.</string>
+    <string name="bt_err_base_fx_unavailable">Wechselkurse für deine Basiswährung sind derzeit nicht verfügbar.</string>
+
+    <!-- Bargeld: Quellen, Bewegungen, Tags, Budgets, Regeln -->
+    <string name="bt_err_cash_source_not_found">Diese Bargeldquelle konnten wir nicht finden.</string>
+    <string name="bt_err_cash_source_name_taken">Eine Bargeldquelle mit diesem Namen existiert bereits.</string>
+    <string name="bt_err_cash_source_archived">Diese Bargeldquelle ist archiviert. Stelle sie wieder her, bevor du neue Bewegungen erfasst.</string>
+    <string name="bt_err_cash_source_already_archived">Diese Bargeldquelle ist bereits archiviert.</string>
+    <string name="bt_err_cash_source_not_archived">Diese Bargeldquelle ist nicht archiviert.</string>
+    <string name="bt_err_cash_source_is_main">Die Haupt-Bargeldquelle kann nicht archiviert werden.</string>
+    <string name="bt_err_cash_source_not_empty">Nur eine Bargeldquelle mit Nullsaldo kann archiviert werden. Übertrage oder hebe den Rest zuerst ab.</string>
+    <string name="bt_err_cash_movement_not_found">Diese Bewegung konnten wir nicht finden.</string>
+    <string name="bt_err_cash_movement_not_editable">Diese Bewegung stammt aus einem Trade oder einer Dividende — bearbeite stattdessen diese.</string>
+    <string name="bt_err_cash_ledger_would_go_negative">Dadurch würde dein Bargeldbestand zu einem späteren Datum ins Minus rutschen. Füge zuerst Bargeld hinzu oder entferne die abhängigen Bewegungen.</string>
+    <string name="bt_err_insufficient_cash">In dieser Quelle ist nicht genug Bargeld vorhanden.</string>
+    <string name="bt_err_cash_flag_mismatch">Diese Bargeldoption passt nicht zu dieser Art von Eintrag.</string>
+    <string name="bt_err_cash_fx_unavailable">Für bargeldgekoppelte Einträge fehlt derzeit eine Währungsumrechnung.</string>
+    <string name="bt_err_cash_transfer_same_source">Eine Umbuchung benötigt zwei verschiedene Bargeldquellen.</string>
+    <string name="bt_err_cash_transfer_invalid">Diese Umbuchung lässt sich so nicht erfassen.</string>
+    <string name="bt_err_cash_tag_not_found">Dieses Tag konnten wir nicht finden.</string>
+    <string name="bt_err_cash_tag_name_taken">Du hast bereits ein Tag mit diesem Namen.</string>
+    <string name="bt_err_cash_tag_system_protected">Integrierte Tags lassen sich nicht löschen — benenne es stattdessen um.</string>
+    <string name="bt_err_cash_tag_ref_not_found">Eines dieser Tags existiert nicht mehr.</string>
+    <string name="bt_err_cash_rule_not_found">Diese Regel konnten wir nicht finden.</string>
+    <string name="bt_err_cash_rule_regex_unsupported">Dieses Muster ist kein unterstützter regulärer Ausdruck.</string>
+    <string name="bt_err_cash_budget_not_found">Dieses Budget konnten wir nicht finden.</string>
+    <string name="bt_err_cash_budget_exists">Für dieses Tag existiert in diesem Zeitraum bereits ein Budget.</string>
+    <string name="bt_err_standing_order_asset_not_found">Diesen Wert für den Dauerauftrag konnten wir nicht finden.</string>
+    <string name="bt_err_standing_order_end_before_start">Das Enddatum muss am oder nach dem Startdatum liegen.</string>
+    <string name="bt_err_standing_order_insufficient_cash">Es ist nicht genug Bargeld vorhanden, um diesen Dauerauftrag zu decken.</string>
+
+    <!-- Werte, Körbe, Watchlists, Workboard, Alarme, KI -->
+    <string name="bt_err_asset_not_found">Diesen Wert konnten wir nicht finden.</string>
+    <string name="bt_err_custom_asset_not_found">Diesen eigenen Wert konnten wir nicht finden.</string>
+    <string name="bt_err_duplicate_value_point">Für dieses Datum existiert bereits ein Wert.</string>
+    <string name="bt_err_manual_asset_not_found">Diesen eigenen Wert konnten wir nicht finden.</string>
+    <string name="bt_err_manual_asset_empty">Für diesen eigenen Wert gibt es noch keine Werte.</string>
+    <string name="bt_err_quote_unavailable">Wir konnten keinen aktuellen Kurs abrufen. Bitte versuche es in Kürze erneut.</string>
+    <string name="bt_err_no_quote">Für diesen Wert gibt es keinen aktuellen Kurs.</string>
+    <string name="bt_err_conglomerate_not_found">Diesen Korb konnten wir nicht finden.</string>
+    <string name="bt_err_conglomerate_name_taken">Ein Korb mit diesem Namen existiert bereits.</string>
+    <string name="bt_err_conglomerate_in_use">Dieser Korb ist Teil eines anderen Korbs — entferne ihn zuerst dort.</string>
+    <string name="bt_err_conglomerate_visibility_guard_required">Ändere die Sichtbarkeit dieses Korbs in den Freigabe-Einstellungen.</string>
+    <string name="bt_err_duplicate_asset">Ein Wert darf in einem Korb nur einmal vorkommen.</string>
+    <string name="bt_err_duplicate_child">Ein Korb darf in einem anderen Korb nur einmal vorkommen.</string>
+    <string name="bt_err_nesting_cycle">Ein Korb kann sich nicht selbst enthalten.</string>
+    <string name="bt_err_nesting_too_deep">Diese Körbe sind zu tief verschachtelt.</string>
+    <string name="bt_err_too_many_positions">Dieser Korb hat die maximale Anzahl an Positionen erreicht.</string>
+    <string name="bt_err_activation_invalid">Dieser Korb benötigt mindestens eine Position, und seine Gewichtungen müssen insgesamt 100 Prozent ergeben, bevor er aktiviert werden kann.</string>
+    <string name="bt_err_allocation_no_positions">Dieser Korb hat keine Positionen, auf die sich ein Budget verteilen ließe.</string>
+    <string name="bt_err_allocation_invalid">Diese Aufteilung lässt sich so nicht berechnen.</string>
+    <string name="bt_err_backtest_unavailable">Für diesen Rücktest liegen nicht genügend Daten vor.</string>
+    <string name="bt_err_no_price_history">Für diesen Rücktest gibt es keine Kurshistorie.</string>
+    <string name="bt_err_fx_unavailable">Eine für diesen Rücktest nötige Währungsumrechnung ist derzeit nicht verfügbar.</string>
+    <string name="bt_err_sandbox_private_asset">Ein privater eigener Wert lässt sich in einer geteilten Testumgebung nicht zurückrechnen.</string>
+    <string name="bt_err_sandbox_positions_mismatch">Die Gewichtungen müssen exakt die Positionen des geteilten Korbs abdecken.</string>
+    <string name="bt_err_watchlist_not_found">Diese Watchlist konnten wir nicht finden.</string>
+    <string name="bt_err_watchlist_name_taken">Eine Watchlist mit diesem Namen existiert bereits.</string>
+    <string name="bt_err_watchlist_default_locked">Die Standard-Watchlist kann nicht umbenannt oder gelöscht werden.</string>
+    <string name="bt_err_already_watching">Dieser Wert steht bereits auf dieser Watchlist.</string>
+    <string name="bt_err_item_not_found">Diesen Workboard-Eintrag konnten wir nicht finden.</string>
+    <string name="bt_err_idea_conglomerate_not_found">Der Korb, auf den sich diese Idee bezieht, existiert nicht mehr.</string>
+    <string name="bt_err_alert_not_found">Diesen Alarm konnten wir nicht finden.</string>
+    <string name="bt_err_alert_sharing_ack_required">Wenn du deine Alarme teilst, sehen Follower, welche Werte du beobachtest, und deine Kursziele. Bestätige dies, um es zu aktivieren.</string>
+    <string name="bt_err_ai_no_data">Dieses Portfolio hat keine bewerteten Positionen zum Analysieren.</string>
+    <string name="bt_err_ai_unavailable">Der KI-Assistent ist derzeit nicht verfügbar.</string>
+    <string name="bt_err_ai_cap_exceeded">Du hast das heutige KI-Limit erreicht. Bitte versuche es morgen erneut.</string>
+    <string name="bt_err_ai_provider_error">Der KI-Assistent hat nicht geantwortet. Bitte versuche es erneut.</string>
+
+    <!-- Gruppen-Portfolios (Spiegel-Naht) -->
+    <string name="bt_err_mirror_chain_not_found">Dieses Gruppen-Portfolio konnten wir nicht finden.</string>
+    <string name="bt_err_mirror_forbidden">Deine Rolle in diesem Gruppen-Portfolio erlaubt das nicht.</string>
+    <string name="bt_err_mirror_member_not_found">Diese Person ist kein Mitglied dieses Gruppen-Portfolios.</string>
+    <string name="bt_err_mirror_already_member">Diese Person ist bereits Mitglied dieses Gruppen-Portfolios.</string>
+    <string name="bt_err_mirror_already_synced">Dieses Portfolio ist bereits ein Gruppen-Portfolio.</string>
+    <string name="bt_err_mirror_no_members">Dieses Gruppen-Portfolio hat keine aktiven Kopien zum Beitreten.</string>
+    <string name="bt_err_mirror_not_friends">Du kannst ein Gruppen-Portfolio nur mit deinen Freundinnen und Freunden teilen.</string>
+    <string name="bt_err_mirror_cannot_invite_self">Du kannst dich nicht selbst einladen.</string>
+    <string name="bt_err_mirror_member_cap_reached">Dieses Gruppen-Portfolio ist voll.</string>
+    <string name="bt_err_mirror_invite_exists">Für diese Person ist bereits eine Einladung offen.</string>
+    <string name="bt_err_mirror_invite_not_found">Diese Einladung ist nicht mehr gültig.</string>
+    <string name="bt_err_mirror_conflict">Jemand anderes hat diesen geteilten Eintrag zuerst geändert. Aktualisiere und versuche es erneut.</string>
+    <string name="bt_err_mirror_row_deleted">Dieser Eintrag wurde aus dem geteilten Portfolio entfernt, daher lässt sich die Änderung nicht anwenden.</string>
+    <string name="bt_err_mirror_busy">Dieses Gruppen-Portfolio wendet gerade eine andere Änderung an. Bitte versuche es in Kürze erneut.</string>
+    <string name="bt_err_mirror_sync_stalled">Das geteilte Portfolio synchronisiert noch. Das wird automatisch erneut versucht.</string>
+    <string name="bt_err_mirror_asset_not_syncable">Eigene Werte können nicht in ein Gruppen-Portfolio — andere Mitglieder könnten sie nicht sehen. Nutze eines deiner eigenen Portfolios.</string>
+    <string name="bt_err_mirror_owner_transfer_required">Übertrage zuerst die Eigentümerschaft dieses Gruppen-Portfolios.</string>
+
+    <!-- Soziales, Teilen und Chat -->
+    <string name="bt_err_friend_request_not_found">Diese Freundschaftsanfrage konnten wir nicht finden.</string>
+    <string name="bt_err_friendship_not_found">Du bist mit dieser Person nicht befreundet.</string>
+    <string name="bt_err_friend_group_not_found">Diesen Kreis konnten wir nicht finden.</string>
+    <string name="bt_err_group_member_not_friend">Nur deine Freundinnen und Freunde können zu einem Kreis hinzugefügt werden.</string>
+    <string name="bt_err_group_audience_invalid">Zum Teilen mit einem Kreis brauchst du einen deiner eigenen Kreise.</string>
+    <string name="bt_err_follow_not_found">Du folgst dieser Person nicht.</string>
+    <string name="bt_err_cannot_follow_self">Du kannst dir nicht selbst folgen.</string>
+    <string name="bt_err_item_follow_not_found">Du folgst diesem Eintrag nicht.</string>
+    <string name="bt_err_cannot_follow_own_item">Du kannst deinem eigenen Eintrag nicht folgen.</string>
+    <string name="bt_err_link_not_found">Dieser geteilte Link ist nicht mehr verfügbar.</string>
+    <string name="bt_err_profile_not_found">Dieses Profil ist nicht verfügbar.</string>
+    <string name="bt_err_invalid_profile_icon">Dieses Profilsymbol existiert nicht.</string>
+    <string name="bt_err_public_profile_ack_required">Ein öffentliches Profil zeigt allen die Einträge, die du öffentlich gemacht hast. Bestätige dies, um es zu aktivieren.</string>
+    <string name="bt_err_public_link_ack_required">Ein öffentlicher Link zeigt deine Bestände und dein Vermögen allen, die ihn haben. Bestätige dies, um fortzufahren.</string>
+    <string name="bt_err_comment_not_found">Diesen Kommentar konnten wir nicht finden.</string>
+    <string name="bt_err_chat_banned">Du kannst derzeit keine Nachrichten senden.</string>
+    <string name="bt_err_chat_chip_not_owned">Du kannst nur einen Eintrag teilen, der dir gehört.</string>
+
+    <!-- Benachrichtigungen und Zustellung -->
+    <string name="bt_err_notification_not_found">Diese Benachrichtigung konnten wir nicht finden.</string>
+    <string name="bt_err_web_push_endpoint_unsafe">Diese Push-Adresse wurde als unsicher abgelehnt.</string>
+    <string name="bt_err_web_push_subscription_limit_reached">Du hast die maximale Anzahl an Push-Geräten erreicht.</string>
+    <string name="bt_err_webhook_not_found">Diesen Webhook konnten wir nicht finden.</string>
+    <string name="bt_err_webhook_limit_reached">Du hast die maximale Anzahl an Webhooks erreicht.</string>
+
+    <!-- Datenexport -->
+    <string name="bt_err_export_token_required">Für diesen Download wird ein gültiger Token benötigt.</string>
+    <string name="bt_err_export_not_found">Dieser Export ist nicht mehr verfügbar.</string>
+    <string name="bt_err_export_rate_limited">Du kannst einen Datenexport pro Tag anfordern. Bitte versuche es später erneut.</string>
+
+    <!-- Offline-Warteschlange: Idempotenzschlüssel -->
+    <string name="bt_err_idempotency_key_invalid">Diese Änderung konnte nicht übermittelt werden (ihr Sync-Schlüssel wurde abgelehnt). Entferne sie und lege sie neu an.</string>
+    <string name="bt_err_idempotency_key_mismatch">Diese Änderung wurde bereits in anderer Form übermittelt. Entferne sie und lege sie neu an.</string>
+    <string name="bt_err_idempotency_in_progress">Diese Änderung wird noch verarbeitet. Sie wird automatisch erneut versucht.</string>
+
+    <!-- Paranoid-Modus und Tresor -->
+    <string name="bt_err_paranoid_mode">Diese Funktion ist nicht verfügbar, solange der Paranoid-Modus aktiv ist.</string>
+    <string name="bt_err_paranoid_not_enabled">Der Paranoid-Modus ist nicht aktiviert.</string>
+    <string name="bt_err_paranoid_media_not_ready">Dein Tresorspeicher ist noch nicht bereit.</string>
+    <string name="bt_err_paranoid_mirrorchain_active">Verlasse deine Gruppen-Portfolios, bevor du den Paranoid-Modus änderst.</string>
+    <string name="bt_err_paranoid_import_in_flight">Ein Import läuft noch. Warte, bis er abgeschlossen ist, und versuche es erneut.</string>
+    <string name="bt_err_paranoid_export_in_flight">Ein Export läuft noch. Warte, bis er abgeschlossen ist, und versuche es erneut.</string>
+    <string name="bt_err_paranoid_transition_conflict">Ein anderes Gerät ändert gerade den Paranoid-Modus. Bitte versuche es in Kürze erneut.</string>
+    <string name="bt_err_paranoid_normal_data_changed">Deine Daten haben sich während der Vorbereitung geändert. Bitte starte erneut.</string>
+    <string name="bt_err_paranoid_rehydration_invalid">Diese Wiederherstellungsdatei konnte nicht validiert werden.</string>
+    <string name="bt_err_vault_not_found">Es wurden keine Tresordaten gefunden.</string>
+    <string name="bt_err_vault_paranoid_mode_required">Das ist nur verfügbar, solange der Paranoid-Modus aktiv ist.</string>
+    <string name="bt_err_vault_precondition_required">Diesem Tresor-Schreibvorgang fehlt seine Sicherheitsprüfung.</string>
+    <string name="bt_err_vault_precondition_failed">Dein Tresor wurde auf einem anderen Gerät geändert. Aktualisiere und versuche es erneut.</string>
+    <string name="bt_err_vault_too_large">Dein Tresor hat die von diesem Server akzeptierte Größe überschritten.</string>
+    <string name="bt_err_vault_malformed">Diese Tresordaten konnten nicht gelesen werden.</string>
+    <string name="bt_err_vault_server_medium_inactive">Der serverseitige Tresorspeicher ist nicht aktiv.</string>
+    <string name="bt_err_vault_media_state_conflict">Dein Tresorspeicher wurde auf einem anderen Gerät geändert. Aktualisiere und versuche es erneut.</string>
+    <string name="bt_err_vault_media_verification_failed">Wir konnten deinen Tresorspeicher nicht verifizieren. Bitte versuche es erneut.</string>
+    <string name="bt_err_vault_retired_server_proof_required">Diese Änderung benötigt einen Speichernachweis, der noch nicht verfügbar ist.</string>
+    <string name="bt_err_vault_retired_server_proof_invalid">Dieser Speichernachweis konnte nicht verifiziert werden.</string>
+    <string name="bt_err_vault_retired_server_conflict">Diese Speicheränderung steht im Konflikt mit deinen aufbewahrten Wiederherstellungsdaten.</string>
+    <string name="bt_err_vault_retired_server_retention">Der Wiederherstellungszeitraum für die alte Serverkopie ist noch nicht abgelaufen.</string>
+
+    <!-- App-eigene Ablehnungen (kommen nie vom Server) -->
+    <string name="bt_err_app_http_failed">Der Server hat diese Anfrage abgelehnt. Bitte versuche es erneut.</string>
+    <string name="bt_err_app_empty_response">Der Server hat eine leere Antwort gesendet. Bitte versuche es erneut.</string>
+    <string name="bt_err_app_unexpected">Etwas Unerwartetes ist passiert. Bitte versuche es erneut.</string>
+    <string name="bt_err_app_rejected">BetterTrack hat diesen Eintrag abgelehnt.</string>
+    <string name="bt_err_app_op_malformed_submit">Dieser eingereihte Eintrag ist fehlerhaft und kann nicht übermittelt werden.</string>
+    <string name="bt_err_app_op_malformed_vault">Dieser eingereihte Eintrag ist fehlerhaft und kann nicht auf deinen Tresor angewendet werden.</string>
+    <string name="bt_err_app_op_replay_window_expired">Wir konnten nicht bestätigen, ob diese Änderung den Server erreicht hat. Prüfe deine Transaktionen, bevor du es erneut versuchst.</string>
+    <string name="bt_err_app_op_attempt_timed_out">Bei dieser Änderung ist die Zeit abgelaufen — der Server hat nicht geantwortet. Versuche es erneut oder entferne sie.</string>
+    <string name="bt_err_app_op_no_vault">Diese Änderung wartet darauf, dass dein Tresor entsperrt wird.</string>
+    <string name="bt_err_app_op_no_cash_source">Dieses Portfolio hat noch keine Bargeldquelle, daher lässt sich die Bargeldseite dieses Eintrags nicht erfassen.</string>
+    <string name="bt_err_app_op_zero_amount">Dieser Betrag wird auf null gerundet, es gibt also nichts zu erfassen.</string>
+    <string name="bt_err_app_op_no_rate">Auf diesem Gerät gibt es keinen %1$s-Wechselkurs, daher lässt sich die Bargeldseite dieses Trades nicht bewerten. Stelle eine Internetverbindung her oder erfasse den Trade ohne Bargeldzahlung.</string>
+    <string name="bt_err_no_live_prices">BetterTrack hat auf diesem Gerät keinen Kurs für diesen Wert. Trage selbst einen Wert ein oder aktiviere die Kursabfrage in den Einstellungen.</string>
+    <string name="bt_err_direct_provider_disabled">Direkte Kursabfragen sind in dieser Version nicht aktiviert.</string>
+    <string name="bt_err_no_exchange_rate">Auf diesem Gerät gibt es keinen %1$s-Wechselkurs, daher lässt sich dieses Portfolio noch nicht bewerten.</string>
+    <string name="bt_err_vault_derivation_failed">Die Kennzahlen dieses Portfolios konnten auf diesem Gerät nicht berechnet werden.</string>
+    <string name="bt_err_delete_disabled">Die Kontolöschung ist in dieser Version deaktiviert.</string>
+    <string name="bt_err_app_unknown_alert_kind">Dieser Alarm nutzt einen Typ, den deine App-Version noch nicht kennt. Aktualisiere BetterTrack, um ihn zu sehen.</string>
 </resources>

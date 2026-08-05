@@ -1,9 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
-import at.bettertrack.app.ui.format.BtDiscreetMode
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,14 +42,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -63,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.HistoryPoint
@@ -86,8 +85,11 @@ import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.format.BtDiscreetMode
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import androidx.compose.ui.unit.Dp
 import java.util.Locale
 
@@ -360,7 +362,7 @@ private fun OverviewContent(
     onOpenCash: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val totals = portfolio.totals
 
     // W6: true when this mode has no live quotes, so an absent price is a state
@@ -1193,7 +1195,7 @@ private fun ErrorFillState(onRetry: () -> Unit) {
 private fun NoPortfolioState(
     isOnline: Boolean,
     busy: Boolean,
-    error: String?,
+    error: BtMessage?,
     onCreate: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -1222,10 +1224,10 @@ private fun NoPortfolioState(
                             color = bt.textMuted,
                         )
                     }
-                    if (error != null) {
+                    error?.let { shown ->
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = error,
+                            text = shown.resolveWithDiagnostic(),
                             style = MaterialTheme.typography.bodySmall,
                             color = bt.loss,
                         )

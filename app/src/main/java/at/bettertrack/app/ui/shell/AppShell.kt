@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -120,6 +122,9 @@ import at.bettertrack.app.navigation.WorkbenchTabRoute
 import at.bettertrack.app.ui.components.BtBadgeOverlay
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtTabBadgeDot
+import at.bettertrack.app.ui.components.BtSnackbarHost
+import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.rememberBtSnackbarState
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.home.HomeScreen
 import at.bettertrack.app.ui.cash.CashScreen
@@ -393,23 +398,40 @@ fun BtApp() {
         AppGraph.alertsRepository.refreshTriggered(storageMode)
     }
 
+    // One feedback idiom for the whole app (S6 P1-9). Hoisted here so every
+    // screen — top-level or pushed, inside a sheet or not — answers the same
+    // way, in the app's own dark/gold styling, with room for a Retry action.
+    // Declared ahead of the shell's own action lambdas below: they report
+    // through it, so it has to exist before they capture it.
+    val snackbar = rememberBtSnackbarState()
+
     // Discreet mode as a first-class quick toggle (mandate §5: "give it a sane
     // home, e.g. overflow or profile, not bar chrome"). Home's overflow is that
     // home; the Settings row stays the canonical control.
     val discreetMode by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
-    // Hoisted to a named lambda because it now has TWO call sites — Home's
-    // overflow item and Home's in-content quick-links row (Fable's rule: an
-    // overflow entry may never be the only path to its act). One implementation,
-    // so the two can never diverge on what "flip discreet mode" means.
-    val toggleDiscreet: (Boolean) -> Unit = { wanted ->
+    // A local fun rather than a val lambda because it now has THREE call sites —
+    // Home's overflow item, Home's in-content quick-links row (Fable's rule: an
+    // overflow entry may never be the only path to its act), and its own Retry
+    // below. One implementation, so they can never diverge on what "flip
+    // discreet mode" means; being a fun is what lets it name itself as the way
+    // out, which a self-referencing local val cannot do.
+    fun toggleDiscreet(wanted: Boolean) {
         // Flip locally FIRST — the point of masking is that amounts vanish the
-        // instant the user asks, not a round-trip later. Settings owns the error
-        // copy for a refusal (mandate §5 keeps it the canonical control); here
-        // the state visibly reverting IS the feedback.
+        // instant the user asks, not a round-trip later.
         AppGraph.discreetModeStore.set(wanted)
         scope.launch {
             val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
-            if (r is BtResult.Err) AppGraph.discreetModeStore.set(!wanted)
+            if (r is BtResult.Err) {
+                // Roll back AND say why. Settings stays the canonical control and
+                // renders this same `asMessage()` line inline beside its row; the
+                // shell has no inline place for it, so it goes to the one feedback
+                // idiom instead. Letting the revert speak for itself — as this
+                // call site did before the app-wide snackbar existed — leaves the
+                // user watching the switch flick back with no reason given, which
+                // is the exact silence S6 P1-9 set out to remove.
+                AppGraph.discreetModeStore.set(!wanted)
+                snackbar.controller.showError(r.error.asMessage()) { toggleDiscreet(wanted) }
+            }
         }
     }
 
@@ -419,6 +441,7 @@ fun BtApp() {
         // destinations (gallery, settings, placeholders) run their own Scaffold.
         // Zeroing here prevents double status-bar padding on those routes.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { BtSnackbarHost(snackbar.hostState) },
         topBar = {
             // `ownsItsHeader` destinations render their own (R1-B's collapsing
             // large title); the shell adds nothing on top of them.
@@ -439,7 +462,7 @@ fun BtApp() {
                     onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                     onDevBackend = { navController.navigate(DevBackendRoute) },
-                    onToggleDiscreet = toggleDiscreet,
+                    onToggleDiscreet = ::toggleDiscreet,
                 )
             }
         },
@@ -464,6 +487,7 @@ fun BtApp() {
             }
         },
     ) { innerPadding ->
+        CompositionLocalProvider(LocalBtSnackbar provides snackbar.controller) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -481,7 +505,8 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(navController, navigateDeepLink, switchToTab, discreetMode, toggleDiscreet)
+            BtNavHost(navController, navigateDeepLink, switchToTab, discreetMode, ::toggleDiscreet)
+        }
         }
     }
 }

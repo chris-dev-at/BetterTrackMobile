@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,8 +72,8 @@ import at.bettertrack.app.ui.prices.NoPricesHero
 import at.bettertrack.app.ui.prices.UnpricedNote
 import at.bettertrack.app.ui.prices.priceCoverage
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import at.bettertrack.app.ui.workboard.WorkboardEntry
-import java.util.Locale
 
 /**
  * The rhythm between Home's sections (mandate §4: more whitespace, fewer
@@ -403,7 +402,7 @@ fun HomeScreen(
 @Composable
 private fun HomeHero(state: HomeHeroState, modifier: Modifier = Modifier) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
 
     // Discreet mode: press and hold the hero to peek, release to re-hide. Bound
     // to the gesture rather than a latch, and only armed while masking — exactly
@@ -553,7 +552,7 @@ private fun HomeMovers(
 @Composable
 private fun MoverCard(holding: HoldingEntity, onClick: () -> Unit) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val pct = holding.dayChangePct ?: 0.0
     BtCard(modifier = Modifier.width(132.dp), onClick = onClick) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
@@ -734,7 +733,7 @@ private fun HomeUnpricedBlock(
 @Composable
 private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val totals = portfolio.totals
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(

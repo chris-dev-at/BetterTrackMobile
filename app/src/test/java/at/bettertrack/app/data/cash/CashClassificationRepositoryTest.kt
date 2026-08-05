@@ -149,7 +149,7 @@ class CashClassificationRepositoryTest {
         assertTrue(err.isCashTagSystemProtected)
         assertFalse(err.isCashTagNameTaken)
         // The server's wording already says exactly the right thing — keep it.
-        assertEquals("Built-in tags cannot be deleted.", err.userMessage)
+        assertEquals("Built-in tags cannot be deleted.", err.diagnostic)
         assertEquals("DELETE", server.takeRequest().method)
     }
 
@@ -167,7 +167,7 @@ class CashClassificationRepositoryTest {
         val err = (r as BtResult.Err).error
         assertTrue(err.isCashTagNameTaken)
         assertFalse(err.isCashTagSystemProtected)
-        assertEquals("You already have a tag with that name.", err.userMessage)
+        assertEquals("You already have a tag with that name.", err.diagnostic)
     }
 
     @Test

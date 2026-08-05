@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -33,15 +32,16 @@ import androidx.compose.ui.unit.sp
 import at.bettertrack.app.data.repo.HistoryPoint
 import at.bettertrack.app.data.repo.MILLIS_PER_DAY
 import at.bettertrack.app.ui.components.rememberReducedMotion
+import at.bettertrack.app.ui.format.BT_MASKED_PLAIN
+import at.bettertrack.app.ui.format.BtDiscreetMode
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.theme.FONT_FEATURE_TABULAR
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import at.bettertrack.app.ui.format.BT_MASKED_PLAIN
-import at.bettertrack.app.ui.format.BtDiscreetMode
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -77,7 +77,7 @@ fun BtAreaChart(
     val bt = BtTheme.colors
     val reducedMotion = rememberReducedMotion()
     val textMeasurer = rememberTextMeasurer()
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
 
     // ── Range-transition morph state ────────────────────────────────────────
     val progress = remember { Animatable(1f) }

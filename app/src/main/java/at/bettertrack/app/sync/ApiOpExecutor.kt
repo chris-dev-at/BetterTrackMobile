@@ -3,20 +3,21 @@ package at.bettertrack.app.sync
 import android.util.Log
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.api.MIRROR_SEAM_CONFLICT_CODES
 import at.bettertrack.app.data.api.dto.CashEntryRequest
-import at.bettertrack.app.ui.cash.CashKind
 import at.bettertrack.app.data.api.dto.CashTransferRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.PutValuePointsRequest
 import at.bettertrack.app.data.api.dto.ValuePointDto
 import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.ui.cash.CashKind
+import java.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
 import retrofit2.Response
-import java.io.IOException
 
 /**
  * The op → API mapping layer (§7.2 ledger-event set → module endpoints).
@@ -142,9 +143,10 @@ class ApiOpExecutor(
             when {
                 resp.isSuccessful -> resp.body()?.points ?: emptyList()
                 resp.code() == 401 -> return ExecResult.AuthFailure
-                resp.code() in 400..499 -> return ExecResult.Rejected(
-                    parseApiError(json, resp.code(), resp.errorBody()).userMessage,
-                )
+                resp.code() in 400..499 -> {
+                    val err = parseApiError(json, resp.code(), resp.errorBody())
+                    return ExecResult.Rejected(err.code, err.diagnostic)
+                }
                 else -> return ExecResult.Ambiguous(reachable = true)
             }
         } catch (_: IOException) {
@@ -173,7 +175,7 @@ class ApiOpExecutor(
         call: suspend () -> Response<T>?,
         onSuccess: (T) -> String?,
     ): ExecResult = try {
-        val resp = call() ?: return ExecResult.Rejected(MSG_MALFORMED)
+        val resp = call() ?: return ExecResult.Rejected(BtErrorCopy.AppCodes.OP_MALFORMED_SUBMIT)
         when {
             // 2xx — provably applied. A replay (same key) returns a byte-identical
             // 2xx, so this success path needs no special-casing (#9).
@@ -182,9 +184,11 @@ class ApiOpExecutor(
                 ExecResult.Success(body?.let(onSuccess))
             }
             resp.code() == 401 -> ExecResult.AuthFailure
-            resp.code() == 408 || resp.code() == 429 -> ExecResult.RetryableNotApplied(
-                "The server asked us to retry (HTTP ${resp.code()}).",
-            )
+            // RetryableNotApplied never parks, so its payload is never shown to
+            // anyone — the op goes back to PENDING with the error column cleared.
+            // A bare code is all the log needs.
+            resp.code() == 408 || resp.code() == 429 ->
+                ExecResult.RetryableNotApplied("HTTP ${resp.code()}")
             resp.code() in 400..499 ->
                 classifyClientError(parseApiError(json, resp.code(), resp.errorBody()), op)
             // V5 mirror seam: 503 MIRROR_SYNC_STALLED is a KNOWN transient — the
@@ -195,7 +199,7 @@ class ApiOpExecutor(
                 val err = parseApiError(json, resp.code(), resp.errorBody())
                 if (err.isMirrorSyncStalled) {
                     Log.d(TAG, "Mirror sync stalled for op#${op.id} — retrying with backoff")
-                    ExecResult.RetryableNotApplied(err.userMessage)
+                    ExecResult.RetryableNotApplied(err.code)
                 } else {
                     ExecResult.Ambiguous(reachable = true)
                 }
@@ -224,7 +228,7 @@ class ApiOpExecutor(
         // one settles into the replay).
         BtApiError.Codes.IDEMPOTENCY_IN_PROGRESS -> {
             Log.d(TAG, "Idempotency in-progress for op#${op.id} (key=${op.clientId}) — will retry")
-            ExecResult.RetryableNotApplied("A previous attempt of this change is still being processed.")
+            ExecResult.RetryableNotApplied(err.code)
         }
         // Non-UUID key — regenerate once + retry (handled by the engine).
         BtApiError.Codes.IDEMPOTENCY_KEY_INVALID -> {
@@ -236,7 +240,7 @@ class ApiOpExecutor(
         // permanent op failure surfaced through needs-attention.
         BtApiError.Codes.IDEMPOTENCY_KEY_MISMATCH -> {
             Log.w(TAG, "Idempotency key MISMATCH for op#${op.id} (key=${op.clientId}, HTTP ${err.httpStatus}) — parking as needs-attention")
-            ExecResult.Rejected(err.userMessage)
+            ExecResult.Rejected(err.code, err.diagnostic)
         }
         // V5 mirror seam (409): the row moved, vanished, or is derived-and-not-
         // editable. All three are permanent for THIS attempt, so park with the
@@ -244,9 +248,9 @@ class ApiOpExecutor(
         // pending-sync screen (same shape as MSG_ATTEMPT_TIMED_OUT).
         in MIRROR_SEAM_CONFLICT_CODES -> {
             Log.w(TAG, "Mirror-seam refusal ${err.code} for op#${op.id} (HTTP ${err.httpStatus}) — parking as needs-attention")
-            ExecResult.Rejected(err.userMessage)
+            ExecResult.Rejected(err.code, err.diagnostic)
         }
-        else -> ExecResult.Rejected(err.userMessage)
+        else -> ExecResult.Rejected(err.code, err.diagnostic)
     }
 
     private fun <T> decode(
@@ -261,7 +265,7 @@ class ApiOpExecutor(
 
     private fun malformed(op: SyncOp): ExecResult {
         Log.w(TAG, "Rejecting malformed op ${op.clientId} (${op.type.wire})")
-        return ExecResult.Rejected(MSG_MALFORMED)
+        return ExecResult.Rejected(BtErrorCopy.AppCodes.OP_MALFORMED_SUBMIT)
     }
 
     private fun resultJson(key: String, ids: List<String>): String =
@@ -269,6 +273,5 @@ class ApiOpExecutor(
 
     companion object {
         private const val TAG = "BtOpExecutor"
-        private const val MSG_MALFORMED = "This queued entry is malformed and can't be submitted."
     }
 }

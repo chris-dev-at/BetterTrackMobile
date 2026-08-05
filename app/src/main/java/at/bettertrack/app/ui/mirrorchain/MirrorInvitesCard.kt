@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.mirrorchain
 
-import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -14,8 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,19 +23,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.MirrorInvite
 import at.bettertrack.app.data.repo.MirrorchainRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
@@ -45,18 +44,21 @@ import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +78,14 @@ internal sealed interface MirrorInvitesUiState {
 /** A message with its args, resolved to a string only at the composable. */
 internal sealed interface MirrorInviteMessage {
     data class Res(@StringRes val id: Int, val args: List<Any> = emptyList()) : MirrorInviteMessage
-    data class Raw(val text: String) : MirrorInviteMessage
+
+    /**
+     * A refusal this card has no copy of its own for. It carries the app-owned
+     * [BtMessage] for the server's error code — not the server's English
+     * sentence, which used to be pasted straight onto the row (S6 P0-4) and now
+     * survives only as that message's dim diagnostic half.
+     */
+    data class Failure(val message: BtMessage) : MirrorInviteMessage
 }
 
 /** An inline refusal pinned to the invite row it belongs to. */
@@ -178,7 +187,7 @@ internal class MirrorInvitesViewModel(
             MirrorchainRepository.CODE_BUSY ->
                 MirrorInviteMessage.Res(R.string.bt_chain_err_busy)
 
-            else -> MirrorInviteMessage.Raw(error.userMessage)
+            else -> MirrorInviteMessage.Failure(error.asMessage())
         }
         _rowError.value = MirrorInviteRowError(inviteId, message)
     }
@@ -200,15 +209,17 @@ fun MirrorInvitesCard(modifier: Modifier = Modifier) {
     val busyId by vm.busyInviteId.collectAsStateWithLifecycle()
     val rowError by vm.rowError.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val snackbar = LocalBtSnackbar.current
 
+    // One feedback idiom (S6 P1-9): the app-level snackbar, not a system toast.
+    // Both of this card's confirmations take at most the chain name, so they map
+    // straight onto a resource plus its single format argument.
     LaunchedEffect(toast) {
-        val t = toast ?: return@LaunchedEffect
-        val text = when (t) {
-            is MirrorInviteMessage.Raw -> t.text
-            is MirrorInviteMessage.Res -> context.getString(t.id, *t.args.toTypedArray())
+        when (val t = toast) {
+            null -> return@LaunchedEffect
+            is MirrorInviteMessage.Failure -> snackbar.showError(t.message)
+            is MirrorInviteMessage.Res -> snackbar.show(t.id, *t.args.toTypedArray())
         }
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
         vm.consumeToast()
     }
 
@@ -269,7 +280,7 @@ private fun InviteRow(
     onDecline: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BtAvatar(name = invite.fromUsername ?: invite.chainName, size = 36.dp)
@@ -303,7 +314,9 @@ private fun InviteRow(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = when (error) {
-                    is MirrorInviteMessage.Raw -> error.text
+                    // One line to work with, so the diagnostic (when there is
+                    // one) trails the app's sentence instead of taking a row.
+                    is MirrorInviteMessage.Failure -> error.message.resolveWithDiagnostic()
                     is MirrorInviteMessage.Res ->
                         stringResource(error.id, *error.args.toTypedArray())
                 },

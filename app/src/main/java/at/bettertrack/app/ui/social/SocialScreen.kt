@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,7 +69,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.AudienceState
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Friend
@@ -95,6 +96,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -109,7 +111,7 @@ data class SocialUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val online: Boolean = true,
-    val error: String? = null,
+    val error: BtMessage? = null,
     val friends: List<Friend> = emptyList(),
     val incoming: List<FriendRequest> = emptyList(),
     val outgoing: List<FriendRequest> = emptyList(),
@@ -168,7 +170,7 @@ class SocialViewModel(
                 loading = false,
                 refreshing = false,
                 online = true,
-                error = if (_state.value.friends.isEmpty() && err != null) err.error.userMessage else null,
+                error = if (_state.value.friends.isEmpty() && err != null) err.error.asMessage() else null,
                 friends = (friendsR as? BtResult.Ok)?.value ?: _state.value.friends,
                 incoming = (requestsR as? BtResult.Ok)?.value?.incoming ?: _state.value.incoming,
                 outgoing = (requestsR as? BtResult.Ok)?.value?.outgoing ?: _state.value.outgoing,
@@ -184,16 +186,16 @@ class SocialViewModel(
         load()
     }
 
-    fun sendRequest(identifier: String) = write {
+    fun sendRequest(identifier: String): Unit = write {
         val r = repo.sendRequest(identifier)
         // No enumeration: identical message whether or not the target exists.
         if (r is BtResult.Ok) SocialToast.Res(R.string.bt_social_toast_request_sent, listOf(identifier.substringBefore('@')))
-        else SocialToast.Raw((r as BtResult.Err).error.userMessage)
+        else SocialToast.Failure((r as BtResult.Err).error.asMessage(), onRetry = { sendRequest(identifier) })
     }
 
-    fun decline(req: FriendRequest) = write { toastFor(repo.declineRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_declined)) }
-    fun cancel(req: FriendRequest) = write { toastFor(repo.cancelRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_cancelled)) }
-    fun accept(req: FriendRequest) = write { toastFor(repo.acceptRequest(req.id), SocialToast.Res(R.string.bt_social_toast_now_friends, listOf(req.username))) }
+    fun decline(req: FriendRequest): Unit = write { toastFor(repo.declineRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_declined)) { decline(req) } }
+    fun cancel(req: FriendRequest): Unit = write { toastFor(repo.cancelRequest(req.id), SocialToast.Res(R.string.bt_social_toast_request_cancelled)) { cancel(req) } }
+    fun accept(req: FriendRequest): Unit = write { toastFor(repo.acceptRequest(req.id), SocialToast.Res(R.string.bt_social_toast_now_friends, listOf(req.username))) { accept(req) } }
 
     fun openSharing(item: MySharedItem) {
         _state.value = _state.value.copy(sharingItem = item, sharingState = null)
@@ -258,7 +260,13 @@ class SocialViewModel(
                 }
                 is BtResult.Err -> {
                     _state.value = _state.value.copy(sharingBusy = false)
-                    _toast.value = SocialToast.Raw(r.error.userMessage)
+                    // The sheet is gone but every argument survives here, so
+                    // "Try again" can re-issue exactly the audience the user
+                    // just chose instead of making them re-pick it.
+                    _toast.value = SocialToast.Failure(
+                        r.error.asMessage(),
+                        onRetry = { applyAudience(item, audience, friendIds, groupId, acknowledge) },
+                    )
                 }
             }
         }
@@ -273,8 +281,8 @@ class SocialViewModel(
         }
     }
 
-    private fun toastFor(r: BtResult<Unit>, ok: SocialToast): SocialToast =
-        if (r is BtResult.Ok) ok else SocialToast.Raw((r as BtResult.Err).error.userMessage)
+    private fun toastFor(r: BtResult<Unit>, ok: SocialToast, retry: () -> Unit): SocialToast =
+        if (r is BtResult.Ok) ok else SocialToast.Failure((r as BtResult.Err).error.asMessage(), retry)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -294,6 +302,7 @@ fun SocialScreen(
     val chatRepo: ChatRepository = AppGraph.chatRepository
     val chatUnread by chatRepo.totalUnread.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val snackbar = LocalBtSnackbar.current
     var section by remember { mutableStateOf(SocialSection.Friends) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -306,10 +315,7 @@ fun SocialScreen(
         chatRepo.connectRealtime()
         onDispose { chatRepo.disconnectRealtime() }
     }
-    val toastText = toast?.let { it.resolve() }
-    androidx.compose.runtime.LaunchedEffect(toast) {
-        toastText?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeToast() }
-    }
+    SocialToastEffect(toast) { vm.consumeToast() }
 
     val refreshState = rememberPullToRefreshState()
     Box(Modifier.fillMaxSize()) {
@@ -336,6 +342,9 @@ fun SocialScreen(
                     )
                 },
             ) {
+                // Pulled out of the `when` so it smart-casts: the error is a
+                // BtMessage now, and BtErrorState takes it non-null.
+                val loadError = ui.error
                 when {
                     ui.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = bt.gold)
@@ -346,8 +355,8 @@ fun SocialScreen(
                         message = stringResource(R.string.bt_social_offline_body),
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                     )
-                    ui.error != null && ui.friends.isEmpty() -> BtErrorState(
-                        message = ui.error,
+                    loadError != null && ui.friends.isEmpty() -> BtErrorState(
+                        message = loadError,
                         onRetry = { vm.load(initial = true) },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -399,19 +408,25 @@ fun SocialScreen(
     }
 
     ui.publicLinkToShow?.let { url ->
+        // Read in composition, not inside the lambdas: a `context.getString` in a
+        // click handler is resolved against a context Compose is not observing,
+        // so it can hand back the previous language after an in-app switch
+        // (S6 P2-18, LocalContextGetResourceValueCall).
+        val clipLabel = stringResource(R.string.bt_social_link_clip_label)
+        val chooserTitle = stringResource(R.string.bt_social_link_chooser_title)
         PublicLinkDialog(
             url = url,
             onCopy = {
                 val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clip.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.bt_social_link_clip_label), url))
-                Toast.makeText(context, context.getString(R.string.bt_social_link_copied_toast), Toast.LENGTH_SHORT).show()
+                clip.setPrimaryClip(ClipData.newPlainText(clipLabel, url))
+                snackbar.show(R.string.bt_social_link_copied_toast)
             },
             onShare = {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, url)
                 }
-                context.startActivity(Intent.createChooser(send, context.getString(R.string.bt_social_link_chooser_title)))
+                context.startActivity(Intent.createChooser(send, chooserTitle))
             },
             onDismiss = { vm.dismissLink() },
         )

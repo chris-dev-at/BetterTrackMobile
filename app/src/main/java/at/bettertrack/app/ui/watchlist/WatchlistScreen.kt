@@ -31,14 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
@@ -59,6 +58,8 @@ import at.bettertrack.app.ui.market.assetTypeLabel
 import at.bettertrack.app.ui.shell.RefreshFailedBanner
 import at.bettertrack.app.ui.shell.RefreshNoticeState
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,7 +69,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /** A watchlist row's quote (§6.6 — price + day change). */
 data class WatchQuote(val eurPrice: Double?, val dayChangePct: Double?)
@@ -203,7 +203,7 @@ fun WatchlistPanel(
         )
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val boards by vm.boards.collectAsStateWithLifecycle()
     val selectedId by vm.selectedBoardId.collectAsStateWithLifecycle()
     val items by vm.items.collectAsStateWithLifecycle()

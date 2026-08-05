@@ -60,10 +60,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -91,6 +87,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.notifications.AppNotification
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotifKind
@@ -103,6 +100,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtUnreadDot
+import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -147,7 +145,10 @@ fun NotificationsInboxScreen(
 
     var selectedView by remember { mutableStateOf(NotifView.Active) }
     var phase by remember { mutableStateOf(InboxPhase.Loading) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    // The app-wide snackbar (S6 P1-9). This screen used to own a private
+    // SnackbarHost, which is why its feedback appeared in a different place —
+    // and behind a different scrim — than every other screen's.
+    val snackbar = LocalBtSnackbar.current
 
     // Dialog + menu state.
     var deleteTarget by remember { mutableStateOf<AppNotification?>(null) }
@@ -176,22 +177,13 @@ fun NotificationsInboxScreen(
 
     var simulateIndex by remember { mutableIntStateOf(0) }
 
-    // Snackbar copy resolved in composition (can't call stringResource in a lambda).
-    val archivedMsg = stringResource(R.string.bt_notif_snack_archived)
-    val undoLabel = stringResource(R.string.bt_notif_undo)
-
+    // Both actions are reversible and re-issuable, so a failure gets a real Retry:
+    // re-running the same call is exactly what the user asked for the first time.
     fun onArchive(n: AppNotification) {
         scope.launch {
             when (val r = repo.archive(n.id)) {
-                is BtResult.Ok -> {
-                    val res = snackbarHostState.showSnackbar(
-                        message = archivedMsg,
-                        actionLabel = undoLabel,
-                        duration = SnackbarDuration.Short,
-                    )
-                    if (res == SnackbarResult.ActionPerformed) repo.unarchive(n.id, restore = n)
-                }
-                is BtResult.Err -> snackbarHostState.showSnackbar(r.error.userMessage)
+                is BtResult.Ok -> snackbar.show(R.string.bt_notif_snack_archived)
+                is BtResult.Err -> snackbar.showError(r.error.asMessage(), onRetry = { onArchive(n) })
             }
         }
     }
@@ -199,7 +191,7 @@ fun NotificationsInboxScreen(
     fun onUnarchive(n: AppNotification) {
         scope.launch {
             val r = repo.unarchive(n.id)
-            if (r is BtResult.Err) snackbarHostState.showSnackbar(r.error.userMessage)
+            if (r is BtResult.Err) snackbar.showError(r.error.asMessage(), onRetry = { onUnarchive(n) })
         }
     }
 
@@ -209,7 +201,6 @@ fun NotificationsInboxScreen(
 
     Scaffold(
         containerColor = bt.bg,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.bt_dest_notifications), style = MaterialTheme.typography.titleLarge) },
@@ -371,8 +362,10 @@ fun NotificationsInboxScreen(
                 TextButton(onClick = {
                     deleteTarget = null
                     scope.launch {
+                        // No Retry on the destructive paths: the button would
+                        // re-fire a hard server delete with no second confirm.
                         val r = repo.delete(target.id)
-                        if (r is BtResult.Err) snackbarHostState.showSnackbar(r.error.userMessage)
+                        if (r is BtResult.Err) snackbar.showError(r.error.asMessage())
                     }
                 }) { Text(stringResource(R.string.bt_notif_action_delete), color = bt.loss) }
             },
@@ -416,7 +409,7 @@ fun NotificationsInboxScreen(
                             BulkConfirm.DeleteArchived -> repo.deleteAllArchived()
                             BulkConfirm.DeleteAll -> repo.deleteAll()
                         }
-                        if (r is BtResult.Err) snackbarHostState.showSnackbar(r.error.userMessage)
+                        if (r is BtResult.Err) snackbar.showError(r.error.asMessage())
                     }
                 }) { Text(stringResource(R.string.bt_notif_action_delete), color = bt.loss) }
             },

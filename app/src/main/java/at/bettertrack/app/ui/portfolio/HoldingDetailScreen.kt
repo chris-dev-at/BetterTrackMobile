@@ -37,15 +37,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.db.HoldingEntity
@@ -65,6 +64,8 @@ import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,7 +77,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * Holding detail (Step 7, spec §6.1): the position view — value, P/L, amount,
@@ -190,7 +190,7 @@ fun HoldingDetailScreen(
     val priceBusy by priceVm.busy.collectAsStateWithLifecycle()
 
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val holding by vm.holding.collectAsStateWithLifecycle()
     val transactions by vm.transactions.collectAsStateWithLifecycle()
     val pendingRows by vm.pendingRows.collectAsStateWithLifecycle()

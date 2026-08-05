@@ -12,18 +12,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.theme.BtTheme
-import androidx.compose.ui.unit.dp
-import java.util.Locale
+import at.bettertrack.app.ui.util.rememberBtLocale
 
 /**
  * §7.4: queued ledger events render alongside the synced ledger as clearly
@@ -70,7 +70,7 @@ fun PendingTransactionRow(
     onEdit: ((PendingTxRow) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val editable = row.status == PendingUiStatus.PENDING ||
         row.status == PendingUiStatus.NEEDS_ATTENTION
     BtCard(
@@ -122,11 +122,15 @@ fun PendingTransactionRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                // The server's rejection reason, right on the row (§7.3).
-                if (row.status == PendingUiStatus.NEEDS_ATTENTION && row.serverError != null) {
+                // Why the op parked, right on the row (§7.3) — resolved from the
+                // stored CODE at render time, so it speaks the phone's language
+                // rather than whatever the server was speaking when it parked.
+                if (row.status == PendingUiStatus.NEEDS_ATTENTION &&
+                    (row.errorCode != null || row.serverError != null)
+                ) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = row.serverError,
+                        text = rememberParkReason(row.errorCode, row.serverError),
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.lossSoft,
                         maxLines = 2,

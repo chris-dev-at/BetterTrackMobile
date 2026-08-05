@@ -33,17 +33,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.AssetPriceSeries
 import at.bettertrack.app.data.repo.AssetRange
 import at.bettertrack.app.data.repo.AssetSnapshot
@@ -64,17 +65,18 @@ import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
 
 /** The error code [at.bettertrack.app.data.storage.NoLivePricesMarketDataSource] raises. */
 private const val NO_LIVE_PRICES_CODE = "NO_LIVE_PRICES"
@@ -83,7 +85,7 @@ sealed interface AssetDetailUiState {
     data object Loading : AssetDetailUiState
     data class Loaded(val snapshot: AssetSnapshot) : AssetDetailUiState
     data object OfflineState : AssetDetailUiState
-    data class Error(val message: String) : AssetDetailUiState
+    data class Error(val message: BtMessage) : AssetDetailUiState
 
     /**
      * W6 — this mode has no live quotes, so there is no asset page to render.
@@ -146,7 +148,7 @@ class AssetPageViewModel(
                 is BtResult.Err -> _detail.value = when {
                     r.error.isNetwork -> AssetDetailUiState.OfflineState
                     r.error.code == NO_LIVE_PRICES_CODE -> AssetDetailUiState.NoLivePrices
-                    else -> AssetDetailUiState.Error(r.error.userMessage)
+                    else -> AssetDetailUiState.Error(r.error.asMessage())
                 }
             }
         }
@@ -195,7 +197,7 @@ fun AssetPageScreen(
         )
     }
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val detail by vm.detail.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val range by vm.range.collectAsStateWithLifecycle()

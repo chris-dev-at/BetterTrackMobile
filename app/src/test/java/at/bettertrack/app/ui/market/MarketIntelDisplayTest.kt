@@ -1,6 +1,8 @@
 package at.bettertrack.app.ui.market
 
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.DividendCalendarEntryDto
 import at.bettertrack.app.data.api.dto.DividendEventDto
@@ -11,17 +13,17 @@ import at.bettertrack.app.data.api.dto.NewsResponse
 import at.bettertrack.app.data.api.dto.SplitEventDto
 import at.bettertrack.app.data.api.dto.SplitsResponse
 import at.bettertrack.app.ui.components.formatPercent
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
+import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
-import java.util.TimeZone
 
 /**
  * The display decisions behind the market-intel surfaces, as pure functions.
@@ -342,9 +344,11 @@ class MarketIntelDisplayTest {
         ) { it.available }
 
         assertTrue(failed is IntelBlockUi.Failed)
+        // The block carries a resource, not the server's English: NETWORK_ERROR
+        // is catalogued, so the user reads the app's own translated sentence.
         assertEquals(
-            "No connection. Check your network and try again.",
-            (failed as IntelBlockUi.Failed).message,
+            BtErrorCopy.resFor(BtApiError.Codes.NETWORK),
+            (failed as IntelBlockUi.Failed).message.res,
         )
     }
 
@@ -361,7 +365,7 @@ class MarketIntelDisplayTest {
         // One failure is enough to keep the screen in its per-section rendering:
         // a retry must stay reachable.
         assertFalse(
-            everythingOff.copy(digest = IntelBlockUi.Failed("boom")).allUnavailable,
+            everythingOff.copy(digest = IntelBlockUi.Failed(BtMessage.generic)).allUnavailable,
         )
         // And a block still loading is not an absence.
         assertFalse(everythingOff.copy(earnings = IntelBlockUi.Loading).allUnavailable)

@@ -146,11 +146,7 @@ class AccountRepository(
     suspend fun deleteAccount(confirmUsername: String, password: String): BtResult<Unit> {
         if (!DeleteAccountFeature.armed) {
             return BtResult.Err(
-                BtApiError(
-                    httpStatus = -2,
-                    code = "DELETE_DISABLED",
-                    userMessage = "Account deletion is disabled in this build.",
-                ),
+                BtApiError(httpStatus = -2, code = "DELETE_DISABLED"),
             )
         }
         return emptyCall {

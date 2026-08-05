@@ -86,6 +86,24 @@ class StringParityTest {
         assertTrue("placeholder mismatch (crash risk at format time): $mismatched", mismatched.isEmpty())
     }
 
+    /**
+     * The S6 P0-4 error catalogue is the largest single block of copy in the app
+     * and the one most likely to be extended in a hurry (a new server code, a
+     * new queue refusal). Asserting the whole `bt_err_*` family here — on top of
+     * the generic parity tests above — means a half-added code fails the build
+     * with the key named, rather than shipping an English sentence to a German
+     * phone. `BtErrorCopyTest` checks the other half: that the Kotlin catalogue
+     * and these strings agree.
+     */
+    @Test
+    fun `every error-code string exists in both languages`() {
+        val en = strings("").keys.filter { it.startsWith("bt_err_") }.toSet()
+        val de = strings("-de").keys.filter { it.startsWith("bt_err_") }.toSet()
+        assertTrue("error catalogue looks empty (${en.size} keys)", en.size > 150)
+        assertTrue("error codes missing from DE: ${(en - de).sorted()}", (en - de).isEmpty())
+        assertTrue("error codes only in DE: ${(de - en).sorted()}", (de - en).isEmpty())
+    }
+
     @Test
     fun `german strings are actually translated`() {
         val en = strings("")

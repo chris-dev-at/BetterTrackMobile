@@ -17,10 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,7 +37,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
@@ -54,6 +54,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.isGermanUi
 
 /**
  * Settings → About (spec §6.12): the two-color wordmark + "App" edition + tagline,
@@ -74,7 +75,7 @@ fun AboutScreen(
     // Public legal pages (board #34 — live + final; required for Play review).
     // Fixed public URLs on the marketing domain, independent of the API/web
     // origins. Each page ships EN + DE — follow the app's active language.
-    val isDe = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language == "de"
+    val isDe = isGermanUi()
     fun legalUrl(path: String) = "https://bettertrack.at/$path/" + if (isDe) "de/" else ""
     fun legalHost(path: String) = "bettertrack.at/$path"
     val privacyUrl = legalUrl("privacy")

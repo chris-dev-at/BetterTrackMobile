@@ -48,9 +48,12 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.account.AccountSession
 import at.bettertrack.app.data.account.SessionMapper
 import at.bettertrack.app.data.account.SessionRecency
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtBadge
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -72,7 +75,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
 
     var loading by remember { mutableStateOf(true) }
     var sessions by remember { mutableStateOf<List<AccountSession>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<BtMessage?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     var revokeTarget by remember { mutableStateOf<AccountSession?>(null) }
@@ -81,7 +84,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
     suspend fun reload() {
         when (val r = repo.sessions()) {
             is BtResult.Ok -> { sessions = r.value; error = null }
-            is BtResult.Err -> error = r.error.userMessage
+            is BtResult.Err -> error = r.error.asMessage()
         }
         loading = false
     }
@@ -117,7 +120,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
                 loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = bt.gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
-                error != null -> Text(error!!, style = MaterialTheme.typography.bodyMedium, color = bt.loss)
+                error != null -> Text(error!!.resolveWithDiagnostic(), style = MaterialTheme.typography.bodyMedium, color = bt.loss)
                 sessions.isEmpty() -> Text(stringResource(R.string.bt_sessions_none), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
                 else -> {
                     sessions.forEach { session ->
@@ -168,7 +171,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
                     scope.launch {
                         when (val r = repo.revokeSession(target.id)) {
                             is BtResult.Ok -> reload()
-                            is BtResult.Err -> error = r.error.userMessage
+                            is BtResult.Err -> error = r.error.asMessage()
                         }
                         busy = false
                     }
@@ -195,7 +198,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
                     scope.launch {
                         when (val r = repo.revokeOtherSessions()) {
                             is BtResult.Ok -> reload()
-                            is BtResult.Err -> error = r.error.userMessage
+                            is BtResult.Err -> error = r.error.asMessage()
                         }
                         busy = false
                     }

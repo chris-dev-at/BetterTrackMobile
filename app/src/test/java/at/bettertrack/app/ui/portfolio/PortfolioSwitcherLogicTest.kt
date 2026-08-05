@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.db.PortfolioEntity
 import org.junit.Assert.assertEquals
@@ -76,11 +77,16 @@ class PortfolioSwitcherLogicTest {
     }
 
     @Test
-    fun `any other error maps to Failed with the user message`() {
+    fun `any other error maps to Failed with the app's own copy for that code`() {
         val err = BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection."))
         val result = portfolioDeleteResult(err)
         assertTrue(result is PortfolioDeleteResult.Failed)
-        assertEquals("No connection.", (result as PortfolioDeleteResult.Failed).message)
+        // The dialog carries a resource, not the server's English: NETWORK_ERROR
+        // is catalogued, so the line reads in the device's language (S6 P0-4).
+        assertEquals(
+            BtErrorCopy.resFor(BtApiError.Codes.NETWORK),
+            (result as PortfolioDeleteResult.Failed).message.res,
+        )
         assertFalse(err.error.isLastActivePortfolio)
     }
 

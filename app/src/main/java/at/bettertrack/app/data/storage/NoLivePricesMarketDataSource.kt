@@ -106,17 +106,10 @@ class NoLivePricesMarketDataSource(
     suspend fun cache(rows: List<PriceCacheRow>) = priceCache.upsertPrices(rows)
 
     companion object {
-        const val MSG_NO_PRICES =
-            "BetterTrack has no price for this asset on this device. Add a value yourself, " +
-                "or turn on price lookups in Settings."
+        /** Catalogued in `BtErrorCopy`, so the copy is translated at render time. */
+        const val CODE_NO_PRICES = "NO_LIVE_PRICES"
 
-        private fun noPricesError() = BtApiError(
-            httpStatus = 0,
-            code = "NO_LIVE_PRICES",
-            userMessage = MSG_NO_PRICES,
-            details = null,
-            serverMessage = null,
-        )
+        private fun noPricesError() = BtApiError(httpStatus = 0, code = CODE_NO_PRICES)
     }
 }
 

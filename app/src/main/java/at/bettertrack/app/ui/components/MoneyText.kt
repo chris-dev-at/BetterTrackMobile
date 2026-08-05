@@ -5,13 +5,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import at.bettertrack.app.ui.format.btFormatMoneyCore
 import at.bettertrack.app.ui.format.btFormatPercentCore
 import at.bettertrack.app.ui.format.btMoneySymbol
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.util.Locale
 
 /**
@@ -41,7 +41,7 @@ fun MoneyText(
     textAlign: TextAlign? = null,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val resolvedColor = when {
         color.isSpecified -> color
         colorMode == MoneyColorMode.GainLoss && value > 0.0 -> bt.gain

@@ -101,6 +101,13 @@ data class PendingCashRow(
     val amountEur: Double,
     val note: String?,
     val status: PendingUiStatus,
+    /**
+     * Both halves of the park reason, so the row can resolve it through
+     * `rememberParkReason` (S6 P0-4): [errorCode] drives the translated sentence,
+     * [serverError] is the diagnostic detail — or the pre-DB-v10 English prose
+     * when there is no code to resolve.
+     */
+    val errorCode: String?,
     val serverError: String?,
     val createdAtMs: Long,
     /**
@@ -144,6 +151,7 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
                 amountEur = p.amountEur,
                 note = p.note,
                 status = status,
+                errorCode = op.errorCode,
                 serverError = op.serverError,
                 createdAtMs = op.createdAtMs,
                 executedAt = p.executedAt,
@@ -165,6 +173,7 @@ fun decodePendingCashRow(op: SyncOpEntity, json: Json): PendingCashRow? {
                 amountEur = p.amountEur,
                 note = p.note,
                 status = status,
+                errorCode = op.errorCode,
                 serverError = op.serverError,
                 createdAtMs = op.createdAtMs,
                 executedAt = p.executedAt,

@@ -207,7 +207,7 @@ class DefaultWatchlistRepository(
     )
 
     private fun generalLocked(): BtResult<Nothing> = BtResult.Err(
-        BtApiError(0, BtApiError.Codes.UNKNOWN, "The General list can't be renamed or deleted."),
+        BtApiError(0, BtApiError.Codes.WATCHLIST_DEFAULT_LOCKED),
     )
 
     private fun WorkboardItemDto.toEntity(listId: String) = WatchlistItemEntity(

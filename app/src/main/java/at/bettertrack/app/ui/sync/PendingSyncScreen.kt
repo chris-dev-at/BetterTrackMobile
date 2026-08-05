@@ -35,13 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.db.BtDatabase
@@ -53,6 +52,8 @@ import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
+import at.bettertrack.app.ui.cash.PendingCashRow
+import at.bettertrack.app.ui.cash.decodePendingCashRow
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -61,8 +62,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
-import at.bettertrack.app.ui.cash.PendingCashRow
-import at.bettertrack.app.ui.cash.decodePendingCashRow
+import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
 import at.bettertrack.app.ui.portfolio.PendingTxRow
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
@@ -73,13 +73,14 @@ import at.bettertrack.app.ui.portfolio.transactionNotional
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.shell.formatAsOf
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.util.Locale
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import java.util.Locale
 
 /**
  * The Pending-sync screen (spec §7.4): every queued/failed outbound op with
@@ -159,7 +160,7 @@ fun PendingSyncScreen(
     }
 
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     val items by vm.items.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val dataAgeMs by vm.dataAgeMs.collectAsStateWithLifecycle()
@@ -426,11 +427,15 @@ private fun PendingOpCard(
                 }
             }
 
-            // The server's rejection reason (§7.3) — verbatim, human-readable.
-            if (item.status == PendingUiStatus.NEEDS_ATTENTION && item.op.serverError != null) {
+            // Why the op parked (§7.3). The stored CODE is what resolves to the
+            // sentence, so this line follows the phone's language even for a row
+            // that parked weeks ago under a different one.
+            if (item.status == PendingUiStatus.NEEDS_ATTENTION &&
+                (item.op.errorCode != null || item.op.serverError != null)
+            ) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = item.op.serverError!!,
+                    text = rememberParkReason(item.op.errorCode, item.op.serverError),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.lossSoft,
                 )

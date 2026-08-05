@@ -47,10 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.account.DeleteAccountFeature
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -78,7 +81,7 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
     var typed by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var submitting by remember { mutableStateOf(false) }
-    var serverError by remember { mutableStateOf<String?>(null) }
+    var serverError by remember { mutableStateOf<BtMessage?>(null) }
     var showFinalConfirm by remember { mutableStateOf(false) }
 
     val nameMatches = username.isNotEmpty() && typed.trim() == username
@@ -150,7 +153,7 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
                 supportingText = stringResource(R.string.bt_del_reauth_note),
             )
 
-            serverError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = bt.loss) }
+            serverError?.let { Text(it.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss) }
             if (!online) Text(stringResource(R.string.bt_requires_connection_inline), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
 
             // Honest disabled note when the destructive call is safety-gated off.
@@ -199,7 +202,7 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
                         scope.launch {
                             when (val r = repo.deleteAccount(typed, password)) {
                                 is BtResult.Ok -> { submitting = false; AppGraph.authRepository.requestLogout() }
-                                is BtResult.Err -> { serverError = r.error.userMessage; submitting = false }
+                                is BtResult.Err -> { serverError = r.error.asMessage(); submitting = false }
                             }
                         }
                     },

@@ -7,8 +7,10 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CHAT_MESSAGE_MAX
 import at.bettertrack.app.data.api.dto.ChatChipDto
 import at.bettertrack.app.data.api.dto.ChatChipRefDto
@@ -101,6 +103,13 @@ data class ChatMessage(
 data class Conversation(
     val id: String,
     val friendUserId: String,
+    /**
+     * BLANK for a participant who deleted their account (#362) — the app's
+     * sentinel, since the server never issues an empty username. The UI answers
+     * it with a translated "Deleted user" label; the data layer must not carry a
+     * fake handle like `deleted`, which reads as a real @name everywhere it lands
+     * (row title, avatar seed, nav argument).
+     */
     val friendUsername: String,
     val lastPreview: String,
     val lastAtMs: Long,
@@ -127,8 +136,9 @@ data class ThreadState(
     val hasMore: Boolean = false,
     val availability: ThreadAvailability = ThreadAvailability.Available,
     val friendUserId: String? = null,
+    /** Blank ⇒ deleted participant; see [Conversation.friendUsername]. */
     val friendUsername: String = "",
-    val error: String? = null,
+    val error: BtMessage? = null,
 )
 
 // ── Pure helpers (unit-tested; Context/Android-free) ─────────────────────────
@@ -208,7 +218,7 @@ internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
     return Conversation(
         id = id,
         friendUserId = user?.id.orEmpty(),
-        friendUsername = user?.username ?: "deleted",
+        friendUsername = user?.username.orEmpty(),
         lastPreview = preview,
         lastAtMs = at,
         unread = unreadCount,
@@ -365,7 +375,7 @@ class DefaultChatRepository(
                     hasMore = dto.nextCursor != null,
                     availability = if (readOnly) ThreadAvailability.ReadOnly else ThreadAvailability.Available,
                     friendUserId = friendId,
-                    friendUsername = dto.conversation.user?.username ?: "deleted",
+                    friendUsername = dto.conversation.user?.username.orEmpty(),
                     error = null,
                 )
                 upsertConversation(dto.conversation)
@@ -375,7 +385,7 @@ class DefaultChatRepository(
                 store.value = if (r.error.httpStatus == 404) {
                     store.value.copy(loading = false, availability = ThreadAvailability.NotAvailable)
                 } else {
-                    store.value.copy(loading = false, error = r.error.userMessage)
+                    store.value.copy(loading = false, error = r.error.asMessage())
                 }
                 r
             }
@@ -400,7 +410,7 @@ class DefaultChatRepository(
                 BtResult.Ok(Unit)
             }
             is BtResult.Err -> {
-                store.value = store.value.copy(loadingOlder = false, error = r.error.userMessage)
+                store.value = store.value.copy(loadingOlder = false, error = r.error.asMessage())
                 r
             }
         }
@@ -605,7 +615,9 @@ class DefaultChatRepository(
             val resp = call()
             if (resp.isSuccessful) BtResult.Ok(Unit) else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
         } catch (_: IOException) {
-            BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."))
+            // No diagnostic: NETWORK is catalogued, so the app already owns the
+            // sentence — an English one here would only be dead weight.
+            BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK))
         }
 
     private companion object {

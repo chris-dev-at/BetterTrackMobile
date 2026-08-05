@@ -33,7 +33,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.SharedWatchlistDetailResponse
@@ -48,11 +50,14 @@ import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.theme.BtTheme
-import java.util.Locale
+import at.bettertrack.app.ui.util.rememberBtLocale
 
 /** Read-only friend-shared portfolio (§6.9 — no edit affordances anywhere). */
 @Composable
 fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
+    // Hoisted once for the whole screen: the percentages below used to reach for
+    // Locale.getDefault(), which Compose cannot observe (S6 P2-18).
+    val locale = rememberBtLocale()
     val state by produceState<BtResult<SharedPortfolioDetailResponse>?>(initialValue = null, portfolioId) {
         value = AppGraph.socialRepository.sharedPortfolio(portfolioId)
     }
@@ -81,7 +86,7 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
                                 d.totals.dayChangePct?.let {
                                     Spacer(Modifier.size(8.dp))
                                     Text(
-                                        formatPercent(it, Locale.getDefault()),
+                                        formatPercent(it, locale),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = if (it >= 0) bt.gain else bt.loss,
                                     )
@@ -121,7 +126,7 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
                                 MoneyText(value = h.marketValueEur ?: 0.0, style = MaterialTheme.typography.titleSmall)
                                 h.unrealizedPnlPct?.let {
                                     Text(
-                                        formatPercent(it, Locale.getDefault()),
+                                        formatPercent(it, locale),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (it >= 0) bt.gain else bt.loss,
                                     )
@@ -192,6 +197,7 @@ fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: ()
 /** Read-only friend-shared conglomerate. */
 @Composable
 fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
+    val locale = rememberBtLocale()
     val state by produceState<BtResult<SharedConglomerateDetailResponse>?>(initialValue = null, conglomerateId) {
         value = AppGraph.socialRepository.sharedConglomerate(conglomerateId)
     }
@@ -223,7 +229,7 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                                 Text(p.asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1)
                             }
                             Text(
-                                formatPercent(p.weightPct, Locale.getDefault(), showSign = false),
+                                formatPercent(p.weightPct, locale, showSign = false),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = bt.goldEmphasis,
                                 fontWeight = FontWeight.SemiBold,
@@ -286,8 +292,15 @@ private fun <T> Loaded(
         null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = bt.gold)
         }
+        // A 404 here is not a fault, it is news: the owner stopped sharing. That
+        // stays this screen's own sentence; everything else defers to the shared
+        // error-code catalog rather than to the server's English.
         is BtResult.Err -> BtErrorState(
-            message = if (s.error.httpStatus == 404) stringResource(R.string.bt_social_not_shared_anymore) else s.error.userMessage,
+            message = if (s.error.httpStatus == 404) {
+                BtMessage(R.string.bt_social_not_shared_anymore)
+            } else {
+                s.error.asMessage()
+            },
             onRetry = onRetry,
         )
         is BtResult.Ok -> content(s.value)

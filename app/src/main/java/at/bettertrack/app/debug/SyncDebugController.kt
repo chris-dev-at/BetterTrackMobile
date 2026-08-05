@@ -137,7 +137,7 @@ class SyncDebugController(
                 "Created \"${r.value.portfolio.name}\" (${r.value.portfolio.id.take(8)}…)"
             }
 
-            is BtResult.Err -> "Create failed: HTTP ${r.error.httpStatus} ${r.error.code} — ${r.error.userMessage}"
+            is BtResult.Err -> "Create failed: HTTP ${r.error.httpStatus} ${r.error.code} — ${r.error.diagnostic.orEmpty()}"
         }
 
     /** LIVE ledger fetch straight from the API (bypasses Room) — E2E evidence. */
@@ -172,7 +172,7 @@ class SyncDebugController(
         }
         val live = when (val r = apiCall(json) { api.transactions(portfolioId, limit = 200) }) {
             is BtResult.Ok -> r.value.items
-            is BtResult.Err -> return "Cleanup failed at GET: ${r.error.userMessage}"
+            is BtResult.Err -> return "Cleanup failed at GET: ${r.error.diagnostic.orEmpty()}"
         }
         val testTxs = live
         var deleted = 0
@@ -188,7 +188,7 @@ class SyncDebugController(
         }
         val archived = when (val r = apiCall(json) { api.archivePortfolio(portfolioId) }) {
             is BtResult.Ok -> true
-            is BtResult.Err -> return "Deleted $deleted tx; archive failed: ${r.error.userMessage}"
+            is BtResult.Err -> return "Deleted $deleted tx; archive failed: ${r.error.diagnostic.orEmpty()}"
         }
         repo.refreshPortfolios()
         return "Deleted $deleted test transaction(s); portfolio archived=$archived"

@@ -1,5 +1,7 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.domain.CashLedgerError
 import at.bettertrack.app.domain.CashTransferInput
 import at.bettertrack.app.domain.DomainException
@@ -79,18 +81,27 @@ class VaultOpExecutor(
         val result = try {
             store.mutate { graph, context -> apply(op, graph, context) }
         } catch (refusal: VaultOpRefusal) {
-            return ExecResult.Rejected(refusal.message)
+            return ExecResult.Rejected(refusal.code, refusal.arg)
         } catch (refusal: OversellError) {
-            return ExecResult.Rejected(refusal.message ?: MSG_OVERSELL)
+            // The engine's own invariants map onto the SAME codes the server uses
+            // for the same refusal, so a Drive-mode park and a server-mode park
+            // read identically to the user (S6 P1-13).
+            return ExecResult.Rejected(BtApiError.Codes.OVERSELL, refusal.message)
         } catch (refusal: InsufficientCashError) {
-            return ExecResult.Rejected(refusal.message ?: MSG_NO_CASH)
+            return ExecResult.Rejected(BtApiError.Codes.INSUFFICIENT_CASH, refusal.message)
         } catch (refusal: CashLedgerError) {
-            return ExecResult.Rejected(refusal.message ?: MSG_MALFORMED)
+            return ExecResult.Rejected(
+                BtApiError.Codes.CASH_LEDGER_WOULD_GO_NEGATIVE,
+                refusal.message,
+            )
         } catch (refusal: DomainException) {
             // Any other engine-level invariant (a non-finite quantity, an
             // unparseable timestamp). Well-formed-input errors are the user's to
             // fix, so they park as needs-attention rather than retrying forever.
-            return ExecResult.Rejected(refusal.message ?: MSG_MALFORMED)
+            return ExecResult.Rejected(
+                BtErrorCopy.AppCodes.OP_MALFORMED_VAULT,
+                refusal.message,
+            )
         }
 
         onApplied(result.vaultVersion)
@@ -114,10 +125,10 @@ class VaultOpExecutor(
         graph: VaultEntityGraph,
         context: VaultMutationContext,
     ): Applied {
-        val payload = decode(TxOpPayload.serializer(), op) ?: refuse(MSG_MALFORMED)
-        val portfolioId = op.portfolioId ?: refuse(MSG_MALFORMED)
+        val payload = decode(TxOpPayload.serializer(), op) ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
+        val portfolioId = op.portfolioId ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
         val expectedSide = if (op.type == OpType.TX_BUY) "buy" else "sell"
-        if (payload.side != expectedSide) refuse(MSG_MALFORMED)
+        if (payload.side != expectedSide) refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
 
         // The asset identity may not be in the vault yet — an offline buy of an
         // asset this device met through search. The queue's display-only snapshot
@@ -151,9 +162,9 @@ class VaultOpExecutor(
         var movementId: String? = null
         if (cashLeg != null) {
             val sourceId = mainCashSourceId(graph, portfolioId)
-                ?: refuse(MSG_NO_SOURCE)
+                ?: refuse(BtErrorCopy.AppCodes.OP_NO_CASH_SOURCE)
             val nativeEur = toEur(cashLeg, currency, payload.executedAt.take(10))
-                ?: refuse(msgNoRate(currency))
+                ?: refuse(BtErrorCopy.AppCodes.OP_NO_RATE, currency)
             val amount = floorCents(nativeEur)
 
             val sourceMovements = sourceMovements(graph, sourceId)
@@ -243,16 +254,16 @@ class VaultOpExecutor(
         context: VaultMutationContext,
         kind: String,
     ): Applied {
-        val payload = decode(CashOpPayload.serializer(), op) ?: refuse(MSG_MALFORMED)
-        val portfolioId = op.portfolioId ?: refuse(MSG_MALFORMED)
+        val payload = decode(CashOpPayload.serializer(), op) ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
+        val portfolioId = op.portfolioId ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
         val sourceId = payload.sourceId?.takeIf { graph.find(VaultKinds.CASH_SOURCE, it) != null }
             ?: mainCashSourceId(graph, portfolioId)
-            ?: refuse(MSG_NO_SOURCE)
+            ?: refuse(BtErrorCopy.AppCodes.OP_NO_CASH_SOURCE)
 
         // Cash exists only in cents (CASH_DECIMALS = 2) — quantize once, here, so
         // the stored payload and every replay of it agree to the cent.
         val magnitude = floorCents(kotlin.math.abs(payload.amountEur))
-        if (magnitude == 0.0) refuse(MSG_ZERO_AMOUNT)
+        if (magnitude == 0.0) refuse(BtErrorCopy.AppCodes.OP_ZERO_AMOUNT)
         val signed = if (kind == "deposit") magnitude else -magnitude
         val occurredAt = payload.executedAt ?: context.now
 
@@ -285,8 +296,8 @@ class VaultOpExecutor(
         graph: VaultEntityGraph,
         context: VaultMutationContext,
     ): Applied {
-        val payload = decode(CashTransferOpPayload.serializer(), op) ?: refuse(MSG_MALFORMED)
-        val portfolioId = op.portfolioId ?: refuse(MSG_MALFORMED)
+        val payload = decode(CashTransferOpPayload.serializer(), op) ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
+        val portfolioId = op.portfolioId ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
         val occurredAt = payload.executedAt ?: context.now
 
         // Throws CashLedgerError on a same-source / non-positive / sub-cent move.
@@ -352,7 +363,7 @@ class VaultOpExecutor(
         graph: VaultEntityGraph,
         context: VaultMutationContext,
     ): Applied {
-        val payload = decode(ValuePointOpPayload.serializer(), op) ?: refuse(MSG_MALFORMED)
+        val payload = decode(ValuePointOpPayload.serializer(), op) ?: refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
         val existing = graph.live(VaultKinds.CUSTOM_ASSET_VALUE).firstOrNull {
             it.text("assetId") == payload.customAssetId && it.text("date") == payload.date
         }
@@ -433,22 +444,13 @@ class VaultOpExecutor(
      * advanced for an op that changed nothing — a phantom "unsynced change" the
      * chip would then show the user.
      */
-    private class VaultOpRefusal(override val message: String) : RuntimeException(message)
+    private class VaultOpRefusal(
+        val code: String,
+        /** Format argument for the codes that take one; null otherwise. */
+        val arg: String? = null,
+    ) : RuntimeException(code)
 
-    private fun refuse(message: String): Nothing = throw VaultOpRefusal(message)
-
-    companion object {
-        const val MSG_MALFORMED = "This queued entry is malformed and can't be applied to your vault."
-        const val MSG_NO_SOURCE =
-            "This portfolio has no cash source in your vault yet, so the cash side of this entry can't be recorded."
-        const val MSG_ZERO_AMOUNT = "This amount rounds to €0.00, so there is nothing to record."
-        const val MSG_OVERSELL = "You don't hold enough of this asset to sell that quantity."
-        const val MSG_NO_CASH = "There isn't enough cash in this source for this entry."
-
-        fun msgNoRate(currency: String): String =
-            "BetterTrack has no $currency → EUR rate on this device, so the cash side of this trade can't be valued. " +
-                "Connect to the internet, or record the trade without paying from cash."
-    }
+    private fun refuse(code: String, arg: String? = null): Nothing = throw VaultOpRefusal(code, arg)
 }
 
 private fun at.bettertrack.app.vault.VaultEntity.toDomainTransaction(): Transaction = Transaction(

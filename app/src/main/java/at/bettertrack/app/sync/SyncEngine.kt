@@ -1,11 +1,13 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.backendTag
+import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.UUID
 
 /**
  * Executes one op against the API. There is no separate reconcile lookup:
@@ -151,7 +153,7 @@ class SyncEngine(
                     // double-apply an op that already landed, so step aside and let the
                     // user decide (needs-attention never blocks the queue). Their Retry
                     // re-sends the SAME key — a documented, chosen residual risk.
-                    store.markNeedsAttention(op.id, MSG_REPLAY_WINDOW_EXPIRED, now())
+                    store.markNeedsAttention(op.id, BtErrorCopy.AppCodes.OP_REPLAY_WINDOW_EXPIRED, null, now())
                     continue
                 }
 
@@ -175,7 +177,7 @@ class SyncEngine(
                         // flow. Retry re-sends the SAME key — exactly-once-safe inside
                         // [REPLAY_SAFE_WINDOW_MS].
                         if (wasReplay) {
-                            store.markNeedsAttention(op.id, MSG_ATTEMPT_TIMED_OUT, now())
+                            store.markNeedsAttention(op.id, BtErrorCopy.AppCodes.OP_ATTEMPT_TIMED_OUT, null, now())
                             continue
                         }
                         val attempts = op.attemptCount + 1
@@ -190,12 +192,18 @@ class SyncEngine(
                         completed++
                     }
 
-                    is ExecResult.Rejected -> store.markNeedsAttention(op.id, e.message, now())
+                    is ExecResult.Rejected -> store.markNeedsAttention(op.id, e.code, e.diagnostic, now())
 
-                    is ExecResult.Unsupported -> store.markNeedsAttention(op.id, e.message, now())
+                    is ExecResult.Unsupported -> store.markNeedsAttention(op.id, e.code, e.diagnostic, now())
 
                     // Still invalid after one regeneration — unrecoverable; surface it.
-                    ExecResult.InvalidKey -> store.markNeedsAttention(op.id, MSG_KEY_INVALID, now())
+                    ExecResult.InvalidKey ->
+                        store.markNeedsAttention(
+                            op.id,
+                            BtApiError.Codes.IDEMPOTENCY_KEY_INVALID,
+                            null,
+                            now(),
+                        )
 
                     is ExecResult.RetryableNotApplied -> {
                         // Provably NOT applied (408/429, or IDEMPOTENCY_IN_PROGRESS —
@@ -266,10 +274,6 @@ class SyncEngine(
         /** Done rows kept for the debug/pending screens before pruning. */
         const val KEEP_DONE_ROWS = 25
 
-        /** Shown when the server rejects the op's idempotency key twice (#432). */
-        const val MSG_KEY_INVALID =
-            "This change couldn't be submitted (its sync key was rejected). Discard it and re-create it."
-
         /**
          * Hard per-attempt cap (each send / replay): an attempt only tries for
          * 10 s while online; a server that accepts the connection but never
@@ -286,25 +290,5 @@ class SyncEngine(
          */
         const val REPLAY_SAFE_WINDOW_MS = 40L * 60 * 60 * 1000
 
-        /**
-         * Client-generated park message (same raw-`serverError` pattern as
-         * [MSG_KEY_INVALID]; the pending-sync UIs render `serverError` verbatim,
-         * with no sentinel→resource mapping) for an ambiguous op the drain can no
-         * longer safely replay because its in-flight streak crossed
-         * [REPLAY_SAFE_WINDOW_MS]. The user's Retry re-sends the SAME key.
-         */
-        const val MSG_REPLAY_WINDOW_EXPIRED =
-            "Couldn't confirm whether this change reached the server. " +
-                "Check your transactions before retrying."
-
-        /**
-         * Park message when an op's attempt AND its automatic replay both blew
-         * [ATTEMPT_TIMEOUT_MS] (the server accepts the socket but never answers
-         * this request). Same raw-`serverError` pattern as [MSG_KEY_INVALID].
-         * Retry re-sends the SAME idempotency key — safe inside
-         * [REPLAY_SAFE_WINDOW_MS].
-         */
-        const val MSG_ATTEMPT_TIMED_OUT =
-            "This change timed out (the server didn't respond). Retry, or remove it."
     }
 }

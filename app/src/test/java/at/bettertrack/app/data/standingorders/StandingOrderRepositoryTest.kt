@@ -206,7 +206,7 @@ class StandingOrderRepositoryTest {
         val err = (repo.update("o1", endDate = "2020-01-01") as BtResult.Err).error
         assertEquals(400, err.httpStatus)
         assertEquals("STANDING_ORDER_END_BEFORE_START", err.code)
-        assertEquals("endDate must be on or after startDate.", err.userMessage)
+        assertEquals("endDate must be on or after startDate.", err.diagnostic)
     }
 
     @Test

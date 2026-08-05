@@ -1,5 +1,6 @@
 package at.bettertrack.app.sync
 
+import at.bettertrack.app.data.api.BtErrorCopy
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -104,10 +105,19 @@ class SyncEngineTest {
                 )
             }
 
-        override suspend fun markNeedsAttention(id: Long, error: String, nowMs: Long) =
-            update(id) {
-                it.copy(status = OpStatus.NEEDS_ATTENTION, serverError = error, updatedAtMs = nowMs)
-            }
+        override suspend fun markNeedsAttention(
+            id: Long,
+            errorCode: String,
+            diagnostic: String?,
+            nowMs: Long,
+        ) = update(id) {
+            it.copy(
+                status = OpStatus.NEEDS_ATTENTION,
+                errorCode = errorCode,
+                serverError = diagnostic,
+                updatedAtMs = nowMs,
+            )
+        }
 
         override suspend fun markPending(
             id: Long,
@@ -292,7 +302,7 @@ class SyncEngineTest {
             val good = h.enqueueTx("p2")
             h.executor.execScript = { op ->
                 if (op.clientId == bad.clientId) {
-                    ExecResult.Rejected("Insufficient cash balance.")
+                    ExecResult.Rejected("INSUFFICIENT_CASH", "Insufficient cash balance.")
                 } else {
                     ExecResult.Success(null)
                 }
@@ -315,7 +325,7 @@ class SyncEngineTest {
         val good = h.enqueueTx("p1")
         h.executor.execScript = { op ->
             if (op.type == OpType.CASH_TRANSFER) {
-                ExecResult.Unsupported("Not supported yet.")
+                ExecResult.Unsupported(BtErrorCopy.AppCodes.OP_NO_VAULT)
             } else {
                 ExecResult.Success(null)
             }
@@ -334,7 +344,7 @@ class SyncEngineTest {
     fun `retry moves needs-attention back to pending and discard deletes`() = runBlocking {
         val h = Harness()
         val op = h.enqueueTx()
-        h.executor.execScript = { ExecResult.Rejected("nope") }
+        h.executor.execScript = { ExecResult.Rejected("NOPE") }
         h.engine.drain()
         assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(op.clientId)!!.status)
 
@@ -527,7 +537,9 @@ class SyncEngineTest {
         assertEquals(DrainResult.Idle, result)             // nothing completed
         val parked = h.store.byClient(op.clientId)!!
         assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
-        assertEquals(SyncEngine.MSG_REPLAY_WINDOW_EXPIRED, parked.serverError)
+        // The reason is stored as a stable code, so the row renders in whatever
+        // language the phone is set to when the user finally reads it.
+        assertEquals(BtErrorCopy.AppCodes.OP_REPLAY_WINDOW_EXPIRED, parked.errorCode)
         assertTrue(h.executor.executed.isEmpty())          // never blind-replayed
     }
 
@@ -614,7 +626,7 @@ class SyncEngineTest {
     fun `edit-and-retry resubmits the SAME client uuid after a rejection`() = runBlocking {
         val h = Harness()
         val op = h.enqueueTx()
-        h.executor.execScript = { ExecResult.Rejected("Sell exceeds current holding.") }
+        h.executor.execScript = { ExecResult.Rejected("OVERSELL", "Sell exceeds current holding.") }
         h.engine.drain()
         assertEquals(OpStatus.NEEDS_ATTENTION, h.store.byClient(op.clientId)!!.status)
 
@@ -660,7 +672,7 @@ class SyncEngineTest {
         val bad = h.enqueueTx("p1")
         val good = h.enqueueTx("p2")
         h.executor.execScript = { op ->
-            if (op.clientId == bad.clientId) ExecResult.Rejected("nope") else ExecResult.Success(null)
+            if (op.clientId == bad.clientId) ExecResult.Rejected("NOPE") else ExecResult.Success(null)
         }
         h.engine.drain()
 
@@ -813,7 +825,7 @@ class SyncEngineTest {
         assertEquals(DrainResult.Idle, result)
         val parked = store.byClient("c1")!!
         assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
-        assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
+        assertEquals(BtErrorCopy.AppCodes.OP_ATTEMPT_TIMED_OUT, parked.errorCode)
         assertEquals(1, executor.executed.size)      // the one (timed-out) replay
         assertTrue(executor.serverApplied.isEmpty()) // nothing applied
     }
@@ -836,7 +848,7 @@ class SyncEngineTest {
         assertEquals(DrainResult.Drained(1), r2)
         val parked = h.store.byClient(head.clientId)!!
         assertEquals(OpStatus.NEEDS_ATTENTION, parked.status)
-        assertEquals(SyncEngine.MSG_ATTEMPT_TIMED_OUT, parked.serverError)
+        assertEquals(BtErrorCopy.AppCodes.OP_ATTEMPT_TIMED_OUT, parked.errorCode)
         assertEquals(OpStatus.DONE, h.store.byClient(later.clientId)!!.status)
     }
 

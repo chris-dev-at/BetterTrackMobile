@@ -39,11 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.MirrorActivityEntry
 import at.bettertrack.app.data.repo.MirrorChainStatus
 import at.bettertrack.app.data.repo.MirrorMember
@@ -58,12 +60,13 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -73,7 +76,7 @@ internal sealed interface ChainRosterState {
 
     /** 404 — the chain is unknown to me now. Not an error: a fact about me. */
     data object Gone : ChainRosterState
-    data class Failed(val message: String) : ChainRosterState
+    data class Failed(val message: BtMessage) : ChainRosterState
 }
 
 internal data class ChainActivityState(
@@ -99,8 +102,8 @@ internal class ChainDetailViewModel(
     private val _leaving = MutableStateFlow(false)
     val leaving: StateFlow<Boolean> = _leaving.asStateFlow()
 
-    private val _leaveError = MutableStateFlow<String?>(null)
-    val leaveError: StateFlow<String?> = _leaveError.asStateFlow()
+    private val _leaveError = MutableStateFlow<BtMessage?>(null)
+    val leaveError: StateFlow<BtMessage?> = _leaveError.asStateFlow()
 
     init {
         load()
@@ -116,7 +119,7 @@ internal class ChainDetailViewModel(
                     if (r.error.code == MirrorchainRepository.CODE_CHAIN_NOT_FOUND) {
                         ChainRosterState.Gone
                     } else {
-                        ChainRosterState.Failed(r.error.userMessage)
+                        ChainRosterState.Failed(r.error.asMessage())
                     }
             }
         }
@@ -175,7 +178,7 @@ internal class ChainDetailViewModel(
                         portfolios.refreshPortfolios()
                         onLeft()
                     } else {
-                        _leaveError.value = r.error.userMessage
+                        _leaveError.value = r.error.asMessage()
                     }
                 }
             }
@@ -271,10 +274,12 @@ fun ChainDetailSheet(chainId: String, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(18.dp))
                     AdminHint()
 
-                    if (leaveError != null) {
+                    leaveError?.let { failure ->
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            text = leaveError.orEmpty(),
+                            // One inline line under the Leave button, so the
+                            // diagnostic (if any) trails the app's own sentence.
+                            text = failure.resolveWithDiagnostic(),
                             style = MaterialTheme.typography.bodySmall,
                             color = bt.loss,
                         )
@@ -422,7 +427,7 @@ private fun ActivityFeed(
     onLoadOlder: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     when {
         state.loading -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             repeat(3) {

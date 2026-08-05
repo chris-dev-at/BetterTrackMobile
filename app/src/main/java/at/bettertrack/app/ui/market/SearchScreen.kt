@@ -51,7 +51,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
@@ -83,7 +85,7 @@ sealed interface SearchUiState {
     data class Results(val assets: List<MarketAsset>, val enriching: Boolean) : SearchUiState
     data object Empty : SearchUiState
     data object OfflineState : SearchUiState
-    data class Error(val message: String) : SearchUiState
+    data class Error(val message: BtMessage) : SearchUiState
 }
 
 /**
@@ -132,7 +134,7 @@ internal suspend fun searchWithEnrichPolling(
         is BtResult.Err ->
             emit(
                 if (r.error.isNetwork) SearchUiState.OfflineState
-                else SearchUiState.Error(r.error.userMessage),
+                else SearchUiState.Error(r.error.asMessage()),
             )
     }
 }

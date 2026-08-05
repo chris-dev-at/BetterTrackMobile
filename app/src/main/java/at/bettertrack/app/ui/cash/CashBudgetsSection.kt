@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +43,7 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -245,7 +245,7 @@ fun CashMonthStepper(
     modifier: Modifier = Modifier,
 ) {
     val bt = BtTheme.colors
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = rememberBtLocale()
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onPrev, modifier = Modifier.size(28.dp)) {
             Icon(

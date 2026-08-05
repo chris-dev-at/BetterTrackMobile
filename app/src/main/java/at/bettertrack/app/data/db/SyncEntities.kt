@@ -35,7 +35,16 @@ data class SyncOpEntity(
     val attemptCount: Int,
     /** Earliest wall-clock ms the op may be (re)tried; 0 = immediately. */
     val nextAttemptAtMs: Long,
-    /** Human-readable server rejection, set when status = needs-attention. */
+    /**
+     * Diagnostic text for a parked op. Since DB v10 this is the SECONDARY half:
+     * the server's own words, or the format argument for the few codes that take
+     * one. The message the user actually reads comes from [errorCode].
+     *
+     * Rows parked BEFORE v10 have a null [errorCode] and English prose here —
+     * they keep rendering that prose verbatim (see `RoomOpStore`), because
+     * re-deriving a code from a sentence is guesswork and a wrong guess would
+     * tell the user something untrue about their own queued money.
+     */
     val serverError: String?,
     /** JSON of server-assigned ids once done (e.g. created transaction id). */
     val serverResultJson: String?,
@@ -59,6 +68,18 @@ data class SyncOpEntity(
      * pre-v7 row is backfilled `'server'`, which is what it was.
      */
     val backendTag: String = "server",
+    /**
+     * Stable error CODE for a parked op — a server code (`MIRROR_CONFLICT`) or
+     * an app-local one (`APP_OP_ATTEMPT_TIMED_OUT`), resolved through
+     * `BtErrorCopy` at RENDER time.
+     *
+     * Storing the code rather than the sentence is what makes a parked row
+     * honour the device language: a row parked on an English device and read
+     * after switching to German reads German, because nothing linguistic was
+     * ever persisted. Added in DB v10; pre-v10 rows are null and fall back to
+     * the English prose in [serverError].
+     */
+    val errorCode: String? = null,
 )
 
 /**
