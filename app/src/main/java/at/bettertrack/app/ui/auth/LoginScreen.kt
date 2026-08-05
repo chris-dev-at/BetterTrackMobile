@@ -59,6 +59,17 @@ import at.bettertrack.app.ui.theme.BtTheme
  *   and someone who has not chosen yet deserves to know the option exists.
  * @param onBack when non-null, shows a back affordance — the wizard's login step
  *   is reachable by choice and must be leavable the same way.
+ *
+ * The 2026-08-04 owner ask adds one more, and it is the reason the pair below
+ * exists at all: you have to be able to pick the server BEFORE you sign in to
+ * it. Settings lives behind the login, so a logged-out user could otherwise
+ * never reach it. It is deliberately the quietest thing on the screen — one
+ * muted line at the very bottom, naming the host so the answer is usually
+ * visible without tapping anything.
+ *
+ * @param serverHost when non-null, shows that bottom "Server: <host>" line.
+ *   Passed only where the setting exists (the `github` flavor).
+ * @param onOpenServer what that line opens.
  */
 @Composable
 fun LoginScreen(
@@ -70,6 +81,8 @@ fun LoginScreen(
     onLongPressWordmark: () -> Unit = {},
     onUseWithoutAccount: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
+    serverHost: String? = null,
+    onOpenServer: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -207,7 +220,24 @@ fun LoginScreen(
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        // ── Server affordance ───────────────────────────────────────────────
+        // Last line on the screen, muted, sized down: discoverable if you look
+        // for it, invisible if you don't. It states the current host rather than
+        // saying "Server settings", because for almost everyone the useful
+        // information is that it already says `web.bettertrack.at`.
+        if (serverHost != null && onOpenServer != null) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onOpenServer, enabled = !inProgress) {
+                Text(
+                    text = stringResource(R.string.bt_login_server, serverHost),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = bt.textMuted,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        } else {
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }
 

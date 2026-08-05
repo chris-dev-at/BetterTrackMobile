@@ -22,6 +22,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +37,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.AuthState
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.data.prefs.ServerOrigins
+import at.bettertrack.app.data.prefs.originLabel
 import at.bettertrack.app.ui.auth.LoginScreen
+import at.bettertrack.app.ui.settings.ServerScreen
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtTextField
 import at.bettertrack.app.ui.theme.BtTheme
@@ -86,23 +92,37 @@ fun StorageSetupWizard(
     when (state.step) {
         WizardStep.SERVER_LOGIN -> {
             val phase by AppGraph.authRepository.loginPhase.collectAsStateWithLifecycle()
-            // The existing login screen, unchanged (plan §4.2 step 2).
-            LoginScreen(
-                phase = phase,
-                onLogin = onStartLogin,
-                onNeedAccount = { onOpenUrl(AppGraph.authRepository.needAccountUrl()) },
-                onForgotPassword = { onOpenUrl(AppGraph.authRepository.forgotPasswordUrl()) },
-                onBack = { vm.goBack() },
-                // Plan §4.2 step 6. It lives HERE, inside the wizard, and nowhere
-                // else: an established SERVER user never reaches this screen, so
-                // the affordance cannot suggest to someone with a live account
-                // that they should abandon it. Someone standing on the wizard's
-                // login step, on the other hand, has not committed to anything.
-                onUseWithoutAccount = {
-                    vm.choose(WizardChoice.DRIVE)
-                    vm.next()
-                },
-            )
+            // The Server affordance belongs here for the same reason it belongs
+            // on the logged-out login screen: this is a first run, the person
+            // has not signed in to anything yet, and "which server?" is a
+            // question they may need to answer BEFORE the sign-in they are about
+            // to attempt. Leaving it out would mean a fresh install could only
+            // reach the setting by first signing in to the wrong backend.
+            var showServer by remember { mutableStateOf(false) }
+            val serverEnabled = ServerOrigins.settingEnabled
+            if (serverEnabled && showServer) {
+                ServerScreen(onBack = { showServer = false })
+            } else {
+                // The existing login screen, unchanged (plan §4.2 step 2).
+                LoginScreen(
+                    phase = phase,
+                    onLogin = onStartLogin,
+                    onNeedAccount = { onOpenUrl(AppGraph.authRepository.needAccountUrl()) },
+                    onForgotPassword = { onOpenUrl(AppGraph.authRepository.forgotPasswordUrl()) },
+                    onBack = { vm.goBack() },
+                    // Plan §4.2 step 6. It lives HERE, inside the wizard, and
+                    // nowhere else: an established SERVER user never reaches this
+                    // screen, so the affordance cannot suggest to someone with a
+                    // live account that they should abandon it. Someone standing
+                    // on the wizard's login step has not committed to anything.
+                    onUseWithoutAccount = {
+                        vm.choose(WizardChoice.DRIVE)
+                        vm.next()
+                    },
+                    serverHost = if (serverEnabled) originLabel(ServerOrigins.webOrigin) else null,
+                    onOpenServer = if (serverEnabled) ({ showServer = true }) else null,
+                )
+            }
         }
 
         WizardStep.CHOOSE -> ChooseStep(

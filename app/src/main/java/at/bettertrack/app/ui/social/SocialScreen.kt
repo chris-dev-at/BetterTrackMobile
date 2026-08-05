@@ -112,6 +112,8 @@ import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
+import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -426,6 +428,7 @@ fun SocialScreen(
                             onChatWith = onOpenChatWith,
                             onOpenChats = onOpenChats,
                             onOpenGroups = onOpenGroups,
+                            onAddFriend = { showAdd = true },
                         )
                         SocialSection.SharedWithMe -> SharedWithMeSection(ui.sharedWithMe, onOpenPerson = onOpenFriend)
                         SocialSection.MyShares -> MySharesSection(ui.myShared, onShare = { vm.openSharing(it) })
@@ -439,7 +442,16 @@ fun SocialScreen(
         // above "answer the people already asking" — the exact inversion §3 is
         // about. As a FAB it is always reachable, gets out of the way on scroll,
         // and stops competing with the requests for the lead.
-        if (section == SocialSection.Friends) {
+        //
+        // …and it stands down entirely on an empty friends list, where the empty
+        // state carries the single "Add a friend" CTA ([fabVisibleForList]).
+        // `empty` is the same three-way test the empty state itself uses: an
+        // outgoing request you sent is a friends list that is doing something.
+        val friendsFabVisible = fabVisibleForList(
+            resolved = !ui.loading,
+            empty = ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty(),
+        )
+        if (section == SocialSection.Friends && friendsFabVisible) {
             fabVisibility.Content(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -605,6 +617,7 @@ private fun FriendsSection(
     onChatWith: (String, String) -> Unit,
     onOpenChats: () -> Unit,
     onOpenGroups: () -> Unit,
+    onAddFriend: () -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -649,10 +662,18 @@ private fun FriendsSection(
         item { BtSectionHeader(stringResource(R.string.bt_social_tab_friends), count = ui.friends.size) }
         if (ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty()) {
             item {
+                // The FAB stands down on exactly this condition, so this button
+                // is the tab's only way to add someone.
                 BtEmptyState(
                     icon = Icons.Outlined.Group,
                     title = stringResource(R.string.bt_social_no_friends_title),
                     message = stringResource(R.string.bt_social_no_friends_body),
+                    action = {
+                        BtPrimaryButton(
+                            text = stringResource(R.string.bt_social_add_friend),
+                            onClick = onAddFriend,
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                 )
             }

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.ScreenRotation
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
@@ -71,6 +72,8 @@ import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
+import at.bettertrack.app.data.prefs.ServerOrigins
+import at.bettertrack.app.data.prefs.originLabel
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
@@ -124,7 +127,7 @@ fun SettingsScreen(
     onOpenDataHome: () -> Unit = {},
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},
-    onOpenDevBackend: () -> Unit = {},
+    onOpenServer: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val snackbar = LocalBtSnackbar.current
@@ -228,6 +231,18 @@ fun SettingsScreen(
                     subtitle = stringResource(storageMode.labelRes()),
                     onClick = onOpenDataHome,
                 )
+                // Which backend this install talks to. A `github`-flavor row —
+                // a Play install has fixed official endpoints, so the setting
+                // would be a lie there. This and the login screen's affordance
+                // are the two (and only two) paths to the Server screen.
+                if (BuildConfig.SERVER_SETTING_ENABLED) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Dns,
+                        title = stringResource(R.string.bt_dest_server),
+                        subtitle = serverRowSubtitle(),
+                        onClick = onOpenServer,
+                    )
+                }
                 if (hasNotifications) {
                     BtGroupRow(
                         icon = Icons.Outlined.Notifications,
@@ -343,13 +358,6 @@ fun SettingsScreen(
                         title = stringResource(R.string.bt_settings_dev_sync),
                         subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
                         onClick = onOpenSyncDebug,
-                    )
-                    // V5 S1: point the installed debug build at any backend (dev stack).
-                    BtGroupRow(
-                        icon = Icons.Outlined.Code,
-                        title = stringResource(R.string.bt_settings_dev_backend),
-                        subtitle = stringResource(R.string.bt_settings_dev_backend_sub),
-                        onClick = onOpenDevBackend,
                     )
                 }
             }
@@ -483,6 +491,20 @@ private fun SettingsToggleRow(
         )
     }
 }
+
+/**
+ * The Server row's subtitle: the host actually in use when it is NOT the
+ * official one, and the plain description otherwise. A custom server is the
+ * kind of state that must be legible without opening the screen — it changes
+ * what every number in the app means.
+ */
+@Composable
+private fun serverRowSubtitle(): String =
+    if (ServerOrigins.isOverridden) {
+        originLabel(ServerOrigins.apiOrigin)
+    } else {
+        stringResource(R.string.bt_settings_server_sub)
+    }
 
 @Composable
 private fun AccountRow(label: String, value: String, modifier: Modifier = Modifier) {

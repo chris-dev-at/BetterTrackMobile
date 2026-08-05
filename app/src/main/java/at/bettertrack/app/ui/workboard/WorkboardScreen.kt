@@ -92,6 +92,7 @@ import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
@@ -490,12 +491,14 @@ private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
 
     LaunchedEffect(Unit) { vm.load() }
 
-    // S6 P1-12: the empty state already offers a full-width "Create alert" CTA.
-    // Showing the gold + FAB on top of it duplicates the exact same action twice
-    // on one screen and leaves the user guessing whether they differ — so while
-    // that CTA is on screen, the FAB stands down. Once there is a list to scroll,
-    // the FAB is the only create affordance and comes back.
-    val emptyCtaVisible = (state as? AlertsState.Loaded)?.items?.isEmpty() == true
+    // The app-wide empty-state rule ([fabVisibleForList]): the empty state
+    // already offers a full-width "Create alert" CTA, so while it is on screen
+    // the FAB stands down. Once there is a list to scroll, the FAB is the only
+    // create affordance and comes back.
+    val fabVisible = fabVisibleForList(
+        resolved = state is AlertsState.Loaded,
+        empty = (state as? AlertsState.Loaded)?.items?.isEmpty() == true,
+    )
 
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
@@ -561,7 +564,7 @@ private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
         }
 
         val fabCd = stringResource(R.string.bt_alert_create_action)
-        if (!emptyCtaVisible) {
+        if (fabVisible) {
             FloatingActionButton(
                 onClick = { if (isOnline) createOpen = true },
                 containerColor = if (isOnline) bt.gold else bt.border,

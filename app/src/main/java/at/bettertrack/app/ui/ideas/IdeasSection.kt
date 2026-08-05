@@ -86,6 +86,7 @@ import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -296,10 +297,11 @@ internal fun IdeasSection(
         }
 
         val fabCd = stringResource(R.string.bt_ideas_create)
-        // Create is offered only once the list actually loaded: mid-load the
+        // The app-wide empty-state rule ([fabVisibleForList]). `resolved` also
+        // carries the older reason this screen waited for Loaded: mid-load the
         // conglomerate picker would be empty for no reason, and after a failed
         // load (usually offline) the save would fail too.
-        if (state is IdeasUiState.Loaded && !emptyCtaVisible) {
+        if (fabVisibleForList(resolved = state is IdeasUiState.Loaded, empty = emptyCtaVisible)) {
             FloatingActionButton(
                 onClick = { createOpen = true },
                 containerColor = bt.gold,

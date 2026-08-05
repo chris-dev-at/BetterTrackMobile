@@ -73,6 +73,7 @@ import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
@@ -261,18 +262,24 @@ fun CustomAssetsScreen(
                 }
             }
 
+            // The app-wide empty-state rule ([fabVisibleForList]). This screen
+            // used to break it outright: with no assets it rendered a full-width
+            // "Create custom asset" CTA inside the empty state AND this FAB, one
+            // above the other, doing the same thing.
             val fabCd = stringResource(R.string.bt_custom_create)
-            FloatingActionButton(
-                onClick = { createOpen = true },
-                containerColor = if (isOnline) bt.gold else bt.border,
-                contentColor = if (isOnline) bt.onGold else bt.textMuted,
-                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(20.dp)
-                    .semantics { contentDescription = fabCd },
-            ) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
+            if (fabVisibleForList(resolved = firstLoadDone, empty = assets.isEmpty())) {
+                FloatingActionButton(
+                    onClick = { createOpen = true },
+                    containerColor = if (isOnline) bt.gold else bt.border,
+                    contentColor = if (isOnline) bt.onGold else bt.textMuted,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(20.dp)
+                        .semantics { contentDescription = fabCd },
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = null)
+                }
             }
         }
     }

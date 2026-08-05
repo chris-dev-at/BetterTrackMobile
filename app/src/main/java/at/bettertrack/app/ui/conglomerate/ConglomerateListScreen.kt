@@ -54,6 +54,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -152,12 +153,15 @@ fun ConglomerateListScreen(
             }
         }
 
-        // S6 P1-12: the empty state already carries a full "Create conglomerate"
-        // CTA. Stacking the gold + FAB on top of it shows the same action twice
-        // on one screen, so the FAB stands down while that CTA is visible.
-        val emptyCtaVisible = (state as? ConglomerateListState.Loaded)?.items?.isEmpty() == true
+        // The app-wide empty-state rule ([fabVisibleForList]): the empty state
+        // already carries a full "Create conglomerate" CTA, and stacking the
+        // gold + FAB on top of it shows the same action twice on one screen.
+        val fabVisible = fabVisibleForList(
+            resolved = state is ConglomerateListState.Loaded,
+            empty = (state as? ConglomerateListState.Loaded)?.items?.isEmpty() == true,
+        )
         val fabCd = stringResource(R.string.bt_conglo_create)
-        if (!emptyCtaVisible) {
+        if (fabVisible) {
             FloatingActionButton(
                 onClick = onCreate,
                 containerColor = if (isOnline) bt.gold else bt.border,

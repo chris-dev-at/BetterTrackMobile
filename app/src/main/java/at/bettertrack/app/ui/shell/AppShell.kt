@@ -114,7 +114,7 @@ import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
 import at.bettertrack.app.navigation.PeopleTabRoute
-import at.bettertrack.app.navigation.DevBackendRoute
+import at.bettertrack.app.navigation.ServerRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
@@ -138,7 +138,7 @@ import at.bettertrack.app.ui.market.SearchScreen
 import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
 import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
 import at.bettertrack.app.ui.paranoid.ParanoidGate
-import at.bettertrack.app.ui.debug.DevBackendScreen
+import at.bettertrack.app.ui.settings.ServerScreen
 import at.bettertrack.app.ui.debug.SyncDebugScreen
 import androidx.navigation.toRoute
 import at.bettertrack.app.ui.gallery.GalleryScreen
@@ -566,7 +566,6 @@ private fun BtOverviewOverflow(
     discreetMode: Boolean,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
-    onDevBackend: () -> Unit,
     /** Debug builds only — inherited from the retired wordmark long-press. */
     onOpenGallery: () -> Unit,
     onToggleDiscreet: (Boolean) -> Unit,
@@ -640,12 +639,11 @@ private fun BtOverviewOverflow(
                 },
             )
             if (BuildConfig.DEBUG) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_settings_dev_backend)) },
-                    onClick = { open = false; onDevBackend() },
-                )
                 // The wordmark's hidden long-press, made explicit — see
                 // [BtOverviewSearchAction]'s KDoc.
+                // NOTE: no "Server" entry here. Settings → Server and the login
+                // screen's affordance are the two paths, deliberately — a third
+                // one in the overflow is the second-path rule being broken.
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_settings_dev_gallery)) },
                     onClick = { open = false; onOpenGallery() },
@@ -854,7 +852,6 @@ private fun BtNavHost(
                             discreetMode = discreetMode,
                             onNotifications = { navController.navigate(NotificationsInboxRoute) },
                             onSettings = { navController.navigate(SettingsRoute) },
-                            onDevBackend = { navController.navigate(DevBackendRoute) },
                             onOpenGallery = {
                                 if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                             },
@@ -1162,7 +1159,7 @@ private fun BtNavHost(
                 onOpenDataHome = { navController.navigate(StorageHomeRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
-                onOpenDevBackend = { navController.navigate(DevBackendRoute) },
+                onOpenServer = { navController.navigate(ServerRoute) },
             )
         }
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
@@ -1210,8 +1207,8 @@ private fun BtNavHost(
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
             )
         }
-        composable<DevBackendRoute> {
-            DevBackendScreen(onBack = { navController.popBackStack() })
+        composable<ServerRoute> {
+            ServerScreen(onBack = { navController.popBackStack() })
         }
         composable<SyncDebugRoute> {
             SyncDebugScreen(

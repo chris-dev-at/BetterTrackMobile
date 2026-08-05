@@ -43,6 +43,34 @@ fun nextFabVisible(
 }
 
 /**
+ * **The empty-state rule** (Fable design review, 2026-08-04 — binding, app-wide).
+ *
+ * A screen gets ONE create affordance at a time. When the list is empty, the
+ * empty state carries the call to action and the FAB stands down; once there is
+ * content, the FAB is the single entry point and the empty state is gone. Two
+ * buttons that do the same thing, six inches apart, is the app failing to have
+ * an opinion — and on an empty screen the FAB is the weaker of the two, because
+ * it is a floating icon next to a paragraph that just explained what to do.
+ *
+ * [resolved] is "the screen knows what it has" — first load finished, state is
+ * Loaded rather than Loading. An unresolved screen shows no FAB either: popping
+ * one in over a skeleton only to pull it away when the list turns out to be
+ * empty is the flicker this rule exists to prevent.
+ *
+ * Pure, and tested, for the reason `nextFabVisible` is: this is a rule, not a
+ * layout, and a rule that can only be checked by looking at a phone is a rule
+ * that quietly rots.
+ */
+fun fabVisibleForList(resolved: Boolean, empty: Boolean): Boolean = resolved && !empty
+
+/**
+ * The same rule over a resolved [BtListSurface]. Only CONTENT keeps the FAB:
+ * every other surface either has nothing to add to yet (SKELETON), carries its
+ * own single action (EMPTY's CTA, ERROR/OFFLINE's retry), or both.
+ */
+fun fabVisibleForList(surface: BtListSurface): Boolean = surface == BtListSurface.CONTENT
+
+/**
  * Scroll-aware FAB visibility: hold this next to a scrollable, hang
  * [BtFabVisibility.nestedScroll] on that scrollable (or any ancestor of it), and
  * wrap the FAB in [BtFabVisibility.Content].

@@ -82,6 +82,7 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
+import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
@@ -355,6 +356,7 @@ fun PortfolioOverviewScreen(
                             onOpenTransactions = onOpenTransactions,
                             onOpenPendingSync = onOpenPendingSync,
                             onOpenCash = onOpenCash,
+                            onNewTransaction = onNewTransaction,
                         )
                     }
                 }
@@ -362,7 +364,17 @@ fun PortfolioOverviewScreen(
                 // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
                 // this FAB opens the buy/sell form directly. It stays the screen's ONLY
                 // creation entry; the header deliberately carries no `+`.
-                selected?.let { p ->
+                // The app-wide empty-state rule ([fabVisibleForList]): a portfolio
+                // with no holdings shows the "record your first buy" empty state,
+                // and that state carries the CTA — so the FAB stands down until
+                // there is a list to add to. `resolved` is deliberately not just
+                // `true`: before the first sync lands, "no holdings" is a thing we
+                // have not looked up yet, not an answer.
+                val holdingsFabVisible = fabVisibleForList(
+                    resolved = hasEverSynced || holdings.isNotEmpty(),
+                    empty = holdings.isEmpty(),
+                )
+                selected?.takeIf { holdingsFabVisible }?.let { p ->
                     val fabCd = stringResource(R.string.bt_overview_fab_cd)
                     fabVisibility.Content(
                         modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
@@ -427,6 +439,7 @@ private fun OverviewContent(
     onOpenTransactions: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
+    onNewTransaction: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
@@ -633,10 +646,19 @@ private fun OverviewContent(
         if (holdings.isEmpty()) {
             item(key = "holdings-empty") {
                 Box(inset) {
+                    // The FAB stands down while this is on screen, so this
+                    // button is the portfolio's single "record a transaction"
+                    // entry point — the empty state has to carry it.
                     BtEmptyState(
                         icon = Icons.Outlined.PieChart,
                         title = stringResource(R.string.bt_overview_no_holdings_title),
                         message = stringResource(R.string.bt_overview_no_holdings_message),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_overview_fab_cd),
+                                onClick = { onNewTransaction(portfolio.id) },
+                            )
+                        },
                     )
                 }
             }

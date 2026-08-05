@@ -169,4 +169,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object PendingSyncRoute
 @Serializable data object GalleryRoute                                      // debug component gallery
 @Serializable data object SyncDebugRoute                                    // Step-5 sync-queue debug screen
-@Serializable data object DevBackendRoute                                   // V5 S1 dev API/web origin override
+@Serializable data object ServerRoute                                       // Settings → Server (github flavor)

@@ -747,11 +747,36 @@
     <string name="bt_settings_dev_gallery_sub">Design system showcase</string>
     <string name="bt_settings_dev_sync">Sync queue</string>
     <string name="bt_settings_dev_sync_sub">Inspect the offline outbound queue</string>
-    <string name="bt_settings_dev_backend">Dev backend</string>
-    <string name="bt_settings_dev_backend_sub">Override the API / web origin</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
     <!-- %1$s, not %1$d: the app snackbar carries a single STRING format argument. -->
     <string name="bt_settings_dev_hint">%1$s more taps to unlock developer options</string>
+
+    <!-- Server (github flavor only): which backend this install talks to -->
+    <string name="bt_dest_server">Server</string>
+    <string name="bt_settings_server_sub">Which BetterTrack backend this app uses</string>
+    <string name="bt_server_intro">BetterTrack does every calculation on the server. This is the one it asks.</string>
+    <string name="bt_server_current_official">In use — official BetterTrack</string>
+    <string name="bt_server_current_custom">In use — custom server</string>
+    <string name="bt_server_api">API address</string>
+    <string name="bt_server_web">Web address</string>
+    <string name="bt_server_web_hint">Where sign-in, share links and the web app open.</string>
+    <string name="bt_server_presets">Presets</string>
+    <string name="bt_server_preset_official">Official BetterTrack</string>
+    <string name="bt_server_preset_local">Local dev</string>
+    <string name="bt_server_reset">Reset to official</string>
+    <string name="bt_server_save_restart">Save and restart</string>
+    <string name="bt_server_restart_note">A new server takes effect when the app restarts — “Save and restart” does that for you.</string>
+    <string name="bt_server_logout_note">Log out before you switch. Sign-in tokens are issued per server, so a token from another one is refused.</string>
+    <string name="bt_server_reset_done">Back to the official endpoints. Save to apply.</string>
+    <string name="bt_server_preset_applied">Filled in. Save to apply.</string>
+    <string name="bt_server_warn_insecure">Insecure connection: http traffic is not encrypted. Use https unless this is a local dev stack.</string>
+    <string name="bt_server_warn_insecure_blocked">http does not work in this build: Android refuses unencrypted connections outside debug builds. Use an https address.</string>
+    <string name="bt_server_err_scheme">Only http:// and https:// addresses are supported</string>
+    <string name="bt_server_err_host">Enter a host, for example bt.example.com</string>
+    <string name="bt_server_err_space">The address must not contain spaces</string>
+    <string name="bt_server_err_port">That is not a valid port number</string>
+    <!-- Login screen: the quiet way to the Server screen. %1$s is a host name. -->
+    <string name="bt_login_server">Server: %1$s</string>
 
     <!-- Change password -->
     <string name="bt_dest_change_password">Change password</string>

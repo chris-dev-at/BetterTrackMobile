@@ -78,7 +78,7 @@ fun AboutScreen(
 ) {
     val bt = BtTheme.colors
     val context = androidx.compose.ui.platform.LocalContext.current
-    val webOrigin = at.bettertrack.app.data.prefs.DevOriginOverride.webOrigin.trimEnd('/')
+    val webOrigin = at.bettertrack.app.data.prefs.ServerOrigins.webOrigin.trimEnd('/')
     val webHost = webOrigin.substringAfter("://")
     // Public legal pages (board #34 — live + final; required for Play review).
     // Fixed public URLs on the marketing domain, independent of the API/web

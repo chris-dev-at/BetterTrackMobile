@@ -19,7 +19,7 @@ import at.bettertrack.app.data.notifications.DefaultNotificationRepository
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotificationRepository
 import at.bettertrack.app.data.notifications.NotificationSettingsStore
-import at.bettertrack.app.data.prefs.DevOriginOverride
+import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.push.PushTokenManager
 import at.bettertrack.app.data.cash.CashClassificationRepository
 import at.bettertrack.app.data.standingorders.StandingOrderRepository
@@ -95,7 +95,7 @@ object AppGraph {
         appContext = context.applicationContext
         // V5 S1: load the debug-only origin overrides SYNCHRONOUSLY, before any
         // OkHttp/Retrofit instance below captures a base URL. No-op on release.
-        at.bettertrack.app.data.prefs.DevOriginOverride.init(appContext)
+        at.bettertrack.app.data.prefs.ServerOrigins.init(appContext)
         // V5 W4: the debug-only Drive-mode gate, read on the same synchronous
         // path for the same reason — `storageMode` below is a gated read and it
         // is consulted while this graph is still being wired. No-op on release,
@@ -117,13 +117,15 @@ object AppGraph {
     }
 
     /**
-     * The effective API base URL. Reads through [DevOriginOverride] so a debug
-     * build can be pointed at a local dev stack without a rebuild; release
-     * builds always resolve to `BuildConfig.API_ORIGIN`. Captured once per
-     * Retrofit instance ⇒ an override change applies on the next app start.
+     * The effective API base URL. Reads through [ServerOrigins] so a build whose
+     * flavor enables the Server setting (`github`, debug + release) can be
+     * pointed at another backend without a rebuild; `play` always resolves to
+     * `BuildConfig.API_ORIGIN`. Captured once per Retrofit instance ⇒ an
+     * override change applies on the next app start, which is what the Server
+     * screen's "restart to apply" says out loud.
      */
     private val apiBaseUrl: String
-        get() = DevOriginOverride.apiOrigin.trimEnd('/') + "/api/v1/"
+        get() = ServerOrigins.apiOrigin.trimEnd('/') + "/api/v1/"
 
     private fun loggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply {
@@ -227,7 +229,7 @@ object AppGraph {
             btApi = btApi,
             store = secureStore,
             json = json,
-            webOrigin = DevOriginOverride.webOrigin,
+            webOrigin = ServerOrigins.webOrigin,
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
@@ -433,7 +435,7 @@ object AppGraph {
     }
 
     val socialRepository: SocialRepository by lazy {
-        DefaultSocialRepository(api = btApi, json = json, webOrigin = DevOriginOverride.webOrigin)
+        DefaultSocialRepository(api = btApi, json = json, webOrigin = ServerOrigins.webOrigin)
     }
 
     // ── V5 S2c-2 surfaces ────────────────────────────────────────────────────
@@ -485,7 +487,7 @@ object AppGraph {
             api = btApi,
             json = json,
             gateway = SocketIoChatGateway(
-                apiOrigin = DevOriginOverride.apiOrigin,
+                apiOrigin = ServerOrigins.apiOrigin,
                 client = wsClient,
                 tokenProvider = { tokenManager.currentAccessToken() },
                 json = json,

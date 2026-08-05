@@ -21,7 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.ParanoidModeState
-import at.bettertrack.app.data.prefs.DevOriginOverride
+import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -110,14 +110,14 @@ fun ParanoidGate(
 /**
  * Opens the BetterTrack web app in a Custom Tab, falling back to whatever
  * browser the device has. Reads the EFFECTIVE web origin, so a debug build
- * pointed at a dev stack ([DevOriginOverride]) opens that stack and not
+ * pointed at a dev stack ([ServerOrigins]) opens that stack and not
  * production.
  */
 internal fun openBtWebApp(context: Context, path: String = "/") {
     // The URL is this function's job; the tab itself is [BtCustomTab]'s (which
     // keeps the fail-soft browser fallback — a missing browser must never crash
     // the explainer).
-    BtCustomTab.open(context, btWebUrl(DevOriginOverride.webOrigin, path))
+    BtCustomTab.open(context, btWebUrl(ServerOrigins.webOrigin, path))
 }
 
 /**

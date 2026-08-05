@@ -64,6 +64,8 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.fabVisibleForList
+import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -157,6 +159,20 @@ fun ChatListScreen(
     val loading by vm.loading.collectAsStateWithLifecycle()
     var showPicker by remember { mutableStateOf(false) }
 
+    // Held in a plain local so the null check narrows the type for the
+    // BtErrorState call — a `by` delegate never smart-casts.
+    val failure = error
+    // The shared resolver rather than this screen's own `when`: the "failed first
+    // fetch reads as an empty inbox" bug is the one every list screen wrote
+    // independently, so the decision lives in one tested place
+    // (BtListSurfaceTest) and this screen only renders it. Hoisted above the
+    // Scaffold because the FAB obeys it too — see [fabVisibleForList].
+    val surface = resolveListSurface(
+        hasContent = conversations.isNotEmpty(),
+        firstLoadPending = loading,
+        failed = failure != null,
+    )
+
     Scaffold(
         containerColor = bt.bg,
         topBar = {
@@ -175,29 +191,20 @@ fun ChatListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showPicker = true },
-                containerColor = bt.gold,
-                contentColor = bt.onGold,
-                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-            ) { Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.bt_chat_new_message_cd)) }
+            // The app-wide empty-state rule: with no conversations the empty
+            // state carries the single "New message" CTA and this stands down.
+            if (fabVisibleForList(surface)) {
+                FloatingActionButton(
+                    onClick = { showPicker = true },
+                    containerColor = bt.gold,
+                    contentColor = bt.onGold,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                ) { Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.bt_chat_new_message_cd)) }
+            }
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
-            // Held in a plain local so the null check narrows the type for the
-            // BtErrorState call — a `by` delegate never smart-casts.
-            val failure = error
-            // The shared resolver rather than this screen's own `when`: the
-            // "failed first fetch reads as an empty inbox" bug is the one every
-            // list screen wrote independently, so the decision lives in one
-            // tested place (BtListSurfaceTest) and this screen only renders it.
-            when (
-                resolveListSurface(
-                    hasContent = conversations.isNotEmpty(),
-                    firstLoadPending = loading,
-                    failed = failure != null,
-                )
-            ) {
+            when (surface) {
                 BtListSurface.SKELETON -> ChatListSkeleton()
                 // OFFLINE cannot occur here: this VM tracks no connectivity flag,
                 // so the resolver is called with the default isOnline = true. It
@@ -208,10 +215,17 @@ fun ChatListScreen(
                     onRetry = vm::refresh,
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
+                // The FAB is gone on this surface, so the CTA lives here.
                 BtListSurface.EMPTY -> BtEmptyState(
                     icon = Icons.AutoMirrored.Outlined.Chat,
                     title = stringResource(R.string.bt_chat_empty_title),
                     message = stringResource(R.string.bt_chat_empty_body),
+                    action = {
+                        BtPrimaryButton(
+                            text = stringResource(R.string.bt_chat_new_title),
+                            onClick = { showPicker = true },
+                        )
+                    },
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
                 BtListSurface.CONTENT -> LazyColumn(

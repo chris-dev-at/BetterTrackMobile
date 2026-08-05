@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.components
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,5 +53,55 @@ class FabVisibilityTest {
         assertFalse(visible)
         listOf(18f, 22f).forEach { visible = nextFabVisible(visible, it) }
         assertTrue(visible)
+    }
+
+    // ── The empty-state rule (Fable design review, 2026-08-04) ──────────────
+
+    @Test
+    fun `content keeps the fab`() {
+        assertTrue(fabVisibleForList(resolved = true, empty = false))
+    }
+
+    @Test
+    fun `an empty list stands the fab down so the empty state owns the CTA`() {
+        assertFalse(fabVisibleForList(resolved = true, empty = true))
+    }
+
+    @Test
+    fun `an unresolved screen shows no fab either way`() {
+        // The anti-flicker half of the rule: popping a FAB in over a skeleton
+        // and pulling it away when the list turns out to be empty is exactly
+        // the flash the rule exists to prevent.
+        assertFalse(fabVisibleForList(resolved = false, empty = true))
+        assertFalse(fabVisibleForList(resolved = false, empty = false))
+    }
+
+    @Test
+    fun `only CONTENT keeps the fab across every list surface`() {
+        // Exhaustive over the enum so a new surface cannot be added without
+        // deciding what the FAB does on it.
+        BtListSurface.entries.forEach { surface ->
+            assertEquals(
+                "FAB visibility on $surface",
+                surface == BtListSurface.CONTENT,
+                fabVisibleForList(surface),
+            )
+        }
+    }
+
+    @Test
+    fun `the two overloads agree wherever both apply`() {
+        assertEquals(
+            fabVisibleForList(BtListSurface.CONTENT),
+            fabVisibleForList(resolved = true, empty = false),
+        )
+        assertEquals(
+            fabVisibleForList(BtListSurface.EMPTY),
+            fabVisibleForList(resolved = true, empty = true),
+        )
+        assertEquals(
+            fabVisibleForList(BtListSurface.SKELETON),
+            fabVisibleForList(resolved = false, empty = false),
+        )
     }
 }

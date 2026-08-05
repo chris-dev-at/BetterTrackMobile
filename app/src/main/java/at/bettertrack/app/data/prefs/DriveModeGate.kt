@@ -15,7 +15,7 @@ import at.bettertrack.app.data.storage.StorageMode
  * release build — not by a stale prefs file, not by a mis-set stored mode, not
  * by a bug in a code path that has not shipped yet.
  *
- * The shape is deliberately the same as [DevOriginOverride] (V5 S1): plain
+ * The shape is deliberately the same as [ServerOrigins] (V5 S1): plain
  * [SharedPreferences] (this is read synchronously from `AppGraph.init`, before
  * the DB and network exist, and it holds no secret), a hard [BuildConfig.DEBUG]
  * guard on every read, and restart-applied semantics with the dev screen saying

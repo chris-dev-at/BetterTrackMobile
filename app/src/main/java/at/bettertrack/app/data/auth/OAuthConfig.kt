@@ -2,7 +2,7 @@ package at.bettertrack.app.data.auth
 
 import android.net.Uri
 import at.bettertrack.app.BuildConfig
-import at.bettertrack.app.data.prefs.DevOriginOverride
+import at.bettertrack.app.data.prefs.ServerOrigins
 
 /**
  * Static OAuth client configuration (spec §4). Client id + redirect URI come from
@@ -54,13 +54,13 @@ object OAuthConfig {
      * [v5ScopesAllowedFor].
      *
      * A computed property, not a constant: the effective API origin is a runtime
-     * value on debug builds ([DevOriginOverride]), so the scope set must be read
-     * per authorize call rather than frozen at class-init.
+     * value wherever the Server setting is enabled ([ServerOrigins]), so the
+     * scope set must be read per authorize call rather than frozen at class-init.
      */
     val SCOPES: String
         get() = requestedScopes(
             alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
-            v5ScopesEnabled = v5ScopesAllowedFor(DevOriginOverride.apiOrigin),
+            v5ScopesEnabled = v5ScopesAllowedFor(ServerOrigins.apiOrigin),
         )
 
     /**

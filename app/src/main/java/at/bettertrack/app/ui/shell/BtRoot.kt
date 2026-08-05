@@ -17,7 +17,9 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
-import at.bettertrack.app.ui.debug.DevBackendScreen
+import at.bettertrack.app.data.prefs.ServerOrigins
+import at.bettertrack.app.data.prefs.originLabel
+import at.bettertrack.app.ui.settings.ServerScreen
 import at.bettertrack.app.ui.storage.StorageSetupWizard
 import at.bettertrack.app.ui.storage.VaultUnlockGate
 import at.bettertrack.app.ui.theme.BtTheme
@@ -95,22 +97,26 @@ private fun AuthGate(
 
         AuthState.LoggedOut -> {
             val phase by auth.loginPhase.collectAsStateWithLifecycle()
-            // V5 S1: the dev-origin override also has to be reachable while
-            // LOGGED OUT — you point the app at a backend BEFORE you can sign
-            // in to one, and Settings lives behind the login. Debug only, via a
-            // long-press on the login wordmark; the Settings → Developer entry
-            // is the same screen. The login screen is rendered outside the
-            // NavHost, so this is a plain state swap rather than a route.
-            var showDevBackend by remember { mutableStateOf(false) }
-            if (BuildConfig.DEBUG && showDevBackend) {
-                DevBackendScreen(onBack = { showDevBackend = false })
+            // The Server screen has to be reachable while LOGGED OUT — you point
+            // the app at a backend BEFORE you can sign in to one, and Settings
+            // lives behind the login. In the `github` flavor (debug AND release)
+            // the login screen carries a quiet "Server: <host>" line; the debug
+            // wordmark long-press stays as the old shortcut. The login screen is
+            // rendered outside the NavHost, so this is a plain state swap rather
+            // than a route.
+            var showServer by remember { mutableStateOf(false) }
+            val serverEnabled = ServerOrigins.settingEnabled
+            if (serverEnabled && showServer) {
+                ServerScreen(onBack = { showServer = false })
             } else {
                 LoginScreen(
                     phase = phase,
                     onLogin = onStartLogin,
                     onNeedAccount = { onOpenUrl(auth.needAccountUrl()) },
                     onForgotPassword = { onOpenUrl(auth.forgotPasswordUrl()) },
-                    onLongPressWordmark = { if (BuildConfig.DEBUG) showDevBackend = true },
+                    onLongPressWordmark = { if (BuildConfig.DEBUG && serverEnabled) showServer = true },
+                    serverHost = if (serverEnabled) originLabel(ServerOrigins.webOrigin) else null,
+                    onOpenServer = if (serverEnabled) ({ showServer = true }) else null,
                 )
             }
         }

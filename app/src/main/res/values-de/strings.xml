@@ -706,10 +706,34 @@
     <string name="bt_settings_dev_gallery_sub">Schaukasten des Designsystems</string>
     <string name="bt_settings_dev_sync">Sync-Warteschlange</string>
     <string name="bt_settings_dev_sync_sub">Die Offline-Warteschlange inspizieren</string>
-    <string name="bt_settings_dev_backend">Dev-Backend</string>
-    <string name="bt_settings_dev_backend_sub">API-/Web-Origin überschreiben</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
     <string name="bt_settings_dev_hint">Noch %1$s Mal tippen, um Entwickleroptionen freizuschalten</string>
+
+    <!-- Server (nur github-Variante): mit welchem Backend diese Installation spricht -->
+    <string name="bt_dest_server">Server</string>
+    <string name="bt_settings_server_sub">Welches BetterTrack-Backend diese App nutzt</string>
+    <string name="bt_server_intro">BetterTrack rechnet alles am Server. Das hier ist der, den die App fragt.</string>
+    <string name="bt_server_current_official">Aktiv — offizielles BetterTrack</string>
+    <string name="bt_server_current_custom">Aktiv — eigener Server</string>
+    <string name="bt_server_api">API-Adresse</string>
+    <string name="bt_server_web">Web-Adresse</string>
+    <string name="bt_server_web_hint">Hier öffnen Anmeldung, Teilen-Links und die Web-App.</string>
+    <string name="bt_server_presets">Vorlagen</string>
+    <string name="bt_server_preset_official">Offizielles BetterTrack</string>
+    <string name="bt_server_preset_local">Lokaler Dev-Server</string>
+    <string name="bt_server_reset">Auf offiziell zurücksetzen</string>
+    <string name="bt_server_save_restart">Speichern und neu starten</string>
+    <string name="bt_server_restart_note">Ein neuer Server gilt ab dem nächsten App-Start — „Speichern und neu starten“ erledigt das für dich.</string>
+    <string name="bt_server_logout_note">Melde dich vor dem Wechsel ab. Anmelde-Tokens gelten pro Server; ein Token von einem anderen wird abgelehnt.</string>
+    <string name="bt_server_reset_done">Zurück auf die offiziellen Adressen. Zum Übernehmen speichern.</string>
+    <string name="bt_server_preset_applied">Eingetragen. Zum Übernehmen speichern.</string>
+    <string name="bt_server_warn_insecure">Unsichere Verbindung: http-Datenverkehr ist unverschlüsselt. Nutze https, außer das ist ein lokaler Dev-Server.</string>
+    <string name="bt_server_warn_insecure_blocked">http funktioniert in diesem Build nicht: Android verweigert unverschlüsselte Verbindungen außerhalb von Debug-Builds. Nutze eine https-Adresse.</string>
+    <string name="bt_server_err_scheme">Es werden nur http://- und https://-Adressen unterstützt</string>
+    <string name="bt_server_err_host">Gib einen Host an, zum Beispiel bt.example.com</string>
+    <string name="bt_server_err_space">Die Adresse darf keine Leerzeichen enthalten</string>
+    <string name="bt_server_err_port">Das ist keine gültige Portnummer</string>
+    <string name="bt_login_server">Server: %1$s</string>
 
     <!-- Passwort ändern -->
     <string name="bt_dest_change_password">Passwort ändern</string>
