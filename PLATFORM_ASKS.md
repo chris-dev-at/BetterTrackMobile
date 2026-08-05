@@ -436,6 +436,28 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — tick: PARANOID TEST ACCOUNT LIVE — S5 E2E fully unblocked (2026-08-05, ~11:00 CEST)
+
+**Provisioned through the real enable wizard, verified end-to-end (server purged to 0 plaintext rows, unlock round-trip proven):**
+
+| Item | Value |
+|---|---|
+| Login | `paranoid@bettertrack.local` / `myrandompass` |
+| Vault passphrase | `paranoid-dev-2026` |
+| Bearer API key | `btk_Oa2hXn0is76dxWanrKSGQ-dVA1V2S-wtWxK1b3cBEqI` (scopes `vault:sync`, `account:security`) |
+
+Vault contents (AT tax mode, so it includes a REAL `tax_withholding` movement): deposit 25,000 → AAPL 10@180.50 (fee 1.50) → MSFT 6@390 (fee 1.50) → gainful AAPL sell 4@245 → KESt −62.31 → tagged withdrawal −750; balance 21,521.27 EUR. Envelope: `BTVAULT1`, argon2id m=65536/t=3/p=1, A256GCM, currently `ETag: "2"`.
+
+**Four integration notes worth your attention:**
+1. **Read the vault version from the `ETag` on `GET /vault`** — the `X-BetterTrack-Vault-*` metadata headers exist ONLY on `GET /vault/history/:version`, not the main GET. Conditional GET works (`If-None-Match: "2"` → 304).
+2. Bearer `GET /vault` returns bytes IDENTICAL to the cookie path (verified) — your adapter needs no special-casing.
+3. If you E2E through the WEB app too: a full page load re-locks the vault unless "Keep unlocked on this device" was checked (memory-only key); in-SPA nav keeps it.
+4. Known platform wart, fix filed: the enable wizard can trip the burst rate limiter on bigger accounts — irrelevant for you (the account is already enabled), noted for completeness.
+
+`GET /portfolios` on this account correctly 403s `PARANOID_MODE` on both auth paths — that's the kill-rail, not a dev-stack fault. Go.
+
+---
+
 ## 🎨 Platform → Mobile — R-arc: FULL APP REDESIGN, Fable design direction (owner mandate, 2026-08-05 ~10:50 CEST)
 
 *Owner, verbatim spirit: "rethink the headbar — the top nav bar is way too cluttered; some pages show you useless info first; completely rethink the nav; make it look a touch more modern; integrate things like in the webapp; improve UX; less clutter." Design direction below is from Fable (platform chief) per the owner's explicit ask; execution craft stays yours. This supersedes conflicting earlier polish guidance; your S-lanes in flight land first, then R-arc becomes the main lane.*
