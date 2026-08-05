@@ -1753,4 +1753,33 @@
     <string name="bt_prices_toggle_on_note">On. Searches and quotes go to BetterTrack; your portfolio, transactions and cash stay on this device.</string>
     <string name="bt_prices_toggle_off_note">Off. Nothing leaves this device, and prices are the ones you enter yourself.</string>
     <string name="bt_prices_toggle_needs_account">Price lookups are signed-in requests, so this needs a BetterTrack account. Add one under “Change where it lives” — your portfolio still stays in Drive.</string>
+
+    <!-- ══ R-arc R1 ══ APPEND-ONLY BLOCK. Keep new R-arc keys here, at the very
+         end of the file, and never edit or delete inside the region above while
+         a parallel work package is adding keys of its own: two appends merge
+         cleanly, an append against an edit does not. The retirement of the old
+         tab keys (bt_tab_assets / bt_tab_social / bt_tab_workboard and the
+         bt_tab_*_empty_* family) is deliberately NOT in this commit — it lands
+         in the R1 tail commit, after the parallel package has merged. -->
+
+    <!-- Bottom navigation — the mandate's five destinations, in bar order. -->
+    <string name="bt_tab_home">Home</string>
+    <string name="bt_tab_workbench">Workbench</string>
+    <string name="bt_tab_markets">Markets</string>
+    <string name="bt_tab_people">People</string>
+
+    <!-- Top bar: context + ONE action + overflow. -->
+    <string name="bt_top_more">More</string>
+
+    <!-- Home -->
+    <string name="bt_home_net_worth">Net worth</string>
+    <string name="bt_home_across_portfolios">Across %1$d of %2$d portfolios</string>
+    <string name="bt_home_needs_you">Needs you</string>
+    <plurals name="bt_home_alerts_triggered">
+        <item quantity="one">%1$d alert triggered</item>
+        <item quantity="other">%1$d alerts triggered</item>
+    </plurals>
+    <string name="bt_home_alerts_triggered_sub">Open the alerts manager</string>
+    <string name="bt_home_no_portfolios_title">No portfolio yet</string>
+    <string name="bt_home_no_portfolios_body">Create one on the Portfolio tab and your net worth appears here.</string>
 </resources>

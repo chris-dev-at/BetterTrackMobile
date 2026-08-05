@@ -1741,4 +1741,27 @@
     <string name="bt_prices_toggle_on_note">An. Suche und Kurse laufen über BetterTrack; Portfolio, Buchungen und Bargeld bleiben auf diesem Gerät.</string>
     <string name="bt_prices_toggle_off_note">Aus. Nichts verlässt dieses Gerät, und als Kurse gelten die, die du selbst einträgst.</string>
     <string name="bt_prices_toggle_needs_account">Kursabfragen sind angemeldete Anfragen, dafür braucht es ein BetterTrack-Konto. Füg unter „Wo deine Daten liegen“ eines hinzu — dein Portfolio bleibt trotzdem in Drive.</string>
+
+    <!-- ══ R-arc R1 ══ APPEND-ONLY BLOCK — see the EN file for the rule. -->
+
+    <!-- Bottom navigation. Labels per coordinator decision O-11. -->
+    <string name="bt_tab_home">Start</string>
+    <string name="bt_tab_workbench">Werkbank</string>
+    <string name="bt_tab_markets">Märkte</string>
+    <string name="bt_tab_people">Leute</string>
+
+    <!-- Top bar -->
+    <string name="bt_top_more">Mehr</string>
+
+    <!-- Home -->
+    <string name="bt_home_net_worth">Nettovermögen</string>
+    <string name="bt_home_across_portfolios">Über %1$d von %2$d Portfolios</string>
+    <string name="bt_home_needs_you">Zu erledigen</string>
+    <plurals name="bt_home_alerts_triggered">
+        <item quantity="one">%1$d Alarm ausgelöst</item>
+        <item quantity="other">%1$d Alarme ausgelöst</item>
+    </plurals>
+    <string name="bt_home_alerts_triggered_sub">Alarm-Verwaltung öffnen</string>
+    <string name="bt_home_no_portfolios_title">Noch kein Portfolio</string>
+    <string name="bt_home_no_portfolios_body">Leg im Portfolio-Tab eines an — dein Nettovermögen erscheint dann hier.</string>
 </resources>

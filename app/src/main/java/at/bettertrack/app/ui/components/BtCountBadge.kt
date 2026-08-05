@@ -49,17 +49,26 @@ fun BtCountBadge(
 }
 
 /**
- * A compact count badge sized to overlay an icon (e.g. the bell). A stroke in
- * the bar background keeps it legible where it overlaps the glyph. Renders a
- * bare dot when [count] <= 0 but [showDot] is set (unused for the bell today).
+ * A compact count badge sized to overlay an icon. A stroke in the bar background
+ * keeps it legible where it overlaps the glyph.
+ *
+ * [showDot] renders a bare gold dot when [count] <= 0 — for the callers that
+ * want "something is here" without claiming a number. (This parameter was
+ * promised by this KDoc long before it existed in the signature; R1 made the
+ * promise true rather than deleting it, because the tab badges below want
+ * exactly that shape.)
  */
 @Composable
 fun BtBadgeOverlay(
     count: Int,
     modifier: Modifier = Modifier,
     max: Int = 9,
+    showDot: Boolean = false,
 ) {
-    if (count <= 0) return
+    if (count <= 0) {
+        if (showDot) BtBorderedDot(modifier)
+        return
+    }
     val bt = BtTheme.colors
     Box(
         modifier = modifier
@@ -84,4 +93,40 @@ fun BtBadgeOverlay(
 fun BtUnreadDot(modifier: Modifier = Modifier, size: Int = 8) {
     val bt = BtTheme.colors
     Box(modifier = modifier.size(size.dp).background(bt.gold, CircleShape))
+}
+
+/**
+ * The bottom-navigation badge (R-arc mandate §1).
+ *
+ * The mandate moves the unread-chat and triggered-alert signals off the top bar
+ * and onto their owning tabs, and it asks for a **dot**, not a count. That is
+ * the right call and worth stating: a number on a 24dp glyph inside a 56dp nav
+ * item is unreadable at a glance and competes with the label directly under it,
+ * while a dot answers the only question the bar is asked — "is there something
+ * over there?" — in one saccade. The count itself lives one tap away, on the
+ * screen that can afford to show it.
+ *
+ * Renders nothing when [show] is false, so callers can pass the raw predicate
+ * without wrapping every use in an `if`.
+ */
+@Composable
+fun BtTabBadgeDot(show: Boolean, modifier: Modifier = Modifier) {
+    if (!show) return
+    BtBorderedDot(modifier)
+}
+
+/**
+ * A gold dot ringed in the bar background, so it stays legible wherever it
+ * overlaps a glyph. Shared by [BtBadgeOverlay]'s dot mode and [BtTabBadgeDot]
+ * precisely so the two can never drift into two different dots.
+ */
+@Composable
+private fun BtBorderedDot(modifier: Modifier = Modifier) {
+    val bt = BtTheme.colors
+    Box(
+        modifier = modifier
+            .size(10.dp)
+            .background(bt.gold, CircleShape)
+            .border(1.5.dp, bt.surface, CircleShape),
+    )
 }

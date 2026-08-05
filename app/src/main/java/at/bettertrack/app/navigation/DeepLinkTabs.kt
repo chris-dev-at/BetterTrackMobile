@@ -3,17 +3,23 @@ package at.bettertrack.app.navigation
 import at.bettertrack.app.data.notifications.NotifDeepLink
 
 /**
- * The four bottom-navigation destinations, each paired with its typed route.
+ * The five bottom-navigation destinations, each paired with its typed route.
+ *
+ * Declaration order IS bar order (R-arc mandate §2): Home · Portfolio ·
+ * Workbench · Markets · People. The shell filters this set per storage mode but
+ * never reorders it, so a Drive-only bar is a subsequence of the full one rather
+ * than a different bar.
  *
  * Having the tab set as an enum (rather than only as a list of UI specs inside
  * the shell) is what makes the deep-link routing rule below a PURE function the
  * unit tests can pin down — no NavController, no Compose.
  */
 enum class BtTab(val route: Any) {
+    Home(HomeTabRoute),
     Portfolio(PortfolioTabRoute),
-    Assets(AssetsTabRoute),
-    Social(SocialTabRoute),
-    Workboard(WorkboardTabRoute),
+    Workbench(WorkbenchTabRoute),
+    Markets(MarketsTabRoute),
+    People(PeopleTabRoute),
 }
 
 /**
@@ -27,10 +33,16 @@ enum class BtTab(val route: Any) {
  * semantics) and only then pushes.
  *
  * The account-level destinations (settings, security, notification settings)
- * have no tab of their own: they hang off the top bar, which is visible on all
- * four tabs. They are mapped to Portfolio — the graph's START destination — so
- * that they always get the same, predictable parent instead of whichever tab
- * happened to be selected when the push arrived.
+ * have no tab of their own: they live behind Home's overflow, which the R-arc
+ * top-bar rule (mandate §1) made their single entry point. They are mapped to
+ * Home — the graph's START destination — so that they always get the same,
+ * predictable parent instead of whichever tab happened to be selected when the
+ * push arrived.
+ *
+ * That fallback is *stronger* after R1 than it was before it. It used to point
+ * at Portfolio, which was the start destination only by accident of being first;
+ * Home is the start destination by construction, and its surface is `FULL` in
+ * every storage mode, so the fallback tab can never be one this install hides.
  */
 fun owningTab(link: NotifDeepLink): BtTab = when (link) {
     // People, and everything people share with you.
@@ -40,19 +52,19 @@ fun owningTab(link: NotifDeepLink): BtTab = when (link) {
     is NotifDeepLink.PublicProfile,
     is NotifDeepLink.SharedConglomerate,
     is NotifDeepLink.Chat,
-    -> BtTab.Social
+    -> BtTab.People
 
-    // Market pages live under Assets…
-    is NotifDeepLink.Asset -> BtTab.Assets
+    // Market pages live under Markets…
+    is NotifDeepLink.Asset -> BtTab.Markets
     // …but a HELD position is portfolio data, not market data.
     is NotifDeepLink.Holding -> BtTab.Portfolio
 
-    // The price-alert manager is a Workboard segment.
-    NotifDeepLink.Alerts -> BtTab.Workboard
+    // The price-alert manager is a Workbench segment.
+    NotifDeepLink.Alerts -> BtTab.Workbench
 
     // Account-level: no tab of their own — see the KDoc above.
     NotifDeepLink.Settings,
     NotifDeepLink.Security,
     NotifDeepLink.NotificationSettings,
-    -> BtTab.Portfolio
+    -> BtTab.Home
 }

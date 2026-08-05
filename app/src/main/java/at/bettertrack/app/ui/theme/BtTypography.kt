@@ -23,6 +23,25 @@ private val System = FontFamily.Default
 /** Brand-specific styles that don't map 1:1 onto Material roles. */
 @Immutable
 data class BtTypography(
+    /**
+     * The app's single biggest number — Home's net worth (R-arc R1, O-8).
+     *
+     * The mandate asks for "a bigger type ramp for hero numbers — money is the
+     * product, let it breathe". This is the top of that ramp, one clear step
+     * above [moneyLarge] rather than a nudge: at 44sp against 36sp the two read
+     * as different roles, which is the point — Home answers "what am I worth"
+     * and Portfolio answers "what is this portfolio worth", and the type should
+     * say so before the label does. Tracking tightens with size so the extra
+     * 8sp buys presence, not width; a 9-digit figure still fits 360dp.
+     */
+    val moneyHero: TextStyle = TextStyle(
+        fontFamily = System,
+        fontWeight = FontWeight.Bold,
+        fontSize = 44.sp,
+        lineHeight = 50.sp,
+        letterSpacing = (-0.03).em,
+        fontFeatureSettings = FONT_FEATURE_TABULAR,
+    ),
     /** Hero money value (portfolio total) — large, confident, tightly tracked. */
     val moneyLarge: TextStyle = TextStyle(
         fontFamily = System,

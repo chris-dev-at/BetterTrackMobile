@@ -1,27 +1,19 @@
 package at.bettertrack.app.ui.shell
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.lifecycle.viewmodel.compose.viewModel
-import at.bettertrack.app.ui.components.btPressScale
-import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
-import at.bettertrack.app.ui.portfolio.PortfolioOverviewVmInitializer
-import at.bettertrack.app.ui.theme.BtShapes
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.People
@@ -81,7 +74,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.StandingOrdersRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
-import at.bettertrack.app.navigation.AssetsTabRoute
+import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.navigation.CashRulesRoute
 import at.bettertrack.app.navigation.CashTagsRoute
@@ -96,6 +89,7 @@ import at.bettertrack.app.navigation.CustomAssetsRoute
 import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
+import at.bettertrack.app.navigation.HomeTabRoute
 import at.bettertrack.app.navigation.FriendGroupsRoute
 import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
@@ -117,14 +111,17 @@ import at.bettertrack.app.navigation.SettingsSecurityRoute
 import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
-import at.bettertrack.app.navigation.SocialTabRoute
+import at.bettertrack.app.navigation.PeopleTabRoute
 import at.bettertrack.app.navigation.DevBackendRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
-import at.bettertrack.app.navigation.WorkboardTabRoute
+import at.bettertrack.app.navigation.WorkbenchTabRoute
 import at.bettertrack.app.ui.components.BtBadgeOverlay
+import at.bettertrack.app.ui.components.BtCountBadge
+import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.Wordmark
+import at.bettertrack.app.ui.home.HomeScreen
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
 import at.bettertrack.app.ui.conglomerate.ConglomerateBuilderScreen
@@ -132,7 +129,6 @@ import at.bettertrack.app.ui.conglomerate.ConglomerateDetailScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
 import at.bettertrack.app.ui.market.AssetPageScreen
 import at.bettertrack.app.ui.market.SearchScreen
-import at.bettertrack.app.ui.notifications.NotificationBell
 import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
 import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
 import at.bettertrack.app.ui.paranoid.ParanoidGate
@@ -145,8 +141,8 @@ import at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen
 import at.bettertrack.app.ui.portfolio.TransactionFormScreen
 import at.bettertrack.app.ui.portfolio.TransactionsScreen
 import at.bettertrack.app.ui.sync.PendingSyncScreen
-import at.bettertrack.app.ui.screens.AssetsTabScreen
-import at.bettertrack.app.ui.screens.WorkboardTabScreen
+import at.bettertrack.app.ui.screens.MarketsTabScreen
+import at.bettertrack.app.ui.screens.WorkbenchTabScreen
 import at.bettertrack.app.ui.workboard.WorkboardEntry
 import at.bettertrack.app.ui.chat.ChatListScreen
 import at.bettertrack.app.ui.chat.ChatThreadScreen
@@ -171,35 +167,68 @@ import at.bettertrack.app.ui.applock.AppLockSetupScreen
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.reflect.KClass
 
-/** Bottom-navigation tab metadata — Portfolio · Assets · Social · Workboard. */
+/** Which shell-level signal lights this tab's badge dot (R-arc mandate §1). */
+private enum class TabBadge {
+    /** No dot, ever. */
+    None,
+
+    /** Unread chat messages — the affordance that left the top bar. */
+    Chat,
+
+    /** Alerts that have fired — the other badge the top bar used to carry. */
+    Alerts,
+}
+
+/**
+ * Bottom-navigation tab metadata — Home · Portfolio · Workbench · Markets ·
+ * People (R-arc mandate §2).
+ *
+ * @param surface the §4.5 surface this tab is the entry point for — drives mode
+ *   gating. Note the deliberate name mismatch on Workbench: its surface constant
+ *   is [BtSurface.CONGLOMERATES], because that name mirrors the storage plan's
+ *   §4.5 table verbatim and renaming it would drift the app from the document it
+ *   implements for no user-visible gain (R1 decision O-2). The label is the
+ *   user-facing name; the constant is the contract's.
+ * @param ownsItsHeader true when the DESTINATION renders its own header and the
+ *   shell must not add one on top of it. The R-arc target for Portfolio is an
+ *   in-screen collapsing large title (mandate §1), which package R1-B builds;
+ *   until it lands, the shell renders Portfolio's title like the other tabs',
+ *   and R1-B flips this one flag rather than editing the shell around it.
+ */
 private data class TabSpec(
     val tab: BtTab,
     val routeClass: KClass<*>,
     val labelRes: Int,
     val icon: ImageVector,
-    /** The §4.5 surface this tab is the entry point for — drives mode gating. */
     val surface: BtSurface,
+    val badge: TabBadge = TabBadge.None,
+    val ownsItsHeader: Boolean = false,
 )
 
 private val Tabs = listOf(
+    TabSpec(BtTab.Home, HomeTabRoute::class, R.string.bt_tab_home, Icons.Outlined.Home, BtSurface.HOME),
     TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO),
-    TabSpec(BtTab.Assets, AssetsTabRoute::class, R.string.bt_tab_assets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
-    TabSpec(BtTab.Social, SocialTabRoute::class, R.string.bt_tab_social, Icons.Outlined.People, BtSurface.SOCIAL),
-    TabSpec(BtTab.Workboard, WorkboardTabRoute::class, R.string.bt_tab_workboard, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES),
+    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
+    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
+    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
 )
 
 /**
  * The tabs this mode may show (S3/S4 plan §4.5, "absent, not greyed").
  *
- * A Drive-only install has no BetterTrack account, so Social and the Workboard's
+ * A Drive-only install has no BetterTrack account, so People and the Workbench's
  * conglomerates are not features it is missing — they are features that cannot
- * exist for it. Rendering them disabled would turn two thirds of the bottom bar
- * into a permanent advertisement for something the user deliberately opted out
- * of; dropping them leaves a bar where every entry works.
+ * exist for it. Rendering them disabled would turn part of the bottom bar into a
+ * permanent advertisement for something the user deliberately opted out of;
+ * dropping them leaves a bar where every entry works.
  *
- * The Assets tab stays: search and watchlists are DEGRADED rather than absent
+ * The Markets tab stays: search and watchlists are DEGRADED rather than absent
  * (no live quotes until W6, device-local watchlist membership per board #40.3),
  * and each of those surfaces renders its own honest reduced state.
+ *
+ * R-arc R1: Home joins as the first entry and is `FULL` in every mode, so a
+ * Drive-only install goes from a two-tab bar to a three-tab one with a real
+ * front door — the mode that had the least navigation gains the most from it.
  */
 private fun tabsFor(mode: StorageMode): List<TabSpec> {
     val visible = visibleTabSurfaces(mode)
@@ -207,9 +236,28 @@ private fun tabsFor(mode: StorageMode): List<TabSpec> {
 }
 
 /**
- * The BetterTrack app shell (Step 3): top bar (wordmark + bell slot + settings),
- * 4-tab bottom navigation, global offline-banner scaffold, and the full typed
- * navigation graph with placeholders for every future destination.
+ * The BetterTrack app shell: a 3-element top bar, 5-tab bottom navigation, the
+ * global offline-banner scaffold and the full typed navigation graph.
+ *
+ * ## The R-arc top-bar rule (mandate §1)
+ *
+ * The bar carries **(a) context/title, (b) ONE contextual action, (c) overflow —
+ * nothing else**. Before R1 it carried six things on every tab: wordmark,
+ * portfolio selector chip, search, chats+badge, bell+badge and settings. Each
+ * had been a defensible local decision; together they were the accretion the
+ * owner reacted to.
+ *
+ * Where the six went, so no capability was merely deleted:
+ *  - **chat unread** → a dot on the People tab, with Messages as People's one
+ *    action (the S6 P1-10 problem — "a new message announced itself nowhere" —
+ *    solved at zero bar cost);
+ *  - **triggered alerts** → a dot on the Workbench tab, fed by the same count
+ *    the Workbench's own segment badge shows;
+ *  - **notification bell** → one inbox entry in Home's overflow, count included;
+ *  - **portfolio selector** → the Portfolio screen's own header (R1-B);
+ *  - **search** → Home's one action (Markets already had a better in-content
+ *    search field, and the top-bar glyph was a duplicate of it — S6 P1-11);
+ *  - **settings** and **discreet mode** → Home's overflow.
  */
 @Composable
 fun BtApp() {
@@ -217,9 +265,13 @@ fun BtApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val isTopLevel = Tabs.any { tab ->
+    // Which top-level tab is showing, if any. Resolved once: the top bar needs
+    // the SPEC (its title, its one action), not just the yes/no the bars used to
+    // share, and two independent lookups would be free to disagree.
+    val currentTab = Tabs.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
     }
+    val isTopLevel = currentTab != null
     // V5 W5: per-mode surface gating (plan §4.5). Read once here so the bars and
     // the routes below cannot disagree about what this install can do.
     val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
@@ -235,15 +287,20 @@ fun BtApp() {
     // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
     // system-push intents (surfaced via AppGraph.pendingDeepLink).
     val scope = rememberCoroutineScope()
-    val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope) {
-        // Switch to a top-level TAB with the same semantics as the bottom bar.
-        fun switchToTab(tab: BtTab) {
+    // Switch to a top-level TAB with bottom-bar semantics. Hoisted out of the
+    // deep-link handler because Home needs it too: Home is an index whose rows
+    // are owned by other tabs, so "go to Workbench's alerts" must land exactly
+    // the way the bottom bar and a notification tap do, not as a bare push.
+    val switchToTab: (BtTab) -> Unit = remember(navController) {
+        { tab ->
             navController.navigate(tab.route) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
             }
         }
+    }
+    val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
         // EVERY deep link lands the same way (S6 P1-8):
         //   1. drop the notifications inbox (inclusive) if the tap came from it, so
         //      it is never saved under a tab's restored state — a no-op on a
@@ -285,7 +342,7 @@ fun BtApp() {
                 is NotifDeepLink.Chat -> open(link) { navController.navigate(ChatListRoute) }
                 is NotifDeepLink.Asset -> open(link) { navController.navigate(AssetPageRoute(link.assetId)) }
                 is NotifDeepLink.Holding -> open(link) { navController.navigate(HoldingDetailRoute(link.assetId)) }
-                // The alerts manager is a SEGMENT of the Workboard tab, not a route
+                // The alerts manager is a SEGMENT of the Workbench tab, not a route
                 // of its own: switch to the tab and ask it to open that segment.
                 NotifDeepLink.Alerts -> {
                     WorkboardEntry.requestAlerts()
@@ -309,22 +366,37 @@ fun BtApp() {
         }
     }
 
-    // Bell unread badge: refresh the inbox once on entry so the count is live.
-    val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
+    // Inbox unread count: refresh once on entry so the number next to Home's
+    // overflow inbox entry is live. The bell that used to carry this is gone
+    // (mandate §1) but the count is not — it moved, it did not die.
     // Drive-only has no server to hold an inbox; asking would be a guaranteed
     // failed call on every launch, not a feature.
+    val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
     LaunchedEffect(showNotificationSurfaces) {
         if (showNotificationSurfaces) AppGraph.notificationRepository.refresh()
     }
 
-    // Chat was only reachable from a card inside the Social tab — invisible from
-    // the other three, and a new message announced itself nowhere (S6 P1-10). The
-    // repository already keeps a server-derived total, so the shell just needs to
-    // prime it once and hang a badged affordance next to the bell.
+    // Chat was only reachable from a card inside the People tab — invisible from
+    // the other tabs, and a new message announced itself nowhere (S6 P1-10). The
+    // repository already keeps a server-derived total; the shell primes it once
+    // and it now lights the People tab's dot instead of a top-bar icon.
     val chatUnread by AppGraph.chatRepository.totalUnread.collectAsStateWithLifecycle()
     LaunchedEffect(showSocialSurfaces) {
         if (showSocialSurfaces) AppGraph.chatRepository.refreshConversations()
     }
+
+    // Triggered alerts: the Workbench tab's dot AND Home's actionable row read
+    // this one cached count, primed here so it is live from whichever tab the
+    // user happens to open the app on. The repository does its own mode gating.
+    val triggeredAlerts by AppGraph.alertsRepository.triggered.collectAsStateWithLifecycle()
+    LaunchedEffect(storageMode) {
+        AppGraph.alertsRepository.refreshTriggered(storageMode)
+    }
+
+    // Discreet mode as a first-class quick toggle (mandate §5: "give it a sane
+    // home, e.g. overflow or profile, not bar chrome"). Home's overflow is that
+    // home; the Settings row stays the canonical control.
+    val discreetMode by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = bt.bg,
@@ -333,45 +405,37 @@ fun BtApp() {
         // Zeroing here prevents double status-bar padding on those routes.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (isTopLevel) {
-                // Portfolio-tab: show the current-portfolio selector beside the
-                // wordmark (owner 2026-07-09). It shares the SAME nav-entry-scoped
-                // PortfolioOverviewViewModel the overview uses, so the name is live
-                // and tapping opens the switcher sheet the overview hosts.
-                val onPortfolioTab = currentDestination?.hierarchy
-                    ?.any { it.hasRoute(PortfolioTabRoute::class) } == true
-                var selectorName: String? = null
-                var openSwitcher: (() -> Unit)? = null
-                if (onPortfolioTab) {
-                    val portfolioEntry = remember(backStackEntry) {
-                        runCatching { navController.getBackStackEntry(PortfolioTabRoute) }.getOrNull()
-                    }
-                    if (portfolioEntry != null) {
-                        val pvm: PortfolioOverviewViewModel = viewModel(
-                            viewModelStoreOwner = portfolioEntry,
-                            initializer = PortfolioOverviewVmInitializer,
-                        )
-                        val selected by pvm.selected.collectAsStateWithLifecycle()
-                        selectorName = selected?.name
-                        openSwitcher = { pvm.openSwitcher() }
-                    }
-                }
+            // `ownsItsHeader` destinations render their own (R1-B's collapsing
+            // large title); the shell adds nothing on top of them.
+            if (currentTab != null && !currentTab.ownsItsHeader) {
                 BtTopBar(
+                    spec = currentTab,
                     notifUnread = notifUnread,
-                    chatUnread = chatUnread,
-                    showChats = showSocialSurfaces,
                     showNotifications = showNotificationSurfaces,
-                    portfolioName = selectorName,
-                    onOpenSwitcher = openSwitcher,
+                    discreetMode = discreetMode,
                     onWordmarkLongPress = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
                     onSearch = { navController.navigate(SearchRoute) },
-                    // The chat list belongs to Social, so it opens with the very
+                    // The chat list belongs to People, so it opens with the very
                     // same tab semantics a notification tap uses (S6 P1-8).
-                    onChats = { navigateDeepLink(NotifDeepLink.Chat(null)) },
+                    onMessages = { navigateDeepLink(NotifDeepLink.Chat(null)) },
+                    onFriendGroups = { navController.navigate(FriendGroupsRoute) },
                     onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
+                    onDevBackend = { navController.navigate(DevBackendRoute) },
+                    onToggleDiscreet = { wanted ->
+                        // Flip locally FIRST — the point of masking is that
+                        // amounts vanish the instant the user asks, not a
+                        // round-trip later. Settings owns the error copy for a
+                        // refusal (mandate §5 keeps it the canonical control);
+                        // here the state visibly reverting IS the feedback.
+                        AppGraph.discreetModeStore.set(wanted)
+                        scope.launch {
+                            val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
+                            if (r is BtResult.Err) AppGraph.discreetModeStore.set(!wanted)
+                        }
+                    },
                 )
             }
         },
@@ -382,15 +446,16 @@ fun BtApp() {
                     isSelected = { tab ->
                         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
                     },
-                    onSelect = { tab ->
-                        navController.navigate(tab.tab.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                    // The badges the top bar used to carry, on the tabs that own
+                    // them. Both are dots, not counts — see [BtTabBadgeDot].
+                    hasBadge = { tab ->
+                        when (tab.badge) {
+                            TabBadge.None -> false
+                            TabBadge.Chat -> showSocialSurfaces && chatUnread > 0
+                            TabBadge.Alerts -> showNotificationSurfaces && triggeredAlerts > 0
                         }
                     },
+                    onSelect = { tab -> switchToTab(tab.tab) },
                 )
             }
         },
@@ -412,30 +477,61 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(navController, navigateDeepLink)
+            BtNavHost(navController, navigateDeepLink, switchToTab)
         }
     }
 }
 
+/**
+ * The 3-element top bar (R-arc mandate §1): context/title, ONE action, overflow.
+ *
+ * One composable rather than five per-screen bars, because the *rule* is what
+ * has to be enforceable — a per-screen bar is exactly how the old one grew to
+ * six elements, one defensible addition at a time. The budget is spent per tab:
+ *
+ * | Tab | Context | ONE action | Overflow |
+ * |---|---|---|---|
+ * | Home | wordmark | Search | inbox · discreet · settings · (debug) dev backend |
+ * | Portfolio | title * | — (the FAB owns creation) | — * |
+ * | Workbench | title | — (segments are content) | — |
+ * | Markets | title | — (the in-content field IS the entry) | — |
+ * | People | title | Messages | Friend groups |
+ *
+ * `*` R1-A renders Portfolio's title here so the tab is never bare; R1-B moves
+ * it into the screen as a collapsing large title that also carries the portfolio
+ * switcher and this row's overflow, and flips [TabSpec.ownsItsHeader].
+ *
+ * **The wordmark appears on Home only.** It stopped being wayfinding the moment
+ * it was on all four tabs — the user knows which app they opened — and Home is
+ * the one screen with no better claim on that space. Its hidden long-press debug
+ * gallery entry moves with it.
+ *
+ * An empty overflow renders **no button**. A menu affordance that opens onto
+ * nothing is worse than the icon it saved, so Workbench and Markets carry a
+ * title and nothing else in R1 (decision O-4: Markets takes no action at all,
+ * killing the S6 P1-11 search duplication at its root rather than restyling it).
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun BtTopBar(
+    spec: TabSpec,
     notifUnread: Int,
-    chatUnread: Int,
-    showChats: Boolean,
     showNotifications: Boolean,
-    portfolioName: String?,
-    onOpenSwitcher: (() -> Unit)?,
+    discreetMode: Boolean,
     onWordmarkLongPress: () -> Unit,
     onSearch: () -> Unit,
-    onChats: () -> Unit,
+    onMessages: () -> Unit,
+    onFriendGroups: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
+    onDevBackend: () -> Unit,
+    onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
+    val isHome = spec.tab == BtTab.Home
     TopAppBar(
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isHome) {
                 // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
                 // long-press (debug builds only).
                 Wordmark(
@@ -447,38 +543,57 @@ private fun BtTopBar(
                         onLongClick = onWordmarkLongPress,
                     ),
                 )
-                // Portfolio selector (Portfolio tab only) — compact, shrinks to fit.
-                if (portfolioName != null && onOpenSwitcher != null) {
-                    Spacer(Modifier.width(10.dp))
-                    PortfolioSelectorChip(
-                        name = portfolioName,
-                        onClick = onOpenSwitcher,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                }
+            } else {
+                // A step up from `titleLarge` towards the mandate's large-title
+                // idiom, without faking a collapsing header these screens cannot
+                // yet drive: `LargeTopAppBar` needs a scroll behaviour wired to
+                // the destination's own scroll container, and R1-B builds the
+                // shared component (`BtCollapsingHeader`) that does that properly
+                // for every screen. Rendering a tall static bar in the meantime
+                // would cost vertical space and buy nothing.
+                Text(
+                    text = stringResource(spec.labelRes),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = bt.textPrimary,
+                )
             }
         },
         actions = {
-            // App-wide search affordance (§6.5).
-            IconButton(onClick = onSearch) {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = stringResource(R.string.bt_search_cd),
-                    tint = bt.textSecondary,
-                )
+            when (spec.tab) {
+                // Home's ONE action (decision O-3): search is the affordance the
+                // whole app shares and Home is the only screen that is about all
+                // of it. A profile/avatar entry was the alternative — revisit at
+                // R2, when settings get their own pass.
+                BtTab.Home -> IconButton(onClick = onSearch) {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = stringResource(R.string.bt_search_cd),
+                        tint = bt.textSecondary,
+                    )
+                }
+                // Where the WP-C chat affordance LANDS. It solved a real problem
+                // (P1-10) and it keeps solving it — as this tab's one action plus
+                // the tab's own dot, at zero cost to the other four bars.
+                BtTab.People -> IconButton(onClick = onMessages) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Chat,
+                        contentDescription = stringResource(R.string.bt_top_messages),
+                        tint = bt.textSecondary,
+                    )
+                }
+                else -> Unit
             }
-            // Messages + unread badge → chat list. Same badge language as the
-            // bell; sits beside it because both answer "did anything happen?".
-            // Both are absent (not disabled) in Drive-only mode — plan §4.5.
-            if (showChats) BtTopBarChats(unread = chatUnread, onClick = onChats)
-            if (showNotifications) NotificationBell(unread = notifUnread, onClick = onNotifications)
-            IconButton(onClick = onSettings) {
-                Icon(
-                    Icons.Outlined.Settings,
-                    contentDescription = stringResource(R.string.bt_top_settings),
-                    tint = bt.textSecondary,
-                )
-            }
+            BtTopBarOverflow(
+                tab = spec.tab,
+                notifUnread = notifUnread,
+                showNotifications = showNotifications,
+                discreetMode = discreetMode,
+                onFriendGroups = onFriendGroups,
+                onNotifications = onNotifications,
+                onSettings = onSettings,
+                onDevBackend = onDevBackend,
+                onToggleDiscreet = onToggleDiscreet,
+            )
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = bt.bg,
@@ -488,89 +603,132 @@ private fun BtTopBar(
 }
 
 /**
- * Top-bar messages affordance (S6 P1-10): the chat list was previously reachable
- * only from a card inside the Social tab, so from the other three tabs the
- * feature simply did not exist and an incoming message announced itself nowhere.
- * Deliberately built as the bell's twin — same 24dp glyph, same [BtBadgeOverlay]
- * gold count — so the two "something happened" entries read as one pair rather
- * than two competing idioms.
+ * The overflow (⋮) — the third and last thing a top bar may carry.
+ *
+ * This is where the secondary surfaces the mandate evicted from the bar live:
+ * "settings, sync status, dev screen, About live behind overflow/profile, never
+ * as bar icons" (§2). The notification inbox keeps its unread count here,
+ * because a number the user could act on is exactly what an overflow item may
+ * carry — it is the persistent *bell competing for bar space* that had to go,
+ * not the information.
  */
 @Composable
-private fun BtTopBarChats(unread: Int, onClick: () -> Unit) {
+private fun BtTopBarOverflow(
+    tab: BtTab,
+    notifUnread: Int,
+    showNotifications: Boolean,
+    discreetMode: Boolean,
+    onFriendGroups: () -> Unit,
+    onNotifications: () -> Unit,
+    onSettings: () -> Unit,
+    onDevBackend: () -> Unit,
+    onToggleDiscreet: (Boolean) -> Unit,
+) {
     val bt = BtTheme.colors
+    // Only two tabs have anything to put behind it in R1 — and a ⋮ that opens
+    // onto an empty menu is a broken promise, so the other three render nothing.
+    val hasMenu = tab == BtTab.Home || tab == BtTab.People
+    if (!hasMenu) return
+
+    var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = onClick) {
+        IconButton(onClick = { open = true }) {
             Icon(
-                Icons.AutoMirrored.Outlined.Chat,
-                contentDescription = stringResource(R.string.bt_top_messages),
+                Icons.Outlined.MoreVert,
+                contentDescription = stringResource(R.string.bt_top_more),
                 tint = bt.textSecondary,
             )
         }
+        // The inbox count rides the ⋮ itself as a dot, so "something is waiting"
+        // survives the bell's removal without a second glyph. The exact number
+        // is on the menu item one tap in.
         BtBadgeOverlay(
-            count = unread,
+            count = 0,
+            showDot = tab == BtTab.Home && showNotifications && notifUnread > 0,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 7.dp, end = 6.dp),
+                .offset(x = (-6).dp, y = 8.dp),
         )
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = bt.surface,
+        ) {
+            if (tab == BtTab.People) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_groups_title)) },
+                    onClick = { open = false; onFriendGroups() },
+                )
+            }
+            if (tab == BtTab.Home) {
+                if (showNotifications) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bt_top_notifications)) },
+                        onClick = { open = false; onNotifications() },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = bt.textSecondary,
+                            )
+                        },
+                        trailingIcon = { BtCountBadge(count = notifUnread) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_settings_discreet)) },
+                    onClick = { open = false; onToggleDiscreet(!discreetMode) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (discreetMode) {
+                                Icons.Outlined.VisibilityOff
+                            } else {
+                                Icons.Outlined.Visibility
+                            },
+                            contentDescription = null,
+                            // Gold while ON: the one state in this menu that
+                            // changes what every other screen renders should not
+                            // look like the rows that merely navigate.
+                            tint = if (discreetMode) bt.gold else bt.textSecondary,
+                        )
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_top_settings)) },
+                    onClick = { open = false; onSettings() },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Settings,
+                            contentDescription = null,
+                            tint = bt.textSecondary,
+                        )
+                    },
+                )
+                if (BuildConfig.DEBUG) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bt_settings_dev_backend)) },
+                        onClick = { open = false; onDevBackend() },
+                    )
+                }
+            }
+        }
     }
 }
 
 /**
- * The current-portfolio selector that lives in the top bar next to the wordmark
- * (owner 2026-07-09). A compact, tappable pill with a subtle gold chevron; the
- * name ellipsizes and the whole pill shrinks to fit (weight from the caller) so
- * the wordmark + action icons always stay visible. Tapping opens the switcher
- * sheet (hosted by the overview via the shared VM).
+ * The bottom bar — the backbone the mandate keeps (§2), now five wide and
+ * carrying the two signals the top bar gave up.
+ *
+ * [hasBadge] is a predicate rather than a count map on purpose: the bar renders
+ * dots, so a count here would be information the component cannot use and the
+ * caller would be free to get wrong. What "there is something on that tab" means
+ * — including its per-mode gating — stays with the shell, which owns the flows.
  */
-@Composable
-private fun PortfolioSelectorChip(
-    name: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val bt = BtTheme.colors
-    val cd = stringResource(R.string.bt_switcher_open_cd)
-    val interaction = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        shape = BtShapes.pill,
-        color = bt.surface,
-        contentColor = bt.textPrimary,
-        border = BorderStroke(1.dp, bt.border),
-        interactionSource = interaction,
-        modifier = modifier
-            .btPressScale(interaction, pressedScale = 0.96f)
-            .heightIn(min = 34.dp)
-            .semantics { contentDescription = cd },
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = bt.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 150.dp).weight(1f, fill = false),
-            )
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = bt.gold,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
 @Composable
 private fun BtBottomBar(
     tabs: List<TabSpec>,
     isSelected: (TabSpec) -> Boolean,
+    hasBadge: (TabSpec) -> Boolean,
     onSelect: (TabSpec) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -581,7 +739,21 @@ private fun BtBottomBar(
                 NavigationBarItem(
                     selected = isSelected(tab),
                     onClick = { onSelect(tab) },
-                    icon = { Icon(tab.icon, contentDescription = null) },
+                    icon = {
+                        Box {
+                            Icon(tab.icon, contentDescription = null)
+                            // Nudged onto the glyph's top-right corner rather
+                            // than the item's, so the dot reads as belonging to
+                            // the icon and does not drift into the neighbour's
+                            // touch target on a narrow screen.
+                            BtTabBadgeDot(
+                                show = hasBadge(tab),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 5.dp, y = (-3).dp),
+                            )
+                        }
+                    },
                     label = { Text(stringResource(tab.labelRes)) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = bt.gold,
@@ -602,18 +774,33 @@ private fun BtBottomBar(
 private fun BtNavHost(
     navController: NavHostController,
     onDeepLink: (NotifDeepLink) -> Unit,
+    onSwitchTab: (BtTab) -> Unit,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
     NavHost(
         navController = navController,
-        startDestination = PortfolioTabRoute,
+        // R-arc R1: Home, not Portfolio. Two things follow, both improvements:
+        // system-back from any tab now lands on Home and back from Home exits
+        // (before, back from any tab landed on Portfolio, which was arbitrary
+        // the moment Portfolio became one of five peers); and the two
+        // `popUpTo(findStartDestination())` call sites — the deep-link tab
+        // switch and the bottom-bar tap — pop to a tab that is `FULL` in every
+        // storage mode, which Portfolio only happened to be.
+        startDestination = HomeTabRoute,
         modifier = Modifier.fillMaxSize(),
     ) {
         // Tabs
+        composable<HomeTabRoute> {
+            // Home navigates ONLY through these two callbacks — see HomeScreen's
+            // KDoc. No `navController` is handed to it, deliberately: a bare push
+            // from an index screen stacks another tab's detail on Home and the
+            // next bottom-bar tap saves it under the wrong tab (S6 P1-8).
+            HomeScreen(onOpen = onDeepLink, onSwitchTab = onSwitchTab)
+        }
         composable<PortfolioTabRoute> {
             // V5 S2a: a paranoid account's portfolio family is server-blind. Route
-            // ONLY these killed surfaces to the explainer — Assets/Social/Workboard
-            // and everything under them keep working, because they genuinely do.
+            // ONLY these killed surfaces to the explainer — Home/Markets/People/
+            // Workbench and everything under them keep working, because they do.
             // Top-level tab: no onBack — the shell's own bars are showing.
             ParanoidGate {
                 PortfolioOverviewScreen(
@@ -631,8 +818,8 @@ private fun BtNavHost(
                 )
             }
         }
-        composable<AssetsTabRoute> {
-            AssetsTabScreen(
+        composable<MarketsTabRoute> {
+            MarketsTabScreen(
                 onOpenSearch = { navController.navigate(SearchRoute) },
                 onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
@@ -640,7 +827,7 @@ private fun BtNavHost(
                 onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
             )
         }
-        composable<SocialTabRoute> {
+        composable<PeopleTabRoute> {
             SocialScreen(
                 onOpenFriend = { userId, username ->
                     navController.navigate(FriendOverviewRoute(userId, username))
@@ -655,8 +842,8 @@ private fun BtNavHost(
         composable<FriendGroupsRoute> {
             FriendGroupsScreen(onBack = back)
         }
-        composable<WorkboardTabRoute> {
-            WorkboardTabScreen(
+        composable<WorkbenchTabRoute> {
+            WorkbenchTabScreen(
                 onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
                 onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },

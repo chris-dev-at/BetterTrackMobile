@@ -17,10 +17,23 @@ import kotlinx.serialization.Serializable
 @Serializable data class AppLockSetupRoute(val change: Boolean = false)
 
 // ── Tabs (top-level) ───────────────────────────────────────────────────────
-@Serializable data object PortfolioTabRoute     // portfolio overview — TODO(step 6)
-@Serializable data object AssetsTabRoute        // watchlists + search entry — TODO(steps 11–12)
-@Serializable data object SocialTabRoute        // friends — TODO(step 14)
-@Serializable data object WorkboardTabRoute     // conglomerate list — TODO(step 13)
+//
+// R-arc R1 (mandate §2): five destinations, in bar order —
+// Home · Portfolio · Workbench · Markets · People. Three of them were renamed
+// rather than replaced: the *screens* behind Markets and People are the same
+// ones Assets and Social hosted, and Workbench is the Workboard tab under the
+// label the mandate asks for. Renaming the route objects (not aliasing them)
+// keeps exactly one name per destination, so nothing in the graph can drift.
+/**
+ * The app's front door (R-arc R1). Home is an INDEX over whatever this install
+ * has — never a feature of its own — which is why it is also the NavHost's start
+ * destination and the account-level deep links' fallback parent.
+ */
+@Serializable data object HomeTabRoute
+@Serializable data object PortfolioTabRoute     // portfolio overview
+@Serializable data object WorkbenchTabRoute     // conglomerates · ideas · alerts
+@Serializable data object MarketsTabRoute       // search + watchlists + market intel
+@Serializable data object PeopleTabRoute        // friends, sharing, chat
 
 // ── Portfolio ──────────────────────────────────────────────────────────────
 @Serializable data class HoldingDetailRoute(val holdingId: String)          // TODO(step 7)
