@@ -29,9 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import at.bettertrack.app.ui.shell.BtNavMotion
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -140,9 +142,14 @@ fun BtCollapsingHeader(
             // `collapsedFraction` here also scopes the per-frame recomposition to
             // this one row instead of the whole header.
             val fraction = scrollBehavior.state.collapsedFraction
+            // Compose refuses to lerp TextUnits of different types ("Cannot
+            // perform operation for Em and Sp" — a hard crash, found live on
+            // device 2026-08-05): the brand ramp spaces letters in `em` while
+            // M3's titleMedium keeps `sp`. Normalize every unit to sp (via the
+            // style's own sp font size) before interpolating.
             val style = lerp(
-                start = MaterialTheme.typography.headlineSmall,
-                stop = MaterialTheme.typography.titleMedium,
+                start = MaterialTheme.typography.headlineSmall.withSpUnits(),
+                stop = MaterialTheme.typography.titleMedium.withSpUnits(),
                 fraction = fraction,
             )
             val interaction = remember { MutableInteractionSource() }
@@ -308,4 +315,16 @@ suspend fun TopAppBarScrollBehavior.btExpandHeader(reducedMotion: Boolean = fals
             easing = FastOutSlowInEasing,
         ),
     ) { value, _ -> state.heightOffset = value }
+}
+
+/**
+ * Converts a style's em-based letterSpacing/lineHeight to sp using its own sp
+ * font size, so two styles can always be lerped. A style whose units are
+ * already sp (or unspecified) passes through untouched.
+ */
+private fun TextStyle.withSpUnits(): TextStyle {
+    if (!fontSize.isSp) return this
+    val ls = if (letterSpacing.isEm) (letterSpacing.value * fontSize.value).sp else letterSpacing
+    val lh = if (lineHeight.isEm) (lineHeight.value * fontSize.value).sp else lineHeight
+    return if (ls == letterSpacing && lh == lineHeight) this else copy(letterSpacing = ls, lineHeight = lh)
 }
