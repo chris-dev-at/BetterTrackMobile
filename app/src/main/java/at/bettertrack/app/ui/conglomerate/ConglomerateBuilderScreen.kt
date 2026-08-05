@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -242,7 +243,12 @@ fun ConglomerateBuilderScreen(
             return@Scaffold
         }
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(pad),
+            // Edge-to-edge: the window does not resize for the keyboard and the
+            // Scaffold's insets exclude the IME, so the name field and the per-row
+            // weight fields would be typed under the keyboard. The asset sheet
+            // below already does this; the screen that owns the fields must too.
+            // Consuming `pad` keeps its nav-bar inset from stacking with the IME.
+            modifier = Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

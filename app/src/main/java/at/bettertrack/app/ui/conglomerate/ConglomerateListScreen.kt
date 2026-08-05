@@ -51,6 +51,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,10 +111,9 @@ fun ConglomerateListScreen(
                 CircularProgressIndicator(color = bt.gold)
             }
 
-            ConglomerateListState.OfflineState -> BtEmptyState(
-                icon = Icons.Outlined.Dashboard,
-                title = stringResource(R.string.bt_requires_connection_title),
+            ConglomerateListState.OfflineState -> BtOfflineState(
                 message = stringResource(R.string.bt_conglo_requires_connection),
+                onRetry = { vm.load() },
                 modifier = Modifier.align(Alignment.Center),
             )
 

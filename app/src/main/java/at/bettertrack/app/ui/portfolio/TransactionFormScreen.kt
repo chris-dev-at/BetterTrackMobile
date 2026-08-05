@@ -2245,7 +2245,18 @@ private fun HeldAssetSheet(
         containerColor = bt.surface,
         contentColor = bt.textPrimary,
     ) {
-        Column(Modifier.padding(horizontal = 16.dp)) {
+        // A ModalBottomSheet ships no content insets at all, and this sheet had no
+        // bottom padding of its own: the search field would be typed under the
+        // keyboard and the list would run behind the nav bar. imePadding() shrinks
+        // the sheet's content box so the field stays above the keyboard and the
+        // capped list below it takes whatever height is left. The list's own
+        // 28dp contentPadding is the content margin, so none is added here.
+        Column(
+            Modifier
+                .padding(horizontal = 16.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+        ) {
             Text(
                 text = stringResource(R.string.bt_txform_asset_sheet_title),
                 style = MaterialTheme.typography.titleMedium,

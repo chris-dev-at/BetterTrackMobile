@@ -52,6 +52,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCustomTab
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.components.formatPercent
@@ -712,34 +713,8 @@ internal fun IntelEmptyLine(text: String, modifier: Modifier = Modifier) {
  * claiming a second line the compact layout does not have.
  */
 @Composable
-internal fun IntelInlineError(message: BtMessage, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    val bt = BtTheme.colors
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Outlined.ErrorOutline,
-            contentDescription = null,
-            tint = bt.lossSoft,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = message.resolveWithDiagnostic(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = bt.textSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onRetry) {
-            Text(
-                text = stringResource(R.string.bt_action_retry),
-                style = MaterialTheme.typography.labelLarge,
-                color = bt.goldEmphasis,
-            )
-        }
-    }
-}
+internal fun IntelInlineError(message: BtMessage, onRetry: () -> Unit, modifier: Modifier = Modifier) =
+    BtInlineError(message = message, onRetry = onRetry, modifier = modifier)
 
 /**
  * One card-shaped placeholder while the capability probe runs.

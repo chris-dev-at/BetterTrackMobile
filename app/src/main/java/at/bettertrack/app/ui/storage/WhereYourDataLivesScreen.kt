@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,6 +66,7 @@ import at.bettertrack.app.data.storage.holdsVault
 import at.bettertrack.app.data.storage.priceLookupAvailability
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.btExpandHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -71,6 +74,7 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.vault.VaultSyncStatus
@@ -113,10 +117,11 @@ fun WhereYourDataLivesScreen(onBack: () -> Unit) {
     // forms. Carrying the previous section's collapse into them would leave a
     // half-height bar over content too short to scroll it back open — worst of
     // all on DELETE, where the title is the warning.
-    LaunchedEffect(section) {
-        scrollBehavior.state.heightOffset = 0f
-        scrollBehavior.state.contentOffset = 0f
-    }
+    //
+    // R3 §1: animated rather than assigned, so the bar settles as the section
+    // swaps instead of jumping 48dp in one frame under the reader's eyes.
+    val reducedMotion = rememberReducedMotion()
+    LaunchedEffect(section) { scrollBehavior.btExpandHeader(reducedMotion) }
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
@@ -150,6 +155,14 @@ fun WhereYourDataLivesScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
+                // Edge-to-edge: the window does not resize for the keyboard and the
+                // Scaffold's insets are system-bars only. The re-key and delete
+                // sub-sections are passphrase forms — old, new, confirm, plus the
+                // typed delete confirmation — and their submit buttons sit below
+                // the last field, i.e. exactly where the keyboard lands. Consume
+                // `inner` (nav bar) so imePadding() adds only the remainder.
+                .consumeWindowInsets(inner)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

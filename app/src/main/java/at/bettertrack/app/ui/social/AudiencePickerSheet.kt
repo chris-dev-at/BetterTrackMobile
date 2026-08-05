@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -121,7 +122,11 @@ fun AudiencePickerSheet(
                 .heightIn(max = 620.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp)
+                // A ModalBottomSheet ships no content insets, so the 24dp above is
+                // a content margin only — the Apply button at the end of this
+                // scroll would sit behind a 3-button nav bar without this.
+                .navigationBarsPadding(),
         ) {
             Text(stringResource(R.string.bt_social_share_label), style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
             Text(

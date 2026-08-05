@@ -20,6 +20,14 @@ import at.bettertrack.app.ui.theme.BtTheme
 /**
  * Primary action button: gold container, near-black content, 8dp corners, flat
  * (spec §3.3/§3.5 — gold is reserved for primary actions).
+ *
+ * R3 §4: this is also where the app's confirmation haptic lives. Gold is
+ * reserved for primary actions by spec, so "is this a primary confirmation?" is
+ * already answered by the fact that the caller reached for this component —
+ * which makes one edit here the whole of "consistent light haptics on primary
+ * confirmations", and makes it impossible for a new screen to ship a gold button
+ * that feels different from every other gold button. [BtSecondaryButton] stays
+ * silent on purpose; see [at.bettertrack.app.ui.components.BtHaptics].
  */
 @Composable
 fun BtPrimaryButton(
@@ -31,8 +39,9 @@ fun BtPrimaryButton(
 ) {
     val bt = BtTheme.colors
     val interaction = remember { MutableInteractionSource() }
+    val haptics = rememberBtHaptics()
     Button(
-        onClick = onClick,
+        onClick = { haptics.confirm(); onClick() },
         modifier = modifier.btPressScale(interaction),
         enabled = enabled && !loading,
         shape = BtShapes.control,

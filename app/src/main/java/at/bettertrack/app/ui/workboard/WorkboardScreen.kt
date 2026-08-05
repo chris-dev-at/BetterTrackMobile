@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,7 +88,9 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
@@ -497,14 +498,23 @@ private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
-            AlertsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = bt.gold)
+            // R3 §2: skeleton rows, not a spinner. IdeasSection — the block
+            // directly below this one, on the same tab — has always used
+            // skeletons, so a user scrolling this screen watched two loading
+            // idioms fight each other. Row-shaped, because alert rows are what
+            // is coming.
+            AlertsState.Loading -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
             }
 
-            AlertsState.OfflineState -> BtEmptyState(
-                icon = Icons.Outlined.NotificationsActive,
-                title = stringResource(R.string.bt_requires_connection_title),
+            AlertsState.OfflineState -> BtOfflineState(
                 message = stringResource(R.string.bt_alerts_requires_connection),
+                onRetry = { vm.load() },
                 modifier = Modifier.align(Alignment.Center),
             )
 

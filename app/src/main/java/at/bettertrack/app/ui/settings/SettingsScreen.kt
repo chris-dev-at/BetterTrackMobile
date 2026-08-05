@@ -78,6 +78,7 @@ import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -452,10 +453,16 @@ private fun SettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
+    // R3 §4: a toggle is the one control whose result can sit under the thumb
+    // that flipped it, so the direction is worth carrying in the haptic. Stated
+    // once here and applied to both affordances below, because the row and the
+    // switch are the same act and must not feel different.
+    val haptics = rememberBtHaptics()
+    val commit: (Boolean) -> Unit = { on -> haptics.toggle(on); onCheckedChange(on) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+            .clickable { commit(!checked) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -468,7 +475,7 @@ private fun SettingsToggleRow(
         Spacer(Modifier.width(8.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = commit,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = bt.onGold,
                 checkedTrackColor = bt.gold,

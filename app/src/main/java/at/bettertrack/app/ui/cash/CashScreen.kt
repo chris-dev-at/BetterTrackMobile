@@ -132,6 +132,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -234,8 +235,23 @@ class CashViewModel(
             all.firstOrNull { it.id == pid }?.totals?.cashEur
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * R3 §2: true once [sources] has emitted at least once.
+     *
+     * `sources` is a Room flow seeded with `emptyList()`, so "empty" meant two
+     * different things — *not loaded yet* and *there are none* — and the screen
+     * rendered a shimmer for both. A portfolio with no named cash sources
+     * therefore shimmered forever: a loading state that can never resolve, which
+     * is the worst kind because the user waits for something that will not come.
+     * `PortfolioSwitcherSheet` documents this exact trap and guards against it;
+     * this is the same guard.
+     */
+    private val _sourcesLoaded = MutableStateFlow(false)
+    val sourcesLoaded: StateFlow<Boolean> = _sourcesLoaded.asStateFlow()
+
     val sources: StateFlow<List<CashSourceEntity>> = portfolioId
         .flatMapLatest { pid -> if (pid == null) flowOf(emptyList()) else repo.cashSources(pid) }
+        .onEach { _sourcesLoaded.value = true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Movement-list source filter; null = all sources. */
@@ -746,6 +762,7 @@ fun CashScreen(
     val movements by vm.movements.collectAsStateWithLifecycle()
     val pendingRows by vm.pendingRows.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    val sourcesLoaded by vm.sourcesLoaded.collectAsStateWithLifecycle()
     val manageBusy by vm.manageBusy.collectAsStateWithLifecycle()
     val manageError by vm.manageError.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
@@ -1095,7 +1112,10 @@ fun CashScreen(
                             )
                         }
                     }
-                    if (sources.isEmpty()) {
+                    // Only while the flow has genuinely not answered yet — see
+                    // CashViewModel.sourcesLoaded. An empty list AFTER the first
+                    // emission is an answer, not a wait.
+                    if (sources.isEmpty() && !sourcesLoaded) {
                         item(key = "sources-skeleton") {
                             BtSkeleton(Modifier.fillMaxWidth().height(64.dp))
                         }
@@ -1567,7 +1587,13 @@ private fun CashBudgetSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+                // A ModalBottomSheet ships no content insets: the 28dp above is a
+                // content margin, not clearance for the system bars. Without these
+                // the amount field is typed under the keyboard and the Save button
+                // sits under a 3-button nav bar.
+                .imePadding()
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
@@ -1717,7 +1743,11 @@ private fun CashMovementTagsSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+                // A ModalBottomSheet ships no content insets — the 28dp above is a
+                // content margin, not nav-bar clearance. This sheet is chips + Save
+                // only (no text input), so it needs the nav bar and not the IME.
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(

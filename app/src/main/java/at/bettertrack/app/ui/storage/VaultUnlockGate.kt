@@ -30,9 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.IntOffset
@@ -42,6 +40,7 @@ import at.bettertrack.app.R
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
@@ -87,7 +86,7 @@ private fun VaultUnlockScreen() {
     val custody = AppGraph.vaultKeyCustody
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
+    val haptics = rememberBtHaptics()
     val reducedMotion = rememberReducedMotion()
 
     var passphrase by remember { mutableStateOf("") }
@@ -121,7 +120,7 @@ private fun VaultUnlockScreen() {
             if (!ok) {
                 error = R.string.bt_vault_unlock_wrong
                 shakeTrigger++
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.reject()
                 passphrase = ""
             }
             // On success the gate recomposes away as `locked` flips — the same

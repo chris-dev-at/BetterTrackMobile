@@ -32,8 +32,7 @@ import java.time.format.DateTimeFormatter
 /**
  * Global offline indicator (spec §7.4): persistent but unobtrusive —
  * "Offline — showing data as of 14:32". Driven by real connectivity and the
- * cached-data age since Step 5. TODO(step 8): tapping opens the Pending-sync
- * screen.
+ * cached-data age since Step 5. Tapping opens the Pending-sync screen.
  */
 @Composable
 fun OfflineBanner(

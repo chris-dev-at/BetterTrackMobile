@@ -38,9 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -48,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.applock.PinVerifyResult
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
@@ -75,7 +74,7 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
     val context = LocalContext.current
     val activity = remember { context.findFragmentActivity() }
     val reducedMotion = rememberReducedMotion()
-    val haptic = LocalHapticFeedback.current
+    val haptics = rememberBtHaptics()
 
     val pinLength = config.pinLength.coerceIn(4, 6)
     var entered by remember { mutableStateOf("") }
@@ -128,7 +127,7 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
             is PinVerifyResult.Wrong -> {
                 error = true
                 shakeTrigger++
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.reject()
             }
         }
     }

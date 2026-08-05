@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.applock
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,13 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -155,7 +154,7 @@ private fun KeyButton(
     content: @Composable () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val view = LocalView.current
+    val haptics = rememberBtHaptics()
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -167,11 +166,13 @@ private fun KeyButton(
                 indication = ripple(bounded = true, color = bt.gold),
                 enabled = enabled,
                 onClick = {
-                    // Light per-keypress tick so entry feels organic. KEYBOARD_TAP
-                    // is NOT forced, so it honours the system haptic setting (silent
-                    // when the user has disabled touch feedback). The stronger
-                    // wrong-PIN LongPress buzz stays upstream in the lock screen.
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    // Light per-keypress tick so entry feels organic. R3 §4 moved
+                    // this to BtHaptics — same constant, same unforced call (so it
+                    // still honours the system haptic setting and stays silent when
+                    // the user has disabled touch feedback), now stated once for the
+                    // whole app instead of twice in two different idioms. The
+                    // stronger wrong-PIN reject stays upstream in the lock screen.
+                    haptics.keyTap()
                     onClick()
                 },
             ),

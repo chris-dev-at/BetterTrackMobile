@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -133,7 +134,12 @@ fun PortfolioSwitcherSheet(
                 .fillMaxWidth()
                 .heightIn(max = maxListHeight)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 28.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 28.dp)
+                // A ModalBottomSheet ships no content insets, so the 28dp above is
+                // a content margin only — on a 3-button nav bar the last portfolio
+                // row would end up behind it. (The rename/delete text fields live
+                // in AlertDialogs, which get their own resizing window.)
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(

@@ -67,6 +67,7 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -269,7 +270,23 @@ fun FriendOverviewScreen(
                     modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
                 )
             }
-            if (ui.sharesNothing) {
+            // R3 §2: the view model has computed `error` since this screen was
+            // written and nothing ever rendered it, so a failed `sharedWithMe()`
+            // fell straight through to "@name shares nothing with you" — a claim
+            // about the FRIEND made on the strength of a request that did not
+            // complete. The failure replaces the empty *in this section only*:
+            // the profile header and the go-to-chat row above it did not fail and
+            // stay usable, which a full-screen error state would have taken away.
+            val sharesError = ui.error
+            if (sharesError != null && ui.sharesNothing) {
+                item {
+                    BtErrorState(
+                        message = sharesError,
+                        onRetry = { vm.load() },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    )
+                }
+            } else if (ui.sharesNothing) {
                 item {
                     BtEmptyState(
                         icon = Icons.Outlined.PieChart,

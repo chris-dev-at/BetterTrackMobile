@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -610,6 +611,10 @@ private fun AssetFilterSheet(
         contentColor = bt.textPrimary,
     ) {
         LazyColumn(
+            // A ModalBottomSheet ships no content insets, so the 28dp below is a
+            // content margin only — the last asset row would sit behind a 3-button
+            // nav bar without this.
+            modifier = Modifier.navigationBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

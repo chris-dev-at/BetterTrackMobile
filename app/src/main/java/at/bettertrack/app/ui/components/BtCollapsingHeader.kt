@@ -1,5 +1,8 @@
 package at.bettertrack.app.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
@@ -29,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import at.bettertrack.app.ui.shell.BtNavMotion
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -246,9 +250,62 @@ val BT_HEADER_EXPANDED_HEIGHT_SUBTITLE = 132.dp
  * a long holdings list feel like it is fighting the finger. Exit-until-collapsed
  * gives the space back for the whole downward journey and returns the title only
  * when the user has actually returned to the top.
+ *
+ * @param canScroll gates collapsing on whether the body can actually scroll. Pass
+ *   a real predicate on any screen whose body has non-scrolling branches (a
+ *   centred empty/error state, a short form): without it, a fling that begins on
+ *   a long branch and ends on a short one leaves a half-height bar with nothing
+ *   on screen a finger could scroll to bring the title back. Screens whose body
+ *   always scrolls can leave the default.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun rememberBtCollapsingHeaderBehavior(
     state: TopAppBarState = rememberTopAppBarState(),
-): TopAppBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state)
+    canScroll: () -> Boolean = { true },
+): TopAppBarScrollBehavior =
+    TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state, canScroll = canScroll)
+
+/**
+ * Return a collapsed header to fully expanded, animated (R3 §1).
+ *
+ * ## Why this exists
+ *
+ * Two screens change what their whole body IS while the header stays
+ * ([at.bettertrack.app.ui.market.AssetPageScreen] between its loaded/empty/error
+ * branches, and "Where your data lives" between its three sections). Both must
+ * put the bar back — a collapse carried into a branch too short to scroll is
+ * unrecoverable — and both did it by assigning `heightOffset = 0f`, which snaps
+ * 64dp of bar back in a single frame while the user is looking straight at it.
+ * The height change is legitimate; doing it instantly is the jank.
+ *
+ * `TopAppBarState` exposes no animator of its own, so this drives `heightOffset`
+ * with the same duration and easing as the app's screen transitions
+ * ([at.bettertrack.app.ui.shell.BtNavMotion]) — the branch swap and the bar
+ * settle together instead of one arriving after the other.
+ *
+ * `contentOffset` is reset up-front rather than animated: it is not a rendered
+ * dimension but the scroll accumulator the behaviour uses to decide when the bar
+ * may expand again, and leaving it negative during the animation would let the
+ * behaviour fight the values being written in.
+ *
+ * Under reduced motion it assigns directly — which is exactly the old behaviour,
+ * and correct: "remove animations" asks for the end state, now.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+suspend fun TopAppBarScrollBehavior.btExpandHeader(reducedMotion: Boolean = false) {
+    val from = state.heightOffset
+    state.contentOffset = 0f
+    if (reducedMotion || from == 0f) {
+        state.heightOffset = 0f
+        return
+    }
+    animate(
+        initialValue = from,
+        targetValue = 0f,
+        animationSpec = tween(
+            durationMillis = BtNavMotion.DURATION_TOTAL_MS,
+            easing = FastOutSlowInEasing,
+        ),
+    ) { value, _ -> state.heightOffset = value }
+}

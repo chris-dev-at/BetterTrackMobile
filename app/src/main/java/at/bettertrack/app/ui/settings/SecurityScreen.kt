@@ -54,6 +54,7 @@ import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -329,7 +330,12 @@ private fun SecurityToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
-    val rowClick: (() -> Unit)? = if (enabled) ({ onCheckedChange(!checked) }) else null
+    // R3 §4 — same toggle haptic as every other settings switch (see
+    // SettingsScreen's SettingsToggleRow); the two rows look alike, so they must
+    // feel alike.
+    val haptics = rememberBtHaptics()
+    val commit: (Boolean) -> Unit = { on -> haptics.toggle(on); onCheckedChange(on) }
+    val rowClick: (() -> Unit)? = if (enabled) ({ commit(!checked) }) else null
     BtGroupRow(
         icon = icon,
         iconTint = if (enabled) null else bt.textMuted,
@@ -340,7 +346,7 @@ private fun SecurityToggleRow(
         trailing = {
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = commit,
                 enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = bt.onGold,

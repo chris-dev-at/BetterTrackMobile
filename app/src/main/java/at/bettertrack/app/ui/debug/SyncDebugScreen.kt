@@ -253,12 +253,15 @@ fun SyncDebugScreen(onClose: () -> Unit, onOpenPendingSync: () -> Unit = {}) {
             }
             if (ops.isEmpty()) {
                 item {
-                    BtCard(modifier = Modifier.fillMaxWidth()) {
-                        BtEmptyState(
-                            title = "Queue is empty",
-                            message = "Enqueue a test op to watch it drain.",
-                        )
-                    }
+                    // R3 §2: was the app's only glyph-less BtEmptyState, and the
+                    // only one wrapped in a bordered card. Debug screen or not, it
+                    // is where the state system gets eyeballed most often.
+                    BtEmptyState(
+                        icon = Icons.Outlined.CloudDone,
+                        title = "Queue is empty",
+                        message = "Enqueue a test op to watch it drain.",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             } else {
                 items(count = ops.size, key = { ops[it].id }) { index ->

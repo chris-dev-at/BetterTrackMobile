@@ -60,6 +60,7 @@ import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
@@ -221,7 +222,11 @@ fun HomeScreen(
             // belongs to the content rather than to the space between items.
         ) {
             item(key = "hero") {
-                HomeHero(state = hero, modifier = Modifier.padding(horizontal = 20.dp))
+                HomeHero(
+                    state = hero,
+                    onCreatePortfolio = { onSwitchTab(BtTab.Portfolio) },
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
             }
 
             // Movers: absent, never an empty card. With no priced day-change
@@ -400,7 +405,11 @@ fun HomeScreen(
  * all. Nothing here renders a figure the logic did not authorise.
  */
 @Composable
-private fun HomeHero(state: HomeHeroState, modifier: Modifier = Modifier) {
+private fun HomeHero(
+    state: HomeHeroState,
+    onCreatePortfolio: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
 
@@ -439,6 +448,13 @@ private fun HomeHero(state: HomeHeroState, modifier: Modifier = Modifier) {
                 BtSkeleton(Modifier.width(140.dp).height(14.dp))
             }
 
+            // R3 §2: the app's front door, in the one state where the user has
+            // nothing yet, used to state the problem and then stop — while
+            // Portfolio's equivalent empty state has carried a Create button
+            // since R1. Home is an INDEX, so it must not own the create flow; it
+            // hands the user to the tab that does, through onSwitchTab like every
+            // other cross-tab move on this screen. The body copy already named
+            // that tab, which is exactly the sentence a button should replace.
             HomeHeroState.NoPortfolios -> {
                 Text(
                     text = stringResource(R.string.bt_home_no_portfolios_title),
@@ -450,6 +466,11 @@ private fun HomeHero(state: HomeHeroState, modifier: Modifier = Modifier) {
                     text = stringResource(R.string.bt_home_no_portfolios_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
+                )
+                Spacer(Modifier.height(14.dp))
+                BtSecondaryButton(
+                    text = stringResource(R.string.bt_overview_create_portfolio),
+                    onClick = onCreatePortfolio,
                 )
             }
 

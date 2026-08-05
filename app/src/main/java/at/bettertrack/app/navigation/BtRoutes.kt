@@ -36,8 +36,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object PeopleTabRoute        // friends, sharing, chat
 
 // ── Portfolio ──────────────────────────────────────────────────────────────
-@Serializable data class HoldingDetailRoute(val holdingId: String)          // TODO(step 7)
-@Serializable data class TransactionsRoute(val portfolioId: String? = null) // TODO(step 7)
+@Serializable data class HoldingDetailRoute(val holdingId: String)
+@Serializable data class TransactionsRoute(val portfolioId: String? = null)
 /**
  * Buy/sell form (Step 8, §6.2). Exactly one mode:
  *  - [opId] set        ⇒ edit a QUEUED op (pending / needs-attention retry);
@@ -85,8 +85,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class CustomAssetDetailRoute(val assetId: String)        // custom-asset detail (§6.4)
 
 // ── Market ─────────────────────────────────────────────────────────────────
-@Serializable data class AssetPageRoute(val assetId: String)                // TODO(step 11)
-@Serializable data object SearchRoute                                       // TODO(step 11)
+@Serializable data class AssetPageRoute(val assetId: String)
+@Serializable data object SearchRoute
 /**
  * V5 S2c: portfolio-wide market intel — earnings + dividend calendars, the
  * projected-income summary and the grouped news digest. Reached from the Assets
@@ -100,8 +100,8 @@ import kotlinx.serialization.Serializable
 // ── Workboard ──────────────────────────────────────────────────────────────
 // S6 P2-19: ConglomerateListRoute is gone — the list is a SEGMENT of the
 // Workboard tab, composed directly by WorkboardScreen.
-@Serializable data class ConglomerateBuilderRoute(val conglomerateId: String? = null) // TODO(step 13)
-@Serializable data class ConglomerateDetailRoute(val conglomerateId: String) // TODO(step 13)
+@Serializable data class ConglomerateBuilderRoute(val conglomerateId: String? = null)
+@Serializable data class ConglomerateDetailRoute(val conglomerateId: String)
 /**
  * V5 S2c: one saved workboard idea (name + thesis + the backtest setup behind
  * it). The list is a SEGMENT of the Workboard tab, like conglomerates and
@@ -132,7 +132,7 @@ import kotlinx.serialization.Serializable
     val friendUserId: String? = null,
     val friendUsername: String = "",
 )
-@Serializable data object NotificationsInboxRoute                           // TODO(step 16)
+@Serializable data object NotificationsInboxRoute
 
 // ── Settings (spec §6.12) ────────────────────────────────────────────────────
 @Serializable data object SettingsRoute
@@ -159,7 +159,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object StorageHomeRoute
 
 // ── Sync & debug ───────────────────────────────────────────────────────────
-@Serializable data object PendingSyncRoute                                  // TODO(step 8, §7.4)
+@Serializable data object PendingSyncRoute
 @Serializable data object GalleryRoute                                      // debug component gallery
 @Serializable data object SyncDebugRoute                                    // Step-5 sync-queue debug screen
 @Serializable data object DevBackendRoute                                   // V5 S1 dev API/web origin override

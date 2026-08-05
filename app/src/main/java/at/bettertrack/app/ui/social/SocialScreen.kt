@@ -107,6 +107,7 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -404,10 +405,10 @@ fun SocialScreen(
                     ui.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = bt.gold)
                     }
-                    !ui.online && ui.friends.isEmpty() && ui.sharedWithMe == null -> BtEmptyState(
-                        icon = Icons.Outlined.People,
+                    !ui.online && ui.friends.isEmpty() && ui.sharedWithMe == null -> BtOfflineState(
                         title = stringResource(R.string.bt_social_offline_title),
                         message = stringResource(R.string.bt_social_offline_body),
+                        onRetry = { vm.load(initial = true) },
                         modifier = Modifier.fillMaxSize().padding(24.dp),
                     )
                     loadError != null && ui.friends.isEmpty() -> BtErrorState(

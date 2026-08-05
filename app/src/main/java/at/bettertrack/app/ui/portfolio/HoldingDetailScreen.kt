@@ -83,7 +83,6 @@ import kotlinx.coroutines.launch
  * Holding detail (Step 7, spec §6.1): the position view — value, P/L, amount,
  * that asset's transactions — for one asset inside the governing portfolio.
  * All numbers are the server's (§7.1); renders offline from Room.
- * TODO(step 11): the link-out row below becomes the real asset-page entry.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HoldingDetailViewModel(

@@ -62,6 +62,7 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -133,6 +134,7 @@ fun GalleryScreen(
             item { ChipBadgeSection() }
             item { SkeletonSection() }
             item { EmptyStateSection() }
+            item { OfflineStateSection() }
             item { ErrorStateSection() }
             item { OfflineBannerSection() }
             item { SyncDebugSection(onOpenSyncDebug) }
@@ -675,26 +677,38 @@ private fun SkeletonSection() {
     }
 }
 
+// R3 §2/§6: these three demos are the app's reference for what a state LOOKS
+// like, so what they show has to be what screens should copy. Empty and Error
+// used to be demoed inside a `BtCard` — a bordered box around a state — which is
+// exactly the box-in-box the R-arc removed everywhere else, taught from the one
+// screen a builder consults before writing a new one. They are full-surface and
+// borderless now, and the badge behind the glyph is tonal (see BtStates).
 @Composable
 private fun EmptyStateSection() {
     GallerySection("Empty state") {
-        at.bettertrack.app.ui.components.BtCard {
-            BtEmptyState(
-                icon = Icons.AutoMirrored.Outlined.ReceiptLong,
-                title = "No transactions yet",
-                message = "Your buys and sells will appear here.",
-                action = { BtSecondaryButton(text = "Add transaction", onClick = {}) },
-            )
-        }
+        BtEmptyState(
+            icon = Icons.AutoMirrored.Outlined.ReceiptLong,
+            title = "No transactions yet",
+            message = "Your buys and sells will appear here.",
+            action = { BtSecondaryButton(text = "Add transaction", onClick = {}) },
+        )
+    }
+}
+
+@Composable
+private fun OfflineStateSection() {
+    GallerySection("Offline state (one glyph app-wide)") {
+        BtOfflineState(
+            message = "Connect to see live market data.",
+            onRetry = {},
+        )
     }
 }
 
 @Composable
 private fun ErrorStateSection() {
     GallerySection("Error state") {
-        at.bettertrack.app.ui.components.BtCard {
-            BtErrorState(onRetry = {})
-        }
+        BtErrorState(onRetry = {})
     }
 }
 

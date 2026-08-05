@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
@@ -288,7 +290,10 @@ fun SearchScreen(
             }
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        // `consumeWindowInsets` books the nav-bar inset the padding above already
+        // paid, so the results list can ask for the IME inset without stacking a
+        // second nav bar underneath the keyboard.
+        Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
             when (val s = state) {
                 SearchUiState.Idle -> BtEmptyState(
                     icon = Icons.Outlined.Search,
@@ -335,7 +340,12 @@ fun SearchScreen(
                 )
 
                 is SearchUiState.Results -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    // The search field takes focus as the screen opens, so the
+                    // keyboard is up over the results by default. Edge-to-edge means
+                    // the window never resizes for it, so without this the last rows
+                    // cannot be scrolled out from behind the keyboard. The bar above
+                    // needs nothing — it is pinned to the top.
+                    modifier = Modifier.fillMaxSize().imePadding(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

@@ -17,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.QueryStats
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,11 +59,15 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.btExpandHeader
+import at.bettertrack.app.ui.components.BtInlineError
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
@@ -104,7 +107,16 @@ sealed interface AssetHistoryUiState {
     data object Loading : AssetHistoryUiState
     data class Loaded(val series: AssetPriceSeries) : AssetHistoryUiState
     data object Empty : AssetHistoryUiState
-    data object Failed : AssetHistoryUiState
+
+    /**
+     * R3 §2: carries the failure's [BtMessage] rather than being a bare marker.
+     * The screen used to render `Empty, Failed ->` as one branch, so a dropped
+     * request read to the user as "this asset has no price history" — a
+     * statement about the ASSET, made on the strength of a network error. The
+     * two are different facts and now render differently; carrying the message
+     * is what lets the failure branch say which failure it was.
+     */
+    data class Failed(val message: BtMessage) : AssetHistoryUiState
 }
 
 class AssetPageViewModel(
@@ -163,10 +175,13 @@ class AssetPageViewModel(
                     if (r.value.points.size < 2) AssetHistoryUiState.Empty
                     else AssetHistoryUiState.Loaded(r.value)
 
-                is BtResult.Err -> _history.value = AssetHistoryUiState.Failed
+                is BtResult.Err -> _history.value = AssetHistoryUiState.Failed(r.error.asMessage())
             }
         }
     }
+
+    /** Retry the chart alone, at the range the user is already looking at. */
+    fun retryHistory() = loadHistory(_range.value)
 
     fun setRange(range: AssetRange) {
         if (range == _range.value) return
@@ -210,23 +225,25 @@ fun AssetPageScreen(
     val asset = loaded?.snapshot?.asset
     var pickerOpen by remember { mutableStateOf(false) }
 
-    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     // Only the Loaded branch scrolls; the other four are centred states. A
     // collapsing header stranded half-way over a centred empty state is the
     // classic broken-looking bar — there is nothing on screen a finger could
     // scroll to bring the title back. The header still renders for those branches
     // (the screen needs its title and its back affordance no matter what it is
     // showing), and it keeps the one collapsing behaviour so Loaded behaves like
-    // every other R2 screen; what this does is snap the bar back to fully
-    // expanded on the way INTO a non-scrolling branch — e.g. the error state's
-    // Retry, which drops `detail` back to Loading — because "fully expanded" is
-    // the only honest position for a page with nothing to scroll.
+    // every other R2 screen.
+    //
+    // R3 §1 — two things guard the stranded bar now instead of one. `canScroll`
+    // stops a non-scrolling branch from collapsing in the first place; the effect
+    // handles the case `canScroll` cannot, which is arriving in such a branch
+    // ALREADY collapsed (scroll down through a loaded page, hit Retry) — and it
+    // now animates the bar back over the same 300ms the screen transitions use
+    // rather than snapping 48dp of header in a single frame.
     val scrollable = detail is AssetDetailUiState.Loaded
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior(canScroll = { scrollable })
+    val reducedMotion = rememberReducedMotion()
     LaunchedEffect(scrollable) {
-        if (!scrollable) {
-            scrollBehavior.state.heightOffset = 0f
-            scrollBehavior.state.contentOffset = 0f
-        }
+        if (!scrollable) scrollBehavior.btExpandHeader(reducedMotion)
     }
     Scaffold(
         // AssetLoadedContent owns the LazyColumn; nestedScroll propagates down
@@ -266,10 +283,9 @@ fun AssetPageScreen(
             when (val d = detail) {
                 AssetDetailUiState.Loading -> AssetPageSkeleton()
 
-                AssetDetailUiState.OfflineState -> BtEmptyState(
-                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                    title = stringResource(R.string.bt_requires_connection_title),
+                AssetDetailUiState.OfflineState -> BtOfflineState(
                     message = stringResource(R.string.bt_asset_requires_connection_message),
+                    onRetry = { vm.load() },
                     modifier = Modifier.align(Alignment.Center),
                 )
 
@@ -293,6 +309,7 @@ fun AssetPageScreen(
                     isOnline = isOnline,
                     locale = locale,
                     onRange = { vm.setRange(it) },
+                    onRetryHistory = { vm.retryHistory() },
                     onBuy = {
                         onTrade(d.snapshot.asset.id, d.snapshot.asset.symbol, d.snapshot.asset.name, d.snapshot.asset.currency, selectedPid, false)
                     },
@@ -317,6 +334,7 @@ private fun AssetLoadedContent(
     isOnline: Boolean,
     locale: Locale,
     onRange: (AssetRange) -> Unit,
+    onRetryHistory: () -> Unit,
     onBuy: () -> Unit,
     onSell: () -> Unit,
 ) {
@@ -393,12 +411,16 @@ private fun AssetLoadedContent(
             BtCard(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
                     when (history) {
+                        // R3 §2: a skeleton, not a spinner — the block that is
+                        // coming is a chart of known size, and the rest of the app
+                        // says so with BtSkeleton (see PortfolioOverviewScreen's
+                        // hero chart). A spinner here was the odd one out.
                         AssetHistoryUiState.Loading -> Box(
                             Modifier.fillMaxWidth().height(180.dp),
                             contentAlignment = Alignment.Center,
-                        ) { CircularProgressIndicator(color = bt.gold) }
+                        ) { BtSkeleton(Modifier.fillMaxWidth().height(140.dp)) }
 
-                        AssetHistoryUiState.Empty, AssetHistoryUiState.Failed -> Box(
+                        AssetHistoryUiState.Empty -> Box(
                             Modifier.fillMaxWidth().height(180.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -406,6 +428,20 @@ private fun AssetLoadedContent(
                                 stringResource(R.string.bt_asset_chart_empty),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.textMuted,
+                            )
+                        }
+
+                        // The chart is secondary to the price above it, so the
+                        // failure stays inline and keeps the same shape the intel
+                        // sections on this page use — one line plus a retry, never
+                        // a full-surface error over content that already loaded.
+                        is AssetHistoryUiState.Failed -> Box(
+                            Modifier.fillMaxWidth().height(180.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            BtInlineError(
+                                message = history.message,
+                                onRetry = onRetryHistory,
                             )
                         }
 

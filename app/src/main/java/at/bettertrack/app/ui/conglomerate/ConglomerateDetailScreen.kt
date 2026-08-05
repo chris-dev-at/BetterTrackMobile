@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -68,6 +70,7 @@ import at.bettertrack.app.sync.TxOpPayload
 import at.bettertrack.app.ui.charts.BtPriceChart
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
@@ -92,7 +95,13 @@ sealed interface BacktestUiState {
     data object Loading : BacktestUiState
     data class Loaded(val backtest: Backtest) : BacktestUiState
     data object Empty : BacktestUiState
-    data object Failed : BacktestUiState
+
+    /**
+     * R3 §2: carries the failure's message. `Empty` and `Failed` used to share
+     * one UI branch that read "Not enough history for a backtest" — a claim
+     * about the CONGLOMERATE, printed whenever the request merely failed.
+     */
+    data class Failed(val message: BtMessage) : BacktestUiState
 }
 
 class ConglomerateDetailViewModel(
@@ -151,7 +160,7 @@ class ConglomerateDetailViewModel(
                     runBacktest(r.value)
                 }
 
-                is BtResult.Err -> _backtest.value = BacktestUiState.Failed
+                is BtResult.Err -> _backtest.value = BacktestUiState.Failed(r.error.asMessage())
             }
         }
     }
@@ -163,10 +172,13 @@ class ConglomerateDetailViewModel(
             val weights = d.positions.map { it.assetId to it.weightPct }
             _backtest.value = when (val r = repo.backtest(weights, _range.value)) {
                 is BtResult.Ok -> if (r.value.series.size < 2) BacktestUiState.Empty else BacktestUiState.Loaded(r.value)
-                is BtResult.Err -> BacktestUiState.Failed
+                is BtResult.Err -> BacktestUiState.Failed(r.error.asMessage())
             }
         }
     }
+
+    /** Retry the backtest alone, at the range the user is already looking at. */
+    fun retryBacktest() = _detail.value?.let { runBacktest(it) }
 
     fun setRange(range: BacktestRange) {
         if (range == _range.value) return
@@ -303,7 +315,12 @@ fun ConglomerateDetailScreen(
             return@Scaffold
         }
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(pad),
+            // Edge-to-edge: the window does not resize for the keyboard and the
+            // Scaffold's insets exclude the IME. The budget calculator's amount and
+            // step fields live near the bottom of this list, with the Calculate
+            // button under them — all of it behind the keyboard without this.
+            // Consuming `pad` keeps its nav-bar inset from stacking with the IME.
+            modifier = Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -332,8 +349,14 @@ fun ConglomerateDetailScreen(
                         Spacer(Modifier.height(10.dp))
                         when (val b = backtest) {
                             BacktestUiState.Loading -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = bt.gold) }
-                            BacktestUiState.Empty, BacktestUiState.Failed -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+                            BacktestUiState.Empty -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
                                 Text(stringResource(R.string.bt_conglo_no_backtest), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                            }
+
+                            // The backtest is secondary to the positions above
+                            // it, so its failure stays inline and keeps a retry.
+                            is BacktestUiState.Failed -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
+                                BtInlineError(message = b.message, onRetry = { vm.retryBacktest() })
                             }
                             is BacktestUiState.Loaded -> {
                                 BtPriceChart(points = b.backtest.series, modifier = Modifier.fillMaxWidth().height(180.dp))

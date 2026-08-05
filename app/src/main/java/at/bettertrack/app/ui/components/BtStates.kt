@@ -1,21 +1,24 @@
 package at.bettertrack.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +37,18 @@ import at.bettertrack.app.ui.theme.BtTheme
  * title, a short secondary message, and an optional next action. Wrapping the
  * icon in a 64dp surface badge (instead of a bare floating glyph) gives these
  * states intentional presence and is the template ALL downstream screens inherit.
+ *
+ * ## R3: the badge is tonal, not outlined
+ *
+ * The badge used to be a `surface` fill plus a 1dp ring. R2 moved the whole app
+ * from border walls to tonal steps (see [BtGroup]), and this badge was the last
+ * piece of the *state* system still drawing an outline — which mattered more
+ * than its size suggests, because it is the one shape every empty and error
+ * surface in the app inherits. A ring around a glyph that is already a filled
+ * disc on a darker page is a second boundary doing the first one's job; the
+ * tonal step alone reads cleaner and is now the same containment language the
+ * groups use. The error badge keeps its red tint (a colour, not a border), so
+ * "this is a failure" still reads before any word does.
  */
 @Composable
 private fun BtStateScaffold(
@@ -42,7 +57,6 @@ private fun BtStateScaffold(
     icon: ImageVector? = null,
     iconTint: Color = BtTheme.colors.textSecondary,
     badgeColor: Color = BtTheme.colors.surface,
-    badgeBorder: Color = BtTheme.colors.border,
     message: String? = null,
     detail: String? = null,
     action: (@Composable () -> Unit)? = null,
@@ -59,8 +73,7 @@ private fun BtStateScaffold(
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .background(badgeColor, CircleShape)
-                    .border(1.dp, badgeBorder, CircleShape),
+                    .background(badgeColor, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -128,6 +141,112 @@ fun BtEmptyState(
 }
 
 /**
+ * A failure inside ONE section of a screen whose primary content already loaded
+ * (R3 §2).
+ *
+ * ## Why this is not [BtErrorState]
+ *
+ * [BtErrorState] claims the surface — correct when the screen has nothing else
+ * to show. It is wrong for a chart under a price that arrived fine, or a
+ * backtest under a conglomerate's positions: a 64dp badge and a centred title
+ * over a section would say the *page* failed. This is one line and a retry, at
+ * the weight the failure actually has.
+ *
+ * The retry is not optional, and that is the whole reason this exists as a
+ * component. Three screens had grown their own private version of this row and a
+ * fourth had no error branch at all — it rendered its section's failure as the
+ * section's *empty* state, so a dropped request read as "there is no data here".
+ * Without a retry the only cure for a dropped request is to leave the screen and
+ * come back, which users do not know to do.
+ *
+ * The diagnostic (present only for a server code this build has no copy for)
+ * rides after an em dash rather than claiming a second line the compact layout
+ * does not have.
+ */
+@Composable
+fun BtInlineError(
+    message: BtMessage,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bt = BtTheme.colors
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Outlined.ErrorOutline,
+            contentDescription = null,
+            tint = bt.lossSoft,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = message.resolveWithDiagnostic(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) {
+            Text(
+                text = stringResource(R.string.bt_action_retry),
+                style = MaterialTheme.typography.labelLarge,
+                color = bt.goldEmphasis,
+            )
+        }
+    }
+}
+
+/**
+ * "This screen needs a connection" (R3 §2).
+ *
+ * ## Why offline gets its own composable
+ *
+ * Five screens rendered this exact state — a centred [BtEmptyState] carrying
+ * `bt_requires_connection_title` and a screen-specific sentence — and between
+ * them they used **four different glyphs**: `Dashboard`, `NotificationsActive`,
+ * `People`, `Search`, and on the asset page a navigation *back arrow*. None of
+ * them used `CloudOff`, which is the mark this app already uses for "offline" in
+ * seven other places, starting with the global offline banner the user has
+ * almost certainly just seen. A user who learns what `CloudOff` means from the
+ * banner should not have to re-learn it per screen, and a screen's own domain
+ * glyph says "this feature" where the state needs to say "the network".
+ *
+ * So the glyph is fixed here rather than passed in — that is the entire point of
+ * the component — and each screen supplies only [message], the one thing that is
+ * genuinely screen-specific.
+ *
+ * ## [onRetry]
+ *
+ * Every one of those five call sites sat directly beside a [BtErrorState] with a
+ * working Retry, while the offline branch — the one a user is far more likely to
+ * be able to fix, by turning the network back on — offered no way to try again.
+ * Pass the same action the sibling error branch uses.
+ */
+@Composable
+fun BtOfflineState(
+    message: String,
+    modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.bt_requires_connection_title),
+    onRetry: (() -> Unit)? = null,
+) {
+    BtStateScaffold(
+        title = title,
+        modifier = modifier,
+        icon = Icons.Outlined.CloudOff,
+        message = message,
+        action = onRetry?.let {
+            {
+                BtSecondaryButton(
+                    text = stringResource(R.string.bt_action_retry),
+                    onClick = it,
+                )
+            }
+        },
+    )
+}
+
+/**
  * Error state with retry (spec §6.13): human-readable, never a raw error string.
  * The badge picks up the red-tinted destructive surface so the state reads as an
  * error at a glance without shouting.
@@ -153,7 +272,6 @@ fun BtErrorState(
         icon = Icons.Outlined.ErrorOutline,
         iconTint = bt.loss,
         badgeColor = bt.lossSurface,
-        badgeBorder = bt.loss.copy(alpha = 0.35f),
         // resolve() — not stringResource(message.res) — because a handful of
         // catalogued codes name a currency through a %1$s argument, and dropping
         // it would render the placeholder itself to the user.

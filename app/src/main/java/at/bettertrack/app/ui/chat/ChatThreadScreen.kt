@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -626,7 +627,10 @@ private fun AttachSheet(items: List<ShareChip>, onPick: (ShareChip) -> Unit, onD
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+        // A ModalBottomSheet ships no content insets — the 24dp is a content
+        // margin, not nav-bar clearance, so the last share chip would sit behind
+        // a 3-button nav bar without navigationBarsPadding().
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
             Text(stringResource(R.string.bt_chat_share_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
             Text(stringResource(R.string.bt_chat_share_subtitle), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             Spacer(Modifier.size(12.dp))

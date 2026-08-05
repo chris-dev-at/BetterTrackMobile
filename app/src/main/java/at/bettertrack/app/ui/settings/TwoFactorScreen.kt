@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -139,6 +141,15 @@ fun TwoFactorScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
+                // Edge-to-edge: the window never resizes for the keyboard and the
+                // Scaffold's insets carry the system bars only, not the IME. The
+                // in-screen TOTP code fields (enrol + disable) would otherwise be
+                // typed blind. Consume what `inner` already paid so imePadding()
+                // adds the remainder rather than a second nav-bar height.
+                // (The code field inside the AlertDialog needs nothing — a dialog
+                // gets its own window, which does resize.)
+                .consumeWindowInsets(inner)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),

@@ -63,6 +63,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatMoney
@@ -190,6 +191,15 @@ class MarketIntelViewModel(private val repo: MarketIntelRepository) : ViewModel(
 
     fun refresh() = loadAll(showSkeletons = false)
 
+    /**
+     * The whole-screen retry, for the ONE state where the per-section rule below
+     * does not apply: when every section came back unavailable there is no
+     * healthy section left to protect, so reloading all four costs nothing the
+     * per-section rule was written to save. Skeletons are shown because the
+     * screen is genuinely empty — there is no stale content to preserve.
+     */
+    fun retryAll() = loadAll(showSkeletons = true)
+
     // Retry is PER SECTION. A screen-wide reload would blank three healthy
     // sections back to skeletons — and re-spend three provider round-trips —
     // because a fourth one failed.
@@ -299,11 +309,21 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             // Four absences under a title is not a screen. One honest sentence is.
             if (state.allUnavailable) {
+                // R3 §2: every per-section failure below this branch carries a
+                // Retry (IntelInlineError); the whole-screen one did not, so the
+                // only cure for "all four probes came back unavailable" was to
+                // leave the screen and come back.
                 BtEmptyState(
                     modifier = Modifier.align(Alignment.Center),
                     icon = Icons.Outlined.Summarize,
                     title = stringResource(R.string.bt_intel_unavailable_title),
                     message = stringResource(R.string.bt_intel_unavailable_message),
+                    action = {
+                        BtSecondaryButton(
+                            text = stringResource(R.string.bt_action_retry),
+                            onClick = { vm.retryAll() },
+                        )
+                    },
                 )
                 return@Box
             }

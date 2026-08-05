@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -257,7 +258,10 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+        // A ModalBottomSheet ships no content insets — the 24dp is a content
+        // margin, not nav-bar clearance, so the last friend row would sit behind
+        // a 3-button nav bar without navigationBarsPadding().
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
             Text(stringResource(R.string.bt_chat_new_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
             Text(stringResource(R.string.bt_chat_new_subtitle), style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
             Spacer(Modifier.size(12.dp))

@@ -1,5 +1,7 @@
 package at.bettertrack.app.ui.shell
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
@@ -125,6 +127,7 @@ import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.BtSnackbarHost
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtSnackbarState
+import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.home.HomeScreen
 import at.bettertrack.app.ui.cash.CashScreen
@@ -755,8 +758,62 @@ private fun BtNavHost(
     onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
+    // R3 §1 — the app's one screen-transition idiom. Read once, here, and
+    // captured by the four lambdas below: they are plain (non-composable)
+    // lambdas, so the reduced-motion preference cannot be sampled inside them.
+    val reducedMotion = rememberReducedMotion()
     NavHost(
         navController = navController,
+        // Which of BtNavMotion's two shapes a navigation gets is decided by the
+        // PAIR of routes, never by the destination entry — see BtNavMotion's
+        // KDoc. All four lambdas ask the same question because a tab hop can
+        // arrive as a pop: the bottom bar navigates with
+        // `popUpTo(startDestination) { saveState = true }`, so hopping back to
+        // Home runs popEnter/popExit, not enter/exit.
+        enterTransition = {
+            when {
+                reducedMotion -> EnterTransition.None
+                BtNavMotion.isLateral(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                ) -> BtNavMotion.lateralEnter()
+
+                else -> BtNavMotion.forwardEnter()
+            }
+        },
+        exitTransition = {
+            when {
+                reducedMotion -> ExitTransition.None
+                BtNavMotion.isLateral(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                ) -> BtNavMotion.lateralExit()
+
+                else -> BtNavMotion.forwardExit()
+            }
+        },
+        popEnterTransition = {
+            when {
+                reducedMotion -> EnterTransition.None
+                BtNavMotion.isLateral(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                ) -> BtNavMotion.lateralEnter()
+
+                else -> BtNavMotion.backEnter()
+            }
+        },
+        popExitTransition = {
+            when {
+                reducedMotion -> ExitTransition.None
+                BtNavMotion.isLateral(
+                    initialState.destination.route,
+                    targetState.destination.route,
+                ) -> BtNavMotion.lateralExit()
+
+                else -> BtNavMotion.backExit()
+            }
+        },
         // R-arc R1: Home, not Portfolio. Two things follow, both improvements:
         // system-back from any tab now lands on Home and back from Home exits
         // (before, back from any tab landed on Portfolio, which was arbitrary

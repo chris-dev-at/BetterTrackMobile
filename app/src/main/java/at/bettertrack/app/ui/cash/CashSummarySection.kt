@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -468,10 +469,13 @@ fun CashAnalyticsError(
 ) {
     val bt = BtTheme.colors
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // R3 §2: ErrorOutline, tinted `lossSoft` — the app's one error glyph.
+        // A muted BarChart said "no chart data" where the truth was "the request
+        // failed", which is the same conflation the asset page's chart had.
         Icon(
-            Icons.Outlined.BarChart,
+            Icons.Outlined.ErrorOutline,
             contentDescription = null,
-            tint = bt.textMuted,
+            tint = bt.lossSoft,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(10.dp))

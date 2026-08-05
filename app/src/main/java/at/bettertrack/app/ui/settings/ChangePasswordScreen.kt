@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +98,15 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
+                // The window is edge-to-edge, so it does NOT resize for the
+                // keyboard, and a Scaffold's insets are system-bars only — the IME
+                // is not in them. Without this the confirm field and the submit
+                // button sit under the keyboard with no way to reach them.
+                // `consumeWindowInsets(inner)` books the nav-bar inset the Scaffold
+                // already paid above, so imePadding() adds the difference instead
+                // of stacking a second nav bar on top of the keyboard.
+                .consumeWindowInsets(inner)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),

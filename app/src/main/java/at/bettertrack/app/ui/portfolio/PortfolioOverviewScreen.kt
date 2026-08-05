@@ -87,6 +87,7 @@ import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.BtDiscreetMode
+import at.bettertrack.app.ui.market.rememberAssetTypeLabeller
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -910,8 +911,16 @@ private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, lo
 
     val otherLabel = stringResource(R.string.bt_overview_alloc_other)
     val cashLabel = stringResource(R.string.bt_overview_alloc_cash)
-    val segments = remember(holdings, cashEur, byCategory, otherLabel, cashLabel) {
-        allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel)
+    // R3 §3: the category names are resolved HERE, like the two labels above,
+    // because `allocationSegments` is a pure function and `assetTypeLabel` is a
+    // composable. They used to come from a private `categoryLabel` in this file
+    // that returned hard-coded English — so a German user's donut read "Stocks",
+    // "ETFs", "Commodities". `assetTypeLabel` is the app's real, localized
+    // mapping for exactly these server type strings, and it already carried the
+    // identical unknown-type fallback; the duplicate is gone.
+    val categoryLabels = rememberAssetTypeLabeller()
+    val segments = remember(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels) {
+        allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels)
     }
     val total = segments.sumOf { it.value }
     if (segments.isEmpty() || total <= 0.0) return
@@ -1265,6 +1274,7 @@ private fun allocationSegments(
     byCategory: Boolean,
     otherLabel: String,
     cashLabel: String,
+    categoryLabel: (String) -> String,
 ): List<DonutSegment> {
     data class Part(val label: String, val value: Double)
 
@@ -1289,18 +1299,6 @@ private fun allocationSegments(
         if (rest > 0.0) add(DonutSegment(otherLabel, rest, BtChartPalette.rest))
         if (cashEur > 0.0) add(DonutSegment(cashLabel, cashEur, BtChartPalette.cash))
     }
-}
-
-/** Server asset types → display labels. TODO(step 19): localize. */
-private fun categoryLabel(type: String): String = when (type) {
-    "stock" -> "Stocks"
-    "etf" -> "ETFs"
-    "index" -> "Indices"
-    "fx" -> "FX"
-    "commodity" -> "Commodities"
-    "crypto" -> "Crypto"
-    "custom" -> "Custom"
-    else -> type.replaceFirstChar { it.uppercase() }
 }
 
 @Composable

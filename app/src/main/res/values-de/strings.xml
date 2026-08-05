@@ -13,7 +13,6 @@
     <!-- Login (§4) -->
     <string name="bt_login_tagline">BetterTrack — deine Finanzen im Griff</string>
     <string name="bt_login_button">Mit BetterTrack anmelden</string>
-    <string name="bt_login_connecting">Verbinde…</string>
     <string name="bt_login_need_account">Noch kein Konto?</string>
     <string name="bt_login_forgot_password">Passwort vergessen?</string>
     <string name="bt_login_error_generic">Anmeldung fehlgeschlagen. Bitte versuch es noch einmal.</string>
@@ -26,7 +25,7 @@
 
     <!-- Erzwungene Passwortänderung (§4 / §6.13) -->
     <string name="bt_pwchange_title">Passwortänderung erforderlich</string>
-    <string name="bt_pwchange_message">Aus Sicherheitsgründen: Ändere dein Passwort in BetterTrack im Web fertig, komm dann zurück und melde dich neu an.</string>
+    <string name="bt_pwchange_message">Aus Sicherheitsgründen: Schließe die Passwortänderung in BetterTrack im Web ab, komm dann zurück und melde dich neu an.</string>
     <string name="bt_pwchange_open_web">Im Web abschließen</string>
 
     <!-- Konto / Abmelden -->
@@ -62,11 +61,9 @@
     <string name="bt_overview_net_worth">Vermögen</string>
     <string name="bt_overview_today">heute</string>
     <string name="bt_overview_cash">Bargeld</string>
-    <string name="bt_overview_invested">Investiert</string>
-    <string name="bt_overview_value_over_time">Wertverlauf</string>
     <string name="bt_overview_holdings_section">Bestände</string>
     <string name="bt_overview_allocation_section">Aufteilung</string>
-    <string name="bt_overview_alloc_by_asset">Nach Wert</string>
+    <string name="bt_overview_alloc_by_asset">Nach Positionen</string>
     <string name="bt_overview_alloc_by_category">Nach Kategorie</string>
     <string name="bt_overview_alloc_other">Sonstige</string>
     <string name="bt_overview_alloc_cash">Bargeld</string>
@@ -77,14 +74,12 @@
     <string name="bt_overview_create_portfolio">Portfolio anlegen</string>
     <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
     <string name="bt_overview_chart_cd">Diagramm des Vermögens über die Zeit</string>
-    <string name="bt_overview_graph_range_cd">%1$s Verlauf anzeigen</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
     <string name="bt_range_6m">6M</string>
     <string name="bt_range_1y">1J</string>
     <string name="bt_range_max">Max</string>
-    <string name="bt_holding_weight">%1$s %%</string>
 
     <!-- Portfolio-Wechsler (§6.1) -->
     <string name="bt_switcher_title">Portfolios</string>
@@ -122,7 +117,6 @@
     <string name="bt_tx_filter_buys">Käufe</string>
     <string name="bt_tx_filter_sells">Verkäufe</string>
     <string name="bt_tx_filter_all_assets">Alle Werte</string>
-    <string name="bt_tx_filter_asset_cd">Nach Wert filtern</string>
     <string name="bt_tx_filter_asset_title">Nach Wert filtern</string>
     <string name="bt_tx_side_buy">Kauf</string>
     <string name="bt_tx_side_sell">Verkauf</string>
@@ -133,7 +127,6 @@
     <string name="bt_tx_no_matches_message">Versuch, die Filter zu entfernen.</string>
     <string name="bt_tx_clear_filters">Filter entfernen</string>
     <string name="bt_tx_load_more">Ältere Transaktionen laden</string>
-    <string name="bt_tx_count_shown">%1$d Transaktionen</string>
 
     <!-- Positionsdetail (§6.1/§6.2) -->
     <string name="bt_holding_position_value">Positionswert</string>
@@ -144,7 +137,6 @@
     <string name="bt_holding_transactions_section">Transaktionen</string>
     <string name="bt_holding_no_tx">Noch keine Transaktionen für diese Position.</string>
     <string name="bt_holding_asset_page_link">Wert-Seite</string>
-    <string name="bt_holding_asset_page_soon">Bald verfügbar</string>
     <string name="bt_holding_not_found_title">Position nicht gefunden</string>
     <string name="bt_holding_not_found_message">Diese Position ist nicht mehr im Portfolio.</string>
 
@@ -157,9 +149,6 @@
     <string name="bt_txform_asset_locked_cd">Der Wert kann bei einer Bearbeitung nicht geändert werden</string>
     <string name="bt_txform_asset_held">%1$s im Bestand</string>
     <string name="bt_txform_asset_sheet_title">Wert auswählen</string>
-    <string name="bt_txform_asset_sheet_empty">Noch keine Werte im Bestand. Neue Werte kaufst du über die Suche.</string>
-    <string name="bt_txform_asset_other_section">In anderen Portfolios gehalten</string>
-    <string name="bt_txform_asset_search_soon">Die Suche über alle Werte kommt mit der Suche.</string>
     <string name="bt_txform_asset_search_hint">Alle Werte durchsuchen…</string>
     <string name="bt_txform_asset_your_section">Deine Werte</string>
     <string name="bt_txform_asset_all_section">Alle Werte</string>
@@ -184,9 +173,9 @@
     <string name="bt_txform_cash_after">Bargeld danach: %1$s</string>
     <string name="bt_txform_cash_balance">Bargeldbestand: %1$s</string>
     <string name="bt_txform_cash_off_hint">Bargeld bleibt unberührt</string>
-    <string name="bt_txform_cash_unknown">Bestand aktualisiert sich beim nächsten Sync</string>
+    <string name="bt_txform_cash_unknown">Bestand aktualisiert sich bei der nächsten Synchronisierung</string>
     <string name="bt_txform_insufficient_cash">Nicht genug Bargeld — %1$s verfügbar</string>
-    <string name="bt_txform_backdated_cash_warning">Am %1$s hielt dieses Konto nur %2$s — die %3$s werden jetzt von deinem Bargeld abgezogen, als wäre heute gekauft worden. Der Kauf behält sein Datum vom %1$s.</string>
+    <string name="bt_txform_backdated_cash_warning">Am %1$s hielt diese Quelle nur %2$s — die %3$s werden jetzt von deinem Bargeld abgezogen, als wäre heute gekauft worden. Der Kauf behält sein Datum vom %1$s.</string>
     <!-- Ungedeckter (Über-)Verkauf (PR #429, Step 19) -->
     <string name="bt_txform_uncovered_title">Mehr verkaufen, als du hältst</string>
     <string name="bt_txform_uncovered_body">Du hältst %1$s %2$s. Dieser Verkauf schließt die Position und lässt %3$s ungedeckt — ohne passenden Kauf zeigt dieser Teil 0%% Rendite.</string>
@@ -217,7 +206,7 @@
     <string name="bt_pending_badge_syncing">Synchronisiere…</string>
     <string name="bt_pending_badge_attention">Braucht Aufmerksamkeit</string>
     <string name="bt_pending_badge_done">Synchronisiert</string>
-    <string name="bt_pending_section">Wartet auf Sync</string>
+    <string name="bt_pending_section">Wartet auf Synchronisierung</string>
     <string name="bt_pending_synced_section">Synchronisiert</string>
     <string name="bt_pending_title">Ausstehende Synchronisierung</string>
     <string name="bt_pending_summary">%1$d zu synchronisieren</string>
@@ -229,7 +218,7 @@
     <string name="bt_pending_added_at">Hinzugefügt %1$s</string>
     <string name="bt_pending_retry">Erneut versuchen</string>
     <string name="bt_pending_edit">Bearbeiten</string>
-    <string name="bt_pending_edit_retry">Bearbeiten &amp; erneut</string>
+    <string name="bt_pending_edit_retry">Bearbeiten &amp; erneut versuchen</string>
     <string name="bt_pending_discard">Verwerfen</string>
     <string name="bt_pending_offline_hint">Wartet auf eine Verbindung — synchronisiert automatisch.</string>
     <string name="bt_pending_op_cash_deposit">Bargeld-Einzahlung</string>
@@ -306,7 +295,7 @@
     <string name="bt_cash_delete_message">Die Bewegung wird entfernt und dein Saldo aus dem gesamten Verlauf neu berechnet.</string>
     <string name="bt_cash_delete_action">Bewegung löschen</string>
     <string name="bt_cash_not_editable_title">Diese Bewegung hängt an einer anderen</string>
-    <string name="bt_cash_not_editable_hint">BetterTrack erzeugt sie automatisch, damit sie immer zur übergeordneten Position passt. Ändere die Transaktion oder Dividende, aus der sie stammt, dann ändert sich diese mit.</string>
+    <string name="bt_cash_not_editable_hint">BetterTrack erzeugt sie automatisch, damit sie immer zum zugehörigen Eintrag passt. Ändere die Transaktion oder Dividende, aus der sie stammt, dann ändert sich diese mit.</string>
     <string name="bt_cash_correction_failed_title">Änderung konnte nicht gespeichert werden</string>
     <string name="bt_cash_edit_kind_label">Art</string>
 
@@ -315,8 +304,6 @@
     <string name="bt_source_import">Import · %1$s</string>
     <string name="bt_source_sync">Sync · %1$s</string>
     <string name="bt_source_sync_group">Aus Gruppe</string>
-    <string name="bt_source_filter_all">Alle Bewegungen</string>
-    <string name="bt_source_filter_automatic">Nur automatische</string>
 
     <!-- v5-Mirrorchain-Overlays (Gruppenportfolio) -->
     <string name="bt_mirror_added_by">hinzugefügt von @%1$s</string>
@@ -365,7 +352,6 @@
     <string name="bt_custom_smoothing_help">Zwischen den Wertpunkten eine gerade Linie ziehen, statt jeden Wert bis zum nächsten zu halten.</string>
 
     <!-- Suche &amp; Wert-Seiten (§6.5) -->
-    <string name="bt_search_title">Suche</string>
     <string name="bt_search_hint">Aktien, ETFs, Krypto suchen…</string>
     <string name="bt_search_clear">Löschen</string>
     <string name="bt_search_cd">Suchen</string>
@@ -431,7 +417,6 @@
     <string name="bt_watchlist_rename">Liste umbenennen</string>
     <string name="bt_watchlist_delete">Liste löschen</string>
     <string name="bt_watchlist_delete_message">„%1$s“ löschen? Ihre Werte werden aus dieser Liste entfernt.</string>
-    <string name="bt_watchlist_stub">Beispiel-Liste</string>
     <string name="bt_watchlist_empty_title">Noch keine Werte</string>
     <string name="bt_watchlist_empty_message">Füg Aktien, ETFs oder Krypto hinzu, um ihre Kurse hier zu verfolgen.</string>
     <string name="bt_watchlist_add_asset">Wert hinzufügen</string>
@@ -460,10 +445,10 @@
     <string name="bt_conglo_remove">Entfernen</string>
     <string name="bt_conglo_composition">Zusammensetzung</string>
     <string name="bt_conglo_performance">Bisherige Wertentwicklung</string>
-    <string name="bt_conglo_no_backtest">Nicht genug Verlauf für einen Rücktest.</string>
+    <string name="bt_conglo_no_backtest">Nicht genug Verlauf für einen Backtest.</string>
     <string name="bt_conglo_total_return">Gesamtrendite</string>
     <string name="bt_conglo_cagr">CAGR</string>
-    <string name="bt_conglo_drawdown">Max. Rückgang</string>
+    <string name="bt_conglo_drawdown">Max. Drawdown</string>
     <string name="bt_conglo_budget">Budgetrechner</string>
     <string name="bt_conglo_budget_label">Budget</string>
     <string name="bt_conglo_at_least_one">Mindestens 1 Anteil je Wert</string>
@@ -481,7 +466,7 @@
     <string name="bt_conglo_add_to_portfolio">Zu %1$s hinzufügen</string>
 
     <!-- Mitteilungen (§6.11) -->
-    <string name="bt_settings_preferences_section">Einstellungen</string>
+    <string name="bt_settings_preferences_section">Allgemein</string>
     <string name="bt_settings_orientation_lock">Bildschirmausrichtung sperren</string>
     <string name="bt_settings_orientation_lock_sub">Die App im Hochformat halten. Ausschalten, um der Geräteausrichtung zu folgen.</string>
     <string name="bt_settings_about_section">Über</string>
@@ -496,7 +481,7 @@
     <string name="bt_wn_0_15_switcher_name">Portfolio-Auswahl ganz oben</string>
     <string name="bt_wn_0_15_switcher_desc">Wechsle direkt in der oberen Leiste zwischen deinen Portfolios, gleich neben dem Logo.</string>
     <string name="bt_wn_0_15_chart_name">Ein markanteres Wertdiagramm</string>
-    <string name="bt_wn_0_15_chart_desc">Dein Portfolio-Graph füllt jetzt den ganzen Bildschirm, wie ein großes Titelbild.</string>
+    <string name="bt_wn_0_15_chart_desc">Dein Portfolio-Graph füllt jetzt den ganzen Bildschirm.</string>
     <string name="bt_wn_0_15_smooth_name">Weichere Wertänderungen</string>
     <string name="bt_wn_0_15_smooth_desc">Beträge gleiten sanft an ihre Position, statt zu springen, wenn sich Kurse ändern.</string>
     <string name="bt_wn_0_15_orient_name">Bildschirmausrichtung sperren</string>
@@ -510,7 +495,7 @@
     <string name="bt_wn_0_14_updates_desc">Update-Hinweise und diese Seite zeigen jetzt, was jede Version bringt.</string>
     <!-- Neue Funktionen · 0.13 — smarteres Transaktionsformular -->
     <string name="bt_wn_0_13_datelink_name">Datum und Preis verknüpft</string>
-    <string name="bt_wn_0_13_datelink_desc">Wähle ein Datum für den Kurs des Tages – oder tippe einen Preis ein, um den Tag zu finden, an dem er galt.</string>
+    <string name="bt_wn_0_13_datelink_desc">Wähle ein Datum für den Kurs des Tages — oder tippe einen Preis ein, um den Tag zu finden, an dem er galt.</string>
     <string name="bt_wn_0_13_selectall_name">Schnelleres Bearbeiten</string>
     <string name="bt_wn_0_13_selectall_desc">Betragsfelder markieren beim Antippen alles, damit du sofort neu eintippen kannst.</string>
     <string name="bt_wn_0_13_backdate_name">Rückdatierte Käufe warnen nur</string>
@@ -525,12 +510,12 @@
     <string name="bt_wn_0_12_watchlists_name">Benannte Watchlists</string>
     <string name="bt_wn_0_12_watchlists_desc">Erstelle so viele Watchlists, wie du möchtest, und benenne jede einzeln.</string>
     <string name="bt_wn_0_12_messages_name">Nachrichten</string>
-    <string name="bt_wn_0_12_messages_desc">Chatte mit Freunden direkt in BetterTrack – wird gerade ausgerollt.</string>
+    <string name="bt_wn_0_12_messages_desc">Chatte mit Freunden direkt in BetterTrack — wird gerade ausgerollt.</string>
     <!-- Neue Funktionen · 0.11 — Konto &amp; Einstellungen -->
     <string name="bt_wn_0_11_password_name">Passwort ändern</string>
     <string name="bt_wn_0_11_password_desc">Ändere dein Konto-Passwort, ohne die App zu verlassen.</string>
     <string name="bt_wn_0_11_twofa_name">Zwei-Faktor-Authentifizierung</string>
-    <string name="bt_wn_0_11_twofa_desc">Füge beim Login einen zweiten Schritt hinzu, um dein Konto besser zu schützen.</string>
+    <string name="bt_wn_0_11_twofa_desc">Füge bei der Anmeldung einen zweiten Schritt hinzu, um dein Konto besser zu schützen.</string>
     <string name="bt_wn_0_11_sessions_name">Aktive Sitzungen</string>
     <string name="bt_wn_0_11_sessions_desc">Sieh, wo du angemeldet bist, und melde andere Geräte ab.</string>
     <string name="bt_wn_0_11_delete_name">Konto löschen</string>
@@ -539,21 +524,20 @@
     <string name="bt_wn_0_11_german_desc">Wechsle BetterTrack in den Einstellungen zwischen Englisch und Deutsch.</string>
     <!-- Neue Funktionen · 0.10 — App-Sperre -->
     <string name="bt_wn_0_10_pin_name">App sperren</string>
-    <string name="bt_wn_0_10_pin_desc">Schütze BetterTrack mit einer PIN – beim Start oder nach einer Pause.</string>
+    <string name="bt_wn_0_10_pin_desc">Schütze BetterTrack mit einer PIN — beim Start oder nach einer Pause.</string>
     <string name="bt_wn_0_10_biometric_name">Mit Biometrie entsperren</string>
     <string name="bt_wn_0_10_biometric_desc">Nutze Fingerabdruck oder Gesicht, statt deine PIN einzutippen.</string>
     <string name="bt_wn_0_10_btpin_name">Deine BetterTrack-PIN</string>
-    <string name="bt_wn_0_10_btpin_desc">Entsperre mit derselben PIN wie dein BetterTrack-Konto – du brauchst dir keine neue zu merken.</string>
+    <string name="bt_wn_0_10_btpin_desc">Entsperre mit derselben PIN wie dein BetterTrack-Konto — du brauchst dir keine neue zu merken.</string>
     <!-- Neue Funktionen · 0.09 — Willkommen bei BetterTrack -->
     <string name="bt_wn_0_09_overview_name">Dein ganzes Portfolio</string>
     <string name="bt_wn_0_09_overview_desc">Vermögen, Bestände und Aufteilung auf einen Blick.</string>
     <string name="bt_wn_0_09_offline_name">Funktioniert offline</string>
-    <string name="bt_wn_0_09_offline_desc">Kaufe und verkaufe jederzeit – deine Änderungen synchronisieren, sobald du wieder online bist.</string>
+    <string name="bt_wn_0_09_offline_desc">Kaufe und verkaufe jederzeit — deine Änderungen synchronisieren, sobald du wieder online bist.</string>
     <string name="bt_wn_0_09_research_name">Suchen und planen</string>
-    <string name="bt_wn_0_09_research_desc">Entdecke Werte, erstelle Watchlists und stelle Konglomerate zusammen – alles an einem Ort.</string>
+    <string name="bt_wn_0_09_research_desc">Entdecke Werte, erstelle Watchlists und stelle Konglomerate zusammen — alles an einem Ort.</string>
     <string name="bt_settings_notifications_row">Mitteilungen</string>
-    <string name="bt_settings_notifications_sub">Posteingang, Push und E-Mail-Einstellungen</string>
-    <string name="bt_notif_mark_all_read">Alle als gelesen markieren</string>
+    <string name="bt_settings_notifications_sub">Einstellungen für Posteingang, Push und E-Mail</string>
     <string name="bt_notif_empty_title">Alles erledigt</string>
     <string name="bt_notif_empty_message">Freundschaftsanfragen, geteilte Inhalte und Alarme erscheinen hier.</string>
     <string name="bt_notif_enable_push_title">Push-Mitteilungen aktivieren</string>
@@ -598,18 +582,14 @@
     <string name="bt_notif_more_actions">Weitere Aktionen</string>
     <string name="bt_notif_action_manage_alerts">Kursalarme verwalten</string>
     <string name="bt_notif_archived_label">Archiviert</string>
-    <string name="bt_notif_action_mark_read">Als gelesen markieren</string>
     <string name="bt_notif_action_archive">Archivieren</string>
     <string name="bt_notif_action_unarchive">Aus Archiv holen</string>
     <string name="bt_notif_action_delete">Löschen</string>
-    <string name="bt_notif_bulk_archive_read">Alle gelesenen archivieren</string>
     <!-- v4 (PR #486): „Alle als gelesen“ archiviert → leert den aktiven Posteingang. -->
     <string name="bt_notif_archive_all">Alle archivieren</string>
     <string name="bt_notif_bulk_delete_archived">Alle archivierten löschen</string>
     <string name="bt_notif_bulk_delete_all">Alle löschen</string>
     <string name="bt_notif_snack_archived">Mitteilung archiviert</string>
-    <string name="bt_notif_snack_archived_read">Gelesene Mitteilungen archiviert</string>
-    <string name="bt_notif_undo">Rückgängig</string>
     <string name="bt_notif_delete_title">Mitteilung löschen?</string>
     <string name="bt_notif_delete_body">Diese Mitteilung wird endgültig gelöscht.</string>
     <string name="bt_notif_delete_archived_title">Alle archivierten löschen?</string>
@@ -617,18 +597,18 @@
     <string name="bt_notif_empty_archived_title">Keine archivierten Mitteilungen</string>
     <string name="bt_notif_empty_archived_message">Mitteilungen, die du archivierst, erscheinen hier.</string>
     <!-- Task C — eigene Zeilen für die drei Plattform-Ereignistypen -->
-    <string name="bt_notif_type_friend_activity">Freundes-Aktivität</string>
+    <string name="bt_notif_type_friend_activity">Aktivität von Freunden</string>
     <string name="bt_notif_type_friend_activity_sub">Wenn ein Freund in einem geteilten Eintrag handelt</string>
     <string name="bt_notif_type_watchlist_shared">Watchlist geteilt</string>
     <string name="bt_notif_type_watchlist_shared_sub">Wenn ein Freund eine Watchlist teilt</string>
     <string name="bt_notif_type_conglomerate_shared">Konglomerat geteilt</string>
     <string name="bt_notif_type_conglomerate_shared_sub">Wenn ein Freund ein Konglomerat teilt</string>
     <!-- V4-P0c — Follow-Graph-Zeilen + einmalige Ankündigung -->
-    <string name="bt_notif_type_follow_published">Neues von Gefolgten</string>
+    <string name="bt_notif_type_follow_published">Neues von Personen, denen du folgst</string>
     <string name="bt_notif_type_follow_published_sub">Wenn jemand, dem du folgst, etwas veröffentlicht</string>
-    <string name="bt_notif_type_follow_alert_created">Alarm eines Gefolgten erstellt</string>
+    <string name="bt_notif_type_follow_alert_created">Kursalarm einer gefolgten Person erstellt</string>
     <string name="bt_notif_type_follow_alert_created_sub">Wenn jemand, dem du folgst, einen Kursalarm setzt</string>
-    <string name="bt_notif_type_follow_alert_fired">Alarm eines Gefolgten ausgelöst</string>
+    <string name="bt_notif_type_follow_alert_fired">Kursalarm einer gefolgten Person ausgelöst</string>
     <string name="bt_notif_type_follow_alert_fired_sub">Wenn ein gefolgter Alarm sein Ziel erreicht</string>
     <string name="bt_notif_type_account_notice">Ankündigungen</string>
     <string name="bt_notif_type_account_notice_sub">Wichtige Hinweise von BetterTrack</string>
@@ -740,12 +720,12 @@
 
     <!-- Kontosicherheit (Einträge im Sicherheits-Screen) -->
     <string name="bt_settings_account_security_section">Kontosicherheit</string>
-    <string name="bt_settings_2fa_sub">Einen zweiten Schritt beim Login hinzufügen</string>
+    <string name="bt_settings_2fa_sub">Einen zweiten Schritt bei der Anmeldung hinzufügen</string>
     <string name="bt_settings_sessions_sub">Sieh, wo du angemeldet bist</string>
 
     <!-- Zwei-Faktor-Authentifizierung -->
     <string name="bt_dest_two_factor">Zwei-Faktor-Authentifizierung</string>
-    <string name="bt_2fa_intro">Füg für zusätzliche Sicherheit einen zweiten Schritt beim Login hinzu. Nutze eine Authenticator-App, E-Mail-Codes oder beides.</string>
+    <string name="bt_2fa_intro">Füge für zusätzliche Sicherheit einen zweiten Schritt bei der Anmeldung hinzu. Nutze eine Authenticator-App, E-Mail-Codes oder beides.</string>
     <string name="bt_2fa_status_on">Zwei-Faktor-Authentifizierung ist an</string>
     <string name="bt_2fa_status_off">Zwei-Faktor-Authentifizierung ist aus</string>
     <string name="bt_2fa_set_up">Einrichten</string>
@@ -762,7 +742,7 @@
     <string name="bt_2fa_email_sub_on">An</string>
     <string name="bt_2fa_email_sub_off">Erhalte beim Login einen Code per E-Mail</string>
     <string name="bt_2fa_email_sent">Wir haben einen Code an deine E-Mail geschickt. Gib ihn unten ein, um E-Mail-Codes zu aktivieren.</string>
-    <string name="bt_2fa_enroll_scan">Scan diesen QR-Code mit deiner Authenticator-App und gib dann den angezeigten 6-stelligen Code ein.</string>
+    <string name="bt_2fa_enroll_scan">Scanne diesen QR-Code mit deiner Authenticator-App und gib dann den angezeigten 6-stelligen Code ein.</string>
     <string name="bt_2fa_enroll_secret">Oder gib diesen Schlüssel manuell ein:</string>
     <string name="bt_2fa_enroll_code">6-stelliger Code</string>
     <string name="bt_2fa_enroll_verify">Bestätigen &amp; aktivieren</string>
@@ -799,7 +779,7 @@
     <string name="bt_sessions_unknown">Kürzlich aktiv</string>
 
     <!-- Sprache -->
-    <string name="bt_lang_intro">Wähl die Sprache für die App. Beträge und Daten folgen derselben Einstellung.</string>
+    <string name="bt_lang_intro">Wähle die Sprache für die App. Beträge und Datumsangaben folgen derselben Einstellung.</string>
     <string name="bt_lang_system">Systemstandard</string>
     <string name="bt_lang_system_sub">Der Sprache deines Geräts folgen</string>
     <string name="bt_lang_english">Englisch</string>
@@ -818,7 +798,7 @@
     <!-- Konto löschen -->
     <string name="bt_dest_delete_account">Konto löschen</string>
     <string name="bt_del_warning_title">Das lässt sich nicht rückgängig machen</string>
-    <string name="bt_del_warning_body">Wenn du dein Konto löschst, werden deine Portfolios, Transaktionen, dein Bargeld, eigene Werte, Watchlists, Konglomerate und Social-Daten endgültig entfernt. Das lässt sich nicht rückgängig machen.</string>
+    <string name="bt_del_warning_body">Wenn du dein Konto löschst, werden deine Portfolios, Transaktionen, dein Bargeld, eigene Werte, Watchlists, Konglomerate und deine sozialen Daten endgültig entfernt. Das lässt sich nicht rückgängig machen.</string>
     <string name="bt_del_confirm_label">Gib zur Bestätigung deinen Benutzernamen ein</string>
     <string name="bt_del_mismatch">Das stimmt nicht mit deinem Benutzernamen überein.</string>
     <string name="bt_del_password">Dein Passwort</string>
@@ -880,7 +860,6 @@
     <string name="bt_alert_kind_day_up">Anstieg an einem Tag</string>
     <string name="bt_alert_kind_day_down">Rückgang an einem Tag</string>
 
-    <string name="bt_action_copied">Kopiert</string>
     <string name="bt_action_show_password">Passwort anzeigen</string>
     <string name="bt_action_hide_password">Passwort verbergen</string>
 
@@ -896,8 +875,8 @@
     <string name="bt_chat_readonly">Du kannst in diesem Chat keine Nachrichten mehr senden.</string>
     <string name="bt_chat_unavailable_title">Unterhaltung nicht verfügbar</string>
     <string name="bt_chat_unavailable_body">Dieser Chat ist nicht verfügbar. Möglicherweise kannst du dieser Person nicht mehr schreiben.</string>
-    <string name="bt_chat_say_hi">Sag @%1$s Hallo</string>
-    <string name="bt_chat_empty_hint">Beginne die Unterhaltung — mit der Büroklammer kannst du hier direkt ein Asset oder Portfolio teilen.</string>
+    <string name="bt_chat_say_hi">Schreib @%1$s</string>
+    <string name="bt_chat_empty_hint">Beginne die Unterhaltung — mit der Büroklammer kannst du hier direkt einen Wert oder ein Portfolio teilen.</string>
     <string name="bt_chat_chip_view">Ansehen</string>
     <string name="bt_chat_chip_not_shared">Nicht mit dir geteilt</string>
     <string name="bt_chat_share_item_cd">Element teilen</string>
@@ -906,7 +885,7 @@
     <string name="bt_chat_share_title">Im Chat teilen</string>
     <string name="bt_chat_share_subtitle">Das Senden erweitert nie den Zugriff — Freunde sehen es nur, wenn es bereits mit ihnen geteilt ist.</string>
     <string name="bt_chat_share_empty">Du hast noch keine Portfolios, Watchlists oder Konglomerate zum Teilen.</string>
-    <string name="bt_chat_kind_asset">Asset</string>
+    <string name="bt_chat_kind_asset">Wert</string>
     <string name="bt_chat_kind_portfolio">Portfolio</string>
     <string name="bt_chat_kind_watchlist">Watchlist</string>
     <string name="bt_chat_kind_conglomerate">Konglomerat</string>
@@ -1006,7 +985,7 @@
 
     <!-- Freund-Übersicht -->
     <string name="bt_social_go_to_chat">Zum Chat</string>
-    <string name="bt_social_shares_with_you">TEILT MIT DIR</string>
+    <string name="bt_social_shares_with_you">Teilt mit dir</string>
     <string name="bt_social_fo_empty_title">Nichts mit dir geteilt</string>
     <string name="bt_social_fo_empty_body">@%1$s hat noch keine Portfolios, Watchlists oder Konglomerate mit dir geteilt.</string>
     <string name="bt_social_remove_friend">Freund entfernen</string>
@@ -1015,7 +994,7 @@
     <string name="bt_social_remove">Entfernen</string>
     <string name="bt_social_alert_activity">Bei Aktivität benachrichtigen</string>
     <string name="bt_social_toast_alerts_on">Du wirst hier über Aktivität benachrichtigt</string>
-    <string name="bt_social_toast_alerts_off">Benachrichtigungen für diesen Eintrag aus</string>
+    <string name="bt_social_toast_alerts_off">Mitteilungen für diesen Eintrag sind aus</string>
 
     <!-- Geteilte, schreibgeschützte Detail-Screens -->
     <string name="bt_social_shared_portfolio_title">Geteiltes Portfolio</string>
@@ -1026,7 +1005,7 @@
     <string name="bt_social_net_worth">Vermögen</string>
     <string name="bt_social_today">"  heute"</string>
     <string name="bt_social_invested">Investiert</string>
-    <string name="bt_social_unrealized_pl">Buchg. G/V</string>
+    <string name="bt_social_unrealized_pl">Buchgewinn/-verlust</string>
     <string name="bt_social_cash">Bargeld</string>
     <string name="bt_social_holdings">Bestände</string>
     <string name="bt_social_composition">Zusammensetzung</string>
@@ -1064,9 +1043,9 @@
     <string name="bt_paranoid_body">Deine Portfolio-, Steuer- und Import-Daten liegen verschlüsselt in einem privaten Tresor, den die BetterTrack-Server nicht lesen können. Es geht nichts verloren — die App kann nur keine Zahlen zeigen, die sie nicht sehen darf.</string>
     <string name="bt_paranoid_works_title">Funktioniert hier weiterhin</string>
     <string name="bt_paranoid_works_social">Freunde, Teilen und Chat</string>
-    <string name="bt_paranoid_works_watchlists">Watchlists und Asset-Suche</string>
+    <string name="bt_paranoid_works_watchlists">Watchlists und Wertsuche</string>
     <string name="bt_paranoid_works_alerts">Kursalarme</string>
-    <string name="bt_paranoid_works_notifications">Benachrichtigungen</string>
+    <string name="bt_paranoid_works_notifications">Mitteilungen</string>
     <string name="bt_paranoid_web_hint">Portfolio-, Steuer- und Import-Funktionen liegen in der BetterTrack-Web-App, solange dein Tresor server-blind ist.</string>
     <string name="bt_paranoid_open_web">Web-App öffnen</string>
     <!-- Top bar of the explainer when it replaces a PUSHED route (S6 P0-1). -->
@@ -1076,7 +1055,7 @@
     <string name="bt_notif_type_dividend">Dividende</string>
     <string name="bt_notif_type_dividend_sub">Wenn eine Dividende gebucht wird</string>
     <string name="bt_notif_type_budget">Budget überschritten</string>
-    <string name="bt_notif_type_budget_sub">Wenn ein Cash-Budget überschritten wird</string>
+    <string name="bt_notif_type_budget_sub">Wenn ein Bargeld-Budget überschritten wird</string>
     <string name="bt_notif_type_mirror_invite">Einladung zu Gruppen-Portfolio</string>
     <string name="bt_notif_type_mirror_invite_sub">Wenn dich jemand zu einem Gruppen-Portfolio einlädt</string>
     <string name="bt_notif_type_mirror_event">Gruppen-Portfolio</string>
@@ -1088,14 +1067,14 @@
     <string name="bt_notif_delivery_section">Zustellung</string>
     <string name="bt_notif_delivery_inbox_hint">Dein Posteingang in der App wird nie verzögert oder pausiert. Sammel-Rhythmus und Ruhezeiten gelten nur für E-Mail, Push und verknüpfte Kanäle.</string>
     <string name="bt_notif_cadence_title">Sammel-Rhythmus</string>
-    <string name="bt_notif_cadence_subtitle">Wie oft nicht dringende Benachrichtigungen verschickt werden</string>
+    <string name="bt_notif_cadence_subtitle">Wie oft nicht dringende Mitteilungen verschickt werden</string>
     <string name="bt_notif_cadence_instant">Sofort</string>
     <string name="bt_notif_cadence_daily">Täglich</string>
     <string name="bt_notif_cadence_weekly">Wöchentlich</string>
     <string name="bt_notif_cadence_mixed">Diese Typen sind aktuell unterschiedlich eingestellt. Wähle eine Option, um sie für alle zu übernehmen.</string>
     <string name="bt_notif_cadence_urgent_hint">Kursalarme, Sicherheitscodes, Chat-Nachrichten und Einladungen kommen immer sofort und werden nie gesammelt.</string>
     <string name="bt_notif_quiet_title">Ruhezeiten</string>
-    <string name="bt_notif_quiet_subtitle">Ausgehende Benachrichtigungen in einem selbst gewählten Zeitfenster zurückhalten</string>
+    <string name="bt_notif_quiet_subtitle">Ausgehende Mitteilungen in einem selbst gewählten Zeitfenster zurückhalten</string>
     <string name="bt_notif_quiet_start">Beginn</string>
     <string name="bt_notif_quiet_end">Ende</string>
     <string name="bt_notif_quiet_window">%1$s → %2$s</string>
@@ -1107,7 +1086,7 @@
     <string name="bt_notif_quiet_set">Übernehmen</string>
 
     <!-- ── V5 S2c: Cash-Klassifizierung (Tags / Budgets / Auto-Tag-Regeln) ─── -->
-    <string name="bt_cash_menu">Cash-Optionen</string>
+    <string name="bt_cash_menu">Bargeld-Optionen</string>
     <string name="bt_cash_menu_manage_tags">Tags verwalten</string>
     <string name="bt_cash_menu_rules">Auto-Tag-Regeln</string>
     <string name="bt_cash_menu_standing_orders">Daueraufträge</string>
@@ -1121,41 +1100,37 @@
     <string name="bt_tags_empty_title">Noch keine Tags</string>
     <string name="bt_tags_empty_message">Tags beschriften deine Bargeldbewegungen, damit Budgets und Auswertungen sie gruppieren können.</string>
     <string name="bt_tags_error_title">Tags konnten nicht geladen werden</string>
-    <string name="bt_tags_new">Neuer Tag</string>
-    <string name="bt_tags_new_title">Neuer Tag</string>
+    <string name="bt_tags_new">Neues Tag</string>
+    <string name="bt_tags_new_title">Neues Tag</string>
     <string name="bt_tags_edit_title">Tag bearbeiten</string>
     <string name="bt_tags_name">Name</string>
     <string name="bt_tags_colour">Farbe</string>
     <string name="bt_tags_create_action">Tag erstellen</string>
     <string name="bt_tags_save_action">Änderungen speichern</string>
     <string name="bt_tags_delete_title">Tag löschen?</string>
-    <string name="bt_tags_delete_message">„%1$s“ wird von allen Bewegungen entfernt, die ihn tragen. Budgets und Regeln dafür werden ebenfalls gelöscht.</string>
+    <string name="bt_tags_delete_message">„%1$s“ wird von allen Bewegungen entfernt, die es tragen. Budgets und Regeln dafür werden ebenfalls gelöscht.</string>
     <string name="bt_tags_delete_action">Tag löschen</string>
     <string name="bt_tags_actions_cd">Tag-Aktionen</string>
     <string name="bt_tags_name_required">Gib dem Tag einen Namen.</string>
     <string name="bt_tags_system_protected">Vorgegebene Tags können nicht gelöscht werden.</string>
-    <string name="bt_tags_used_count">Verwendet bei %1$d</string>
 
     <!-- Tags an einer Bewegung -->
-    <string name="bt_cash_tags">Tags</string>
     <string name="bt_cash_tags_edit">Tags bearbeiten</string>
-    <string name="bt_cash_tags_none">Keine Tags</string>
     <string name="bt_cash_tags_none_hint">Wähle die Tags, die zu dieser Bewegung passen.</string>
     <string name="bt_cash_tags_save">Tags speichern</string>
-    <string name="bt_cash_tags_empty_catalog">Du hast noch keine Tags. Lege einen unter Cash-Optionen → Tags verwalten an.</string>
+    <string name="bt_cash_tags_empty_catalog">Du hast noch keine Tags. Lege eines unter Bargeld-Optionen → Tags verwalten an.</string>
     <string name="bt_cash_tags_suggested">Von deinen Regeln vorgeschlagen</string>
 
     <!-- Budgets -->
     <string name="bt_budgets_section">Budgets</string>
     <string name="bt_budgets_empty_title">Diesen Monat keine Budgets</string>
-    <string name="bt_budgets_empty_message">Lege ein Monatsziel für einen Tag fest und behalte im Blick, was noch übrig ist.</string>
+    <string name="bt_budgets_empty_message">Lege ein Monatsziel für ein Tag fest und behalte im Blick, was noch übrig ist.</string>
     <string name="bt_budgets_error_title">Budgets konnten nicht geladen werden</string>
     <string name="bt_budgets_new">Neues Budget</string>
     <string name="bt_budgets_new_title">Neues Budget</string>
     <string name="bt_budgets_edit_title">Budget bearbeiten</string>
     <string name="bt_budgets_tag">Tag</string>
     <string name="bt_budgets_amount">Monatsziel</string>
-    <string name="bt_budgets_period">Gilt für</string>
     <string name="bt_budgets_period_recurring">Jeden Monat</string>
     <string name="bt_budgets_period_single">Nur %1$s</string>
     <string name="bt_budgets_recurring_badge">Jeden Monat</string>
@@ -1164,13 +1139,11 @@
     <string name="bt_budgets_exceeded">%1$s darüber</string>
     <string name="bt_budgets_create_action">Budget erstellen</string>
     <string name="bt_budgets_save_action">Budget speichern</string>
-    <string name="bt_budgets_delete_title">Budget löschen?</string>
-    <string name="bt_budgets_delete_message">Das Ziel für „%1$s“ wird entfernt. Deine Bewegungen und deren Tags bleiben unverändert.</string>
     <string name="bt_budgets_delete_action">Budget löschen</string>
     <string name="bt_budgets_actions_cd">Budget-Aktionen</string>
     <string name="bt_budgets_amount_required">Gib einen Betrag größer als null ein.</string>
-    <string name="bt_budgets_tag_required">Wähle einen Tag für das Budget.</string>
-    <string name="bt_budgets_duplicate">Für diesen Tag gibt es in diesem Zeitraum schon ein Budget.</string>
+    <string name="bt_budgets_tag_required">Wähle ein Tag für das Budget.</string>
+    <string name="bt_budgets_duplicate">Für dieses Tag gibt es in diesem Zeitraum schon ein Budget.</string>
     <string name="bt_budgets_prev_month_cd">Vorheriger Monat</string>
     <string name="bt_budgets_next_month_cd">Nächster Monat</string>
     <string name="bt_budgets_all_tags_budgeted">Alle Tags haben in diesem Zeitraum bereits ein Budget.</string>
@@ -1200,7 +1173,7 @@
     <string name="bt_rules_delete_action">Regel löschen</string>
     <string name="bt_rules_actions_cd">Regel-Aktionen</string>
     <string name="bt_rules_pattern_required">Gib den Suchtext ein.</string>
-    <string name="bt_rules_tags_required">Wähle mindestens einen Tag aus.</string>
+    <string name="bt_rules_tags_required">Wähle mindestens ein Tag aus.</string>
     <string name="bt_rules_apply_now">Auf bestehende Bewegungen anwenden</string>
     <string name="bt_rules_apply_none">Nichts Neues zu taggen.</string>
     <string name="bt_rules_disabled_badge">Aus</string>
@@ -1233,11 +1206,11 @@
     <string name="bt_so_new_title">Neuer Dauerauftrag</string>
     <string name="bt_so_edit_title">Dauerauftrag bearbeiten</string>
     <string name="bt_so_kind">Was passieren soll</string>
-    <string name="bt_so_kind_buy">Wertpapier kaufen</string>
+    <string name="bt_so_kind_buy">Wert kaufen</string>
     <string name="bt_so_kind_cash_add">Geld einzahlen</string>
     <string name="bt_so_kind_cash_deduct">Geld abbuchen</string>
-    <string name="bt_so_asset">Wertpapier</string>
-    <string name="bt_so_asset_pick">Wertpapier auswählen</string>
+    <string name="bt_so_asset">Wert</string>
+    <string name="bt_so_asset_pick">Wert auswählen</string>
     <string name="bt_so_amount_shares">Stückzahl</string>
     <string name="bt_so_amount_cash">Betrag</string>
     <string name="bt_so_label">Bezeichnung</string>
@@ -1250,7 +1223,7 @@
     <string name="bt_so_start_date">Beginnt</string>
     <string name="bt_so_end_date">Endet</string>
     <string name="bt_so_end_date_none">Kein Enddatum</string>
-    <string name="bt_so_next_run">Nächste %1$s</string>
+    <string name="bt_so_next_run">Nächste Ausführung %1$s</string>
     <string name="bt_so_no_next_run">Nichts geplant</string>
     <string name="bt_so_last_run">Zuletzt gebucht %1$s</string>
     <string name="bt_so_status_active">Aktiv</string>
@@ -1260,11 +1233,11 @@
     <string name="bt_so_create_action">Dauerauftrag erstellen</string>
     <string name="bt_so_save_action">Änderungen speichern</string>
     <string name="bt_so_delete_title">Dauerauftrag löschen?</string>
-    <string name="bt_so_delete_message">Er wird ab sofort nicht mehr ausgeführt. Alles bereits Gebuchte bleibt in deinem Konto.</string>
+    <string name="bt_so_delete_message">Er wird ab sofort nicht mehr ausgeführt. Alles bereits Gebuchte bleibt in deinem Verlauf.</string>
     <string name="bt_so_delete_action">Dauerauftrag löschen</string>
     <string name="bt_so_actions_cd">Dauerauftrag-Aktionen</string>
-    <string name="bt_so_schedule_locked">Zeitplan und Wertpapier stehen fest, sobald ein Auftrag existiert. Zum Ändern lösche ihn und lege einen neuen an.</string>
-    <string name="bt_so_err_asset_required">Wähle das Wertpapier zum Kaufen.</string>
+    <string name="bt_so_schedule_locked">Zeitplan und Wert stehen fest, sobald ein Auftrag existiert. Zum Ändern lösche ihn und lege einen neuen an.</string>
+    <string name="bt_so_err_asset_required">Wähle den Wert zum Kaufen.</string>
     <string name="bt_so_err_anchor_required">Wähle den Tag im Monat für die Ausführung.</string>
     <string name="bt_so_err_anchor_range">Wähle einen Tag zwischen 1 und 31.</string>
     <string name="bt_so_err_amount">Gib einen Betrag größer als null ein.</string>
@@ -1288,17 +1261,15 @@
     <string name="bt_storage_choose_drive_body">Alles wird auf diesem Gerät verschlüsselt und in deinem eigenen Google Drive abgelegt. Kein BetterTrack-Konto — und niemand außer dir kann es öffnen.</string>
     <string name="bt_storage_choose_drive_missing">Freunde, Teilen und Chat · Alarme und Mitteilungen · Steuermodi · Live-Kurse nur eingeschränkt</string>
     <string name="bt_storage_choose_both_title">Beides</string>
-    <string name="bt_storage_choose_both_body">BetterTrack bleibt dein Hauptzuhause, zusätzlich landet eine verschlüsselte Sicherung in deinem Drive.</string>
+    <string name="bt_storage_choose_both_body">BetterTrack bleibt dein Hauptspeicherort, zusätzlich landet eine verschlüsselte Sicherung in deinem Drive.</string>
     <string name="bt_storage_choose_both_missing">Braucht ein Konto und eine Google-Verbindung.</string>
 
     <string name="bt_storage_google_title">Google Drive verbinden</string>
     <string name="bt_storage_google_body">BetterTrack fragt nur eine Berechtigung ab: den eigenen versteckten Ordner in deinem Drive. Deine übrigen Dateien bleiben unsichtbar.</string>
     <string name="bt_storage_google_scope_note">Angeforderte Berechtigung: nur der App-Ordner</string>
-    <string name="bt_storage_google_connect">Google Drive verbinden</string>
     <string name="bt_storage_google_unavailable_title">Die Google-Anmeldung gibt es in dieser Version noch nicht</string>
     <string name="bt_storage_google_unavailable_body">Dein Tresor liegt auf diesem Gerät und synchronisiert sich mit Drive, sobald die Verbindung steht.</string>
     <string name="bt_storage_google_continue_local">Auf diesem Gerät weitermachen</string>
-    <string name="bt_storage_google_connected">Google Drive verbunden</string>
 
     <string name="bt_storage_pass_title">Wähle eine Tresor-Passphrase</string>
     <string name="bt_storage_pass_body">Das ist ein neues Geheimnis, nicht dein BetterTrack-Passwort. Nur damit öffnet sich dein Tresor.</string>
@@ -1306,20 +1277,20 @@
     <string name="bt_storage_pass_confirm_label">Passphrase wiederholen</string>
     <string name="bt_storage_pass_too_short">Verwende mindestens %1$d Zeichen.</string>
     <string name="bt_storage_pass_mismatch">Die beiden Eingaben stimmen nicht überein.</string>
-    <string name="bt_storage_pass_weak_hint">Ein paar zusammenhanglose Wörter merkst du dir leichter und sind viel schwerer zu erraten.</string>
+    <string name="bt_storage_pass_weak_hint">Ein paar zusammenhanglose Wörter sind leichter zu merken und viel schwerer zu erraten.</string>
     <string name="bt_storage_strength_weak">Schwach</string>
     <string name="bt_storage_strength_fair">Brauchbar</string>
     <string name="bt_storage_strength_strong">Stark</string>
 
     <string name="bt_storage_kit_title">Sichere deinen Wiederherstellungs-Schlüssel</string>
     <string name="bt_storage_kit_body">Der Wiederherstellungs-Schlüssel ist eine kleine Datei, die deinen Tresor öffnet, falls du die Passphrase vergisst. Leg sie dorthin, wo nur du hinkommst — in einen Passwort-Manager oder auf einen verschlüsselten Datenträger.</string>
-    <string name="bt_storage_kit_save">Schlüsseldatei speichern</string>
+    <string name="bt_storage_kit_save">Wiederherstellungs-Schlüssel speichern</string>
     <string name="bt_storage_kit_created">Wiederherstellungs-Schlüssel erstellt.</string>
     <string name="bt_storage_kit_ack">Ich habe meinen Wiederherstellungs-Schlüssel sicher verwahrt</string>
     <string name="bt_storage_kit_failed">Der Wiederherstellungs-Schlüssel konnte nicht erstellt werden.</string>
 
     <string name="bt_storage_ack_title">Verlierst du beides, sind die Daten weg</string>
-    <string name="bt_storage_ack_body">Dein Tresor ist auf diesem Gerät mit deiner Passphrase verschlüsselt. BetterTrack kann ihn nicht öffnen, Google kann ihn nicht öffnen, und es gibt keinen Zurücksetzen-Link. Sind Passphrase und Schlüsseldatei weg, kann niemand deine Daten zurückholen.</string>
+    <string name="bt_storage_ack_body">Dein Tresor ist auf diesem Gerät mit deiner Passphrase verschlüsselt. BetterTrack kann ihn nicht öffnen, Google kann ihn nicht öffnen, und es gibt keinen Zurücksetzen-Link. Sind Passphrase und Wiederherstellungs-Schlüssel weg, kann niemand deine Daten zurückholen.</string>
     <string name="bt_storage_ack_checkbox">Mir ist klar, dass niemand meine Daten für mich wiederherstellen kann</string>
 
     <string name="bt_storage_first_title">Benenne dein erstes Portfolio</string>
@@ -1402,18 +1373,17 @@
     <string name="bt_vault_change_pass">Passphrase ändern</string>
     <string name="bt_vault_change_pass_sub">Du brauchst dafür deine aktuelle.</string>
     <string name="bt_vault_new_kit">Neuer Wiederherstellungs-Schlüssel</string>
-    <string name="bt_vault_new_kit_sub">Ältere Schlüsseldateien funktionieren weiter — das ist nur eine zusätzliche Kopie.</string>
+    <string name="bt_vault_new_kit_sub">Ältere Wiederherstellungs-Schlüssel funktionieren weiter — das ist nur eine zusätzliche Kopie.</string>
     <string name="bt_vault_rekey_title">Tresor-Passphrase ändern</string>
-    <string name="bt_vault_rekey_body">Deine Daten werden nicht neu verschlüsselt; nur der Schlüssel, der sie schützt, wird neu verpackt. Bereits erstellte Schlüsseldateien funktionieren weiter.</string>
+    <string name="bt_vault_rekey_body">Deine Daten werden nicht neu verschlüsselt; nur der Schlüssel, der sie schützt, wird neu verpackt. Bereits erstellte Wiederherstellungs-Schlüssel funktionieren weiter.</string>
     <string name="bt_vault_rekey_current">Aktuelle Passphrase</string>
     <string name="bt_vault_rekey_new">Neue Passphrase</string>
     <string name="bt_vault_rekey_confirm">Neue Passphrase wiederholen</string>
     <string name="bt_vault_rekey_wrong">Das ist nicht deine aktuelle Passphrase.</string>
     <string name="bt_vault_rekey_done">Passphrase geändert.</string>
-    <string name="bt_vault_rekey_failed">Die Passphrase konnte nicht geändert werden. Es wurde nichts verändert.</string>
 
     <string name="bt_storage_tr_server_to_both">Verschlüsselte Drive-Sicherung ergänzen</string>
-    <string name="bt_storage_tr_server_to_both_sub">BetterTrack bleibt dein Hauptzuhause, zusätzlich spiegelst du eine verschlüsselte Kopie in dein Drive.</string>
+    <string name="bt_storage_tr_server_to_both_sub">BetterTrack bleibt dein Hauptspeicherort, zusätzlich spiegelst du eine verschlüsselte Kopie in dein Drive.</string>
     <string name="bt_storage_tr_drive_to_both">BetterTrack-Konto ergänzen</string>
     <string name="bt_storage_tr_drive_to_both_sub">Hol deinen Tresor zu BetterTrack und behalte Drive als Sicherung.</string>
     <string name="bt_storage_tr_both_to_drive">Nur Google Drive verwenden</string>
@@ -1432,7 +1402,7 @@
     <string name="bt_storage_delete_everything">Alles auf diesem Gerät löschen</string>
     <string name="bt_storage_delete_everything_sub">Dein Tresor, dein Schlüssel und jedes Portfolio auf diesem Handy.</string>
     <string name="bt_storage_delete_warning_title">Das lässt sich nicht rückgängig machen</string>
-    <string name="bt_storage_delete_warning_body">Das löscht deinen Tresor, deinen Schlüssel und jedes Portfolio von diesem Gerät. Ohne Schlüsseldatei oder Kopie in Drive sind die Daten endgültig weg.</string>
+    <string name="bt_storage_delete_warning_body">Das löscht deinen Tresor, deinen Schlüssel und jedes Portfolio von diesem Gerät. Ohne Wiederherstellungs-Schlüssel oder Kopie in Drive sind die Daten endgültig weg.</string>
     <string name="bt_storage_delete_confirm_label">Tippe zur Bestätigung %1$s</string>
     <string name="bt_storage_delete_confirm_word">LÖSCHEN</string>
     <string name="bt_storage_delete_mismatch">Tippe es genau so wie angezeigt.</string>
@@ -1448,10 +1418,10 @@
     <string name="bt_intel_unavailable_title">Marktinfos sind für dein Konto nicht verfügbar</string>
     <string name="bt_intel_unavailable_message">Momentan lässt sich davon nichts abrufen. Sobald es wieder geht, steht es hier.</string>
     <string name="bt_intel_section_dividends">Dividenden</string>
-    <string name="bt_intel_section_earnings">Quartalszahlen</string>
+    <string name="bt_intel_section_earnings">Berichte</string>
     <string name="bt_intel_section_news">News</string>
     <string name="bt_intel_section_splits">Splits</string>
-    <string name="bt_intel_forward_yield">Erwartete Rendite</string>
+    <string name="bt_intel_forward_yield">Erwartete Dividendenrendite</string>
     <string name="bt_intel_trailing_amount">Letzte 12 Monate</string>
     <string name="bt_intel_next_payout">Nächste Zahlung</string>
     <string name="bt_intel_dividend_history">Letzte Zahlungen</string>
@@ -1481,8 +1451,8 @@
     <string name="bt_intel_projection_note">Geschätzt aus der zuletzt angekündigten Dividende je Anteil, in Euro umgerechnet.</string>
     <string name="bt_intel_projection_holding_line">%1$s × %2$s pro Jahr</string>
     <string name="bt_intel_news_digest">News-Überblick</string>
-    <string name="bt_intel_open_asset">Wertpapier öffnen</string>
-    <string name="bt_intel_held">Im Depot</string>
+    <string name="bt_intel_open_asset">Wert öffnen</string>
+    <string name="bt_intel_held">Im Bestand</string>
     <string name="bt_intel_watched">Beobachtet</string>
     <string name="bt_intel_age_now">gerade eben</string>
     <string name="bt_intel_age_minutes">vor %1$d Min.</string>
@@ -1494,12 +1464,11 @@
 
     <!-- Kommentare + Emoji-Reaktionen zu geteilten Elementen -->
     <string name="bt_thread_title">Kommentare</string>
-    <string name="bt_thread_reactions_label">Reaktionen</string>
     <string name="bt_thread_react_cd">Mit %1$s reagieren</string>
     <string name="bt_thread_unreact_cd">Deine Reaktion %1$s entfernen</string>
     <string name="bt_thread_add_reaction_cd">Reaktion hinzufügen</string>
     <string name="bt_thread_empty_title">Noch keine Kommentare</string>
-    <string name="bt_thread_empty_body">Sag als Erste:r etwas dazu — alle, mit denen es geteilt ist, sehen es.</string>
+    <string name="bt_thread_empty_body">Schreib den ersten Kommentar — alle, mit denen es geteilt ist, sehen es.</string>
     <string name="bt_thread_not_shared_title">Nicht mehr mit dir geteilt</string>
     <string name="bt_thread_not_shared_body">Wem das gehört, hat geändert, wer es sehen darf. Die Unterhaltung läuft dort weiter — nur eben ohne dich.</string>
     <string name="bt_thread_error_title">Kommentare konnten nicht geladen werden</string>
@@ -1512,7 +1481,7 @@
     <string name="bt_thread_delete_body">Er verschwindet für alle. Kommentare lassen sich nicht bearbeiten, nur löschen.</string>
     <string name="bt_thread_delete_action">Löschen</string>
     <string name="bt_thread_deleted_toast">Kommentar gelöscht</string>
-    <string name="bt_thread_rate_limited">Du hast in der letzten Stunde viel geschrieben. Mach kurz Pause und versuche es dann erneut.</string>
+    <string name="bt_thread_rate_limited">Zu viele Kommentare in der letzten Stunde. Bitte versuche es später erneut.</string>
     <string name="bt_thread_reaction_failed">Die Reaktion wurde nicht gespeichert. Versuche es erneut.</string>
     <plurals name="bt_thread_comment_count">
         <item quantity="one">%1$d Kommentar</item>
@@ -1520,11 +1489,10 @@
     </plurals>
 
     <!-- Die Freigabe-Art `idea` — eine gespeicherte Workboard-Analyse (Name + These + Backtest) -->
-    <string name="bt_share_kind_idea">Idee</string>
     <string name="bt_share_idea_subtitle">These und Backtest</string>
     <string name="bt_share_choose_idea">Lege fest, wer diese Idee lesen darf — deine These und den Backtest dahinter.</string>
     <string name="bt_share_hint_all_friends_idea">Alle Freunde können dann die These lesen und sehen, wie der Backtest ausgegangen ist.</string>
-    <string name="bt_share_hint_public_active_idea">Jede:r mit dem Link kann diese Idee lesen. Wähle eine andere Sichtbarkeit, um den Link abzuschalten.</string>
+    <string name="bt_share_hint_public_active_idea">Jeder mit dem Link kann diese Idee lesen. Wähle eine andere Sichtbarkeit, um den Link abzuschalten.</string>
 
     <!-- Freundesgruppen -->
     <string name="bt_groups_title">Freundesgruppen</string>
@@ -1549,7 +1517,7 @@
     <string name="bt_groups_expand_cd">Mitglieder von %1$s anzeigen</string>
     <string name="bt_groups_collapse_cd">Mitglieder von %1$s ausblenden</string>
     <string name="bt_groups_members">Mitglieder</string>
-    <string name="bt_groups_no_members">Noch niemand drin. Füge einen Freund hinzu, damit die Gruppe etwas bringt.</string>
+    <string name="bt_groups_no_members">Noch keine Mitglieder. Füge dieser Gruppe einen Freund hinzu.</string>
     <string name="bt_groups_add_member">Freund hinzufügen</string>
     <string name="bt_groups_add_done">Fertig</string>
     <string name="bt_groups_all_friends_in">Alle deine Freunde sind bereits in dieser Gruppe.</string>
@@ -1625,7 +1593,7 @@
     <string name="bt_ideas_create_title">Idee speichern</string>
     <string name="bt_ideas_name_label">Titel</string>
     <string name="bt_ideas_thesis_label">These (optional)</string>
-    <string name="bt_ideas_thesis_hint">Warum lohnt sich das?</string>
+    <string name="bt_ideas_thesis_hint">Warum lohnt es sich, das zu halten?</string>
     <string name="bt_ideas_source_label">Basiert auf</string>
     <string name="bt_ideas_source_conglomerate">Einem Konglomerat</string>
     <string name="bt_ideas_source_adhoc">Einzelnen Werten</string>
@@ -1642,7 +1610,7 @@
     <string name="bt_ideas_rebalance_yearly">Jährlich</string>
     <string name="bt_ideas_mode_label">Wenn eine Gewichtung überläuft</string>
     <string name="bt_ideas_mode_hint">Was passiert, wenn eine Position ihren vollen Anteil nicht aufnehmen kann.</string>
-    <string name="bt_ideas_mode_clip">Abschneiden</string>
+    <string name="bt_ideas_mode_clip">Deckeln</string>
     <string name="bt_ideas_mode_cash">Als Bargeld liegen lassen</string>
     <string name="bt_ideas_mode_redistribute">Auf die anderen verteilen</string>
     <string name="bt_ideas_benchmark_label">Vergleichsindex</string>
@@ -1672,7 +1640,7 @@
     </plurals>
 
     <!-- ── V5 W6 — manuelle Kurse + ehrliche Zustände ohne Live-Kurse ─────── -->
-    <string name="bt_price_manual_badge">manuell</string>
+    <string name="bt_price_manual_badge">Manuell</string>
     <string name="bt_price_none">Noch kein Kurs</string>
     <string name="bt_price_add">Kurs eintragen</string>
     <string name="bt_price_update">Kurs ändern</string>
@@ -1689,11 +1657,11 @@
     <string name="bt_price_delete_body">%1$s vom %2$s wird entfernt und dieses Portfolio sofort neu berechnet.</string>
     <string name="bt_price_delete_confirm">Entfernen</string>
     <string name="bt_price_err_number">Gib den Kurs als Zahl ein.</string>
-    <string name="bt_price_err_positive">Ein Kurs muss größer als null sein. Wenn du ihn nicht kennst, lass ihn weg — BetterTrack sagt lieber nichts, als zu raten.</string>
+    <string name="bt_price_err_positive">Ein Kurs muss größer als null sein. Wenn du ihn nicht kennst, lass ihn weg.</string>
     <string name="bt_price_err_large">Das sieht zu groß aus. Prüf das Dezimaltrennzeichen.</string>
     <string name="bt_price_err_future">Ein Kurs kann nicht aus der Zukunft kommen.</string>
     <string name="bt_price_err_currency">Nimm einen dreibuchstabigen Währungscode, zum Beispiel EUR.</string>
-    <string name="bt_price_err_rate">Auf diesem Gerät gibt es keinen Kurs %1$s → %2$s, deshalb lässt sich ein Preis in %1$s hier nicht verwenden. Trag ihn in %2$s ein.</string>
+    <string name="bt_price_err_rate">Auf diesem Gerät gibt es keinen Wechselkurs %1$s → %2$s, deshalb lässt sich ein Kurs in %1$s hier nicht verwenden. Trage ihn in %2$s ein.</string>
     <string name="bt_price_unpriced_title">Noch keine Kurse</string>
     <string name="bt_price_unpriced_body">Deine Transaktionen und dein Bargeld liegen sicher auf diesem Gerät. Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
     <plurals name="bt_price_unpriced_note">
@@ -1701,8 +1669,8 @@
         <item quantity="other">Ohne %1$d Positionen ohne Kurs</item>
     </plurals>
     <string name="bt_price_search_title">Suche braucht Kursabfragen</string>
-    <string name="bt_price_search_body">In diesem Modus liegt kein Wertpapier-Verzeichnis auf dem Gerät, es gibt also nichts zu durchsuchen. Du kannst jeden Wert weiterhin selbst anlegen und selbst bewerten.</string>
-    <string name="bt_price_asset_unavailable">Diese Wertpapierseite braucht Live-Kurse, die es in diesem Modus nicht gibt. Die Kurse, die du selbst eingetragen hast, stehen bei der Position.</string>
+    <string name="bt_price_search_body">In diesem Modus liegt kein Wertverzeichnis auf dem Gerät, es gibt also nichts zu durchsuchen. Du kannst jeden Wert weiterhin selbst anlegen und selbst bewerten.</string>
+    <string name="bt_price_asset_unavailable">Diese Wertseite braucht Live-Kurse, die es in diesem Modus nicht gibt. Die Kurse, die du selbst eingetragen hast, stehen bei der Position.</string>
 
     <!-- ── V5 W6 — Opt-in „nur für Kurse“ ────────────────────────────────── -->
     <string name="bt_prices_section">Kurse</string>
@@ -1726,7 +1694,7 @@
     <!-- Home -->
     <string name="bt_home_net_worth">Nettovermögen</string>
     <string name="bt_home_across_portfolios">Über %1$d von %2$d Portfolios</string>
-    <string name="bt_home_needs_you">Zu erledigen</string>
+    <string name="bt_home_needs_you">Wartet auf dich</string>
     <plurals name="bt_home_alerts_triggered">
         <item quantity="one">%1$d Alarm ausgelöst</item>
         <item quantity="other">%1$d Alarme ausgelöst</item>
@@ -1741,7 +1709,7 @@
         <item quantity="one">%1$d Freundschaftsanfrage</item>
         <item quantity="other">%1$d Freundschaftsanfragen</item>
     </plurals>
-    <string name="bt_home_friend_requests_sub">Unter Leute beantworten</string>
+    <string name="bt_home_friend_requests_sub">Im Tab „Leute“ beantworten</string>
     <plurals name="bt_home_unread_messages">
         <item quantity="one">%1$d ungelesene Nachricht</item>
         <item quantity="other">%1$d ungelesene Nachrichten</item>
@@ -1756,7 +1724,7 @@
         <item quantity="one">%1$d Position braucht einen Kurs</item>
         <item quantity="other">%1$d Positionen brauchen einen Kurs</item>
     </plurals>
-    <string name="bt_home_unpriced_more">%1$d weitere im Portfolio</string>
+    <string name="bt_home_unpriced_more">%1$d weitere im Portfolio-Tab</string>
     <string name="bt_home_portfolios">Deine Portfolios</string>
     <string name="bt_home_more">Mehr</string>
     <string name="bt_home_on">An</string>
@@ -1789,9 +1757,9 @@
 
     <!-- Anmeldung: Zugangsdaten + Kontostatus -->
     <string name="bt_err_invalid_credentials">Falsche E-Mail-Adresse, falscher Benutzername oder falsches Passwort.</string>
-    <string name="bt_err_account_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administratorin oder deinen Administrator.</string>
-    <string name="bt_err_user_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administratorin oder deinen Administrator.</string>
-    <string name="bt_err_admin_account_kind">Die BetterTrack App ist ausschließlich für persönliche Konten.</string>
+    <string name="bt_err_account_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administration.</string>
+    <string name="bt_err_user_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administration.</string>
+    <string name="bt_err_admin_account_kind">Die BetterTrack-App ist ausschließlich für persönliche Konten.</string>
     <string name="bt_err_password_change_required">Du musst ein neues Passwort festlegen, bevor du fortfahren kannst.</string>
     <string name="bt_err_admin_2fa_setup_required">Für dieses Konto muss zuerst die Zwei-Faktor-Authentifizierung eingerichtet werden.</string>
     <string name="bt_err_weak_password">Dieses Passwort ist nicht sicher genug. Wähle ein längeres, weniger gebräuchliches.</string>
@@ -1860,7 +1828,7 @@
     <string name="bt_err_cash_source_archived">Diese Bargeldquelle ist archiviert. Stelle sie wieder her, bevor du neue Bewegungen erfasst.</string>
     <string name="bt_err_cash_source_already_archived">Diese Bargeldquelle ist bereits archiviert.</string>
     <string name="bt_err_cash_source_not_archived">Diese Bargeldquelle ist nicht archiviert.</string>
-    <string name="bt_err_cash_source_is_main">Die Haupt-Bargeldquelle kann nicht archiviert werden.</string>
+    <string name="bt_err_cash_source_is_main">Die primäre Bargeldquelle kann nicht archiviert werden.</string>
     <string name="bt_err_cash_source_not_empty">Nur eine Bargeldquelle mit Nullsaldo kann archiviert werden. Übertrage oder hebe den Rest zuerst ab.</string>
     <string name="bt_err_cash_movement_not_found">Diese Bewegung konnten wir nicht finden.</string>
     <string name="bt_err_cash_movement_not_editable">Diese Bewegung stammt aus einem Trade oder einer Dividende — bearbeite stattdessen diese.</string>
@@ -1872,7 +1840,7 @@
     <string name="bt_err_cash_transfer_invalid">Diese Umbuchung lässt sich so nicht erfassen.</string>
     <string name="bt_err_cash_tag_not_found">Dieses Tag konnten wir nicht finden.</string>
     <string name="bt_err_cash_tag_name_taken">Du hast bereits ein Tag mit diesem Namen.</string>
-    <string name="bt_err_cash_tag_system_protected">Integrierte Tags lassen sich nicht löschen — benenne es stattdessen um.</string>
+    <string name="bt_err_cash_tag_system_protected">Ein vorgegebenes Tag lässt sich nicht löschen — benenne es stattdessen um.</string>
     <string name="bt_err_cash_tag_ref_not_found">Eines dieser Tags existiert nicht mehr.</string>
     <string name="bt_err_cash_rule_not_found">Diese Regel konnten wir nicht finden.</string>
     <string name="bt_err_cash_rule_regex_unsupported">Dieses Muster ist kein unterstützter regulärer Ausdruck.</string>
@@ -1882,7 +1850,7 @@
     <string name="bt_err_standing_order_end_before_start">Das Enddatum muss am oder nach dem Startdatum liegen.</string>
     <string name="bt_err_standing_order_insufficient_cash">Es ist nicht genug Bargeld vorhanden, um diesen Dauerauftrag zu decken.</string>
 
-    <!-- Werte, Körbe, Watchlists, Workboard, Alarme, KI -->
+    <!-- Werte, Konglomerate, Watchlists, Werkbank, Alarme, KI -->
     <string name="bt_err_asset_not_found">Diesen Wert konnten wir nicht finden.</string>
     <string name="bt_err_custom_asset_not_found">Diesen eigenen Wert konnten wir nicht finden.</string>
     <string name="bt_err_duplicate_value_point">Für dieses Datum existiert bereits ein Wert.</string>
@@ -1890,29 +1858,29 @@
     <string name="bt_err_manual_asset_empty">Für diesen eigenen Wert gibt es noch keine Werte.</string>
     <string name="bt_err_quote_unavailable">Wir konnten keinen aktuellen Kurs abrufen. Bitte versuche es in Kürze erneut.</string>
     <string name="bt_err_no_quote">Für diesen Wert gibt es keinen aktuellen Kurs.</string>
-    <string name="bt_err_conglomerate_not_found">Diesen Korb konnten wir nicht finden.</string>
-    <string name="bt_err_conglomerate_name_taken">Ein Korb mit diesem Namen existiert bereits.</string>
-    <string name="bt_err_conglomerate_in_use">Dieser Korb ist Teil eines anderen Korbs — entferne ihn zuerst dort.</string>
-    <string name="bt_err_conglomerate_visibility_guard_required">Ändere die Sichtbarkeit dieses Korbs in den Freigabe-Einstellungen.</string>
-    <string name="bt_err_duplicate_asset">Ein Wert darf in einem Korb nur einmal vorkommen.</string>
-    <string name="bt_err_duplicate_child">Ein Korb darf in einem anderen Korb nur einmal vorkommen.</string>
-    <string name="bt_err_nesting_cycle">Ein Korb kann sich nicht selbst enthalten.</string>
-    <string name="bt_err_nesting_too_deep">Diese Körbe sind zu tief verschachtelt.</string>
-    <string name="bt_err_too_many_positions">Dieser Korb hat die maximale Anzahl an Positionen erreicht.</string>
-    <string name="bt_err_activation_invalid">Dieser Korb benötigt mindestens eine Position, und seine Gewichtungen müssen insgesamt 100 Prozent ergeben, bevor er aktiviert werden kann.</string>
-    <string name="bt_err_allocation_no_positions">Dieser Korb hat keine Positionen, auf die sich ein Budget verteilen ließe.</string>
+    <string name="bt_err_conglomerate_not_found">Dieses Konglomerat konnten wir nicht finden.</string>
+    <string name="bt_err_conglomerate_name_taken">Ein Konglomerat mit diesem Namen existiert bereits.</string>
+    <string name="bt_err_conglomerate_in_use">Dieses Konglomerat ist Teil eines anderen Konglomerats — entferne ihn zuerst dort.</string>
+    <string name="bt_err_conglomerate_visibility_guard_required">Ändere die Sichtbarkeit dieses Konglomerats in den Freigabe-Einstellungen.</string>
+    <string name="bt_err_duplicate_asset">Ein Wert darf in einem Konglomerat nur einmal vorkommen.</string>
+    <string name="bt_err_duplicate_child">Ein Konglomerat darf in einem anderen Konglomerat nur einmal vorkommen.</string>
+    <string name="bt_err_nesting_cycle">Ein Konglomerat kann sich nicht selbst enthalten.</string>
+    <string name="bt_err_nesting_too_deep">Diese Konglomerate sind zu tief verschachtelt.</string>
+    <string name="bt_err_too_many_positions">Dieses Konglomerat hat die maximale Anzahl an Positionen erreicht.</string>
+    <string name="bt_err_activation_invalid">Dieses Konglomerat benötigt mindestens eine Position, und seine Gewichtungen müssen insgesamt 100 Prozent ergeben, bevor es aktiviert werden kann.</string>
+    <string name="bt_err_allocation_no_positions">Dieses Konglomerat hat keine Positionen, auf die sich ein Budget verteilen ließe.</string>
     <string name="bt_err_allocation_invalid">Diese Aufteilung lässt sich so nicht berechnen.</string>
-    <string name="bt_err_backtest_unavailable">Für diesen Rücktest liegen nicht genügend Daten vor.</string>
-    <string name="bt_err_no_price_history">Für diesen Rücktest gibt es keine Kurshistorie.</string>
-    <string name="bt_err_fx_unavailable">Eine für diesen Rücktest nötige Währungsumrechnung ist derzeit nicht verfügbar.</string>
-    <string name="bt_err_sandbox_private_asset">Ein privater eigener Wert lässt sich in einer geteilten Testumgebung nicht zurückrechnen.</string>
-    <string name="bt_err_sandbox_positions_mismatch">Die Gewichtungen müssen exakt die Positionen des geteilten Korbs abdecken.</string>
+    <string name="bt_err_backtest_unavailable">Für diesen Backtest liegen nicht genügend Daten vor.</string>
+    <string name="bt_err_no_price_history">Für diesen Backtest gibt es keine Kurshistorie.</string>
+    <string name="bt_err_fx_unavailable">Eine für diesen Backtest nötige Währungsumrechnung ist derzeit nicht verfügbar.</string>
+    <string name="bt_err_sandbox_private_asset">Ein privater eigener Wert lässt sich in einer geteilten Testumgebung nicht backtesten.</string>
+    <string name="bt_err_sandbox_positions_mismatch">Die Gewichtungen müssen exakt die Positionen des geteilten Konglomerats abdecken.</string>
     <string name="bt_err_watchlist_not_found">Diese Watchlist konnten wir nicht finden.</string>
     <string name="bt_err_watchlist_name_taken">Eine Watchlist mit diesem Namen existiert bereits.</string>
     <string name="bt_err_watchlist_default_locked">Die Standard-Watchlist kann nicht umbenannt oder gelöscht werden.</string>
     <string name="bt_err_already_watching">Dieser Wert steht bereits auf dieser Watchlist.</string>
-    <string name="bt_err_item_not_found">Diesen Workboard-Eintrag konnten wir nicht finden.</string>
-    <string name="bt_err_idea_conglomerate_not_found">Der Korb, auf den sich diese Idee bezieht, existiert nicht mehr.</string>
+    <string name="bt_err_item_not_found">Diesen Werkbank-Eintrag konnten wir nicht finden.</string>
+    <string name="bt_err_idea_conglomerate_not_found">Das Konglomerat, auf das sich diese Idee bezieht, existiert nicht mehr.</string>
     <string name="bt_err_alert_not_found">Diesen Alarm konnten wir nicht finden.</string>
     <string name="bt_err_alert_sharing_ack_required">Wenn du deine Alarme teilst, sehen Follower, welche Werte du beobachtest, und deine Kursziele. Bestätige dies, um es zu aktivieren.</string>
     <string name="bt_err_ai_no_data">Dieses Portfolio hat keine bewerteten Positionen zum Analysieren.</string>
@@ -1927,7 +1895,7 @@
     <string name="bt_err_mirror_already_member">Diese Person ist bereits Mitglied dieses Gruppen-Portfolios.</string>
     <string name="bt_err_mirror_already_synced">Dieses Portfolio ist bereits ein Gruppen-Portfolio.</string>
     <string name="bt_err_mirror_no_members">Dieses Gruppen-Portfolio hat keine aktiven Kopien zum Beitreten.</string>
-    <string name="bt_err_mirror_not_friends">Du kannst ein Gruppen-Portfolio nur mit deinen Freundinnen und Freunden teilen.</string>
+    <string name="bt_err_mirror_not_friends">Du kannst ein Gruppen-Portfolio nur mit deinen Freunden teilen.</string>
     <string name="bt_err_mirror_cannot_invite_self">Du kannst dich nicht selbst einladen.</string>
     <string name="bt_err_mirror_member_cap_reached">Dieses Gruppen-Portfolio ist voll.</string>
     <string name="bt_err_mirror_invite_exists">Für diese Person ist bereits eine Einladung offen.</string>
@@ -1936,15 +1904,15 @@
     <string name="bt_err_mirror_row_deleted">Dieser Eintrag wurde aus dem geteilten Portfolio entfernt, daher lässt sich die Änderung nicht anwenden.</string>
     <string name="bt_err_mirror_busy">Dieses Gruppen-Portfolio wendet gerade eine andere Änderung an. Bitte versuche es in Kürze erneut.</string>
     <string name="bt_err_mirror_sync_stalled">Das geteilte Portfolio synchronisiert noch. Das wird automatisch erneut versucht.</string>
-    <string name="bt_err_mirror_asset_not_syncable">Eigene Werte können nicht in ein Gruppen-Portfolio — andere Mitglieder könnten sie nicht sehen. Nutze eines deiner eigenen Portfolios.</string>
+    <string name="bt_err_mirror_asset_not_syncable">Eigene Werte lassen sich nicht in ein Gruppen-Portfolio aufnehmen — andere Mitglieder könnten sie nicht sehen. Nutze eines deiner eigenen Portfolios.</string>
     <string name="bt_err_mirror_owner_transfer_required">Übertrage zuerst die Eigentümerschaft dieses Gruppen-Portfolios.</string>
 
     <!-- Soziales, Teilen und Chat -->
     <string name="bt_err_friend_request_not_found">Diese Freundschaftsanfrage konnten wir nicht finden.</string>
     <string name="bt_err_friendship_not_found">Du bist mit dieser Person nicht befreundet.</string>
-    <string name="bt_err_friend_group_not_found">Diesen Kreis konnten wir nicht finden.</string>
-    <string name="bt_err_group_member_not_friend">Nur deine Freundinnen und Freunde können zu einem Kreis hinzugefügt werden.</string>
-    <string name="bt_err_group_audience_invalid">Zum Teilen mit einem Kreis brauchst du einen deiner eigenen Kreise.</string>
+    <string name="bt_err_friend_group_not_found">Diese Gruppe konnten wir nicht finden.</string>
+    <string name="bt_err_group_member_not_friend">Nur deine Freunde können zu einer Gruppe hinzugefügt werden.</string>
+    <string name="bt_err_group_audience_invalid">Zum Teilen mit einer Gruppe brauchst du eine deiner eigenen Gruppen.</string>
     <string name="bt_err_follow_not_found">Du folgst dieser Person nicht.</string>
     <string name="bt_err_cannot_follow_self">Du kannst dir nicht selbst folgen.</string>
     <string name="bt_err_item_follow_not_found">Du folgst diesem Eintrag nicht.</string>
@@ -1958,8 +1926,8 @@
     <string name="bt_err_chat_banned">Du kannst derzeit keine Nachrichten senden.</string>
     <string name="bt_err_chat_chip_not_owned">Du kannst nur einen Eintrag teilen, der dir gehört.</string>
 
-    <!-- Benachrichtigungen und Zustellung -->
-    <string name="bt_err_notification_not_found">Diese Benachrichtigung konnten wir nicht finden.</string>
+    <!-- Mitteilungen und Zustellung -->
+    <string name="bt_err_notification_not_found">Diese Mitteilung konnten wir nicht finden.</string>
     <string name="bt_err_web_push_endpoint_unsafe">Diese Push-Adresse wurde als unsicher abgelehnt.</string>
     <string name="bt_err_web_push_subscription_limit_reached">Du hast die maximale Anzahl an Push-Geräten erreicht.</string>
     <string name="bt_err_webhook_not_found">Diesen Webhook konnten wir nicht finden.</string>
@@ -2012,7 +1980,7 @@
     <string name="bt_err_app_op_no_cash_source">Dieses Portfolio hat noch keine Bargeldquelle, daher lässt sich die Bargeldseite dieses Eintrags nicht erfassen.</string>
     <string name="bt_err_app_op_zero_amount">Dieser Betrag wird auf null gerundet, es gibt also nichts zu erfassen.</string>
     <string name="bt_err_app_op_no_rate">Auf diesem Gerät gibt es keinen %1$s-Wechselkurs, daher lässt sich die Bargeldseite dieses Trades nicht bewerten. Stelle eine Internetverbindung her oder erfasse den Trade ohne Bargeldzahlung.</string>
-    <string name="bt_err_no_live_prices">BetterTrack hat auf diesem Gerät keinen Kurs für diesen Wert. Trage selbst einen Wert ein oder aktiviere die Kursabfrage in den Einstellungen.</string>
+    <string name="bt_err_no_live_prices">BetterTrack hat auf diesem Gerät keinen Kurs für diesen Wert. Trage selbst einen Kurs ein oder aktiviere die Kursabfrage in den Einstellungen.</string>
     <string name="bt_err_direct_provider_disabled">Direkte Kursabfragen sind in dieser Version nicht aktiviert.</string>
     <string name="bt_err_no_exchange_rate">Auf diesem Gerät gibt es keinen %1$s-Wechselkurs, daher lässt sich dieses Portfolio noch nicht bewerten.</string>
     <string name="bt_err_vault_derivation_failed">Die Kennzahlen dieses Portfolios konnten auf diesem Gerät nicht berechnet werden.</string>
