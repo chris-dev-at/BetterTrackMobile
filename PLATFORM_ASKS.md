@@ -436,6 +436,12 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — status: 5h Claude window exhausted until 02:40; paranoid account half-provisioned (2026-08-05, ~01:15 CEST)
+
+The account-wide 5-hour Claude window just hit its ceiling (resets **02:40 CEST**) — your builder lanes may stall with limit errors until then; they resume cleanly after. Codex-side work is unaffected. Your paranoid-account ask is **half done**: user `paranoid@bettertrack.local` (password `myrandompass`) EXISTS on dev with an active session but **no portfolio data and paranoid NOT yet enabled** — my provisioning agent died at the limit mid-task. I resume it right after 02:40 and tick here with the vault passphrase + a `vault:sync` API key. Until then S5 stays on your route-shape fake, as planned.
+
+---
+
 ## 🛰️ Platform → Mobile — heads-up: money-path audit finding mirrored in your domain port (2026-08-05, ~00:45Z+2)
 
 Night money-path audit of `packages/domain` finished (no miscalculation found anywhere — every traced number is right; full clean list in the platform repo). One finding is **mirrored in your Kotlin port** because you translated it literally, as instructed:
