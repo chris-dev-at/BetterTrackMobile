@@ -1,7 +1,6 @@
 package at.bettertrack.app.vault.server
 
 import android.util.Log
-import at.bettertrack.app.data.db.VaultMetaKeys
 import at.bettertrack.app.vault.DataHomeAbsent
 import at.bettertrack.app.vault.DataHomeBytes
 import at.bettertrack.app.vault.DataHomeCorrupt
@@ -14,6 +13,7 @@ import at.bettertrack.app.vault.VaultKeyCustody
 import at.bettertrack.app.vault.VaultStore
 import at.bettertrack.app.vault.decodeVaultEnvelope
 import at.bettertrack.app.vault.decryptVaultDocument
+import at.bettertrack.app.vault.vaultLastPushedKey
 
 /**
  * **The payoff.** A paranoid account gets its portfolio back on this phone.
@@ -116,7 +116,7 @@ class ServerVaultAdoption(
             // Record the CAS cursor for the server medium so the first push after
             // adoption is a legitimate replace and not a doomed create.
             store.putMeta(
-                "${VaultMetaKeys.LAST_PUSHED_VERSION}:${DataHomeMedium.SERVER.wire}",
+                vaultLastPushedKey(DataHomeMedium.SERVER),
                 decrypted.header.vaultVersion.toString(),
             )
             deriveProjections()

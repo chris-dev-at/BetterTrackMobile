@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -277,7 +278,7 @@ private fun WorkbenchNeedsYou(
         }
         if (hidden > 0) {
             Text(
-                text = stringResource(R.string.bt_workbench_needs_more, hidden),
+                text = pluralStringResource(R.plurals.bt_workbench_needs_more, hidden, hidden),
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),

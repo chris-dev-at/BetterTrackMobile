@@ -287,3 +287,115 @@ fun BtErrorState(
         },
     )
 }
+
+/**
+ * A failure that belongs to an ACTION the user just took — a save, a submit, a
+ * toggle — rather than to a read.
+ *
+ * ## Why this is not [BtInlineError]
+ *
+ * [BtInlineError]'s retry is mandatory, and for a dropped *read* that is exactly
+ * right: without it the only cure is to leave the screen and come back, which
+ * users do not know to do. A failed *write* is the opposite situation. The
+ * control that caused it is still on screen and still armed — the Save button,
+ * the confirm, the toggle — so a Retry beside it would be a second button doing
+ * the first one's job. Worse, it would be a button whose behaviour has to be
+ * guessed: re-running "the save" from an error row means re-reading form state
+ * that the user may have edited since, so the retry that looks obvious is the
+ * one most likely to submit something the user did not intend.
+ *
+ * So this keeps the typed [BtMessage] contract and the red, and deliberately
+ * offers no action. Screens with this case were each writing
+ * `Text(failure.resolveWithDiagnostic(), color = bt.loss)` by hand — correct in
+ * substance, but drifting in size and spacing, and one `String` parameter away
+ * from a raw server message reaching a user.
+ *
+ * Text-only, no glyph: this row sits directly beneath the control it belongs to,
+ * where an icon would compete with the button for the eye. [BtInlineError] earns
+ * its glyph because it stands alone in a section with no other explanation.
+ */
+@Composable
+fun BtFormError(
+    message: BtMessage,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = message.resolveWithDiagnostic(),
+        style = MaterialTheme.typography.bodySmall,
+        color = BtTheme.colors.loss,
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * "There is nothing here" inside ONE section of a screen that otherwise loaded —
+ * the calm sibling of [BtInlineError].
+ *
+ * ## Why this exists
+ *
+ * [BtEmptyState] claims the surface: a 64dp glyph badge, a centred title and
+ * 32dp of padding all round. That is exactly right when the screen has nothing
+ * to show, and exactly wrong inside a dividends card, a 180dp chart slot or a
+ * picker sheet — there it would announce that the *page* is empty, and in a
+ * fixed-height slot it does not even fit.
+ *
+ * So the app grew private one-line empties instead: `IntelEmptyLine`,
+ * `HintLine`, `CashBudgetsEmpty`, and a long tail of loose `Text(...)` calls
+ * sitting in `if (list.isEmpty())` branches. That is precisely the fragmentation
+ * [BtInlineError] was extracted to end — the *error* half of the pair had a
+ * component and the *empty* half did not, so every screen answered the same
+ * question by itself and arrived somewhere slightly different.
+ *
+ * ## Why it looks nothing like the error row
+ *
+ * No glyph, no accent, muted text. An empty section is an ANSWER, not a
+ * failure: giving "no dividends were paid" the error row's red `ErrorOutline`
+ * would tell the user something broke when nothing did. The one-line weight is
+ * the point — it says "this section has its answer, and the answer is none"
+ * without interrupting the page around it.
+ *
+ * [action] exists for the minority of sections that have a genuine next step.
+ * Most have none, and inventing one is worse than the silence.
+ *
+ * ## [message] — because an empty state is often the onboarding
+ *
+ * [BtEmptyState] takes a title AND a message, and this needed the same pair for
+ * a reason worth writing down: the first version shipped with only one line, and
+ * converting the budgets block to it silently deleted *"Set a monthly target for
+ * a tag and track what's left as you spend"* — the one sentence that explained
+ * what budgets are. A section is empty most often because the user has never
+ * used the feature, so the empty state is precisely where the explanation earns
+ * its place, and a primitive that cannot carry one quietly costs copy every time
+ * it is adopted. The second line is a step quieter (`labelSmall`), the same
+ * relationship the full state scaffold gives its own detail line.
+ */
+@Composable
+fun BtInlineEmpty(
+    text: String,
+    modifier: Modifier = Modifier,
+    message: String? = null,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val bt = BtTheme.colors
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textMuted,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!message.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelSmall,
+                color = bt.textMuted.copy(alpha = 0.8f),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (action != null) {
+            Spacer(Modifier.height(12.dp))
+            action()
+        }
+    }
+}

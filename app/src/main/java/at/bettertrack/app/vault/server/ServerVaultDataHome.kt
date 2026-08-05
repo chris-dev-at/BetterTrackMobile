@@ -72,6 +72,16 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * sync rather than that authority. Sending it would be a request the app cannot
  * mean. Enrolling a retirement verifier stays a browser act.
  *
+ * ## The one header used two ways
+ *
+ * `If-None-Match` appears on both verbs here and means different things on each.
+ * On the `PUT` it is the RFC "create if absent" wildcard (`*`) that makes a write
+ * a create rather than a replace — mandatory, or the platform answers `428`. On
+ * the `GET` it is a conditional-read validator carrying a concrete version, and
+ * the `304` it earns is served from [ServerVaultEtagCache]. The two never meet:
+ * the cache is consulted on `GET` only, and a write drops its entry before the
+ * request goes out.
+ *
  * ## Why plain OkHttp and not Retrofit
  *
  * Same reason `DriveDataHome` gives: the payload is opaque bytes with meaning
@@ -93,6 +103,12 @@ class ServerVaultDataHome(
      */
     private val hasSession: () -> Boolean = { true },
     private val isOnline: () -> Boolean = { true },
+    /**
+     * The conditional-read cache for the main `GET` (S5 tail). Injected rather
+     * than owned so account teardown can clear it beside the S2a interceptor —
+     * no ciphertext may outlive the session it was fetched under.
+     */
+    private val etagCache: ServerVaultEtagCache = ServerVaultEtagCache(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DataHome {
 
@@ -102,15 +118,69 @@ class ServerVaultDataHome(
 
     // ── DataHome ────────────────────────────────────────────────────────────
 
+    /**
+     * `GET /vault`, conditionally.
+     *
+     * The platform answers `304` when `If-None-Match` names the stored version,
+     * so an unchanged vault costs headers instead of a whole envelope — worth
+     * having, because this is the read a status probe and every sync pass make.
+     *
+     * The three rules that make it safe rather than merely cheap are all visible
+     * below and documented on [ServerVaultEtagCache]: the validator is only sent
+     * while the body it names is still held; a `304` we cannot honour drops the
+     * validator and refetches instead of returning nothing; and the bytes a
+     * `304` is answered with go through [readEnvelope] exactly as a live `200`
+     * does, so the "ETag *is* the vault version" invariant is re-proven on every
+     * serve rather than assumed once.
+     */
     override suspend fun read(): DataHomeReadResult {
-        val fetched = fetch(Request.Builder().url(vaultUrl).get().build(), mutating = false)
-        return when (fetched) {
-            is Fetched.Failure -> DataHomeTransport(medium, fetched.failure)
-            is Fetched.Ok -> when (fetched.code) {
-                404 -> DataHomeAbsent(medium)
-                200 -> readEnvelope(fetched.body, fetched.etag)
-                else -> DataHomeTransport(medium, unexpected("GET vault failed.", fetched))
+        val validator = etagCache.validator(medium)
+        val fetched = getVault(validator)
+        if (fetched is Fetched.Ok && fetched.code == 304) {
+            val cached = etagCache.cached(medium, fetched.etag)
+            if (cached != null) return readEnvelope(cached.envelope, cached.etag)
+            // The entry went away between the request and the response (a
+            // logout, a write, a clear). Refetch WITHOUT the validator rather
+            // than hand the caller an empty body it would read as corruption.
+            etagCache.forget(medium)
+            return readOutcome(getVault(null))
+        }
+        return readOutcome(fetched)
+    }
+
+    private suspend fun getVault(validator: String?): Fetched {
+        val builder = Request.Builder().url(vaultUrl).get()
+        // Deliberately the same header name `write()` uses, and deliberately not
+        // the same thing: here it is a conditional-read validator, there it is
+        // the RFC `*` create wildcard on a PUT. Different verb, different
+        // meaning, and this branch is the only one that ever sends a version.
+        if (validator != null) builder.header(HEADER_IF_NONE_MATCH, validator)
+        return fetch(builder.build(), mutating = false)
+    }
+
+    private fun readOutcome(fetched: Fetched): DataHomeReadResult = when (fetched) {
+        is Fetched.Failure -> DataHomeTransport(medium, fetched.failure)
+        is Fetched.Ok -> when (fetched.code) {
+            404 -> {
+                // No vault: the held body names nothing any more.
+                etagCache.forget(medium)
+                DataHomeAbsent(medium)
             }
+
+            200 -> readEnvelope(fetched.body, fetched.etag).also { result ->
+                // Only a read that PASSED the version invariant may be cached —
+                // otherwise a later 304 would replay bytes this build already
+                // decided it could not trust.
+                if (result is DataHomeBytes) {
+                    etagCache.remember(medium, fetched.etag, result.envelope, result.info.version)
+                } else {
+                    etagCache.forget(medium)
+                }
+            }
+
+            // Includes a `304` answering a request that carried no validator —
+            // a server we cannot satisfy, never an empty body handed upwards.
+            else -> DataHomeTransport(medium, unexpected("GET vault failed.", fetched))
         }
     }
 
@@ -144,6 +214,11 @@ class ServerVaultDataHome(
         if (ifVersion == null) builder.header(HEADER_IF_NONE_MATCH, "*")
         else builder.header(HEADER_IF_MATCH, vaultEtag(ifVersion))
 
+        // Whatever this PUT does to the stored vault, the cached GET body stops
+        // being the current one. Dropped BEFORE the request so no outcome —
+        // success, conflict, or a lost response that may still have committed —
+        // can leave a validator pointing at bytes the server has superseded.
+        etagCache.forget(medium)
         val fetched = fetch(builder.build(), mutating = true)
         return when (fetched) {
             is Fetched.Failure -> DataHomeTransport(medium, fetched.failure)

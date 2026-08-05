@@ -84,6 +84,14 @@ data class SharedWithMeResponse(
     val portfolios: List<SharedPortfolioSummaryDto> = emptyList(),
     val conglomerates: List<SharedConglomerateSummaryDto> = emptyList(),
     val watchlists: List<SharedWatchlistSummaryDto> = emptyList(),
+    /**
+     * V5: the FOURTH array. It has been on the wire since ideas became a share
+     * kind, and the app dropped every element of it silently — the global
+     * `ignoreUnknownKeys = true` means a missing DTO field is not an error, it
+     * is nothing at all. Defaulted, so a pre-v5 body without the key still
+     * decodes.
+     */
+    val ideas: List<SharedIdeaSummaryDto> = emptyList(),
 )
 
 @Serializable
@@ -113,6 +121,33 @@ data class SharedWatchlistSummaryDto(
     val name: String,
     val owner: SocialUserDto,
     val itemCount: Int,
+    val activityAlertsEnabled: Boolean = false,
+)
+
+/**
+ * V5: one friend-shared idea (a saved workboard analysis) — a **read-only
+ * pointer**, not the idea.
+ *
+ * The three sibling summaries above each point at a detail route the viewer can
+ * open (`GET /social/shared/...`). This one deliberately does not: there is no
+ * shared-idea read route, and `GET /ideas/{ideaId}` is owner-only — a friend's
+ * idea answers **404** there (verified live against the dev backend, 2026-08-05).
+ * Cloning it into an own private copy (`POST /ideas/{ideaId}/clone`) is the only
+ * way a non-owner ever reads the full state, which is why the row's action is a
+ * copy rather than a chevron.
+ *
+ * [hasThesis] is a boolean and not the text on purpose: the platform does not
+ * inline the thesis here, so "there is a rationale attached" is the entire
+ * signal the app has before the copy exists.
+ */
+@Serializable
+data class SharedIdeaSummaryDto(
+    val ideaId: String,
+    val name: String,
+    val owner: SocialUserDto,
+    /** Whether a free-text thesis note is attached; the text is NOT inlined. */
+    val hasThesis: Boolean = false,
+    /** Viewer's per-item activity-alert opt-in (V3-P6); delivery deferred to #368. */
     val activityAlertsEnabled: Boolean = false,
 )
 

@@ -60,6 +60,7 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.btExpandHeader
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
@@ -423,13 +424,7 @@ private fun AssetLoadedContent(
                         AssetHistoryUiState.Empty -> Box(
                             Modifier.fillMaxWidth().height(180.dp),
                             contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                stringResource(R.string.bt_asset_chart_empty),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                            )
-                        }
+                        ) { BtInlineEmpty(stringResource(R.string.bt_asset_chart_empty)) }
 
                         // The chart is secondary to the price above it, so the
                         // failure stays inline and keeps the same shape the intel

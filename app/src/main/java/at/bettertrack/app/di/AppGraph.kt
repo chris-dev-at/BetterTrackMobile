@@ -274,6 +274,10 @@ object AppGraph {
                 // may outlive the account they belong to.
                 at.bettertrack.app.data.api.ParanoidModeState.clear()
                 etagInterceptor.clear()
+                // V5 S5 tail: the vault's own conditional-GET body is ciphertext
+                // belonging to the account that just went away. Same rule, same
+                // place — a validator whose body we dropped is unusable anyway.
+                serverVaultEtagCache.clear()
                 // V5 S2b: discreet mode is per-account, so the next account must
                 // not inherit the previous one's masking preference.
                 discreetModeStore.clear()
@@ -751,7 +755,19 @@ object AppGraph {
             apiBase = apiBaseUrl.toHttpUrl(),
             json = json,
             hasSession = { tokenManager.hasTokens() },
+            etagCache = serverVaultEtagCache,
         )
+    }
+
+    /**
+     * The `GET /vault` conditional-read cache.
+     *
+     * Owned by the graph rather than by the medium for exactly the reason
+     * [etagInterceptor] is: it holds response bodies, and account teardown has to
+     * be able to drop them without reaching inside a lazily-built medium.
+     */
+    val serverVaultEtagCache: at.bettertrack.app.vault.server.ServerVaultEtagCache by lazy {
+        at.bettertrack.app.vault.server.ServerVaultEtagCache()
     }
 
     /**
@@ -805,6 +821,24 @@ object AppGraph {
                 at.bettertrack.app.vault.DataHomeTransportFailure("You are not signed in to BetterTrack.")
             )
         }
+
+    /**
+     * The restore picker's *act* — one retained version becomes this device's
+     * vault again, behind a verified round trip and a type-to-confirm.
+     *
+     * Shares [vaultProvisioner] deliberately: the proof a restore owes the user
+     * is the same proof the first-run wizard owes them, and two copies of "write
+     * it, read it back, check it is the write I just made" is one copy too many.
+     */
+    val serverVaultRestore: at.bettertrack.app.vault.server.ServerVaultRestore by lazy {
+        at.bettertrack.app.vault.server.ServerVaultRestore(
+            home = { if (tokenManager.hasTokens()) serverVaultDataHome else null },
+            custody = vaultKeyCustody,
+            store = vaultStore,
+            provisioner = vaultProvisioner,
+            deriveProjections = { vaultPortfolioBackend.deriveAll() },
+        )
+    }
 
     private val noLivePricesMarketDataSource: NoLivePricesMarketDataSource by lazy {
         NoLivePricesMarketDataSource(database.priceCacheDao())

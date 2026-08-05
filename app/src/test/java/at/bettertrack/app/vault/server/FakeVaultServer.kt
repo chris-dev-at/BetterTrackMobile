@@ -71,6 +71,32 @@ class FakeVaultServer {
     var lieAboutEtag: Boolean = false
 
     /**
+     * Answers the next `GET /vault` with `304` **regardless of what the client
+     * sent**, then resets itself.
+     *
+     * Not something the live server does — it is the shape the client has to
+     * survive when its own cache entry vanished between sending a validator and
+     * reading the response (a logout, a write, an eviction). A client that
+     * handed that 304 back as data would report an empty body as corruption, so
+     * the refetch-without-the-validator branch needs a way to be *driven*.
+     */
+    var force304Once: Boolean = false
+
+    /**
+     * Stamps Express's default **weak** ETag over the JSON error body onto every
+     * error response — what the live dev backend actually does.
+     *
+     * Confirmed on `http://localhost:3000` 2026-08-05: `GET /api/v1/vault` on an
+     * account with no vault answers `404 VAULT_NOT_FOUND` carrying
+     * `ETag: W/"41-CFGiyEaJgQhnoUueXuAN5ZSM2GU"`. That is a content hash of the
+     * error, not a vault version, and a cache that took its validator off the raw
+     * response before branching on the status would store it — after which the
+     * next `GET` could be answered `304` and the *error body* served as vault
+     * bytes. Modelled here so the client's refusal is asserted, not assumed.
+     */
+    var weakEtagOnErrors: Boolean = false
+
+    /**
      * Set to stamp the `X-BetterTrack-Vault-*` metadata headers onto the **main**
      * `GET /vault` as well, carrying values that contradict the envelope.
      *
@@ -105,6 +131,9 @@ class FakeVaultServer {
     fun seed(envelope: ByteArray, version: Int) {
         versions[version] = StoredVault(envelope, createdAt = "2026-08-04T22:00:0${version % 10}.000Z")
     }
+
+    /** Removes every stored version — the vault went away mid-session. */
+    fun clearVault() = versions.clear()
 
     val currentVersion: Int? get() = versions.keys.maxOrNull()
 
@@ -141,10 +170,14 @@ class FakeVaultServer {
     }
 
     private fun readVault(request: RecordedRequest): MockResponse {
-        val version = currentVersion ?: return error(404, CODE_NOT_FOUND, "No vault stored.")
-        val stored = versions.getValue(version)
         val ifNoneMatch = request.getHeader(IF_NONE_MATCH)
         preconditions += ifNoneMatch
+        if (force304Once) {
+            force304Once = false
+            return MockResponse().setResponseCode(304)
+        }
+        val version = currentVersion ?: return error(404, CODE_NOT_FOUND, "No vault stored.")
+        val stored = versions.getValue(version)
         // `vaultRoutes.ts:427-431` — a matching If-None-Match short-circuits.
         if (ifNoneMatch != null && parseEtag(ifNoneMatch) == version) {
             return MockResponse().setResponseCode(304).setHeader(ETAG, etag(version))
@@ -269,6 +302,7 @@ class FakeVaultServer {
 
     private fun error(code: Int, errorCode: String, message: String) =
         json(code, """{"error":{"code":"$errorCode","message":"${message.replace("\"", "\\\"")}"}}""")
+            .apply { if (weakEtagOnErrors) setHeader(ETAG, WEAK_BODY_ETAG) }
 
     private class StoredVault(val envelope: ByteArray, val createdAt: String)
 
@@ -278,6 +312,9 @@ class FakeVaultServer {
 
         /** What [metadataHeadersOnMainGet] claims; nothing in the app may believe it. */
         const val CONTRADICTORY_CREATED_AT = "1999-12-31T23:59:59.000Z"
+
+        /** The live 404's ETag, verbatim (2026-08-05) — a body hash, not a version. */
+        const val WEAK_BODY_ETAG = "W/\"41-CFGiyEaJgQhnoUueXuAN5ZSM2GU\""
 
         private const val VAULT_PATH = "/api/v1/vault"
         private const val ETAG = "ETag"

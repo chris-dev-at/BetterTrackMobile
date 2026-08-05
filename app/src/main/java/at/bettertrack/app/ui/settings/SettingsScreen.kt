@@ -72,6 +72,7 @@ import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtSectionHeader
@@ -282,12 +283,7 @@ fun SettingsScreen(
             )
             }
             discreetError?.let {
-                Text(
-                    text = it.resolveWithDiagnostic(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BtTheme.colors.loss,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                )
+                BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
             }
             }
 

@@ -25,7 +25,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,12 +62,14 @@ import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.market.assetTypeLabel
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -239,7 +240,7 @@ fun ConglomerateBuilderScreen(
         },
     ) { pad ->
         if (loading) {
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = bt.gold) }
+            BuilderSkeleton(Modifier.fillMaxSize().padding(pad))
             return@Scaffold
         }
         LazyColumn(
@@ -287,9 +288,7 @@ fun ConglomerateBuilderScreen(
                 // Inline, one line, next to the Save button that produced it —
                 // so the diagnostic (when the code is one this build has no copy
                 // for) trails the app's own sentence rather than taking a row.
-                item(key = "error") {
-                    Text(failure.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss)
-                }
+                item(key = "error") { BtFormError(failure) }
             }
             item(key = "save") {
                 BtPrimaryButton(
@@ -386,4 +385,24 @@ private fun AssetSearchSheet(
 private fun trimPct(v: Double): String {
     val r = kotlin.math.round(v * 10) / 10.0
     return if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString()
+}
+
+/**
+ * The builder's shape while an existing conglomerate loads into it.
+ *
+ * A name field, then rows of position placeholders — the form's own silhouette,
+ * so the fields do not appear to arrive from nowhere. This screen is reached
+ * both empty (new) and populated (edit); only the edit path ever shows this.
+ */
+@Composable
+private fun BuilderSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BtSkeleton(modifier = Modifier.fillMaxWidth().height(56.dp), shape = BtShapes.card)
+        repeat(4) {
+            BtSkeleton(modifier = Modifier.fillMaxWidth().height(64.dp), shape = BtShapes.card)
+        }
+    }
 }

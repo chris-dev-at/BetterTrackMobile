@@ -103,6 +103,7 @@ import at.bettertrack.app.sync.SyncScheduler
 import at.bettertrack.app.sync.TxOpPayload
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtDatePickerDialog
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
@@ -2090,6 +2091,16 @@ private fun UncoveredSellCard(
     }
 }
 
+/**
+ * "The server refused this entry", as a tonal banner.
+ *
+ * R3: the 1dp red ring is gone. A red-tinted fill on a darker form, carrying a
+ * red `ErrorOutline` glyph and a red title, is already saying failure twice
+ * before a word is read — the outline was a third boundary doing the first
+ * one's job, and the same ring the state badge dropped in `BtStates`. The tonal
+ * step alone is the app's containment language now, and "this is a failure"
+ * still reads before any word does.
+ */
 @Composable
 private fun RejectionCard(message: BtMessage, isQueuedRetry: Boolean) {
     val bt = BtTheme.colors
@@ -2097,7 +2108,6 @@ private fun RejectionCard(message: BtMessage, isQueuedRetry: Boolean) {
         shape = BtShapes.card,
         color = bt.lossSurface,
         contentColor = bt.textPrimary,
-        border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -2330,7 +2340,17 @@ private fun HeldAssetSheet(
 
                         AssetSearchState.Empty ->
                             if (heldShown.isEmpty() && otherShown.isEmpty()) {
-                                item(key = "s-empty") { SheetNote(stringResource(R.string.bt_search_no_results_title)) }
+                                // "No matches" is an ANSWER — the search worked
+                                // and there is nothing. BtInlineEmpty is the DS
+                                // form for that inside a sheet slot; the two
+                                // notes around it stay notes (one is an offline
+                                // condition, one a prompt to start typing).
+                                item(key = "s-empty") {
+                                    BtInlineEmpty(
+                                        text = stringResource(R.string.bt_search_no_results_title),
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                    )
+                                }
                             }
 
                         is AssetSearchState.Results -> {
@@ -2374,13 +2394,22 @@ private fun SheetNote(text: String) {
     )
 }
 
+/**
+ * Asset search, still out.
+ *
+ * A spinner here said "something is happening"; these placeholders say WHAT is
+ * coming — three rows the size and shape of the [AssetSheetRow]s that replace
+ * them — so the list does not jump when the results land (§3.7 / R-arc §4). The
+ * two spinners this app keeps are the ones a skeleton cannot do: the load-more
+ * foot of an already-drawn list, and the in-field price lookup.
+ */
 @Composable
 private fun SheetLoadingRow() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CircularProgressIndicator(color = BtTheme.colors.gold, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(56.dp), shape = BtShapes.card) }
     }
 }
 

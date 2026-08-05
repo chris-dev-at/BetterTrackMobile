@@ -492,18 +492,7 @@ class VaultSyncCoordinator(
 
     // ── State bookkeeping ───────────────────────────────────────────────────
 
-    /**
-     * The per-medium CAS cursor.
-     *
-     * Drive keeps the original key so an install that already synced to Drive
-     * does not re-push its whole vault after this upgrade; every other medium
-     * gets a suffixed key of its own. Sharing one cursor across media would make
-     * a successful Drive push claim the server had the bytes too.
-     */
-    private fun lastPushedKey(medium: DataHomeMedium): String = when (medium) {
-        DataHomeMedium.DRIVE -> VaultMetaKeys.LAST_PUSHED_VERSION
-        else -> "${VaultMetaKeys.LAST_PUSHED_VERSION}:${medium.wire}"
-    }
+    private fun lastPushedKey(medium: DataHomeMedium): String = vaultLastPushedKey(medium)
 
     private suspend fun lastPushedVersion(medium: DataHomeMedium): Int? =
         store.meta(lastPushedKey(medium))?.toIntOrNull()
@@ -603,6 +592,25 @@ class VaultSyncCoordinator(
         const val MSG_ABSENT = "No copy stored here yet."
         const val MSG_RETRY = "Changes are saved on this device and will sync on the next try."
     }
+}
+
+/**
+ * The per-medium CAS cursor key — what a given storage place last acknowledged.
+ *
+ * Drive keeps the original, unsuffixed key so an install that already synced to
+ * Drive does not re-push its whole vault after this upgrade; every other medium
+ * gets a suffixed key of its own. Sharing one cursor across media would make a
+ * successful Drive push claim the server had the bytes too.
+ *
+ * Top-level and `internal` because three flows depend on the exact same mapping
+ * — the sync coordinator that maintains it, adoption which seeds it so the first
+ * push after hydration is a legitimate *replace*, and restore which must put it
+ * back untouched. Three private copies of one string format is one drift away
+ * from a silent overwrite of another device's work.
+ */
+internal fun vaultLastPushedKey(medium: DataHomeMedium): String = when (medium) {
+    DataHomeMedium.DRIVE -> VaultMetaKeys.LAST_PUSHED_VERSION
+    else -> "${VaultMetaKeys.LAST_PUSHED_VERSION}:${medium.wire}"
 }
 
 /**

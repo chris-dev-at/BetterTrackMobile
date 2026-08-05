@@ -95,12 +95,13 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.customassets.dialogFieldColors
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
 import at.bettertrack.app.ui.portfolio.formatQuantity
@@ -609,10 +610,21 @@ fun StandingOrdersScreen(
 
                             if (actionFailure != null) {
                                 item(key = "row-error") {
-                                    Text(
-                                        text = actionFailure.resolveWithDiagnostic(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = bt.lossSoft,
+                                    // This channel carries two things: a failed
+                                    // REFRESH (for which re-listing is the exact
+                                    // retry) and a failed pause / resume / delete
+                                    // (for which it is the honest one — the row's
+                                    // true state after a refused write is whatever
+                                    // the server says, and this asks). The clear is
+                                    // not cosmetic: `load` only nulls `loadError`,
+                                    // so without it a successful refresh would sit
+                                    // under a stale failure sentence.
+                                    BtInlineError(
+                                        message = actionFailure,
+                                        onRetry = {
+                                            vm.clearRowError()
+                                            vm.refresh()
+                                        },
                                     )
                                 }
                             }
@@ -1499,14 +1511,14 @@ private fun FieldError(problem: StandingOrderProblem?, visible: Boolean) {
     )
 }
 
+/**
+ * A refused create / save inside the sheet. No retry, deliberately: the sheet's
+ * own submit button is the retry and is still armed a few dp below — see
+ * [BtFormError]. This stays as a named helper only because both sheets reach for
+ * it; it adds nothing over the component itself.
+ */
 @Composable
-private fun SheetError(message: BtMessage) {
-    Text(
-        text = message.resolveWithDiagnostic(),
-        style = MaterialTheme.typography.bodySmall,
-        color = BtTheme.colors.lossSoft,
-    )
-}
+private fun SheetError(message: BtMessage) = BtFormError(message)
 
 @Composable
 private fun LockedRow(label: String, value: String) {

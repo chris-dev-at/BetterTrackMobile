@@ -873,6 +873,9 @@ private fun PersonRow(p: PersonShares, onClick: () -> Unit) {
                 if (p.portfolios.isNotEmpty()) MiniCount(Icons.Outlined.PieChart, p.portfolios.size)
                 if (p.conglomerates.isNotEmpty()) MiniCount(Icons.Outlined.Dashboard, p.conglomerates.size)
                 if (p.watchlists.isNotEmpty()) MiniCount(Icons.AutoMirrored.Outlined.ShowChart, p.watchlists.size)
+                // V5: a friend's shared ideas. Same glyph the my-shares row and
+                // the Workboard Ideas segment use, so the mark means one thing.
+                if (p.ideas.isNotEmpty()) MiniCount(Icons.Outlined.Lightbulb, p.ideas.size)
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
             }
@@ -896,6 +899,7 @@ private fun sharesSummary(p: PersonShares): String {
         if (p.portfolios.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_portfolios, p.portfolios.size, p.portfolios.size))
         if (p.conglomerates.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_conglomerates, p.conglomerates.size, p.conglomerates.size))
         if (p.watchlists.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_watchlists, p.watchlists.size, p.watchlists.size))
+        if (p.ideas.isNotEmpty()) add(pluralStringResource(R.plurals.bt_social_count_ideas, p.ideas.size, p.ideas.size))
     }
     return parts.joinToString(" · ")
 }
@@ -916,7 +920,18 @@ private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
     ) {
         item {
             Text(
-                if (mine.sharedCount == 0) stringResource(R.string.bt_social_not_sharing) else stringResource(R.string.bt_social_sharing_count, mine.sharedCount, mine.items.size),
+                // "X of Y items" — the noun belongs to Y, so the TOTAL picks the
+                // form; the shared count is only the numerator.
+                if (mine.sharedCount == 0) {
+                    stringResource(R.string.bt_social_not_sharing)
+                } else {
+                    pluralStringResource(
+                        R.plurals.bt_social_sharing_count,
+                        mine.items.size,
+                        mine.sharedCount,
+                        mine.items.size,
+                    )
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = bt.textSecondary,
                 modifier = Modifier.padding(vertical = 6.dp),

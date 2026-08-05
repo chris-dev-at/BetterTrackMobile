@@ -48,6 +48,7 @@ import at.bettertrack.app.data.storage.validateManualPrice
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.components.BtDateField
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.theme.BtTheme
@@ -201,11 +202,7 @@ fun ManualPriceSheet(
                 color = bt.textMuted,
             )
             if (points.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.bt_price_history_empty),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                )
+                BtInlineEmpty(stringResource(R.string.bt_price_history_empty))
             } else {
                 // Newest first: the price that is currently valuing the holding is
                 // the one the user most likely came here to check or correct.

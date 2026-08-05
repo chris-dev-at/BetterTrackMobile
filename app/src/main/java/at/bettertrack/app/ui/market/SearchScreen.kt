@@ -67,6 +67,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -302,8 +303,18 @@ fun SearchScreen(
                     modifier = Modifier.align(Alignment.Center),
                 )
 
-                SearchUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = bt.gold)
+                // Result-row placeholders rather than a spinner: the shape of
+                // what is coming is known, so the list can hold its own space.
+                SearchUiState.Loading -> Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    repeat(6) {
+                        BtSkeleton(
+                            modifier = Modifier.fillMaxWidth().height(64.dp),
+                            shape = BtShapes.card,
+                        )
+                    }
                 }
 
                 // W6: in Drive mode `search` returns an empty result by design —

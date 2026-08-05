@@ -156,6 +156,7 @@
     <string name="bt_tx_no_matches_message">Try clearing the filters.</string>
     <string name="bt_tx_clear_filters">Clear filters</string>
     <string name="bt_tx_load_more">Load older transactions</string>
+    <string name="bt_tx_requires_connection">These transactions haven\'t been downloaded yet. Reconnect to load them.</string>
 
     <!-- Step 7 — Holding detail (spec §6.1/§6.2) -->
     <string name="bt_holding_position_value">Position value</string>
@@ -168,6 +169,7 @@
     <string name="bt_holding_asset_page_link">Asset page</string>
     <string name="bt_holding_not_found_title">Holding not found</string>
     <string name="bt_holding_not_found_message">This position is no longer in the portfolio.</string>
+    <string name="bt_holding_requires_connection">This position hasn\'t been downloaded yet. Reconnect to load it.</string>
 
     <!-- Step 8 — Transaction form (spec §6.2) -->
     <string name="bt_txform_title_new">New transaction</string>
@@ -299,6 +301,8 @@
     <string name="bt_cash_movements_for">Movements · %1$s</string>
     <string name="bt_cash_empty_title">No cash movements yet</string>
     <string name="bt_cash_empty_message">Deposits, withdrawals and transfers appear here.</string>
+    <string name="bt_cash_movements_error_title">Couldn\'t load your movements</string>
+    <string name="bt_cash_requires_connection">Nothing is cached on this phone yet. Reconnect to load your movements.</string>
     <string name="bt_cash_type_bank">Bank</string>
     <string name="bt_cash_type_retirement">Retirement</string>
     <string name="bt_cash_type_cash">Cash</string>
@@ -341,7 +345,10 @@
     <!-- v5 mirrorchain (group portfolio) overlays -->
     <string name="bt_mirror_added_by">added by @%1$s</string>
     <string name="bt_mirror_group_badge">Group</string>
-    <string name="bt_mirror_members">%1$d members</string>
+    <plurals name="bt_mirror_members">
+        <item quantity="one">%1$d member</item>
+        <item quantity="other">%1$d members</item>
+    </plurals>
     <string name="bt_mirror_syncing">Syncing %1$d%%</string>
 
     <!-- v5 discreet mode -->
@@ -362,6 +369,7 @@
     <string name="bt_custom_category">Category</string>
     <string name="bt_custom_empty_title">No custom assets yet</string>
     <string name="bt_custom_empty_message">Track things like a watch collection, real estate or a private loan.</string>
+    <string name="bt_custom_requires_connection">Custom assets need a connection to load. Reconnect to see them.</string>
     <string name="bt_custom_current_value">Current value</string>
     <string name="bt_custom_value_history">Value over time</string>
     <string name="bt_custom_chart_empty">Record two values to draw the history</string>
@@ -452,6 +460,7 @@
     <string name="bt_watchlist_delete_message">Delete “%1$s”? Its assets are removed from this list.</string>
     <string name="bt_watchlist_empty_title">No assets yet</string>
     <string name="bt_watchlist_empty_message">Add stocks, ETFs or crypto to follow their prices here.</string>
+    <string name="bt_watchlist_requires_connection">Your watchlist needs a connection to load. Reconnect to see it.</string>
     <string name="bt_watchlist_add_asset">Add asset</string>
     <string name="bt_watchlist_remove_item">Remove from list</string>
     <string name="bt_watchlist_add_to">Add to watchlist</string>
@@ -467,8 +476,10 @@
     <string name="bt_conglo_delete">Delete</string>
     <string name="bt_conglo_delete_message">Delete this conglomerate? This can\'t be undone.</string>
     <string name="bt_conglo_draft">Draft</string>
-    <string name="bt_conglo_assets_one">1 asset</string>
-    <string name="bt_conglo_assets_n">%1$d assets</string>
+    <plurals name="bt_conglo_assets">
+        <item quantity="one">%1$d asset</item>
+        <item quantity="other">%1$d assets</item>
+    </plurals>
     <string name="bt_conglo_name">Name</string>
     <string name="bt_conglo_positions">Positions</string>
     <string name="bt_conglo_total">Total %1$s%%</string>
@@ -793,7 +804,10 @@
     <string name="bt_2fa_disable_message">Enter a current 6-digit code or a recovery code to turn it off.</string>
     <string name="bt_2fa_disable_code">Code or recovery code</string>
     <string name="bt_2fa_recovery_title">Recovery codes</string>
-    <string name="bt_2fa_recovery_remaining">%1$d recovery codes left</string>
+    <plurals name="bt_2fa_recovery_remaining">
+        <item quantity="one">%1$d recovery code left</item>
+        <item quantity="other">%1$d recovery codes left</item>
+    </plurals>
     <string name="bt_2fa_recovery_regenerate">Regenerate</string>
     <string name="bt_2fa_recovery_shown_title">Save your recovery codes</string>
     <string name="bt_2fa_recovery_shown_message">Store these somewhere safe. Each code works once. You won\'t see them again.</string>
@@ -816,7 +830,10 @@
     <string name="bt_sessions_just_now">Active just now</string>
     <string name="bt_sessions_minutes">Active %1$d min ago</string>
     <string name="bt_sessions_hours">Active %1$d h ago</string>
-    <string name="bt_sessions_days">Active %1$d days ago</string>
+    <plurals name="bt_sessions_days">
+        <item quantity="one">Active %1$d day ago</item>
+        <item quantity="other">Active %1$d days ago</item>
+    </plurals>
     <string name="bt_sessions_on_date">Active %1$s</string>
     <string name="bt_sessions_unknown">Active recently</string>
 
@@ -963,7 +980,7 @@
 
     <!-- Shared-with-me section -->
     <string name="bt_social_swm_empty_title">Nothing shared with you yet</string>
-    <string name="bt_social_swm_empty_body">When a friend shares a portfolio, watchlist or conglomerate with you, they\'ll show up here — grouped by friend.</string>
+    <string name="bt_social_swm_empty_body">When a friend shares a portfolio, watchlist, conglomerate or idea with you, they\'ll show up here — grouped by friend.</string>
     <string name="bt_social_people_sharing">People sharing with you</string>
     <plurals name="bt_social_count_portfolios">
         <item quantity="one">%1$d portfolio</item>
@@ -977,10 +994,19 @@
         <item quantity="one">%1$d watchlist</item>
         <item quantity="other">%1$d watchlists</item>
     </plurals>
+    <plurals name="bt_social_count_ideas">
+        <item quantity="one">%1$d idea</item>
+        <item quantity="other">%1$d ideas</item>
+    </plurals>
 
     <!-- My-shares section -->
     <string name="bt_social_not_sharing">You\'re not sharing anything yet</string>
-    <string name="bt_social_sharing_count">You\'re sharing %1$d of %2$d items</string>
+    <!-- "X of Y items": the noun belongs to the TOTAL, so the quantity is
+         selected on %2$d, not on the shared count. -->
+    <plurals name="bt_social_sharing_count">
+        <item quantity="one">You\'re sharing %1$d of %2$d item</item>
+        <item quantity="other">You\'re sharing %1$d of %2$d items</item>
+    </plurals>
     <string name="bt_social_my_shares_hint">Tap any item to change who can see it, or revoke access.</string>
     <string name="bt_social_kind_portfolio">Portfolio</string>
     <plurals name="bt_social_positions">
@@ -1031,7 +1057,19 @@
     <string name="bt_social_go_to_chat">Go to chat</string>
     <string name="bt_social_shares_with_you">Shares with you</string>
     <string name="bt_social_fo_empty_title">Nothing shared with you</string>
-    <string name="bt_social_fo_empty_body">@%1$s hasn\'t shared any portfolios, watchlists or conglomerates with you yet.</string>
+    <string name="bt_social_fo_empty_body">@%1$s hasn\'t shared any portfolios, watchlists, conglomerates or ideas with you yet.</string>
+    <string name="bt_social_fo_offline_body">What this friend shares with you needs a connection. Reconnect and try again.</string>
+
+    <!-- A friend's shared idea. The summary is a POINTER: a name and whether a
+         thesis exists. There is no read-only view to open — `GET /ideas/{id}` is
+         owner-only — so the row's action is an honest copy, not an "open". -->
+    <string name="bt_shared_idea_has_thesis">Idea · thesis attached</string>
+    <string name="bt_shared_idea_no_thesis">Idea · no thesis attached</string>
+    <string name="bt_shared_idea_copy_hint">You can\'t open someone else\'s idea. Copying puts your own private copy — thesis, assets and backtest setup — in your ideas.</string>
+    <string name="bt_shared_idea_copy">Copy to my ideas</string>
+    <string name="bt_shared_idea_copying">Copying…</string>
+    <string name="bt_shared_idea_copied_toast">“%1$s” is now in your ideas</string>
+    <string name="bt_shared_idea_revoked">This idea isn\'t shared with you anymore — the owner changed who can see it.</string>
     <string name="bt_social_remove_friend">Remove friend</string>
     <string name="bt_social_remove_confirm_title">Remove @%1$s?</string>
     <string name="bt_social_remove_confirm_body">You\'ll both stop seeing anything shared between you. This can\'t be undone.</string>
@@ -1168,8 +1206,6 @@
     <!-- Budgets -->
     <string name="bt_budgets_section">Budgets</string>
     <string name="bt_budgets_empty_title">No budgets this month</string>
-    <string name="bt_budgets_empty_message">Set a monthly target for a tag and track what\'s left as you spend.</string>
-    <string name="bt_budgets_error_title">Couldn\'t load budgets</string>
     <string name="bt_budgets_new">New budget</string>
     <string name="bt_budgets_new_title">New budget</string>
     <string name="bt_budgets_edit_title">Edit budget</string>
@@ -1231,14 +1267,12 @@
     <string name="bt_cash_summary_untagged">Untagged</string>
     <string name="bt_cash_summary_empty">No movements this month.</string>
     <string name="bt_cash_summary_overlap_hint">A movement with several tags counts towards each of them, so the rows can add up to more than the total.</string>
-    <string name="bt_cash_summary_error">Couldn\'t load this month\'s summary.</string>
     <plurals name="bt_cash_summary_movements">
         <item quantity="one">%1$d movement</item>
         <item quantity="other">%1$d movements</item>
     </plurals>
     <string name="bt_cash_trends_section">Last months</string>
     <string name="bt_cash_trends_empty">No cash history yet.</string>
-    <string name="bt_cash_trends_error">Couldn\'t load the trend.</string>
 
     <!-- ── V5 S2c: standing orders ─────────────────────────────────────────── -->
     <string name="bt_so_title">Standing orders</string>
@@ -1409,6 +1443,20 @@
     <string name="bt_server_vault_wrong_pass">That passphrase doesn\'t open this vault.</string>
     <string name="bt_server_vault_update_required">This vault was saved by a newer version of BetterTrack. Update the app to open it.</string>
     <string name="bt_server_vault_failed">Your vault could not be opened right now.</string>
+    <!-- S5 tail: restoring one of the retained versions -->
+    <string name="bt_server_vault_history_empty_title">Nothing to restore yet</string>
+    <string name="bt_server_vault_restore_action">Restore</string>
+    <string name="bt_server_vault_restore_title">Restore version %1$d</string>
+    <string name="bt_server_vault_restore_body">Your portfolio on this device is replaced by the one saved in that version. Nothing is thrown away: the vault you have now becomes an earlier version you can come back to the same way.</string>
+    <string name="bt_server_vault_restore_confirm_word">RESTORE</string>
+    <string name="bt_server_vault_restore_cancel">Keep what I have</string>
+    <string name="bt_server_vault_restore_working">Restoring…</string>
+    <string name="bt_server_vault_restored">Version %1$d is back on this device.</string>
+    <string name="bt_server_vault_restore_gone">That version is no longer kept. Reload the list to see what is left.</string>
+    <string name="bt_server_vault_restore_wrong_key">That version was locked with an earlier vault key this device no longer has. Unlock with the recovery kit from that time to reach it.</string>
+    <string name="bt_server_vault_restore_unreadable">That version\'s data is damaged and can\'t be opened. Nothing on this device changed — try an earlier one.</string>
+    <string name="bt_server_vault_restore_unproven">This device could not confirm it had stored the restored vault, so nothing was changed.</string>
+    <string name="bt_server_vault_restore_failed">That version could not be restored right now. Nothing on this device changed.</string>
     <string name="bt_medium_synced_server">Backed up to BetterTrack</string>
     <string name="bt_medium_sign_in_server">Sign out and back in to sync with BetterTrack</string>
     <string name="bt_vault_sync_pending_google">Not connected to Google yet — your vault lives on this device</string>
@@ -1612,7 +1660,12 @@
     <string name="bt_chain_err_not_friends">You and the person who invited you are no longer friends, so this invite can\'t be accepted.</string>
     <string name="bt_chain_err_busy">The group is busy right now. Try again in a moment.</string>
     <string name="bt_chain_members_section">Members</string>
-    <string name="bt_chain_members_count">%1$d of %2$d members</string>
+    <!-- "X of Y members": the noun belongs to the CAP, so the quantity is
+         selected on %2$d, not on the roster size. -->
+    <plurals name="bt_chain_members_count">
+        <item quantity="one">%1$d of %2$d member</item>
+        <item quantity="other">%1$d of %2$d members</item>
+    </plurals>
     <string name="bt_chain_activity_section">Activity</string>
     <string name="bt_chain_activity_empty">Nothing has happened in this group yet.</string>
     <string name="bt_chain_load_older">Load older</string>
@@ -1749,7 +1802,12 @@
 
     <!-- Home -->
     <string name="bt_home_net_worth">Net worth</string>
-    <string name="bt_home_across_portfolios">Across %1$d of %2$d portfolios</string>
+    <!-- "X of Y portfolios": the noun belongs to the TOTAL, so the quantity is
+         selected on %2$d, not on the covered count. -->
+    <plurals name="bt_home_across_portfolios">
+        <item quantity="one">Across %1$d of %2$d portfolio</item>
+        <item quantity="other">Across %1$d of %2$d portfolios</item>
+    </plurals>
     <string name="bt_home_needs_you">Needs you</string>
     <plurals name="bt_home_alerts_triggered">
         <item quantity="one">%1$d alert triggered</item>
@@ -1780,7 +1838,13 @@
         <item quantity="one">%1$d holding needs a price</item>
         <item quantity="other">%1$d holdings need a price</item>
     </plurals>
-    <string name="bt_home_unpriced_more">%1$d more on the Portfolio tab</string>
+    <!-- Counts the unpriced HOLDINGS not shown in the preview. English reads the
+         same either way; German inflects the bare "weitere" with the noun's
+         gender (Position, feminine), so both forms exist for the record. -->
+    <plurals name="bt_home_unpriced_more">
+        <item quantity="one">%1$d more on the Portfolio tab</item>
+        <item quantity="other">%1$d more on the Portfolio tab</item>
+    </plurals>
     <string name="bt_home_portfolios">Your portfolios</string>
     <string name="bt_home_more">More</string>
     <string name="bt_home_on">On</string>
@@ -2048,7 +2112,13 @@
 
     <!-- The "actionable first" lead block (§3), shared by Workbench and People. -->
     <string name="bt_needs_you">Needs you</string>
-    <string name="bt_workbench_needs_more">+%1$d more</string>
+    <!-- Counts the ITEMS (triggered alerts + unfinished ideas) the cap hid.
+         English reads the same either way; German inflects the bare "weitere",
+         so both forms exist for the record. -->
+    <plurals name="bt_workbench_needs_more">
+        <item quantity="one">+%1$d more</item>
+        <item quantity="other">+%1$d more</item>
+    </plurals>
     <!-- The "idea needing a decision" row reuses the EXISTING `bt_ideas_no_thesis`
          (the idea detail screen's own line): the ideas API has no status
          workflow, so the block is read from `thesis == null` and says exactly

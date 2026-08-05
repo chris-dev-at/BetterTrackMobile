@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -186,11 +187,11 @@ private fun ConglomerateRow(item: Conglomerate, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = if (item.positionCount == 1) {
-                        stringResource(R.string.bt_conglo_assets_one)
-                    } else {
-                        stringResource(R.string.bt_conglo_assets_n, item.positionCount)
-                    },
+                    text = pluralStringResource(
+                        R.plurals.bt_conglo_assets,
+                        item.positionCount,
+                        item.positionCount,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                 )

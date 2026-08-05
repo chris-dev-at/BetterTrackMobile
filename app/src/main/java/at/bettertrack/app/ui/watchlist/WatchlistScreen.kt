@@ -40,7 +40,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.WatchlistItemEntity
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.WatchlistBoard
@@ -52,8 +54,13 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtOfflineState
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.market.assetTypeLabel
 import at.bettertrack.app.ui.shell.RefreshFailedBanner
 import at.bettertrack.app.ui.shell.RefreshNoticeState
@@ -109,6 +116,24 @@ class WatchlistViewModel(
     private val _refreshNotice = MutableStateFlow(RefreshNoticeState())
     val refreshNotice: StateFlow<RefreshNoticeState> = _refreshNotice.asStateFlow()
 
+    /**
+     * How the LIST load went — separate from the quote notice above, which is
+     * about prices going stale on rows that exist. `watchlist.refresh()` was
+     * called as a bare statement and its result dropped, so a panel whose lists
+     * never arrived rendered "Nothing on your watchlist yet" with an Add button:
+     * an invitation to fix a problem the user does not have.
+     */
+    private val _loadFailure = MutableStateFlow<BtMessage?>(null)
+    val loadFailure: StateFlow<BtMessage?> = _loadFailure.asStateFlow()
+
+    /**
+     * False until the first list load has come back, either way. The panel had no
+     * loading flag at all: a cold start rendered the empty state before the first
+     * fetch had even been sent.
+     */
+    private val _firstLoadDone = MutableStateFlow(false)
+    val firstLoadDone: StateFlow<Boolean> = _firstLoadDone.asStateFlow()
+
     init {
         // Default to the first board (General) once loaded.
         viewModelScope.launch {
@@ -118,7 +143,7 @@ class WatchlistViewModel(
                 }
             }
         }
-        viewModelScope.launch { watchlist.refresh() }
+        viewModelScope.launch { loadBoards() }
         // Fetch quotes whenever the visible items change (online).
         viewModelScope.launch {
             items.collect { list -> if (isOnline.value) fetchQuotes(list) }
@@ -155,10 +180,16 @@ class WatchlistViewModel(
         }
     }
 
+    /** Pull the boards + their rows, keeping the outcome instead of dropping it. */
+    private suspend fun loadBoards() {
+        _loadFailure.value = (watchlist.refresh() as? BtResult.Err)?.asMessage()
+        _firstLoadDone.value = true
+    }
+
     fun selectBoard(id: String) { _selectedBoardId.value = id }
 
     fun refresh() = viewModelScope.launch {
-        watchlist.refresh()
+        loadBoards()
         fetchQuotes(items.value)
     }
 
@@ -220,6 +251,8 @@ fun WatchlistPanel(
     val quotes by vm.quotes.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val refreshNotice by vm.refreshNotice.collectAsStateWithLifecycle()
+    val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
+    val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
 
     var createOpen by remember { mutableStateOf(false) }
     var renameBoard by remember { mutableStateOf<WatchlistBoard?>(null) }
@@ -277,19 +310,46 @@ fun WatchlistPanel(
 
         // Items.
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                BtEmptyState(
-                    icon = Icons.Outlined.StarBorder,
-                    title = stringResource(R.string.bt_watchlist_empty_title),
-                    message = stringResource(R.string.bt_watchlist_empty_message),
-                    action = {
-                        at.bettertrack.app.ui.components.BtSecondaryButton(
-                            text = stringResource(R.string.bt_watchlist_add_asset),
-                            onClick = { selectedId?.let(onAddAsset) },
-                            enabled = isOnline || selectedBoard?.isReal == false,
+            val listFailure = loadFailure
+            val surface = resolveListSurface(
+                hasContent = false,
+                firstLoadPending = !firstLoadDone,
+                failed = listFailure != null,
+                isOnline = isOnline,
+            )
+            if (surface == BtListSurface.SKELETON) {
+                // The panel used to invite the user to add their first asset
+                // before it had even asked the server what was on the list.
+                WatchlistSkeleton(Modifier.fillMaxWidth().weight(1f))
+            } else {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    when (surface) {
+                        BtListSurface.OFFLINE -> BtOfflineState(
+                            message = stringResource(R.string.bt_watchlist_requires_connection),
+                            onRetry = { vm.refresh() },
                         )
-                    },
-                )
+
+                        BtListSurface.ERROR -> BtErrorState(
+                            message = listFailure ?: BtMessage.generic,
+                            onRetry = { vm.refresh() },
+                        )
+
+                        // A load that landed and returned nothing: the one case
+                        // entitled to say the watchlist is empty.
+                        else -> BtEmptyState(
+                            icon = Icons.Outlined.StarBorder,
+                            title = stringResource(R.string.bt_watchlist_empty_title),
+                            message = stringResource(R.string.bt_watchlist_empty_message),
+                            action = {
+                                at.bettertrack.app.ui.components.BtSecondaryButton(
+                                    text = stringResource(R.string.bt_watchlist_add_asset),
+                                    onClick = { selectedId?.let(onAddAsset) },
+                                    enabled = isOnline || selectedBoard?.isReal == false,
+                                )
+                            },
+                        )
+                    }
+                }
             }
             if (footer != null) {
                 Spacer(Modifier.height(8.dp))
@@ -364,6 +424,22 @@ fun WatchlistPanel(
                 }
             },
         )
+    }
+}
+
+/** Placeholder rows shaped like [WatchRow], for the panel's first list load. */
+@Composable
+private fun WatchlistSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(5) {
+            BtSkeleton(
+                Modifier.fillMaxWidth().height(62.dp),
+                shape = at.bettertrack.app.ui.theme.BtShapes.card,
+            )
+        }
     }
 }
 

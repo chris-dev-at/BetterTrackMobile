@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -60,6 +61,10 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +84,23 @@ class ChatListViewModel(
     private val _error = MutableStateFlow<BtMessage?>(null)
     val error: StateFlow<BtMessage?> = _error
 
+    /**
+     * True until the first conversation refresh has answered, either way.
+     *
+     * The screen already told the truth about a *failed* first fetch (that is
+     * what [error] is for) but had no third state, so in the window before the
+     * first response lands an empty list fell straight through to "no messages
+     * yet" — the app telling a user with a full inbox that they have none.
+     *
+     * The flag is one-way on purpose: it goes false when the first refresh
+     * settles and never goes back. Later refreshes happen over conversations
+     * that are already on screen, and replacing real content with a skeleton
+     * because a background poll is in flight would be a worse lie than the one
+     * this fixes.
+     */
+    private val _loading = MutableStateFlow(true)
+    val loading: StateFlow<Boolean> = _loading
+
     init {
         chat.connectRealtime()
         refresh()
@@ -87,6 +109,7 @@ class ChatListViewModel(
     fun refresh() {
         viewModelScope.launch {
             _error.value = (chat.refreshConversations() as? BtResult.Err)?.error?.asMessage()
+            _loading.value = false
         }
         viewModelScope.launch {
             (social.friends() as? BtResult.Ok)?.let { _friends.value = it.value }
@@ -131,6 +154,7 @@ fun ChatListScreen(
     val conversations by vm.conversations.collectAsStateWithLifecycle()
     val friends by vm.friends.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val loading by vm.loading.collectAsStateWithLifecycle()
     var showPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -163,20 +187,34 @@ fun ChatListScreen(
             // Held in a plain local so the null check narrows the type for the
             // BtErrorState call — a `by` delegate never smart-casts.
             val failure = error
-            when {
-                // A failed refresh with nothing cached is an ERROR, not an empty inbox.
-                failure != null && conversations.isEmpty() -> BtErrorState(
-                    message = failure,
+            // The shared resolver rather than this screen's own `when`: the
+            // "failed first fetch reads as an empty inbox" bug is the one every
+            // list screen wrote independently, so the decision lives in one
+            // tested place (BtListSurfaceTest) and this screen only renders it.
+            when (
+                resolveListSurface(
+                    hasContent = conversations.isNotEmpty(),
+                    firstLoadPending = loading,
+                    failed = failure != null,
+                )
+            ) {
+                BtListSurface.SKELETON -> ChatListSkeleton()
+                // OFFLINE cannot occur here: this VM tracks no connectivity flag,
+                // so the resolver is called with the default isOnline = true. It
+                // shares the ERROR branch rather than being dropped, so adding a
+                // connectivity flag later cannot silently lose the case.
+                BtListSurface.ERROR, BtListSurface.OFFLINE -> BtErrorState(
+                    message = failure ?: BtMessage(R.string.bt_error_generic_message),
                     onRetry = vm::refresh,
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
-                conversations.isEmpty() -> BtEmptyState(
+                BtListSurface.EMPTY -> BtEmptyState(
                     icon = Icons.AutoMirrored.Outlined.Chat,
                     title = stringResource(R.string.bt_chat_empty_title),
                     message = stringResource(R.string.bt_chat_empty_body),
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                 )
-                else -> LazyColumn(
+                BtListSurface.CONTENT -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -266,7 +304,10 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
             Text(stringResource(R.string.bt_chat_new_subtitle), style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary)
             Spacer(Modifier.size(12.dp))
             if (friends.isEmpty()) {
-                Text(stringResource(R.string.bt_chat_new_no_friends), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted, modifier = Modifier.padding(vertical = 16.dp))
+                BtInlineEmpty(
+                    text = stringResource(R.string.bt_chat_new_no_friends),
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(friends, key = { it.userId }) { f ->
@@ -285,6 +326,25 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Placeholder rows for the window before the first conversation refresh answers.
+ *
+ * Five blocks at the conversation row's own height, so the list does not jump
+ * when the real rows replace them. `BtSkeleton` skips its shimmer under reduced
+ * motion by itself (§3.7) — nothing here has to remember that.
+ */
+@Composable
+private fun ChatListSkeleton() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(5) {
+            BtSkeleton(modifier = Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card)
         }
     }
 }

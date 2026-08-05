@@ -38,6 +38,7 @@ class SocialLogicTest {
         assertEquals("portfolio", ShareableKind.Portfolio.wire)
         assertEquals("conglomerate", ShareableKind.Conglomerate.wire)
         assertEquals("watchlist", ShareableKind.Watchlist.wire)
+        assertEquals("idea", ShareableKind.Idea.wire)
     }
 
     // ── SharedWithMe.groupByPerson ───────────────────────────────────────────
@@ -50,6 +51,9 @@ class SocialLogicTest {
 
     private fun watch(id: String, owner: String) =
         SharedWatchlistSummary(id, "W$id", ownerId = owner, ownerName = owner, itemCount = 3, activityAlertsEnabled = false)
+
+    private fun idea(id: String, owner: String, hasThesis: Boolean = true) =
+        SharedIdeaSummary(id, "I$id", ownerId = owner, ownerName = owner, hasThesis = hasThesis, activityAlertsEnabled = false)
 
     @Test fun `groups shared items by their owner`() {
         val shared = SharedWithMe(
@@ -124,13 +128,52 @@ class SocialLogicTest {
         assertEquals(5, my.items.size)
     }
 
-    @Test fun `sharedWithMe count sums all three kinds`() {
+    @Test fun `sharedWithMe count sums all four kinds`() {
         val shared = SharedWithMe(
             portfolios = listOf(port("p1", "a", "x")),
             conglomerates = listOf(cong("c1", "a")),
             watchlists = listOf(watch("w1", "a"), watch("w2", "a")),
+            ideas = listOf(idea("i1", "a")),
         )
-        assertEquals(4, shared.count)
+        assertEquals(5, shared.count)
         assertFalse(shared.isEmpty)
+    }
+
+    // ── Shared ideas (V5, the fourth kind) ───────────────────────────────────
+
+    /**
+     * The failure this guards is the one the app actually shipped: ideas were on
+     * the wire, the DTO had no field for them, `ignoreUnknownKeys` swallowed the
+     * array, and a friend who shares ONLY ideas therefore did not exist as far
+     * as the app was concerned — no person row, no count, nothing to click.
+     */
+    @Test fun `a friend who shares only ideas still appears`() {
+        val shared = SharedWithMe(
+            portfolios = emptyList(),
+            conglomerates = emptyList(),
+            watchlists = emptyList(),
+            ideas = listOf(idea("i1", "alice"), idea("i2", "alice")),
+        )
+
+        assertFalse(shared.isEmpty)
+        val people = shared.groupByPerson()
+        assertEquals(1, people.size)
+        assertEquals("alice", people[0].ownerId)
+        // The name fallback has to reach the ideas list too, or the row renders
+        // under an empty "@".
+        assertEquals("alice", people[0].ownerName)
+        assertEquals(2, people[0].ideas.size)
+        assertEquals(2, people[0].count)
+    }
+
+    @Test fun `ideas count toward the per-person total and ordering`() {
+        val shared = SharedWithMe(
+            portfolios = listOf(port("p1", "bob", "x")),
+            conglomerates = emptyList(),
+            watchlists = emptyList(),
+            ideas = listOf(idea("i1", "alice"), idea("i2", "alice")),
+        )
+        // alice shares 2 (both ideas), bob 1 → alice leads.
+        assertEquals(listOf("alice", "bob"), shared.groupByPerson().map { it.ownerId })
     }
 }

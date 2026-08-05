@@ -14,13 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,9 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.dto.CashSummaryResponse
 import at.bettertrack.app.data.api.dto.CashTagSummaryDto
 import at.bettertrack.app.data.api.dto.CashTrendPointDto
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.theme.BtShapes
@@ -145,18 +142,28 @@ fun trendMonthLabel(wire: String, locale: Locale): String = try {
 
 // ── Summary block ───────────────────────────────────────────────────────────
 
-/** The summary block's three honest states — same shape as [BudgetsUi]. */
+/**
+ * The summary block's three honest states — same shape as [BudgetsUi].
+ *
+ * [Failed] carries the message rather than being a payload-less marker: the
+ * block used to collapse every refusal into one fixed sentence ("Couldn't load
+ * this month's summary"), which threw away the one thing the server actually
+ * said — offline, rate-limited, portfolio gone. Every other feature in the app
+ * carries its error (`ConglomerateListState.Error`, `ChainRosterState.Failed`,
+ * `IntelBlockUi.Failed`), and carrying it here is what lets the block render the
+ * shared `BtInlineError` instead of a private copy of it.
+ */
 sealed interface CashSummaryUi {
     data object Loading : CashSummaryUi
     data class Ready(val summary: CashSummaryResponse) : CashSummaryUi
-    data object Failed : CashSummaryUi
+    data class Failed(val message: BtMessage) : CashSummaryUi
 }
 
-/** The trends block's three honest states. */
+/** The trends block's three honest states — see [CashSummaryUi]. */
 sealed interface CashTrendsUi {
     data object Loading : CashTrendsUi
     data class Ready(val points: List<CashTrendPointDto>) : CashTrendsUi
-    data object Failed : CashTrendsUi
+    data class Failed(val message: BtMessage) : CashTrendsUi
 }
 
 /**
@@ -174,11 +181,12 @@ fun CashSummaryBlock(
 ) {
     val bt = BtTheme.colors
     if (summaryIsEmpty(summary)) {
-        Text(
+        // In-section empty: this sits under its own heading inside a scrolling
+        // page, so it takes the compact idiom rather than a full BtEmptyState —
+        // a 64dp badge here would say the PAGE is empty.
+        BtInlineEmpty(
             text = stringResource(R.string.bt_cash_summary_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = bt.textMuted,
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier,
         )
         return
     }
@@ -342,11 +350,9 @@ fun CashTrendsBlock(
 ) {
     val bt = BtTheme.colors
     if (points.isEmpty()) {
-        Text(
+        BtInlineEmpty(
             text = stringResource(R.string.bt_cash_trends_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = bt.textMuted,
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier,
         )
         return
     }
@@ -453,44 +459,10 @@ fun CashTrendsSkeleton(modifier: Modifier = Modifier) {
     BtSkeleton(modifier.fillMaxWidth().height(84.dp))
 }
 
-/**
- * Compact inline failure used by both blocks.
- *
- * These are secondary reads on a screen whose primary content (the ledger) is
- * already on screen, so a full [at.bettertrack.app.ui.components.BtErrorState]
- * would be disproportionate — but the retry is not optional: without it the only
- * way back from a dropped request is to leave the screen and return.
- */
-@Composable
-fun CashAnalyticsError(
-    text: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val bt = BtTheme.colors
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // R3 §2: ErrorOutline, tinted `lossSoft` — the app's one error glyph.
-        // A muted BarChart said "no chart data" where the truth was "the request
-        // failed", which is the same conflation the asset page's chart had.
-        Icon(
-            Icons.Outlined.ErrorOutline,
-            contentDescription = null,
-            tint = bt.lossSoft,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = bt.textSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onRetry) {
-            Text(
-                text = stringResource(R.string.bt_action_retry),
-                style = MaterialTheme.typography.labelLarge,
-                color = bt.goldEmphasis,
-            )
-        }
-    }
-}
+// `CashAnalyticsError` used to live here: a byte-for-byte copy of
+// `BtInlineError` (same glyph, tint, spacing, weights and gold retry) whose only
+// real difference was taking a raw `String` instead of a typed `BtMessage`. It
+// predated the P0-4 typed-message contract, and keeping it meant the two blocks
+// on this screen were the last place in the app where a section failure could
+// not say what the server said. Both call sites now use the shared component
+// directly, with the message the VM stopped discarding.

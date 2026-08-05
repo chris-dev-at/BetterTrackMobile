@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,8 +69,10 @@ import at.bettertrack.app.sync.TxOpPayload
 import at.bettertrack.app.ui.charts.BtPriceChart
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
@@ -79,6 +80,7 @@ import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.portfolio.executedAtIso
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.LocalDate
@@ -311,7 +313,7 @@ fun ConglomerateDetailScreen(
     ) { pad ->
         val d = detail
         if (d == null) {
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = bt.gold) }
+            ConglomerateDetailSkeleton(Modifier.fillMaxSize().padding(pad))
             return@Scaffold
         }
         LazyColumn(
@@ -348,9 +350,14 @@ fun ConglomerateDetailScreen(
                         Text(stringResource(R.string.bt_conglo_performance), style = MaterialTheme.typography.titleSmall, color = bt.textSecondary)
                         Spacer(Modifier.height(10.dp))
                         when (val b = backtest) {
-                            BacktestUiState.Loading -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = bt.gold) }
+                            // The chart's own footprint, so the card does not
+                            // resize under the user when the series arrives.
+                            BacktestUiState.Loading -> BtSkeleton(
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                shape = BtShapes.card,
+                            )
                             BacktestUiState.Empty -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.bt_conglo_no_backtest), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                                BtInlineEmpty(stringResource(R.string.bt_conglo_no_backtest))
                             }
 
                             // The backtest is secondary to the positions above
@@ -552,4 +559,22 @@ private fun StatCell(label: String, value: String, color: androidx.compose.ui.gr
 private fun trimQty(v: Double): String {
     val r = kotlin.math.round(v * 100000) / 100000.0
     return if (r == r.toLong().toDouble()) r.toLong().toString() else r.toString()
+}
+
+/**
+ * The detail screen's silhouette while the conglomerate resolves.
+ *
+ * Composition card, then the performance card at its real 180dp chart height —
+ * the two blocks this screen always has, at the sizes they will actually be, so
+ * the page does not reflow around the user when the data lands.
+ */
+@Composable
+private fun ConglomerateDetailSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BtSkeleton(modifier = Modifier.fillMaxWidth().height(148.dp), shape = BtShapes.card)
+        BtSkeleton(modifier = Modifier.fillMaxWidth().height(232.dp), shape = BtShapes.card)
+    }
 }

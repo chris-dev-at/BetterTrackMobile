@@ -77,6 +77,7 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -813,10 +814,13 @@ private fun HeroChart(
                 if (history == null) {
                     BtSkeleton(Modifier.fillMaxWidth().height(126.dp).padding(horizontal = 16.dp))
                 } else {
-                    Text(
+                    // BtInlineEmpty, not BtEmptyState: a 64dp glyph badge plus
+                    // 32dp of padding does not fit a 150dp chart slot, and an
+                    // absent chart is an answer rather than a failure — so it
+                    // gets the calm one-line form, inset to the page gutter.
+                    BtInlineEmpty(
                         text = stringResource(R.string.bt_overview_chart_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
+                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
             }

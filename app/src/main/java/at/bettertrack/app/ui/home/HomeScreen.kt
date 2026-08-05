@@ -486,8 +486,11 @@ private fun HomeHero(
                     if (state.partial) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = stringResource(
-                                R.string.bt_home_across_portfolios,
+                            // "X of Y portfolios" — the noun belongs to Y, so
+                            // the ACTIVE count picks the form, not the covered.
+                            text = pluralStringResource(
+                                R.plurals.bt_home_across_portfolios,
+                                state.active,
                                 state.covered,
                                 state.active,
                             ),
@@ -740,8 +743,9 @@ private fun HomeUnpricedBlock(
         if (state.hasMore) {
             HomeQuietRow(
                 icon = Icons.Outlined.MoreHoriz,
-                label = stringResource(
-                    R.string.bt_home_unpriced_more,
+                label = pluralStringResource(
+                    R.plurals.bt_home_unpriced_more,
+                    state.total - state.preview.size,
                     state.total - state.preview.size,
                 ),
                 onClick = onSeeAll,

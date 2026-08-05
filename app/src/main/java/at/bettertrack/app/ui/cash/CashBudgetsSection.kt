@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.dto.CashBudgetProgressDto
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.theme.BtShapes
@@ -282,29 +282,22 @@ fun CashBudgetSkeletonRow(modifier: Modifier = Modifier) {
     }
 }
 
-/** Empty-state body for the budgets block (compact — it lives inside the list). */
+/**
+ * Empty-state body for the budgets block.
+ *
+ * This was a hand-rolled glyph + title + message row — a third, smaller copy of
+ * the `BtEmptyState` scaffold, drawn inside a section that must not claim the
+ * whole page is empty. It is now the design system's compact empty: ONE muted
+ * line stating the answer, with the block's own "New budget" button directly
+ * beneath it carrying the next step. The glyph is deliberately gone — a muted
+ * pie chart beside the words "no budgets" decorated a sentence that already
+ * said everything, and an empty section is an ANSWER, not a state that needs a
+ * mark to be recognised.
+ */
 @Composable
 fun CashBudgetsEmpty(modifier: Modifier = Modifier) {
-    val bt = BtTheme.colors
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.Outlined.PieChart,
-            contentDescription = null,
-            tint = bt.textMuted,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(
-                text = stringResource(R.string.bt_budgets_empty_title),
-                style = MaterialTheme.typography.bodyMedium,
-                color = bt.textSecondary,
-            )
-            Text(
-                text = stringResource(R.string.bt_budgets_empty_message),
-                style = MaterialTheme.typography.labelSmall,
-                color = bt.textMuted,
-            )
-        }
-    }
+    BtInlineEmpty(
+        text = stringResource(R.string.bt_budgets_empty_title),
+        modifier = modifier,
+    )
 }

@@ -72,9 +72,10 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -109,7 +110,17 @@ import kotlinx.coroutines.launch
  * dedicated sentence (deleting an app-owned tag) from everything else, which
  * renders through the shared error catalog.
  */
-data class CashTagFailure(val systemProtected: Boolean, val message: BtMessage)
+data class CashTagFailure(val systemProtected: Boolean, val message: BtMessage) {
+    /**
+     * The sentence to render. The system-protected refusal gets the app's own
+     * copy — the server folds it behind a generic code whose English says less
+     * than "built-in tags can't be deleted" does — everything else renders the
+     * catalogued message. Kept here rather than at the two render sites so both
+     * cannot drift apart.
+     */
+    fun displayMessage(): BtMessage =
+        if (systemProtected) BtMessage(R.string.bt_tags_system_protected) else message
+}
 
 /**
  * Split the catalog into the two rendered sections, preserving the DAO's order
@@ -291,14 +302,12 @@ fun CashTagsScreen(onBack: () -> Unit) {
                 ) {
                     // A failed refresh over a populated cache keeps the rows and
                     // says so quietly — a full error state would throw away data
-                    // the user can still read.
+                    // the user can still read. The retry is not optional though:
+                    // without it the only cure for a dropped refresh was to leave
+                    // the screen and come back.
                     loadError?.let { message ->
                         item(key = "load-error") {
-                            Text(
-                                text = message.resolveWithDiagnostic(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.lossSoft,
-                            )
+                            BtInlineError(message = message, onRetry = { vm.refresh() })
                         }
                     }
 
@@ -399,18 +408,10 @@ fun CashTagsScreen(onBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.bt_tags_delete_message, target.name))
                     // A refusal is answered here, where the user is looking —
-                    // the app phrases the system-protected case itself.
-                    writeError?.let { failure ->
-                        Text(
-                            text = if (failure.systemProtected) {
-                                stringResource(R.string.bt_tags_system_protected)
-                            } else {
-                                failure.message.resolveWithDiagnostic()
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.lossSoft,
-                        )
-                    }
+                    // the app phrases the system-protected case itself. No retry:
+                    // the dialog's own Delete button IS the retry, and a second
+                    // one beside it would just be a worse copy.
+                    writeError?.let { failure -> BtFormError(failure.displayMessage()) }
                 }
             },
             confirmButton = {
@@ -609,17 +610,7 @@ private fun CashTagSheet(
                 onSelect = { color = it },
             )
 
-            failure?.let {
-                Text(
-                    text = if (it.systemProtected) {
-                        stringResource(R.string.bt_tags_system_protected)
-                    } else {
-                        it.message.resolveWithDiagnostic()
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.lossSoft,
-                )
-            }
+            failure?.let { BtFormError(it.displayMessage()) }
 
             BtPrimaryButton(
                 text = confirmLabel,

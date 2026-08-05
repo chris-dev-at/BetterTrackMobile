@@ -52,6 +52,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCustomTab
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatMoney
@@ -688,25 +689,35 @@ internal fun IntelStat(label: String, value: String, modifier: Modifier = Modifi
     }
 }
 
-/** "There is nothing here" — an ANSWER, styled calmly, never as a failure. */
+/**
+ * "There is nothing here" — an ANSWER, styled calmly, never as a failure.
+ *
+ * This row's styling is now the design system's
+ * [at.bettertrack.app.ui.components.BtInlineEmpty]: it turned out that this
+ * private helper had been the app's de-facto compact empty all along, copied by
+ * hand into other screens because the DS shipped a compact *error* row
+ * ([at.bettertrack.app.ui.components.BtInlineError]) and no compact *empty* to
+ * pair with it. The name stays because the intel blocks read better for it —
+ * same move `IntelInlineError` made below.
+ */
 @Composable
-internal fun IntelEmptyLine(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = BtTheme.colors.textMuted,
-        modifier = modifier.fillMaxWidth(),
-    )
-}
+internal fun IntelEmptyLine(text: String, modifier: Modifier = Modifier) =
+    BtInlineEmpty(text = text, modifier = modifier)
 
 /**
  * A failed intel read, inline and with retry.
  *
  * Deliberately compact rather than a full [at.bettertrack.app.ui.components.BtErrorState]:
  * intel is a SECONDARY read on a page whose primary content (the price, the
- * chart) is already on screen — same reasoning as `CashAnalyticsError`. The
- * retry is not optional though; without it the only cure for a dropped request
- * is to leave the page and come back.
+ * chart) is already on screen, so claiming the surface would say the *page*
+ * failed. The retry is not optional though; without it the only cure for a
+ * dropped request is to leave the page and come back.
+ *
+ * (This used to cite `CashAnalyticsError` as the precedent for that reasoning.
+ * That composable was a third hand-rolled copy of the same row and has since
+ * been deleted in favour of the shared
+ * [at.bettertrack.app.ui.components.BtInlineError] this one now delegates to,
+ * so the citation would have pointed at nothing.)
  *
  * One line of copy is all this row has, so the diagnostic (present only for a
  * code this build has no copy for) rides along after an em dash rather than

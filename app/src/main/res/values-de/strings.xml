@@ -127,6 +127,7 @@
     <string name="bt_tx_no_matches_message">Versuch, die Filter zu entfernen.</string>
     <string name="bt_tx_clear_filters">Filter entfernen</string>
     <string name="bt_tx_load_more">Ältere Transaktionen laden</string>
+    <string name="bt_tx_requires_connection">Diese Transaktionen wurden noch nicht geladen. Verbinde dich, um sie zu laden.</string>
 
     <!-- Positionsdetail (§6.1/§6.2) -->
     <string name="bt_holding_position_value">Positionswert</string>
@@ -139,6 +140,7 @@
     <string name="bt_holding_asset_page_link">Wert-Seite</string>
     <string name="bt_holding_not_found_title">Position nicht gefunden</string>
     <string name="bt_holding_not_found_message">Diese Position ist nicht mehr im Portfolio.</string>
+    <string name="bt_holding_requires_connection">Diese Position wurde noch nicht geladen. Verbinde dich, um sie zu laden.</string>
 
     <!-- Transaktionsformular (§6.2) -->
     <string name="bt_txform_title_new">Neue Transaktion</string>
@@ -266,6 +268,8 @@
     <string name="bt_cash_movements_for">Bewegungen · %1$s</string>
     <string name="bt_cash_empty_title">Noch keine Bargeldbewegungen</string>
     <string name="bt_cash_empty_message">Einzahlungen, Auszahlungen und Umbuchungen erscheinen hier.</string>
+    <string name="bt_cash_movements_error_title">Bewegungen konnten nicht geladen werden</string>
+    <string name="bt_cash_requires_connection">Auf diesem Handy ist noch nichts gespeichert. Verbinde dich, um deine Bewegungen zu laden.</string>
     <string name="bt_cash_type_bank">Bank</string>
     <string name="bt_cash_type_retirement">Vorsorge</string>
     <string name="bt_cash_type_cash">Bargeld</string>
@@ -308,7 +312,10 @@
     <!-- v5-Mirrorchain-Overlays (Gruppenportfolio) -->
     <string name="bt_mirror_added_by">hinzugefügt von @%1$s</string>
     <string name="bt_mirror_group_badge">Gruppe</string>
-    <string name="bt_mirror_members">%1$d Mitglieder</string>
+    <plurals name="bt_mirror_members">
+        <item quantity="one">%1$d Mitglied</item>
+        <item quantity="other">%1$d Mitglieder</item>
+    </plurals>
     <string name="bt_mirror_syncing">Synchronisiert %1$d%%</string>
 
     <!-- v5 discreet mode -->
@@ -329,6 +336,7 @@
     <string name="bt_custom_category">Kategorie</string>
     <string name="bt_custom_empty_title">Noch keine eigenen Werte</string>
     <string name="bt_custom_empty_message">Verfolge Dinge wie eine Uhrensammlung, Immobilien oder ein privates Darlehen.</string>
+    <string name="bt_custom_requires_connection">Eigene Werte brauchen eine Verbindung. Verbinde dich, um sie zu laden.</string>
     <string name="bt_custom_current_value">Aktueller Wert</string>
     <string name="bt_custom_value_history">Wertverlauf</string>
     <string name="bt_custom_chart_empty">Erfass zwei Werte, um den Verlauf zu zeichnen</string>
@@ -419,6 +427,7 @@
     <string name="bt_watchlist_delete_message">„%1$s“ löschen? Ihre Werte werden aus dieser Liste entfernt.</string>
     <string name="bt_watchlist_empty_title">Noch keine Werte</string>
     <string name="bt_watchlist_empty_message">Füg Aktien, ETFs oder Krypto hinzu, um ihre Kurse hier zu verfolgen.</string>
+    <string name="bt_watchlist_requires_connection">Deine Watchlist braucht eine Verbindung. Verbinde dich, um sie zu laden.</string>
     <string name="bt_watchlist_add_asset">Wert hinzufügen</string>
     <string name="bt_watchlist_remove_item">Aus Liste entfernen</string>
     <string name="bt_watchlist_add_to">Zur Watchlist hinzufügen</string>
@@ -434,8 +443,10 @@
     <string name="bt_conglo_delete">Löschen</string>
     <string name="bt_conglo_delete_message">Dieses Konglomerat löschen? Das lässt sich nicht rückgängig machen.</string>
     <string name="bt_conglo_draft">Entwurf</string>
-    <string name="bt_conglo_assets_one">1 Wert</string>
-    <string name="bt_conglo_assets_n">%1$d Werte</string>
+    <plurals name="bt_conglo_assets">
+        <item quantity="one">%1$d Wert</item>
+        <item quantity="other">%1$d Werte</item>
+    </plurals>
     <string name="bt_conglo_name">Name</string>
     <string name="bt_conglo_positions">Positionen</string>
     <string name="bt_conglo_total">Gesamt %1$s%%</string>
@@ -751,7 +762,10 @@
     <string name="bt_2fa_disable_message">Gib einen aktuellen 6-stelligen Code oder einen Wiederherstellungscode ein, um ihn zu deaktivieren.</string>
     <string name="bt_2fa_disable_code">Code oder Wiederherstellungscode</string>
     <string name="bt_2fa_recovery_title">Wiederherstellungscodes</string>
-    <string name="bt_2fa_recovery_remaining">Noch %1$d Wiederherstellungscodes</string>
+    <plurals name="bt_2fa_recovery_remaining">
+        <item quantity="one">Noch %1$d Wiederherstellungscode</item>
+        <item quantity="other">Noch %1$d Wiederherstellungscodes</item>
+    </plurals>
     <string name="bt_2fa_recovery_regenerate">Neu erzeugen</string>
     <string name="bt_2fa_recovery_shown_title">Sichere deine Wiederherstellungscodes</string>
     <string name="bt_2fa_recovery_shown_message">Bewahr sie an einem sicheren Ort auf. Jeder Code funktioniert einmal. Du siehst sie nicht noch einmal.</string>
@@ -774,7 +788,10 @@
     <string name="bt_sessions_just_now">Gerade eben aktiv</string>
     <string name="bt_sessions_minutes">Aktiv vor %1$d Min.</string>
     <string name="bt_sessions_hours">Aktiv vor %1$d Std.</string>
-    <string name="bt_sessions_days">Aktiv vor %1$d Tagen</string>
+    <plurals name="bt_sessions_days">
+        <item quantity="one">Aktiv vor %1$d Tag</item>
+        <item quantity="other">Aktiv vor %1$d Tagen</item>
+    </plurals>
     <string name="bt_sessions_on_date">Aktiv am %1$s</string>
     <string name="bt_sessions_unknown">Kürzlich aktiv</string>
 
@@ -919,7 +936,7 @@
 
     <!-- Mit-mir-geteilt-Bereich -->
     <string name="bt_social_swm_empty_title">Noch nichts mit dir geteilt</string>
-    <string name="bt_social_swm_empty_body">Wenn ein Freund ein Portfolio, eine Watchlist oder ein Konglomerat mit dir teilt, erscheint es hier — nach Freund gruppiert.</string>
+    <string name="bt_social_swm_empty_body">Wenn ein Freund ein Portfolio, eine Watchlist, ein Konglomerat oder eine Idee mit dir teilt, erscheint es hier — nach Freund gruppiert.</string>
     <string name="bt_social_people_sharing">Personen, die mit dir teilen</string>
     <plurals name="bt_social_count_portfolios">
         <item quantity="one">%1$d Portfolio</item>
@@ -933,10 +950,19 @@
         <item quantity="one">%1$d Watchlist</item>
         <item quantity="other">%1$d Watchlists</item>
     </plurals>
+    <plurals name="bt_social_count_ideas">
+        <item quantity="one">%1$d Idee</item>
+        <item quantity="other">%1$d Ideen</item>
+    </plurals>
 
     <!-- Meine-Freigaben-Bereich -->
     <string name="bt_social_not_sharing">Du teilst noch nichts</string>
-    <string name="bt_social_sharing_count">Du teilst %1$d von %2$d Elementen</string>
+    <!-- "X von Y Elementen": das Substantiv gehört zur GESAMTZAHL, die Form
+         richtet sich also nach %2$d, nicht nach der Zahl der Freigaben. -->
+    <plurals name="bt_social_sharing_count">
+        <item quantity="one">Du teilst %1$d von %2$d Element</item>
+        <item quantity="other">Du teilst %1$d von %2$d Elementen</item>
+    </plurals>
     <string name="bt_social_my_shares_hint">Tippe auf einen Eintrag, um zu ändern, wer ihn sehen kann, oder den Zugriff zu entziehen.</string>
     <string name="bt_social_kind_portfolio">Portfolio</string>
     <plurals name="bt_social_positions">
@@ -987,7 +1013,20 @@
     <string name="bt_social_go_to_chat">Zum Chat</string>
     <string name="bt_social_shares_with_you">Teilt mit dir</string>
     <string name="bt_social_fo_empty_title">Nichts mit dir geteilt</string>
-    <string name="bt_social_fo_empty_body">@%1$s hat noch keine Portfolios, Watchlists oder Konglomerate mit dir geteilt.</string>
+    <string name="bt_social_fo_empty_body">@%1$s hat noch keine Portfolios, Watchlists, Konglomerate oder Ideen mit dir geteilt.</string>
+    <string name="bt_social_fo_offline_body">Was dieser Freund mit dir teilt, braucht eine Verbindung. Verbinde dich neu und versuch es erneut.</string>
+
+    <!-- Die geteilte Idee eines Freundes. Die Zusammenfassung ist ein VERWEIS:
+         ein Name und ob eine These existiert. Es gibt keine schreibgeschützte
+         Ansicht zum Öffnen — `GET /ideas/{id}` ist nur für den Besitzer — daher
+         ist die Aktion der Zeile ein ehrliches Kopieren, kein „Öffnen“. -->
+    <string name="bt_shared_idea_has_thesis">Idee · mit These</string>
+    <string name="bt_shared_idea_no_thesis">Idee · ohne These</string>
+    <string name="bt_shared_idea_copy_hint">Die Idee einer anderen Person lässt sich nicht öffnen. Beim Kopieren landet deine eigene private Kopie — These, Assets und Backtest-Aufbau — in deinen Ideen.</string>
+    <string name="bt_shared_idea_copy">In meine Ideen kopieren</string>
+    <string name="bt_shared_idea_copying">Wird kopiert…</string>
+    <string name="bt_shared_idea_copied_toast">„%1$s“ ist jetzt in deinen Ideen</string>
+    <string name="bt_shared_idea_revoked">Diese Idee ist nicht mehr mit dir geteilt — die Besitzerin oder der Besitzer hat geändert, wer sie sehen darf.</string>
     <string name="bt_social_remove_friend">Freund entfernen</string>
     <string name="bt_social_remove_confirm_title">@%1$s entfernen?</string>
     <string name="bt_social_remove_confirm_body">Ihr beide seht dann nichts mehr, was ihr geteilt habt. Das kann nicht rückgängig gemacht werden.</string>
@@ -1124,8 +1163,6 @@
     <!-- Budgets -->
     <string name="bt_budgets_section">Budgets</string>
     <string name="bt_budgets_empty_title">Diesen Monat keine Budgets</string>
-    <string name="bt_budgets_empty_message">Lege ein Monatsziel für ein Tag fest und behalte im Blick, was noch übrig ist.</string>
-    <string name="bt_budgets_error_title">Budgets konnten nicht geladen werden</string>
     <string name="bt_budgets_new">Neues Budget</string>
     <string name="bt_budgets_new_title">Neues Budget</string>
     <string name="bt_budgets_edit_title">Budget bearbeiten</string>
@@ -1187,14 +1224,12 @@
     <string name="bt_cash_summary_untagged">Ohne Tag</string>
     <string name="bt_cash_summary_empty">Diesen Monat keine Bewegungen.</string>
     <string name="bt_cash_summary_overlap_hint">Eine Bewegung mit mehreren Tags zählt bei jedem davon mit — die Zeilen können also mehr ergeben als die Summe.</string>
-    <string name="bt_cash_summary_error">Monatsübersicht konnte nicht geladen werden.</string>
     <plurals name="bt_cash_summary_movements">
         <item quantity="one">%1$d Bewegung</item>
         <item quantity="other">%1$d Bewegungen</item>
     </plurals>
     <string name="bt_cash_trends_section">Letzte Monate</string>
     <string name="bt_cash_trends_empty">Noch kein Verlauf vorhanden.</string>
-    <string name="bt_cash_trends_error">Verlauf konnte nicht geladen werden.</string>
 
     <!-- ── V5 S2c: Daueraufträge ───────────────────────────────────────────── -->
     <string name="bt_so_title">Daueraufträge</string>
@@ -1365,6 +1400,20 @@
     <string name="bt_server_vault_wrong_pass">Mit dieser Passphrase lässt sich der Tresor nicht öffnen.</string>
     <string name="bt_server_vault_update_required">Dieser Tresor wurde mit einer neueren BetterTrack-Version gespeichert. Aktualisiere die App, um ihn zu öffnen.</string>
     <string name="bt_server_vault_failed">Dein Tresor konnte gerade nicht geöffnet werden.</string>
+    <!-- S5-Nachtrag: eine der aufbewahrten Versionen wiederherstellen -->
+    <string name="bt_server_vault_history_empty_title">Noch nichts zum Wiederherstellen</string>
+    <string name="bt_server_vault_restore_action">Wiederherstellen</string>
+    <string name="bt_server_vault_restore_title">Version %1$d wiederherstellen</string>
+    <string name="bt_server_vault_restore_body">Dein Portfolio auf diesem Gerät wird durch das aus jener Version ersetzt. Nichts geht verloren: Der Tresor, den du jetzt hast, wird zu einer früheren Version, zu der du genauso zurückkehren kannst.</string>
+    <string name="bt_server_vault_restore_confirm_word">WIEDERHERSTELLEN</string>
+    <string name="bt_server_vault_restore_cancel">So lassen, wie es ist</string>
+    <string name="bt_server_vault_restore_working">Wird wiederhergestellt…</string>
+    <string name="bt_server_vault_restored">Version %1$d ist wieder auf diesem Gerät.</string>
+    <string name="bt_server_vault_restore_gone">Diese Version wird nicht mehr aufbewahrt. Lade die Liste neu, um zu sehen, was noch da ist.</string>
+    <string name="bt_server_vault_restore_wrong_key">Diese Version wurde mit einem früheren Tresor-Schlüssel gesperrt, den dieses Gerät nicht mehr hat. Entsperre mit dem Wiederherstellungs-Schlüssel aus jener Zeit, um an sie heranzukommen.</string>
+    <string name="bt_server_vault_restore_unreadable">Die Daten dieser Version sind beschädigt und lassen sich nicht öffnen. Auf diesem Gerät hat sich nichts geändert — probiere eine ältere.</string>
+    <string name="bt_server_vault_restore_unproven">Dieses Gerät konnte nicht bestätigen, dass es den wiederhergestellten Tresor gespeichert hat — deshalb wurde nichts geändert.</string>
+    <string name="bt_server_vault_restore_failed">Diese Version konnte gerade nicht wiederhergestellt werden. Auf diesem Gerät hat sich nichts geändert.</string>
     <string name="bt_medium_synced_server">Bei BetterTrack gesichert</string>
     <string name="bt_medium_sign_in_server">Zum Synchronisieren mit BetterTrack ab- und wieder anmelden</string>
     <string name="bt_vault_sync_pending_google">Noch nicht mit Google verbunden — dein Tresor liegt auf diesem Gerät</string>
@@ -1568,7 +1617,12 @@
     <string name="bt_chain_err_not_friends">Ihr seid keine Freunde mehr, deshalb lässt sich diese Einladung nicht annehmen.</string>
     <string name="bt_chain_err_busy">Die Gruppe ist gerade beschäftigt. Versuch es gleich noch einmal.</string>
     <string name="bt_chain_members_section">Mitglieder</string>
-    <string name="bt_chain_members_count">%1$d von %2$d Mitgliedern</string>
+    <!-- "X von Y Mitgliedern": das Substantiv gehört zur OBERGRENZE, die Form
+         richtet sich also nach %2$d, nicht nach der Zahl der Mitglieder. -->
+    <plurals name="bt_chain_members_count">
+        <item quantity="one">%1$d von %2$d Mitglied</item>
+        <item quantity="other">%1$d von %2$d Mitgliedern</item>
+    </plurals>
     <string name="bt_chain_activity_section">Aktivität</string>
     <string name="bt_chain_activity_empty">In dieser Gruppe ist noch nichts passiert.</string>
     <string name="bt_chain_load_older">Ältere laden</string>
@@ -1693,7 +1747,12 @@
 
     <!-- Home -->
     <string name="bt_home_net_worth">Nettovermögen</string>
-    <string name="bt_home_across_portfolios">Über %1$d von %2$d Portfolios</string>
+    <!-- "X von Y Portfolios": das Substantiv gehört zur GESAMTZAHL, die Form
+         richtet sich also nach %2$d, nicht nach der Zahl der erfassten. -->
+    <plurals name="bt_home_across_portfolios">
+        <item quantity="one">Über %1$d von %2$d Portfolio</item>
+        <item quantity="other">Über %1$d von %2$d Portfolios</item>
+    </plurals>
     <string name="bt_home_needs_you">Wartet auf dich</string>
     <plurals name="bt_home_alerts_triggered">
         <item quantity="one">%1$d Alarm ausgelöst</item>
@@ -1724,7 +1783,12 @@
         <item quantity="one">%1$d Position braucht einen Kurs</item>
         <item quantity="other">%1$d Positionen brauchen einen Kurs</item>
     </plurals>
-    <string name="bt_home_unpriced_more">%1$d weitere im Portfolio-Tab</string>
+    <!-- Gezählt werden Positionen (feminin), deshalb heißt die Einzahl hier
+         ebenfalls "weitere" — gleich geschrieben, aber nicht dieselbe Form. -->
+    <plurals name="bt_home_unpriced_more">
+        <item quantity="one">%1$d weitere im Portfolio-Tab</item>
+        <item quantity="other">%1$d weitere im Portfolio-Tab</item>
+    </plurals>
     <string name="bt_home_portfolios">Deine Portfolios</string>
     <string name="bt_home_more">Mehr</string>
     <string name="bt_home_on">An</string>
@@ -1990,7 +2054,12 @@
     <!-- ══ R-arc R2 ══ APPEND-ONLY BLOCK, gleiche Regel wie beim R1-Block. -->
 
     <string name="bt_needs_you">Wartet auf dich</string>
-    <string name="bt_workbench_needs_more">+%1$d weitere</string>
+    <!-- Gezählt werden gemischte Einträge (Alarme + Ideen); als Oberbegriff
+         nutzt die App "Element" (neutrum), daher "+1 weiteres". -->
+    <plurals name="bt_workbench_needs_more">
+        <item quantity="one">+%1$d weiteres</item>
+        <item quantity="other">+%1$d weitere</item>
+    </plurals>
 
     <string name="bt_social_messages_sub">Deine Unterhaltungen</string>
     <plurals name="bt_social_unread_messages">

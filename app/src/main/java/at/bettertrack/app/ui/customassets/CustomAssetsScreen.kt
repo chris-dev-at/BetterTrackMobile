@@ -67,9 +67,15 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -96,14 +102,31 @@ class CustomAssetsViewModel(
     private val _error = MutableStateFlow<BtMessage?>(null)
     val error: StateFlow<BtMessage?> = _error.asStateFlow()
 
+    /**
+     * The failure of the LIST load — distinct from [error], which belongs to the
+     * create/edit dialog. Keeping them apart matters: the dialog's failure is
+     * about something the user just typed and is retried by pressing the button
+     * again, while this one is about the screen having nothing to show and is
+     * retried by [refresh]. They were one field, so a failed list load could only
+     * ever render as the empty state: "You haven't created any custom assets yet"
+     * on an account that has.
+     */
+    private val _loadFailure = MutableStateFlow<BtMessage?>(null)
+    val loadFailure: StateFlow<BtMessage?> = _loadFailure.asStateFlow()
+
+    /** False until the first list load has come back, either way. */
+    private val _firstLoadDone = MutableStateFlow(false)
+    val firstLoadDone: StateFlow<Boolean> = _firstLoadDone.asStateFlow()
+
     init { refresh() }
 
     /** Pull the authoritative custom-asset list (#387) so zero-holding assets appear. */
     fun refresh() {
         viewModelScope.launch {
             _refreshing.value = true
-            repo.refreshCustomAssets()
+            _loadFailure.value = (repo.refreshCustomAssets() as? BtResult.Err)?.asMessage()
             _refreshing.value = false
+            _firstLoadDone.value = true
         }
     }
 
@@ -138,6 +161,8 @@ fun CustomAssetsScreen(
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
+    val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
 
@@ -174,20 +199,54 @@ fun CustomAssetsScreen(
             Column(Modifier.fillMaxSize()) {
                 if (!isOnline) OfflineBanner(asOfMs = dataAgeMs)
 
+                val listFailure = loadFailure
                 if (assets.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        BtEmptyState(
-                            icon = Icons.Outlined.Category,
-                            title = stringResource(R.string.bt_custom_empty_title),
-                            message = stringResource(R.string.bt_custom_empty_message),
-                            action = {
-                                BtPrimaryButton(
-                                    text = stringResource(R.string.bt_custom_create),
-                                    onClick = { createOpen = true },
-                                    enabled = isOnline,
-                                )
-                            },
+                    // The four ways to have no rows, which used to be one:
+                    // still loading, offline, the load failed, or genuinely none.
+                    when (
+                        resolveListSurface(
+                            hasContent = false,
+                            firstLoadPending = !firstLoadDone,
+                            failed = listFailure != null,
+                            isOnline = isOnline,
                         )
+                    ) {
+                        BtListSurface.SKELETON -> CustomAssetsSkeleton()
+
+                        BtListSurface.OFFLINE -> Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            BtOfflineState(
+                                message = stringResource(R.string.bt_custom_requires_connection),
+                                onRetry = { vm.refresh() },
+                            )
+                        }
+
+                        BtListSurface.ERROR -> Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            BtErrorState(
+                                message = listFailure ?: BtMessage.generic,
+                                onRetry = { vm.refresh() },
+                            )
+                        }
+
+                        else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            BtEmptyState(
+                                icon = Icons.Outlined.Category,
+                                title = stringResource(R.string.bt_custom_empty_title),
+                                message = stringResource(R.string.bt_custom_empty_message),
+                                action = {
+                                    BtPrimaryButton(
+                                        text = stringResource(R.string.bt_custom_create),
+                                        onClick = { createOpen = true },
+                                        enabled = isOnline,
+                                    )
+                                },
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -235,6 +294,19 @@ fun CustomAssetsScreen(
                 vm.clearError()
             },
         )
+    }
+}
+
+/** Placeholder rows shaped like [CustomAssetRow], for the first list load. */
+@Composable
+private fun CustomAssetsSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(6) { BtSkeleton(Modifier.fillMaxWidth().height(58.dp), shape = BtShapes.card) }
     }
 }
 
@@ -348,13 +420,11 @@ fun CustomAssetDialog(
                         )
                     }
                 }
-                if (error != null) {
-                    Text(
-                        text = error.resolveWithDiagnostic(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.loss,
-                    )
-                }
+                // A refused WRITE, so BtFormError and not BtInlineError: the
+                // confirm button below is still armed and is the retry. Wiring
+                // vm.refresh() here would re-read the list, which is not what
+                // failed.
+                if (error != null) BtFormError(error)
             }
         },
         confirmButton = {

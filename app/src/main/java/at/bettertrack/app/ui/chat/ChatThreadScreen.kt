@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -83,7 +84,10 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -346,10 +350,7 @@ fun ChatThreadScreen(
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
-                state.loading && state.messages.isEmpty() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator(color = bt.gold) }
+                state.loading && state.messages.isEmpty() -> ThreadSkeleton()
 
                 state.availability == ThreadAvailability.NotAvailable -> BtEmptyState(
                     icon = Icons.Outlined.Lock,
@@ -635,10 +636,8 @@ private fun AttachSheet(items: List<ShareChip>, onPick: (ShareChip) -> Unit, onD
             Text(stringResource(R.string.bt_chat_share_subtitle), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
             Spacer(Modifier.size(12.dp))
             if (items.isEmpty()) {
-                Text(
-                    stringResource(R.string.bt_chat_share_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = bt.textMuted,
+                BtInlineEmpty(
+                    text = stringResource(R.string.bt_chat_share_empty),
                     modifier = Modifier.padding(vertical = 16.dp),
                 )
             } else {
@@ -688,4 +687,35 @@ private fun ShareChip.kindLabel(): String = stringResource(
 private fun ShareChip.subtitle(): String {
     val k = kindLabel()
     return ownerName?.takeIf { it.isNotBlank() }?.let { "$k · $it" } ?: k
+}
+
+/**
+ * Placeholder bubbles while a thread's first page loads.
+ *
+ * Alternating sides and varying widths, because a thread is not a list of equal
+ * rows and five identical blocks would set the wrong expectation for what is
+ * about to appear. Bottom-anchored (`Arrangement.Bottom`) to match where a
+ * conversation actually sits, so the real messages do not slide up past the
+ * placeholders when they land.
+ */
+@Composable
+private fun ThreadSkeleton() {
+    // Fraction of the width, and whether the bubble hangs on the right (mine).
+    val bubbles = listOf(0.55f to false, 0.42f to true, 0.68f to false, 0.36f to true, 0.50f to false)
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.Bottom,
+    ) {
+        bubbles.forEach { (fraction, mine) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+            ) {
+                BtSkeleton(
+                    modifier = Modifier.fillMaxWidth(fraction).height(40.dp),
+                    shape = BtShapes.card,
+                )
+            }
+        }
+    }
 }

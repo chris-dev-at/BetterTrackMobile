@@ -1095,6 +1095,11 @@ private fun BtNavHost(
                     navController.navigate(SharedWatchlistViewRoute(watchlistId, ownerName))
                 },
                 onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
+                // A cloned idea is the caller's OWN idea from the moment it
+                // exists, so it opens on the ordinary owner-only detail route —
+                // there is no "shared idea" screen to send it to, and that is
+                // exactly why cloning is the affordance in the first place.
+                onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
             )
         }
         composable<SharedPortfolioViewRoute> { entry ->

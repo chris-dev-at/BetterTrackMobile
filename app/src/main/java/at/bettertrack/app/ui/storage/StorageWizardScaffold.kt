@@ -285,6 +285,13 @@ fun BlockingAcknowledgment(
     onToggle: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    // KEEPS its border, deliberately — do not "finish" the tonal sweep here.
+    // R2 moved the app off border walls and left exactly one exception: the
+    // danger zone. This is that category — the gate in front of an action that
+    // cannot be walked back — and the border is what separates it from the
+    // merely-serious notices (WizardNote LOSS, PublicAcknowledgment) that went
+    // tonal in the leftovers pass. An outline only means "stop" while it is
+    // rare, so spending it anywhere else is what would weaken this one.
     Surface(
         shape = BtShapes.card,
         color = bt.loss.copy(alpha = 0.09f),
@@ -394,7 +401,29 @@ fun RequiredTick(label: String, checked: Boolean, enabled: Boolean, onToggle: ()
     }
 }
 
-/** A calm, bordered note — the honest "this isn't available yet" surface. */
+/**
+ * A calm note — the honest "this isn't available yet" surface.
+ *
+ * ## Tonal, not bordered
+ *
+ * All three tones used to draw a 1dp ring: a full-opacity `borderStrong` for
+ * NEUTRAL, and a 40% accent for GOLD and LOSS. R2 moved the app off border walls
+ * onto tonal steps ([at.bettertrack.app.ui.components.BtGroup]) and R3 took the
+ * ring off the state badge for the same reason — a tinted fill on a darker page
+ * is already a boundary, so the outline is a second boundary doing the first
+ * one's job. This note was one of the last three semantic banners still drawing
+ * one.
+ *
+ * Each tone's fill steps up to hold the shape on its own now that nothing is
+ * drawn around it (GOLD 6% → 11%, LOSS 8% → 13%). NEUTRAL needs no bump: a plain
+ * `surface` fill with no border at `BtShapes.group` is *exactly* what [BtGroup]
+ * already is, which is the point — the neutral note stops being a special case
+ * and becomes the app's ordinary containment.
+ *
+ * The tone still reads, because it was never the border doing that work: the
+ * fill's hue and the title's colour (`lossSoft` / `gold`) carry it, which is the
+ * same thing R3 kept when it un-ringed the error badge.
+ */
 @Composable
 fun WizardNote(
     title: String?,
@@ -402,19 +431,13 @@ fun WizardNote(
     tone: NoteTone = NoteTone.NEUTRAL,
 ) {
     val bt = BtTheme.colors
-    val accent = when (tone) {
-        NoteTone.NEUTRAL -> bt.borderStrong
-        NoteTone.GOLD -> bt.gold
-        NoteTone.LOSS -> bt.loss
-    }
     Surface(
-        shape = BtShapes.card,
+        shape = BtShapes.group,
         color = when (tone) {
             NoteTone.NEUTRAL -> bt.surface
-            NoteTone.GOLD -> bt.gold.copy(alpha = 0.06f)
-            NoteTone.LOSS -> bt.loss.copy(alpha = 0.08f)
+            NoteTone.GOLD -> bt.gold.copy(alpha = 0.11f)
+            NoteTone.LOSS -> bt.loss.copy(alpha = 0.13f)
         },
-        border = BorderStroke(1.dp, accent.copy(alpha = if (tone == NoteTone.NEUTRAL) 1f else 0.4f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {

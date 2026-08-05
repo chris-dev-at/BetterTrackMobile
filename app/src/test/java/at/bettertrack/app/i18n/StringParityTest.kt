@@ -38,6 +38,24 @@ class StringParityTest {
             .map { it.groupValues[1] }
             .toSet()
 
+    /** name -> (quantity -> body), for `<plurals>` entries. */
+    private fun plurals(qualifier: String): Map<String, Map<String, String>> {
+        val text = resFile(qualifier).readText()
+        return Regex("""<plurals\s+name="([^"]+)"\s*>(.*?)</plurals>""", RegexOption.DOT_MATCHES_ALL)
+            .findAll(text)
+            .associate { block ->
+                block.groupValues[1] to
+                    Regex("""<item\s+quantity="([^"]+)"\s*>(.*?)</item>""", RegexOption.DOT_MATCHES_ALL)
+                        .findAll(block.groupValues[2])
+                        .associate { it.groupValues[1] to it.groupValues[2] }
+            }
+    }
+
+    private val placeholder = Regex("""%(\d+\$)?[sdf]""")
+
+    private fun placeholdersIn(body: String): List<String> =
+        placeholder.findAll(body).map { it.value }.sorted().toList()
+
     /** Keys whose value is legitimately identical in both languages. */
     private val identicalAllowed = setOf(
         // Proper nouns, symbols, format-only strings and loanwords that do not
@@ -77,13 +95,87 @@ class StringParityTest {
     fun `format placeholders match between languages`() {
         val en = strings("")
         val de = strings("-de")
-        val placeholder = Regex("""%(\d+\$)?[sdf]""")
         val mismatched = en.keys.intersect(de.keys).filter { key ->
-            val a = placeholder.findAll(en.getValue(key)).map { it.value }.sorted().toList()
-            val b = placeholder.findAll(de.getValue(key)).map { it.value }.sorted().toList()
-            a != b
+            placeholdersIn(en.getValue(key)) != placeholdersIn(de.getValue(key))
         }.sorted()
         assertTrue("placeholder mismatch (crash risk at format time): $mismatched", mismatched.isEmpty())
+    }
+
+    /**
+     * The `<string>` placeholder test above stops at `</string>`, so converting a
+     * counted key from `<string>` to `<plurals>` used to *drop* its crash
+     * coverage: `getQuantityString(id, n, a, b)` formats whichever item CLDR
+     * picks, and an item that quietly lost a `%2$d` — or a German `one` form
+     * translated from an older English wording — crashes only on the phone that
+     * happens to hit that quantity. Every item of a plural therefore has to carry
+     * exactly the same placeholders as every other item, in both languages.
+     */
+    @Test
+    fun `format placeholders match across plural items and languages`() {
+        val en = plurals("")
+        val de = plurals("-de")
+        val mismatched = en.keys.intersect(de.keys).filter { name ->
+            val perItem = (en.getValue(name) + de.getValue(name).mapKeys { "de:" + it.key })
+                .mapValues { placeholdersIn(it.value) }
+            perItem.values.distinct().size > 1
+        }.sorted()
+        assertTrue("plural items disagree on placeholders (crash risk at format time): $mismatched", mismatched.isEmpty())
+    }
+
+    /**
+     * A plural is only doing its job if the language's own quantity classes are
+     * all present. English and German share the same two (CLDR `one` + `other`);
+     * a missing `one` silently falls back to `other` and reprints the very bug
+     * the plural was added to fix ("1 members"), while a stray extra class is
+     * dead weight that no BetterTrack locale will ever select.
+     */
+    @Test
+    fun `every plural carries the quantity classes its language needs`() {
+        val required = setOf("one", "other")
+        val wrong = mutableListOf<String>()
+        for ((qualifier, label) in listOf("" to "EN", "-de" to "DE")) {
+            plurals(qualifier).forEach { (name, items) ->
+                if (items.keys != required) wrong += "$label:$name has ${items.keys.sorted()}"
+            }
+        }
+        assertTrue("plurals with the wrong quantity classes (want $required): ${wrong.sorted()}", wrong.isEmpty())
+    }
+
+    /**
+     * Keys whose `%d` sits next to a plural noun on purpose. Only a count that
+     * can never be 1 belongs here — anything else is a plural waiting to happen.
+     */
+    private val hardCodedPluralAllowed = setOf(
+        // "Use at least %1$d characters." — the argument is the compile-time
+        // minimum length (a constant well above 1), never a live count.
+        "bt_storage_pass_too_short",
+    )
+
+    /**
+     * The guard for the whole class of bug: a counted noun frozen into a
+     * `<string>`, which prints "1 transactions" the first time the count reaches
+     * one. Deliberately narrow so it stays quiet — it only fires when a `%d`
+     * (never `%s`) is followed within three words by a lower-case word of four
+     * letters or more ending in a single "s". That leaves the abbreviation-based
+     * counters alone by construction ("Active %1$d min ago", "%1$d d ago",
+     * "Syncing %1$d%%"), because an abbreviation is not a noun that inflects.
+     */
+    @Test
+    fun `no string hard-codes a plural noun beside a count`() {
+        val count = Regex("""%(\d+\$)?d""")
+        val word = Regex("""[A-Za-z']+""")
+        val offenders = strings("").filter { (key, body) ->
+            key !in hardCodedPluralAllowed && count.findAll(body).any { hit ->
+                word.findAll(body.substring(hit.range.last + 1)).take(3).any { w ->
+                    val t = w.value
+                    t.length >= 4 && t == t.lowercase() && t.endsWith("s") && !t.endsWith("ss")
+                }
+            }
+        }.keys.sorted()
+        assertTrue(
+            "counted noun hard-coded in a <string> (use <plurals> + pluralStringResource): $offenders",
+            offenders.isEmpty(),
+        )
     }
 
     /**

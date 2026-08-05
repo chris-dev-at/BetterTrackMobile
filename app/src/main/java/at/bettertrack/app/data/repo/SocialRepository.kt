@@ -102,9 +102,12 @@ data class SharedWithMe(
     val portfolios: List<SharedPortfolioSummary>,
     val conglomerates: List<SharedConglomerateSummary>,
     val watchlists: List<SharedWatchlistSummary>,
+    /** V5: the fourth share kind. Defaulted so existing construction sites compile. */
+    val ideas: List<SharedIdeaSummary> = emptyList(),
 ) {
-    val isEmpty: Boolean get() = portfolios.isEmpty() && conglomerates.isEmpty() && watchlists.isEmpty()
-    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size
+    val isEmpty: Boolean
+        get() = portfolios.isEmpty() && conglomerates.isEmpty() && watchlists.isEmpty() && ideas.isEmpty()
+    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size + ideas.size
 }
 
 data class SharedPortfolioSummary(
@@ -132,6 +135,24 @@ data class SharedWatchlistSummary(
     val ownerId: String,
     val ownerName: String,
     val itemCount: Int,
+    val activityAlertsEnabled: Boolean,
+)
+
+/**
+ * A friend's shared idea — a pointer, not the idea.
+ *
+ * There is no read route a non-owner can use: `GET /ideas/{id}` is owner-only
+ * and answers 404 for someone else's idea. [hasThesis] is therefore the ONLY
+ * thing the viewer knows about the rationale until they clone it, and the app
+ * says so rather than implying the thesis is one tap away.
+ */
+data class SharedIdeaSummary(
+    val ideaId: String,
+    val name: String,
+    val ownerId: String,
+    val ownerName: String,
+    /** A written thesis is attached; its text is not on this wire. */
+    val hasThesis: Boolean,
     val activityAlertsEnabled: Boolean,
 )
 
@@ -181,29 +202,38 @@ data class PersonShares(
     val portfolios: List<SharedPortfolioSummary>,
     val conglomerates: List<SharedConglomerateSummary>,
     val watchlists: List<SharedWatchlistSummary>,
+    /** V5: ideas are the fourth kind a friend can share. */
+    val ideas: List<SharedIdeaSummary> = emptyList(),
 ) {
-    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size
+    val count: Int get() = portfolios.size + conglomerates.size + watchlists.size + ideas.size
 }
 
 /**
  * Group everything shared with me by the friend who shares it (pure — unit-tested).
  * People are ordered by most-shared first, then name; each person's items keep
- * portfolio → conglomerate → watchlist order.
+ * portfolio → conglomerate → watchlist → idea order.
+ *
+ * A friend who shares ONLY ideas is a real case (ideas are the cheapest thing to
+ * share), so ideas seed the id set and the name fallback exactly like the other
+ * three — otherwise that person would not appear in the list at all.
  */
 fun SharedWithMe.groupByPerson(): List<PersonShares> {
     val ids = LinkedHashSet<String>()
     portfolios.forEach { ids.add(it.ownerId) }
     conglomerates.forEach { ids.add(it.ownerId) }
     watchlists.forEach { ids.add(it.ownerId) }
+    ideas.forEach { ids.add(it.ownerId) }
     return ids.map { ownerId ->
         val ps = portfolios.filter { it.ownerId == ownerId }
         val cs = conglomerates.filter { it.ownerId == ownerId }
         val ws = watchlists.filter { it.ownerId == ownerId }
+        val ideas = ideas.filter { it.ownerId == ownerId }
         val name = ps.firstOrNull()?.ownerName
             ?: cs.firstOrNull()?.ownerName
             ?: ws.firstOrNull()?.ownerName
+            ?: ideas.firstOrNull()?.ownerName
             ?: ""
-        PersonShares(ownerId, name, ps, cs, ws)
+        PersonShares(ownerId, name, ps, cs, ws, ideas)
     }.sortedWith(compareByDescending<PersonShares> { it.count }.thenBy { it.ownerName.lowercase() })
 }
 
@@ -279,6 +309,9 @@ class DefaultSocialRepository(
                     },
                     watchlists = r.value.watchlists.map {
                         SharedWatchlistSummary(it.watchlistId, it.name, it.owner.id, it.owner.username, it.itemCount, it.activityAlertsEnabled)
+                    },
+                    ideas = r.value.ideas.map {
+                        SharedIdeaSummary(it.ideaId, it.name, it.owner.id, it.owner.username, it.hasThesis, it.activityAlertsEnabled)
                     },
                 ),
             )

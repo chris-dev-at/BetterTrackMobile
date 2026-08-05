@@ -40,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -251,7 +252,7 @@ private fun lastActiveLabel(lastSeenMs: Long?): String {
         is SessionRecency.JustNow -> stringResource(R.string.bt_sessions_just_now)
         is SessionRecency.MinutesAgo -> stringResource(R.string.bt_sessions_minutes, r.minutes)
         is SessionRecency.HoursAgo -> stringResource(R.string.bt_sessions_hours, r.hours)
-        is SessionRecency.DaysAgo -> stringResource(R.string.bt_sessions_days, r.days)
+        is SessionRecency.DaysAgo -> pluralStringResource(R.plurals.bt_sessions_days, r.days, r.days)
         is SessionRecency.OnDate -> stringResource(
             R.string.bt_sessions_on_date,
             java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(r.epochMs)),

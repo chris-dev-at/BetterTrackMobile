@@ -74,11 +74,12 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.LocalBtSnackbar
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -438,23 +439,20 @@ fun CashRulesScreen(onBack: () -> Unit) {
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // A failed READ over a populated cache keeps the rows and
+                    // offers the one thing that fixes it.
                     loadError?.let { message ->
                         item(key = "load-error") {
-                            Text(
-                                text = message.resolveWithDiagnostic(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.lossSoft,
-                            )
+                            BtInlineError(message = message, onRetry = { vm.refresh() })
                         }
                     }
+                    // A failed WRITE gets no retry, and that is the point: the
+                    // switch or the Save that caused it is still on screen and
+                    // still armed, so a second button here would only be a worse
+                    // copy of it — one that would have to guess which write to
+                    // replay from state the user may have changed since.
                     writeError?.let { message ->
-                        item(key = "write-error") {
-                            Text(
-                                text = message.resolveWithDiagnostic(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.lossSoft,
-                            )
-                        }
+                        item(key = "write-error") { BtFormError(message) }
                     }
 
                     item(key = "apply") {
@@ -841,13 +839,7 @@ private fun CashRuleSheet(
                 )
             }
 
-            error?.let {
-                Text(
-                    text = it.resolveWithDiagnostic(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.lossSoft,
-                )
-            }
+            error?.let { BtFormError(it) }
 
             BtPrimaryButton(
                 text = confirmLabel,

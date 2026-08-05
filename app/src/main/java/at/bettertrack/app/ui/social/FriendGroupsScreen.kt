@@ -74,6 +74,7 @@ import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.theme.BtShapes
@@ -530,11 +531,7 @@ private fun GroupCard(
                 )
                 Spacer(Modifier.height(6.dp))
                 if (group.members.isEmpty()) {
-                    Text(
-                        stringResource(R.string.bt_groups_no_members),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textSecondary,
-                    )
+                    BtInlineEmpty(stringResource(R.string.bt_groups_no_members))
                 } else {
                     group.members.forEach { m ->
                         PersonRow(
@@ -661,10 +658,16 @@ private fun PersonRow(
     }
 }
 
+/**
+ * The add-a-member sheet's "nobody left to add" line.
+ *
+ * Now the design system's [BtInlineEmpty] rather than a private `Text`: this
+ * was one of the hand-copied compact empties that motivated adding a compact
+ * empty to the DS in the first place (the DS had [BtInlineError] for the
+ * failure half of the pair and nothing for this half).
+ */
 @Composable
-private fun HintLine(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = BtTheme.colors.textSecondary)
-}
+private fun HintLine(text: String) = BtInlineEmpty(text)
 
 @Composable
 private fun GroupNameDialog(

@@ -51,7 +51,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
@@ -62,12 +64,16 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
@@ -87,6 +93,107 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/**
+ * Which single surface the ledger area shows.
+ *
+ * ## Why this exists next to [resolveListSurface]
+ *
+ * [resolveListSurface] owns the hard part and is not restated here: content
+ * beats a failure, unknown beats empty, and "you have none" is claimed only by a
+ * read that actually succeeded. This type adds the one thing that rule cannot
+ * know — that this screen's content can be present but hidden by the type/asset
+ * filters, which is a fifth situation with its own copy and its own way out
+ * (clear the filters) — and it carries the failure's [BtMessage] so the error
+ * surface can say what went wrong rather than shrug.
+ *
+ * The branch this replaces was the app's worst state lie: "nothing cached and
+ * not refreshing" was ONE branch rendering "You have no transactions yet", so a
+ * first fetch that dropped told an account with hundreds of entries that it had
+ * none — and the ViewModel had thrown the `BtApiError` away before the screen
+ * could have known better.
+ */
+sealed interface TxLedgerSurface {
+    /** Nothing cached yet and the first fetch is still out. */
+    data object Loading : TxLedgerSurface
+
+    /** Nothing to show because the fetch FAILED — not because the ledger is empty. */
+    data class Failed(val message: BtMessage) : TxLedgerSurface
+
+    /** Nothing to show, and no connection to go and get it with. */
+    data object Offline : TxLedgerSurface
+
+    /** The ledger really is empty. The one case allowed to say so. */
+    data object Empty : TxLedgerSurface
+
+    /** Rows exist, but this filter combination matches none of them. */
+    data object NoMatches : TxLedgerSurface
+
+    /** Rows to render. */
+    data object Ledger : TxLedgerSurface
+}
+
+/**
+ * True when the surface being shown is real content — the only situation in
+ * which the dismissible "couldn't refresh" strip belongs on screen. That banner
+ * exists for *stale content*; over an error or an empty surface it would be a
+ * second report of a failure the surface itself is already explaining.
+ */
+val TxLedgerSurface.showsContent: Boolean
+    get() = this is TxLedgerSurface.Ledger || this is TxLedgerSurface.NoMatches
+
+/** Everything [txLedgerSurface] needs, as plain values. */
+data class TxLedgerState(
+    /** Any transaction for this portfolio is in Room (BEFORE the display filters). */
+    val hasAnyCached: Boolean = false,
+    /** Any queued buy/sell survives the display filters. */
+    val hasPendingRows: Boolean = false,
+    /** Any synced row survives the display filters. */
+    val hasVisibleRows: Boolean = false,
+    /** The first refresh for the governing portfolio has come back, either way. */
+    val firstLoadDone: Boolean = false,
+    /**
+     * A governing portfolio is known. Without one no fetch is ever sent, so
+     * "not loaded yet" would otherwise mean a skeleton that never resolves.
+     */
+    val hasPortfolio: Boolean = true,
+    val isOnline: Boolean = true,
+    /** The message from the most recent failed fetch, or null if the last one landed. */
+    val loadFailure: BtMessage? = null,
+)
+
+/**
+ * Pick the ledger's surface: the shared rule, plus this screen's filters.
+ *
+ * Content is decided first because it is the one thing the shared rule cannot
+ * see the shape of — "there are rows, but this filter matches none of them" is
+ * content, not emptiness, and it wants the clear-filters action rather than the
+ * "record your first buy" copy. Everything past that is [resolveListSurface]'s
+ * call, translated back into a message-carrying verdict.
+ */
+fun txLedgerSurface(state: TxLedgerState): TxLedgerSurface {
+    if (state.hasAnyCached || state.hasPendingRows) {
+        return if (state.hasVisibleRows || state.hasPendingRows) {
+            TxLedgerSurface.Ledger
+        } else {
+            TxLedgerSurface.NoMatches
+        }
+    }
+    val shared = resolveListSurface(
+        hasContent = false,
+        firstLoadPending = state.hasPortfolio && !state.firstLoadDone,
+        failed = state.loadFailure != null,
+        isOnline = state.isOnline,
+    )
+    return when (shared) {
+        BtListSurface.SKELETON -> TxLedgerSurface.Loading
+        BtListSurface.OFFLINE -> TxLedgerSurface.Offline
+        BtListSurface.ERROR -> TxLedgerSurface.Failed(state.loadFailure ?: BtMessage.generic)
+        // CONTENT cannot come back from `hasContent = false`; it collapses into
+        // the same "nothing to show and nothing went wrong" answer as EMPTY.
+        BtListSurface.EMPTY, BtListSurface.CONTENT -> TxLedgerSurface.Empty
+    }
+}
 
 /**
  * Per-portfolio transaction history (Step 7, spec §6.2 read-only; Step 8 adds
@@ -173,6 +280,28 @@ class TransactionsViewModel(
     private val _refreshNotice = MutableStateFlow(RefreshNoticeState())
     val refreshNotice: StateFlow<RefreshNoticeState> = _refreshNotice.asStateFlow()
 
+    /**
+     * The app-owned message from the most recent failed fetch — null whenever the
+     * last one landed.
+     *
+     * The ViewModel used to have no error channel at all: both failure sites did
+     * `is BtResult.Err -> _refreshNotice.onFailure()` and dropped the error on
+     * the floor. That was survivable while there was content to fall back on, and
+     * a lie when there was not — see [txLedgerSurface]. A [BtMessage] rather than
+     * a String, so the raw server sentence is not one assignment away (S6 P0-4).
+     */
+    private val _loadFailure = MutableStateFlow<BtMessage?>(null)
+    val loadFailure: StateFlow<BtMessage?> = _loadFailure.asStateFlow()
+
+    /**
+     * False until the first refresh for the governing portfolio has come back —
+     * successfully or not. Distinguishes "we have not looked yet" from "we looked
+     * and there is nothing", which is the difference between a skeleton and the
+     * app telling the user they own no transactions.
+     */
+    private val _firstLoadDone = MutableStateFlow(false)
+    val firstLoadDone: StateFlow<Boolean> = _firstLoadDone.asStateFlow()
+
     private var refreshedOnce = false
 
     init {
@@ -195,11 +324,18 @@ class TransactionsViewModel(
                 is BtResult.Ok -> {
                     _nextCursor.value = r.value
                     _refreshNotice.value = _refreshNotice.value.onSuccess()
+                    _loadFailure.value = null
                 }
-                // Cached rows stay — and the user is told they are cached.
-                is BtResult.Err -> _refreshNotice.value = _refreshNotice.value.onFailure()
+                // Cached rows stay — and the user is told they are cached. With
+                // nothing cached the message is the whole surface, so it is kept
+                // rather than reduced to a boolean.
+                is BtResult.Err -> {
+                    _refreshNotice.value = _refreshNotice.value.onFailure()
+                    _loadFailure.value = r.asMessage()
+                }
             }
             _refreshing.value = false
+            _firstLoadDone.value = true
         }
     }
 
@@ -218,9 +354,13 @@ class TransactionsViewModel(
                 is BtResult.Ok -> {
                     _nextCursor.value = r.value
                     _refreshNotice.value = _refreshNotice.value.onSuccess()
+                    _loadFailure.value = null
                 }
                 // A swallowed loadMore looked like "you have reached the end".
-                is BtResult.Err -> _refreshNotice.value = _refreshNotice.value.onFailure()
+                is BtResult.Err -> {
+                    _refreshNotice.value = _refreshNotice.value.onFailure()
+                    _loadFailure.value = r.asMessage()
+                }
             }
             _loadingMore.value = false
         }
@@ -272,8 +412,25 @@ fun TransactionsScreen(
     val hasMore by vm.hasMore.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val portfolioName by vm.portfolioName.collectAsStateWithLifecycle()
+    val portfolioId by vm.portfolioId.collectAsStateWithLifecycle()
+    val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
+    val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
+
+    // One verdict, taken once, read by both the banner and the ledger area — so
+    // the strip cannot contradict the surface underneath it.
+    val surface = txLedgerSurface(
+        TxLedgerState(
+            hasAnyCached = hasAnyCached,
+            hasPendingRows = pendingRows.isNotEmpty(),
+            hasVisibleRows = transactions.isNotEmpty(),
+            firstLoadDone = firstLoadDone,
+            hasPortfolio = portfolioId != null,
+            isOnline = isOnline,
+            loadFailure = loadFailure,
+        ),
+    )
 
     var assetSheetOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -323,7 +480,10 @@ fun TransactionsScreen(
             // S6 P0-5: online but the fetch failed — say so instead of leaving
             // the stale ledger looking freshly loaded. (Offline is already
             // covered by the banner above, so the row suppresses itself there.)
-            if (refreshNotice.visible(isOnline)) {
+            // Only over CONTENT: with nothing to show, the surface below is
+            // already a full error state with its own retry, and two reports of
+            // one failure is noise, not honesty.
+            if (surface.showsContent && refreshNotice.visible(isOnline)) {
                 RefreshFailedBanner(
                     onDismiss = { vm.dismissRefreshNotice() },
                     onRetry = { vm.refresh() },
@@ -378,11 +538,27 @@ fun TransactionsScreen(
                     )
                 },
             ) {
-                when {
-                    // Nothing cached yet and the first fetch is running.
-                    !hasAnyCached && pendingRows.isEmpty() && refreshing -> TransactionsSkeleton()
+                when (surface) {
+                    // Nothing cached yet and the first fetch is still out.
+                    TxLedgerSurface.Loading -> TransactionsSkeleton()
 
-                    !hasAnyCached && pendingRows.isEmpty() -> EmptyFill {
+                    // The fetch failed and there is nothing cached to fall back
+                    // on. This used to render as "You have no transactions yet".
+                    is TxLedgerSurface.Failed -> EmptyFill {
+                        BtErrorState(
+                            message = surface.message,
+                            onRetry = { vm.refresh() },
+                        )
+                    }
+
+                    TxLedgerSurface.Offline -> EmptyFill {
+                        BtOfflineState(
+                            message = stringResource(R.string.bt_tx_requires_connection),
+                            onRetry = { vm.refresh() },
+                        )
+                    }
+
+                    TxLedgerSurface.Empty -> EmptyFill {
                         BtEmptyState(
                             icon = Icons.AutoMirrored.Outlined.ReceiptLong,
                             title = stringResource(R.string.bt_tx_empty_title),
@@ -390,7 +566,7 @@ fun TransactionsScreen(
                         )
                     }
 
-                    transactions.isEmpty() && pendingRows.isEmpty() -> EmptyFill {
+                    TxLedgerSurface.NoMatches -> EmptyFill {
                         BtEmptyState(
                             icon = Icons.Outlined.FilterList,
                             title = stringResource(R.string.bt_tx_no_matches_title),
@@ -404,7 +580,7 @@ fun TransactionsScreen(
                         )
                     }
 
-                    else -> {
+                    TxLedgerSurface.Ledger -> {
                         val listState = rememberLazyListState()
                         // Incremental load: fetch older pages as the end nears.
                         LaunchedEffect(listState, transactions.size, hasMore) {

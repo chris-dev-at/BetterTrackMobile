@@ -76,18 +76,23 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtDateField
 import at.bettertrack.app.ui.components.BtDatePickerDialog
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtInlineError
+import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberParkReason
-import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.LocalDate
@@ -139,6 +144,20 @@ class CustomAssetDetailViewModel(
     private val _error = MutableStateFlow<BtMessage?>(null)
     val error: StateFlow<BtMessage?> = _error.asStateFlow()
 
+    /**
+     * The failure of the value-point LOAD — kept apart from [error], which is the
+     * refusal of something the user just submitted. Only this one is allowed to
+     * change what the chart and the point history say about themselves; a dropped
+     * load used to render as "Record two values to draw the history" on an asset
+     * with years of them.
+     */
+    private val _loadFailure = MutableStateFlow<BtMessage?>(null)
+    val loadFailure: StateFlow<BtMessage?> = _loadFailure.asStateFlow()
+
+    /** False until the first value-point load has come back, either way. */
+    private val _firstLoadDone = MutableStateFlow(false)
+    val firstLoadDone: StateFlow<Boolean> = _firstLoadDone.asStateFlow()
+
     init {
         refresh()
         // Pull server truth back into Room when a queued value point for this
@@ -158,8 +177,9 @@ class CustomAssetDetailViewModel(
     fun refresh() {
         viewModelScope.launch {
             _refreshing.value = true
-            repo.refreshValuePoints(assetId)
+            _loadFailure.value = (repo.refreshValuePoints(assetId) as? BtResult.Err)?.asMessage()
             _refreshing.value = false
+            _firstLoadDone.value = true
         }
     }
 
@@ -282,8 +302,24 @@ fun CustomAssetDetailScreen(
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
+    val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
+
+    // Until the FIRST value-point fetch comes back, the chart and the history owe
+    // the reader placeholders rather than a verdict about their own emptiness.
+    // Deliberately not "a refresh is running": later refreshes happen over
+    // content and must not blank it back to placeholders. `hasContent = false`
+    // because this is the verdict for the slots that have nothing to draw — the
+    // ones that do never consult it.
+    val awaitingFirstLoad = !firstLoadDone
+    val chartSurface = resolveListSurface(
+        hasContent = false,
+        firstLoadPending = awaitingFirstLoad,
+        failed = loadFailure != null,
+        isOnline = isOnline,
+    )
 
     var updateOpen by rememberSaveable { mutableStateOf(false) }
     var editOpen by rememberSaveable { mutableStateOf(false) }
@@ -362,10 +398,14 @@ fun CustomAssetDetailScreen(
                         )
                         Spacer(Modifier.height(2.dp))
                         val current = latestValue(points)
-                        if (current != null) {
-                            MoneyText(value = current, style = BtTheme.type.moneyLarge)
-                        } else {
-                            Text(
+                        when {
+                            current != null ->
+                                MoneyText(value = current, style = BtTheme.type.moneyLarge)
+
+                            awaitingFirstLoad ->
+                                BtSkeleton(Modifier.width(160.dp).height(34.dp))
+
+                            else -> Text(
                                 text = stringResource(R.string.bt_switcher_value_pending),
                                 style = BtTheme.type.moneyLarge,
                                 color = bt.textMuted,
@@ -397,11 +437,30 @@ fun CustomAssetDetailScreen(
                                     Modifier.fillMaxWidth().height(180.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Text(
-                                        text = stringResource(R.string.bt_custom_chart_empty),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = bt.textMuted,
-                                    )
+                                    val failure = loadFailure
+                                    when (chartSurface) {
+                                        BtListSurface.SKELETON ->
+                                            BtSkeleton(Modifier.fillMaxWidth().height(180.dp))
+
+                                        // The section's data never arrived, so
+                                        // the chart cannot claim there is not
+                                        // enough of it. One line and a retry, at
+                                        // the weight this failure has — offline
+                                        // and error share the row because a
+                                        // 64dp badge does not fit a 180dp slot,
+                                        // and the message already names which
+                                        // of the two it was.
+                                        BtListSurface.ERROR, BtListSurface.OFFLINE -> BtInlineError(
+                                            message = failure ?: BtMessage.generic,
+                                            onRetry = { vm.refresh() },
+                                        )
+
+                                        // No glyph, no accent: an empty chart is
+                                        // an answer, not a failure.
+                                        else -> BtInlineEmpty(
+                                            text = stringResource(R.string.bt_custom_chart_empty),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -472,13 +531,23 @@ fun CustomAssetDetailScreen(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-                if (points.isEmpty() && pending.isEmpty()) {
+                // Nothing at all while the load is FAILED: the chart above is
+                // already carrying that failure and its retry, and this section
+                // repeating it would be volume, not information.
+                if (points.isEmpty() && pending.isEmpty() && loadFailure == null) {
                     item(key = "points-empty") {
-                        Text(
-                            text = stringResource(R.string.bt_custom_no_points),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textMuted,
-                        )
+                        if (awaitingFirstLoad) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                repeat(3) {
+                                    BtSkeleton(
+                                        Modifier.fillMaxWidth().height(44.dp),
+                                        shape = BtShapes.card,
+                                    )
+                                }
+                            }
+                        } else {
+                            BtInlineEmpty(text = stringResource(R.string.bt_custom_no_points))
+                        }
                     }
                 }
                 val sorted = points.sortedByDescending { it.date }
@@ -652,13 +721,9 @@ private fun UpdateValueSheet(
                 onClick = { pickerOpen = true },
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (error != null) {
-                Text(
-                    text = error.resolveWithDiagnostic(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.loss,
-                )
-            }
+            // Refused WRITE: the "Record value" button below is the retry, so
+            // this row carries the reason and no action of its own.
+            if (error != null) BtFormError(error)
             BtPrimaryButton(
                 text = stringResource(R.string.bt_custom_record_value),
                 onClick = { value?.let { onSubmit(date, it) } },

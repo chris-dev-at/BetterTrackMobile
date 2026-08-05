@@ -51,13 +51,18 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.notifications.NotifChannel
 import at.bettertrack.app.data.notifications.NotifKind
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSectionHeader
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -97,9 +102,22 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val availability by store.availability.collectAsStateWithLifecycle()
     val delivery by store.delivery.collectAsStateWithLifecycle()
 
-    // Best-effort: pull the server matrix + channel availability on open so the
-    // in-app/email/telegram/discord columns reflect the web (v4 gates the extra columns).
-    androidx.compose.runtime.LaunchedEffect(Unit) { repo.loadServerSettings() }
+    // Pull the server matrix + channel availability on open so the
+    // in-app/email/telegram/discord columns reflect the web (v4 gates the extra
+    // columns).
+    //
+    // This used to be a bare `LaunchedEffect { repo.loadServerSettings() }` whose
+    // result went unread, which made the grid quietly dishonest in both
+    // directions: while the call was in flight the chips showed on-device
+    // DEFAULTS as though they were the account's settings, and if it failed they
+    // kept showing them forever. Toggling one then pushed those invented defaults
+    // back to the server. So the outcome is now state.
+    var loadFailure by remember { mutableStateOf<BtMessage?>(null) }
+    var matrixLoaded by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
+        matrixLoaded = true
+    }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     var permissionGranted by remember {
@@ -167,17 +185,44 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             // top padding goes with it.
             BtSectionHeader(stringResource(R.string.bt_notif_matrix_section))
 
-            store.configurableKinds.forEach { kind ->
-                TypePrefCard(
-                    kind = kind,
-                    prefs = matrix.prefs(kind),
-                    availability = availability,
-                    onToggleChannel = { channel, on ->
-                        store.setChannel(kind, channel, on)
-                        scope.launch { repo.pushServerSettings() }
-                    },
-                    onToggleMute = { muted -> store.setMuted(kind, muted) },
-                )
+            val matrixFailure = loadFailure
+            when {
+                // Placeholders rather than defaults-dressed-as-settings.
+                !matrixLoaded -> repeat(store.configurableKinds.size.coerceAtMost(4)) {
+                    BtSkeleton(
+                        Modifier.fillMaxWidth().height(112.dp),
+                        shape = BtShapes.card,
+                    )
+                }
+
+                // The grid below is the on-device copy, which is real — it is
+                // just not confirmed against the account. One line and a retry,
+                // above the rows it qualifies.
+                else -> {
+                    if (matrixFailure != null) {
+                        BtInlineError(
+                            message = matrixFailure,
+                            onRetry = {
+                                scope.launch {
+                                    loadFailure =
+                                        (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
+                                }
+                            },
+                        )
+                    }
+                    store.configurableKinds.forEach { kind ->
+                        TypePrefCard(
+                            kind = kind,
+                            prefs = matrix.prefs(kind),
+                            availability = availability,
+                            onToggleChannel = { channel, on ->
+                                store.setChannel(kind, channel, on)
+                                scope.launch { repo.pushServerSettings() }
+                            },
+                            onToggleMute = { muted -> store.setMuted(kind, muted) },
+                        )
+                    }
+                }
             }
 
             Text(

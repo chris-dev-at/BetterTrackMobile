@@ -101,6 +101,12 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtDateField
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtInlineError
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
@@ -111,6 +117,7 @@ import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberParkReason
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
@@ -189,8 +196,41 @@ private const val TREND_MONTHS = 6
 sealed interface BudgetsUi {
     data object Loading : BudgetsUi
     data class Ready(val rows: List<CashBudgetProgressDto>) : BudgetsUi
-    data object Failed : BudgetsUi
+
+    /**
+     * [message] rather than a payload-less marker: the block used to answer
+     * every refusal with the same fixed line and throw the server's actual
+     * reason away. See [CashSummaryUi.Failed] for the full argument.
+     */
+    data class Failed(val message: BtMessage) : BudgetsUi
 }
+
+/**
+ * Whether the ledger's first read is still unanswered — the `firstLoadPending`
+ * input [resolveListSurface] needs to tell "we have not asked yet" from "we
+ * asked and there is nothing".
+ *
+ * The screen reads movements from Room, and an empty table cannot say WHY it is
+ * empty. Until now that ambiguity was resolved by always picking the kinder
+ * reading and rendering "No cash movements yet" — so a portfolio whose very
+ * first fetch was refused was told, in the app's calmest voice, that its money
+ * had no history. That is the same conflation R3 found behind the eternal
+ * shimmer on this screen, one branch further down.
+ *
+ * Two things end the wait, and the second one is why this is a function rather
+ * than a bare `!loaded`:
+ *
+ *  · [loaded] — the first refresh finished, either way.
+ *  · [hasPortfolio] false once [sourcesSeen] — there is no portfolio to read, so
+ *    no request will ever be sent, so nothing will ever set [loaded]. A flag only
+ *    the request could clear would leave the list shimmering forever, which is
+ *    exactly the trap [CashViewModel.sourcesLoaded] was added for. `sourcesSeen`
+ *    is that same signal reused: the sources flow emits for a null portfolio too,
+ *    so it answers "the local reads have run" without claiming anything about the
+ *    network.
+ */
+fun cashLedgerPending(loaded: Boolean, hasPortfolio: Boolean, sourcesSeen: Boolean): Boolean =
+    !loaded && (hasPortfolio || !sourcesSeen)
 
 private sealed interface CashSheet {
     /** Create (or edit a queued) deposit / withdrawal / fee. */
@@ -278,6 +318,26 @@ class CashViewModel(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    /**
+     * Why the last cash refresh failed, or null when it succeeded / never ran.
+     *
+     * Only `refreshCash` feeds this. `refreshPortfolioDetail` populates the hero
+     * total, and a failure there must not make the movement list below claim it
+     * could not load — the two reads answer different questions.
+     */
+    private val _ledgerError = MutableStateFlow<BtMessage?>(null)
+    val ledgerError: StateFlow<BtMessage?> = _ledgerError.asStateFlow()
+
+    /**
+     * True once a refresh has finished, whichever way it went.
+     *
+     * Room answers "no rows" instantly and identically for a cold cache and an
+     * empty ledger, so without this the screen cannot tell "we have not asked
+     * yet" from "we asked and there is nothing" — see [cashLedgerPending].
+     */
+    private val _ledgerLoaded = MutableStateFlow(false)
+    val ledgerLoaded: StateFlow<Boolean> = _ledgerLoaded.asStateFlow()
+
     /** Busy/error state of the online-only source-management actions. */
     private val _manageBusy = MutableStateFlow(false)
     val manageBusy: StateFlow<Boolean> = _manageBusy.asStateFlow()
@@ -307,8 +367,12 @@ class CashViewModel(
         val pid = portfolioId.value ?: return
         viewModelScope.launch {
             _refreshing.value = true
-            repo.refreshCash(pid)
+            val cash = repo.refreshCash(pid)
+            // Deliberately not folded into the ledger's error: this read feeds
+            // the hero total, and its failure says nothing about the movements.
             repo.refreshPortfolioDetail(pid)
+            _ledgerError.value = if (cash is BtResult.Err) cash.error.asMessage() else null
+            _ledgerLoaded.value = true
             _refreshing.value = false
         }
     }
@@ -472,7 +536,7 @@ class CashViewModel(
             _budgets.value = BudgetsUi.Loading
             _budgets.value = when (val r = classification.budgets(pid, month)) {
                 is BtResult.Ok -> BudgetsUi.Ready(r.value.budgets)
-                is BtResult.Err -> BudgetsUi.Failed
+                is BtResult.Err -> BudgetsUi.Failed(r.asMessage())
             }
         }
     }
@@ -526,7 +590,7 @@ class CashViewModel(
             _summary.value = CashSummaryUi.Loading
             _summary.value = when (val r = classification.summary(pid, month)) {
                 is BtResult.Ok -> CashSummaryUi.Ready(r.value)
-                is BtResult.Err -> CashSummaryUi.Failed
+                is BtResult.Err -> CashSummaryUi.Failed(r.asMessage())
             }
         }
     }
@@ -538,7 +602,7 @@ class CashViewModel(
             _trends.value = CashTrendsUi.Loading
             _trends.value = when (val r = classification.trends(pid, TREND_MONTHS)) {
                 is BtResult.Ok -> CashTrendsUi.Ready(r.value.points)
-                is BtResult.Err -> CashTrendsUi.Failed
+                is BtResult.Err -> CashTrendsUi.Failed(r.asMessage())
             }
         }
     }
@@ -763,6 +827,8 @@ fun CashScreen(
     val pendingRows by vm.pendingRows.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val sourcesLoaded by vm.sourcesLoaded.collectAsStateWithLifecycle()
+    val ledgerError by vm.ledgerError.collectAsStateWithLifecycle()
+    val ledgerLoaded by vm.ledgerLoaded.collectAsStateWithLifecycle()
     val manageBusy by vm.manageBusy.collectAsStateWithLifecycle()
     val manageError by vm.manageError.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
@@ -803,6 +869,20 @@ fun CashScreen(
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
     val sourceNames = sources.associate { it.id to it.name }
+
+    // A source filter can empty the visible list all by itself, and a failed
+    // fetch must not be blamed for a view the user narrowed on purpose.
+    val ledgerFailure = ledgerError.takeIf { sourceFilter == null }
+    val ledgerSurface = resolveListSurface(
+        hasContent = movements.isNotEmpty() || pendingRows.isNotEmpty(),
+        firstLoadPending = cashLedgerPending(
+            loaded = ledgerLoaded,
+            hasPortfolio = resolvedPid != null,
+            sourcesSeen = sourcesLoaded,
+        ),
+        failed = ledgerFailure != null,
+        isOnline = isOnline,
+    )
 
     // Entry via the pending screen's "Edit & retry" (deep-linked edit).
     LaunchedEffect(editOpId) {
@@ -1011,10 +1091,9 @@ fun CashScreen(
                                     CashBudgetSkeletonRow()
                                 }
 
-                                is BudgetsUi.Failed -> Text(
-                                    text = stringResource(R.string.bt_budgets_error_title),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = bt.loss,
+                                is BudgetsUi.Failed -> BtInlineError(
+                                    message = b.message,
+                                    onRetry = { vm.loadBudgets() },
                                 )
 
                                 is BudgetsUi.Ready -> if (b.rows.isEmpty()) {
@@ -1055,8 +1134,8 @@ fun CashScreen(
                             Spacer(Modifier.height(8.dp))
                             when (val s = summary) {
                                 is CashSummaryUi.Loading -> CashSummarySkeleton()
-                                is CashSummaryUi.Failed -> CashAnalyticsError(
-                                    text = stringResource(R.string.bt_cash_summary_error),
+                                is CashSummaryUi.Failed -> BtInlineError(
+                                    message = s.message,
                                     onRetry = { vm.loadSummary() },
                                 )
 
@@ -1075,8 +1154,8 @@ fun CashScreen(
                             Spacer(Modifier.height(8.dp))
                             when (val t = trends) {
                                 is CashTrendsUi.Loading -> CashTrendsSkeleton()
-                                is CashTrendsUi.Failed -> CashAnalyticsError(
-                                    text = stringResource(R.string.bt_cash_trends_error),
+                                is CashTrendsUi.Failed -> BtInlineError(
+                                    message = t.message,
                                     onRetry = { vm.loadTrends() },
                                 )
 
@@ -1105,10 +1184,22 @@ fun CashScreen(
                     }
                     manageError?.let { message ->
                         item(key = "manage-error") {
-                            Text(
-                                text = message.resolveWithDiagnostic(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.loss,
+                            // Retry re-READS the sources rather than replaying the
+                            // write: which write failed is not held here, and
+                            // re-sending a create or an archive on a tap labelled
+                            // "Try again" could book a second one. What the user
+                            // actually needs after a refused management call is the
+                            // server's own answer about what the list now is — and
+                            // it clears a line that otherwise had NO way to
+                            // disappear at all after a failed archive or restore
+                            // (the only clear ran on a dialog's dismiss, and those
+                            // two actions have no dialog).
+                            BtInlineError(
+                                message = message,
+                                onRetry = {
+                                    vm.clearManageError()
+                                    vm.refresh()
+                                },
                             )
                         }
                     }
@@ -1219,12 +1310,36 @@ fun CashScreen(
                             modifier = Modifier.padding(top = 6.dp),
                         )
                     }
-                    if (movements.isEmpty() && pendingRows.isEmpty()) {
-                        item(key = "movements-empty") {
+                    when (ledgerSurface) {
+                        // The items() below are the CONTENT branch.
+                        BtListSurface.CONTENT -> Unit
+
+                        BtListSurface.SKELETON -> item(key = "movements-loading") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(64.dp)) }
+                            }
+                        }
+
+                        BtListSurface.EMPTY -> item(key = "movements-empty") {
                             BtEmptyState(
                                 icon = Icons.Outlined.AccountBalanceWallet,
                                 title = stringResource(R.string.bt_cash_empty_title),
                                 message = stringResource(R.string.bt_cash_empty_message),
+                            )
+                        }
+
+                        BtListSurface.OFFLINE -> item(key = "movements-offline") {
+                            BtOfflineState(
+                                message = stringResource(R.string.bt_cash_requires_connection),
+                                onRetry = { vm.refresh() },
+                            )
+                        }
+
+                        BtListSurface.ERROR -> item(key = "movements-error") {
+                            BtErrorState(
+                                title = stringResource(R.string.bt_cash_movements_error_title),
+                                message = ledgerFailure ?: BtMessage.generic,
+                                onRetry = { vm.refresh() },
                             )
                         }
                     }
@@ -1611,7 +1726,9 @@ private fun CashBudgetSheet(
                     CashTagChip(name = existing.tagName, color = existing.tagColor)
                 }
             } else if (choosable.isEmpty()) {
-                Text(
+                // Two different empties, one surface: no catalog at all, or a
+                // catalog every one of whose tags is already budgeted.
+                BtInlineEmpty(
                     text = stringResource(
                         if (allTags.isEmpty()) {
                             R.string.bt_cash_tags_empty_catalog
@@ -1619,8 +1736,6 @@ private fun CashBudgetSheet(
                             R.string.bt_budgets_all_tags_budgeted
                         },
                     ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textSecondary,
                 )
             } else {
                 Text(
@@ -1668,7 +1783,10 @@ private fun CashBudgetSheet(
                 }
             }
 
-            error?.let { RejectionText(stringResource(it)) }
+            // Form validation, not a queue refusal — so BtFormError rather than
+            // RejectionText: "Rejected by BetterTrack" over "Enter an amount"
+            // blamed the server for a field the user simply had not filled in.
+            error?.let { BtFormError(BtMessage(it)) }
 
             BtPrimaryButton(
                 text = stringResource(
@@ -1766,11 +1884,7 @@ private fun CashMovementTagsSheet(
             if (ordered.isEmpty()) {
                 // No catalog yet — say where tags come from instead of showing a
                 // blank area with a dead Save button.
-                Text(
-                    text = stringResource(R.string.bt_cash_tags_empty_catalog),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textSecondary,
-                )
+                BtInlineEmpty(text = stringResource(R.string.bt_cash_tags_empty_catalog))
             } else {
                 Text(
                     text = stringResource(R.string.bt_cash_tags_none_hint),
@@ -2239,7 +2353,7 @@ private fun CashEntrySheet(
                     color = bt.textMuted,
                 )
             }
-            sheetError?.let { RejectionText(it.resolveWithDiagnostic()) }
+            sheetError?.let { RejectionText(it) }
 
             SheetNumberField(
                 value = amountText,
@@ -2415,7 +2529,7 @@ private fun TransferSheet(
                 style = MaterialTheme.typography.titleMedium,
                 color = bt.textPrimary,
             )
-            sheetError?.let { RejectionText(it.resolveWithDiagnostic()) }
+            sheetError?.let { RejectionText(it) }
 
             SheetNumberField(
                 value = amountText,
@@ -2547,8 +2661,23 @@ private fun SheetNumberField(
     )
 }
 
+/**
+ * A refusal of the thing the user just submitted, headed by WHO refused it.
+ *
+ * Deliberately not [BtFormError]: that component is one body line, and the line
+ * this block cannot afford to lose is the heading — "Rejected by BetterTrack"
+ * is the difference between "your connection dropped, try again" and "the
+ * server looked at this and said no", and only the second one tells the user to
+ * change the form rather than tap Save again. The submit button directly beneath
+ * is the retry, so there is no action here, exactly as [BtFormError] argues.
+ *
+ * [message] is a [BtMessage] — the same typed contract the rest of the app
+ * moved onto in P0-4 — so there is no longer a `String` parameter a raw server
+ * sentence could be handed to. Local form validation passes its own resource
+ * wrapped the same way.
+ */
 @Composable
-private fun RejectionText(message: String) {
+private fun RejectionText(message: BtMessage) {
     val bt = BtTheme.colors
     Column {
         Text(
@@ -2557,7 +2686,7 @@ private fun RejectionText(message: String) {
             color = bt.lossSoft,
         )
         Text(
-            text = message,
+            text = message.resolveWithDiagnostic(),
             style = MaterialTheme.typography.bodySmall,
             color = bt.textSecondary,
         )

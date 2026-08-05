@@ -46,6 +46,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
@@ -56,6 +59,10 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
+import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
@@ -63,6 +70,7 @@ import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -126,6 +134,21 @@ class HoldingDetailViewModel(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    /**
+     * The app-owned message from the most recent failed refresh, or null when the
+     * last one landed.
+     *
+     * [refresh] used to call both endpoints and read neither result, so a dropped
+     * first fetch left the screen showing "Holding not found" — the same lie the
+     * transactions ledger told, on a position the user definitely owns.
+     */
+    private val _loadFailure = MutableStateFlow<BtMessage?>(null)
+    val loadFailure: StateFlow<BtMessage?> = _loadFailure.asStateFlow()
+
+    /** False until the first refresh has come back, either way. */
+    private val _firstLoadDone = MutableStateFlow(false)
+    val firstLoadDone: StateFlow<Boolean> = _firstLoadDone.asStateFlow()
+
     private var refreshedOnce = false
 
     init {
@@ -143,9 +166,16 @@ class HoldingDetailViewModel(
         val pid = portfolioId.value ?: return
         viewModelScope.launch {
             _refreshing.value = true
-            repo.refreshPortfolioDetail(pid)
-            repo.refreshTransactions(pid)
+            // Both calls feed this one screen, so the FIRST failure is the one
+            // worth reporting: the position hero and its ledger are equally
+            // missing either way, and two error surfaces for one dropped
+            // connection would say nothing the first does not.
+            val detail = repo.refreshPortfolioDetail(pid)
+            val transactions = repo.refreshTransactions(pid)
+            _loadFailure.value = (detail as? BtResult.Err)?.asMessage()
+                ?: (transactions as? BtResult.Err)?.asMessage()
             _refreshing.value = false
+            _firstLoadDone.value = true
         }
     }
 }
@@ -196,6 +226,8 @@ fun HoldingDetailScreen(
     val pendingRows by vm.pendingRows.collectAsStateWithLifecycle()
     val portfolioId by vm.portfolioId.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
+    val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
@@ -254,6 +286,16 @@ fun HoldingDetailScreen(
                 },
             ) {
                 val h = holding
+                val failure = loadFailure
+                // "We have not looked yet" is not "there is nothing here": until
+                // the first fetch comes back the screen owes the reader a
+                // skeleton, not a verdict about a position they just tapped.
+                val surface = resolveListSurface(
+                    hasContent = h != null,
+                    firstLoadPending = portfolioId != null && !firstLoadDone,
+                    failed = failure != null,
+                    isOnline = isOnline,
+                )
                 when {
                     h != null -> HoldingContent(
                         holding = h,
@@ -269,21 +311,30 @@ fun HoldingDetailScreen(
                         onOpenAssetPage = onOpenAssetPage,
                     )
 
-                    refreshing -> HoldingSkeleton()
+                    surface == BtListSurface.SKELETON -> HoldingSkeleton()
 
-                    else -> LazyColumn(Modifier.fillMaxSize()) {
-                        item {
-                            Box(
-                                Modifier.fillParentMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                BtEmptyState(
-                                    icon = Icons.Outlined.PieChart,
-                                    title = stringResource(R.string.bt_holding_not_found_title),
-                                    message = stringResource(R.string.bt_holding_not_found_message),
-                                )
-                            }
-                        }
+                    surface == BtListSurface.OFFLINE -> HoldingStateFill {
+                        BtOfflineState(
+                            message = stringResource(R.string.bt_holding_requires_connection),
+                            onRetry = { vm.refresh() },
+                        )
+                    }
+
+                    surface == BtListSurface.ERROR -> HoldingStateFill {
+                        BtErrorState(
+                            message = failure ?: BtMessage.generic,
+                            onRetry = { vm.refresh() },
+                        )
+                    }
+
+                    // A fetch came back and this asset was not in it: the
+                    // position really is gone. The only branch entitled to say so.
+                    else -> HoldingStateFill {
+                        BtEmptyState(
+                            icon = Icons.Outlined.PieChart,
+                            title = stringResource(R.string.bt_holding_not_found_title),
+                            message = stringResource(R.string.bt_holding_not_found_message),
+                        )
                     }
                 }
 
@@ -615,17 +666,31 @@ private fun HoldingContent(
         }
         if (transactions.isEmpty() && pendingRows.isEmpty()) {
             item(key = "tx-empty") {
-                Text(
-                    text = stringResource(R.string.bt_holding_no_tx),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                )
+                // BtInlineEmpty, not BtEmptyState: this is the last of five
+                // sections on a scrolling position page, and a 64dp badge with
+                // 32dp of padding here would out-weigh the hero it sits under.
+                BtInlineEmpty(text = stringResource(R.string.bt_holding_no_tx))
             }
         } else {
             items(count = transactions.size, key = { transactions[it].id }) { index ->
                 val tx = transactions[index]
                 TransactionRow(tx, showAsset = false, onClick = { onEditSynced(tx.id) })
             }
+        }
+    }
+}
+
+/**
+ * Centres a state surface over the whole content area while keeping it inside a
+ * scrollable — pull-to-refresh needs something that scrolls, and an error state
+ * with a Retry the user cannot pull to re-run would be the one place the gesture
+ * silently stops working.
+ */
+@Composable
+private fun HoldingStateFill(content: @Composable () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { content() }
         }
     }
 }

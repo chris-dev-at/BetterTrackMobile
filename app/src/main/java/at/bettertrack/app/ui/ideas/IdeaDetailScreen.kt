@@ -68,6 +68,8 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -461,11 +463,7 @@ private fun SourceCard(idea: Idea, refs: IdeaRefs, onOpenAsset: (String) -> Unit
                     FieldLabel(stringResource(R.string.bt_ideas_assets))
                     Spacer(Modifier.height(10.dp))
                     if (source.positions.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.bt_ideas_no_assets),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textMuted,
-                        )
+                        BtInlineEmpty(stringResource(R.string.bt_ideas_no_assets))
                     } else {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -591,11 +589,7 @@ private fun IdeaEditSheet(
 
             error?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    it.resolveWithDiagnostic(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.loss,
-                )
+                BtFormError(it)
             }
 
             Spacer(Modifier.height(18.dp))

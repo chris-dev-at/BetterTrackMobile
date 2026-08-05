@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -350,8 +351,11 @@ private fun ChainHeader(roster: MirrorRoster) {
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = stringResource(
-                R.string.bt_chain_members_count,
+            // The noun is "members", and in "X of Y members" it belongs to Y:
+            // the CAP picks the form, the roster size is only the numerator.
+            text = pluralStringResource(
+                R.plurals.bt_chain_members_count,
+                roster.memberCap,
                 roster.members.size,
                 roster.memberCap,
             ),

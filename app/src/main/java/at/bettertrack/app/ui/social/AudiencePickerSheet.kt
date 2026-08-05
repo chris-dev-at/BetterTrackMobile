@@ -356,13 +356,29 @@ private fun AudienceOption(
     }
 }
 
+/**
+ * A gold advisory note inside the audience sheet.
+ *
+ * ## Tonal, not boxed
+ *
+ * This used to be a `gold @7%` fill wrapped in a `1dp gold @25%` ring. R2 moved
+ * the app off border walls onto tonal steps ([BtGroup]) and R3 took the ring off
+ * the state badge for the same reason: a tinted fill on a darker page is already
+ * a boundary, and drawing a line around it is a second boundary doing the first
+ * one's job.
+ *
+ * Losing the ring means the fill has to hold the shape by itself, so the tint
+ * steps up (7% → 11%) — the *colour* is what says "advisory", and it says it
+ * without an outline. The shape moves to `BtShapes.group` too: a hint is a block
+ * of one subject, not a row competing for a tap, which is the distinction
+ * [BtGroup]'s KDoc draws between the two containment tiers.
+ */
 @Composable
 private fun HintCard(text: String) {
     val bt = BtTheme.colors
     Surface(
-        shape = BtShapes.card,
-        color = bt.gold.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.25f)),
+        shape = BtShapes.group,
+        color = bt.gold.copy(alpha = 0.11f),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -374,13 +390,21 @@ private fun HintCard(text: String) {
     }
 }
 
+/**
+ * The "this will be visible to anyone with the link" tick.
+ *
+ * Tonal for the same reason as [HintCard] — the red ring came off and the fill
+ * stepped up (9% → 13%) to hold the shape without it. The `WarningAmber` glyph
+ * keeps its full `loss` tint, so the severity still reads before any word does:
+ * that is a colour carrying meaning, which is what R3 kept on the error state
+ * badge when it dropped that badge's outline.
+ */
 @Composable
 private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
     val bt = BtTheme.colors
     Surface(
-        shape = BtShapes.card,
-        color = bt.loss.copy(alpha = 0.09f),
-        border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.40f)),
+        shape = BtShapes.group,
+        color = bt.loss.copy(alpha = 0.13f),
         modifier = Modifier
             .fillMaxWidth()
             .toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle() }),

@@ -35,17 +35,23 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.WatchlistBoard
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
+import at.bettertrack.app.ui.components.BtInlineError
+import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -75,16 +81,46 @@ class BoardPickerViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    private val busy = MutableStateFlow(false)
+    private val _busy = MutableStateFlow(false)
+
+    /**
+     * The refusal from the last add/remove, or null when the last one landed.
+     *
+     * Both calls return a [BtResult] and both results were discarded, so a
+     * server-side refusal (or a dropped connection) left the row's check exactly
+     * where it was with nothing said. Silence is the worst possible answer here:
+     * the check state IS the feedback, so a failure that changes nothing is
+     * indistinguishable from a tap that never registered.
+     */
+    private val _failure = MutableStateFlow<BtMessage?>(null)
+    val failure: StateFlow<BtMessage?> = _failure.asStateFlow()
+
+    /** The board whose toggle failed — what Retry re-runs. */
+    private var lastFailedBoardId: String? = null
 
     fun toggle(boardId: String, asset: MarketAsset) {
-        if (busy.value) return
+        if (_busy.value) return
         viewModelScope.launch {
-            busy.value = true
+            _busy.value = true
+            _failure.value = null
             val inList = memberships.value[boardId] == true
-            if (inList) watchlist.removeAsset(boardId, asset.id) else watchlist.addAsset(boardId, asset)
-            busy.value = false
+            val result = if (inList) {
+                watchlist.removeAsset(boardId, asset.id)
+            } else {
+                watchlist.addAsset(boardId, asset)
+            }
+            if (result is BtResult.Err) {
+                lastFailedBoardId = boardId
+                _failure.value = result.asMessage()
+            }
+            _busy.value = false
         }
+    }
+
+    /** Re-run the toggle that failed — the same board, the same asset, same intent. */
+    fun retryFailed(asset: MarketAsset) {
+        val boardId = lastFailedBoardId ?: return
+        toggle(boardId, asset)
     }
 }
 
@@ -105,6 +141,7 @@ fun BoardPickerSheet(
     val bt = BtTheme.colors
     val boards by vm.boards.collectAsStateWithLifecycle()
     val memberships by vm.memberships.collectAsStateWithLifecycle()
+    val failure by vm.failure.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -125,10 +162,31 @@ fun BoardPickerSheet(
                 color = bt.textMuted,
             )
             Spacer(Modifier.height(12.dp))
+            if (boards.isEmpty()) {
+                // The lists come from Room, so this is usually one frame — but a
+                // sheet that opens completely blank reads as broken, and the
+                // placeholder costs nothing.
+                repeat(2) {
+                    BtSkeleton(
+                        Modifier.fillMaxWidth().height(54.dp),
+                        shape = at.bettertrack.app.ui.theme.BtShapes.card,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
             boards.forEach { board ->
                 val inList = memberships[board.id] == true
                 BoardRow(board, inList) { vm.toggle(board.id, asset) }
                 Spacer(Modifier.height(8.dp))
+            }
+            val toggleFailure = failure
+            if (toggleFailure != null) {
+                BtInlineError(
+                    message = toggleFailure,
+                    // Honest retry: the row did not move, so re-running the same
+                    // toggle is exactly the tap the user already made.
+                    onRetry = { vm.retryFailed(asset) },
+                )
             }
         }
     }

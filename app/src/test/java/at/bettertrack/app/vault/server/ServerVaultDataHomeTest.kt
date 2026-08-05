@@ -34,14 +34,24 @@ class ServerVaultDataHomeTest {
     private lateinit var fake: FakeVaultServer
     private lateinit var home: ServerVaultDataHome
 
+    /**
+     * Held so a test that reads twice can decide whether the second read should
+     * be a live `200` or a conditional `304` — see
+     * [theMainGetIgnoresTheHistoryOnlyMetadataHeaders]. The conditional read
+     * itself is covered by `ServerVaultConditionalReadTest`.
+     */
+    private lateinit var etagCache: ServerVaultEtagCache
+
     @Before
     fun setUp() {
         fake = FakeVaultServer()
         fake.start()
+        etagCache = ServerVaultEtagCache()
         home = ServerVaultDataHome(
             client = OkHttpClient(),
             apiBase = fake.apiBase(),
             json = Json { ignoreUnknownKeys = true },
+            etagCache = etagCache,
         )
     }
 
@@ -109,6 +119,10 @@ class ServerVaultDataHomeTest {
 
         val clean = home.read() as DataHomeBytes
         fake.metadataHeadersOnMainGet = true
+        // Without this the second read would be answered `304` from the
+        // conditional cache and never see the headers at all — the assertions
+        // below would then pass for the wrong reason.
+        etagCache.clear()
         val noisy = home.read() as DataHomeBytes
 
         assertEquals("the version still comes from the ETag", 4, noisy.info.version)

@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -386,7 +387,7 @@ private fun SwitcherRow(
                             text = listOfNotNull(
                                 m.mirrorChainName,
                                 m.mirrorMemberCount?.let {
-                                    stringResource(R.string.bt_mirror_members, it)
+                                    pluralStringResource(R.plurals.bt_mirror_members, it, it)
                                 },
                                 // Only mention syncing when it is actually behind —
                                 // "100%" on every row would be noise.

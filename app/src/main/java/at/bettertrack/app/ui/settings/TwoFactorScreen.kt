@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -317,7 +318,11 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                 MethodCard(
                     icon = Icons.Outlined.Key,
                     title = stringResource(R.string.bt_2fa_recovery_title),
-                    subtitle = stringResource(R.string.bt_2fa_recovery_remaining, s.recoveryCodesRemaining),
+                    subtitle = pluralStringResource(
+                        R.plurals.bt_2fa_recovery_remaining,
+                        s.recoveryCodesRemaining,
+                        s.recoveryCodesRemaining,
+                    ),
                     on = false,
                     actionLabel = stringResource(R.string.bt_2fa_recovery_regenerate),
                     actionEnabled = online && !busy,
