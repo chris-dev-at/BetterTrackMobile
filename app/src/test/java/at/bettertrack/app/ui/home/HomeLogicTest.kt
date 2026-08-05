@@ -1,7 +1,9 @@
 package at.bettertrack.app.ui.home
 
+import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.PortfolioTotals
+import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.ui.prices.NetWorthState
 import at.bettertrack.app.ui.prices.PriceCoverage
 import org.junit.Assert.assertEquals
@@ -250,4 +252,137 @@ class HomeLogicTest {
         assertEquals(0.0, worth.eur, 1e-9)
         assertTrue(worth.complete)
     }
+
+    // ── Movers ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `movers rank by the SIZE of the move, not its direction`() {
+        // The one that matters: a position down 9% is the day's biggest event and
+        // must lead, not sit under everything green.
+        val movers = homeMovers(
+            listOf(
+                holding("UP", pct = 2.0),
+                holding("DOWN", pct = -9.0),
+                holding("FLAT", pct = 0.1),
+            ),
+        )
+        assertEquals(listOf("DOWN", "UP", "FLAT"), movers.map { it.assetSymbol })
+    }
+
+    @Test
+    fun `a holding with no known day change is excluded, not treated as flat`() {
+        // Null is "not known", and ranking an absence as 0% would sort real
+        // information below it. This is also the mechanism that makes the movers
+        // section disappear by itself in DRIVE mode.
+        val movers = homeMovers(
+            listOf(
+                holding("KNOWN", pct = 1.0),
+                holding("NO-PCT", pct = null),
+                holding("NO-VALUE", pct = 5.0, marketValue = null),
+            ),
+        )
+        assertEquals(listOf("KNOWN"), movers.map { it.assetSymbol })
+    }
+
+    @Test
+    fun `movers are capped at the limit and empty in means empty out`() {
+        val many = (1..12).map { holding("S$it", pct = it.toDouble()) }
+        assertEquals(5, homeMovers(many).size)
+        assertEquals(3, homeMovers(many, limit = 3).size)
+        assertTrue(homeMovers(many, limit = 0).isEmpty())
+        assertTrue(homeMovers(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `an equal-percent tie is broken by the bigger position, never by row order`() {
+        // Two positions up the same percent: the larger one moved more money, and
+        // the order must not depend on which row Room happened to return first.
+        val movers = homeMovers(
+            listOf(
+                holding("SMALL", pct = 3.0, marketValue = 100.0),
+                holding("BIG", pct = 3.0, marketValue = 90_000.0),
+            ),
+        )
+        assertEquals(listOf("BIG", "SMALL"), movers.map { it.assetSymbol })
+    }
+
+    // ── "Needs you" ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `actionable rows appear in the mandated order`() {
+        val rows = homeActionRows(
+            mode = StorageMode.SERVER,
+            triggeredAlerts = 1,
+            friendRequests = 2,
+            unreadMessages = 3,
+            unreadNotifications = 4,
+            newestNotificationTitle = "AAPL crossed 250",
+        )
+        assertEquals(
+            listOf(
+                HomeActionRow.TriggeredAlerts(1),
+                HomeActionRow.FriendRequests(2),
+                HomeActionRow.UnreadMessages(3),
+                HomeActionRow.UnreadNotifications(4, "AAPL crossed 250"),
+            ),
+            rows,
+        )
+    }
+
+    @Test
+    fun `a zero count produces no row at all, never an empty one`() {
+        // "0 alerts · 0 requests · 0 messages" would spend the user's first
+        // screen telling them there is nothing to see (§4.5 absent-not-greyed,
+        // applied inside a screen).
+        assertTrue(
+            homeActionRows(
+                mode = StorageMode.SERVER,
+                triggeredAlerts = 0,
+                friendRequests = 0,
+                unreadMessages = 0,
+                unreadNotifications = 0,
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `UNSET behaves as SERVER for the actionable block`() {
+        // An install that has not answered the storage wizard still behaves
+        // exactly as the app always has (StorageMode.effective).
+        val rows = homeActionRows(
+            mode = StorageMode.UNSET,
+            triggeredAlerts = 1,
+            friendRequests = 1,
+            unreadMessages = 0,
+            unreadNotifications = 0,
+        )
+        assertEquals(2, rows.size)
+    }
+
+    // ── Fixtures for the above ──────────────────────────────────────────────
+
+    private fun holding(
+        symbol: String,
+        pct: Double?,
+        marketValue: Double? = 1_000.0,
+    ) = HoldingEntity(
+        portfolioId = "p",
+        assetId = "asset-$symbol",
+        assetSymbol = symbol,
+        assetName = "$symbol Inc.",
+        assetExchange = null,
+        assetCurrency = "EUR",
+        assetType = "stock",
+        assetIsCustom = false,
+        quantity = 1.0,
+        avgCost = 1.0,
+        realizedPnl = 0.0,
+        price = marketValue,
+        marketValueEur = marketValue,
+        costBasisEur = null,
+        unrealizedPnlEur = null,
+        unrealizedPnlPct = null,
+        dayChangeEur = pct?.let { 1.0 },
+        dayChangePct = pct,
+    )
 }

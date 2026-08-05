@@ -1782,4 +1782,38 @@
     <string name="bt_home_alerts_triggered_sub">Open the alerts manager</string>
     <string name="bt_home_no_portfolios_title">No portfolio yet</string>
     <string name="bt_home_no_portfolios_body">Create one on the Portfolio tab and your net worth appears here.</string>
+
+    <!-- Home (R1-B): movers, the rest of the actionable rows, the quiet tail. -->
+    <string name="bt_home_movers">Movers today</string>
+    <plurals name="bt_home_friend_requests">
+        <item quantity="one">%1$d friend request</item>
+        <item quantity="other">%1$d friend requests</item>
+    </plurals>
+    <string name="bt_home_friend_requests_sub">Answer on People</string>
+    <plurals name="bt_home_unread_messages">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <string name="bt_home_unread_messages_sub">Open messages</string>
+    <plurals name="bt_home_unread_notifications">
+        <item quantity="one">%1$d new notification</item>
+        <item quantity="other">%1$d new notifications</item>
+    </plurals>
+    <string name="bt_home_unread_notifications_sub">Open the inbox</string>
+    <plurals name="bt_home_unpriced">
+        <item quantity="one">%1$d holding needs a price</item>
+        <item quantity="other">%1$d holdings need a price</item>
+    </plurals>
+    <string name="bt_home_unpriced_more">%1$d more on Portfolio</string>
+    <string name="bt_home_portfolios">Your portfolios</string>
+    <string name="bt_home_more">More</string>
+    <string name="bt_home_on">On</string>
+    <string name="bt_home_off">Off</string>
+
+    <!-- Portfolio (R1-B): the collapsing header's overflow and the allocation
+         summary that replaced the full donut card above the holdings list. -->
+    <string name="bt_overview_manage_portfolios">Manage portfolios</string>
+    <string name="bt_overview_alloc_see_all">See all</string>
+    <string name="bt_overview_alloc_less">Show less</string>
+    <string name="bt_overview_alloc_bar_cd">Allocation across your holdings</string>
 </resources>

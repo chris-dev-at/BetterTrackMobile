@@ -1764,4 +1764,37 @@
     <string name="bt_home_alerts_triggered_sub">Alarm-Verwaltung öffnen</string>
     <string name="bt_home_no_portfolios_title">Noch kein Portfolio</string>
     <string name="bt_home_no_portfolios_body">Leg im Portfolio-Tab eines an — dein Nettovermögen erscheint dann hier.</string>
+
+    <!-- Home (R1-B) -->
+    <string name="bt_home_movers">Heute in Bewegung</string>
+    <plurals name="bt_home_friend_requests">
+        <item quantity="one">%1$d Freundschaftsanfrage</item>
+        <item quantity="other">%1$d Freundschaftsanfragen</item>
+    </plurals>
+    <string name="bt_home_friend_requests_sub">Unter Leute beantworten</string>
+    <plurals name="bt_home_unread_messages">
+        <item quantity="one">%1$d ungelesene Nachricht</item>
+        <item quantity="other">%1$d ungelesene Nachrichten</item>
+    </plurals>
+    <string name="bt_home_unread_messages_sub">Nachrichten öffnen</string>
+    <plurals name="bt_home_unread_notifications">
+        <item quantity="one">%1$d neue Mitteilung</item>
+        <item quantity="other">%1$d neue Mitteilungen</item>
+    </plurals>
+    <string name="bt_home_unread_notifications_sub">Posteingang öffnen</string>
+    <plurals name="bt_home_unpriced">
+        <item quantity="one">%1$d Position braucht einen Kurs</item>
+        <item quantity="other">%1$d Positionen brauchen einen Kurs</item>
+    </plurals>
+    <string name="bt_home_unpriced_more">%1$d weitere im Portfolio</string>
+    <string name="bt_home_portfolios">Deine Portfolios</string>
+    <string name="bt_home_more">Mehr</string>
+    <string name="bt_home_on">An</string>
+    <string name="bt_home_off">Aus</string>
+
+    <!-- Portfolio (R1-B) -->
+    <string name="bt_overview_manage_portfolios">Portfolios verwalten</string>
+    <string name="bt_overview_alloc_see_all">Alle anzeigen</string>
+    <string name="bt_overview_alloc_less">Weniger anzeigen</string>
+    <string name="bt_overview_alloc_bar_cd">Aufteilung über deine Positionen</string>
 </resources>

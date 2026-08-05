@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.paranoid
 
 import android.content.Context
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,7 +66,12 @@ fun ParanoidGate(
     val openWeb: () -> Unit = { openBtWebApp(context) }
 
     if (onBack == null) {
-        ParanoidModeScreen(onOpenWeb = openWeb)
+        // The one no-[onBack] caller is the Portfolio TAB, and since R-arc R1-B
+        // that tab sets `ownsItsHeader`: the shell renders no top bar over it, so
+        // nothing above this consumes the status-bar inset. The overview does it
+        // in its own collapsing header; this explainer REPLACES the overview, so
+        // it has to do it here or its scrolling copy runs under the clock.
+        ParanoidModeScreen(onOpenWeb = openWeb, modifier = Modifier.statusBarsPadding())
         return
     }
     Scaffold(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,8 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.foundation.layout.offset
@@ -43,9 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.ui.charts.BtChartPalette
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
@@ -58,6 +66,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
@@ -105,6 +114,9 @@ fun GalleryScreen(
         ) {
             item { WordmarkSection() }
             item { MoneySection() }
+            item { CollapsingHeaderSection() }
+            item { HomeCardsSection() }
+            item { AllocationBarSection() }
             item { StatCardSection() }
             item { ListCardSection() }
             item { ButtonSection() }
@@ -171,6 +183,217 @@ private fun MoneySection() {
             style = MaterialTheme.typography.bodySmall,
             color = bt.textMuted,
         )
+    }
+}
+
+/**
+ * [BtCollapsingHeader] in both of its states, side by side.
+ *
+ * Rendered at two pinned scroll positions rather than as one live header,
+ * because the whole point of the entry is the comparison: the expanded row is the
+ * screen's subject at `headlineSmall`, the collapsed one is a 64dp identity strip
+ * at `titleMedium`, and a reviewer needs to see the two type sizes and the gold
+ * chevron's two sizes together to judge the ramp. A live one would only ever show
+ * whichever state the gallery's own scroll happened to leave it in.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CollapsingHeaderSection() {
+    val bt = BtTheme.colors
+    GallerySection("Collapsing header §4.1 (R-arc R1)") {
+        Text("Expanded — tap-to-switch title", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+            BtCollapsingHeader(
+                title = "Main portfolio",
+                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                // The gallery's Scaffold already consumed the status bar.
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                onTitleClick = {},
+                titleClickLabel = "Switch portfolio",
+                overflow = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = bt.textSecondary)
+                    }
+                },
+            )
+        }
+        Text("Collapsed — scrolled state (tonal lift, no divider)", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+            val collapsed = rememberBtCollapsingHeaderBehavior()
+            // Drive the state straight to fully-collapsed: heightOffsetLimit is
+            // negative (the distance the bar may travel up), so pinning the offset
+            // to it is exactly "the user has scrolled past the title".
+            collapsed.state.heightOffsetLimit = -48f
+            collapsed.state.heightOffset = -48f
+            collapsed.state.contentOffset = -200f
+            BtCollapsingHeader(
+                title = "Main portfolio",
+                scrollBehavior = collapsed,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                onTitleClick = {},
+                titleClickLabel = "Switch portfolio",
+                overflow = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = bt.textSecondary)
+                    }
+                },
+            )
+        }
+        Text("No title action — a plain large title", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+            BtCollapsingHeader(
+                title = "Workbench",
+                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                // The gallery's Scaffold already consumed the status bar.
+                windowInsets = WindowInsets(0, 0, 0, 0),
+            )
+        }
+    }
+}
+
+/**
+ * Home's card vocabulary (R-arc R1 §3): the hero, an actionable row, a mover
+ * card, and one quiet tail row.
+ *
+ * The point of grouping them here is the WEIGHT ramp — 44sp hero, gold only on
+ * the row that can cost you money, muted rows at the bottom — which is only
+ * judgeable when the four are stacked in the order the screen uses them.
+ */
+@Composable
+private fun HomeCardsSection() {
+    val bt = BtTheme.colors
+    val locale = Locale.GERMANY
+    GallerySection("Home cards §3 (R-arc R1)") {
+        Column {
+            Text("Net worth", style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+            Spacer(Modifier.height(4.dp))
+            MoneyText(value = 128_450.75, style = BtTheme.type.moneyHero)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Across 2 of 3 portfolios",
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MoneyText(
+                    value = 1_204.20,
+                    style = BtTheme.type.numberCaption,
+                    colorMode = MoneyColorMode.GainLoss,
+                    showSign = true,
+                )
+                Text(
+                    " (${formatPercent(0.95, locale)}) · today",
+                    style = BtTheme.type.numberCaption,
+                    color = bt.gain,
+                )
+            }
+        }
+        // The actionable row, gold-led: the one Home card that can be about money
+        // moving without the user.
+        ListCard(
+            title = "2 alerts triggered",
+            subtitle = "Open the alerts manager",
+            leading = {
+                Icon(
+                    Icons.Outlined.NotificationsActive,
+                    contentDescription = null,
+                    tint = bt.goldEmphasis,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            trailing = {
+                Icon(
+                    Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = bt.textMuted,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            onClick = {},
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GalleryMoverCard("NVDA", 4.82, 12_400.0, locale)
+            GalleryMoverCard("ASML", -3.10, 8_150.0, locale)
+        }
+        // The quiet tail: places to go, not things to do.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Inbox, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(14.dp))
+            Text("Notifications", style = MaterialTheme.typography.bodyMedium, color = bt.textSecondary, modifier = Modifier.weight(1f))
+            Text("3", style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun GalleryMoverCard(symbol: String, pct: Double, value: Double, locale: Locale) {
+    val bt = BtTheme.colors
+    Surface(
+        color = bt.surface,
+        shape = BtShapes.card,
+        border = androidx.compose.foundation.BorderStroke(1.dp, bt.border),
+        modifier = Modifier.width(132.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Text(symbol, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                formatPercent(pct, locale),
+                style = BtTheme.type.moneyMedium,
+                color = if (pct >= 0) bt.gain else bt.loss,
+            )
+            Spacer(Modifier.height(2.dp))
+            MoneyText(value = value, style = BtTheme.type.numberCaption)
+        }
+    }
+}
+
+/**
+ * The slim allocation bar that replaced the donut card above the holdings list
+ * (decision O-5). Shown next to the palette it draws from, because the whole
+ * question a reviewer has about a 10dp stacked bar is whether adjacent slices
+ * stay distinguishable at that height.
+ */
+@Composable
+private fun AllocationBarSection() {
+    val bt = BtTheme.colors
+    GallerySection("Allocation summary bar §4.2 (R-arc R1)") {
+        val shares = listOf(0.34f, 0.24f, 0.16f, 0.11f, 0.08f, 0.05f, 0.02f)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            shares.forEachIndexed { i, share ->
+                Box(
+                    Modifier
+                        .weight(share)
+                        .height(10.dp)
+                        .background(
+                            if (i < BtChartPalette.series.size) BtChartPalette.series[i] else BtChartPalette.cash,
+                            BtShapes.pill,
+                        ),
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf("AAPL" to "34,0 %", "MSFT" to "24,0 %", "VWCE" to "16,0 %")
+                .forEachIndexed { i, (label, pct) ->
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(6.dp).background(BtChartPalette.series[i], CircleShape))
+                            Spacer(Modifier.width(6.dp))
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = bt.textSecondary)
+                        }
+                        Text(pct, style = BtTheme.type.numberCaption, color = bt.textPrimary)
+                    }
+                }
+        }
     }
 }
 

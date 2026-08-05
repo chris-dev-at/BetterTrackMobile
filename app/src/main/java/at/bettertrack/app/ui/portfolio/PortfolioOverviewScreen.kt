@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,12 +24,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PieChart
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -43,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
@@ -68,25 +75,43 @@ import at.bettertrack.app.ui.charts.BtDonutChart
 import at.bettertrack.app.ui.charts.DonutSegment
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import androidx.compose.ui.unit.Dp
 import java.util.Locale
 
 /**
- * Shared initializer for [PortfolioOverviewViewModel]. Both this screen and the
- * app-shell top-bar portfolio selector resolve the VM through THIS initializer,
- * scoped to the Portfolio nav-graph entry — so they share ONE instance (one
- * source of truth for the selected portfolio + the switcher sheet's open state).
+ * The hero chart's canvas height (decision O-5).
+ *
+ * Named rather than inlined because it is a hierarchy decision, not a layout
+ * detail: this number is what buys the allocation summary and the first holdings
+ * their place on the first screen, and anyone raising it is undoing §3's reorder.
  */
-internal val PortfolioOverviewVmInitializer: CreationExtras.() -> PortfolioOverviewViewModel = {
+private val HERO_CHART_HEIGHT: Dp = 150.dp
+
+/**
+ * Initializer for [PortfolioOverviewViewModel], scoped to the Portfolio nav-graph
+ * entry.
+ *
+ * Private again as of R-arc R1 (decision O-10). It was `internal` because the
+ * app-shell top-bar portfolio selector resolved the same VM from outside this
+ * screen's composition, so the two had to share one instance. That chip is gone —
+ * the switcher now opens from this screen's own collapsing header — and with
+ * exactly one consumer left, widening the visibility would only invite a second
+ * cross-composition consumer to appear without anyone deciding it should.
+ */
+private val PortfolioOverviewVmInitializer: CreationExtras.() -> PortfolioOverviewViewModel = {
     PortfolioOverviewViewModel(
         AppGraph.portfolioRepository,
         AppGraph.connectivityMonitor,
@@ -96,13 +121,42 @@ internal val PortfolioOverviewVmInitializer: CreationExtras.() -> PortfolioOverv
 }
 
 /**
- * The Portfolio tab overview (Step 6, spec §6.1) — the app's home: Net-Worth
- * hero, §3.6 history graph (blended full-bleed into the page) with range chips,
- * holdings/cash line, allocation donut and the holdings list. The portfolio
- * selector lives in the app-shell top bar beside the wordmark (it opens the
- * switcher sheet hosted here). Renders ONLY server-computed numbers from Room
- * (§7.1); offline shows the cache under the global as-of banner. The buy/sell
- * FAB (≤2 taps) + the pending-changes strip (§7.4) live here.
+ * The Portfolio tab (Step 6, spec §6.1; re-laid out for the R-arc mandate §3).
+ *
+ * ## What the screen leads with, and why the order changed
+ *
+ * The mandate's complaint — "some pages show you useless info first" — landed
+ * squarely here: the old order put a sync strip and a pair of roll-up cards
+ * between the value and the holdings, so on a 360×800 screen the user saw a
+ * number, some infrastructure, and no positions. The order is now:
+ *
+ *  1. **value + today's change** — unchanged, including the W6 honest states;
+ *  2. **the chart**, at 150dp instead of 200 (the owner's praised hero, kept, but
+ *     no longer allowed to push the list off the screen on its own);
+ *  3. **an allocation summary** — a slim stacked bar and the top three names,
+ *     with the full donut one tap behind "See all" (decision O-5);
+ *  4. **the holdings list**, which is what this screen is *for*;
+ *  5. **cash and transactions**, demoted from 50/50 cards to secondary rows;
+ *  6. **the pending-sync strip**, below everything — unless something in it
+ *     needs attention, which is the one case where it is not status but work,
+ *     and it moves back up under the hero.
+ *
+ * The "Holdings value" roll-up card is deleted outright: it printed the sum of a
+ * list rendered 200px underneath it. Its one real job — the W6 "nothing could be
+ * priced" honesty — moved into the holdings section header, where the absence is
+ * next to the rows it is about.
+ *
+ * ## The header owns the switcher now
+ *
+ * The portfolio name is a collapsing large title ([BtCollapsingHeader]) and
+ * tapping it opens the switcher sheet this screen already hosted. That is the
+ * mandate's §1 relocation: the selector chip leaves the shell's top bar, and the
+ * capability lands somewhere strictly more capable — the title says which
+ * portfolio you are looking at even when you are not about to switch.
+ *
+ * Renders ONLY server-computed numbers from Room (§7.1); offline shows the cache
+ * under the global as-of banner. The buy/sell FAB (≤2 taps) lives here, and the
+ * header carries no `+`: one creation entry per screen (mandate §1).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,6 +199,7 @@ fun PortfolioOverviewScreen(
     // would waste that width on every screen, FAB or no FAB), the FAB gets out of
     // the way while the user scrolls down and comes straight back on the way up.
     val fabVisibility = rememberBtFabVisibility()
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     val listState = rememberLazyListState()
     // Back at the very top = nothing to get out of the way of. This also covers
     // the short-list case, where the FAB must never be able to stay hidden.
@@ -153,69 +208,114 @@ fun PortfolioOverviewScreen(
             listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         }.collect { atTop -> if (atTop) fabVisibility.show() }
     }
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = { vm.refresh() },
-        state = pullState,
-        modifier = Modifier.fillMaxSize().nestedScroll(fabVisibility.nestedScroll),
-        indicator = {
-            PullToRefreshDefaults.Indicator(
-                state = pullState,
-                isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
-                containerColor = bt.surface,
-                color = bt.gold,
-            )
-        },
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            // ── Three nested-scroll participants, in this order deliberately ──
+            //
+            // Compose offers a pre-scroll delta to the OUTERMOST connection first
+            // and passes on what is left. The collapsing header CONSUMES delta
+            // while it is collapsing; the FAB's connection observes and returns
+            // Offset.Zero. So the FAB must be outer: inner, it would see a delta
+            // the header had already eaten and could sit under the
+            // FAB_SCROLL_THRESHOLD_PX dead band for the whole first 48dp of every
+            // drag — i.e. the FAB would stop hiding exactly while the header is
+            // doing the thing that makes room. Outer, it sees raw finger movement
+            // and the header still gets the full delta afterwards, because the
+            // FAB consumed none of it.
+            .nestedScroll(fabVisibility.nestedScroll)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
     ) {
-        when {
-            // First run, nothing cached yet: skeleton, never a blank screen.
-            selected == null && !hasEverSynced && loadError == null ->
-                OverviewSkeleton()
-
-            // Nothing cached AND the first load failed: honest error + retry.
-            selected == null && !hasEverSynced ->
-                ErrorFillState { vm.refresh() }
-
-            // Synced but zero active portfolios: branded create-first state.
-            selected == null ->
-                NoPortfolioState(
-                    isOnline = isOnline,
-                    busy = switcherBusy,
-                    error = switcherError,
-                    onCreate = { name -> vm.createPortfolio(name) },
+        // The switcher is reachable while ANY portfolio exists — including when
+        // every one of them is archived, where `selected` is null but restoring
+        // one is exactly what the user needs the sheet for.
+        val canSwitch = portfolios.isNotEmpty()
+        BtCollapsingHeader(
+            title = selected?.name ?: stringResource(R.string.bt_tab_portfolio),
+            scrollBehavior = scrollBehavior,
+            onTitleClick = if (canSwitch) ({ vm.openSwitcher() }) else null,
+            titleClickLabel = stringResource(R.string.bt_switcher_open_cd),
+            overflow = {
+                PortfolioOverflow(
+                    portfolioId = selected?.id,
+                    canSwitch = canSwitch,
+                    hasPending = pendingTx.isNotEmpty(),
+                    onOpenTransactions = onOpenTransactions,
+                    onOpenCash = onOpenCash,
+                    onOpenPendingSync = onOpenPendingSync,
+                    onManagePortfolios = { vm.openSwitcher() },
                 )
+            },
+        )
 
-            else -> OverviewContent(
-                portfolio = selected!!,
-                listState = listState,
-                holdings = holdings,
-                history = history,
-                range = range,
-                pendingTx = pendingTx,
-                onRange = vm::setRange,
-                onOpenHolding = onOpenHolding,
-                onOpenTransactions = onOpenTransactions,
-                onOpenPendingSync = onOpenPendingSync,
-                onOpenCash = onOpenCash,
-            )
-        }
-
-        // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
-        // this FAB opens the buy/sell form directly.
-        selected?.let { p ->
-            val fabCd = stringResource(R.string.bt_overview_fab_cd)
-            fabVisibility.Content(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = { vm.refresh() },
+                state = pullState,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullState,
+                        isRefreshing = refreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = bt.surface,
+                        color = bt.gold,
+                    )
+                },
             ) {
-                FloatingActionButton(
-                    onClick = { onNewTransaction(p.id) },
-                    containerColor = bt.gold,
-                    contentColor = bt.onGold,
-                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                    modifier = Modifier.semantics { contentDescription = fabCd },
+                when {
+                    // First run, nothing cached yet: skeleton, never a blank screen.
+                    selected == null && !hasEverSynced && loadError == null ->
+                        OverviewSkeleton()
+
+                    // Nothing cached AND the first load failed: honest error + retry.
+                    selected == null && !hasEverSynced ->
+                        ErrorFillState { vm.refresh() }
+
+                    // Synced but zero active portfolios: branded create-first state.
+                    selected == null ->
+                        NoPortfolioState(
+                            isOnline = isOnline,
+                            busy = switcherBusy,
+                            error = switcherError,
+                            onCreate = { name -> vm.createPortfolio(name) },
+                        )
+
+                    else -> OverviewContent(
+                        portfolio = selected!!,
+                        listState = listState,
+                        holdings = holdings,
+                        history = history,
+                        range = range,
+                        pendingTx = pendingTx,
+                        onRange = vm::setRange,
+                        onOpenHolding = onOpenHolding,
+                        onOpenTransactions = onOpenTransactions,
+                        onOpenPendingSync = onOpenPendingSync,
+                        onOpenCash = onOpenCash,
+                    )
+                }
+            }
+
+            // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
+            // this FAB opens the buy/sell form directly. It stays the screen's ONLY
+            // creation entry; the header deliberately carries no `+`.
+            selected?.let { p ->
+                val fabCd = stringResource(R.string.bt_overview_fab_cd)
+                fabVisibility.Content(
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
                 ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
+                    FloatingActionButton(
+                        onClick = { onNewTransaction(p.id) },
+                        containerColor = bt.gold,
+                        contentColor = bt.onGold,
+                        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                        modifier = Modifier.semantics { contentDescription = fabCd },
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null)
+                    }
                 }
             }
         }
@@ -397,11 +497,13 @@ private fun OverviewContent(
             }
         }
 
-        // Pending changes strip (§7.1/§7.4): queued entries live ALONGSIDE the
-        // server-computed numbers, clearly marked, and open the Pending-sync
-        // screen — they are never folded into the totals above.
-        if (pendingTx.isNotEmpty()) {
-            item(key = "pending-strip") {
+        // The pending strip's ONE promotion (mandate §3 vs §7.4): a queued change
+        // the server refused is not status, it is work, and work belongs next to
+        // the number it is about to change. Everything merely waiting to upload
+        // is status and lives at the bottom of the screen.
+        val attention = pendingTx.count { it.status == PendingUiStatus.NEEDS_ATTENTION }
+        if (attention > 0) {
+            item(key = "pending-attention") {
                 Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
             }
         }
@@ -420,53 +522,43 @@ private fun OverviewContent(
             )
         }
 
-        // The roll-up line: holdings value + cash (server totals). The cash
-        // card opens the Step-9 cash screen (§6.3).
-        item(key = "rollup") {
-            Row(inset, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                RollupCard(
-                    label = stringResource(R.string.bt_overview_holdings_value),
-                    value = totals?.marketValueEur,
-                    // W6: "Holdings value 0,00 €" next to a list of real holdings
-                    // is the €0 lie in miniature. When nothing could be priced,
-                    // the card says so instead of printing the empty sum.
-                    unpriced = coverage.nothingPriced,
-                    modifier = Modifier.weight(1f),
-                )
-                RollupCard(
-                    label = stringResource(R.string.bt_overview_cash),
-                    value = totals?.cashEur,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onOpenCash(portfolio.id) },
-                )
-            }
-        }
-
-        // Allocation donut (by asset / by category).
+        // Allocation, PROMOTED above the holdings and reduced to a summary
+        // (decision O-5). What a reader wants here is proportion, and a stacked
+        // bar answers that in one glance and 10dp of height where the 132dp donut
+        // needed a card of its own between the value and the positions.
         if (holdings.isNotEmpty() || (totals?.cashEur ?: 0.0) > 0.0) {
             item(key = "allocation") {
                 Box(inset) {
-                    AllocationCard(holdings = holdings, cashEur = totals?.cashEur ?: 0.0, locale = locale)
+                    AllocationSummary(
+                        holdings = holdings,
+                        cashEur = totals?.cashEur ?: 0.0,
+                        locale = locale,
+                    )
                 }
             }
         }
 
-        // Holdings list.
+        // Holdings — the thing this screen is for, now immediately after the
+        // value and the summary (mandate §3).
         item(key = "holdings-header") {
-            Row(
-                modifier = inset.padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Column(inset.padding(top = 4.dp)) {
                 Text(
                     text = stringResource(R.string.bt_overview_holdings_section),
                     style = MaterialTheme.typography.titleMedium,
                     color = bt.textPrimary,
-                    modifier = Modifier.weight(1f),
                 )
-                BtChip(
-                    text = stringResource(R.string.bt_tx_title),
-                    onClick = { onOpenTransactions(portfolio.id) },
-                )
+                // W6, inherited from the deleted "Holdings value" roll-up: with
+                // nothing priced, the rows below all read "No price yet" and the
+                // section says why once, here, instead of the card that used to
+                // print an empty sum 200px above the list it summed.
+                if (coverage.nothingPriced) {
+                    Text(
+                        text = stringResource(R.string.bt_price_none_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
         if (holdings.isEmpty()) {
@@ -494,6 +586,96 @@ private fun OverviewContent(
                         onClick = { onOpenHolding(h.assetId) },
                     )
                 }
+            }
+        }
+
+        // Cash and transactions, demoted from 50/50 roll-up cards to secondary
+        // rows (mandate §3: "cash/source metadata demoted into rows' secondary
+        // lines"). They are also the in-content second path for the two entries
+        // the header's ⋮ carries — overflow is a shortcut, never the only way.
+        item(key = "secondary-rows") {
+            Column(inset.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryRow(
+                    label = stringResource(R.string.bt_overview_cash),
+                    value = totals?.cashEur,
+                    onClick = { onOpenCash(portfolio.id) },
+                )
+                SecondaryRow(
+                    label = stringResource(R.string.bt_tx_title),
+                    value = null,
+                    onClick = { onOpenTransactions(portfolio.id) },
+                )
+            }
+        }
+
+        // Pending changes (§7.1/§7.4): queued entries live ALONGSIDE the
+        // server-computed numbers, clearly marked, and open the Pending-sync
+        // screen — never folded into the totals. Below the holdings unless
+        // something in them needs attention, in which case it is already above.
+        if (pendingTx.isNotEmpty() && attention == 0) {
+            item(key = "pending-strip") {
+                Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
+            }
+        }
+    }
+}
+
+/**
+ * The Portfolio header's ⋮ (mandate §1: context, ONE action, overflow).
+ *
+ * Every entry here has an in-content twin on the screen below — Transactions and
+ * Cash as the secondary rows under the holdings, Pending sync as the strip,
+ * Manage portfolios as the tap on the title itself. That pairing is Fable's
+ * design-review rule, and it is also why "Pending sync" is gated on there being
+ * something pending: it appears and disappears together with the strip, so the
+ * menu never offers a path the screen itself does not.
+ */
+@Composable
+private fun PortfolioOverflow(
+    portfolioId: String?,
+    canSwitch: Boolean,
+    hasPending: Boolean,
+    onOpenTransactions: (String) -> Unit,
+    onOpenCash: (String) -> Unit,
+    onOpenPendingSync: () -> Unit,
+    onManagePortfolios: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = stringResource(R.string.bt_top_more),
+                tint = bt.textSecondary,
+            )
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = bt.surface,
+        ) {
+            if (portfolioId != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_tx_title)) },
+                    onClick = { open = false; onOpenTransactions(portfolioId) },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_overview_cash)) },
+                    onClick = { open = false; onOpenCash(portfolioId) },
+                )
+            }
+            if (hasPending) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_pending_title)) },
+                    onClick = { open = false; onOpenPendingSync() },
+                )
+            }
+            if (canSwitch) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_overview_manage_portfolios)) },
+                    onClick = { open = false; onManagePortfolios() },
+                )
             }
         }
     }
@@ -561,6 +743,13 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
  * header line and the range chips stay inset; the chart itself is full-width
  * with minimal scaffolding. Scrubbing is reported up so the Net-Worth hero
  * shows the touched point.
+ *
+ * R-arc R1 (decision O-5): the canvas is [HERO_CHART_HEIGHT] rather than 200dp.
+ * The chart is the owner's, it is praised, and it stays directly under the hero —
+ * but at 200dp it plus its performance line and range chips were, on their own,
+ * the reason the first holding row sat below the fold. 50dp is what the shape
+ * costs, not what it says; nothing about reading the curve is worse at 150dp,
+ * and the allocation summary and the first two positions now fit the first screen.
  */
 @Composable
 private fun HeroChart(
@@ -607,7 +796,7 @@ private fun HeroChart(
                 points = points,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(HERO_CHART_HEIGHT)
                     .semantics { contentDescription = chartCd },
                 lineColor = bt.gold,
                 minimal = true,
@@ -615,11 +804,11 @@ private fun HeroChart(
             )
         } else {
             Box(
-                modifier = Modifier.fillMaxWidth().height(200.dp),
+                modifier = Modifier.fillMaxWidth().height(HERO_CHART_HEIGHT),
                 contentAlignment = Alignment.Center,
             ) {
                 if (history == null) {
-                    BtSkeleton(Modifier.fillMaxWidth().height(170.dp).padding(horizontal = 16.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(126.dp).padding(horizontal = 16.dp))
                 } else {
                     Text(
                         text = stringResource(R.string.bt_overview_chart_empty),
@@ -629,7 +818,7 @@ private fun HeroChart(
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Range chips (inset) — the set the platform serves (1D/1W/3M need a
         // server-side window that doesn't exist yet; platform gap).
@@ -648,42 +837,74 @@ private fun HeroChart(
     }
 }
 
+/**
+ * A demoted metadata row: label, optional value, chevron.
+ *
+ * Card-less on purpose. Cash used to be half of a 50/50 pair of cards competing
+ * with the value above it; as a row under the holdings it is still one tap away
+ * and no longer claims to be a headline. That is the mandate's "demoted into
+ * rows" applied literally, and it is why these sit below the list rather than
+ * being folded into it: they are about the portfolio, not about a position.
+ */
 @Composable
-private fun RollupCard(
+private fun SecondaryRow(
     label: String,
     value: Double?,
-    modifier: Modifier = Modifier,
-    /** W6 — the value exists but covers nothing; render the honest state. */
-    unpriced: Boolean = false,
-    onClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    BtCard(modifier = modifier, onClick = onClick) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        contentColor = bt.textSecondary,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
+                style = MaterialTheme.typography.bodyMedium,
+                color = bt.textSecondary,
+                modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.height(2.dp))
-            when {
-                unpriced -> Text(
-                    text = stringResource(R.string.bt_price_none),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = bt.textMuted,
-                )
-
-                value != null -> MoneyText(value = value, style = BtTheme.type.moneyMedium)
-                else -> BtSkeleton(Modifier.width(90.dp).height(22.dp))
+            if (value != null) {
+                MoneyText(value = value, style = BtTheme.type.moneySmall)
+                Spacer(Modifier.width(8.dp))
             }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
 
+/**
+ * Allocation as a summary first, the donut second (decision O-5).
+ *
+ * ## Why the bar replaced the card in the first screen
+ *
+ * The donut was never wrong — it is the right shape for "how is this divided" —
+ * but at 132dp inside a card with a legend it cost roughly a third of a phone
+ * screen, sitting between the portfolio's value and its positions. The mandate
+ * asks for "value + allocation summary first; holdings list immediately after",
+ * and a stacked bar is the smallest honest answer to "summary": it encodes the
+ * same proportions, reads left to right in one glance, and takes 10dp. The three
+ * largest names underneath it turn the shape into something you can also read.
+ *
+ * The donut is not deleted — it is one tap behind "See all", together with the
+ * by-asset / by-category switch, because that switch is a question you ask
+ * *while studying* allocation, not while glancing at it.
+ */
 @Composable
-private fun AllocationCard(holdings: List<HoldingEntity>, cashEur: Double, locale: Locale) {
+private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, locale: Locale) {
     val bt = BtTheme.colors
     var byCategory by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     val otherLabel = stringResource(R.string.bt_overview_alloc_other)
     val cashLabel = stringResource(R.string.bt_overview_alloc_cash)
@@ -691,63 +912,163 @@ private fun AllocationCard(holdings: List<HoldingEntity>, cashEur: Double, local
         allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel)
     }
     val total = segments.sumOf { it.value }
+    if (segments.isEmpty() || total <= 0.0) return
 
-    BtCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.bt_overview_allocation_section),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = bt.textPrimary,
-                    modifier = Modifier.weight(1f),
-                )
-                BtChip(
-                    text = stringResource(R.string.bt_overview_alloc_by_asset),
-                    selected = !byCategory,
-                    onClick = { byCategory = false },
-                )
-                Spacer(Modifier.width(8.dp))
-                BtChip(
-                    text = stringResource(R.string.bt_overview_alloc_by_category),
-                    selected = byCategory,
-                    onClick = { byCategory = true },
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.bt_overview_allocation_section),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            BtChip(
+                text = stringResource(
+                    if (expanded) R.string.bt_overview_alloc_less else R.string.bt_overview_alloc_see_all,
+                ),
+                onClick = { expanded = !expanded },
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        AllocationBar(segments = segments, total = total)
+        Spacer(Modifier.height(12.dp))
+
+        // The top three, as compact legend cells. Three because that is what fits
+        // one row at a readable size on 360dp — and because past the third slice
+        // the question stops being "what is this mostly" and starts being the one
+        // the donut answers.
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            segments.take(ALLOCATION_SUMMARY_LEGEND).forEach { segment ->
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).background(segment.color, CircleShape))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = segment.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = bt.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    weightPct(segment.value, total)?.let { pct ->
+                        Text(
+                            text = formatWeight(pct, locale),
+                            style = BtTheme.type.numberCaption,
+                            color = bt.textPrimary,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (expanded) {
+            Spacer(Modifier.height(16.dp))
+            AllocationDetail(
+                segments = segments,
+                total = total,
+                byCategory = byCategory,
+                onByCategory = { byCategory = it },
+                locale = locale,
+            )
+        }
+    }
+}
+
+/** How many slices the collapsed allocation summary names. */
+private const val ALLOCATION_SUMMARY_LEGEND = 3
+
+/**
+ * The slim stacked bar.
+ *
+ * Weighted rather than measured: the slices are proportions of a total that is
+ * already known, so laying them out with `weight` keeps them exact at any width
+ * without a single pixel calculation. The 2dp gaps are what make adjacent slices
+ * of similar colour readable as two things; without them a stacked bar of a
+ * six-colour palette turns into a gradient at small sizes.
+ */
+@Composable
+private fun AllocationBar(segments: List<DonutSegment>, total: Double) {
+    val cd = stringResource(R.string.bt_overview_alloc_bar_cd)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(10.dp)
+            .semantics { contentDescription = cd },
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        segments.forEach { segment ->
+            val share = (segment.value / total).toFloat()
+            if (share > 0f) {
+                Box(
+                    Modifier
+                        .weight(share)
+                        .fillMaxHeight()
+                        .background(segment.color, BtShapes.pill),
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BtDonutChart(
-                    segments = segments,
-                    modifier = Modifier.size(132.dp),
-                )
-                Spacer(Modifier.width(20.dp))
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    segments.forEach { segment ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .background(segment.color, CircleShape),
-                            )
-                            Spacer(Modifier.width(8.dp))
+        }
+    }
+}
+
+/** The full donut + legend, behind "See all". Unchanged in substance from S6. */
+@Composable
+private fun AllocationDetail(
+    segments: List<DonutSegment>,
+    total: Double,
+    byCategory: Boolean,
+    onByCategory: (Boolean) -> Unit,
+    locale: Locale,
+) {
+    val bt = BtTheme.colors
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BtChip(
+                text = stringResource(R.string.bt_overview_alloc_by_asset),
+                selected = !byCategory,
+                onClick = { onByCategory(false) },
+            )
+            Spacer(Modifier.width(8.dp))
+            BtChip(
+                text = stringResource(R.string.bt_overview_alloc_by_category),
+                selected = byCategory,
+                onClick = { onByCategory(true) },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BtDonutChart(
+                segments = segments,
+                modifier = Modifier.size(132.dp),
+            )
+            Spacer(Modifier.width(20.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                segments.forEach { segment ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .background(segment.color, CircleShape),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = segment.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = bt.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        weightPct(segment.value, total)?.let { pct ->
                             Text(
-                                text = segment.label,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
+                                text = formatWeight(pct, locale),
+                                style = BtTheme.type.numberCaption,
+                                color = bt.textPrimary,
                             )
-                            Spacer(Modifier.width(8.dp))
-                            weightPct(segment.value, total)?.let { pct ->
-                                Text(
-                                    text = formatWeight(pct, locale),
-                                    style = BtTheme.type.numberCaption,
-                                    color = bt.textPrimary,
-                                )
-                            }
                         }
                     }
                 }

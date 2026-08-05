@@ -190,10 +190,10 @@ private enum class TabBadge {
  *   implements for no user-visible gain (R1 decision O-2). The label is the
  *   user-facing name; the constant is the contract's.
  * @param ownsItsHeader true when the DESTINATION renders its own header and the
- *   shell must not add one on top of it. The R-arc target for Portfolio is an
- *   in-screen collapsing large title (mandate §1), which package R1-B builds;
- *   until it lands, the shell renders Portfolio's title like the other tabs',
- *   and R1-B flips this one flag rather than editing the shell around it.
+ *   shell must not add one on top of it. Portfolio does, as of R1-B: its title is
+ *   the portfolio's own name in an in-screen collapsing large title that also
+ *   carries the switcher and that screen's overflow (mandate §1). R2 flips this
+ *   flag for the remaining tabs as each one grows its own header.
  */
 private data class TabSpec(
     val tab: BtTab,
@@ -207,7 +207,7 @@ private data class TabSpec(
 
 private val Tabs = listOf(
     TabSpec(BtTab.Home, HomeTabRoute::class, R.string.bt_tab_home, Icons.Outlined.Home, BtSurface.HOME),
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, ownsItsHeader = true),
     TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
     TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
     TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
@@ -397,6 +397,21 @@ fun BtApp() {
     // home, e.g. overflow or profile, not bar chrome"). Home's overflow is that
     // home; the Settings row stays the canonical control.
     val discreetMode by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
+    // Hoisted to a named lambda because it now has TWO call sites — Home's
+    // overflow item and Home's in-content quick-links row (Fable's rule: an
+    // overflow entry may never be the only path to its act). One implementation,
+    // so the two can never diverge on what "flip discreet mode" means.
+    val toggleDiscreet: (Boolean) -> Unit = { wanted ->
+        // Flip locally FIRST — the point of masking is that amounts vanish the
+        // instant the user asks, not a round-trip later. Settings owns the error
+        // copy for a refusal (mandate §5 keeps it the canonical control); here
+        // the state visibly reverting IS the feedback.
+        AppGraph.discreetModeStore.set(wanted)
+        scope.launch {
+            val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
+            if (r is BtResult.Err) AppGraph.discreetModeStore.set(!wanted)
+        }
+    }
 
     Scaffold(
         containerColor = bt.bg,
@@ -424,18 +439,7 @@ fun BtApp() {
                     onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                     onDevBackend = { navController.navigate(DevBackendRoute) },
-                    onToggleDiscreet = { wanted ->
-                        // Flip locally FIRST — the point of masking is that
-                        // amounts vanish the instant the user asks, not a
-                        // round-trip later. Settings owns the error copy for a
-                        // refusal (mandate §5 keeps it the canonical control);
-                        // here the state visibly reverting IS the feedback.
-                        AppGraph.discreetModeStore.set(wanted)
-                        scope.launch {
-                            val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
-                            if (r is BtResult.Err) AppGraph.discreetModeStore.set(!wanted)
-                        }
-                    },
+                    onToggleDiscreet = toggleDiscreet,
                 )
             }
         },
@@ -477,7 +481,7 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(navController, navigateDeepLink, switchToTab)
+            BtNavHost(navController, navigateDeepLink, switchToTab, discreetMode, toggleDiscreet)
         }
     }
 }
@@ -492,14 +496,13 @@ fun BtApp() {
  * | Tab | Context | ONE action | Overflow |
  * |---|---|---|---|
  * | Home | wordmark | Search | inbox · discreet · settings · (debug) dev backend |
- * | Portfolio | title * | — (the FAB owns creation) | — * |
  * | Workbench | title | — (segments are content) | — |
  * | Markets | title | — (the in-content field IS the entry) | — |
  * | People | title | Messages | Friend groups |
  *
- * `*` R1-A renders Portfolio's title here so the tab is never bare; R1-B moves
- * it into the screen as a collapsing large title that also carries the portfolio
- * switcher and this row's overflow, and flips [TabSpec.ownsItsHeader].
+ * **Portfolio is not in that table**: as of R1-B it sets [TabSpec.ownsItsHeader]
+ * and renders its own collapsing large title (the portfolio's name, tap to
+ * switch) with its own overflow. This composable is never called for it.
  *
  * **The wordmark appears on Home only.** It stopped being wayfinding the moment
  * it was on all four tabs — the user knows which app they opened — and Home is
@@ -775,6 +778,9 @@ private fun BtNavHost(
     navController: NavHostController,
     onDeepLink: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
+    /** Discreet-mode state + its one implementation, shared with the top bar. */
+    discreetMode: Boolean,
+    onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
     NavHost(
@@ -791,11 +797,21 @@ private fun BtNavHost(
     ) {
         // Tabs
         composable<HomeTabRoute> {
-            // Home navigates ONLY through these two callbacks — see HomeScreen's
+            // Home crosses tabs ONLY through onOpen/onSwitchTab — see HomeScreen's
             // KDoc. No `navController` is handed to it, deliberately: a bare push
             // from an index screen stacks another tab's detail on Home and the
-            // next bottom-bar tap saves it under the wrong tab (S6 P1-8).
-            HomeScreen(onOpen = onDeepLink, onSwitchTab = onSwitchTab)
+            // next bottom-bar tap saves it under the wrong tab (S6 P1-8). The two
+            // typed pushes below are Home's OWN destinations — the tab that
+            // carries them is the tab they belong on — and neither has a
+            // NotifDeepLink to route through.
+            HomeScreen(
+                onOpen = onDeepLink,
+                onSwitchTab = onSwitchTab,
+                onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
+                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
+                discreetMode = discreetMode,
+                onToggleDiscreet = onToggleDiscreet,
+            )
         }
         composable<PortfolioTabRoute> {
             // V5 S2a: a paranoid account's portfolio family is server-blind. Route

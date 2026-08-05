@@ -10,11 +10,11 @@ import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.prefetchPortfolioTotals
 import at.bettertrack.app.sync.ConnectivityMonitor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -156,20 +156,11 @@ class PortfolioOverviewViewModel(
             return
         }
         switcherPrefetchJob = viewModelScope.launch {
-            ids.chunked(SWITCHER_PREFETCH_CONCURRENCY).forEach { chunk ->
-                coroutineScope {
-                    chunk.map { id ->
-                        async {
-                            id to (repo.refreshPortfolioDetail(id) is BtResult.Err)
-                        }
-                    }.awaitAll()
-                }.filter { (_, failed) -> failed }
-                    .map { (id, _) -> id }
-                    .let { failedIds ->
-                        if (failedIds.isNotEmpty()) {
-                            _switcherValueFailed.value = _switcherValueFailed.value + failedIds
-                        }
-                    }
+            // The fan-out itself is shared with Home's net-worth hero, which has
+            // the identical problem one level up (see prefetchPortfolioTotals).
+            val failedIds = prefetchPortfolioTotals(repo, ids, SWITCHER_PREFETCH_CONCURRENCY)
+            if (failedIds.isNotEmpty()) {
+                _switcherValueFailed.value = _switcherValueFailed.value + failedIds
             }
         }
     }

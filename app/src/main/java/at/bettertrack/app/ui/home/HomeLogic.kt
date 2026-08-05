@@ -1,9 +1,15 @@
 package at.bettertrack.app.ui.home
 
+import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.ui.prices.NetWorthState
 import at.bettertrack.app.ui.prices.PriceCoverage
+import at.bettertrack.app.ui.prices.manualEntryAvailable
 import at.bettertrack.app.ui.prices.netWorthState
+import kotlin.math.abs
 
 /**
  * Home's arithmetic, as pure functions.
@@ -28,6 +34,17 @@ import at.bettertrack.app.ui.prices.netWorthState
  *  1. every active portfolio is covered → the number, plain;
  *  2. some are covered → the number, and never without saying what it covers;
  *  3. none are covered → no number at all, a skeleton.
+ *
+ * ## Why the whole SHAPE of the screen is decided here too
+ *
+ * Home's second job after the number is deciding what is not there. Which rows
+ * exist depends on the storage mode, five independent counts and the price
+ * coverage, and "the actionable block must be absent, not empty" is exactly the
+ * kind of rule that rots into `if (count > 0 || isDrive)` scattered across a
+ * composable nobody can test. So the composition is a pure function of its
+ * inputs ([homeActionRows], [homeMovers], [homeUnpriced]) and the composable
+ * renders what it is handed. That is also what makes the Drive-mode gate a unit
+ * test rather than a device pass the phone-less R1 could not run.
  */
 
 // ── The hero ────────────────────────────────────────────────────────────────
@@ -140,5 +157,178 @@ fun homeNetWorth(active: List<PortfolioEntity>, coverage: PriceCoverage): HomeHe
         showDayChange = !coverage.nothingPriced,
         covered = covered.size,
         active = active.size,
+    )
+}
+
+// ── Movers ──────────────────────────────────────────────────────────────────
+
+/** How many movers Home shows. Five fits one screen-third; movers are second. */
+const val HOME_MOVERS_LIMIT = 5
+
+/**
+ * Today's biggest movers across every active portfolio, largest absolute move
+ * first.
+ *
+ * ## Why absolute, and why both ends
+ *
+ * A "top gainers" list is a mood, not information. What a user opens the app to
+ * find out is *what moved* — a position down 9% is more worth their attention
+ * than one up 2%, and a list that sorts by signed percentage buries it under
+ * everything green. Sorting by |%| puts the day's real events first regardless of
+ * which way they went, and the rows carry their own sign and colour, so nothing
+ * about the direction is hidden by the ordering.
+ *
+ * ## What is deliberately excluded
+ *
+ * A holding with no `dayChangePct` has not moved 0% — it has no *known* move,
+ * because it could not be priced (the W6 case) or the server has not computed one
+ * yet. Ranking those as "flat" would sort real information below an absence, so
+ * they are filtered out entirely. `marketValueEur` is required for the same
+ * reason one level down: the row renders a money figure next to the percentage,
+ * and a mover whose money column is blank is a row that raises a question instead
+ * of answering one.
+ *
+ * A consequence worth stating because §3.5 depends on it: in DRIVE mode manual
+ * prices yield a market value but never a previous close, so `dayChangePct` is
+ * null on every holding and this returns empty — the movers section disappears by
+ * itself, with no mode check anywhere. That is the intended mechanism, not a
+ * happy accident, and [HomeLogicTest] pins it.
+ */
+fun homeMovers(
+    holdings: List<HoldingEntity>,
+    limit: Int = HOME_MOVERS_LIMIT,
+): List<HoldingEntity> {
+    if (limit <= 0) return emptyList()
+    return holdings
+        .filter { it.dayChangePct != null && it.marketValueEur != null }
+        // Ties broken by market value: on a day when two positions moved the
+        // same percent, the bigger position moved more money, and the order
+        // must not depend on which row Room happened to return first.
+        .sortedWith(
+            compareByDescending<HoldingEntity> { abs(it.dayChangePct!!) }
+                .thenByDescending { it.marketValueEur ?: 0.0 },
+        )
+        .take(limit)
+}
+
+// ── "Needs you" ─────────────────────────────────────────────────────────────
+
+/**
+ * One row of Home's actionable block.
+ *
+ * Modelled as a closed set rather than a list of generic (icon, text, action)
+ * triples because the ORDER is a product decision — alerts before people before
+ * messages before the inbox, in descending order of "this can cost you money if
+ * you miss it" — and a generic list would let each caller re-decide it.
+ */
+sealed interface HomeActionRow {
+
+    /** Price alerts that fired. The one row that can be about money moving. */
+    data class TriggeredAlerts(val count: Int) : HomeActionRow
+
+    /** Incoming friend requests — a person waiting on an answer. */
+    data class FriendRequests(val count: Int) : HomeActionRow
+
+    /** Unread chat messages. */
+    data class UnreadMessages(val count: Int) : HomeActionRow
+
+    /**
+     * Unread notification-inbox rows, with the newest one's title for a one-line
+     * preview. The preview is what makes this a row worth tapping rather than a
+     * number worth ignoring.
+     */
+    data class UnreadNotifications(val count: Int, val newestTitle: String?) : HomeActionRow
+}
+
+/**
+ * Which actionable rows Home shows, in order.
+ *
+ * Every row is doubly gated: by the storage mode (a Drive-only install has no
+ * alert engine and no friends — those rows cannot exist) and by its own count
+ * (nothing to do ⇒ no row). Both gates return NOTHING rather than a disabled or
+ * empty row, which is the §4.5 "absent, not greyed" rule applied inside a screen:
+ * a front door that says "0 alerts · 0 requests · 0 messages" has spent the
+ * user's whole first screen telling them there is nothing to see.
+ *
+ * The mirrorchain-invites card is deliberately not in this list: it owns its own
+ * ViewModel and self-hides when empty (`MirrorInvitesCard`), so Home places it
+ * inside the block and never has to know whether it will draw anything. Its slot
+ * is after alerts, matching this list's order.
+ */
+fun homeActionRows(
+    mode: StorageMode,
+    triggeredAlerts: Int,
+    friendRequests: Int,
+    unreadMessages: Int,
+    unreadNotifications: Int,
+    newestNotificationTitle: String? = null,
+): List<HomeActionRow> {
+    val social = mode.shows(BtSurface.SOCIAL)
+    val alerts = mode.shows(BtSurface.ALERTS_NOTIFICATIONS)
+    return buildList {
+        if (alerts && triggeredAlerts > 0) add(HomeActionRow.TriggeredAlerts(triggeredAlerts))
+        if (social && friendRequests > 0) add(HomeActionRow.FriendRequests(friendRequests))
+        if (social && unreadMessages > 0) add(HomeActionRow.UnreadMessages(unreadMessages))
+        if (alerts && unreadNotifications > 0) {
+            add(HomeActionRow.UnreadNotifications(unreadNotifications, newestNotificationTitle))
+        }
+    }
+}
+
+// ── The Drive user's actionable item ────────────────────────────────────────
+
+/** How many unpriced holdings Home names before it stops listing and counts. */
+const val HOME_UNPRICED_PREVIEW = 3
+
+/**
+ * Holdings this install could fix the price of, if there are any.
+ *
+ * ## Why this row is Home's most valuable one in DRIVE mode
+ *
+ * Everything else in the actionable block is a server feature a Drive-only
+ * install does not have, so without this row a Drive Home's "Needs you" section
+ * is always empty and the mode's front door is a hero and a list. But a Drive user
+ * *does* have an outstanding task, and it is the one that decides whether their
+ * hero number is right at all: a holding with no price is money missing from the
+ * total. Naming it on Home turns the W6 caveat under the hero ("3 holdings have
+ * no price") from a disclaimer into something with a tap target.
+ *
+ * ## Why it is DRIVE-only, from a shared rule rather than a mode check
+ *
+ * The gate is [manualEntryAvailable], the same predicate the Portfolio overview
+ * and the holding detail already use. In SERVER/BOTH a missing price is a
+ * transient server gap the user cannot fix by typing, so offering them the task
+ * would be a lie about whose problem it is. Reading the shared predicate rather
+ * than `mode.isDriveOnly` means this row can never disagree with the sheet it
+ * sends the user to.
+ *
+ * [preview] is capped so the block stays a summary; [total] is the honest count.
+ */
+data class HomeUnpriced(
+    val total: Int,
+    val preview: List<HoldingEntity>,
+) {
+    /** True when the count exceeds what the preview names. */
+    val hasMore: Boolean get() = total > preview.size
+}
+
+/**
+ * The unpriced-holdings row's state, or null when it must not be shown.
+ *
+ * Sorted by symbol so the same three names appear in the same order every time
+ * the user opens the app — a preview that reshuffles on each Room emission reads
+ * as new work arriving when nothing has changed.
+ */
+fun homeUnpriced(
+    mode: StorageMode,
+    holdings: List<HoldingEntity>,
+    previewLimit: Int = HOME_UNPRICED_PREVIEW,
+): HomeUnpriced? {
+    if (!manualEntryAvailable(mode)) return null
+    val unpriced = holdings.filter { it.marketValueEur == null }
+    if (unpriced.isEmpty()) return null
+    return HomeUnpriced(
+        total = unpriced.size,
+        preview = unpriced.sortedBy { it.assetSymbol }.take(previewLimit.coerceAtLeast(0)),
     )
 }

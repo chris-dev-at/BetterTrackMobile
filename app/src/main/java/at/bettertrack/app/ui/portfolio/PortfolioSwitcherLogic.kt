@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.portfolio
 
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.db.PortfolioEntity
+import at.bettertrack.app.data.repo.PORTFOLIO_TOTALS_PREFETCH_CONCURRENCY
 
 /**
  * Pure, UI-free logic for the portfolio switcher (owner directive 2026-07-10:
@@ -48,8 +49,12 @@ fun switcherPrefetchIds(
  * How many detail fetches the switcher runs at once. Small on purpose: the point
  * is to fill in the visible rows without turning one sheet-open into a burst that
  * competes with whatever the overview is already loading.
+ *
+ * Kept as the switcher's own name for the shared cap (R-arc R1: Home's net-worth
+ * hero fans out over exactly the same holes), so the two surfaces cannot drift to
+ * two different numbers.
  */
-const val SWITCHER_PREFETCH_CONCURRENCY = 4
+const val SWITCHER_PREFETCH_CONCURRENCY = PORTFOLIO_TOTALS_PREFETCH_CONCURRENCY
 
 /** Outcome of a hard-delete, mapped from the API result for the confirm dialog. */
 sealed interface PortfolioDeleteResult {
