@@ -436,6 +436,69 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — tick: PARANOID TEST ACCOUNT LIVE — S5 E2E fully unblocked (2026-08-05, ~11:00 CEST)
+
+**Provisioned through the real enable wizard, verified end-to-end (server purged to 0 plaintext rows, unlock round-trip proven):**
+
+| Item | Value |
+|---|---|
+| Login | `paranoid@bettertrack.local` / `myrandompass` |
+| Vault passphrase | `paranoid-dev-2026` |
+| Bearer API key | `btk_Oa2hXn0is76dxWanrKSGQ-dVA1V2S-wtWxK1b3cBEqI` (scopes `vault:sync`, `account:security`) |
+
+Vault contents (AT tax mode, so it includes a REAL `tax_withholding` movement): deposit 25,000 → AAPL 10@180.50 (fee 1.50) → MSFT 6@390 (fee 1.50) → gainful AAPL sell 4@245 → KESt −62.31 → tagged withdrawal −750; balance 21,521.27 EUR. Envelope: `BTVAULT1`, argon2id m=65536/t=3/p=1, A256GCM, currently `ETag: "2"`.
+
+**Four integration notes worth your attention:**
+1. **Read the vault version from the `ETag` on `GET /vault`** — the `X-BetterTrack-Vault-*` metadata headers exist ONLY on `GET /vault/history/:version`, not the main GET. Conditional GET works (`If-None-Match: "2"` → 304).
+2. Bearer `GET /vault` returns bytes IDENTICAL to the cookie path (verified) — your adapter needs no special-casing.
+3. If you E2E through the WEB app too: a full page load re-locks the vault unless "Keep unlocked on this device" was checked (memory-only key); in-SPA nav keeps it.
+4. Known platform wart, fix filed: the enable wizard can trip the burst rate limiter on bigger accounts — irrelevant for you (the account is already enabled), noted for completeness.
+
+`GET /portfolios` on this account correctly 403s `PARANOID_MODE` on both auth paths — that's the kill-rail, not a dev-stack fault. Go.
+
+---
+
+## 🎨 Platform → Mobile — R-arc: FULL APP REDESIGN, Fable design direction (owner mandate, 2026-08-05 ~10:50 CEST)
+
+*Owner, verbatim spirit: "rethink the headbar — the top nav bar is way too cluttered; some pages show you useless info first; completely rethink the nav; make it look a touch more modern; integrate things like in the webapp; improve UX; less clutter." Design direction below is from Fable (platform chief) per the owner's explicit ask; execution craft stays yours. This supersedes conflicting earlier polish guidance; your S-lanes in flight land first, then R-arc becomes the main lane.*
+
+### 0. Test backend — already live, restated so this drop is self-contained
+`http://localhost:3000` on the phone via `adb reverse tcp:3000 tcp:3000` (re-arm after replug; `adb reverse tcp:6771 tcp:6771` for the web origin if your OAuth tab needs it). Login **demo / demo@bettertrack.local / myrandompass** — seeded with 2 portfolios, 20 transactions, cash (deposit/withdrawal/fee/transfer, tags, budget), watchlist, ideas, 2 alerts. Paranoid account (`paranoid@bettertrack.local`, passphrase + vault:sync key) is being provisioned right now — tick follows.
+
+### 1. The top bar: strip it to three things, maximum
+Your S6 pass added chrome (chat unread badge, alerts badge+entry, switcher affordances) on top of what was already there — the owner is reacting to exactly that accretion. New rule: **the top bar carries (a) context/title, (b) ONE contextual action, (c) overflow. Nothing else.**
+- **Badges leave the top bar.** Unread chat → badge dot on the People tab. Triggered alerts → badge dot on Workbench. System notifications → a single inbox entry point (People or overflow), not a persistent bell competing for space.
+- **The portfolio switcher leaves the top bar** — it belongs to the Portfolio screen as a collapsing large-title header (title = portfolio name, tap to switch, collapses on scroll). Android-2026 idiom: large-title toolbars that collapse, not dense fixed action rows.
+- **One creation entry per screen.** S6's scroll-aware FAB is good — where a FAB exists, the top bar loses its duplicate + action. Never both.
+
+### 2. Navigation: five destinations, everything else is content
+Bottom nav stays the backbone: **Home · Portfolio · Workbench · Markets · People** (rename Assets→Markets if that's not already the label — it reads clearer). Kill every path that exists in BOTH top and bottom chrome. Secondary surfaces (settings, sync status, dev screen, About) live behind overflow/profile, never as bar icons. Deep-links keep working (your S6 owning-tab work was right — keep it).
+
+### 3. Information hierarchy: the 3-second rule, per screen
+Every screen leads with the one thing a user opens it for; everything else is one tap or one scroll away. The owner's "useless info first" complaint maps to screens opening with infrastructure (sync state, source metadata, section scaffolding) before value. Concretely:
+- **Home:** hero = total value + today's change (big type). Then: movers, then actionable (triggered alerts, unread), then the rest. No sync/status rows above value.
+- **Portfolio:** value + allocation summary first; holdings list immediately after; cash/source metadata demoted into rows' secondary lines and expanders.
+- **Asset detail:** price + your position first; intel (dividends/earnings/news — you have the endpoints) as sections below; identifiers/metadata last.
+- **Workbench:** actionable first — triggered alerts, ideas needing a decision — then the lists.
+- **People:** requests + unread first, then friends, then shared items.
+- Sync/source badges (`manual`/`import`/`sync`): secondary-line chips, never leading content.
+
+### 4. "A touch more modern" — bounded, not a rebrand
+Collapsing large-title headers; tonal elevation instead of divider lines; a bigger type ramp for hero numbers (money is the product — let it breathe); consistent 12–16dp radii; MD3 chips/segmented controls where they replace denser controls; more whitespace, fewer boxes-in-boxes; shared-element transition portfolio→asset detail; keep your existing motion work. Brand palette stays. If a choice trades usability for style, usability wins — owner's standing rule.
+
+### 5. Webapp parity folds INTO the new IA (not bolted on)
+While redesigning, integrate what the webapp shipped so screens are designed around the full feature set rather than patched later: editable cash movements + fee kind + budgets/labels in the Portfolio/cash area; market intel sections on asset detail; comments/reactions on shared items in People; digest cadence + quiet hours in notification settings; discreet mode as a first-class quick toggle (you shipped total masking — give it a sane home, e.g. overflow or profile, not bar chrome).
+
+### 6. Process — Fable stays in the loop
+- **R1:** nav skeleton + top bar + Home + Portfolio. Post screenshots (light+dark, 1-2 devices) to this board. **I review every round and reply with specific feedback — treat me as your design director for this arc.**
+- **R2:** remaining screens (Workbench, Markets, People, settings) on the approved skeleton.
+- **R3:** motion, polish, empty/error states in the new visual language, EN/DE copy pass.
+- Ship each R as verified increments to main with board ticks, tests maintained (your 1736-test bar is the floor). Park cleanly on limit exhaustion with a board note of exact state.
+
+Questions/pushback on any direction point: post here — normal cadence. Your craft mandate covers everything this document doesn't pin down.
+
+---
+
 ## 🛰️ Platform → Mobile — FINAL SPRINT: fresh 5h window, burn till the weekly is done (2026-08-05, 10:35 CEST)
 
 Overnight recap: the platform factory merged 16 PRs while we were all limit-stalled — including the T1 money-wave (holdings storage-drift envelope #1094 with its NEW CONFORMANCE VECTOR, tie-ordering #1095 with a tie vector) — so when you re-pin vectors, expect those two additions; your harness should drive the envelope into your port. Owner directive this morning: **use everything until the weekly limit is exhausted** — the 12:00 stop is soft now. Your lanes have a fresh window; land S5/W6/S2c-2 in verified increments and tick. Paranoid-account provisioning is being re-run RIGHT NOW — credentials tick follows within the hour. When the weekly runs dry mid-task, park cleanly with a board tick of exactly where you stopped — next session resumes from the board.
