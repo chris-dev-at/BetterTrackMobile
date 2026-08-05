@@ -193,6 +193,28 @@ const val HOME_MOVERS_LIMIT = 5
  * null on every holding and this returns empty — the movers section disappears by
  * itself, with no mode check anywhere. That is the intended mechanism, not a
  * happy accident, and [HomeLogicTest] pins it.
+ *
+ * ## One row per ASSET, not per portfolio (crash fix, 2026-08-05)
+ *
+ * The input is the cross-portfolio union (`HomeViewModel.holdings` flattens the
+ * per-portfolio lists), and `HoldingEntity`'s primary key is
+ * `(portfolioId, assetId)` — so the same asset held in two portfolios arrives
+ * as two rows with the SAME `assetId`. That broke two things at once on the
+ * device: the movers strip is a `LazyRow` keyed by `assetId`, which threw
+ * `IllegalArgumentException: Key "…" was already used` and killed the app on the
+ * first frame of the logged-in Overview; and even without the crash, two cards
+ * for one asset would show the same symbol and the same percentage twice and
+ * deep-link to the same holding.
+ *
+ * Both are the same mistake — a strip that is about assets was being fed rows
+ * that are about positions — so the rows are merged per `assetId` BEFORE the
+ * ranking, and the limit therefore counts distinct assets. The merged row is a
+ * DISPLAY AGGREGATE for this strip: the additive money is summed so the card
+ * shows what the user actually holds in that asset, and every field that only
+ * makes sense per position (`portfolioId`, `avgCost`, `costBasisEur`, the
+ * unrealized/realized figures) is left as the largest slice's and must not be
+ * rendered as a cross-portfolio truth. `dayChangePct` needs no merging: it is a
+ * property of the asset's price move, identical on every row for that asset.
  */
 fun homeMovers(
     holdings: List<HoldingEntity>,
@@ -201,6 +223,8 @@ fun homeMovers(
     if (limit <= 0) return emptyList()
     return holdings
         .filter { it.dayChangePct != null && it.marketValueEur != null }
+        .groupBy { it.assetId }
+        .map { (_, rowsForAsset) -> rowsForAsset.mergeAcrossPortfolios() }
         // Ties broken by market value: on a day when two positions moved the
         // same percent, the bigger position moved more money, and the order
         // must not depend on which row Room happened to return first.
@@ -209,6 +233,28 @@ fun homeMovers(
                 .thenByDescending { it.marketValueEur ?: 0.0 },
         )
         .take(limit)
+}
+
+/**
+ * Collapses every row for ONE asset into a single display row for the movers
+ * strip. See [homeMovers] for why this exists and what the result may be used
+ * for.
+ *
+ * The largest slice is the base so the untouched per-position fields describe
+ * the holding that dominates the number shown, and only the genuinely additive
+ * quantities are summed — no percentage is ever recomputed here, because the
+ * server owns those.
+ */
+private fun List<HoldingEntity>.mergeAcrossPortfolios(): HoldingEntity {
+    val largest = maxBy { it.marketValueEur ?: 0.0 }
+    if (size == 1) return largest
+    return largest.copy(
+        quantity = sumOf { it.quantity },
+        marketValueEur = sumOf { it.marketValueEur ?: 0.0 },
+        // Null only when NO slice reported one: summing over all-null would
+        // turn "unknown" into a confident 0.
+        dayChangeEur = if (all { it.dayChangeEur == null }) null else sumOf { it.dayChangeEur ?: 0.0 },
+    )
 }
 
 // ── "Needs you" ─────────────────────────────────────────────────────────────

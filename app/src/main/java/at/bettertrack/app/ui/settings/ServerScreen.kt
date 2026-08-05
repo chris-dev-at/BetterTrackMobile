@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.settings
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
@@ -43,10 +44,11 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.OAuthConfig
 import at.bettertrack.app.data.auth.v5ScopesAllowedFor
 import at.bettertrack.app.data.prefs.OriginError
-import at.bettertrack.app.data.prefs.OriginFormatException
+import at.bettertrack.app.data.prefs.OriginValidation
 import at.bettertrack.app.data.prefs.OriginWarning
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originWarning
+import at.bettertrack.app.data.prefs.validateOrigins
 import at.bettertrack.app.data.storage.effective
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
@@ -239,20 +241,46 @@ fun ServerScreen(onBack: () -> Unit) {
             BtPrimaryButton(
                 text = stringResource(R.string.bt_server_save_restart),
                 onClick = {
-                    var ok = true
-                    try {
-                        ServerOrigins.setApiOrigin(apiField)
-                    } catch (e: OriginFormatException) {
-                        apiError = e.reason; ok = false
-                    }
-                    try {
-                        ServerOrigins.setWebOrigin(webField)
-                    } catch (e: OriginFormatException) {
-                        webError = e.reason; ok = false
-                    }
-                    if (ok) {
-                        revision++
-                        restartApp(context)
+                    // Validate both fields together, then write both or neither,
+                    // then — and only then — end the process. Every step reports
+                    // its own failure: the one thing this button must never do is
+                    // look like it worked while changing nothing, which is the
+                    // bug the owner hit on 2026-08-05.
+                    when (
+                        val verdict = validateOrigins(
+                            apiRaw = apiField,
+                            webRaw = webField,
+                            defaultApi = ServerOrigins.defaultApiOrigin,
+                            defaultWeb = ServerOrigins.defaultWebOrigin,
+                        )
+                    ) {
+                        is OriginValidation.Invalid -> {
+                            apiError = verdict.apiError
+                            webError = verdict.webError
+                            status = null
+                        }
+
+                        is OriginValidation.Valid -> {
+                            apiError = null
+                            webError = null
+                            revision++
+                            if (!ServerOrigins.persist(verdict.api, verdict.web)) {
+                                // The bytes are not on disk, so a restart would
+                                // come back on the OLD server. Say so; change
+                                // nothing else.
+                                status = R.string.bt_server_save_failed
+                            } else if (restartApp(context)) {
+                                // The relaunch is queued with the system and the
+                                // origins are already committed, so ending the
+                                // process here cannot lose them.
+                                Runtime.getRuntime().exit(0)
+                            } else {
+                                // Saved, but this device would not take the
+                                // relaunch. Never leave a dead button: tell the
+                                // user the one thing left to do.
+                                status = R.string.bt_server_saved_restart_manually
+                            }
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -261,12 +289,12 @@ fun ServerScreen(onBack: () -> Unit) {
             BtSecondaryButton(
                 text = stringResource(R.string.bt_server_reset),
                 onClick = {
-                    ServerOrigins.reset()
+                    val cleared = ServerOrigins.reset()
                     revision++
                     applyPreset(
                         ServerOrigins.defaultApiOrigin,
                         ServerOrigins.defaultWebOrigin,
-                        R.string.bt_server_reset_done,
+                        if (cleared) R.string.bt_server_reset_done else R.string.bt_server_save_failed,
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -403,19 +431,34 @@ private fun MonoRow(label: String, value: String) {
 }
 
 /**
- * Relaunch the app so the new origin is actually in force.
+ * Hands the system a fresh launch of this app on a cleared task, so the new
+ * origin is actually in force.
  *
  * The alternative — "force-stop the app yourself, then reopen it" — is what the
  * hidden dev screen used to say, and it is a bad instruction to give a user who
  * just wants to point their app at another server. Starting the launch intent on
  * a cleared task and then ending the process gives the same clean cold start
  * that a force-stop would, without asking anyone to visit system settings.
+ *
+ * **This function no longer ends the process itself.** Killing the process is
+ * the caller's decision and must happen only after the origins are committed to
+ * disk — the two used to be welded together, and that is precisely how the save
+ * came to be lost (see `ServerOrigins.persist`). Verified on R5CN80ABXBK /
+ * Android 13: `startActivity` + `Runtime.exit(0)` does relaunch reliably from
+ * the foreground, so the mechanism is kept; only its ordering changed.
+ *
+ * @return true when the relaunch was accepted and the caller may end the
+ *   process; false when this device refused it, in which case the caller must
+ *   keep the app alive and say what is left to do.
  */
-private fun restartApp(context: Context) {
+private fun restartApp(context: Context): Boolean {
     val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-    if (launch != null) {
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        ?: return false
+    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    return try {
         context.startActivity(launch)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
     }
-    Runtime.getRuntime().exit(0)
 }

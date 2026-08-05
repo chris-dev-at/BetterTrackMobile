@@ -306,6 +306,70 @@ class HomeLogicTest {
         assertEquals(listOf("BIG", "SMALL"), movers.map { it.assetSymbol })
     }
 
+    /**
+     * The device crash of 2026-08-05: Home is fed the CROSS-PORTFOLIO union, and
+     * `HoldingEntity`'s key is `(portfolioId, assetId)`, so the same asset in two
+     * portfolios arrived as two rows sharing one `assetId`. The movers strip is a
+     * `LazyRow` keyed by `assetId`, so Compose threw
+     * `IllegalArgumentException: Key "…" was already used` and killed the app on
+     * the first frame after login. One row per asset is the fix and the contract.
+     */
+    @Test
+    fun `the same asset in two portfolios yields ONE mover, not a duplicate key`() {
+        val movers = homeMovers(
+            listOf(
+                holding("AAPL", pct = 4.0, marketValue = 1_000.0, portfolioId = "p1"),
+                holding("AAPL", pct = 4.0, marketValue = 3_000.0, portfolioId = "p2"),
+            ),
+        )
+        assertEquals(1, movers.size)
+        // The key Compose actually uses must be unique across the whole strip.
+        assertEquals(movers.map { it.assetId }.distinct().size, movers.size)
+    }
+
+    @Test
+    fun `a merged mover shows the whole position, not one portfolio's slice`() {
+        // The card renders a money figure under the percentage. Showing only the
+        // larger slice would understate what the user holds in that asset.
+        val movers = homeMovers(
+            listOf(
+                holding("AAPL", pct = 4.0, marketValue = 1_000.0, portfolioId = "p1", quantity = 2.0, dayChangeEur = 40.0),
+                holding("AAPL", pct = 4.0, marketValue = 3_000.0, portfolioId = "p2", quantity = 6.0, dayChangeEur = 120.0),
+            ),
+        )
+        val merged = movers.single()
+        assertEquals(4_000.0, merged.marketValueEur!!, 1e-9)
+        assertEquals(8.0, merged.quantity, 1e-9)
+        assertEquals(160.0, merged.dayChangeEur!!, 1e-9)
+        // A property of the asset's price move — never recomputed here.
+        assertEquals(4.0, merged.dayChangePct!!, 1e-9)
+    }
+
+    @Test
+    fun `merging never invents a day-change figure none of the slices had`() {
+        val merged = homeMovers(
+            listOf(
+                holding("AAPL", pct = 4.0, marketValue = 1_000.0, portfolioId = "p1", dayChangeEur = null),
+                holding("AAPL", pct = 4.0, marketValue = 3_000.0, portfolioId = "p2", dayChangeEur = null),
+            ),
+        ).single()
+        assertNull(merged.dayChangeEur)
+    }
+
+    /** The cap counts distinct ASSETS, so duplicates cannot crowd out real movers. */
+    @Test
+    fun `the limit counts assets, not portfolio rows`() {
+        val doubledUp = (1..12).flatMap {
+            listOf(
+                holding("S$it", pct = it.toDouble(), portfolioId = "p1"),
+                holding("S$it", pct = it.toDouble(), portfolioId = "p2"),
+            )
+        }
+        val movers = homeMovers(doubledUp)
+        assertEquals(5, movers.size)
+        assertEquals(5, movers.map { it.assetId }.distinct().size)
+    }
+
     // ── "Needs you" ─────────────────────────────────────────────────────────
 
     @Test
@@ -365,8 +429,14 @@ class HomeLogicTest {
         symbol: String,
         pct: Double?,
         marketValue: Double? = 1_000.0,
+        // Defaulted so every existing case stays a single-portfolio holding; the
+        // cross-portfolio movers tests vary these two to build the real shape —
+        // one asset, two portfolios, one shared assetId.
+        portfolioId: String = "p",
+        quantity: Double = 1.0,
+        dayChangeEur: Double? = pct?.let { 1.0 },
     ) = HoldingEntity(
-        portfolioId = "p",
+        portfolioId = portfolioId,
         assetId = "asset-$symbol",
         assetSymbol = symbol,
         assetName = "$symbol Inc.",
@@ -374,7 +444,7 @@ class HomeLogicTest {
         assetCurrency = "EUR",
         assetType = "stock",
         assetIsCustom = false,
-        quantity = 1.0,
+        quantity = quantity,
         avgCost = 1.0,
         realizedPnl = 0.0,
         price = marketValue,
@@ -382,7 +452,7 @@ class HomeLogicTest {
         costBasisEur = null,
         unrealizedPnlEur = null,
         unrealizedPnlPct = null,
-        dayChangeEur = pct?.let { 1.0 },
+        dayChangeEur = dayChangeEur,
         dayChangePct = pct,
     )
 }

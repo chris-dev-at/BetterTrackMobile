@@ -173,6 +173,71 @@ class ServerOriginsTest {
         assertEquals(OriginWarning.NONE, originWarning("", cleartextPermitted = false))
     }
 
+    // ── validateOrigins: a save is all-or-nothing ───────────────────────────
+
+    private val defApi = "https://api.bettertrack.at"
+    private val defWeb = "https://web.bettertrack.at"
+
+    private fun validate(api: String?, web: String?) =
+        validateOrigins(api, web, defaultApi = defApi, defaultWeb = defWeb)
+
+    @Test
+    fun `a valid pair normalizes both halves`() {
+        assertEquals(
+            OriginValidation.Valid("http://192.168.0.114:3000", "http://192.168.0.114:6771"),
+            validate("192.168.0.114:3000", "  http://192.168.0.114:6771/  "),
+        )
+    }
+
+    /**
+     * The rule the Server screen leans on: typing (or preset-filling) the
+     * official address is a RESET, not an override — otherwise the app would
+     * report "custom server" forever while behaving like a stock install.
+     */
+    @Test
+    fun `the official addresses validate to no override at all`() {
+        assertEquals(OriginValidation.Valid(null, null), validate(defApi, defWeb))
+    }
+
+    @Test
+    fun `blank fields clear the override`() {
+        assertEquals(OriginValidation.Valid(null, null), validate("", "   "))
+    }
+
+    /**
+     * The reason both fields are validated in ONE call: a typo in the web field
+     * must not let the API field through on its own, which would strand the app
+     * on a mismatched pair of backends.
+     */
+    @Test
+    fun `one bad field fails the whole save and names only that field`() {
+        assertEquals(
+            OriginValidation.Invalid(apiError = null, webError = OriginError.SCHEME),
+            validate("192.168.0.114:3000", "ws://192.168.0.114:6771"),
+        )
+        assertEquals(
+            OriginValidation.Invalid(apiError = OriginError.PORT, webError = null),
+            validate("http://192.168.0.114:99999", "192.168.0.114:6771"),
+        )
+    }
+
+    @Test
+    fun `two bad fields report both reasons`() {
+        assertEquals(
+            OriginValidation.Invalid(apiError = OriginError.HOST, webError = OriginError.SPACE),
+            validate("http://", "http://local host:6771"),
+        )
+    }
+
+    /** A half-official pair is legal: only the custom half becomes an override. */
+    @Test
+    fun `mixing an official half with a custom half overrides only the custom one`() {
+        assertEquals(
+            OriginValidation.Valid(null, "http://192.168.0.114:6771"),
+            validate(defApi, "192.168.0.114:6771"),
+        )
+    }
+
     // ── labels ──────────────────────────────────────────────────────────────
 
     @Test

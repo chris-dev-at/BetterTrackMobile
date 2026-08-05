@@ -1,5 +1,6 @@
 package at.bettertrack.app.data.prefs
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import at.bettertrack.app.BuildConfig
@@ -40,6 +41,10 @@ import at.bettertrack.app.BuildConfig
  *    origin at construction, so a change takes effect on the next app start.
  *    The Server screen says so and offers to restart rather than pretending the
  *    switch is live.
+ *  - **Written with [SharedPreferences.Editor.commit], never `apply()`** — see
+ *    [persist]. This is the one place in the app where the asynchronous write is
+ *    a correctness bug rather than a performance win, because the caller kills
+ *    the process microseconds later.
  *  - The gradle-property fallback (`-PbtApiOrigin` / `-PbtWebOrigin`) is
  *    untouched and remains the DEFAULT this override sits on top of.
  */
@@ -103,38 +108,62 @@ object ServerOrigins {
     val isOverridden: Boolean get() = apiOverride != null || webOverride != null
 
     /**
-     * Stores (or clears, on a blank/null input) the API-origin override.
-     * @return the normalized value stored, or null if the override was cleared.
-     * @throws IllegalArgumentException when the input is not a usable origin.
+     * Writes an already-validated origin pair — the output of [validateOrigins]
+     * — and reports whether it actually reached the disk.
+     *
+     * ## Why this is one call, and why it is [SharedPreferences.Editor.commit]
+     *
+     * Both properties were bought with a device bug (owner report 2026-08-05,
+     * "the save doesn't work"; reproduced on R5CN80ABXBK/Android 13):
+     *
+     *  1. **Synchronous.** The Server screen ends the process immediately after
+     *     a successful save, so the new origin is in force on the next start.
+     *     `apply()` only queues the disk write onto `QueuedWork`'s writer
+     *     thread, and that thread does not survive `Runtime.exit()` — the write
+     *     was silently dropped, the app restarted, re-read the OLD file, and
+     *     came back on the previous server. The button looked alive (the app
+     *     really did restart) while changing nothing, which is exactly what
+     *     "doesn't work" described. `commit()` returns only once the bytes are
+     *     down, so the kill can no longer race it.
+     *  2. **Atomic.** Two independent edits meant a save could half-apply — API
+     *     stored, web rejected — leaving the app pointed at a mismatched pair of
+     *     backends. One editor, one commit, both keys or neither.
+     *
+     * The in-memory values are updated ONLY on a successful commit: a screen
+     * that reported "in use" for an origin that never reached the disk would be
+     * lying to the next cold start.
+     *
+     * @return true when both keys are persisted; false when the flavor has the
+     *   setting off, the prefs were never opened, or the commit failed.
      */
-    fun setApiOrigin(raw: String?): String? = store(KEY_API, raw) { apiOverrideValue = it }
-
-    /** As [setApiOrigin], for the web/consent origin. */
-    fun setWebOrigin(raw: String?): String? = store(KEY_WEB, raw) { webOverrideValue = it }
-
-    /** Drops both overrides — the app falls back to its BuildConfig origins. */
-    fun reset() {
-        if (!settingEnabled) return
-        prefs?.edit()?.remove(KEY_API)?.remove(KEY_WEB)?.apply()
-        apiOverrideValue = null
-        webOverrideValue = null
+    @SuppressLint("ApplySharedPref") // Deliberate: see above — apply() loses this write.
+    fun persist(api: String?, web: String?): Boolean {
+        if (!settingEnabled) return false
+        val p = prefs ?: return false
+        val editor = p.edit()
+        if (api == null) editor.remove(KEY_API) else editor.putString(KEY_API, api)
+        if (web == null) editor.remove(KEY_WEB) else editor.putString(KEY_WEB, web)
+        if (!editor.commit()) return false
+        apiOverrideValue = api
+        webOverrideValue = web
+        return true
     }
 
-    private inline fun store(key: String, raw: String?, assign: (String?) -> Unit): String? {
-        if (!settingEnabled) return null
-        // Typing the official origin by hand is not an override, it is a reset:
-        // storing it would leave the app reporting "custom" forever while
-        // behaving exactly like a stock install.
-        val default = if (key == KEY_API) defaultApiOrigin else defaultWebOrigin
-        val normalized = normalizeOrigin(raw)?.takeIf { it != default }
-        val p = prefs
-        if (normalized == null) {
-            p?.edit()?.remove(key)?.apply()
-        } else {
-            p?.edit()?.putString(key, normalized)?.apply()
-        }
-        assign(normalized)
-        return normalized
+    /**
+     * Drops both overrides — the app falls back to its BuildConfig origins.
+     * Synchronous for the same reason as [persist]: the user's very next tap is
+     * usually "Save and restart", and a queued write would not survive it.
+     *
+     * @return true when the cleared state is on disk.
+     */
+    @SuppressLint("ApplySharedPref") // Deliberate: see [persist].
+    fun reset(): Boolean {
+        if (!settingEnabled) return false
+        val p = prefs ?: return false
+        if (!p.edit().remove(KEY_API).remove(KEY_WEB).commit()) return false
+        apiOverrideValue = null
+        webOverrideValue = null
+        return true
     }
 
     private fun effectiveOrigin(override: String?, default: String): String =
@@ -149,6 +178,57 @@ object ServerOrigins {
  */
 internal fun effectiveOrigin(override: String?, default: String, enabled: Boolean): String =
     if (enabled && !override.isNullOrBlank()) override else default
+
+/**
+ * The verdict on a Server-screen save, decided BEFORE anything is written so a
+ * save is all-or-nothing: a typo in the web field must never leave the API
+ * field applied on its own, pointing the app at a mismatched pair of backends.
+ */
+internal sealed interface OriginValidation {
+    /** Both fields are usable. A null half means "no override" for that origin. */
+    data class Valid(val api: String?, val web: String?) : OriginValidation
+
+    /** At least one field was refused; the non-null reasons are what to show. */
+    data class Invalid(val apiError: OriginError?, val webError: OriginError?) : OriginValidation
+}
+
+/**
+ * Validates BOTH typed origins together and normalizes them for storage.
+ *
+ * Kept pure (defaults passed in rather than read off `BuildConfig`) so the
+ * all-or-nothing rule and the "official address means no override" rule are
+ * unit-testable without Android — the same split the rest of this file uses.
+ *
+ * Typing the official origin by hand is a reset, not an override: storing it
+ * would leave the app reporting "custom server" forever while behaving exactly
+ * like a stock install.
+ */
+internal fun validateOrigins(
+    apiRaw: String?,
+    webRaw: String?,
+    defaultApi: String,
+    defaultWeb: String,
+): OriginValidation {
+    var apiError: OriginError? = null
+    var webError: OriginError? = null
+    var api: String? = null
+    var web: String? = null
+    try {
+        api = normalizeOrigin(apiRaw)?.takeIf { it != defaultApi }
+    } catch (e: OriginFormatException) {
+        apiError = e.reason
+    }
+    try {
+        web = normalizeOrigin(webRaw)?.takeIf { it != defaultWeb }
+    } catch (e: OriginFormatException) {
+        webError = e.reason
+    }
+    return if (apiError != null || webError != null) {
+        OriginValidation.Invalid(apiError, webError)
+    } else {
+        OriginValidation.Valid(api, web)
+    }
+}
 
 /**
  * Why a typed origin was refused. The Server screen is a user-facing surface in

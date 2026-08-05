@@ -768,6 +768,8 @@
     <string name="bt_server_restart_note">A new server takes effect when the app restarts — “Save and restart” does that for you.</string>
     <string name="bt_server_logout_note">Log out before you switch. Sign-in tokens are issued per server, so a token from another one is refused.</string>
     <string name="bt_server_reset_done">Back to the official endpoints. Save to apply.</string>
+    <string name="bt_server_save_failed">The server could not be saved on this device, so nothing was changed. Try again.</string>
+    <string name="bt_server_saved_restart_manually">Saved. This device would not restart the app itself — close BetterTrack and open it again to use the new server.</string>
     <string name="bt_server_preset_applied">Filled in. Save to apply.</string>
     <string name="bt_server_warn_insecure">Insecure connection: http traffic is not encrypted. Use https unless this is a local dev stack.</string>
     <string name="bt_server_warn_insecure_blocked">http does not work in this build: Android refuses unencrypted connections outside debug builds. Use an https address.</string>

@@ -726,6 +726,8 @@
     <string name="bt_server_restart_note">Ein neuer Server gilt ab dem nächsten App-Start — „Speichern und neu starten“ erledigt das für dich.</string>
     <string name="bt_server_logout_note">Melde dich vor dem Wechsel ab. Anmelde-Tokens gelten pro Server; ein Token von einem anderen wird abgelehnt.</string>
     <string name="bt_server_reset_done">Zurück auf die offiziellen Adressen. Zum Übernehmen speichern.</string>
+    <string name="bt_server_save_failed">Der Server konnte auf diesem Gerät nicht gespeichert werden, es wurde nichts geändert. Versuch es noch einmal.</string>
+    <string name="bt_server_saved_restart_manually">Gespeichert. Dieses Gerät wollte die App nicht selbst neu starten — schließe BetterTrack und öffne es erneut, um den neuen Server zu nutzen.</string>
     <string name="bt_server_preset_applied">Eingetragen. Zum Übernehmen speichern.</string>
     <string name="bt_server_warn_insecure">Unsichere Verbindung: http-Datenverkehr ist unverschlüsselt. Nutze https, außer das ist ein lokaler Dev-Server.</string>
     <string name="bt_server_warn_insecure_blocked">http funktioniert in diesem Build nicht: Android verweigert unverschlüsselte Verbindungen außerhalb von Debug-Builds. Nutze eine https-Adresse.</string>
