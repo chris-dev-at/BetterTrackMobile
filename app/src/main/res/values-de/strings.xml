@@ -1738,7 +1738,8 @@
     <!-- ══ R-arc R1 ══ APPEND-ONLY BLOCK — see the EN file for the rule. -->
 
     <!-- Bottom navigation. Labels per coordinator decision O-11. -->
-    <string name="bt_tab_home">Start</string>
+    <!-- bt_tab_home mit dem Home-Tab zurückgezogen (Owner-IA-Änderung
+         2026-08-05) — siehe die EN-Datei. -->
     <string name="bt_tab_workbench">Werkbank</string>
     <string name="bt_tab_markets">Märkte</string>
     <string name="bt_tab_people">Leute</string>
@@ -2067,4 +2068,9 @@
         <item quantity="one">%1$d ungelesene Nachricht</item>
         <item quantity="other">%1$d ungelesene Nachrichten</item>
     </plurals>
+
+    <!-- == Owner-IA-Anderung 2026-08-05 == APPEND-ONLY BLOCK - siehe EN-Datei. -->
+    <string name="bt_overview_title">Übersicht</string>
+    <string name="bt_overview_switcher_sub">Alles, über alle Portfolios hinweg</string>
+    <string name="bt_overview_selected_cd">Übersicht ausgewählt</string>
 </resources>

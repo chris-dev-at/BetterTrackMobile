@@ -1,6 +1,7 @@
 package at.bettertrack.app.data.api
 
 import at.bettertrack.app.data.api.dto.ApiErrorEnvelope
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.ResponseBody
@@ -169,6 +170,43 @@ fun parseApiError(json: Json, httpStatus: Int, errorBody: ResponseBody?): BtApiE
 }
 
 /**
+ * The single rule for "a call threw — what kind of failure is that?".
+ *
+ * Everything reachable from OkHttp/Retrofit lands in one of two buckets:
+ *  - [IOException] (which is `UnknownHostException`, `ConnectException`,
+ *    `SocketTimeoutException` and `SSLException` — i.e. *every* shape of "the
+ *    server is not there") ⇒ a NETWORK error the whole app already renders;
+ *  - anything else (a `SerializationException` because a maintenance proxy
+ *    answered HTML, an `IllegalStateException` out of an interceptor) ⇒
+ *    UNEXPECTED, carrying the JVM's words as a dim diagnostic.
+ *
+ * The second bucket is the one that used to escape: several call sites caught
+ * only [IOException], so a non-JSON body from a dead origin propagated out of
+ * the data layer and into whatever coroutine had called it.
+ */
+fun asBtApiError(e: Throwable): BtApiError = when (e) {
+    // No diagnostic for NETWORK: the code is catalogued, so the app already owns
+    // the sentence — the JVM's English one would only be dead weight.
+    is IOException -> BtApiError(0, BtApiError.Codes.NETWORK)
+    else -> BtApiError(-1, BtErrorCopy.AppCodes.UNEXPECTED, e.message)
+}
+
+/**
+ * The catch-block form of [asBtApiError], for the call sites that need the raw
+ * [Response] on success (they cache a body, delete a Room row) and so cannot go
+ * through [apiCall] / [unitApiCall].
+ *
+ * **Re-throws [CancellationException]** — a cancelled call has no error to
+ * report, and reporting one would leave the caller running inside a coroutine
+ * that is already dead. Use it as the single `catch (e: Exception)` arm:
+ * `} catch (e: Exception) { return transportErr(e) }`.
+ */
+fun transportErr(e: Exception): BtResult.Err {
+    if (e is CancellationException) throw e
+    return BtResult.Err(asBtApiError(e))
+}
+
+/**
  * Runs a suspend Retrofit call and maps it into a [BtResult], translating
  * transport failures and error envelopes into a [BtApiError]. Used for every
  * body-returning endpoint.
@@ -188,10 +226,31 @@ suspend fun <T : Any> apiCall(json: Json, call: suspend () -> Response<T>): BtRe
         } else {
             BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
         }
-    } catch (_: IOException) {
-        BtResult.Err(
-            BtApiError(0, BtApiError.Codes.NETWORK),
-        )
+    } catch (e: CancellationException) {
+        // A cancelled call is not a failed one. Swallowing it would leave the
+        // caller running inside an already-cancelled coroutine.
+        throw e
     } catch (e: Exception) {
-        BtResult.Err(BtApiError(-1, BtErrorCopy.AppCodes.UNEXPECTED, e.message))
+        BtResult.Err(asBtApiError(e))
+    }
+
+/**
+ * The [apiCall] of endpoints whose BODY IS IRRELEVANT — 204s and the
+ * 200-with-empty-body writes. [apiCall] insists on a non-null body, so a dozen
+ * call sites had each hand-rolled this shape; they now share one, which is what
+ * makes "a transport failure is a `BtResult.Err`, never a throw" a property of
+ * the boundary rather than of whoever wrote the call site.
+ */
+suspend fun unitApiCall(json: Json, call: suspend () -> Response<*>): BtResult<Unit> =
+    try {
+        val resp = call()
+        if (resp.isSuccessful) {
+            BtResult.Ok(Unit)
+        } else {
+            BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        BtResult.Err(asBtApiError(e))
     }

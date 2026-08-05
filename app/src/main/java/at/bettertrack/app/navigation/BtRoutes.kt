@@ -18,19 +18,26 @@ import kotlinx.serialization.Serializable
 
 // ── Tabs (top-level) ───────────────────────────────────────────────────────
 //
-// R-arc R1 (mandate §2): five destinations, in bar order —
+// R-arc R1 (mandate §2) declared FIVE destinations, in bar order —
 // Home · Portfolio · Workbench · Markets · People. Three of them were renamed
 // rather than replaced: the *screens* behind Markets and People are the same
 // ones Assets and Social hosted, and Workbench is the Workboard tab under the
 // label the mandate asks for. Renaming the route objects (not aliasing them)
 // keeps exactly one name per destination, so nothing in the graph can drift.
+//
+// Owner IA change 2026-08-05: `HomeTabRoute` is GONE — four tabs, Portfolio
+// first and start. Home's content did not go with it: it is now "Overview", the
+// pinned first entry of the portfolio switcher, rendered by the Portfolio tab.
+// A route object with no destination is exactly the kind of drift the comment
+// above warns about, so it was deleted rather than deprecated.
 /**
- * The app's front door (R-arc R1). Home is an INDEX over whatever this install
- * has — never a feature of its own — which is why it is also the NavHost's start
- * destination and the account-level deep links' fallback parent.
+ * The app's front door. Renders the portfolio the switcher selects — or, when
+ * the switcher's pinned **Overview** entry is selected, the account-wide index
+ * (hero · movers · needs-you · quiet tail) that used to be the Home tab.
+ *
+ * The NavHost's start destination, and the tab a cold start lands on.
  */
-@Serializable data object HomeTabRoute
-@Serializable data object PortfolioTabRoute     // portfolio overview
+@Serializable data object PortfolioTabRoute     // portfolio overview + Overview
 @Serializable data object WorkbenchTabRoute     // conglomerates · ideas · alerts
 @Serializable data object MarketsTabRoute       // search + watchlists + market intel
 @Serializable data object PeopleTabRoute        // friends, sharing, chat

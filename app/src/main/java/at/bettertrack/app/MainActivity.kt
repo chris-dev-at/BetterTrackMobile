@@ -60,7 +60,12 @@ class MainActivity : FragmentActivity() {
         // the first frame — ON (default) = portrait-locked; OFF = follow the sensor.
         applyOrientation(AppGraph.devicePrefs.orientationLockedNow())
         lifecycleScope.launch {
-            AppGraph.devicePrefs.orientationLocked.collect { applyOrientation(it) }
+            // `lifecycleScope` is a plain root scope: a throw inside a collector
+            // reaches the process's default handler and takes the app down. None
+            // of these device-preference mirrors is worth that.
+            AppGraph.devicePrefs.orientationLocked.collect { locked ->
+                guarded("applyOrientation") { applyOrientation(locked) }
+            }
         }
         // Dark-only app ⇒ force dark system bars regardless of system setting.
         enableEdgeToEdge(
@@ -85,7 +90,22 @@ class MainActivity : FragmentActivity() {
         // mask is armed on cold start AND the instant the user toggles the lock,
         // closing the "enable then immediately background" snapshot race.
         lifecycleScope.launch {
-            AppGraph.appLockController.config.collect { applyRecentsMasking(it.enabled) }
+            AppGraph.appLockController.config.collect { config ->
+                guarded("applyRecentsMasking") { applyRecentsMasking(config.enabled) }
+            }
+        }
+    }
+
+    /**
+     * Runs a window/system side effect that is not the user's task. A failure is
+     * logged and skipped rather than crashing the activity: an unmasked recents
+     * preview or an unpinned orientation is a cosmetic defect, a dead app is not.
+     */
+    private inline fun guarded(what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.w(BtCrashGuard.NONFATAL_TAG, "$what failed; continuing.", e)
         }
     }
 

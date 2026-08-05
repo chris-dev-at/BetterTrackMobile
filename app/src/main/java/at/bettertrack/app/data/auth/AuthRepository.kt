@@ -255,11 +255,21 @@ class AuthRepository(
         scope.launch { logout() }
     }
 
-    /** Revoke server-side (best effort), then wipe ALL local state (spec §4). */
+    /**
+     * Revoke server-side (best effort), then wipe ALL local state (spec §4).
+     *
+     * **Logging out always completes.** Every step before the credential wipe is
+     * best-effort and individually guarded, because each one of them talks to
+     * something that can be unavailable — the network (deregister, revoke) or
+     * Room (the account-scoped wipe). A logout that threw half-way used to leave
+     * the tokens on disk and the user still "signed in" to a server they cannot
+     * reach; the local wipe is the part the user actually asked for, so it runs
+     * whatever the rest did.
+     */
     suspend fun logout() {
         // Deregister the FCM device token FIRST, while the bearer is still valid
         // (bounded + fail-soft inside the hook — logout never blocks on it).
-        onBeforeLogout()
+        bestEffort("deregister device token") { onBeforeLogout() }
         revokeGrantBestEffort()
         // Explicit logout wipes the account-keyed Room data too: caches AND the
         // outbound sync queue, plus any scheduled sync work (§7.3). The wipe is
@@ -267,14 +277,25 @@ class AuthRepository(
         // reachable today — it is the same full wipe as always, but once a Drive
         // vault can exist, logging out of the BetterTrack account must not
         // destroy data the user still owns.
-        localAccountData.wipeForLogout()
+        bestEffort("wipe local account data") { localAccountData.wipeForLogout() }
         store.wipeAll()
         _authState.value = AuthState.LoggedOut
         _loginPhase.value = LoginPhase.Idle
         // AFTER the wipe: the wipe scope itself is decided by the mode we are
         // leaving, so demoting first would run the full EVERYTHING wipe under a
         // mode that still holds a vault — and destroy it.
-        onAfterLogout()
+        bestEffort("post-logout storage demotion") { onAfterLogout() }
+    }
+
+    /** One logout step whose failure must not stop the ones after it. */
+    private suspend fun bestEffort(what: String, step: suspend () -> Unit) {
+        try {
+            step()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Logout step '$what' failed; continuing with the wipe.", e)
+        }
     }
 
     /**

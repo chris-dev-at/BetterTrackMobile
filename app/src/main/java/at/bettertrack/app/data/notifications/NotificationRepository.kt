@@ -5,17 +5,16 @@ import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
-import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
 import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.NotificationItemDto
 import at.bettertrack.app.data.api.dto.UpdateNotificationSettingsRequest
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import retrofit2.Response
-import java.io.IOException
 import java.time.Instant
 
 /** Notifications feature flags (tripwire-tested: see NotificationLogicTest). */
@@ -348,22 +347,13 @@ class DefaultNotificationRepository(
         rollbackTo: List<AppNotification>,
         call: suspend () -> Response<Unit>,
     ): BtResult<Unit> {
-        val resp = try {
-            call()
-        } catch (_: IOException) {
+        val result = unitApiCall(json, call)
+        if (result is BtResult.Err) {
             _items.value = rollbackTo
             recomputeBadge()
-            return BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection."))
+            Log.w(TAG, "notification write failed: HTTP ${result.error.httpStatus} ${result.error.code}")
         }
-        return if (resp.isSuccessful) {
-            BtResult.Ok(Unit)
-        } else {
-            val err = parseApiError(json, resp.code(), resp.errorBody())
-            _items.value = rollbackTo
-            recomputeBadge()
-            Log.w(TAG, "notification write failed: HTTP ${resp.code()} ${err.code}")
-            BtResult.Err(err)
-        }
+        return result
     }
 
     private fun mapItem(dto: NotificationItemDto): AppNotification = AppNotification(

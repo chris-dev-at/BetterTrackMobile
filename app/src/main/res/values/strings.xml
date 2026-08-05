@@ -1793,7 +1793,10 @@
          header uses it for the Messages action. -->
 
     <!-- Bottom navigation — the mandate's five destinations, in bar order. -->
-    <string name="bt_tab_home">Home</string>
+    <!-- bt_tab_home was RETIRED with the Home tab (owner IA change 2026-08-05):
+         its content is now Overview, the portfolio switcher's pinned entry,
+         whose keys are in the append block at the end of this file.
+         bt_tab_portfolio labels the tab that hosts both. -->
     <string name="bt_tab_workbench">Workbench</string>
     <string name="bt_tab_markets">Markets</string>
     <string name="bt_tab_people">People</string>
@@ -2131,4 +2134,12 @@
         <item quantity="one">%1$d unread message</item>
         <item quantity="other">%1$d unread messages</item>
     </plurals>
+
+    <!-- == Owner IA change 2026-08-05 == APPEND-ONLY BLOCK.
+         The Home tab became "Overview": the pinned, visually distinct first
+         entry of the portfolio switcher. Selecting it makes the Portfolio tab
+         render the account-wide index (hero, movers, needs-you, tail). -->
+    <string name="bt_overview_title">Overview</string>
+    <string name="bt_overview_switcher_sub">Everything, across all portfolios</string>
+    <string name="bt_overview_selected_cd">Overview selected</string>
 </resources>

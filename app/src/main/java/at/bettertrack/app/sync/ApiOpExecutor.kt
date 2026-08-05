@@ -13,6 +13,7 @@ import at.bettertrack.app.data.api.dto.ValuePointDto
 import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.ui.cash.CashKind
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -149,8 +150,15 @@ class ApiOpExecutor(
                 }
                 else -> return ExecResult.Ambiguous(reachable = true)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: IOException) {
             return ExecResult.Ambiguous(reachable = false)
+        } catch (e: Exception) {
+            // The server answered, we just could not read it (a maintenance page
+            // where JSON was promised). It was reached ⇒ the effect is unknown.
+            Log.w(TAG, "Value-point read ended ambiguously: ${e.message}")
+            return ExecResult.Ambiguous(reachable = true)
         }
         // Merge by date and write the full set back.
         val merged = current.filter { it.date != payload.date } +
@@ -207,6 +215,8 @@ class ApiOpExecutor(
             // Other 5xx — the server was reached; the effect is unknown.
             else -> ExecResult.Ambiguous(reachable = true)
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: IOException) {
         // Transport failure — may or may not have reached the server.
         ExecResult.Ambiguous(reachable = false)

@@ -8,6 +8,42 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
+ * True when [table] already has a column named [column].
+ *
+ * Every `ADD COLUMN` below goes through this, because a migration in this app
+ * is not guaranteed to meet the schema its own version number implies — twice
+ * in this project's history a build shipped a NEW column (or a new table) under
+ * an ALREADY-USED `@Database(version = …)`, so two different physical schemas
+ * exist in the wild stamped with the same `user_version`. See [BtDatabase]'s
+ * migration comments for both cases. An unguarded `ALTER TABLE … ADD COLUMN`
+ * against the wrong one of those twins throws "duplicate column name" *inside*
+ * the migration transaction, which Room re-runs — and fails identically — on
+ * every single launch: a crash loop with no way out but clearing app data,
+ * i.e. destroying the durable sync queue this whole chain exists to protect.
+ */
+private fun SupportSQLiteDatabase.hasColumn(table: String, column: String): Boolean {
+    query("PRAGMA table_info(`$table`)").use { cursor ->
+        val nameIndex = cursor.getColumnIndex("name")
+        if (nameIndex < 0) return false
+        while (cursor.moveToNext()) {
+            if (cursor.getString(nameIndex) == column) return true
+        }
+    }
+    return false
+}
+
+/** `ALTER TABLE … ADD COLUMN`, skipped when the column is already there. */
+private fun SupportSQLiteDatabase.addColumnIfMissing(
+    table: String,
+    column: String,
+    definition: String,
+) {
+    if (!hasColumn(table, column)) {
+        execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $definition")
+    }
+}
+
+/**
  * The BetterTrack local database (spec §7.1) — the display source of truth for
  * everything portfolio-scoped, plus the durable outbound sync queue (§7.3).
  * The DB holds exactly ONE account's data (owner key in [MetaEntity]); logout
@@ -75,15 +111,15 @@ abstract class BtDatabase : RoomDatabase() {
         /** v2 → v3 (Step 9): transfer columns on cached cash movements. */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `transferId` TEXT")
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `counterpartSourceId` TEXT")
+                db.addColumnIfMissing("cash_movements", "transferId", "TEXT")
+                db.addColumnIfMissing("cash_movements", "counterpartSourceId", "TEXT")
             }
         }
 
         /** v3 → v4 (catch-up): the custom-asset value-smoothing toggle (V3-P2). */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `custom_assets` ADD COLUMN `smoothing` INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfMissing("custom_assets", "smoothing", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -92,11 +128,23 @@ abstract class BtDatabase : RoomDatabase() {
          * replay-reconcile. New rows default to 0; any op caught mid-flight across
          * the update is backfilled with its last-touched time (a sound proxy for
          * when it went in-flight) so it isn't spuriously parked as replay-stale.
+         *
+         * **Two different physical schemas are stamped `user_version = 4` in the
+         * wild.** Rev `3a8ca5f` (2026-07-17 … 2026-08-04) added `firstAttemptAtMs`
+         * to [SyncOpEntity] but left `@Database(version = 4)` alone and shipped no
+         * migration, so every FRESH install from that window created `sync_ops`
+         * *with* the column, still at version 4. An unguarded `ALTER` against one
+         * of those throws `duplicate column name: firstAttemptAtMs` on every
+         * launch, forever. The guard covers the back-fill too: where the column
+         * already exists its values are real, and re-stamping in-flight rows from
+         * `updatedAtMs` would silently move the replay window.
          */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `firstAttemptAtMs` INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("UPDATE `sync_ops` SET `firstAttemptAtMs` = `updatedAtMs` WHERE `status` = 'in_flight'")
+                if (!db.hasColumn("sync_ops", "firstAttemptAtMs")) {
+                    db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `firstAttemptAtMs` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("UPDATE `sync_ops` SET `firstAttemptAtMs` = `updatedAtMs` WHERE `status` = 'in_flight'")
+                }
             }
         }
 
@@ -111,27 +159,23 @@ abstract class BtDatabase : RoomDatabase() {
          */
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE `cash_movements` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'",
-                )
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `dividendId` TEXT")
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorId` TEXT")
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorVersion` INTEGER")
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorAddedByName` TEXT")
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `mirrorAddedByIcon` TEXT")
-                db.execSQL(
-                    "ALTER TABLE `transactions` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'",
-                )
-                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorId` TEXT")
-                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorVersion` INTEGER")
-                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorAddedByName` TEXT")
-                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `mirrorAddedByIcon` TEXT")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorChainId` TEXT")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorChainName` TEXT")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorRole` TEXT")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorMemberCount` INTEGER")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorSyncPercent` INTEGER")
-                db.execSQL("ALTER TABLE `portfolios` ADD COLUMN `mirrorSynced` INTEGER")
+                db.addColumnIfMissing("cash_movements", "source", "TEXT NOT NULL DEFAULT 'manual'")
+                db.addColumnIfMissing("cash_movements", "dividendId", "TEXT")
+                db.addColumnIfMissing("cash_movements", "mirrorId", "TEXT")
+                db.addColumnIfMissing("cash_movements", "mirrorVersion", "INTEGER")
+                db.addColumnIfMissing("cash_movements", "mirrorAddedByName", "TEXT")
+                db.addColumnIfMissing("cash_movements", "mirrorAddedByIcon", "TEXT")
+                db.addColumnIfMissing("transactions", "source", "TEXT NOT NULL DEFAULT 'manual'")
+                db.addColumnIfMissing("transactions", "mirrorId", "TEXT")
+                db.addColumnIfMissing("transactions", "mirrorVersion", "INTEGER")
+                db.addColumnIfMissing("transactions", "mirrorAddedByName", "TEXT")
+                db.addColumnIfMissing("transactions", "mirrorAddedByIcon", "TEXT")
+                db.addColumnIfMissing("portfolios", "mirrorChainId", "TEXT")
+                db.addColumnIfMissing("portfolios", "mirrorChainName", "TEXT")
+                db.addColumnIfMissing("portfolios", "mirrorRole", "TEXT")
+                db.addColumnIfMissing("portfolios", "mirrorMemberCount", "INTEGER")
+                db.addColumnIfMissing("portfolios", "mirrorSyncPercent", "INTEGER")
+                db.addColumnIfMissing("portfolios", "mirrorSynced", "INTEGER")
             }
         }
 
@@ -147,7 +191,7 @@ abstract class BtDatabase : RoomDatabase() {
          */
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `backendTag` TEXT NOT NULL DEFAULT 'server'")
+                db.addColumnIfMissing("sync_ops", "backendTag", "TEXT NOT NULL DEFAULT 'server'")
                 db.execSQL("UPDATE `sync_ops` SET `backendTag` = 'server' WHERE `backendTag` IS NULL OR `backendTag` = ''")
             }
         }
@@ -164,18 +208,25 @@ abstract class BtDatabase : RoomDatabase() {
          * table simply means "chips have no names yet", not lost data.
          */
         private val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `cash_movements` ADD COLUMN `tagIds` TEXT NOT NULL DEFAULT ''")
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `cash_tags` (" +
-                        "`id` TEXT NOT NULL, " +
-                        "`name` TEXT NOT NULL, " +
-                        "`color` TEXT NOT NULL, " +
-                        "`system` INTEGER NOT NULL, " +
-                        "`systemKey` TEXT, " +
-                        "PRIMARY KEY(`id`))",
-                )
-            }
+            override fun migrate(db: SupportSQLiteDatabase) = createCashClassification(db)
+        }
+
+        /**
+         * The v8 cash-classification shape, as its own function because TWO
+         * migrations have to be able to produce it — see [MIGRATION_VAULT_TABLES].
+         * Idempotent: safe to call on a DB that already has both.
+         */
+        private fun createCashClassification(db: SupportSQLiteDatabase) {
+            db.addColumnIfMissing("cash_movements", "tagIds", "TEXT NOT NULL DEFAULT ''")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `cash_tags` (" +
+                    "`id` TEXT NOT NULL, " +
+                    "`name` TEXT NOT NULL, " +
+                    "`color` TEXT NOT NULL, " +
+                    "`system` INTEGER NOT NULL, " +
+                    "`systemKey` TEXT, " +
+                    "PRIMARY KEY(`id`))",
+            )
         }
 
         /**
@@ -188,7 +239,7 @@ abstract class BtDatabase : RoomDatabase() {
          * nothing else changes — the three `CREATE TABLE`s are additive and
          * order-independent with respect to every other migration.
          *
-         * Purely additive: no existing table is touched, so a SERVER-mode install
+         * Purely additive: nothing existing is rewritten, so a SERVER-mode install
          * that updates in place gains three empty tables and behaves identically.
          * The tables use `IF NOT EXISTS` so a re-run is harmless.
          *
@@ -196,9 +247,21 @@ abstract class BtDatabase : RoomDatabase() {
          * [VaultEntityRow], [VaultMetaRow] and [PriceCacheRow] exactly — including
          * the indices and the backtick-quoted `key`, which is an SQL keyword —
          * or `validateMigration` fails at startup on the first upgraded device.
+         *
+         * **The renumber left a stranded twin.** Before the merge (rev `ac316e1`,
+         * 2026-08-04) this object was `Migration(7, 8)` and the W4 branch declared
+         * `@Database(version = 8)` WITHOUT the cash-classification work — so an
+         * install from that branch sits at `user_version = 8` holding the vault
+         * tables but neither `cash_movements.tagIds` nor `cash_tags`, while the
+         * merged mainline's version 8 means the exact opposite set. Room walks
+         * such a device 8→9→10, finds no migration that ever adds the cash
+         * columns, and throws from `validateMigration` on every launch. The
+         * [createCashClassification] call below closes that: it is a no-op for
+         * every device that came through the mainline [MIGRATION_7_8].
          */
         internal val MIGRATION_VAULT_TABLES = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                createCashClassification(db)
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `vault_entities` (" +
                         "`kind` TEXT NOT NULL, " +
@@ -245,23 +308,34 @@ abstract class BtDatabase : RoomDatabase() {
          */
         internal val MIGRATION_SYNC_ERROR_CODE = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `sync_ops` ADD COLUMN `errorCode` TEXT")
+                db.addColumnIfMissing("sync_ops", "errorCode", "TEXT")
             }
         }
 
+        /**
+         * The whole chain, in one place, so [create] and the migration regression
+         * suite can never disagree about what ships. Room resolves the path itself;
+         * the order here is documentation.
+         *
+         * There is deliberately NO `fallbackToDestructiveMigration()`: the outbound
+         * queue in `sync_ops` is durable user data (§7.3) and a destructive fallback
+         * would silently drop queued ledger events on a schema surprise.
+         */
+        internal val MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_VAULT_TABLES,
+            MIGRATION_SYNC_ERROR_CODE,
+        )
+
         fun create(context: Context): BtDatabase =
             Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
-                .addMigrations(
-                    MIGRATION_1_2,
-                    MIGRATION_2_3,
-                    MIGRATION_3_4,
-                    MIGRATION_4_5,
-                    MIGRATION_5_6,
-                    MIGRATION_6_7,
-                    MIGRATION_7_8,
-                    MIGRATION_VAULT_TABLES,
-                    MIGRATION_SYNC_ERROR_CODE,
-                )
+                .addMigrations(*MIGRATIONS)
                 .build()
     }
 }

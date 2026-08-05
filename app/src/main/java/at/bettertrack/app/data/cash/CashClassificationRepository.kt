@@ -18,14 +18,13 @@ import at.bettertrack.app.data.api.dto.SetCashMovementTagsRequest
 import at.bettertrack.app.data.api.dto.UpdateCashBudgetRequest
 import at.bettertrack.app.data.api.dto.UpdateCashRuleRequest
 import at.bettertrack.app.data.api.dto.UpdateCashTagRequest
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import at.bettertrack.app.data.db.CashDao
 import at.bettertrack.app.data.db.CashTagDao
 import at.bettertrack.app.data.db.CashTagEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.Json
 import retrofit2.Response
-import java.io.IOException
 
 /**
  * The v5 **cash classification** repository: tags, per-movement tagging, budgets,
@@ -312,19 +311,5 @@ class CashClassificationRepository(
      */
     private suspend fun unitCall(
         call: suspend () -> Response<Unit>,
-    ): BtResult<Unit> {
-        val resp = try {
-            call()
-        } catch (_: IOException) {
-            return BtResult.Err(
-                BtApiError(
-                    0,
-                    BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
-        }
-        return if (resp.isSuccessful) BtResult.Ok(Unit)
-        else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-    }
+    ): BtResult<Unit> = unitApiCall(json, call)
 }

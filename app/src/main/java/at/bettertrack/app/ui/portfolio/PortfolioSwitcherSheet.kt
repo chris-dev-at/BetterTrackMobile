@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -81,6 +82,12 @@ import at.bettertrack.app.ui.theme.BtTheme
 fun PortfolioSwitcherSheet(
     portfolios: List<PortfolioEntity>,
     selectedId: String?,
+    /**
+     * True when the pinned **Overview** entry is the current selection, not any
+     * of [portfolios] — see [OverviewSwitcherRow].
+     */
+    overviewSelected: Boolean,
+    onSelectOverview: () -> Unit,
     isOnline: Boolean,
     busy: Boolean,
     error: BtMessage?,
@@ -175,10 +182,20 @@ fun PortfolioSwitcherSheet(
                 )
             }
 
+            // The pinned front-door entry, ABOVE every real portfolio (owner IA
+            // change). It is not a portfolio and must never look like one, so it
+            // gets its own row shape rather than a `SwitcherRow` with a fake
+            // PortfolioEntity behind it — a fake entity would be one refactor
+            // away from reaching a rename dialog or a delete call.
+            OverviewSwitcherRow(
+                selected = overviewSelected,
+                onClick = onSelectOverview,
+            )
+
             active.forEach { p ->
                 SwitcherRow(
                     portfolio = p,
-                    selected = p.id == selectedId,
+                    selected = !overviewSelected && p.id == selectedId,
                     valueGaveUp = p.id in valueFailedIds,
                     actionsEnabled = actionsEnabled,
                     onClick = { onSelect(p.id) },
@@ -303,6 +320,73 @@ fun PortfolioSwitcherSheet(
     // chain either moved on without you or is gone.
     chainTarget?.let { chainId ->
         ChainDetailSheet(chainId = chainId, onDismiss = { chainTarget = null })
+    }
+}
+
+/**
+ * **Overview** — the pinned first entry of the switcher (owner IA change,
+ * 2026-08-05).
+ *
+ * Selecting it makes the Portfolio tab render the account-wide index that used
+ * to be the Home tab: the net-worth hero across every portfolio, the movers, the
+ * "needs you" rows and the quiet tail. It is not a portfolio, so it carries no
+ * value column, no default badge and no ⋮ — there is nothing to rename, archive
+ * or delete.
+ *
+ * ## Why it looks different rather than merely sitting first
+ *
+ * A row that is first in a list is only first until the list is long enough to
+ * scroll. This entry has to read as *a different kind of thing* — the way out of
+ * the per-portfolio view — from any scroll position, which is why it takes the
+ * gold leading glyph and the tinted selected state while the portfolio rows keep
+ * the neutral card. That is the same colour language the bottom bar uses for the
+ * selected tab, and Overview is what the bottom bar's Home tab used to be.
+ */
+@Composable
+private fun OverviewSwitcherRow(
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Home,
+                contentDescription = null,
+                tint = if (selected) bt.gold else bt.textSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.bt_overview_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (selected) bt.gold else bt.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.bt_overview_switcher_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Outlined.Check,
+                    contentDescription = stringResource(R.string.bt_overview_selected_cd),
+                    tint = bt.gold,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
 }
 

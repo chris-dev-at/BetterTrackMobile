@@ -2,6 +2,7 @@ package at.bettertrack.app.navigation
 
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,14 +12,17 @@ import org.junit.Test
  * its detail onto whichever tab happened to be selected — and the next bottom-bar
  * tap saved it there and bounced the user back into it.
  *
- * The fix hinges on one rule: every link has an owning tab. That rule is a pure
- * function precisely so it can be pinned here, on the JVM, with no NavController
- * and no device.
+ * The fix hinges on one rule: every link that belongs to a tab names it. That
+ * rule is a pure function precisely so it can be pinned here, on the JVM, with no
+ * NavController and no device.
  *
  * R-arc R1 rewrote the tab set (four → five, three renamed) without touching the
- * deep-link CONTRACT: `NotifDeepLink` is unchanged, and so is every route these
- * links push. Only the owning-tab constants moved, which is exactly what this
- * file exists to hold still.
+ * deep-link CONTRACT. The owner IA change (2026-08-05) took it back to four by
+ * retiring the Home TAB — Home's content is now Overview, a selection inside the
+ * Portfolio tab. `NotifDeepLink` is still unchanged, and so is every route these
+ * links push; what moved is that the account-level trio now maps to NO tab
+ * instead of to Home. That is the one behavioural change this file exists to
+ * hold still.
  */
 class DeepLinkTabsTest {
 
@@ -54,22 +58,27 @@ class DeepLinkTabsTest {
         assertEquals(BtTab.Workbench, owningTab(NotifDeepLink.Alerts))
     }
 
-    // ── Account-level: deterministic parent, never "wherever you were" ────────
+    // ── Account-level: pushed over the current tab, never a forced switch ─────
 
     @Test
-    fun `account level destinations all land on the start destination tab`() {
-        assertEquals(BtTab.Home, owningTab(NotifDeepLink.Settings))
-        assertEquals(BtTab.Home, owningTab(NotifDeepLink.Security))
-        assertEquals(BtTab.Home, owningTab(NotifDeepLink.NotificationSettings))
+    fun `account level destinations are owned by no tab`() {
+        // The owner's rule: settings / security / notification settings push over
+        // whatever is selected and do not force a switch. `null` is what the shell
+        // reads as "skip the tab switch"; mapping them to Portfolio (the new start
+        // destination) would yank a user off Workbench or People and strand them
+        // there when they backed out of settings.
+        assertNull(owningTab(NotifDeepLink.Settings))
+        assertNull(owningTab(NotifDeepLink.Security))
+        assertNull(owningTab(NotifDeepLink.NotificationSettings))
     }
 
-    // ── Structural guards ──────────────────────────────────────────────────────
-
     @Test
-    fun `every deep link target maps to a tab`() {
-        // If a future link type is added, `owningTab`'s exhaustive `when` fails to
-        // compile — this list keeps the runtime side honest for the cases that
-        // exist today, so no link can quietly regress to a null-ish default.
+    fun `every link that is not account level names a real tab`() {
+        val accountLevel = setOf(
+            NotifDeepLink.Settings,
+            NotifDeepLink.Security,
+            NotifDeepLink.NotificationSettings,
+        )
         val all = listOf(
             NotifDeepLink.Social,
             NotifDeepLink.SharedPortfolio("p"),
@@ -80,19 +89,22 @@ class DeepLinkTabsTest {
             NotifDeepLink.Asset("a"),
             NotifDeepLink.Holding("a"),
             NotifDeepLink.Alerts,
-            NotifDeepLink.Settings,
-            NotifDeepLink.Security,
-            NotifDeepLink.NotificationSettings,
-        )
+        ) + accountLevel
+        // If a future link type is added, `owningTab`'s exhaustive `when` fails to
+        // compile — this list keeps the runtime side honest for the cases that
+        // exist today.
         assertEquals("all twelve deep-link targets are covered", 12, all.size)
-        assertTrue(all.all { owningTab(it) in BtTab.entries })
+        val (unowned, owned) = all.partition { it in accountLevel }
+        assertTrue("no non-account link may be unowned", owned.all { owningTab(it) in BtTab.entries })
+        assertTrue("account-level links are unowned", unowned.all { owningTab(it) == null })
     }
+
+    // ── Structural guards ──────────────────────────────────────────────────────
 
     @Test
     fun `each tab carries its own distinct typed route`() {
         val routes = BtTab.entries.map { it.route }
         assertEquals(routes.size, routes.toSet().size)
-        assertEquals(HomeTabRoute, BtTab.Home.route)
         assertEquals(PortfolioTabRoute, BtTab.Portfolio.route)
         assertEquals(WorkbenchTabRoute, BtTab.Workbench.route)
         assertEquals(MarketsTabRoute, BtTab.Markets.route)
@@ -100,23 +112,24 @@ class DeepLinkTabsTest {
     }
 
     @Test
-    fun `the bar is the mandate's five destinations in the mandate's order`() {
+    fun `the bar is four destinations, Portfolio first`() {
         // Declaration order IS bar order, and the shell reads it rather than
         // keeping a second list — so this is the only place the order lives.
+        // Four, not five: the owner's verdict was that the bar had too many items.
         assertEquals(
-            listOf(BtTab.Home, BtTab.Portfolio, BtTab.Workbench, BtTab.Markets, BtTab.People),
+            listOf(BtTab.Portfolio, BtTab.Workbench, BtTab.Markets, BtTab.People),
             BtTab.entries.toList(),
         )
     }
 
     @Test
-    fun `the start destination tab is the one account level links fall back to`() {
-        // Guards the reasoning in `owningTab`'s KDoc: settings has no tab of its
-        // own, so it must resolve to the graph's start destination (Home).
-        assertEquals(BtTab.Home.route, HomeTabRoute)
-        assertEquals(BtTab.Home, owningTab(NotifDeepLink.Settings))
-        // …and the start destination is the FIRST tab in the bar, so the tab the
-        // fallback lands on is never one the user has to go looking for.
-        assertEquals(BtTab.Home, BtTab.entries.first())
+    fun `the start destination is the first tab in the bar`() {
+        // Portfolio is the NavHost's start destination (see BtNavHost) and the tab
+        // that hosts Overview. Both `popUpTo(findStartDestination())` call sites —
+        // the bottom-bar tap and the deep-link tab switch — land there, so it must
+        // be a tab the user can actually see: first in the bar, and `FULL` in
+        // every storage mode.
+        assertEquals(BtTab.Portfolio, BtTab.entries.first())
+        assertEquals(PortfolioTabRoute, BtTab.entries.first().route)
     }
 }

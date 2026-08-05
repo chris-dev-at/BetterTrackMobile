@@ -38,7 +38,7 @@ suspend fun prefetchPortfolioTotals(
     val failed = mutableSetOf<String>()
     ids.chunked(concurrency.coerceAtLeast(1)).forEach { chunk ->
         coroutineScope {
-            chunk.map { id -> async { id to (repo.refreshPortfolioDetail(id) is BtResult.Err) } }
+            chunk.map { id -> async { id to didFail(repo, id) } }
                 .awaitAll()
         }
             .filter { (_, didFail) -> didFail }
@@ -46,6 +46,25 @@ suspend fun prefetchPortfolioTotals(
     }
     return failed
 }
+
+/**
+ * One prefetch, as a boolean.
+ *
+ * A THROW here is the same fact as an `Err` — "this row has no value" — and must
+ * be reported the same way. It used to be a different fact: an `async` that
+ * throws cancels the enclosing `coroutineScope` and re-throws out of this
+ * function, past both callers' `viewModelScope.launch`, into the process's
+ * default handler. That turned one unreadable cached row into a closed app,
+ * which is precisely the failure mode a cold cache with no server produces.
+ */
+private suspend fun didFail(repo: PortfolioRepository, id: String): Boolean =
+    try {
+        repo.refreshPortfolioDetail(id) is BtResult.Err
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        true
+    }
 
 /**
  * How many detail fetches run at once. Small on purpose: the point is to fill in

@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.People
@@ -93,7 +92,6 @@ import at.bettertrack.app.navigation.CustomAssetsRoute
 import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
-import at.bettertrack.app.navigation.HomeTabRoute
 import at.bettertrack.app.navigation.FriendGroupsRoute
 import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
@@ -197,14 +195,14 @@ private enum class TabBadge {
  *   §4.5 table verbatim and renaming it would drift the app from the document it
  *   implements for no user-visible gain (R1 decision O-2). The label is the
  *   user-facing name; the constant is the contract's.
- * @param ownsItsHeader true when the DESTINATION renders its own header and the
- *   shell must not add one on top of it. Portfolio did first, at R1-B; **as of
- *   R2 every tab but Home does.** Each one now drives a [BtCollapsingHeader]
- *   against its own scroll container, which is the only way a collapsing bar can
- *   work — the shell cannot see a destination's scroll state, so a shell-drawn
- *   large title could only ever be a tall static bar spending vertical space for
- *   nothing. Home keeps the shell bar because it is the one tab whose context
- *   slot is the wordmark rather than a title.
+ *
+ * There is no `ownsItsHeader` flag any more: with Home retired as a tab (owner IA
+ * change 2026-08-05) **every** tab drives its own [BtCollapsingHeader] against
+ * its own scroll container, which is the only way a collapsing bar can work — the
+ * shell cannot see a destination's scroll state, so a shell-drawn large title
+ * could only ever be a tall static bar spending vertical space for nothing. The
+ * shell therefore draws no top bar at all, and the flag that used to say which
+ * tabs were exceptions had no `false` left to describe.
  */
 private data class TabSpec(
     val tab: BtTab,
@@ -213,15 +211,13 @@ private data class TabSpec(
     val icon: ImageVector,
     val surface: BtSurface,
     val badge: TabBadge = TabBadge.None,
-    val ownsItsHeader: Boolean = false,
 )
 
 private val Tabs = listOf(
-    TabSpec(BtTab.Home, HomeTabRoute::class, R.string.bt_tab_home, Icons.Outlined.Home, BtSurface.HOME),
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, ownsItsHeader = true),
-    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts, ownsItsHeader = true),
-    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET, ownsItsHeader = true),
-    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat, ownsItsHeader = true),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO),
+    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
+    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
+    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
 )
 
 /**
@@ -237,9 +233,11 @@ private val Tabs = listOf(
  * (no live quotes until W6, device-local watchlist membership per board #40.3),
  * and each of those surfaces renders its own honest reduced state.
  *
- * R-arc R1: Home joins as the first entry and is `FULL` in every mode, so a
- * Drive-only install goes from a two-tab bar to a three-tab one with a real
- * front door — the mode that had the least navigation gains the most from it.
+ * Owner IA change 2026-08-05: with Home no longer a tab, a Drive-only bar is
+ * Portfolio + Markets — and it loses nothing by it, because Overview (Home's
+ * content) is now reached from inside the Portfolio tab, which every mode shows.
+ * BtSurface.HOME is `FULL` in every mode and still gates that content; it simply
+ * no longer gates a bar entry.
  */
 private fun tabsFor(mode: StorageMode): List<TabSpec> {
     val visible = visibleTabSurfaces(mode)
@@ -323,7 +321,11 @@ fun BtApp() {
         //   3. push the detail route on top of that tab, if the link has one.
         fun open(link: NotifDeepLink, push: (() -> Unit)? = null) {
             navController.popBackStack(NotificationsInboxRoute, inclusive = true)
-            switchToTab(owningTab(link))
+            // `null` = an account-level target that no tab owns (settings,
+            // security, notification settings). Those push over whatever tab the
+            // user is standing on rather than yanking them somewhere first —
+            // owner's rule, and see `owningTab`'s KDoc for why it is safe here.
+            owningTab(link)?.let(switchToTab)
             push?.invoke()
         }
         val handler: (NotifDeepLink) -> Unit = { link ->
@@ -448,25 +450,9 @@ fun BtApp() {
         // Zeroing here prevents double status-bar padding on those routes.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { BtSnackbarHost(snackbar.hostState) },
-        topBar = {
-            // `ownsItsHeader` destinations render their own (R1-B's collapsing
-            // large title); the shell adds nothing on top of them.
-            if (currentTab != null && !currentTab.ownsItsHeader) {
-                BtHomeTopBar(
-                    notifUnread = notifUnread,
-                    showNotifications = showNotificationSurfaces,
-                    discreetMode = discreetMode,
-                    onWordmarkLongPress = {
-                        if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
-                    },
-                    onSearch = { navController.navigate(SearchRoute) },
-                    onNotifications = { navController.navigate(NotificationsInboxRoute) },
-                    onSettings = { navController.navigate(SettingsRoute) },
-                    onDevBackend = { navController.navigate(DevBackendRoute) },
-                    onToggleDiscreet = ::toggleDiscreet,
-                )
-            }
-        },
+        // No shell top bar: every tab drives its own collapsing header, and
+        // Overview's — the last one the shell used to draw — now travels with the
+        // Portfolio tab that hosts it. See [BtOverviewOverflow].
         bottomBar = {
             if (isTopLevel) {
                 BtBottomBar(
@@ -506,93 +492,61 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(navController, navigateDeepLink, switchToTab, discreetMode, ::toggleDiscreet)
+            BtNavHost(
+                navController = navController,
+                onDeepLink = navigateDeepLink,
+                onSwitchTab = switchToTab,
+                discreetMode = discreetMode,
+                onToggleDiscreet = ::toggleDiscreet,
+                notifUnread = notifUnread,
+                showNotifications = showNotificationSurfaces,
+            )
         }
         }
     }
 }
 
 /**
- * **Home's** 3-element top bar (R-arc mandate §1): context, ONE action, overflow.
+ * **Overview's** ONE header action (R-arc mandate §1: context, ONE action,
+ * overflow).
  *
- * | Tab | Context | ONE action | Overflow |
- * |---|---|---|---|
- * | Home | wordmark | Search | inbox · discreet · settings · (debug) dev backend |
+ * Search is the affordance the whole app shares and Overview is the only screen
+ * that is about all of it, so it keeps the slot it had on the Home tab's bar.
  *
- * ## Why this is the only shell-drawn bar left
+ * ## Why this is a bare action and not a top bar any more
  *
- * R1 shipped this as one composable covering four tabs, deliberately: the *rule*
- * is what has to be enforceable, and a per-screen bar is exactly how the old one
- * grew to six elements, one defensible addition at a time. R2 keeps the rule and
- * moves the bars, because a **collapsing** large title cannot be drawn by the
- * shell — `LargeTopAppBar` needs a scroll behaviour wired to the destination's
- * own scroll container, which the shell cannot see. R1's own comment here said
- * as much while rendering a static title as the interim. So Portfolio (R1-B),
- * then Workbench, Markets and People (R2) each set [TabSpec.ownsItsHeader] and
- * drive their own [at.bettertrack.app.ui.components.BtCollapsingHeader], and the
- * 3-element budget travels with them — People, for instance, carries exactly the
- * Messages action and a Friend-groups overflow this bar used to hold for it.
+ * R1 shipped a shell-drawn `BtHomeTopBar` covering four tabs, deliberately: the
+ * *rule* is what has to be enforceable, and a per-screen bar is exactly how the
+ * old one grew to six elements, one defensible addition at a time. R2 moved the
+ * bars anyway, because a **collapsing** large title cannot be drawn by the shell
+ * — `LargeTopAppBar` needs a scroll behaviour wired to the destination's own
+ * scroll container, which the shell cannot see. Home was the one tab left on the
+ * shell bar, because its context slot was the wordmark rather than a title and so
+ * it had nothing to collapse.
  *
- * Home is the one tab left, and the one that should be: its context slot is the
- * **wordmark**, not a title, so there is no large title to collapse in the first
- * place. The wordmark appears here and nowhere else — it stopped being wayfinding
- * the moment it was on all four tabs — and its hidden long-press debug gallery
- * entry lives with it.
+ * The owner IA change settles it: Overview is no longer a tab, it is a selection
+ * inside the Portfolio tab, and it takes that tab's collapsing header with the
+ * title **Overview** in the context slot. So the shell draws no bar at all, and
+ * the two things Home's bar carried travel to the header as slots — this action
+ * and [BtOverviewOverflow]. The 3-element budget is unchanged; only who renders
+ * it moved.
+ *
+ * The wordmark went with the bar. It stopped being wayfinding the moment it sat
+ * on four tabs, and a header whose job is to say *which switcher entry you are
+ * looking at* cannot also say "BetterTrack". Its hidden long-press gallery entry
+ * was the one thing worth keeping, and it is now an explicit debug-only row in
+ * the overflow, where a debug affordance is easier to find than a secret.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-private fun BtHomeTopBar(
-    notifUnread: Int,
-    showNotifications: Boolean,
-    discreetMode: Boolean,
-    onWordmarkLongPress: () -> Unit,
-    onSearch: () -> Unit,
-    onNotifications: () -> Unit,
-    onSettings: () -> Unit,
-    onDevBackend: () -> Unit,
-    onToggleDiscreet: (Boolean) -> Unit,
-) {
+private fun BtOverviewSearchAction(onSearch: () -> Unit) {
     val bt = BtTheme.colors
-    TopAppBar(
-        title = {
-            // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
-            // long-press (debug builds only).
-            Wordmark(
-                fontSize = 20.sp,
-                modifier = Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                    onLongClick = onWordmarkLongPress,
-                ),
-            )
-        },
-        actions = {
-            // Home's ONE action (decision O-3): search is the affordance the
-            // whole app shares and Home is the only screen that is about all
-            // of it.
-            IconButton(onClick = onSearch) {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = stringResource(R.string.bt_search_cd),
-                    tint = bt.textSecondary,
-                )
-            }
-            BtHomeOverflow(
-                notifUnread = notifUnread,
-                showNotifications = showNotifications,
-                discreetMode = discreetMode,
-                onNotifications = onNotifications,
-                onSettings = onSettings,
-                onDevBackend = onDevBackend,
-                onToggleDiscreet = onToggleDiscreet,
-            )
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = bt.bg,
-            titleContentColor = bt.textPrimary,
-        ),
-    )
+    IconButton(onClick = onSearch) {
+        Icon(
+            Icons.Outlined.Search,
+            contentDescription = stringResource(R.string.bt_search_cd),
+            tint = bt.textSecondary,
+        )
+    }
 }
 
 /**
@@ -606,13 +560,15 @@ private fun BtHomeTopBar(
  * not the information.
  */
 @Composable
-private fun BtHomeOverflow(
+private fun BtOverviewOverflow(
     notifUnread: Int,
     showNotifications: Boolean,
     discreetMode: Boolean,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
     onDevBackend: () -> Unit,
+    /** Debug builds only — inherited from the retired wordmark long-press. */
+    onOpenGallery: () -> Unit,
     onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -688,6 +644,12 @@ private fun BtHomeOverflow(
                     text = { Text(stringResource(R.string.bt_settings_dev_backend)) },
                     onClick = { open = false; onDevBackend() },
                 )
+                // The wordmark's hidden long-press, made explicit — see
+                // [BtOverviewSearchAction]'s KDoc.
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_settings_dev_gallery)) },
+                    onClick = { open = false; onOpenGallery() },
+                )
             }
         }
     }
@@ -753,9 +715,12 @@ private fun BtNavHost(
     navController: NavHostController,
     onDeepLink: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
-    /** Discreet-mode state + its one implementation, shared with the top bar. */
+    /** Discreet-mode state + its one implementation, shared with Overview's ⋮. */
     discreetMode: Boolean,
     onToggleDiscreet: (Boolean) -> Unit,
+    /** Inbox unread count, rendered on Overview's overflow entry. */
+    notifUnread: Int,
+    showNotifications: Boolean,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
     // R3 §1 — the app's one screen-transition idiom. Read once, here, and
@@ -814,37 +779,20 @@ private fun BtNavHost(
                 else -> BtNavMotion.backExit()
             }
         },
-        // R-arc R1: Home, not Portfolio. Two things follow, both improvements:
-        // system-back from any tab now lands on Home and back from Home exits
-        // (before, back from any tab landed on Portfolio, which was arbitrary
-        // the moment Portfolio became one of five peers); and the two
-        // `popUpTo(findStartDestination())` call sites — the deep-link tab
-        // switch and the bottom-bar tap — pop to a tab that is `FULL` in every
-        // storage mode, which Portfolio only happened to be.
-        startDestination = HomeTabRoute,
+        // Owner IA change: Portfolio is the start destination again — but for a
+        // reason it did not have the first time round. It is not "first by
+        // accident of declaration order" now; it is the tab that hosts Overview,
+        // the app's front door, so system-back from any tab lands on the index
+        // and back from there exits. It is also `FULL` in every storage mode, so
+        // the two `popUpTo(findStartDestination())` call sites — the deep-link
+        // tab switch and the bottom-bar tap — can never pop to a hidden tab.
+        startDestination = PortfolioTabRoute,
         modifier = Modifier.fillMaxSize(),
     ) {
         // Tabs
-        composable<HomeTabRoute> {
-            // Home crosses tabs ONLY through onOpen/onSwitchTab — see HomeScreen's
-            // KDoc. No `navController` is handed to it, deliberately: a bare push
-            // from an index screen stacks another tab's detail on Home and the
-            // next bottom-bar tap saves it under the wrong tab (S6 P1-8). The two
-            // typed pushes below are Home's OWN destinations — the tab that
-            // carries them is the tab they belong on — and neither has a
-            // NotifDeepLink to route through.
-            HomeScreen(
-                onOpen = onDeepLink,
-                onSwitchTab = onSwitchTab,
-                onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
-                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
-                discreetMode = discreetMode,
-                onToggleDiscreet = onToggleDiscreet,
-            )
-        }
         composable<PortfolioTabRoute> {
             // V5 S2a: a paranoid account's portfolio family is server-blind. Route
-            // ONLY these killed surfaces to the explainer — Home/Markets/People/
+            // ONLY these killed surfaces to the explainer — Markets/People/
             // Workbench and everything under them keep working, because they do.
             // Top-level tab: no onBack — the shell's own bars are showing.
             ParanoidGate {
@@ -859,6 +807,59 @@ private fun BtNavHost(
                     onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
                     onOpenCash = { portfolioId ->
                         navController.navigate(CashRoute(portfolioId = portfolioId))
+                    },
+                    // ── Overview: the former Home tab, as a switcher selection ──
+                    // Composed here rather than inside the portfolio screen so
+                    // that screen stays ignorant of Home, and so Home's whole
+                    // callback surface — which is all navigation — stays in the
+                    // one file that owns the graph.
+                    overviewContent = { openSwitcher, leaveOverview ->
+                        // Overview crosses tabs ONLY through onOpen/onSwitchTab —
+                        // see HomeScreen's KDoc. No `navController` is handed to
+                        // it, deliberately: a bare push from an index screen
+                        // stacks another tab's detail on it and the next
+                        // bottom-bar tap saves it under the wrong tab (S6 P1-8).
+                        HomeScreen(
+                            onOpen = onDeepLink,
+                            onSwitchTab = onSwitchTab,
+                            // "See all holdings" / "open this portfolio": leave
+                            // Overview for the portfolio page. This used to be
+                            // `onSwitchTab(BtTab.Portfolio)`, which after the IA
+                            // change would be a hop to the tab we are already on
+                            // — i.e. a no-op the user would read as a dead tap.
+                            onOpenPortfolioView = leaveOverview,
+                            // "Create a portfolio": open the switcher, which is
+                            // where creation lives. Sending the user to an empty
+                            // portfolio page and hoping they find the sheet was
+                            // the old behaviour and it was never good; it is
+                            // simply impossible now, since the page they would
+                            // land on is the one they are already looking at.
+                            onCreatePortfolio = openSwitcher,
+                            onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
+                            onOpenDataHome = { navController.navigate(StorageHomeRoute) },
+                            discreetMode = discreetMode,
+                            onToggleDiscreet = onToggleDiscreet,
+                        )
+                    },
+                    overviewAction = {
+                        // Overview's ONE action (R1 decision O-3): search is the
+                        // affordance the whole app shares and Overview is the
+                        // only screen that is about all of it.
+                        BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
+                    },
+                    overviewOverflow = {
+                        BtOverviewOverflow(
+                            notifUnread = notifUnread,
+                            showNotifications = showNotifications,
+                            discreetMode = discreetMode,
+                            onNotifications = { navController.navigate(NotificationsInboxRoute) },
+                            onSettings = { navController.navigate(SettingsRoute) },
+                            onDevBackend = { navController.navigate(DevBackendRoute) },
+                            onOpenGallery = {
+                                if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
+                            },
+                            onToggleDiscreet = onToggleDiscreet,
+                        )
                     },
                 )
             }

@@ -9,13 +9,13 @@ import at.bettertrack.app.data.api.dto.CreateWatchlistRequest
 import at.bettertrack.app.data.api.dto.RenameWatchlistRequest
 import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.transportErr
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
-import java.io.IOException
 
 /**
  * Watchlists (Step 12 + V3-P5, §6.6). Multiple NAMED lists are now LIVE
@@ -121,8 +121,8 @@ class DefaultWatchlistRepository(
         if (boardId == WatchlistEntity.WORKBOARD_ID) return market.addToWatchlist(asset.id)
         val resp = try {
             api.addToWorkboard(AddToWorkboardRequest(assetId = asset.id, watchlistId = boardId))
-        } catch (_: IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             resp.body()?.let { db.watchlistDao().insertItems(listOf(it.toEntity(boardId))) }
@@ -137,8 +137,8 @@ class DefaultWatchlistRepository(
         val item = db.watchlistDao().itemForAsset(boardId, assetId) ?: return BtResult.Ok(Unit)
         val resp = try {
             api.removeFromWorkboard(item.id)
-        } catch (_: IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             db.watchlistDao().deleteItem(item.id)
@@ -151,8 +151,8 @@ class DefaultWatchlistRepository(
     override suspend fun createBoard(name: String): BtResult<String> {
         val resp = try {
             api.createWatchlist(CreateWatchlistRequest(name.trim()))
-        } catch (_: IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             val created = resp.body()
@@ -173,8 +173,8 @@ class DefaultWatchlistRepository(
         if (boardId == WatchlistEntity.WORKBOARD_ID) return generalLocked()
         val resp = try {
             api.renameWatchlist(boardId, RenameWatchlistRequest(name.trim()))
-        } catch (_: IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             db.watchlistDao().upsertLists(
@@ -190,8 +190,8 @@ class DefaultWatchlistRepository(
         if (boardId == WatchlistEntity.WORKBOARD_ID) return generalLocked()
         val resp = try {
             api.deleteWatchlist(boardId)
-        } catch (_: IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             db.watchlistDao().deleteItems(boardId)
@@ -201,10 +201,6 @@ class DefaultWatchlistRepository(
             BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
         }
     }
-
-    private fun networkErr(): BtResult<Nothing> = BtResult.Err(
-        BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-    )
 
     private fun generalLocked(): BtResult<Nothing> = BtResult.Err(
         BtApiError(0, BtApiError.Codes.WATCHLIST_DEFAULT_LOCKED),

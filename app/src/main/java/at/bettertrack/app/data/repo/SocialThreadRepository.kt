@@ -8,9 +8,8 @@ import at.bettertrack.app.data.api.dto.CreateCommentRequest
 import at.bettertrack.app.data.api.dto.ItemCommentDto
 import at.bettertrack.app.data.api.dto.ReactionSummaryDto
 import at.bettertrack.app.data.api.dto.ToggleReactionRequest
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
-import java.io.IOException
 
 /**
  * Comments + emoji reactions on shared items (V5, `social:*`).
@@ -157,18 +156,7 @@ class SocialThreadRepository(
 
     /** Delete a comment (own, or moderated as the item owner). 204. */
     suspend fun deleteComment(commentId: String): BtResult<Unit> =
-        try {
-            val resp = api.deleteComment(commentId)
-            if (resp.isSuccessful) {
-                BtResult.Ok(Unit)
-            } else {
-                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-            }
-        } catch (_: IOException) {
-            BtResult.Err(
-                BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-            )
-        }
+        unitApiCall(json) { api.deleteComment(commentId) }
 
     private fun ItemCommentDto.toDomain() = ItemComment(
         id = id,

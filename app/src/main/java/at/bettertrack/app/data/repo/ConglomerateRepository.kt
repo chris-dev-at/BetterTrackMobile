@@ -10,7 +10,6 @@ import at.bettertrack.app.data.api.dto.ConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.CreateConglomerateRequest
 import at.bettertrack.app.data.api.dto.PositionWeightDto
 import at.bettertrack.app.data.api.dto.ReplacePositionsRequest
-import at.bettertrack.app.data.api.parseApiError
 import kotlinx.serialization.json.Json
 
 // ── Domain models ────────────────────────────────────────────────────────────
@@ -221,17 +220,8 @@ class ConglomerateRepository(
             is BtResult.Err -> r
         }
 
-    suspend fun delete(id: String): BtResult<Unit> {
-        val resp = try {
-            api.deleteConglomerate(id)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(0, at.bettertrack.app.data.api.BtApiError.Codes.NETWORK, "No connection."),
-            )
-        }
-        return if (resp.isSuccessful) BtResult.Ok(Unit)
-        else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-    }
+    suspend fun delete(id: String): BtResult<Unit> =
+        at.bettertrack.app.data.api.unitApiCall(json) { api.deleteConglomerate(id) }
 
     private fun map(r: BtResult<ConglomerateDetailResponse>): BtResult<ConglomerateDetail> = when (r) {
         is BtResult.Ok -> BtResult.Ok(

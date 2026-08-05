@@ -5,11 +5,10 @@ import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.StandingOrderDto
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import retrofit2.Response
-import java.io.IOException
 
 /**
  * The v5 **standing orders** repository — scheduled recurring buys and cash
@@ -96,20 +95,7 @@ class StandingOrderRepository(
     /** Delete (204) — the order's run history cascades server-side. */
     suspend fun delete(id: String): BtResult<Unit> = unitCall { api.deleteStandingOrder(id) }
 
-    /** A 204 endpoint; [apiCall] insists on a non-null body, so map it by hand. */
-    private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> {
-        val resp = try {
-            call()
-        } catch (_: IOException) {
-            return BtResult.Err(
-                BtApiError(
-                    0,
-                    BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
-        }
-        return if (resp.isSuccessful) BtResult.Ok(Unit)
-        else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-    }
+    /** A 204 endpoint; [apiCall] insists on a non-null body, so use the bodyless twin. */
+    private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> =
+        unitApiCall(json, call)
 }

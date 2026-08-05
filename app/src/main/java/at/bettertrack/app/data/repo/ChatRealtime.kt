@@ -82,13 +82,23 @@ class SocketIoChatGateway(
         webSocket = null
     }
 
+    /**
+     * Fail-soft by contract: [connect] is called from a MAIN-thread lifecycle
+     * observer and from the reconnect thread, and neither has anywhere to put an
+     * exception. Realtime is an optimisation — the repository's foreground poll
+     * is the guarantee — so a socket that will not open is a log line.
+     */
     private fun openSocket() {
         if (!wanted.get()) return
-        val token = tokenProvider()
-        val builder = Request.Builder().url(wsUrl)
-        if (token != null) builder.header("Authorization", "Bearer $token") // best-effort bearer on the upgrade
-        Log.i(TAG, "connecting $wsUrl (bearer=${token != null})")
-        webSocket = client.newWebSocket(builder.build(), Listener(token))
+        try {
+            val token = tokenProvider()
+            val builder = Request.Builder().url(wsUrl)
+            if (token != null) builder.header("Authorization", "Bearer $token") // best-effort bearer on the upgrade
+            Log.i(TAG, "connecting $wsUrl (bearer=${token != null})")
+            webSocket = client.newWebSocket(builder.build(), Listener(token))
+        } catch (e: Exception) {
+            Log.w(TAG, "ws connect could not start: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 
     private inner class Listener(private val token: String?) : WebSocketListener() {
@@ -168,9 +178,14 @@ class SocketIoChatGateway(
         Thread {
             try {
                 kotlinx.coroutines.runBlocking { onReconnectSleep(delayMs) }
-            } catch (_: Exception) {
+                // A RAW thread has no supervisor: anything that escapes this body
+                // goes straight to the process's uncaught handler and kills the
+                // app. With an unreachable origin this reconnect fires in a loop,
+                // so it is the last place that may throw.
+                if (wanted.get()) openSocket()
+            } catch (e: Exception) {
+                Log.w(TAG, "ws reconnect attempt failed: ${e.javaClass.simpleName}: ${e.message}")
             }
-            if (wanted.get()) openSocket()
         }.apply { isDaemon = true }.start()
     }
 

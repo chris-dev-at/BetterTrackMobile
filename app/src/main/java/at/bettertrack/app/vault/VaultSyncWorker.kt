@@ -34,8 +34,12 @@ class VaultSyncWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val coordinator = AppGraph.vaultSyncCoordinator ?: return Result.success()
+        // Resolving the coordinator FORCES the graph (storage mode, Room, vault
+        // custody), and WorkManager can start this worker in a process where none
+        // of that has ever been built. So the lookup is inside the guard too — a
+        // `doWork` that throws is a FAILED work item, not a designed outcome.
         val state = try {
+            val coordinator = AppGraph.vaultSyncCoordinator ?: return Result.success()
             coordinator.pushNow()
         } catch (cause: Exception) {
             // The local vault is already durable; a crashed push loses nothing.

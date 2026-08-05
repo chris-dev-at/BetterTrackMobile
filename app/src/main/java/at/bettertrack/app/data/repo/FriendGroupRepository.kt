@@ -7,9 +7,8 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AddGroupMemberRequest
 import at.bettertrack.app.data.api.dto.FriendGroupDto
 import at.bettertrack.app.data.api.dto.FriendGroupNameRequest
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
-import java.io.IOException
 
 /**
  * Friend groups (V5, `social:*`) — named sets of accepted friends that act as a
@@ -58,18 +57,7 @@ class FriendGroupRepository(
 
     /** 204 — everything shared to this group stops being shared. */
     suspend fun delete(groupId: String): BtResult<Unit> =
-        try {
-            val resp = api.deleteFriendGroup(groupId)
-            if (resp.isSuccessful) {
-                BtResult.Ok(Unit)
-            } else {
-                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-            }
-        } catch (_: IOException) {
-            BtResult.Err(
-                BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-            )
-        }
+        unitApiCall(json) { api.deleteFriendGroup(groupId) }
 
     /**
      * Add an accepted friend (idempotent). Both member mutations answer with the

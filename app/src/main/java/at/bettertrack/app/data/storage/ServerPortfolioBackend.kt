@@ -431,14 +431,8 @@ class ServerPortfolioBackend(
     override suspend fun deleteCustomAsset(id: String): BtResult<Unit> {
         val resp = try {
             api.deleteCustomAsset(id)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
+        } catch (e: Exception) {
+            return at.bettertrack.app.data.api.transportErr(e)
         }
         return if (resp.isSuccessful) {
             db.customAssetDao().delete(id)
@@ -499,14 +493,8 @@ class ServerPortfolioBackend(
     ): BtResult<Unit> {
         val resp = try {
             api.deleteTransaction(portfolioId, txId, idempotencyKey)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
+        } catch (e: Exception) {
+            return at.bettertrack.app.data.api.transportErr(e)
         }
         return if (resp.isSuccessful) {
             BtResult.Ok(Unit)
@@ -573,14 +561,8 @@ class ServerPortfolioBackend(
     override suspend fun deletePortfolio(portfolioId: String): BtResult<Unit> {
         val resp = try {
             api.deletePortfolio(portfolioId)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(
-                at.bettertrack.app.data.api.BtApiError(
-                    0,
-                    at.bettertrack.app.data.api.BtApiError.Codes.NETWORK,
-                    "No connection. Check your network and try again.",
-                ),
-            )
+        } catch (e: Exception) {
+            return at.bettertrack.app.data.api.transportErr(e)
         }
         return if (resp.isSuccessful) {
             BtResult.Ok(Unit)

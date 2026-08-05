@@ -4,7 +4,6 @@ import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
-import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
 import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
@@ -157,19 +156,6 @@ class AccountRepository(
     }
 
     /** Map a call whose body is ignored: 2xx → Ok(Unit), else the parsed error. */
-    private suspend inline fun <T> emptyCall(crossinline call: suspend () -> Response<T>): BtResult<Unit> =
-        try {
-            val resp = call()
-            if (resp.isSuccessful) {
-                BtResult.Ok(Unit)
-            } else {
-                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-            }
-        } catch (_: java.io.IOException) {
-            BtResult.Err(
-                BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-            )
-        } catch (e: Exception) {
-            BtResult.Err(BtApiError(-1, BtApiError.Codes.UNKNOWN, e.message ?: "Unexpected error."))
-        }
+    private suspend fun <T> emptyCall(call: suspend () -> Response<T>): BtResult<Unit> =
+        at.bettertrack.app.data.api.unitApiCall(json, call)
 }

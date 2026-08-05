@@ -10,10 +10,9 @@ import at.bettertrack.app.data.api.dto.SetAudienceRequest
 import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
 import at.bettertrack.app.data.api.dto.SharedWatchlistDetailResponse
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
 import retrofit2.Response
-import java.io.IOException
 
 /**
  * Friends & sharing (Steps 14 + Social v2, §6.9 / V3 sharing). The whole social
@@ -464,14 +463,5 @@ class DefaultSocialRepository(
 
     /** For 200-with-empty-body writes (friend graph) that [apiCall] can't decode. */
     private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> =
-        try {
-            val resp = call()
-            if (resp.isSuccessful) {
-                BtResult.Ok(Unit)
-            } else {
-                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-            }
-        } catch (_: IOException) {
-            BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."))
-        }
+        unitApiCall(json, call)
 }

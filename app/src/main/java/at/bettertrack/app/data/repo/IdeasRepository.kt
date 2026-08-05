@@ -6,14 +6,13 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.IDEA_ADHOC_MAX
 import at.bettertrack.app.data.api.dto.IdeaDto
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.io.IOException
 
 /**
  * Workboard **ideas** (V5, `workboard:*`) — a saved analysis: a name, an
@@ -196,18 +195,7 @@ class IdeasRepository(
 
     /** 204. */
     suspend fun delete(ideaId: String): BtResult<Unit> =
-        try {
-            val resp = api.deleteIdea(ideaId)
-            if (resp.isSuccessful) {
-                BtResult.Ok(Unit)
-            } else {
-                BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-            }
-        } catch (_: IOException) {
-            BtResult.Err(
-                BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-            )
-        }
+        unitApiCall(json) { api.deleteIdea(ideaId) }
 
     /** Copy a friend's shared idea into my own list — the only non-owner read. */
     suspend fun clone(ideaId: String): BtResult<Idea> =

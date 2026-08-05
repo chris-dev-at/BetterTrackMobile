@@ -31,7 +31,10 @@ class UpdateChecker(
     private val client: OkHttpClient,
     private val json: Json,
     private val nowMs: () -> Long = System::currentTimeMillis,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val scope: CoroutineScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            at.bettertrack.app.btBackgroundExceptionHandler("UpdateChecker"),
+    ),
 ) {
     private var checkedThisProcess = false
     private var remindedThisSession = false

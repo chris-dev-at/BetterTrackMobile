@@ -12,6 +12,7 @@ import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.prefs.DevicePrefs
 import at.bettertrack.app.data.repo.prefetchPortfolioTotals
 import at.bettertrack.app.sync.ConnectivityMonitor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,9 +46,22 @@ class PortfolioOverviewViewModel(
     connectivity: ConnectivityMonitor,
     db: BtDatabase,
     json: Json,
+    private val devicePrefs: DevicePrefs,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
+
+    /**
+     * True when the switcher's pinned **Overview** entry is selected, so the tab
+     * renders the account-wide index instead of one portfolio (owner IA change).
+     *
+     * Deliberately independent of [selected]: Overview does not clear the
+     * portfolio choice, it sits *above* it. Everything downstream of [selected]
+     * — holdings, history, the pending strip, the six other screens that read
+     * the same persisted id — keeps pointing at the portfolio the user would
+     * return to, so coming back out of Overview is a re-render and not a reload.
+     */
+    val overviewSelected: StateFlow<Boolean> = devicePrefs.overviewSelected
 
     /** All portfolios, active and archived (the switcher shows both). */
     val portfolios: StateFlow<List<PortfolioEntity>> = repo.portfolios
@@ -178,27 +192,38 @@ class PortfolioOverviewViewModel(
     /** Full refresh: list + the selected portfolio's detail/graph/ledger/cash. */
     fun refresh() {
         viewModelScope.launch {
-            _refreshing.value = true
-            val result = repo.refreshPortfolios()
-            if (result is BtResult.Err) {
-                _loadError.value = result.error
-            } else {
-                _loadError.value = null
-                lastRefreshAtMs = System.currentTimeMillis()
+            // `finally`, not a trailing assignment: this spinner is the one piece
+            // of state whose stuck value is worse than the failure that stuck it.
+            // Nothing below can throw today — the repository boundary now answers
+            // BtResult for every transport failure — but "today" is the whole
+            // problem with relying on that: a future call added inside this block
+            // would leave the user watching a pull-to-refresh spinner that never
+            // stops, on a screen that is otherwise working. Cancellation lands
+            // here too, which is exactly when the spinner must also come down.
+            try {
+                _refreshing.value = true
+                val result = repo.refreshPortfolios()
+                if (result is BtResult.Err) {
+                    _loadError.value = result.error
+                } else {
+                    _loadError.value = null
+                    lastRefreshAtMs = System.currentTimeMillis()
+                }
+                // Resolve the governing portfolio from a ONE-SHOT read, not the
+                // `selected` StateFlow: right after the list write, that
+                // WhileSubscribed flow may not have recomputed yet, so reading it
+                // here races to null on a fresh login and the dependent cascade
+                // (detail/holdings/history/cash) never fires — the reported "stuck
+                // on skeletons until pull-to-refresh" bug. Persist the auto-pick so
+                // the selection sticks and every screen agrees on the default.
+                val chosen = repo.defaultSelection()
+                if (chosen != null) {
+                    if (repo.selectedPortfolioIdNow() != chosen.id) repo.selectPortfolio(chosen.id)
+                    refreshSelectedScope(chosen.id)
+                }
+            } finally {
+                _refreshing.value = false
             }
-            // Resolve the governing portfolio from a ONE-SHOT read, not the
-            // `selected` StateFlow: right after the list write, that
-            // WhileSubscribed flow may not have recomputed yet, so reading it
-            // here races to null on a fresh login and the dependent cascade
-            // (detail/holdings/history/cash) never fires — the reported "stuck
-            // on skeletons until pull-to-refresh" bug. Persist the auto-pick so
-            // the selection sticks and every screen agrees on the default.
-            val chosen = repo.defaultSelection()
-            if (chosen != null) {
-                if (repo.selectedPortfolioIdNow() != chosen.id) repo.selectPortfolio(chosen.id)
-                refreshSelectedScope(chosen.id)
-            }
-            _refreshing.value = false
         }
     }
 
@@ -218,10 +243,42 @@ class PortfolioOverviewViewModel(
     }
 
     fun selectPortfolio(portfolioId: String) {
+        // Picking a real portfolio is also how you LEAVE Overview — there is no
+        // separate "close Overview" affordance, and there should not be: the
+        // switcher is one list and picking any entry in it is one gesture.
+        devicePrefs.setOverviewSelected(false)
         viewModelScope.launch {
             repo.selectPortfolio(portfolioId)
             if (isOnline.value) refreshSelectedScope(portfolioId)
         }
+    }
+
+    /**
+     * Select the pinned Overview entry.
+     *
+     * No refresh is kicked off here. Overview reads the SAME cached portfolio
+     * rows the tab already had — its hero is a sum over `portfolios`, not a
+     * seventh endpoint — and Home's own view model does its own resume refresh
+     * when it composes. Firing one here would mean two overlapping refreshes on
+     * every switch, which against a slow or dead backend is exactly the pile-up
+     * this build is trying to stop.
+     */
+    fun selectOverview() {
+        devicePrefs.setOverviewSelected(true)
+    }
+
+    /**
+     * Leave Overview for the portfolio that is already selected.
+     *
+     * The counterpart of [selectOverview], and deliberately NOT
+     * `selectPortfolio(currentId)`: there is no new choice being made here, so
+     * re-persisting the same id and re-firing its four refreshes would be work
+     * with no question behind it. Overview's own rows call this after the user
+     * taps one — the selection they imply is written by [selectPortfolio] first,
+     * and this only changes which of the two views is on screen.
+     */
+    fun leaveOverview() {
+        devicePrefs.setOverviewSelected(false)
     }
 
     /** Everything the overview + offline cache need for one portfolio. */

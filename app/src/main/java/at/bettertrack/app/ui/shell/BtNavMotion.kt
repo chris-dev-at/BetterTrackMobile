@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import at.bettertrack.app.navigation.HomeTabRoute
 import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.PeopleTabRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
@@ -134,7 +133,6 @@ object BtNavMotion {
      * lateral set and give tab hops the push motion.
      */
     val TAB_ROUTE_KEYS: Set<String> = setOf(
-        HomeTabRoute::class,
         PortfolioTabRoute::class,
         WorkbenchTabRoute::class,
         MarketsTabRoute::class,

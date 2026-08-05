@@ -8,7 +8,6 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AlertDto
 import at.bettertrack.app.data.api.dto.CreateAlertRequest
 import at.bettertrack.app.data.api.dto.UpdateAlertRequest
-import at.bettertrack.app.data.api.parseApiError
 import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.shows
@@ -163,15 +162,8 @@ class AlertsRepository(
     suspend fun update(id: String, threshold: Double?, repeat: Boolean?): BtResult<PriceAlert> =
         apiCall(json) { api.updateAlert(id, UpdateAlertRequest(threshold, repeat)) }.toDomain()
 
-    suspend fun delete(id: String): BtResult<Unit> {
-        val resp = try {
-            api.deleteAlert(id)
-        } catch (_: java.io.IOException) {
-            return BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK, "No connection."))
-        }
-        return if (resp.isSuccessful) BtResult.Ok(Unit)
-        else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-    }
+    suspend fun delete(id: String): BtResult<Unit> =
+        at.bettertrack.app.data.api.unitApiCall(json) { api.deleteAlert(id) }
 
     suspend fun rearm(id: String): BtResult<PriceAlert> =
         apiCall(json) { api.rearmAlert(id) }.toDomain()

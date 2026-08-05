@@ -135,6 +135,24 @@ private val HOME_SECTION_GAP = 28.dp
 fun HomeScreen(
     onOpen: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
+    /**
+     * Leave Overview for the selected portfolio's own page (owner IA change).
+     *
+     * Was `onSwitchTab(BtTab.Portfolio)` while this screen was the Home TAB. It
+     * is now hosted BY the Portfolio tab, so that call became a hop to the tab we
+     * are already standing on — a no-op the user would read as a dead tap. The
+     * intent it always meant ("show me that portfolio") is the one thing left, so
+     * it says so.
+     */
+    onOpenPortfolioView: () -> Unit,
+    /**
+     * Create a portfolio — opens the switcher sheet, which is where creation
+     * lives. Split out from [onOpenPortfolioView] because the two used to share
+     * one call and never should have: landing someone on an empty portfolio page
+     * and hoping they find the sheet was the old behaviour, and after the IA
+     * change that page is the one they are already looking at.
+     */
+    onCreatePortfolio: () -> Unit,
     onOpenInbox: () -> Unit,
     onOpenDataHome: () -> Unit,
     discreetMode: Boolean,
@@ -224,7 +242,7 @@ fun HomeScreen(
             item(key = "hero") {
                 HomeHero(
                     state = hero,
-                    onCreatePortfolio = { onSwitchTab(BtTab.Portfolio) },
+                    onCreatePortfolio = onCreatePortfolio,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
             }
@@ -343,7 +361,7 @@ fun HomeScreen(
                     HomeUnpricedBlock(
                         state = state,
                         onOpenHolding = { assetId -> onOpen(NotifDeepLink.Holding(assetId)) },
-                        onSeeAll = { onSwitchTab(BtTab.Portfolio) },
+                        onSeeAll = onOpenPortfolioView,
                         modifier = Modifier
                             .padding(top = HOME_SECTION_GAP)
                             .padding(horizontal = 20.dp),
@@ -363,12 +381,13 @@ fun HomeScreen(
                             HomePortfolioRow(
                                 portfolio = p,
                                 onClick = {
-                                    // Selection first, then the tab: the Portfolio
-                                    // tab reads the governing selection on
-                                    // composition, so switching first would show
-                                    // the previous portfolio for a frame.
+                                    // Selection first, then the view: the
+                                    // portfolio page reads the governing
+                                    // selection on composition, so leaving
+                                    // Overview first would show the previous
+                                    // portfolio for a frame.
                                     vm.selectPortfolio(p.id)
-                                    onSwitchTab(BtTab.Portfolio)
+                                    onOpenPortfolioView()
                                 },
                             )
                         }

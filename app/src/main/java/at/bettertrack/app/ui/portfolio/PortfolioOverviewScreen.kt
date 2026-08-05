@@ -121,6 +121,7 @@ private val PortfolioOverviewVmInitializer: CreationExtras.() -> PortfolioOvervi
         AppGraph.connectivityMonitor,
         AppGraph.database,
         AppGraph.json,
+        AppGraph.devicePrefs,
     )
 }
 
@@ -170,9 +171,33 @@ fun PortfolioOverviewScreen(
     onNewTransaction: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
+    /**
+     * What to draw when the switcher's pinned **Overview** entry is selected —
+     * the account-wide index that used to be the Home tab (owner IA change).
+     *
+     * A slot rather than a direct `HomeScreen(...)` call, so this screen stays
+     * ignorant of Home: the shell owns which content Overview means and the
+     * dozen callbacks that content needs, and this file keeps knowing only about
+     * portfolios. It also means the Overview branch composes NOTHING while a
+     * portfolio is selected — Home's view model is never even constructed.
+     *
+     * Receives the two things Overview's content needs from THIS screen's state
+     * holder, so the view model stays the single writer of both: `onOpenSwitcher`
+     * (Overview's "create a portfolio" — creation lives in the sheet) and
+     * `onOpenPortfolioView` (leave Overview for the selected portfolio's page).
+     */
+    overviewContent: @Composable (
+        onOpenSwitcher: () -> Unit,
+        onOpenPortfolioView: () -> Unit,
+    ) -> Unit,
+    /** Overview's ONE header action (search) — the mandate's §1 budget. */
+    overviewAction: @Composable () -> Unit,
+    /** Overview's header overflow: inbox · discreet · settings · dev backend. */
+    overviewOverflow: @Composable () -> Unit,
 ) {
     val vm: PortfolioOverviewViewModel = viewModel(initializer = PortfolioOverviewVmInitializer)
 
+    val overviewSelected by vm.overviewSelected.collectAsStateWithLifecycle()
     val portfolios by vm.portfolios.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
@@ -231,96 +256,131 @@ fun PortfolioOverviewScreen(
             .nestedScroll(fabVisibility.nestedScroll)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
     ) {
-        // The switcher is reachable while ANY portfolio exists — including when
-        // every one of them is archived, where `selected` is null but restoring
-        // one is exactly what the user needs the sheet for.
         val canSwitch = portfolios.isNotEmpty()
         BtCollapsingHeader(
-            title = selected?.name ?: stringResource(R.string.bt_tab_portfolio),
+            // The title says which of the switcher's entries you are looking at,
+            // and Overview is one of them — so it names itself here exactly the
+            // way a portfolio does. That is the whole IA change in one line: the
+            // former Home tab is now a selection, not a place.
+            title = if (overviewSelected) {
+                stringResource(R.string.bt_overview_title)
+            } else {
+                selected?.name ?: stringResource(R.string.bt_tab_portfolio)
+            },
             scrollBehavior = scrollBehavior,
-            onTitleClick = if (canSwitch) ({ vm.openSwitcher() }) else null,
+            // Always tappable now. The switcher stopped being an optional
+            // convenience the moment it became the only way between Overview and
+            // the portfolios: an account with zero portfolios still needs the
+            // sheet (to create its first one), and Overview itself is always in
+            // it, so there is no state in which opening it is a dead end. It used
+            // to be disabled while `portfolios` was empty, which after this change
+            // would strand a fresh account on Overview with no way out.
+            onTitleClick = { vm.openSwitcher() },
             titleClickLabel = stringResource(R.string.bt_switcher_open_cd),
-            overflow = {
-                PortfolioOverflow(
-                    portfolioId = selected?.id,
-                    canSwitch = canSwitch,
-                    hasPending = pendingTx.isNotEmpty(),
-                    onOpenTransactions = onOpenTransactions,
-                    onOpenCash = onOpenCash,
-                    onOpenPendingSync = onOpenPendingSync,
-                    onManagePortfolios = { vm.openSwitcher() },
-                )
+            action = if (overviewSelected) overviewAction else null,
+            overflow = if (overviewSelected) {
+                overviewOverflow
+            } else {
+                {
+                    PortfolioOverflow(
+                        portfolioId = selected?.id,
+                        canSwitch = canSwitch,
+                        hasPending = pendingTx.isNotEmpty(),
+                        onOpenTransactions = onOpenTransactions,
+                        onOpenCash = onOpenCash,
+                        onOpenPendingSync = onOpenPendingSync,
+                        onManagePortfolios = { vm.openSwitcher() },
+                    )
+                }
             },
         )
 
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            PullToRefreshBox(
-                isRefreshing = refreshing,
-                onRefresh = { vm.refresh() },
-                state = pullState,
-                modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    PullToRefreshDefaults.Indicator(
-                        state = pullState,
-                        isRefreshing = refreshing,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        containerColor = bt.surface,
-                        color = bt.gold,
-                    )
-                },
-            ) {
-                when {
-                    // First run, nothing cached yet: skeleton, never a blank screen.
-                    selected == null && !hasEverSynced && loadError == null ->
-                        OverviewSkeleton()
-
-                    // Nothing cached AND the first load failed: honest error + retry.
-                    selected == null && !hasEverSynced ->
-                        ErrorFillState { vm.refresh() }
-
-                    // Synced but zero active portfolios: branded create-first state.
-                    selected == null ->
-                        NoPortfolioState(
-                            isOnline = isOnline,
-                            busy = switcherBusy,
-                            error = switcherError,
-                            onCreate = { name -> vm.createPortfolio(name) },
+            if (overviewSelected) {
+                // Overview brings its own pull-to-refresh and its own scroll
+                // container; it is NOT wrapped in this screen's PullToRefreshBox,
+                // which refreshes one portfolio's detail/graph/ledger/cash and
+                // would be the wrong verb here. Its LazyColumn still drives the
+                // collapsing header above, because the nestedScroll connection
+                // is on the Column that wraps both branches.
+                // Positional because Kotlin forbids named arguments on function
+                // types; the parameter names live on the slot's declaration.
+                overviewContent(
+                    /* onOpenSwitcher = */ { vm.openSwitcher() },
+                    /* onOpenPortfolioView = */ { vm.leaveOverview() },
+                )
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = { vm.refresh() },
+                    state = pullState,
+                    modifier = Modifier.fillMaxSize(),
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = refreshing,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            containerColor = bt.surface,
+                            color = bt.gold,
                         )
-
-                    else -> OverviewContent(
-                        portfolio = selected!!,
-                        listState = listState,
-                        holdings = holdings,
-                        history = history,
-                        range = range,
-                        pendingTx = pendingTx,
-                        onRange = vm::setRange,
-                        onOpenHolding = onOpenHolding,
-                        onOpenTransactions = onOpenTransactions,
-                        onOpenPendingSync = onOpenPendingSync,
-                        onOpenCash = onOpenCash,
-                    )
-                }
-            }
-
-            // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
-            // this FAB opens the buy/sell form directly. It stays the screen's ONLY
-            // creation entry; the header deliberately carries no `+`.
-            selected?.let { p ->
-                val fabCd = stringResource(R.string.bt_overview_fab_cd)
-                fabVisibility.Content(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                    },
                 ) {
-                    FloatingActionButton(
-                        onClick = { onNewTransaction(p.id) },
-                        containerColor = bt.gold,
-                        contentColor = bt.onGold,
-                        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                        modifier = Modifier.semantics { contentDescription = fabCd },
-                    ) {
-                        Icon(Icons.Outlined.Add, contentDescription = null)
+                    when {
+                        // First run, nothing cached yet: skeleton, never a blank screen.
+                        selected == null && !hasEverSynced && loadError == null ->
+                            OverviewSkeleton()
+
+                        // Nothing cached AND the first load failed: honest error + retry.
+                        selected == null && !hasEverSynced ->
+                            ErrorFillState { vm.refresh() }
+
+                        // Synced but zero active portfolios: branded create-first state.
+                        selected == null ->
+                            NoPortfolioState(
+                                isOnline = isOnline,
+                                busy = switcherBusy,
+                                error = switcherError,
+                                onCreate = { name -> vm.createPortfolio(name) },
+                            )
+
+                        else -> OverviewContent(
+                            portfolio = selected!!,
+                            listState = listState,
+                            holdings = holdings,
+                            history = history,
+                            range = range,
+                            pendingTx = pendingTx,
+                            onRange = vm::setRange,
+                            onOpenHolding = onOpenHolding,
+                            onOpenTransactions = onOpenTransactions,
+                            onOpenPendingSync = onOpenPendingSync,
+                            onOpenCash = onOpenCash,
+                        )
                     }
                 }
+
+                // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
+                // this FAB opens the buy/sell form directly. It stays the screen's ONLY
+                // creation entry; the header deliberately carries no `+`.
+                selected?.let { p ->
+                    val fabCd = stringResource(R.string.bt_overview_fab_cd)
+                    fabVisibility.Content(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                    ) {
+                        FloatingActionButton(
+                            onClick = { onNewTransaction(p.id) },
+                            containerColor = bt.gold,
+                            contentColor = bt.onGold,
+                            elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                            modifier = Modifier.semantics { contentDescription = fabCd },
+                        ) {
+                            Icon(Icons.Outlined.Add, contentDescription = null)
+                        }
+                    }
+                }
+                // Overview carries no FAB: "record a transaction" needs one
+                // ledger to record INTO, and Overview is deliberately the view
+                // that is about all of them at once.
             }
         }
     }
@@ -329,6 +389,11 @@ fun PortfolioOverviewScreen(
         PortfolioSwitcherSheet(
             portfolios = portfolios,
             selectedId = selected?.id,
+            overviewSelected = overviewSelected,
+            onSelectOverview = {
+                vm.selectOverview()
+                vm.dismissSwitcher()
+            },
             isOnline = isOnline,
             busy = switcherBusy,
             error = switcherError,

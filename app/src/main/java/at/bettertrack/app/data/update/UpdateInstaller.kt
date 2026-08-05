@@ -40,7 +40,10 @@ import kotlin.coroutines.coroutineContext
 class UpdateInstaller(
     private val appContext: Context,
     private val client: OkHttpClient,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val scope: CoroutineScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            at.bettertrack.app.btBackgroundExceptionHandler("UpdateInstaller"),
+    ),
 ) {
     private val _state = MutableStateFlow<UpdateInstallState>(UpdateInstallState.Idle)
     val state: StateFlow<UpdateInstallState> = _state.asStateFlow()

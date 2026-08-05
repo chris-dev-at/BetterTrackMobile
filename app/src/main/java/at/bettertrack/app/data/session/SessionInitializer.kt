@@ -6,6 +6,7 @@ import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.data.repo.WatchlistRepository
 import at.bettertrack.app.sync.ConnectivityMonitor
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,15 +56,28 @@ class SessionInitializer(
         if (!started.compareAndSet(false, true)) return
         scope.launch {
             authState.collect { state ->
-                when (state) {
-                    is AuthState.LoggedIn -> onLoggedIn(freshLogin = sawLoggedOut)
-                    AuthState.LoggedOut, is AuthState.PasswordChangeRequired -> {
-                        // A new session must reload; a re-login of the same user
-                        // still re-warms the cache from server truth.
-                        sawLoggedOut = true
-                        loadedForSession = false
+                // The collector must OUTLIVE a failed load. Without this guard a
+                // single throw (a cold Room read, a decode of a stale blob) both
+                // killed the process — a root coroutine has no other backstop —
+                // and, once that was survivable, would still have ended the
+                // collector, so a later login would silently never warm anything.
+                try {
+                    when (state) {
+                        is AuthState.LoggedIn -> onLoggedIn(freshLogin = sawLoggedOut)
+                        AuthState.LoggedOut, is AuthState.PasswordChangeRequired -> {
+                            // A new session must reload; a re-login of the same user
+                            // still re-warms the cache from server truth.
+                            sawLoggedOut = true
+                            loadedForSession = false
+                        }
+                        AuthState.Unknown -> Unit // transient startup value — ignore
                     }
-                    AuthState.Unknown -> Unit // transient startup value — ignore
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Re-arm so the next auth transition gets another attempt.
+                    loadedForSession = false
+                    Log.w(TAG, "Session warm-up for $state failed: ${e.message}", e)
                 }
             }
         }
@@ -85,30 +99,62 @@ class SessionInitializer(
         runInitialLoad()
     }
 
-    private suspend fun runInitialLoad() = coroutineScope {
+    /**
+     * The first-of-session cascade.
+     *
+     * The try/catch is OUTSIDE the [coroutineScope] deliberately. A `launch`ed
+     * child's failure is not delivered to the enclosing `try` — it cancels the
+     * scope's job and is re-thrown by `coroutineScope` only once it awaits its
+     * children, i.e. AFTER the `try` block has already been left. With the catch
+     * inside (the previous shape) a single throwing warm-up call escaped all the
+     * way to `authState.collect`'s root coroutine and killed the process — the
+     * exact cold-start crash an unreachable backend provokes.
+     *
+     * Each child is additionally wrapped in [warm], so one refusal cannot cancel
+     * its four siblings: an empty cash tab is a designed state, an empty app is
+     * not. Everything called here already returns `BtResult`, so a plain network
+     * failure never even reaches these guards — they exist for what gets past
+     * the API boundary (a Room read on a cold cache, a decode of a stale blob).
+     */
+    private suspend fun runInitialLoad() {
         _initialLoading.value = true
         try {
-            // 1) The list first — the governing selection depends on it.
-            portfolios.refreshPortfolios()
-            // 2) Resolve + persist the default so every screen shares one choice.
-            val chosen = portfolios.defaultSelection()
-            if (chosen != null) {
-                if (portfolios.selectedPortfolioIdNow() != chosen.id) {
-                    portfolios.selectPortfolio(chosen.id)
+            coroutineScope {
+                // 1) The list first — the governing selection depends on it.
+                portfolios.refreshPortfolios()
+                // 2) Resolve + persist the default so every screen shares one choice.
+                val chosen = portfolios.defaultSelection()
+                if (chosen != null) {
+                    if (portfolios.selectedPortfolioIdNow() != chosen.id) {
+                        portfolios.selectPortfolio(chosen.id)
+                    }
+                    // 3) Cascade the dependent scope in parallel (Room flows resolve
+                    //    as each lands, so the overview fills progressively).
+                    launch { warm("detail") { portfolios.refreshPortfolioDetail(chosen.id) } }
+                    launch { warm("history") { portfolios.refreshHistory(chosen.id, HistoryRange.DEFAULT) } }
+                    launch { warm("transactions") { portfolios.refreshTransactions(chosen.id) } }
+                    launch { warm("cash") { portfolios.refreshCash(chosen.id) } }
                 }
-                // 3) Cascade the dependent scope in parallel (Room flows resolve
-                //    as each lands, so the overview fills progressively).
-                launch { portfolios.refreshPortfolioDetail(chosen.id) }
-                launch { portfolios.refreshHistory(chosen.id, HistoryRange.DEFAULT) }
-                launch { portfolios.refreshTransactions(chosen.id) }
-                launch { portfolios.refreshCash(chosen.id) }
+                // 4) Pre-warm the Assets tab's watchlists so it's instant on first tap.
+                launch { warm("watchlists") { watchlists.refresh() } }
             }
-            // 4) Pre-warm the Assets tab's watchlists so it's instant on first tap.
-            launch { watchlists.refresh() }
+        } catch (e: CancellationException) {
+            throw e // structured concurrency: a cancel is not a failure to log
         } catch (e: Exception) {
-            Log.w(TAG, "Initial session load failed: ${e.message}")
+            Log.w(TAG, "Initial session load failed: ${e.message}", e)
         } finally {
             _initialLoading.value = false
+        }
+    }
+
+    /** One warm-up call: a failure is this screen's empty state, never the app's. */
+    private suspend fun warm(what: String, call: suspend () -> Unit) {
+        try {
+            call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Initial $what warm-up failed: ${e.message}", e)
         }
     }
 

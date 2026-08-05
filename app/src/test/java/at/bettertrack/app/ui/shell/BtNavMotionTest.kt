@@ -2,7 +2,6 @@ package at.bettertrack.app.ui.shell
 
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
-import at.bettertrack.app.navigation.HomeTabRoute
 import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.PeopleTabRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
@@ -26,7 +25,6 @@ import org.junit.Test
 class BtNavMotionTest {
 
     private val allTabs = listOf(
-        HomeTabRoute::class.qualifiedName!!,
         PortfolioTabRoute::class.qualifiedName!!,
         WorkbenchTabRoute::class.qualifiedName!!,
         MarketsTabRoute::class.qualifiedName!!,
@@ -69,8 +67,11 @@ class BtNavMotionTest {
     // ── the tab set ─────────────────────────────────────────────────────────
 
     @Test
-    fun `all five tabs and only the five tabs are lateral destinations`() {
-        assertEquals(5, BtNavMotion.TAB_ROUTE_KEYS.size)
+    fun `all four tabs and only the four tabs are lateral destinations`() {
+        // Four since the owner IA change retired the Home tab. The count is
+        // asserted separately from the set so a future tab added to BtTab but
+        // forgotten here fails loudly instead of quietly widening the set.
+        assertEquals(4, BtNavMotion.TAB_ROUTE_KEYS.size)
         assertEquals(allTabs.toSet(), BtNavMotion.TAB_ROUTE_KEYS)
     }
 

@@ -18,7 +18,7 @@ import at.bettertrack.app.data.api.dto.ChatConversationDto
 import at.bettertrack.app.data.api.dto.ChatMessageDto
 import at.bettertrack.app.data.api.dto.OpenConversationRequest
 import at.bettertrack.app.data.api.dto.SendChatMessageRequest
-import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +31,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import retrofit2.Response
-import java.io.IOException
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
@@ -293,7 +292,10 @@ class DefaultChatRepository(
     private val currentUserId: () -> String?,
     /** Current friend ids for read-only (unfriended) detection; null ⇒ couldn't determine. */
     private val friendIdsProvider: suspend () -> Set<String>?,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val scope: CoroutineScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            at.bettertrack.app.btBackgroundExceptionHandler("ChatRepository"),
+    ),
     private val observeProcessLifecycle: Boolean = true,
 ) : ChatRepository {
 
@@ -611,14 +613,7 @@ class DefaultChatRepository(
 
     /** For 200-with-body/empty writes (mark-read) that [apiCall] can't usefully decode. */
     private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> =
-        try {
-            val resp = call()
-            if (resp.isSuccessful) BtResult.Ok(Unit) else BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
-        } catch (_: IOException) {
-            // No diagnostic: NETWORK is catalogued, so the app already owns the
-            // sentence — an English one here would only be dead weight.
-            BtResult.Err(BtApiError(0, BtApiError.Codes.NETWORK))
-        }
+        unitApiCall(json, call)
 
     private companion object {
         const val PAGE = 30

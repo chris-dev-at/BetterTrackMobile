@@ -203,8 +203,22 @@ object AppGraph {
             .create(BtApi::class.java)
     }
 
+    /**
+     * The process-scoped background scope every ambient job runs in (session
+     * warm-up, auth side effects, push registration, the vault lock link).
+     *
+     * The [at.bettertrack.app.btBackgroundExceptionHandler] is load-bearing, not
+     * decoration: `SupervisorJob` stops a failure from cancelling SIBLINGS, but a
+     * root coroutine that throws with no handler still reaches the process's
+     * default uncaught handler — i.e. it kills the app. With an unreachable
+     * backend those throws are the common case, so ambient work here degrades to
+     * a log line and the UI keeps its own designed error states.
+     */
     private val appScope: CoroutineScope by lazy {
-        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.Default +
+                at.bettertrack.app.btBackgroundExceptionHandler("AppGraph.appScope"),
+        )
     }
 
     val authRepository: AuthRepository by lazy {

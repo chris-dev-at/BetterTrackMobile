@@ -7,6 +7,7 @@ import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AddToWorkboardRequest
 import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.transportErr
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
@@ -146,8 +147,8 @@ class MarketRepository(
     suspend fun addToWatchlist(assetId: String): BtResult<Unit> {
         val resp = try {
             api.addToWorkboard(AddToWorkboardRequest(assetId))
-        } catch (_: java.io.IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             resp.body()?.let { db.watchlistDao().insertItems(listOf(it.toEntity())) }
@@ -163,8 +164,8 @@ class MarketRepository(
             ?: return BtResult.Ok(Unit) // already absent
         val resp = try {
             api.removeFromWorkboard(item.id)
-        } catch (_: java.io.IOException) {
-            return networkErr()
+        } catch (e: Exception) {
+            return transportErr(e)
         }
         return if (resp.isSuccessful) {
             db.watchlistDao().deleteItem(item.id)
@@ -173,10 +174,6 @@ class MarketRepository(
             BtResult.Err(parseApiError(json, resp.code(), resp.errorBody()))
         }
     }
-
-    private fun networkErr(): BtResult<Unit> = BtResult.Err(
-        BtApiError(0, BtApiError.Codes.NETWORK, "No connection. Check your network and try again."),
-    )
 
     private fun at.bettertrack.app.data.api.dto.WorkboardItemDto.toEntity() = WatchlistItemEntity(
         id = id,
