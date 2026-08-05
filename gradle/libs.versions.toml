@@ -16,6 +16,10 @@ kotlinxSerializationJson = "1.9.0"
 materialIconsExtended = "1.7.8"
 junit = "4.13.2"
 junitVersion = "1.3.0"
+# Pure-JVM SQLite for the Room migration regression suite (test-only). Pinned to
+# the version Room's own compiler already resolves, so it adds nothing new to the
+# dependency graph.
+sqliteJdbc = "3.41.2.2"
 espressoCore = "3.7.0"
 
 # ── Step 5 (local database & sync engine core) ─────────────────────────────
@@ -137,6 +141,10 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+# Real SQLite in a plain JVM unit test — the only way to execute the Room
+# migration chain (and Room's own schema comparison) without a device or an
+# emulator. Same engine family the app runs on; test-only, never shipped.
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
 # MockWebServer version-aligns with OkHttp above — wire-level tests of the
 # Retrofit client (e.g. the Idempotency-Key header on queue mutations).
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
