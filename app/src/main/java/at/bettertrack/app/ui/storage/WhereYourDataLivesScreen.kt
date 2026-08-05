@@ -16,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Key
@@ -35,9 +34,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -65,8 +63,13 @@ import at.bettertrack.app.data.storage.evaluateTransition
 import at.bettertrack.app.data.storage.holdsVault
 import at.bettertrack.app.data.storage.priceLookupAvailability
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtTextField
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -85,6 +88,19 @@ import kotlinx.coroutines.launch
  * Nothing here reports a success it did not achieve. A transition whose
  * prerequisite is missing renders the reason inline and changes nothing; a Drive
  * delete that failed says so rather than quietly leaving the file behind.
+ *
+ * ## R2 visual pass
+ *
+ * The row runs are [BtGroup]s now, like the rest of settings, and the bar is the
+ * shared collapsing header.
+ *
+ * The one thing this screen needed that no other header did: its title is one of
+ * three, chosen by [DataHomeSection], and the delete section renders it in
+ * `bt.loss`. A red header is the strongest signal the screen has that you are
+ * somewhere irreversible, and it arrives before any body text is read — so it
+ * had to survive the conversion, and `BtCollapsingHeader` grew a `titleColor`
+ * for it. The back button stays dual-purpose: it pops a sub-section first and
+ * only leaves the screen from MAIN.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,22 +108,29 @@ fun WhereYourDataLivesScreen(onBack: () -> Unit) {
     val bt = BtTheme.colors
     var section by remember { mutableStateOf(DataHomeSection.MAIN) }
 
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Each section replaces the whole body, and the two sub-sections are short
+    // forms. Carrying the previous section's collapse into them would leave a
+    // half-height bar over content too short to scroll it back open — worst of
+    // all on DELETE, where the title is the warning.
+    LaunchedEffect(section) {
+        scrollBehavior.state.heightOffset = 0f
+        scrollBehavior.state.contentOffset = 0f
+    }
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(
-                            when (section) {
-                                DataHomeSection.MAIN -> R.string.bt_storage_settings_row
-                                DataHomeSection.REKEY -> R.string.bt_vault_rekey_title
-                                DataHomeSection.DELETE -> R.string.bt_storage_delete_everything
-                            },
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                },
+            BtCollapsingHeader(
+                title = stringResource(
+                    when (section) {
+                        DataHomeSection.MAIN -> R.string.bt_storage_settings_row
+                        DataHomeSection.REKEY -> R.string.bt_vault_rekey_title
+                        DataHomeSection.DELETE -> R.string.bt_storage_delete_everything
+                    },
+                ),
+                titleColor = if (section == DataHomeSection.DELETE) bt.loss else null,
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -120,11 +143,6 @@ fun WhereYourDataLivesScreen(onBack: () -> Unit) {
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = if (section == DataHomeSection.DELETE) bt.loss else bt.textPrimary,
-                    navigationIconContentColor = bt.textSecondary,
-                ),
             )
         },
     ) { inner ->
@@ -174,22 +192,29 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
 
     // ── Backup status (only modes that actually have a vault) ───────────────
     if (effective.holdsVault) {
-        SectionLabel(stringResource(R.string.bt_storage_section_backup))
+        BtSectionHeader(stringResource(R.string.bt_storage_section_backup))
+        // The two backup cards stay separate cards: each is a compound status
+        // block (a sentence, per-medium lines, its own button), not a row, and
+        // merging them would blur exactly the "these are two independent facts"
+        // point `VaultSyncCard` and `ServerVaultSection` exist to make.
         VaultSyncCard()
         // S5: BetterTrack as a second storage place. Its own row, because with a
         // media set "is my data safe?" stops having one answer — see
         // `ServerVaultSection`'s doc.
         ServerVaultSection()
 
-        SectionLabel(stringResource(R.string.bt_storage_section_vault))
-        StorageNavRow(
-            icon = Icons.Outlined.Key,
-            title = stringResource(R.string.bt_vault_change_pass),
-            subtitle = stringResource(R.string.bt_vault_change_pass_sub),
-            onClick = onOpenRekey,
-        )
-        NewRecoveryKitRow()
-        LockVaultRow()
+        // Three things you can do with the key — one subject, so one group.
+        BtSectionHeader(stringResource(R.string.bt_storage_section_vault))
+        BtGroup {
+            BtGroupRow(
+                icon = Icons.Outlined.Key,
+                title = stringResource(R.string.bt_vault_change_pass),
+                subtitle = stringResource(R.string.bt_vault_change_pass_sub),
+                onClick = onOpenRekey,
+            )
+            NewRecoveryKitRow()
+            LockVaultRow()
+        }
     } else if (at.bettertrack.app.data.api.ParanoidModeState.active.collectAsStateWithLifecycle().value &&
         !AppGraph.vaultKeyCustody.hasVault
     ) {
@@ -197,7 +222,7 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
         // vault. Server mode has nothing to render for this user — the kill-rail
         // blacked out every portfolio surface — so the honest offer is the way in,
         // not an empty backup section.
-        SectionLabel(stringResource(R.string.bt_storage_section_backup))
+        BtSectionHeader(stringResource(R.string.bt_storage_section_backup))
         ServerVaultSetupCard()
     }
 
@@ -207,28 +232,35 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
     // ── Change where it lives ───────────────────────────────────────────────
     val transitions = availableTransitions(effective)
     if (transitions.isNotEmpty()) {
-        SectionLabel(stringResource(R.string.bt_storage_section_change))
+        BtSectionHeader(stringResource(R.string.bt_storage_section_change))
         var message by remember { mutableStateOf<Int?>(null) }
-        for (transition in transitions) {
-            TransitionRow(
-                transition = transition,
-                onResult = { result ->
-                    message = when (result) {
-                        is SwitchResult.Blocked -> result.blocker.messageRes()
-                        is SwitchResult.Partial ->
-                            if (result.warning == SwitchWarning.REMOTE_VAULT_NOT_DELETED) {
-                                R.string.bt_storage_remote_delete_failed
-                            } else {
-                                R.string.bt_storage_switch_done
-                            }
+        // The offers are alternatives to each other — one group, so they read as
+        // one decision with N answers rather than N separate propositions.
+        BtGroup {
+            for (transition in transitions) {
+                TransitionRow(
+                    transition = transition,
+                    onResult = { result ->
+                        message = when (result) {
+                            is SwitchResult.Blocked -> result.blocker.messageRes()
+                            is SwitchResult.Partial ->
+                                if (result.warning == SwitchWarning.REMOTE_VAULT_NOT_DELETED) {
+                                    R.string.bt_storage_remote_delete_failed
+                                } else {
+                                    R.string.bt_storage_switch_done
+                                }
 
-                        is SwitchResult.Applied -> R.string.bt_storage_switch_done
-                        is SwitchResult.NeedsFlow -> result.transition.flowUnavailableMessage()
-                    }
-                },
-                scope = scope,
-            )
+                            is SwitchResult.Applied -> R.string.bt_storage_switch_done
+                            is SwitchResult.NeedsFlow -> result.transition.flowUnavailableMessage()
+                        }
+                    },
+                    scope = scope,
+                )
+            }
         }
+        // The outcome of the LAST tap, outside the group: it reports on the act,
+        // not on any one offer, and a row inside the block would read as a
+        // property of whichever transition it happened to sit under.
         message?.let {
             Text(
                 text = stringResource(it),
@@ -241,35 +273,27 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
 
     // ── This device (plan §4.4 row 1: Drive mode has no "log out") ──────────
     if (effective == StorageMode.DRIVE) {
-        SectionLabel(stringResource(R.string.bt_storage_section_device))
-        DisconnectDriveRow()
+        BtSectionHeader(stringResource(R.string.bt_storage_section_device))
+        BtGroup { DisconnectDriveRow() }
+        // Deliberately NOT in the group above, and the one thing on this screen
+        // that keeps a border — the same shape `SettingsScreen`'s danger zone
+        // uses. Every other block dropped its outline for a tonal step, so a
+        // single red-edged block reads as "this one is not like the others"
+        // without shouting; the emphasis is bought by the absence elsewhere.
         Surface(
-            onClick = onOpenDelete,
             color = bt.surface,
             border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
-            shape = BtShapes.card,
+            shape = BtShapes.group,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = bt.loss, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.bt_storage_delete_everything),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = bt.loss,
-                    )
-                    Text(
-                        stringResource(R.string.bt_storage_delete_everything_sub),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
-                    )
-                }
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
-            }
+            BtGroupRow(
+                icon = Icons.Outlined.WarningAmber,
+                iconTint = bt.loss,
+                title = stringResource(R.string.bt_storage_delete_everything),
+                titleColor = bt.loss,
+                subtitle = stringResource(R.string.bt_storage_delete_everything_sub),
+                onClick = onOpenDelete,
+            )
         }
     }
     Spacer(Modifier.height(8.dp))
@@ -428,7 +452,7 @@ private fun NewRecoveryKitRow() {
         kit = null
     }
     var lockedNotice by remember { mutableStateOf(false) }
-    StorageNavRow(
+    BtGroupRow(
         icon = Icons.Outlined.Key,
         title = stringResource(R.string.bt_vault_new_kit),
         subtitle = stringResource(R.string.bt_vault_new_kit_sub),
@@ -447,18 +471,22 @@ private fun NewRecoveryKitRow() {
         },
     )
     if (lockedNotice) {
+        // Lives INSIDE the group, directly under its own row, so the reason
+        // attaches to the tap that produced it. Indented to the group's 16dp
+        // gutter rather than the page's 4dp one it used when it was a sibling of
+        // a bordered card.
         Text(
             text = stringResource(R.string.bt_storage_blocked_unlock),
             style = MaterialTheme.typography.bodySmall,
             color = BtTheme.colors.goldSoft,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
         )
     }
 }
 
 @Composable
 private fun LockVaultRow() {
-    StorageNavRow(
+    BtGroupRow(
         icon = Icons.Outlined.Lock,
         title = stringResource(R.string.bt_vault_lock_action),
         subtitle = stringResource(R.string.bt_vault_lock_sub),
@@ -468,7 +496,7 @@ private fun LockVaultRow() {
 
 @Composable
 private fun DisconnectDriveRow() {
-    StorageNavRow(
+    BtGroupRow(
         icon = Icons.Outlined.CloudOff,
         title = stringResource(R.string.bt_storage_disconnect_drive),
         subtitle = stringResource(R.string.bt_storage_disconnect_drive_sub),
@@ -476,6 +504,15 @@ private fun DisconnectDriveRow() {
     )
 }
 
+/**
+ * One offer to move the data somewhere else, as a row in the transitions group.
+ *
+ * A blocked transition stays TAPPABLE on purpose: the blocker shown here is
+ * evaluated ahead of the tap, but the switcher is the authority, and a row that
+ * silently refused to respond would leave the user with no way to find out
+ * whether the app or their setup is at fault. Tapping a blocked offer changes
+ * nothing and prints the reason.
+ */
 @Composable
 private fun TransitionRow(
     transition: StorageTransition,
@@ -485,34 +522,22 @@ private fun TransitionRow(
     val bt = BtTheme.colors
     val outcome = evaluateTransition(transition, AppGraph.transitionCapabilities())
     val blocker = (outcome as? TransitionOutcome.Blocked)?.blocker
-    Surface(
+    BtGroupRow(
+        title = stringResource(transition.titleRes()),
+        subtitle = stringResource(transition.subtitleRes()),
         onClick = { scope.launch { onResult(AppGraph.storageModeSwitcher.apply(transition)) } },
-        color = bt.surface,
-        border = BorderStroke(1.dp, bt.border),
-        shape = BtShapes.card,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
-            Text(
-                text = stringResource(transition.titleRes()),
-                style = MaterialTheme.typography.titleSmall,
-                color = bt.textPrimary,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(transition.subtitleRes()),
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
-            )
-            if (blocker != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(blocker.messageRes()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.goldSoft,
-                )
-            }
-        }
+    )
+    if (blocker != null) {
+        // The prerequisite, kept as a third line under its own row rather than
+        // squeezed into `subtitle`: the subtitle says what the move does and is
+        // true whether or not you can make it, and merging the two would lose
+        // that distinction the moment the blocker clears.
+        Text(
+            text = stringResource(blocker.messageRes()),
+            style = MaterialTheme.typography.bodySmall,
+            color = bt.goldSoft,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        )
     }
 }
 
@@ -710,7 +735,10 @@ private fun PricesSection(effective: StorageMode) {
     // capability: it routes nowhere, so the switch must not claim it is on.
     val checked = enabled && offerable
 
-    SectionLabel(stringResource(R.string.bt_prices_section))
+    BtSectionHeader(stringResource(R.string.bt_prices_section))
+    // Left as its own bordered card: it is a single control plus the sentence
+    // that explains the trade, not a run of rows, and a one-row group here would
+    // add a container without adding a grouping.
     Surface(
         color = bt.surface,
         border = BorderStroke(1.dp, bt.border),
@@ -769,34 +797,9 @@ private fun PricesSection(effective: StorageMode) {
     }
 }
 
-// ── Shared bits ─────────────────────────────────────────────────────────────
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, color = BtTheme.colors.textMuted)
-}
-
-@Composable
-private fun StorageNavRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    val bt = BtTheme.colors
-    Surface(
-        onClick = onClick,
-        color = bt.surface,
-        border = BorderStroke(1.dp, bt.border),
-        shape = BtShapes.card,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
-        }
-    }
-}
+// R2: `SectionLabel` and `StorageNavRow` are gone — `BtSectionHeader` and
+// `BtGroupRow` do both jobs app-wide, so this screen no longer carries its own
+// third copy of them.
 
 // ── String mapping (kept next to the screen that renders it) ────────────────
 

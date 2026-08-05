@@ -189,6 +189,16 @@ fun WatchlistPanel(
     onOpenAsset: (String) -> Unit,
     onAddAsset: (boardId: String) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * R2 (§3 hierarchy): content the owning tab wants ranked BELOW the
+     * watchlist. Markets uses it for the market-intel doorway, which the mandate
+     * puts after the watchlist rather than above it — and "after" has to mean
+     * after in the *scroll*, not pinned to the bottom of the screen, or the
+     * watchlist ends up with a permanent floor eating its last row. So the
+     * footer rides inside the list when there is a list, and sits under the
+     * empty state when there is not.
+     */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val vm: WatchlistViewModel = viewModel {
         WatchlistViewModel(
@@ -281,6 +291,11 @@ fun WatchlistPanel(
                     },
                 )
             }
+            if (footer != null) {
+                Spacer(Modifier.height(8.dp))
+                footer()
+                Spacer(Modifier.height(12.dp))
+            }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -303,6 +318,12 @@ fun WatchlistPanel(
                         onClick = { selectedId?.let(onAddAsset) },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(46.dp),
                     )
+                }
+                if (footer != null) {
+                    item(key = "footer") {
+                        Spacer(Modifier.height(4.dp))
+                        footer()
+                    }
                 }
             }
         }

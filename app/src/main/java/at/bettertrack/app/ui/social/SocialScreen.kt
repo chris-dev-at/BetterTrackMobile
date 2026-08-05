@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
@@ -35,9 +37,14 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -93,10 +101,16 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
-import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtNeedsYouGroup
+import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -318,9 +332,50 @@ fun SocialScreen(
     SocialToastEffect(toast) { vm.consumeToast() }
 
     val refreshState = rememberPullToRefreshState()
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    val fabVisibility = rememberBtFabVisibility()
+    val friendsListState = rememberLazyListState()
+    // Back at the very top = nothing to get out of the way of. Without this the
+    // FAB stays hidden across a segment switch: `fabVisibility` is remembered at
+    // the screen level (so it survives the switch) while the list resets to the
+    // top (so no upward delta is ever produced to bring the FAB back).
+    androidx.compose.runtime.LaunchedEffect(friendsListState) {
+        androidx.compose.runtime.snapshotFlow {
+            friendsListState.firstVisibleItemIndex == 0 &&
+                friendsListState.firstVisibleItemScrollOffset == 0
+        }.collect { atTop -> if (atTop) fabVisibility.show() }
+    }
+    val addFriendCd = stringResource(R.string.bt_social_add_friend)
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            MessagesHeader(unread = chatUnread, onOpenChats = onOpenChats)
+        Column(
+            Modifier
+                .fillMaxSize()
+                // Same ordering rule as Portfolio (see PortfolioOverviewScreen's
+                // comment): the FAB connection observes and consumes nothing, so
+                // it must be OUTER or it would only ever see the delta the
+                // collapsing header had already eaten.
+                .nestedScroll(fabVisibility.nestedScroll)
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+        ) {
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_tab_people),
+                scrollBehavior = scrollBehavior,
+                // R1 put Messages in the shell bar as People's ONE action; R2
+                // gives People its own header, so the action moves with it —
+                // same affordance, same place on screen. The unread COUNT stays
+                // off it (mandate §1: badges left the top bar); it is carried by
+                // the People tab dot and by the Needs-you row below.
+                action = {
+                    IconButton(onClick = onOpenChats) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Chat,
+                            contentDescription = stringResource(R.string.bt_top_messages),
+                            tint = bt.textSecondary,
+                        )
+                    }
+                },
+                overflow = { PeopleOverflow(onOpenGroups = onOpenGroups) },
+            )
             SegmentedTabs(
                 selected = section,
                 onSelect = { section = it },
@@ -364,15 +419,38 @@ fun SocialScreen(
                         SocialSection.Friends -> FriendsSection(
                             ui = ui,
                             vm = vm,
-                            onAdd = { showAdd = true },
+                            listState = friendsListState,
+                            chatUnread = chatUnread,
                             onOpenFriend = onOpenFriend,
                             onChatWith = onOpenChatWith,
+                            onOpenChats = onOpenChats,
                             onOpenGroups = onOpenGroups,
                         )
                         SocialSection.SharedWithMe -> SharedWithMeSection(ui.sharedWithMe, onOpenPerson = onOpenFriend)
                         SocialSection.MyShares -> MySharesSection(ui.myShared, onShare = { vm.openSharing(it) })
                     }
                 }
+            }
+        }
+
+        // The tab's ONE creation entry (mandate §1). It used to be a full-width
+        // gold button at the top of the friends list, which put "add someone new"
+        // above "answer the people already asking" — the exact inversion §3 is
+        // about. As a FAB it is always reachable, gets out of the way on scroll,
+        // and stops competing with the requests for the lead.
+        if (section == SocialSection.Friends) {
+            fabVisibility.Content(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp),
+            ) {
+                FloatingActionButton(
+                    onClick = { showAdd = true },
+                    containerColor = bt.gold,
+                    contentColor = bt.onGold,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                    modifier = Modifier.semantics { contentDescription = addFriendCd },
+                ) { Icon(Icons.Outlined.PersonAdd, contentDescription = null) }
             }
         }
     }
@@ -488,81 +566,86 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
     }
 }
 
-@Composable
-private fun MessagesHeader(unread: Int, onOpenChats: () -> Unit) {
-    val bt = BtTheme.colors
-    Surface(
-        onClick = onOpenChats,
-        color = bt.surface,
-        border = BorderStroke(1.dp, bt.border),
-        shape = BtShapes.card,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(top = 10.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.bt_social_messages), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, modifier = Modifier.weight(1f))
-            if (unread > 0) {
-                BtCountBadge(count = unread)
-                Spacer(Modifier.width(8.dp))
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
 // ── Friends section ──────────────────────────────────────────────────────────
 
+/**
+ * The Friends segment, re-ranked for R2 (§3: *"requests + unread first, then
+ * friends, then shared items"*).
+ *
+ * ## What the order was, and why it was wrong
+ *
+ * Before: mirror invites → a full-width gold **Add friend** button → the Groups
+ * doorway → incoming requests → sent requests → friends. So the first two things
+ * on the People tab were a creation action and a navigation doorway, and the
+ * people actually waiting on an answer were the fourth block down — below the
+ * fold on a 360×800 screen once the segments and the messages card were counted.
+ *
+ * After: everything genuinely waiting on the user is one **Needs you** block at
+ * the top (mirror invites, unread messages, incoming friend requests), then the
+ * friends themselves, then the quiet doorways (sent requests, Groups, Messages).
+ * Add-friend became the tab's FAB.
+ *
+ * ## Why the block is a list item and not a fixed header
+ *
+ * Workbench's identical block is pinned above its segments because its content
+ * is bounded (three rows and a count). This one is not — every incoming request
+ * carries its own accept/decline decision and all of them must be reachable, so
+ * capping it would strand requests behind a "+N more" that goes nowhere. Living
+ * inside the list means it can be exactly as long as it needs to be and still
+ * scrolls away once dealt with.
+ */
 @Composable
 private fun FriendsSection(
     ui: SocialUiState,
     vm: SocialViewModel,
-    onAdd: () -> Unit,
+    listState: LazyListState,
+    chatUnread: Int,
     onOpenFriend: (String, String) -> Unit,
     onChatWith: (String, String) -> Unit,
+    onOpenChats: () -> Unit,
     onOpenGroups: () -> Unit,
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // V5 S2c: a group-portfolio (mirrorchain) invitation is the one thing on
-        // this tab that is genuinely WAITING on the user, so it sits above even
-        // the add-friend button. The card renders at zero height when there is
-        // nothing to answer, so it costs this list nothing the rest of the time.
+        // this tab that is genuinely WAITING on the user, so it leads. The card
+        // renders at zero height when there is nothing to answer, so it costs
+        // this list nothing the rest of the time.
         item { MirrorInvitesCard(modifier = Modifier.fillMaxWidth()) }
-        item {
-            BtPrimaryButton(
-                text = stringResource(R.string.bt_social_add_friend),
-                onClick = onAdd,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            )
-        }
-        // Groups live under Friends because a group IS a set of friends — putting
-        // it here means you find it while looking at the people it is made of.
-        item { GroupsEntryRow(count = ui.groups.size, onClick = onOpenGroups) }
 
-        if (ui.incoming.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.bt_social_requests_to_you), ui.incoming.size) }
-            items(ui.incoming, key = { "in-" + it.id }) { req ->
-                RequestRow(req, incoming = true, onAccept = { vm.accept(req) }, onDecline = { vm.decline(req) }, onCancel = {})
+        if (chatUnread > 0 || ui.incoming.isNotEmpty()) {
+            item(key = "needs-you") {
+                BtNeedsYouGroup(title = stringResource(R.string.bt_needs_you)) {
+                    if (chatUnread > 0) {
+                        BtGroupRow(
+                            title = stringResource(R.string.bt_social_messages),
+                            subtitle = pluralStringResource(
+                                R.plurals.bt_social_unread_messages,
+                                chatUnread,
+                                chatUnread,
+                            ),
+                            icon = Icons.AutoMirrored.Outlined.Chat,
+                            iconTint = BtTheme.colors.goldEmphasis,
+                            onClick = onOpenChats,
+                            trailing = { BtCountBadge(count = chatUnread) },
+                        )
+                    }
+                    ui.incoming.forEach { req ->
+                        RequestDecisionRow(
+                            req = req,
+                            onAccept = { vm.accept(req) },
+                            onDecline = { vm.decline(req) },
+                        )
+                    }
+                }
             }
         }
-        if (ui.outgoing.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.bt_social_sent_requests), ui.outgoing.size) }
-            items(ui.outgoing, key = { "out-" + it.id }) { req ->
-                RequestRow(req, incoming = false, onAccept = {}, onDecline = {}, onCancel = { vm.cancel(req) })
-            }
-        }
 
-        item { SectionHeader(stringResource(R.string.bt_social_tab_friends), ui.friends.size) }
+        item { BtSectionHeader(stringResource(R.string.bt_social_tab_friends), count = ui.friends.size) }
         if (ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty()) {
             item {
                 BtEmptyState(
@@ -577,55 +660,107 @@ private fun FriendsSection(
                 FriendRow(f, onOpen = { onOpenFriend(f.userId, f.username) }, onChat = { onChatWith(f.userId, f.username) })
             }
         }
-    }
-}
 
-/** The Social tab's way in to [FriendGroupsScreen]. */
-@Composable
-private fun GroupsEntryRow(count: Int, onClick: () -> Unit) {
-    val bt = BtTheme.colors
-    val cd = stringResource(R.string.bt_groups_open_entry_cd)
-    BtCard(modifier = Modifier.fillMaxWidth().semantics { contentDescription = cd }, onClick = onClick) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.Groups, contentDescription = null, tint = bt.gold, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.bt_groups_entry_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = bt.textPrimary,
+        // Sent requests are STATUS, not a decision — nobody is waiting on the
+        // user here, they are waiting on someone else — so they sit below the
+        // friends rather than above them.
+        if (ui.outgoing.isNotEmpty()) {
+            item { BtSectionHeader(stringResource(R.string.bt_social_sent_requests), count = ui.outgoing.size) }
+            items(ui.outgoing, key = { "out-" + it.id }) { req ->
+                SentRequestRow(req, onCancel = { vm.cancel(req) })
+            }
+        }
+
+        // The quiet doorways, grouped as one object rather than two more cards
+        // in a list of cards. Messages is here as well as in the header action:
+        // Fable's addendum rule is that a bar affordance may never be the ONLY
+        // path to a surface, and a group whose siblings are all people-related
+        // is where someone looking for their conversations would actually look.
+        item(key = "doorways") {
+            BtGroup(modifier = Modifier.padding(top = 8.dp)) {
+                BtGroupRow(
+                    title = stringResource(R.string.bt_groups_entry_title),
+                    subtitle = stringResource(R.string.bt_groups_entry_sub),
+                    icon = Icons.Outlined.Groups,
+                    onClick = onOpenGroups,
+                    trailing = if (ui.groups.isNotEmpty()) {
+                        { BtBadge(text = ui.groups.size.toString(), kind = BtBadgeKind.Neutral) }
+                    } else {
+                        null
+                    },
                 )
-                Text(
-                    stringResource(R.string.bt_groups_entry_sub),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
+                BtGroupRow(
+                    title = stringResource(R.string.bt_social_messages),
+                    subtitle = stringResource(R.string.bt_social_messages_sub),
+                    icon = Icons.AutoMirrored.Outlined.Chat,
+                    onClick = onOpenChats,
                 )
             }
-            if (count > 0) {
-                BtBadge(text = count.toString(), kind = BtBadgeKind.Gold)
-                Spacer(Modifier.width(6.dp))
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
         }
     }
 }
 
+/**
+ * An incoming friend request inside the Needs-you block: the same decision the
+ * old `RequestRow` offered, without the card chrome the group already provides.
+ */
 @Composable
-private fun SectionHeader(title: String, count: Int) {
+private fun RequestDecisionRow(req: FriendRequest, onAccept: () -> Unit, onDecline: () -> Unit) {
     val bt = BtTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
-        Spacer(Modifier.width(8.dp))
-        if (count > 0) Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = bt.textMuted)
+        BtAvatar(name = req.username, size = 36.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("@${req.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+            Text(
+                stringResource(R.string.bt_social_request_wants),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+        }
+        IconButton(onClick = onDecline) {
+            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.bt_social_decline_cd), tint = bt.textSecondary)
+        }
+        Surface(onClick = onAccept, shape = BtShapes.pill, color = bt.gold, contentColor = bt.onGold) {
+            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.bt_social_accept), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
+
+/** People's overflow — the ⋮ the mandate allows as a bar's third and last slot. */
+@Composable
+private fun PeopleOverflow(onOpenGroups: () -> Unit) {
+    val bt = BtTheme.colors
+    var open by remember { mutableStateOf(false) }
+    IconButton(onClick = { open = true }) {
+        Icon(
+            Icons.Outlined.MoreVert,
+            contentDescription = stringResource(R.string.bt_top_more),
+            tint = bt.textSecondary,
+        )
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = bt.surface) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bt_groups_entry_title), color = bt.textPrimary) },
+            onClick = {
+                open = false
+                onOpenGroups()
+            },
+        )
+    }
+}
+
+// R2: `GroupsEntryRow` and this file's private `SectionHeader` are gone. Groups
+// is now a row in the doorways group at the foot of the friends list, and the
+// header is `BtSectionHeader` — one implementation for the whole app instead of
+// three private copies that had drifted apart on casing and spacing.
 
 /**
  * A friend row. TWO targets, both spoken (S6 P1-16):
@@ -662,14 +797,14 @@ private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
     }
 }
 
+/**
+ * A request the user SENT. R2 split this from the incoming case (now
+ * [RequestDecisionRow]): one carries a decision and leads the screen, the other
+ * is status and sits below the friends, and a single composable with an
+ * `incoming` flag was making one row pretend to be both.
+ */
 @Composable
-private fun RequestRow(
-    req: FriendRequest,
-    incoming: Boolean,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
-    onCancel: () -> Unit,
-) {
+private fun SentRequestRow(req: FriendRequest, onCancel: () -> Unit) {
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -681,28 +816,14 @@ private fun RequestRow(
             Column(Modifier.weight(1f)) {
                 Text("@${req.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                 Text(
-                    if (incoming) stringResource(R.string.bt_social_request_wants) else stringResource(R.string.bt_social_request_waiting),
+                    stringResource(R.string.bt_social_request_waiting),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                 )
             }
-            if (incoming) {
-                IconButton(onClick = onDecline) {
-                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.bt_social_decline_cd), tint = bt.textSecondary)
-                }
-                Spacer(Modifier.width(2.dp))
-                Surface(onClick = onAccept, shape = BtShapes.pill, color = bt.gold, contentColor = bt.onGold) {
-                    Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.bt_social_accept), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            } else {
-                BtBadge(text = stringResource(R.string.bt_social_pending), kind = BtBadgeKind.Gold)
-                Spacer(Modifier.width(4.dp))
-                TextButton(onClick = onCancel) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) }
-            }
+            BtBadge(text = stringResource(R.string.bt_social_pending), kind = BtBadgeKind.Neutral)
+            Spacer(Modifier.width(4.dp))
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) }
         }
     }
 }
@@ -726,7 +847,7 @@ private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, St
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { SectionHeader(stringResource(R.string.bt_social_people_sharing), people.size) }
+        item { BtSectionHeader(stringResource(R.string.bt_social_people_sharing), count = people.size) }
         items(people, key = { "person-" + it.ownerId }) { p ->
             PersonRow(p, onClick = { onOpenPerson(p.ownerId, p.ownerName) })
         }

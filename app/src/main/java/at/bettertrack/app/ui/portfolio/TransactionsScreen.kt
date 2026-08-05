@@ -27,8 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -43,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +59,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
@@ -67,6 +67,7 @@ import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.shell.OfflineBanner
@@ -275,28 +276,29 @@ fun TransactionsScreen(
 
     var assetSheetOpen by rememberSaveable { mutableStateOf(false) }
 
+    // R2: the two-line title becomes the header's title/subtitle — "transactions,
+    // of THIS portfolio" is orienting information the reader needs on arrival and
+    // not once they are deep in the ledger, which is exactly what the fading
+    // subtitle line is for.
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        // The scrollable that drives the collapse is several composables down
+        // (inside the PullToRefreshBox's `else` branch), so the connection goes on
+        // the Scaffold — the nearest thing that is an ancestor of BOTH the header
+        // and every branch's content.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.bt_tx_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = bt.textPrimary,
-                        )
-                        portfolioName?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_tx_title),
+                // Empty rather than null while the name resolves — see CashScreen:
+                // the flow's first emission is null, and a late subtitle would grow
+                // the bar 112dp → 132dp a frame after the screen appears.
+                subtitle = portfolioName ?: "",
+                scrollBehavior = scrollBehavior,
+                // No action, no overflow — both slots left null on purpose:
+                // everything this screen does is either a row tap or one of the
+                // filter chips below, and none of that belongs in the bar.
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -306,13 +308,15 @@ fun TransactionsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                ),
             )
         },
     ) { innerPadding ->
+        // Everything in this Column is pinned by construction — only the LazyColumn
+        // at the bottom scrolls, so the header collapses against the ledger while
+        // the banners and, crucially, the filter row stay exactly where the user
+        // left them. The filter row is this screen's control surface: a user who
+        // has scrolled 200 rows into a filtered ledger must be able to change the
+        // filter without scrolling back up to find it.
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
             if (!isOnline) OfflineBanner(asOfMs = dataAgeMs, onClick = onOpenPendingSync)
             // S6 P0-5: online but the fetch failed — say so instead of leaving

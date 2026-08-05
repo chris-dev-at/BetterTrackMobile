@@ -63,8 +63,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -96,11 +95,13 @@ import at.bettertrack.app.data.notifications.NotificationFlags
 import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtUnreadDot
 import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -199,23 +200,35 @@ fun NotificationsInboxScreen(
     val archivedCount = notifications.count { it.isArchived }
     val totalCount = notifications.size
 
+    // R2: back + ONE action + the ⋮ — the header's three slots, which is also the
+    // element budget. Nothing was dropped to get there: "Archive all" was already
+    // the single contextual action and the flask already lived in the overflow;
+    // the slots simply make that arrangement the only one expressible.
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        // The list is two levels down (Column → Box → LazyColumn) and one of three
+        // phases; the connection goes on the Scaffold so it reaches whichever
+        // phase is on screen without any of them knowing about the header.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.bt_dest_notifications), style = MaterialTheme.typography.titleLarge) },
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_dest_notifications),
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
-                actions = {
-                    // v4 (PR #486): mark-all-read ARCHIVES everything, so this clears the
-                    // active inbox. Labelled/iconed as "Archive all" so the outcome (rows
-                    // leave the active list into Archive) is not a surprise. The repo
-                    // reconciles from the server afterwards, so on v4 the active list
-                    // empties and on a pre-v4 server the rows stay (as read) — the app
-                    // never assumes which semantics it gets.
+                // v4 (PR #486): mark-all-read ARCHIVES everything, so this clears the
+                // active inbox. Labelled/iconed as "Archive all" so the outcome (rows
+                // leave the active list into Archive) is not a surprise. The repo
+                // reconciles from the server afterwards, so on v4 the active list
+                // empties and on a pre-v4 server the rows stay (as read) — the app
+                // never assumes which semantics it gets.
+                action = {
+                    // Still absent rather than disabled at zero unread: there is
+                    // nothing to archive, so the bar says nothing about archiving.
                     if (unread > 0) {
                         IconButton(onClick = { scope.launch { repo.markAllRead() } }) {
                             Icon(
@@ -229,10 +242,12 @@ fun NotificationsInboxScreen(
                             )
                         }
                     }
-                    // S6 P2-21: the debug "simulate a notification" flask used to sit
-                    // inline with the real actions, as if shipping. It is an overflow
-                    // ENTRY now, and only in debug builds — so the release toolbar is
-                    // exactly the actions a user has.
+                },
+                // S6 P2-21: the debug "simulate a notification" flask used to sit
+                // inline with the real actions, as if shipping. It is an overflow
+                // ENTRY now, and only in debug builds — so the release toolbar is
+                // exactly the actions a user has.
+                overflow = {
                     if (actionsEnabled || BuildConfig.DEBUG) {
                         Box {
                             IconButton(onClick = { overflowOpen = true }) {
@@ -281,15 +296,14 @@ fun NotificationsInboxScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                    navigationIconContentColor = bt.textSecondary,
-                ),
             )
         },
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            // The view switcher stays pinned directly under the bar, outside the
+            // scrolling area: it is what the list IS, not something in it, and a
+            // user who has read their way down Archived must be able to get back
+            // to Active without scrolling to the top to find the control.
             if (actionsEnabled) {
                 InboxFilter(selected = selectedView, onSelect = { selectedView = it })
             }

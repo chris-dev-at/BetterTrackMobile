@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -70,9 +71,13 @@ import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
-import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -84,6 +89,24 @@ import at.bettertrack.app.ui.update.UpdateAvailableRow
  * notifications, language), **About** (version, About screen, what's new), plus a
  * hidden **Developer** menu revealed by multi-tapping the version row (debug only),
  * and Log out. Each destructive/secondary surface is its own screen.
+ *
+ * ## R2 visual pass — what changed, and what deliberately did not
+ *
+ * **No IA changes.** Every row leads where it led before, in the same section,
+ * in the same order. The mandate's §5 webapp-parity items (digest cadence and
+ * quiet hours, discreet mode) were already here; R2's job was to make them sit
+ * naturally, not to move them.
+ *
+ * **The wall of boxes is gone.** Every row used to be its own bordered
+ * `Surface` — eleven identical rounded rectangles stacked vertically, so the
+ * border was the loudest thing on the screen and nothing indicated which rows
+ * belonged together. Rows are now [BtGroupRow]s inside one [BtGroup] per
+ * section: a single tonal block, no border, no dividers, the grouping carried by
+ * the tonal step alone (mandate §4). The section labels stay, but they now label
+ * something that visually *is* one thing.
+ *
+ * **The bar collapses.** Settings scrolls, so it gets the same large title every
+ * other R2 screen has.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,21 +160,19 @@ fun SettingsScreen(
     var devUnlocked by remember { mutableStateOf(false) }
     val versionInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
 
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.bt_dest_settings), style = MaterialTheme.typography.titleLarge) },
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_dest_settings),
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                    navigationIconContentColor = bt.textSecondary,
-                ),
             )
         },
     ) { innerPadding ->
@@ -161,7 +182,7 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // The "Update available" row is part of the self-update surface — shown
             // only in github builds (Task B1); Play builds compile it out.
@@ -172,8 +193,8 @@ fun SettingsScreen(
 
             // ── ACCOUNT ──────────────────────────────────────────────────────
             if (hasAccount) {
-                SectionLabel(stringResource(R.string.bt_settings_account_section))
-                BtCard(modifier = Modifier.fillMaxWidth()) {
+                BtSectionHeader(stringResource(R.string.bt_settings_account_section))
+                BtGroup {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -181,64 +202,63 @@ fun SettingsScreen(
                         AccountRow(stringResource(R.string.bt_settings_username), user?.username?.ifBlank { "—" } ?: "—")
                         AccountRow(stringResource(R.string.bt_settings_email), user?.email?.ifBlank { "—" } ?: "—")
                     }
+                    BtGroupRow(
+                        icon = Icons.Outlined.Key,
+                        title = stringResource(R.string.bt_dest_change_password),
+                        subtitle = stringResource(R.string.bt_settings_change_password_sub),
+                        onClick = onOpenChangePassword,
+                    )
                 }
-                SettingsNavRow(
-                    icon = Icons.Outlined.Key,
-                    title = stringResource(R.string.bt_dest_change_password),
-                    subtitle = stringResource(R.string.bt_settings_change_password_sub),
-                    onClick = onOpenChangePassword,
-                )
-
-                Spacer(Modifier.height(4.dp))
             }
 
             // ── PREFERENCES ──────────────────────────────────────────────────
-            SectionLabel(stringResource(R.string.bt_settings_preferences_section))
-            SettingsNavRow(
-                icon = Icons.Outlined.Lock,
-                title = stringResource(R.string.bt_dest_settings_security),
-                subtitle = stringResource(R.string.bt_settings_security_sub),
-                onClick = onOpenSecurity,
-            )
-            SettingsNavRow(
-                icon = Icons.Outlined.Storage,
-                title = stringResource(R.string.bt_storage_settings_row),
-                subtitle = stringResource(storageMode.labelRes()),
-                onClick = onOpenDataHome,
-            )
-            if (hasNotifications) {
-                SettingsNavRow(
-                    icon = Icons.Outlined.Notifications,
-                    title = stringResource(R.string.bt_settings_notifications_row),
-                    subtitle = stringResource(R.string.bt_settings_notifications_sub),
-                    onClick = onOpenNotifications,
+            BtSectionHeader(stringResource(R.string.bt_settings_preferences_section))
+            BtGroup {
+                BtGroupRow(
+                    icon = Icons.Outlined.Lock,
+                    title = stringResource(R.string.bt_dest_settings_security),
+                    subtitle = stringResource(R.string.bt_settings_security_sub),
+                    onClick = onOpenSecurity,
+                )
+                BtGroupRow(
+                    icon = Icons.Outlined.Storage,
+                    title = stringResource(R.string.bt_storage_settings_row),
+                    subtitle = stringResource(storageMode.labelRes()),
+                    onClick = onOpenDataHome,
+                )
+                if (hasNotifications) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Notifications,
+                        title = stringResource(R.string.bt_settings_notifications_row),
+                        subtitle = stringResource(R.string.bt_settings_notifications_sub),
+                        onClick = onOpenNotifications,
+                    )
+                }
+                BtGroupRow(
+                    icon = Icons.Outlined.Translate,
+                    title = stringResource(R.string.bt_dest_settings_language),
+                    subtitle = currentLanguageLabel(),
+                    onClick = onOpenLanguage,
+                )
+                val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.ScreenRotation,
+                    title = stringResource(R.string.bt_settings_orientation_lock),
+                    subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
+                    checked = orientationLocked,
+                    onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
                 )
             }
-            SettingsNavRow(
-                icon = Icons.Outlined.Translate,
-                title = stringResource(R.string.bt_dest_settings_language),
-                subtitle = currentLanguageLabel(),
-                onClick = onOpenLanguage,
-            )
-            val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
-            SettingsToggleRow(
-                icon = Icons.Outlined.ScreenRotation,
-                title = stringResource(R.string.bt_settings_orientation_lock),
-                subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
-                checked = orientationLocked,
-                onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
-            )
-
-            Spacer(Modifier.height(4.dp))
 
             // ── PRIVACY ──────────────────────────────────────────────────────
             // Discreet mode round-trips through the account, so it belongs to the
             // modes that have one.
             if (hasAccount) {
-            SectionLabel(stringResource(R.string.bt_settings_privacy_section))
+            BtSectionHeader(stringResource(R.string.bt_settings_privacy_section))
             val discreet by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
             var discreetError by remember { mutableStateOf<BtMessage?>(null) }
+            BtGroup {
             SettingsToggleRow(
                 icon = Icons.Outlined.VisibilityOff,
                 title = stringResource(R.string.bt_settings_discreet),
@@ -259,6 +279,7 @@ fun SettingsScreen(
                     }
                 },
             )
+            }
             discreetError?.let {
                 Text(
                     text = it.resolveWithDiagnostic(),
@@ -267,14 +288,12 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
-
-            Spacer(Modifier.height(4.dp))
             }
 
             // ── ABOUT ────────────────────────────────────────────────────────
-            SectionLabel(stringResource(R.string.bt_settings_about_section))
-            // Version row — multi-tap (debug) reveals the Developer section.
-            BtCard(modifier = Modifier.fillMaxWidth()) {
+            BtSectionHeader(stringResource(R.string.bt_settings_about_section))
+            BtGroup {
+                // Version row — multi-tap (debug) reveals the Developer section.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,40 +323,41 @@ fun SettingsScreen(
                         color = bt.textPrimary,
                     )
                 }
+                BtGroupRow(
+                    icon = Icons.Outlined.Info,
+                    title = stringResource(R.string.bt_dest_settings_about),
+                    subtitle = stringResource(R.string.bt_settings_about_sub),
+                    onClick = onOpenAbout,
+                )
             }
-            SettingsNavRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.bt_dest_settings_about),
-                subtitle = stringResource(R.string.bt_settings_about_sub),
-                onClick = onOpenAbout,
-            )
 
             // ── DEVELOPER (hidden; debug + multi-tap) ────────────────────────
             if (BuildConfig.DEBUG && devUnlocked) {
-                Spacer(Modifier.height(4.dp))
-                SectionLabel(stringResource(R.string.bt_settings_developer_section))
-                SettingsNavRow(
-                    icon = Icons.Outlined.Code,
-                    title = stringResource(R.string.bt_settings_dev_gallery),
-                    subtitle = stringResource(R.string.bt_settings_dev_gallery_sub),
-                    onClick = onOpenGallery,
-                )
-                SettingsNavRow(
-                    icon = Icons.Outlined.Code,
-                    title = stringResource(R.string.bt_settings_dev_sync),
-                    subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
-                    onClick = onOpenSyncDebug,
-                )
-                // V5 S1: point the installed debug build at any backend (dev stack).
-                SettingsNavRow(
-                    icon = Icons.Outlined.Code,
-                    title = stringResource(R.string.bt_settings_dev_backend),
-                    subtitle = stringResource(R.string.bt_settings_dev_backend_sub),
-                    onClick = onOpenDevBackend,
-                )
+                BtSectionHeader(stringResource(R.string.bt_settings_developer_section))
+                BtGroup {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Code,
+                        title = stringResource(R.string.bt_settings_dev_gallery),
+                        subtitle = stringResource(R.string.bt_settings_dev_gallery_sub),
+                        onClick = onOpenGallery,
+                    )
+                    BtGroupRow(
+                        icon = Icons.Outlined.Code,
+                        title = stringResource(R.string.bt_settings_dev_sync),
+                        subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
+                        onClick = onOpenSyncDebug,
+                    )
+                    // V5 S1: point the installed debug build at any backend (dev stack).
+                    BtGroupRow(
+                        icon = Icons.Outlined.Code,
+                        title = stringResource(R.string.bt_settings_dev_backend),
+                        subtitle = stringResource(R.string.bt_settings_dev_backend_sub),
+                        onClick = onOpenDevBackend,
+                    )
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             // "Log out" is meaningless without an account (plan §4.4 row 1);
             // Drive mode offers lock / disconnect / delete-everything on
@@ -352,25 +372,27 @@ fun SettingsScreen(
 
             // ── DANGER ZONE ──────────────────────────────────────────────────
             if (hasAccount) {
-            Spacer(Modifier.height(8.dp))
-            SectionLabel(stringResource(R.string.bt_settings_danger_section))
-            Surface(
-                onClick = onOpenDeleteAccount,
-                color = bt.surface,
-                border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
-                shape = BtShapes.card,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.DeleteForever, contentDescription = null, tint = bt.loss, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.bt_dest_delete_account), style = MaterialTheme.typography.titleSmall, color = bt.loss)
-                        Text(stringResource(R.string.bt_settings_delete_sub), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-                    }
-                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
+                BtSectionHeader(stringResource(R.string.bt_settings_danger_section))
+                // The ONE place on this screen that keeps a border. Every other
+                // group dropped its outline for a tonal step, which is exactly
+                // what makes a single red-edged block read as "this one is not
+                // like the others" — the emphasis is bought by the absence
+                // elsewhere rather than by shouting louder.
+                Surface(
+                    color = bt.surface,
+                    border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
+                    shape = BtShapes.group,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.DeleteForever,
+                        iconTint = bt.loss,
+                        title = stringResource(R.string.bt_dest_delete_account),
+                        titleColor = bt.loss,
+                        subtitle = stringResource(R.string.bt_settings_delete_sub),
+                        onClick = onOpenDeleteAccount,
+                    )
                 }
-            }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -410,27 +432,17 @@ private fun currentLanguageLabel(): String = when (LocaleManager.current(LocalCo
     AppLanguage.German -> stringResource(R.string.bt_lang_german)
 }
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, color = BtTheme.colors.textMuted)
-}
+// R2: `SectionLabel` and `SettingsNavRow` are gone — `BtSectionHeader` and
+// `BtGroupRow` do both jobs for the whole app, which is what stops the settings
+// subscreens each growing a slightly different row.
 
-@Composable
-private fun SettingsNavRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    val bt = BtTheme.colors
-    Surface(onClick = onClick, color = bt.surface, border = BorderStroke(1.dp, bt.border), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = bt.textMuted, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
+/**
+ * A toggle row inside a [BtGroup]. Kept local rather than pushed into
+ * `BtGroupRow`'s `trailing` slot because the whole ROW has to be the toggle's
+ * tap target — a switch is a 32dp target at the far edge of a 360dp screen, and
+ * making the label work is the difference between a settings list you can use
+ * one-handed and one you have to aim at.
+ */
 @Composable
 private fun SettingsToggleRow(
     icon: ImageVector,
@@ -440,34 +452,32 @@ private fun SettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
-    Surface(
-        onClick = { onCheckedChange(!checked) },
-        color = bt.surface,
-        border = BorderStroke(1.dp, bt.border),
-        shape = BtShapes.card,
-        modifier = Modifier.fillMaxWidth(),
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-            }
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = bt.onGold,
-                    checkedTrackColor = bt.gold,
-                    checkedBorderColor = bt.gold,
-                    uncheckedThumbColor = bt.textMuted,
-                    uncheckedTrackColor = bt.surface,
-                    uncheckedBorderColor = bt.borderStrong,
-                ),
-            )
+        Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
         }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = bt.onGold,
+                checkedTrackColor = bt.gold,
+                checkedBorderColor = bt.gold,
+                uncheckedThumbColor = bt.textMuted,
+                uncheckedTrackColor = bt.surface,
+                uncheckedBorderColor = bt.borderStrong,
+            ),
+        )
     }
 }
 

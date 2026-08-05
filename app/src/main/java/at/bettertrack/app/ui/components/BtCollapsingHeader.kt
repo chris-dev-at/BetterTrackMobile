@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,9 +72,30 @@ import at.bettertrack.app.ui.theme.BtTheme
  * lifts to the card surface once content has gone under it. The separation
  * appears exactly when there is something to separate.
  *
+ * ## The subtitle, and why it fades instead of persisting
+ *
+ * R2 converts the pushed screens, and four of them (Transactions, Cash, Holding
+ * detail, Standing orders) had a two-line bar title: the screen's name over the
+ * portfolio it belongs to. That second line is *orienting* information — it
+ * answers "whose transactions am I looking at" once, on arrival, and never
+ * again. So it lives in the expanded region and fades out with the collapse
+ * rather than being carried forever in a 64dp strip that the 3-element rule
+ * wants kept to one idea. It is always composed (never conditionally removed) so
+ * the collapse is a pure alpha animation with no reflow, and the expanded height
+ * grows to [BT_HEADER_EXPANDED_HEIGHT_SUBTITLE] to give the extra line real room
+ * instead of letting it clip against the title.
+ *
  * @param title the screen's subject. One line, ellipsized: a portfolio name can
  *   be arbitrarily long and a wrapping header would change the bar's height on
  *   content the user chose, which is worse than a truncated name.
+ * @param subtitle optional orienting second line — see above. Fades on collapse.
+ * @param titleColor overrides the title's colour. Exists for exactly one case:
+ *   "Where your data lives" turns its title red while the user is inside the
+ *   delete-everything section, so the destructive context is stated by the
+ *   screen's own subject rather than only by the button at the bottom of it.
+ *   That is a real signal and the reason this parameter is not a styling hook —
+ *   default to null everywhere else, because a header that can be any colour
+ *   stops meaning anything when one of them turns red.
  * @param scrollBehavior from [rememberBtCollapsingHeaderBehavior]; its
  *   `nestedScrollConnection` must be hung on an ancestor of the screen's
  *   scrollable or the header will never collapse.
@@ -92,6 +116,8 @@ fun BtCollapsingHeader(
     title: String,
     scrollBehavior: TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    titleColor: Color? = null,
     onTitleClick: (() -> Unit)? = null,
     titleClickLabel: String? = null,
     navigationIcon: @Composable () -> Unit = {},
@@ -126,25 +152,41 @@ fun BtCollapsingHeader(
             } else {
                 Modifier
             }
-            Row(modifier = titleRow, verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    style = style,
-                    color = bt.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (onTitleClick != null) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.ExpandMore,
-                        // The click label on the row already says what happens;
-                        // a second announcement on the glyph would make a screen
-                        // reader read the same act twice.
-                        contentDescription = null,
-                        tint = bt.gold,
-                        modifier = Modifier.size(if (fraction > 0.5f) 20.dp else 24.dp),
+            Column(modifier = titleRow) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = style,
+                        color = titleColor ?: bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (onTitleClick != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.ExpandMore,
+                            // The click label on the row already says what happens;
+                            // a second announcement on the glyph would make a screen
+                            // reader read the same act twice.
+                            contentDescription = null,
+                            tint = bt.gold,
+                            modifier = Modifier.size(if (fraction > 0.5f) 20.dp else 24.dp),
+                        )
+                    }
+                }
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        // Fades out over the first half of the collapse, so it is
+                        // gone before the row is tight enough for two lines to
+                        // crowd each other — and it never blinks off at a
+                        // threshold the way a conditional composition would.
+                        modifier = Modifier.alpha((1f - fraction * 2f).coerceIn(0f, 1f)),
                     )
                 }
             }
@@ -155,7 +197,11 @@ fun BtCollapsingHeader(
             overflow?.invoke()
         },
         collapsedHeight = BT_HEADER_COLLAPSED_HEIGHT,
-        expandedHeight = BT_HEADER_EXPANDED_HEIGHT,
+        expandedHeight = if (subtitle != null) {
+            BT_HEADER_EXPANDED_HEIGHT_SUBTITLE
+        } else {
+            BT_HEADER_EXPANDED_HEIGHT
+        },
         // This header consumes the status-bar inset itself, and it must: the app
         // shell zeroes its Scaffold's `contentWindowInsets` because its own bars
         // handle theirs, so a destination that sets `ownsItsHeader` is the ONLY
@@ -184,6 +230,14 @@ val BT_HEADER_COLLAPSED_HEIGHT = 64.dp
  * point of the §3 hierarchy work this header is part of.
  */
 val BT_HEADER_EXPANDED_HEIGHT = 112.dp
+
+/**
+ * Expanded height when a `subtitle` is present: 112 + one 20dp `bodySmall` line.
+ * Sized rather than left to wrap because M3 clips the title slot to
+ * `expandedHeight` — a second line that does not fit does not push the bar
+ * taller, it silently disappears, which is the worst of both outcomes.
+ */
+val BT_HEADER_EXPANDED_HEIGHT_SUBTITLE = 132.dp
 
 /**
  * The scroll behaviour [BtCollapsingHeader] expects: exit-until-collapsed.

@@ -24,18 +24,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -58,12 +57,14 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
@@ -209,19 +210,34 @@ fun AssetPageScreen(
     val asset = loaded?.snapshot?.asset
     var pickerOpen by remember { mutableStateOf(false) }
 
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Only the Loaded branch scrolls; the other four are centred states. A
+    // collapsing header stranded half-way over a centred empty state is the
+    // classic broken-looking bar — there is nothing on screen a finger could
+    // scroll to bring the title back. The header still renders for those branches
+    // (the screen needs its title and its back affordance no matter what it is
+    // showing), and it keeps the one collapsing behaviour so Loaded behaves like
+    // every other R2 screen; what this does is snap the bar back to fully
+    // expanded on the way INTO a non-scrolling branch — e.g. the error state's
+    // Retry, which drops `detail` back to Loading — because "fully expanded" is
+    // the only honest position for a page with nothing to scroll.
+    val scrollable = detail is AssetDetailUiState.Loaded
+    LaunchedEffect(scrollable) {
+        if (!scrollable) {
+            scrollBehavior.state.heightOffset = 0f
+            scrollBehavior.state.contentOffset = 0f
+        }
+    }
     Scaffold(
+        // AssetLoadedContent owns the LazyColumn; nestedScroll propagates down
+        // from here, so that child keeps its current signature.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = asset?.symbol ?: stringResource(R.string.bt_asset_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = bt.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
+            BtCollapsingHeader(
+                // A ticker, not a sentence — single line, no subtitle to fade.
+                title = asset?.symbol ?: stringResource(R.string.bt_asset_title),
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -231,7 +247,10 @@ fun AssetPageScreen(
                         )
                     }
                 },
-                actions = {
+                // The ONE action. The null check stays inside the slot so the star
+                // remains absent — not merely disabled — until there is an asset
+                // to watch, exactly as before.
+                action = {
                     if (asset != null) {
                         WatchlistStar(
                             inWatchlist = asset.id in watchlistIds,
@@ -240,10 +259,6 @@ fun AssetPageScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                ),
             )
         },
     ) { innerPadding ->

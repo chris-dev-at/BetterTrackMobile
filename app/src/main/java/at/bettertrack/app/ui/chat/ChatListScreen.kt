@@ -98,6 +98,24 @@ class ChatListViewModel(
     }
 }
 
+/**
+ * ## R2 bar decision: compact bar kept here too. (Spec §2.4)
+ *
+ * The thread screen's exclusion is forced by its composer; this one is a
+ * judgement call, and it comes down to what a collapsing header would be for.
+ * A large title earns its space by making the screen's subject unmissable on
+ * arrival and then getting out of the way — which requires content long enough
+ * to scroll. A conversation list is a handful of rows for almost every user, and
+ * it carries a compose FAB the list already insets for. So the header would
+ * expand to 112dp, have nothing to collapse against, and permanently cost a
+ * fifth of the screen to restate a word ("Chats") that the row the user just
+ * tapped already said.
+ *
+ * Consistency argues the other way, and it is a real cost — this and the thread
+ * are the only two pushed screens in the app that scroll and do not collapse.
+ * They are also the only two the user reaches as a PAIR, so the inconsistency is
+ * at least internally coherent: chat looks like chat.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(

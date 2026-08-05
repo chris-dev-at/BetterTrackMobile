@@ -195,6 +195,32 @@ class ChatThreadViewModel(
     }
 }
 
+/**
+ * ## R2 bar decision: this screen KEEPS its compact bar. (Spec §2.4)
+ *
+ * R2 converted the pushed screens to the collapsing large-title header. This one
+ * is the deliberate exception, and not for one reason but four that compound:
+ *
+ *  1. **The composer autofocuses and raises the keyboard on entry**, so the IME
+ *     is up from the first frame. A 132dp header above a list squeezed between
+ *     the status bar and a keyboard would leave the messages — the entire point
+ *     of the screen — a few rows tall.
+ *  2. **The composer changes height while you type**: it grows to four lines and
+ *     grows again when the character counter appears. A header animating its own
+ *     height against a bottom bar animating its own is two independent layout
+ *     animations fighting over the same list.
+ *  3. **The list paginates in reverse** — reaching the TOP prepends older
+ *     history. That is exactly where a collapsing header wants to claim scroll
+ *     delta, so the two would compete for the same gesture, and a prepend would
+ *     leave the header in whatever collapse state the insertion happened to
+ *     land on.
+ *  4. **Auto-scroll-to-newest is programmatic**, which drives no nested-scroll
+ *     delta at all — the header would simply not know the list had moved.
+ *
+ * The bar here is a title, a back button and nothing else, which already meets
+ * the 3-element rule the mandate actually asks for; the large title is the
+ * idiom, not the requirement.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatThreadScreen(

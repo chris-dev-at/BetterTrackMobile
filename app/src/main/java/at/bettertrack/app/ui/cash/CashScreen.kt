@@ -45,8 +45,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -62,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -98,6 +97,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtDateField
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtEmptyState
@@ -109,6 +109,7 @@ import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.isBadgeWorthy
@@ -802,28 +803,26 @@ fun CashScreen(
         }
     }
 
+    // R2: the two-line bar title was always one claim — "cash, of THIS portfolio"
+    // — made once on arrival. It is now the header's title/subtitle pair, so the
+    // portfolio name gets real size while the user is orienting and gives the
+    // space back the moment they start reading movements.
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        // The header collapses against the LazyColumn far below, which is not its
+        // descendant in the layout tree — hanging the connection on the Scaffold
+        // itself is what puts it on a common ancestor of both.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.bt_cash_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = bt.textPrimary,
-                        )
-                        portfolioName?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_cash_title),
+                // Empty rather than null while the name resolves: `portfolioName`
+                // is null for the first composition (the flow starts on
+                // subscription), and a subtitle that appears a frame later would
+                // grow the bar from 112dp to 132dp right under the reader's eyes.
+                subtitle = portfolioName ?: "",
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -837,7 +836,7 @@ fun CashScreen(
                 // management screens, not per-visit actions, so they live behind
                 // one overflow rather than adding permanent chrome to a screen
                 // whose primary job is recording money.
-                actions = {
+                overflow = {
                     var menuOpen by remember { mutableStateOf(false) }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
@@ -865,14 +864,16 @@ fun CashScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                ),
             )
         },
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            // The banner stays in the content Column rather than riding inside the
+            // header: it is chrome about the whole screen's freshness, not part of
+            // the screen's identity, so it belongs BELOW the bar and must remain
+            // legible after the title has collapsed away. Sitting here it is
+            // pinned — it never scrolls under the header — while the list below it
+            // is what drives the collapse.
             if (!isOnline) OfflineBanner(asOfMs = dataAgeMs, onClick = onOpenPendingSync)
 
             val pullState = rememberPullToRefreshState()

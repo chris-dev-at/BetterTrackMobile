@@ -220,14 +220,21 @@ internal class IdeasViewModel(
  * because nothing else in the app has taught the user what the word means yet.
  */
 @Composable
-fun IdeasSection(onOpenIdea: (String) -> Unit, modifier: Modifier = Modifier) {
-    val vm: IdeasViewModel = viewModel {
+internal fun IdeasSection(
+    onOpenIdea: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    // R2: hoistable. The Workbench host reads ideas for its "Needs you" lead, and
+    // two ViewModel instances over one list is how a summary and its list start
+    // disagreeing. The default keeps the section standalone-usable (and is what
+    // the debug gallery gets).
+    vm: IdeasViewModel = viewModel {
         IdeasViewModel(
             AppGraph.ideasRepository,
             AppGraph.conglomerateRepository,
             AppGraph.marketRepository,
         )
-    }
+    },
+) {
     val bt = BtTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
     var createOpen by rememberSaveable { mutableStateOf(false) }

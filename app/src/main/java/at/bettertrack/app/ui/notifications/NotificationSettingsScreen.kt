@@ -35,8 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +55,10 @@ import at.bettertrack.app.data.notifications.NotifChannel
 import at.bettertrack.app.data.notifications.NotifKind
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtChip
+import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtSectionHeader
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -70,6 +73,16 @@ import kotlinx.coroutines.launch
  * Design note: the type × channel matrix is rendered as per-type cards with
  * channel toggle-chips (not a dense checkbox grid) so every target stays a 48dp
  * tap on a phone while reading as one coherent grid.
+ *
+ * ## R2 visual pass
+ *
+ * Each type card is a [BtGroup] — border dropped for a tonal step (mandate §4)
+ * — but the cards are NOT collapsed into a single group, which is the one place
+ * this screen departs from the settings pattern. A type card is not a row: it is
+ * a heading, a mute switch and a wrap of channel chips. Stacked inside one
+ * border-less group with no divider available, the chips of one type would sit
+ * directly under the heading of the next and there would be nothing to say which
+ * they belong to. The gap between groups is the separator, and it has to stay.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -100,21 +113,19 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         ActivityResultContracts.RequestPermission(),
     ) { granted -> permissionGranted = granted }
 
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.bt_dest_settings_notifications), style = MaterialTheme.typography.titleLarge) },
+            BtCollapsingHeader(
+                title = stringResource(R.string.bt_dest_settings_notifications),
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                    navigationIconContentColor = bt.textSecondary,
-                ),
             )
         },
     ) { innerPadding ->
@@ -124,7 +135,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // System permission status (Android 13+) with an in-context enable.
             PermissionStatusCard(
@@ -151,12 +162,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 onQuietHours = { quietHours -> scope.launch { repo.setQuietHours(quietHours) } },
             )
 
-            Text(
-                stringResource(R.string.bt_notif_matrix_section).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = bt.textMuted,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            // Was a hand-rolled uppercase label; `BtSectionHeader` is the same
+            // thing app-wide and brings its own breathing room, so the ad-hoc
+            // top padding goes with it.
+            BtSectionHeader(stringResource(R.string.bt_notif_matrix_section))
 
             store.configurableKinds.forEach { kind ->
                 TypePrefCard(
@@ -231,13 +240,10 @@ private fun TypePrefCard(
     onToggleMute: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
-    Surface(
-        color = bt.surface,
-        border = BorderStroke(1.dp, bt.border),
-        shape = BtShapes.card,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+    BtGroup {
+        // Padding matches `BtGroupRow`'s so a type card lines up with every other
+        // grouped row in the app rather than sitting 2dp off from all of them.
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(notifKindTitle(kind), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)

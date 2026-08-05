@@ -39,9 +39,6 @@
 
     <!-- Shell -->
     <string name="bt_tab_portfolio">Portfolio</string>
-    <string name="bt_tab_assets">Werte</string>
-    <string name="bt_tab_social">Social</string>
-    <string name="bt_tab_workboard">Workboard</string>
     <string name="bt_top_notifications">Mitteilungen</string>
     <string name="bt_top_messages">Nachrichten</string>
     <string name="bt_top_settings">Einstellungen</string>
@@ -52,45 +49,18 @@
     <string name="bt_refresh_failed_dismiss">Ausblenden</string>
 
     <!-- Tab-Platzhalter -->
-    <string name="bt_tab_portfolio_empty_title">Hier lebt dein Portfolio</string>
-    <string name="bt_tab_portfolio_empty_message">Deine Bestände, dein Bargeld und dein Vermögen erscheinen hier.</string>
-    <string name="bt_tab_assets_empty_title">Behalt den Markt im Blick</string>
-    <string name="bt_tab_assets_empty_message">Such nach Werten und leg hier Watchlists an.</string>
-    <string name="bt_tab_social_empty_title">Gemeinsam investieren</string>
-    <string name="bt_tab_social_empty_message">Freunde, geteilte Portfolios und Chat findest du hier.</string>
-    <string name="bt_tab_workboard_empty_title">Ideen bauen</string>
-    <string name="bt_tab_workboard_empty_message">Stell Konglomerate zusammen und plan Budgets hier.</string>
 
     <!-- Platzhalter-Ziele -->
-    <string name="bt_placeholder_message">Platzhalter — dieser Screen kommt in einem späteren Schritt.</string>
-    <string name="bt_dest_login">Anmelden</string>
-    <string name="bt_dest_app_lock">App-Sperre</string>
-    <string name="bt_dest_holding_detail">Position</string>
-    <string name="bt_dest_transactions">Transaktionen</string>
-    <string name="bt_dest_transaction_form">Neue Transaktion</string>
-    <string name="bt_dest_cash">Bargeld</string>
-    <string name="bt_dest_custom_assets">Eigene Werte</string>
-    <string name="bt_dest_asset_page">Wert</string>
-    <string name="bt_dest_search">Suche</string>
-    <string name="bt_dest_watchlists">Watchlists</string>
-    <string name="bt_dest_conglomerates">Konglomerate</string>
-    <string name="bt_dest_conglomerate_builder">Konglomerat-Baukasten</string>
-    <string name="bt_dest_conglomerate_detail">Konglomerat</string>
-    <string name="bt_dest_chats">Chats</string>
-    <string name="bt_dest_chat_thread">Chat</string>
     <string name="bt_dest_notifications">Mitteilungen</string>
     <string name="bt_dest_settings">Einstellungen</string>
-    <string name="bt_dest_settings_account">Konto</string>
     <string name="bt_dest_settings_security">Sicherheit</string>
     <string name="bt_dest_settings_notifications">Mitteilungs-Einstellungen</string>
     <string name="bt_dest_settings_language">Sprache</string>
     <string name="bt_dest_settings_about">Über</string>
-    <string name="bt_dest_pending_sync">Ausstehende Synchronisierung</string>
 
     <!-- Portfolio-Übersicht (§6.1) -->
     <string name="bt_overview_net_worth">Vermögen</string>
     <string name="bt_overview_today">heute</string>
-    <string name="bt_overview_holdings_value">Bestände</string>
     <string name="bt_overview_cash">Bargeld</string>
     <string name="bt_overview_invested">Investiert</string>
     <string name="bt_overview_value_over_time">Wertverlauf</string>
@@ -954,7 +924,6 @@
 
     <!-- Freunde-Bereich -->
     <string name="bt_social_add_friend">Freund hinzufügen</string>
-    <string name="bt_social_requests_to_you">Anfragen an dich</string>
     <string name="bt_social_sent_requests">Gesendete Anfragen</string>
     <string name="bt_social_no_friends_title">Noch keine Freunde</string>
     <string name="bt_social_no_friends_body">Füge Freunde per Benutzername oder E-Mail hinzu, um Portfolios zu teilen und zu sehen, was sie mit dir teilen.</string>
@@ -1561,7 +1530,6 @@
     <string name="bt_groups_title">Freundesgruppen</string>
     <string name="bt_groups_entry_title">Freundesgruppen</string>
     <string name="bt_groups_entry_sub">Einen Kreis von Freunden einmal benennen und mit einem Tippen teilen</string>
-    <string name="bt_groups_open_entry_cd">Freundesgruppen öffnen</string>
     <string name="bt_groups_empty_title">Noch keine Gruppen</string>
     <string name="bt_groups_empty_body">Eine Gruppe ist ein benannter Kreis von Freunden — Familie, Trading-Crew — den du als eine einzige Sichtbarkeit wählen kannst.</string>
     <string name="bt_groups_error_title">Deine Gruppen konnten nicht geladen werden</string>
@@ -2050,4 +2018,15 @@
     <string name="bt_err_vault_derivation_failed">Die Kennzahlen dieses Portfolios konnten auf diesem Gerät nicht berechnet werden.</string>
     <string name="bt_err_delete_disabled">Die Kontolöschung ist in dieser Version deaktiviert.</string>
     <string name="bt_err_app_unknown_alert_kind">Dieser Alarm nutzt einen Typ, den deine App-Version noch nicht kennt. Aktualisiere BetterTrack, um ihn zu sehen.</string>
+
+    <!-- ══ R-arc R2 ══ APPEND-ONLY BLOCK, gleiche Regel wie beim R1-Block. -->
+
+    <string name="bt_needs_you">Wartet auf dich</string>
+    <string name="bt_workbench_needs_more">+%1$d weitere</string>
+
+    <string name="bt_social_messages_sub">Deine Unterhaltungen</string>
+    <plurals name="bt_social_unread_messages">
+        <item quantity="one">%1$d ungelesene Nachricht</item>
+        <item quantity="other">%1$d ungelesene Nachrichten</item>
+    </plurals>
 </resources>

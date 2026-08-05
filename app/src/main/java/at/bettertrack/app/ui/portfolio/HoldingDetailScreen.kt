@@ -28,8 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -37,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +54,7 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyColorMode
@@ -62,6 +62,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -200,31 +201,28 @@ fun HoldingDetailScreen(
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
 
+    // R2: the asset's name over "symbol · exchange" was the two-line bar title and
+    // is now the header's title/subtitle. The name is user/exchange data of
+    // arbitrary length — BtCollapsingHeader ellipsizes it to one line rather than
+    // letting a long name change the bar's height.
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
+        // The scrolling list lives inside HoldingContent, two composables down.
+        // nestedScroll propagates from any ancestor, so hanging it here reaches
+        // that list without HoldingContent having to know a header exists.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = bt.bg,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = holding?.assetName ?: "",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = bt.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        holding?.let {
-                            Text(
-                                text = listOfNotNull(it.assetSymbol, it.assetExchange)
-                                    .joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
+            BtCollapsingHeader(
+                title = holding?.assetName ?: "",
+                // Resolved to a (possibly empty) String rather than left null
+                // while `holding` is: the DB flow starts null, and a subtitle that
+                // arrived a frame later would grow the bar from 112dp to 132dp
+                // under content the reader has already started on.
+                subtitle = holding
+                    ?.let { listOfNotNull(it.assetSymbol, it.assetExchange).joinToString(" · ") }
+                    ?: "",
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -234,10 +232,6 @@ fun HoldingDetailScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bt.bg,
-                    titleContentColor = bt.textPrimary,
-                ),
             )
         },
     ) { innerPadding ->

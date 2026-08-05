@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Repeat
@@ -54,6 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -73,6 +75,7 @@ import at.bettertrack.app.data.repo.AlertKind
 import at.bettertrack.app.data.repo.AlertStatus
 import at.bettertrack.app.data.repo.AlertsRepository
 import at.bettertrack.app.data.repo.AssetSnapshot
+import at.bettertrack.app.data.repo.Idea
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PriceAlert
@@ -81,12 +84,18 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.ideas.IdeasSection
+import at.bettertrack.app.ui.ideas.IdeasUiState
+import at.bettertrack.app.ui.ideas.IdeasViewModel
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -103,17 +112,38 @@ import kotlinx.coroutines.launch
 private enum class WorkboardSection { Conglomerates, Ideas, Alerts }
 
 /**
- * The Workboard tab (owner ask 2026-07-10): a two-segment host — the Step-13
- * conglomerate list and the new price-alerts manager. Same segmented-pill
- * pattern as the Social tab.
+ * The **Workbench** tab — R2's §3 rebuild of the Workboard host.
  *
- * S6 P1-10 (discoverability): alerts STAY here — a third home for two lists
- * would be worse than a clearly-labelled segment — but the segment now carries
- * the count of alerts that have actually FIRED, so "one of your alerts hit"
- * is visible from the Workboard without opening the segment first, and the
- * notifications inbox can send the user straight to it (see [WorkboardEntry]).
- * The alerts VM is hoisted to this host so that badge exists on both segments.
+ * ## What changed and why (mandate §3: "actionable first")
+ *
+ * Before R2 this screen opened with three segment pills. That is *scaffolding* —
+ * it tells you the screen has three lists, which is the one thing you already
+ * knew, and it puts a fired price alert one tap and one guess away. The owner's
+ * "some pages show you useless info first" names exactly this shape.
+ *
+ * Now the screen opens with [WorkbenchNeedsYou]: the alerts that actually FIRED
+ * and the ideas that were saved without a thesis. Everything else — the segment
+ * structure, the triggered badge, the three lists, the per-segment FAB rules —
+ * is unchanged, because it was never the problem.
+ *
+ * ## Two design calls worth stating
+ *
+ * **The lead block does not scroll away.** It sits between the collapsing header
+ * and the segments, fixed. That is deliberate: it renders at zero height
+ * whenever there is nothing to act on (the common case), so the space it takes
+ * is, by construction, only ever spent when something is genuinely waiting. The
+ * alternative — folding it into each segment's list — would have meant three
+ * copies of the same block that disagree the moment one list is offline.
+ *
+ * **"Ideas needing a decision" is read honestly.** The mandate asks for them;
+ * the ideas API has no status workflow at all (`IdeasRepository.kt` says so in
+ * as many words), so there is no "needs a decision" flag to read. Inventing a
+ * client-side one would be the app asserting something about the user's money
+ * that the server never said. What IS real is `thesis == null`: a composition
+ * saved without the reasoning behind it, which is a thing the user genuinely
+ * left unfinished. That is what the block shows, labelled as what it is.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkboardScreen(
     onOpenConglomerate: (String) -> Unit,
@@ -130,10 +160,24 @@ fun WorkboardScreen(
             AppGraph.connectivityMonitor,
         )
     }
+    // Hoisted for the same reason the alerts VM already was: the lead block reads
+    // ideas, and a second instance created inside the segment would mean the
+    // block and the list can disagree about what exists.
+    val ideasVm: IdeasViewModel = viewModel {
+        IdeasViewModel(
+            AppGraph.ideasRepository,
+            AppGraph.conglomerateRepository,
+            AppGraph.marketRepository,
+        )
+    }
     val alertsState by alertsVm.state.collectAsStateWithLifecycle()
-    val triggered = (alertsState as? AlertsState.Loaded)
+    val ideasState by ideasVm.state.collectAsStateWithLifecycle()
+    val triggeredAlerts = (alertsState as? AlertsState.Loaded)
         ?.items.orEmpty()
-        .count { it.status == AlertStatus.Triggered }
+        .filter { it.status == AlertStatus.Triggered }
+    val unfinishedIdeas = (ideasState as? IdeasUiState.Loaded)
+        ?.ideas.orEmpty()
+        .filter { it.thesis.isNullOrBlank() }
 
     // Deep-link entry from the notifications inbox ("Manage alerts" on an alert
     // row): open on the Alerts segment, once.
@@ -145,10 +189,25 @@ fun WorkboardScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    Column(
+        Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+    ) {
+        BtCollapsingHeader(
+            title = stringResource(R.string.bt_tab_workbench),
+            scrollBehavior = scrollBehavior,
+        )
+        WorkbenchNeedsYou(
+            triggered = triggeredAlerts,
+            unfinished = unfinishedIdeas,
+            onOpenAsset = onOpenAsset,
+            onOpenIdea = onOpenIdea,
+        )
         SegmentedTabs(
             selected = section,
-            triggeredAlerts = triggered,
+            triggeredAlerts = triggeredAlerts.size,
             onSelect = { section = it },
         )
         when (section) {
@@ -156,11 +215,77 @@ fun WorkboardScreen(
                 onOpen = onOpenConglomerate,
                 onCreate = onCreateConglomerate,
             )
-            WorkboardSection.Ideas -> IdeasSection(onOpenIdea = onOpenIdea)
+            WorkboardSection.Ideas -> IdeasSection(vm = ideasVm, onOpenIdea = onOpenIdea)
             WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
         }
     }
 }
+
+/**
+ * The §3 lead: what is waiting on the user, or nothing at all.
+ *
+ * Capped at [NEEDS_YOU_MAX] rows. The cap is not a layout convenience — an
+ * "actionable" block long enough to scroll has stopped being a summary and
+ * become a fourth list, and both full lists are one tap away in the segments
+ * directly beneath it. The overflow line therefore counts rather than
+ * navigates: it exists to stop the block lying about how much is there.
+ */
+@Composable
+private fun WorkbenchNeedsYou(
+    triggered: List<PriceAlert>,
+    unfinished: List<Idea>,
+    onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
+) {
+    val bt = BtTheme.colors
+    // The ordering and cap arithmetic live in `needsYouPlan`, where they are unit
+    // tested; this composable only draws the answer.
+    val plan = needsYouPlan(triggered, unfinished, NEEDS_YOU_MAX)
+    if (plan.isEmpty) return
+    val shownAlerts = plan.alerts
+    val shownIdeas = plan.ideas
+    val hidden = plan.hidden
+
+    BtNeedsYouGroup(
+        title = stringResource(R.string.bt_needs_you),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        shownAlerts.forEach { alert ->
+            BtGroupRow(
+                title = alert.asset.symbol,
+                subtitle = conditionLine(alert),
+                icon = Icons.Outlined.NotificationsActive,
+                iconTint = bt.goldEmphasis,
+                onClick = { onOpenAsset(alert.asset.id) },
+                trailing = {
+                    BtBadge(
+                        text = stringResource(R.string.bt_alert_status_triggered),
+                        kind = BtBadgeKind.Gold,
+                    )
+                },
+            )
+        }
+        shownIdeas.forEach { idea ->
+            BtGroupRow(
+                title = idea.name,
+                subtitle = stringResource(R.string.bt_ideas_no_thesis),
+                icon = Icons.Outlined.Lightbulb,
+                iconTint = bt.textSecondary,
+                onClick = { onOpenIdea(idea.id) },
+            )
+        }
+        if (hidden > 0) {
+            Text(
+                text = stringResource(R.string.bt_workbench_needs_more, hidden),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+private const val NEEDS_YOU_MAX = 3
 
 @Composable
 private fun SegmentedTabs(

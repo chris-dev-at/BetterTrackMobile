@@ -195,10 +195,13 @@ private enum class TabBadge {
  *   implements for no user-visible gain (R1 decision O-2). The label is the
  *   user-facing name; the constant is the contract's.
  * @param ownsItsHeader true when the DESTINATION renders its own header and the
- *   shell must not add one on top of it. Portfolio does, as of R1-B: its title is
- *   the portfolio's own name in an in-screen collapsing large title that also
- *   carries the switcher and that screen's overflow (mandate §1). R2 flips this
- *   flag for the remaining tabs as each one grows its own header.
+ *   shell must not add one on top of it. Portfolio did first, at R1-B; **as of
+ *   R2 every tab but Home does.** Each one now drives a [BtCollapsingHeader]
+ *   against its own scroll container, which is the only way a collapsing bar can
+ *   work — the shell cannot see a destination's scroll state, so a shell-drawn
+ *   large title could only ever be a tall static bar spending vertical space for
+ *   nothing. Home keeps the shell bar because it is the one tab whose context
+ *   slot is the wordmark rather than a title.
  */
 private data class TabSpec(
     val tab: BtTab,
@@ -213,9 +216,9 @@ private data class TabSpec(
 private val Tabs = listOf(
     TabSpec(BtTab.Home, HomeTabRoute::class, R.string.bt_tab_home, Icons.Outlined.Home, BtSurface.HOME),
     TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, ownsItsHeader = true),
-    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
-    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
-    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
+    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts, ownsItsHeader = true),
+    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET, ownsItsHeader = true),
+    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat, ownsItsHeader = true),
 )
 
 /**
@@ -446,8 +449,7 @@ fun BtApp() {
             // `ownsItsHeader` destinations render their own (R1-B's collapsing
             // large title); the shell adds nothing on top of them.
             if (currentTab != null && !currentTab.ownsItsHeader) {
-                BtTopBar(
-                    spec = currentTab,
+                BtHomeTopBar(
                     notifUnread = notifUnread,
                     showNotifications = showNotificationSurfaces,
                     discreetMode = discreetMode,
@@ -455,10 +457,6 @@ fun BtApp() {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
                     onSearch = { navController.navigate(SearchRoute) },
-                    // The chat list belongs to People, so it opens with the very
-                    // same tab semantics a notification tap uses (S6 P1-8).
-                    onMessages = { navigateDeepLink(NotifDeepLink.Chat(null)) },
-                    onFriendGroups = { navController.navigate(FriendGroupsRoute) },
                     onNotifications = { navController.navigate(NotificationsInboxRoute) },
                     onSettings = { navController.navigate(SettingsRoute) },
                     onDevBackend = { navController.navigate(DevBackendRoute) },
@@ -512,111 +510,75 @@ fun BtApp() {
 }
 
 /**
- * The 3-element top bar (R-arc mandate §1): context/title, ONE action, overflow.
- *
- * One composable rather than five per-screen bars, because the *rule* is what
- * has to be enforceable — a per-screen bar is exactly how the old one grew to
- * six elements, one defensible addition at a time. The budget is spent per tab:
+ * **Home's** 3-element top bar (R-arc mandate §1): context, ONE action, overflow.
  *
  * | Tab | Context | ONE action | Overflow |
  * |---|---|---|---|
  * | Home | wordmark | Search | inbox · discreet · settings · (debug) dev backend |
- * | Workbench | title | — (segments are content) | — |
- * | Markets | title | — (the in-content field IS the entry) | — |
- * | People | title | Messages | Friend groups |
  *
- * **Portfolio is not in that table**: as of R1-B it sets [TabSpec.ownsItsHeader]
- * and renders its own collapsing large title (the portfolio's name, tap to
- * switch) with its own overflow. This composable is never called for it.
+ * ## Why this is the only shell-drawn bar left
  *
- * **The wordmark appears on Home only.** It stopped being wayfinding the moment
- * it was on all four tabs — the user knows which app they opened — and Home is
- * the one screen with no better claim on that space. Its hidden long-press debug
- * gallery entry moves with it.
+ * R1 shipped this as one composable covering four tabs, deliberately: the *rule*
+ * is what has to be enforceable, and a per-screen bar is exactly how the old one
+ * grew to six elements, one defensible addition at a time. R2 keeps the rule and
+ * moves the bars, because a **collapsing** large title cannot be drawn by the
+ * shell — `LargeTopAppBar` needs a scroll behaviour wired to the destination's
+ * own scroll container, which the shell cannot see. R1's own comment here said
+ * as much while rendering a static title as the interim. So Portfolio (R1-B),
+ * then Workbench, Markets and People (R2) each set [TabSpec.ownsItsHeader] and
+ * drive their own [at.bettertrack.app.ui.components.BtCollapsingHeader], and the
+ * 3-element budget travels with them — People, for instance, carries exactly the
+ * Messages action and a Friend-groups overflow this bar used to hold for it.
  *
- * An empty overflow renders **no button**. A menu affordance that opens onto
- * nothing is worse than the icon it saved, so Workbench and Markets carry a
- * title and nothing else in R1 (decision O-4: Markets takes no action at all,
- * killing the S6 P1-11 search duplication at its root rather than restyling it).
+ * Home is the one tab left, and the one that should be: its context slot is the
+ * **wordmark**, not a title, so there is no large title to collapse in the first
+ * place. The wordmark appears here and nowhere else — it stopped being wayfinding
+ * the moment it was on all four tabs — and its hidden long-press debug gallery
+ * entry lives with it.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-private fun BtTopBar(
-    spec: TabSpec,
+private fun BtHomeTopBar(
     notifUnread: Int,
     showNotifications: Boolean,
     discreetMode: Boolean,
     onWordmarkLongPress: () -> Unit,
     onSearch: () -> Unit,
-    onMessages: () -> Unit,
-    onFriendGroups: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
     onDevBackend: () -> Unit,
     onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
-    val isHome = spec.tab == BtTab.Home
     TopAppBar(
         title = {
-            if (isHome) {
-                // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
-                // long-press (debug builds only).
-                Wordmark(
-                    fontSize = 20.sp,
-                    modifier = Modifier.combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                        onLongClick = onWordmarkLongPress,
-                    ),
-                )
-            } else {
-                // A step up from `titleLarge` towards the mandate's large-title
-                // idiom, without faking a collapsing header these screens cannot
-                // yet drive: `LargeTopAppBar` needs a scroll behaviour wired to
-                // the destination's own scroll container, and R1-B builds the
-                // shared component (`BtCollapsingHeader`) that does that properly
-                // for every screen. Rendering a tall static bar in the meantime
-                // would cost vertical space and buy nothing.
-                Text(
-                    text = stringResource(spec.labelRes),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = bt.textPrimary,
-                )
-            }
+            // Plain wordmark, no edition (§3.2). Hidden debug gallery entry:
+            // long-press (debug builds only).
+            Wordmark(
+                fontSize = 20.sp,
+                modifier = Modifier.combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                    onLongClick = onWordmarkLongPress,
+                ),
+            )
         },
         actions = {
-            when (spec.tab) {
-                // Home's ONE action (decision O-3): search is the affordance the
-                // whole app shares and Home is the only screen that is about all
-                // of it. A profile/avatar entry was the alternative — revisit at
-                // R2, when settings get their own pass.
-                BtTab.Home -> IconButton(onClick = onSearch) {
-                    Icon(
-                        Icons.Outlined.Search,
-                        contentDescription = stringResource(R.string.bt_search_cd),
-                        tint = bt.textSecondary,
-                    )
-                }
-                // Where the WP-C chat affordance LANDS. It solved a real problem
-                // (P1-10) and it keeps solving it — as this tab's one action plus
-                // the tab's own dot, at zero cost to the other four bars.
-                BtTab.People -> IconButton(onClick = onMessages) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.Chat,
-                        contentDescription = stringResource(R.string.bt_top_messages),
-                        tint = bt.textSecondary,
-                    )
-                }
-                else -> Unit
+            // Home's ONE action (decision O-3): search is the affordance the
+            // whole app shares and Home is the only screen that is about all
+            // of it.
+            IconButton(onClick = onSearch) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = stringResource(R.string.bt_search_cd),
+                    tint = bt.textSecondary,
+                )
             }
-            BtTopBarOverflow(
-                tab = spec.tab,
+            BtHomeOverflow(
                 notifUnread = notifUnread,
                 showNotifications = showNotifications,
                 discreetMode = discreetMode,
-                onFriendGroups = onFriendGroups,
                 onNotifications = onNotifications,
                 onSettings = onSettings,
                 onDevBackend = onDevBackend,
@@ -641,23 +603,16 @@ private fun BtTopBar(
  * not the information.
  */
 @Composable
-private fun BtTopBarOverflow(
-    tab: BtTab,
+private fun BtHomeOverflow(
     notifUnread: Int,
     showNotifications: Boolean,
     discreetMode: Boolean,
-    onFriendGroups: () -> Unit,
     onNotifications: () -> Unit,
     onSettings: () -> Unit,
     onDevBackend: () -> Unit,
     onToggleDiscreet: (Boolean) -> Unit,
 ) {
     val bt = BtTheme.colors
-    // Only two tabs have anything to put behind it in R1 — and a ⋮ that opens
-    // onto an empty menu is a broken promise, so the other three render nothing.
-    val hasMenu = tab == BtTab.Home || tab == BtTab.People
-    if (!hasMenu) return
-
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
@@ -672,7 +627,7 @@ private fun BtTopBarOverflow(
         // is on the menu item one tap in.
         BtBadgeOverlay(
             count = 0,
-            showDot = tab == BtTab.Home && showNotifications && notifUnread > 0,
+            showDot = showNotifications && notifUnread > 0,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset(x = (-6).dp, y = 8.dp),
@@ -682,62 +637,54 @@ private fun BtTopBarOverflow(
             onDismissRequest = { open = false },
             containerColor = bt.surface,
         ) {
-            if (tab == BtTab.People) {
+            if (showNotifications) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_groups_title)) },
-                    onClick = { open = false; onFriendGroups() },
-                )
-            }
-            if (tab == BtTab.Home) {
-                if (showNotifications) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_top_notifications)) },
-                        onClick = { open = false; onNotifications() },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Notifications,
-                                contentDescription = null,
-                                tint = bt.textSecondary,
-                            )
-                        },
-                        trailingIcon = { BtCountBadge(count = notifUnread) },
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_settings_discreet)) },
-                    onClick = { open = false; onToggleDiscreet(!discreetMode) },
+                    text = { Text(stringResource(R.string.bt_top_notifications)) },
+                    onClick = { open = false; onNotifications() },
                     leadingIcon = {
                         Icon(
-                            imageVector = if (discreetMode) {
-                                Icons.Outlined.VisibilityOff
-                            } else {
-                                Icons.Outlined.Visibility
-                            },
-                            contentDescription = null,
-                            // Gold while ON: the one state in this menu that
-                            // changes what every other screen renders should not
-                            // look like the rows that merely navigate.
-                            tint = if (discreetMode) bt.gold else bt.textSecondary,
-                        )
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_top_settings)) },
-                    onClick = { open = false; onSettings() },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Settings,
+                            Icons.Outlined.Notifications,
                             contentDescription = null,
                             tint = bt.textSecondary,
                         )
                     },
+                    trailingIcon = { BtCountBadge(count = notifUnread) },
                 )
-                if (BuildConfig.DEBUG) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_settings_dev_backend)) },
-                        onClick = { open = false; onDevBackend() },
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.bt_settings_discreet)) },
+                onClick = { open = false; onToggleDiscreet(!discreetMode) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (discreetMode) {
+                            Icons.Outlined.VisibilityOff
+                        } else {
+                            Icons.Outlined.Visibility
+                        },
+                        contentDescription = null,
+                        // Gold while ON: the one state in this menu that
+                        // changes what every other screen renders should not
+                        // look like the rows that merely navigate.
+                        tint = if (discreetMode) bt.gold else bt.textSecondary,
                     )
-                }
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.bt_top_settings)) },
+                onClick = { open = false; onSettings() },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = null,
+                        tint = bt.textSecondary,
+                    )
+                },
+            )
+            if (BuildConfig.DEBUG) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bt_settings_dev_backend)) },
+                    onClick = { open = false; onDevBackend() },
+                )
             }
         }
     }

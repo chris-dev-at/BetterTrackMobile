@@ -23,7 +23,11 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.foundation.layout.offset
@@ -55,6 +59,10 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtNeedsYouGroup
+import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
@@ -116,6 +124,7 @@ fun GalleryScreen(
             item { WordmarkSection() }
             item { MoneySection() }
             item { CollapsingHeaderSection() }
+            item { GroupSection() }
             item { HomeCardsSection() }
             item { AllocationBarSection() }
             item { StatCardSection() }
@@ -249,6 +258,89 @@ private fun CollapsingHeaderSection() {
                 windowInsets = WindowInsets(0, 0, 0, 0),
             )
         }
+        Text(
+            "With subtitle (R2) — the two-line pushed-screen bar",
+            style = MaterialTheme.typography.labelSmall,
+            color = bt.textMuted,
+        )
+        Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+            BtCollapsingHeader(
+                title = "Transactions",
+                subtitle = "Main portfolio",
+                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                navigationIcon = {
+                    IconButton(onClick = {}) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back",
+                            tint = bt.textSecondary,
+                        )
+                    }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * The R2 grouping vocabulary (mandate §4) — the pair has to be judged together.
+ *
+ * The whole argument for [BtGroup] is comparative: a settings section used to be
+ * N separately-bordered cards, and the claim is that ONE border-less tonal block
+ * reads as a single subject while its rows read as parts of it. That claim is
+ * only checkable with the two grouping styles stacked next to each other and
+ * next to [BtNeedsYouGroup], which spends the screen's entire gold budget in one
+ * place and must still not look like a warning.
+ */
+@Composable
+private fun GroupSection() {
+    val bt = BtTheme.colors
+    GallerySection("Groups & Needs-you §4 (R-arc R2)") {
+        Text("BtGroup — tonal, border-less, rows are parts of one subject", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        BtGroup {
+            BtGroupRow(
+                title = "Security",
+                subtitle = "App lock, two-factor, sessions",
+                icon = Icons.Outlined.Lock,
+                onClick = {},
+            )
+            BtGroupRow(
+                title = "Language",
+                subtitle = "English",
+                icon = Icons.Outlined.Translate,
+                onClick = {},
+            )
+            BtGroupRow(
+                title = "Discreet mode",
+                subtitle = "Hide amounts across the app",
+                icon = Icons.Outlined.VisibilityOff,
+                trailing = { BtBadge(text = "Off", kind = BtBadgeKind.Neutral) },
+            )
+        }
+
+        Text("BtSectionHeader — the one section label", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        BtSectionHeader("Friends", count = 12)
+
+        Text("BtNeedsYouGroup — the §3 actionable lead, where the gold goes", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+        BtNeedsYouGroup(title = "Needs you") {
+            BtGroupRow(
+                title = "AAPL",
+                subtitle = "Above $150",
+                icon = Icons.Outlined.NotificationsActive,
+                iconTint = bt.goldEmphasis,
+                onClick = {},
+                trailing = { BtBadge(text = "Triggered", kind = BtBadgeKind.Gold) },
+            )
+            BtGroupRow(
+                title = "Dividend basket",
+                subtitle = "No thesis written yet",
+                icon = Icons.Outlined.Lightbulb,
+                onClick = {},
+            )
+        }
+
+        Text("Empty by construction: the block is absent, not collapsed", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
     }
 }
 

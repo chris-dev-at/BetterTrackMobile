@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -30,7 +32,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.btPressScale
+import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -49,11 +53,25 @@ import at.bettertrack.app.ui.theme.BtTheme
 /**
  * The **Markets** tab (mandate §2 renamed it from Assets — "it reads clearer").
  *
- * Search + watchlists, with custom-asset management and market intel one row
- * away. The in-content search field is this tab's search entry and, after R1,
- * its ONLY one: the top bar's duplicate Search icon is gone here, which is the
- * S6 P1-11 duplication killed at the root rather than restyled.
+ * ## The R2 hierarchy (§3), and the one thing that moved
+ *
+ * 1. **The search field leads** — review-blessed, and unchanged. It is the
+ *    reason people open this tab, and after R1 it is also the tab's ONLY search
+ *    entry: the duplicate top-bar Search glyph is gone (S6 P1-11 killed at the
+ *    root rather than restyled). It stays pinned under the collapsing header
+ *    rather than scrolling with the list, because a search entry you have to
+ *    scroll back up to reach is a search entry that has stopped leading.
+ * 2. **Watchlists with live quotes** — the tab's actual content.
+ * 3. **The market-intel doorway** — *moved*. It used to sit above the
+ *    watchlists, which put a page you visit occasionally ahead of the rows you
+ *    came to read; §3 ranks it below, so it now rides at the end of the
+ *    watchlist's own scroll (see `WatchlistPanel`'s `footer`).
+ *
+ * The custom-assets link keeps its place beside the watchlist heading: it
+ * manages the things IN that list, so it belongs to that heading and nowhere
+ * else.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarketsTabScreen(
     onOpenSearch: () -> Unit = {},
@@ -63,32 +81,37 @@ fun MarketsTabScreen(
     onOpenMarketIntel: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(12.dp))
-        SearchBarButton(onClick = onOpenSearch)
-        Spacer(Modifier.height(10.dp))
-        // V5 S2c: market intel is about the assets you already hold or watch, so
-        // it belongs on this tab rather than in a menu — but it is a read you
-        // visit occasionally, not the tab's job, so it is one row above the
-        // watchlists instead of a segment competing with them.
-        MarketIntelEntryRow(onClick = onOpenMarketIntel)
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.bt_watchlist_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = bt.textPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            androidx.compose.material3.TextButton(onClick = onOpenCustomAssets) {
-                Text(stringResource(R.string.bt_custom_manage), color = bt.textSecondary)
-            }
-        }
-        at.bettertrack.app.ui.watchlist.WatchlistPanel(
-            onOpenAsset = onOpenAsset,
-            onAddAsset = { onAddToWatchlist() },
-            modifier = Modifier.weight(1f),
+    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    Column(
+        Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+    ) {
+        BtCollapsingHeader(
+            title = stringResource(R.string.bt_tab_markets),
+            scrollBehavior = scrollBehavior,
         )
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            SearchBarButton(onClick = onOpenSearch)
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.bt_watchlist_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = bt.textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = onOpenCustomAssets) {
+                    Text(stringResource(R.string.bt_custom_manage), color = bt.textSecondary)
+                }
+            }
+            at.bettertrack.app.ui.watchlist.WatchlistPanel(
+                onOpenAsset = onOpenAsset,
+                onAddAsset = { onAddToWatchlist() },
+                modifier = Modifier.weight(1f),
+                footer = { MarketIntelEntryRow(onClick = onOpenMarketIntel) },
+            )
+        }
     }
 }
 
@@ -96,9 +119,10 @@ fun MarketsTabScreen(
  * The Markets tab's entry into the portfolio-wide market intel screen.
  *
  * A single row rather than a card: it is a doorway, and the tab's content is the
- * watchlists below it. The chevron and the button role carry the affordance;
- * nothing here previews the data, because every block behind it is
- * availability-gated and a preview that renders "—" would be worse than none.
+ * watchlists it now sits *below* (R2, §3 — it used to sit above them, ahead of
+ * the rows the user actually came for). The chevron and the button role carry
+ * the affordance; nothing here previews the data, because every block behind it
+ * is availability-gated and a preview that renders "—" would be worse than none.
  */
 @Composable
 private fun MarketIntelEntryRow(onClick: () -> Unit) {
