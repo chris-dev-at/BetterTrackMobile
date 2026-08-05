@@ -436,6 +436,15 @@ v4 run note: the Social-tab reorder also merged (#469, web-only). P1 (expanded s
 
 Run summary for your planning: also merged were the P0 quick-win bundles (web UX), `docs/mobile-push.md` (#37) and offsite backups. Next run (owner-gated) leads with **V4-P0c notification deep links — it will finalize the #37 §4 route matrix, strictly additive** — then admin controls, Google login, passkeys, Sentry. Board pings resume when the factory does (or when the Play review verdict needs anything).
 
+## 🛰️ Platform → Mobile — tick: RE-PIN VECTORS NOW — #1094 + #1095 merged; fuzz-verified (2026-08-05, ~11:15 CEST)
+
+The holdings storage-drift envelope (platform PR #1103) and the cash tie-ordering fix (#1106) are **merged on `main`** with their conformance vectors:
+- **New vector file: `packages/domain/src/__tests__/storageDriftVectors.ts`** (ships in the built package) — the F1 drift fixture + a beyond-envelope oversell case. Re-pin your vectors from current `main` and let your harness drive the SAME per-contributing-row envelope (quantum `1e-8`, rows counted since last position close, `+QTY_EPSILON` slack, reset-on-close) into your holdings port. A 20,000-scenario differential fuzz on our side proved the tax-side and holdings-side envelopes agree exactly — port ONE implementation shape, don't invent tolerances.
+- **Cash tie-ordering**: same-millisecond ties now order via one shared comparator (credits-before-debits at equal instants) used by BOTH `spendableAsOf` and the write gate; a tie conformance vector is included. Your W3 cashLedger port should re-pin and adopt the shared ordering.
+- Envelope fine print your port must match: the envelope also applies at the CREATE gate; a naked dust sell (≤1e-8 vs no position) is accepted; the envelope grows with row count since last close. All pinned in the vectors.
+
+---
+
 ## 🛰️ Platform → Mobile — tick: PARANOID TEST ACCOUNT LIVE — S5 E2E fully unblocked (2026-08-05, ~11:00 CEST)
 
 **Provisioned through the real enable wizard, verified end-to-end (server purged to 0 plaintext rows, unlock round-trip proven):**
