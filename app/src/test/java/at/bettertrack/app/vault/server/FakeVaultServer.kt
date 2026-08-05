@@ -70,6 +70,20 @@ class FakeVaultServer {
     /** Set to answer a `200` whose `ETag` disagrees with the envelope. */
     var lieAboutEtag: Boolean = false
 
+    /**
+     * Set to stamp the `X-BetterTrack-Vault-*` metadata headers onto the **main**
+     * `GET /vault` as well, carrying values that contradict the envelope.
+     *
+     * The live server never does this — verified 2026-08-05 against the paranoid
+     * account, where `GET /vault` answered `200` with `ETag: "2"` and no `X-`
+     * header at all, while `GET /vault/history/1` carried all three. Platform
+     * called it out as integration note #1 precisely because a client that took
+     * its version or its timestamp from those headers would read `null` on every
+     * live main GET. This switch exists so the client's indifference to them is
+     * *asserted* rather than merely true by accident.
+     */
+    var metadataHeadersOnMainGet: Boolean = false
+
     /** The durable media set reported by `GET /vault/media` for a paranoid account. */
     var mediaSet: List<String> = listOf(MEDIUM_SERVER)
 
@@ -140,6 +154,13 @@ class FakeVaultServer {
             .setHeader(ETAG, etag(if (lieAboutEtag) version + 99 else version))
             .setHeader("Content-Type", OCTET_STREAM)
             .setHeader("Cache-Control", "private, no-store")
+            .apply {
+                if (metadataHeadersOnMainGet) {
+                    setHeader(HEADER_CREATED_AT, CONTRADICTORY_CREATED_AT)
+                    setHeader("X-BetterTrack-Vault-Size-Bytes", (stored.envelope.size + 1).toString())
+                    setHeader("X-BetterTrack-Vault-Medium", "drive")
+                }
+            }
             .setBody(okio.Buffer().write(stored.envelope))
     }
 
@@ -233,7 +254,7 @@ class FakeVaultServer {
             .setHeader(ETAG, etag(version))
             .setHeader("Content-Type", OCTET_STREAM)
             .setHeader("Cache-Control", "private, no-store")
-            .setHeader("X-BetterTrack-Vault-Created-At", stored.createdAt)
+            .setHeader(HEADER_CREATED_AT, stored.createdAt)
             .setHeader("X-BetterTrack-Vault-Size-Bytes", stored.envelope.size.toString())
             .setHeader("X-BetterTrack-Vault-Medium", "server")
             .setBody(okio.Buffer().write(stored.envelope))
@@ -251,25 +272,31 @@ class FakeVaultServer {
 
     private class StoredVault(val envelope: ByteArray, val createdAt: String)
 
-    private companion object {
-        const val VAULT_PATH = "/api/v1/vault"
-        const val ETAG = "ETag"
-        const val IF_MATCH = "If-Match"
-        const val IF_NONE_MATCH = "If-None-Match"
-        const val OCTET_STREAM = "application/octet-stream"
+    companion object {
+        /** `VAULT_HISTORY_CREATED_AT_HEADER` — history responses only, on the live server. */
+        const val HEADER_CREATED_AT = "X-BetterTrack-Vault-Created-At"
 
-        const val PRIVACY_NORMAL = "normal"
-        const val PRIVACY_PARANOID = "paranoid"
-        const val MEDIUM_SERVER = "server"
+        /** What [metadataHeadersOnMainGet] claims; nothing in the app may believe it. */
+        const val CONTRADICTORY_CREATED_AT = "1999-12-31T23:59:59.000Z"
 
-        const val CODE_NOT_FOUND = "VAULT_NOT_FOUND"
-        const val CODE_MALFORMED = "VAULT_MALFORMED"
-        const val CODE_PRECONDITION_FAILED = "VAULT_PRECONDITION_FAILED"
-        const val CODE_MODE_REQUIRED = "VAULT_PARANOID_MODE_REQUIRED"
+        private const val VAULT_PATH = "/api/v1/vault"
+        private const val ETAG = "ETag"
+        private const val IF_MATCH = "If-Match"
+        private const val IF_NONE_MATCH = "If-None-Match"
+        private const val OCTET_STREAM = "application/octet-stream"
 
-        fun etag(version: Int) = "\"$version\""
+        private const val PRIVACY_NORMAL = "normal"
+        private const val PRIVACY_PARANOID = "paranoid"
+        private const val MEDIUM_SERVER = "server"
 
-        fun parseEtag(value: String): Int? =
+        private const val CODE_NOT_FOUND = "VAULT_NOT_FOUND"
+        private const val CODE_MALFORMED = "VAULT_MALFORMED"
+        private const val CODE_PRECONDITION_FAILED = "VAULT_PRECONDITION_FAILED"
+        private const val CODE_MODE_REQUIRED = "VAULT_PARANOID_MODE_REQUIRED"
+
+        private fun etag(version: Int) = "\"$version\""
+
+        private fun parseEtag(value: String): Int? =
             value.trim().removePrefix("W/").trim('"').toIntOrNull()
 
         /**
@@ -277,7 +304,7 @@ class FakeVaultServer {
          * refuse a non-advancing envelope, so it has to actually parse one.
          * `BTVAULT1` ‖ uint32 BE headerLength ‖ headerJson ‖ ciphertext.
          */
-        fun envelopeVersionOf(bytes: ByteArray): Int? {
+        private fun envelopeVersionOf(bytes: ByteArray): Int? {
             if (bytes.size < 12 || bytes.decodeToString(0, 8) != "BTVAULT1") return null
             val headerLength = ((bytes[8].toInt() and 0xFF) shl 24) or
                 ((bytes[9].toInt() and 0xFF) shl 16) or

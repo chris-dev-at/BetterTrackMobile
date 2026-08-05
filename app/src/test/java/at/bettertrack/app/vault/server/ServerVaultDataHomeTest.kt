@@ -86,6 +86,42 @@ class ServerVaultDataHomeTest {
         assertEquals(DataHomeCorruptionReason.VERSION_MISMATCH, (result as DataHomeCorrupt).reason)
     }
 
+    /**
+     * **Integration note #1, pinned as a test.**
+     *
+     * Platform's warning (board, 2026-08-05): the vault version on `GET /vault`
+     * lives in the `ETag`, and the `X-BetterTrack-Vault-*` metadata headers exist
+     * ONLY on `GET /vault/history/{version}`. A client that took its version — or
+     * its timestamp — from those headers would find nothing on every live main
+     * GET and report a healthy vault as corrupt.
+     *
+     * Asserting "we read the ETag" alone cannot catch that regression, because
+     * a client reading *both* would still pass it. So this drives the opposite
+     * shape: the server stamps all three metadata headers onto the main GET with
+     * values that contradict the envelope, and the read must be bit-for-bit the
+     * same as without them. The timestamp in particular must stay the envelope's
+     * own `writtenAt`, never the header's.
+     */
+    @Test
+    fun theMainGetIgnoresTheHistoryOnlyMetadataHeaders() = runTest {
+        val envelope = VaultTestEnvelopes.envelope(vaultVersion = 4, writtenAt = ENVELOPE_WRITTEN_AT)
+        fake.seed(envelope, version = 4)
+
+        val clean = home.read() as DataHomeBytes
+        fake.metadataHeadersOnMainGet = true
+        val noisy = home.read() as DataHomeBytes
+
+        assertEquals("the version still comes from the ETag", 4, noisy.info.version)
+        assertEquals(
+            "and the timestamp from the envelope, not from X-BetterTrack-Vault-Created-At",
+            ENVELOPE_WRITTEN_AT,
+            noisy.info.updatedAt,
+        )
+        assertEquals("the size is the bytes received, not the header's claim", envelope.size.toLong(), noisy.info.sizeBytes)
+        assertEquals("the medium is ours, not the header's claim", DataHomeMedium.SERVER, noisy.info.medium)
+        assertEquals("the metadata headers change nothing at all", clean.info, noisy.info)
+    }
+
     // ── Write / CAS ─────────────────────────────────────────────────────────
 
     @Test
@@ -314,4 +350,9 @@ class ServerVaultDataHomeTest {
 
     private suspend fun historyFailureCode(): DataHomeFailureCode? =
         (home.history() as ServerVaultHistoryResult.Failure).failure.code
+
+    private companion object {
+        /** Deliberately unlike anything [FakeVaultServer] puts in a header. */
+        const val ENVELOPE_WRITTEN_AT = "2026-08-05T08:44:09.000Z"
+    }
 }
