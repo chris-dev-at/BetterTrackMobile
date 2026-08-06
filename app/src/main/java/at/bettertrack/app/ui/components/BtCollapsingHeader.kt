@@ -3,15 +3,21 @@ package at.bettertrack.app.ui.components
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,18 +30,25 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.lerp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.lerp as lerpTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.ui.shell.BtNavMotion
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlin.math.roundToInt
 
 /**
  * The app's collapsing large-title header (R-arc mandate §1/§4).
@@ -60,15 +73,31 @@ import at.bettertrack.app.ui.theme.BtTheme
  * to a 64dp identity strip and stays out of the way. The user never loses the
  * title and never pays for it twice.
  *
- * ## The tap-to-act title
+ * ## The tap-to-act title reads as a BUTTON (owner change 2026-08-06)
  *
  * [onTitleClick] turns the title into the screen's context *switcher* — the
  * single most valuable thing a large title can do, and the reason the portfolio
- * selector chip could leave the top bar without losing a capability. The gold
- * chevron is the affordance: it is the only gold in the header, so "this title is
- * a control" reads before any label does. [titleClickLabel] is the accessible
- * name for that act (e.g. "Switch portfolio"), announced as the click label so a
- * screen reader says what will happen rather than merely that something will.
+ * selector chip could leave the top bar without losing a capability.
+ *
+ * It first shipped as plain text plus a gold chevron, on the theory that the
+ * chevron alone was affordance enough. The owner's verdict on the device was that
+ * it is not: *"the portfolio selector should look more like a button with the
+ * icon, like the real webapp"*. He is right, and the web app agrees with him —
+ * its `.bt-portfolio-trigger` is a real `<button>`: a surface-filled, bordered
+ * control carrying a tinted icon chip, the portfolio's name, and a muted
+ * chevron. A title that is a control should LOOK like a control before it is
+ * touched, not after.
+ *
+ * So a clickable title renders as [BtHeaderSelector]: a rounded, bordered,
+ * surface-filled pill of `[icon chip] name ⌄`. The pill IS the affordance now,
+ * which frees the chevron to go muted and leaves exactly one gold in the header —
+ * the icon chip — instead of the two a gold chevron on a gold-bordered pill would
+ * have made. Everything about it interpolates with the collapse, so it shrinks
+ * into the 64dp strip as one object rather than swapping for a different control.
+ *
+ * [titleClickLabel] is the accessible name for that act (e.g. "Switch
+ * portfolio"), announced as the click label so a screen reader says what will
+ * happen rather than merely that something will.
  *
  * ## Colors: tonal elevation, not a divider
  *
@@ -105,10 +134,15 @@ import at.bettertrack.app.ui.theme.BtTheme
  * @param scrollBehavior from [rememberBtCollapsingHeaderBehavior]; its
  *   `nestedScrollConnection` must be hung on an ancestor of the screen's
  *   scrollable or the header will never collapse.
- * @param onTitleClick when non-null, the title row becomes clickable and grows a
- *   gold chevron.
+ * @param titleIcon the glyph for the selector pill's leading chip. Only read when
+ *   [onTitleClick] is set; a pill with no icon simply omits the chip.
+ * @param onTitleClick when non-null, the title renders as the [BtHeaderSelector]
+ *   button described above.
  * @param titleClickLabel the accessible description of [onTitleClick].
- * @param navigationIcon the back affordance on pushed screens; empty on tabs.
+ * @param navigationIcon the leading slot of the always-visible top row: the back
+ *   affordance on pushed screens, and the [Wordmark] on the app's root tab (see
+ *   [at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen] — it is what stops
+ *   that row from being 64dp of nothing while the header is expanded).
  * @param action the ONE contextual action, or null. Not a slot list — see above.
  * @param overflow the ⋮ menu, or null. Renders after [action], as the last thing
  *   in the row, which is where every Android user's thumb expects to find it.
@@ -124,6 +158,7 @@ fun BtCollapsingHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     titleColor: Color? = null,
+    titleIcon: ImageVector? = null,
     onTitleClick: (() -> Unit)? = null,
     titleClickLabel: String? = null,
     navigationIcon: @Composable () -> Unit = {},
@@ -135,70 +170,78 @@ fun BtCollapsingHeader(
     LargeTopAppBar(
         modifier = modifier,
         title = {
-            // The two type sizes the mandate's idiom needs, interpolated rather
-            // than switched: M3 renders this same lambda in BOTH the collapsed
-            // row and the expanded one and cross-fades them, so a hard switch at
-            // some threshold would land mid-fade and read as a jump. Reading
-            // `collapsedFraction` here also scopes the per-frame recomposition to
-            // this one row instead of the whole header.
-            val fraction = scrollBehavior.state.collapsedFraction
-            // Compose refuses to lerp TextUnits of different types ("Cannot
-            // perform operation for Em and Sp" — a hard crash, found live on
-            // device 2026-08-05): the brand ramp spaces letters in `em` while
-            // M3's titleMedium keeps `sp`. Normalize every unit to sp (via the
-            // style's own sp font size) before interpolating.
-            val style = lerp(
-                start = MaterialTheme.typography.headlineSmall.withSpUnits(),
-                stop = MaterialTheme.typography.titleMedium.withSpUnits(),
-                fraction = fraction,
-            )
-            val interaction = remember { MutableInteractionSource() }
-            val titleRow = if (onTitleClick != null) {
-                Modifier.clickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onClickLabel = titleClickLabel,
+            // ── Collapse fraction, QUANTIZED (perf pass 2026-08-06) ──────────
+            //
+            // M3 renders this same lambda in BOTH the collapsed row and the
+            // expanded one and cross-fades them, so the sizes have to be
+            // interpolated rather than switched at a threshold — a hard switch
+            // would land mid-fade and read as a jump.
+            //
+            // Reading `collapsedFraction` raw, though, made this row recompose on
+            // EVERY frame of the collapse and allocate a whole `TextStyle` (with
+            // its ParagraphStyle/SpanStyle/platform-style tree) per frame, purely
+            // so a font could grow by a fraction of a point. The fraction is
+            // snapped to [COLLAPSE_STEPS] steps inside a `derivedStateOf`, so the
+            // row recomposes only when a step boundary is crossed — at most 32
+            // times across a whole collapse instead of once per frame, and zero
+            // times while the header sits at either end (which is where it sits
+            // for nearly all of a long scroll). One step is ~0.25sp of type and
+            // ~0.3dp of height: below the threshold of visibility, and the motion
+            // stays continuous because the pill's own layout animates the change.
+            val step by remember(scrollBehavior) {
+                derivedStateOf {
+                    (scrollBehavior.state.collapsedFraction * COLLAPSE_STEPS).roundToInt()
+                }
+            }
+            val fraction = step / COLLAPSE_STEPS.toFloat()
+
+            if (onTitleClick != null) {
+                // A title that acts is drawn as the control it is. No subtitle
+                // branch here on purpose: the two screens that own a selector
+                // (Overview and a portfolio) have nothing to orient the user
+                // with beyond the name already inside the pill.
+                BtHeaderSelector(
+                    label = title,
+                    icon = titleIcon,
+                    fraction = fraction,
+                    labelColor = titleColor ?: bt.textPrimary,
+                    clickLabel = titleClickLabel,
                     onClick = onTitleClick,
                 )
             } else {
-                Modifier
-            }
-            Column(modifier = titleRow) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Compose refuses to lerp TextUnits of different types ("Cannot
+                // perform operation for Em and Sp" — a hard crash, found live on
+                // device 2026-08-05): the brand ramp spaces letters in `em` while
+                // M3's titleMedium keeps `sp`. Normalize every unit to sp (via
+                // the style's own sp font size) before interpolating.
+                val style = lerpTextStyle(
+                    start = MaterialTheme.typography.headlineSmall.withSpUnits(),
+                    stop = MaterialTheme.typography.titleMedium.withSpUnits(),
+                    fraction = fraction,
+                )
+                Column {
                     Text(
                         text = title,
                         style = style,
                         color = titleColor ?: bt.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (onTitleClick != null) {
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Outlined.ExpandMore,
-                            // The click label on the row already says what happens;
-                            // a second announcement on the glyph would make a screen
-                            // reader read the same act twice.
-                            contentDescription = null,
-                            tint = bt.gold,
-                            modifier = Modifier.size(if (fraction > 0.5f) 20.dp else 24.dp),
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = bt.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            // Fades out over the first half of the collapse, so
+                            // it is gone before the row is tight enough for two
+                            // lines to crowd each other — and it never blinks off
+                            // at a threshold the way a conditional composition
+                            // would.
+                            modifier = Modifier.alpha((1f - fraction * 2f).coerceIn(0f, 1f)),
                         )
                     }
-                }
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        // Fades out over the first half of the collapse, so it is
-                        // gone before the row is tight enough for two lines to
-                        // crowd each other — and it never blinks off at a
-                        // threshold the way a conditional composition would.
-                        modifier = Modifier.alpha((1f - fraction * 2f).coerceIn(0f, 1f)),
-                    )
                 }
             }
         },
@@ -229,6 +272,139 @@ fun BtCollapsingHeader(
         ),
         scrollBehavior = scrollBehavior,
     )
+}
+
+/**
+ * The number of steps the collapse fraction is snapped to before anything is
+ * sized from it. See the comment in [BtCollapsingHeader]'s title slot: this is a
+ * recomposition budget, not a visual choice — 32 steps over a 48dp collapse and
+ * an 8sp type change is finer than the eye or the pixel grid can resolve.
+ */
+private const val COLLAPSE_STEPS = 32
+
+/**
+ * The clickable title, drawn as a button (owner change 2026-08-06).
+ *
+ * ## Shape of the thing
+ *
+ * `[icon chip] label ⌄` inside a bordered, surface-filled rounded rect — the
+ * Android reading of the web app's `.bt-portfolio-trigger`, which is a 1px
+ * border on `--bt-surface` at radius 6 with a 30px tinted icon chip at radius 8,
+ * a 13.5px/620 name, and a muted 14px chevron. The proportions carry over; the
+ * sizes do not, because this pill has to be the page's *subject* when expanded,
+ * where the web's sits in a permanent 48px topbar and never grows.
+ *
+ * ## Why every dimension interpolates
+ *
+ * M3 draws this lambda twice — once in the collapsed row, once in the expanded
+ * one — and cross-fades. If the pill were one fixed size, the two copies would
+ * be identical and the collapse would read as a fade between two things in
+ * different places rather than one thing moving. Interpolating height, radius,
+ * chip, glyph, type and padding against the same [fraction] makes it a single
+ * object that shrinks: 44dp → 34dp tall, 20sp → 15sp label, 30dp → 24dp chip.
+ *
+ * ## The gold is on the chip, not the chevron
+ *
+ * The design system allows exactly one accent, and the pre-button title spent it
+ * on a gold chevron because the chevron was the only affordance it had. A pill
+ * announces itself, so the chevron drops to muted (as on the web) and the gold
+ * moves to the icon chip — a translucent-gold tile, which is the §5 treatment for
+ * a small control that states the current selection.
+ *
+ * ## Touch target
+ *
+ * The click modifier sits OUTSIDE the 2dp visual inset, so the tap area is the
+ * full 48dp the design system asks for while the drawn pill stays 44dp and clears
+ * the 48dp of vertical room M3 gives the expanded title.
+ */
+@Composable
+private fun BtHeaderSelector(
+    label: String,
+    icon: ImageVector?,
+    fraction: Float,
+    labelColor: Color,
+    clickLabel: String?,
+    onClick: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+
+    val height = lerp(44.dp, 34.dp, fraction)
+    val radius = lerp(14.dp, 11.dp, fraction)
+    val chip = lerp(30.dp, 24.dp, fraction)
+    val chipRadius = lerp(9.dp, 7.dp, fraction)
+    val glyph = lerp(18.dp, 15.dp, fraction)
+    val chevron = lerp(20.dp, 17.dp, fraction)
+    val labelSize = lerp(20.sp, 15.sp, fraction)
+    val startPad = lerp(6.dp, 5.dp, fraction)
+    val endPad = lerp(12.dp, 10.dp, fraction)
+    val gap = lerp(10.dp, 8.dp, fraction)
+
+    // The two shapes are the only per-step ALLOCATIONS in the pill, and a new
+    // shape instance also invalidates the background/border draw caches that
+    // hang off it. Keyed on the rounded dp, so the 32 collapse steps produce at
+    // most a handful of distinct instances instead of two per step.
+    val shape = remember(radius) { RoundedCornerShape(radius) }
+    val chipShape = remember(chipRadius) { RoundedCornerShape(chipRadius) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            // Click first: the tap area is the padded box, i.e. 48dp expanded.
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClickLabel = clickLabel,
+                onClick = onClick,
+            )
+            .btPressScale(interaction)
+            .padding(vertical = 2.dp)
+            .height(height)
+            .clip(shape)
+            .background(bt.surface)
+            .border(1.dp, bt.borderStrong, shape)
+            .padding(start = startPad, end = endPad),
+    ) {
+        if (icon != null) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(chip)
+                    .clip(chipShape)
+                    .background(bt.gold.copy(alpha = 0.14f))
+                    .border(1.dp, bt.gold.copy(alpha = 0.26f), chipShape),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    // The pill's click label already names the act; a second
+                    // description on a garnish glyph would make a screen reader
+                    // read the same control twice.
+                    contentDescription = null,
+                    tint = bt.gold,
+                    modifier = Modifier.size(glyph),
+                )
+            }
+            Spacer(Modifier.width(gap))
+        }
+        Text(
+            text = label,
+            fontSize = labelSize,
+            fontWeight = FontWeight.SemiBold,
+            color = labelColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // fill = false so the pill hugs a short name instead of stretching
+            // to the whole bar; weight so a long one ellipsizes rather than
+            // pushing the chevron out of the header.
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            imageVector = Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = bt.textMuted,
+            modifier = Modifier.size(chevron),
+        )
+    }
 }
 
 /** Collapsed height — one standard app-bar row, so tab hops don't shift content. */

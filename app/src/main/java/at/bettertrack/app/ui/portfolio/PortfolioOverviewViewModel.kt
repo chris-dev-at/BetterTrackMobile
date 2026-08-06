@@ -15,6 +15,7 @@ import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.data.prefs.DevicePrefs
 import at.bettertrack.app.data.repo.prefetchPortfolioTotals
 import at.bettertrack.app.sync.ConnectivityMonitor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -24,7 +25,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -97,13 +100,28 @@ class PortfolioOverviewViewModel(
      * Open queued buy/sells of the selected portfolio (§7.1: pending entries
      * are listed alongside, clearly marked — never folded into the totals).
      * Feeds the overview's pending strip → Pending-sync screen.
+     *
+     * Perf pass 2026-08-06: `observeAll()` re-emits the ENTIRE `sync_ops` table
+     * on every status write, and a drain moves each op through
+     * pending → in_flight → done, so one queued transaction re-emits it three
+     * times. Each emission JSON-decodes every op's payload. That work was
+     * landing on `Dispatchers.Main` — `combine`'s transform runs in the
+     * collector's context, which for `stateIn(viewModelScope, …)` is
+     * `Main.immediate` — while the sync engine was draining in the background
+     * and the user was scrolling the very screen it feeds. `flowOn` moves the
+     * decode off Main; `distinctUntilChanged` then drops the re-emissions that
+     * produce an identical list, which is most of them (a `pending →
+     * in_flight` flip changes nothing this screen renders).
      */
     val pendingTx: StateFlow<List<PendingTxRow>> = combine(
         db.syncOpDao().observeAll(),
         selected,
     ) { ops, sel ->
         if (sel == null) emptyList() else decodePendingTxRows(ops, json, sel.id)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()

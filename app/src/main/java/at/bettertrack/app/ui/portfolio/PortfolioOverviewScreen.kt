@@ -39,6 +39,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -85,6 +87,7 @@ import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -269,6 +272,38 @@ fun PortfolioOverviewScreen(
                 selected?.name ?: stringResource(R.string.bt_tab_portfolio)
             },
             scrollBehavior = scrollBehavior,
+            // The selector's leading glyph is the Portfolio TAB's glyph, on
+            // purpose: the pill states which entry of that tab you are in, so
+            // wearing the tab's own icon makes the relationship legible without a
+            // word. The web app tints its trigger chip per portfolio; this app has
+            // no per-portfolio icon or hue in its model, so one glyph in the
+            // house accent is the honest equivalent rather than a colour invented
+            // client-side.
+            titleIcon = Icons.Outlined.PieChart,
+            // The wordmark lives in the leading slot of the always-visible top
+            // row (owner report 2026-08-06: "the BetterTrack logo up top is
+            // missing — just an empty space now"). Two things were true and both
+            // are fixed here. The brand HAD left the app entirely when the shell
+            // top bar was retired — it survived only on login and About, so the
+            // running app never said its own name. And M3's `LargeTopAppBar`
+            // fades its collapsed title to nothing while the header is expanded,
+            // which left that 64dp row holding a search icon, an overflow, and
+            // ~200dp of deliberate blankness on the screen the app OPENS on.
+            //
+            // Putting the wordmark there answers both with one element: the app
+            // is named again, in the corner every Android app puts its identity,
+            // and the empty row now has a subject. It does NOT fade with the
+            // collapse — brand is not context, and a logo that dissolves when you
+            // scroll reads as a rendering bug, which is precisely the report this
+            // change is answering. It stays on this tab only; the pushed screens'
+            // leading slot is their back arrow, and the other tabs' headers state
+            // their own subject.
+            navigationIcon = {
+                Wordmark(
+                    fontSize = 19.sp,
+                    modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+                )
+            },
             // Always tappable now. The switcher stopped being an optional
             // convenience the moment it became the only way between Overview and
             // the portfolios: an account with zero portfolios still needs the
@@ -447,21 +482,37 @@ private fun OverviewContent(
 
     // W6: true when this mode has no live quotes, so an absent price is a state
     // the user can act on rather than a transient server gap.
-    val noLivePrices = at.bettertrack.app.ui.prices.manualEntryAvailable(
-        at.bettertrack.app.di.AppGraph.gatedStorageMode(
-            at.bettertrack.app.di.AppGraph.storageModeStore.mode.collectAsStateWithLifecycle().value,
-        ),
-    )
+    val storedMode by at.bettertrack.app.di.AppGraph.storageModeStore.mode
+        .collectAsStateWithLifecycle()
+    val noLivePrices = remember(storedMode) {
+        at.bettertrack.app.ui.prices.manualEntryAvailable(
+            at.bettertrack.app.di.AppGraph.gatedStorageMode(storedMode),
+        )
+    }
 
     // How much of this portfolio could be priced at all. Hoisted to the content
     // scope because three separate places need it — the hero, its day-change
     // sub-line and the holdings-value roll-up — and all three must agree.
-    val coverage = at.bettertrack.app.ui.prices.priceCoverage(holdings)
+    // `remember`ed on the list because it is an O(n) count and this scope
+    // recomposes for reasons that have nothing to do with the holdings (this is
+    // what HomeScreen already does with the identical call).
+    val coverage = remember(holdings) { at.bettertrack.app.ui.prices.priceCoverage(holdings) }
 
     // Scrub state is hoisted here so touching the hero chart updates the big
     // Net-Worth readout (Robinhood-style). A fresh selection/range clears it.
     var scrub by remember { mutableStateOf<HistoryPoint?>(null) }
     LaunchedEffect(portfolio.id, range) { scrub = null }
+    // The chart only needs to know WHETHER a scrub is in progress. Passing
+    // `scrub != null` subscribed the chart's item scope to the scrubbed POINT,
+    // so every pointer sample recomposed the hero — its readout, its six range
+    // chips and the canvas — instead of only the two frames where the boolean
+    // actually flips (perf pass 2026-08-06).
+    val scrubbing by remember { derivedStateOf { scrub != null } }
+    // Same shape: the pending strip's promotion is an O(n) count that gates two
+    // `item {}` declarations, so it ran on every rebuild of the item provider.
+    val attention = remember(pendingTx) {
+        pendingTx.count { it.status == PendingUiStatus.NEEDS_ATTENTION }
+    }
 
     // Content is inset 16dp — EXCEPT the hero chart, which bleeds edge-to-edge.
     val inset = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
@@ -481,7 +532,7 @@ private fun OverviewContent(
     ) {
         // Net-Worth hero (server totals only) — scrub-aware: while scrubbing the
         // chart, the big number + label become the touched point's value + date.
-        item(key = "hero") {
+        item(key = "hero", contentType = "hero") {
             val s = scrub
             // Discreet mode: press and hold the hero to peek at the real numbers,
             // release to re-hide. Only armed while masking, so it costs a normal
@@ -583,9 +634,8 @@ private fun OverviewContent(
         // the server refused is not status, it is work, and work belongs next to
         // the number it is about to change. Everything merely waiting to upload
         // is status and lives at the bottom of the screen.
-        val attention = pendingTx.count { it.status == PendingUiStatus.NEEDS_ATTENTION }
         if (attention > 0) {
-            item(key = "pending-attention") {
+            item(key = "pending-attention", contentType = "pending") {
                 Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
             }
         }
@@ -593,11 +643,11 @@ private fun OverviewContent(
         // History graph (§3.6) — blended full-bleed hero: no card, gold gradient
         // fading into the page, edge-to-edge, minimal axis. Header + range chips
         // stay inset; only the canvas bleeds.
-        item(key = "chart") {
+        item(key = "chart", contentType = "chart") {
             HeroChart(
                 history = history,
                 range = range,
-                scrubbing = scrub != null,
+                scrubbing = scrubbing,
                 onRange = onRange,
                 onScrub = { scrub = it },
                 locale = locale,
@@ -609,7 +659,7 @@ private fun OverviewContent(
         // bar answers that in one glance and 10dp of height where the 132dp donut
         // needed a card of its own between the value and the positions.
         if (holdings.isNotEmpty() || (totals?.cashEur ?: 0.0) > 0.0) {
-            item(key = "allocation") {
+            item(key = "allocation", contentType = "allocation") {
                 Box(inset) {
                     AllocationSummary(
                         holdings = holdings,
@@ -622,7 +672,7 @@ private fun OverviewContent(
 
         // Holdings — the thing this screen is for, now immediately after the
         // value and the summary (mandate §3).
-        item(key = "holdings-header") {
+        item(key = "holdings-header", contentType = "section-header") {
             Column(inset.padding(top = 4.dp)) {
                 Text(
                     text = stringResource(R.string.bt_overview_holdings_section),
@@ -644,7 +694,7 @@ private fun OverviewContent(
             }
         }
         if (holdings.isEmpty()) {
-            item(key = "holdings-empty") {
+            item(key = "holdings-empty", contentType = "empty") {
                 Box(inset) {
                     // The FAB stands down while this is on screen, so this
                     // button is the portfolio's single "record a transaction"
@@ -666,6 +716,14 @@ private fun OverviewContent(
             items(
                 count = holdings.size,
                 key = { "holding-" + holdings[it].assetId },
+                // Every `item {}` above declares its own contentType too. Without
+                // them the whole list shared ONE reuse pool, so a holding row
+                // could be handed a retained slot that last held the 150dp chart
+                // or the hero — structures that cannot be reused, which makes
+                // LazyLayout deactivate and fully recompose instead. The pool
+                // then costs bookkeeping and pays nothing back (perf pass
+                // 2026-08-06).
+                contentType = { "holding" },
             ) { index ->
                 val h = holdings[index]
                 Box(inset) {
@@ -684,7 +742,7 @@ private fun OverviewContent(
         // rows (mandate §3: "cash/source metadata demoted into rows' secondary
         // lines"). They are also the in-content second path for the two entries
         // the header's ⋮ carries — overflow is a shortcut, never the only way.
-        item(key = "secondary-rows") {
+        item(key = "secondary-rows", contentType = "secondary") {
             Column(inset.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SecondaryRow(
                     label = stringResource(R.string.bt_overview_cash),
@@ -704,7 +762,7 @@ private fun OverviewContent(
         // screen — never folded into the totals. Below the holdings unless
         // something in them needs attention, in which case it is already above.
         if (pendingTx.isNotEmpty() && attention == 0) {
-            item(key = "pending-strip") {
+            item(key = "pending-strip", contentType = "pending") {
                 Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
             }
         }

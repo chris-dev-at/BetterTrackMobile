@@ -61,6 +61,65 @@ private fun withoutNegativeZero(value: Double): Double = if (value == 0.0) 0.0 e
 
 private fun isFinite(value: Double?): Boolean = value != null && !value.isNaN() && !value.isInfinite()
 
+// ── Formatter reuse (perf pass 2026-08-06) ──────────────────────────────────
+
+/** The three formatter configurations this file needs. */
+private enum class NfShape {
+    /** Money and percent: exactly 2 decimals, grouped. */
+    FIXED_2,
+
+    /** Sub-cent unit prices: up to 20 decimals, trailing zeros already trimmed. */
+    SIGNIFICANT,
+
+    /** Bare quantities: up to 8 decimals, trailing zeros trimmed. */
+    QUANTITY,
+}
+
+/**
+ * Per-thread, per-locale configured [NumberFormat]s.
+ *
+ * `NumberFormat.getNumberInstance` is not a getter — it builds a fresh ICU
+ * `DecimalFormat`, parsing a pattern and resolving a full symbol set, every
+ * call. One holdings row asks for four of them (quantity, weight, market value,
+ * change percent), so a 30-position portfolio was constructing ~120 formatters
+ * per pass over the list, and doing it again on every emission of the holdings
+ * flow and every discreet-mode toggle. The configurations are fixed and there
+ * are only three of them, so they are built once per locale and reused.
+ *
+ * `ThreadLocal` because `NumberFormat` is explicitly NOT thread-safe and these
+ * are reached from both the UI thread and (since the same pass moved decoding
+ * off Main) background dispatchers. A per-thread copy is a few objects and
+ * removes the question entirely; a shared instance behind a lock would trade the
+ * allocation for contention on the hotter path.
+ */
+private val btNumberFormats: ThreadLocal<MutableMap<Pair<Locale, NfShape>, NumberFormat>> =
+    ThreadLocal.withInitial { HashMap() }
+
+private fun btNumberFormat(locale: Locale, shape: NfShape): NumberFormat =
+    btNumberFormats.get()!!.getOrPut(locale to shape) {
+        NumberFormat.getNumberInstance(locale).apply {
+            isGroupingUsed = true
+            when (shape) {
+                NfShape.FIXED_2 -> {
+                    minimumFractionDigits = 2
+                    maximumFractionDigits = 2
+                }
+
+                NfShape.SIGNIFICANT -> {
+                    minimumFractionDigits = 0
+                    maximumFractionDigits = 20
+                    roundingMode = RoundingMode.HALF_UP
+                }
+
+                NfShape.QUANTITY -> {
+                    minimumFractionDigits = 0
+                    maximumFractionDigits = 8
+                    roundingMode = RoundingMode.HALF_UP
+                }
+            }
+        }
+    }
+
 /**
  * Rule 1 — fiat money, symbol-last, exactly 2 decimals, half-away-from-zero.
  * [showSign] prepends a literal "+" for positive values (gain/loss money);
@@ -81,12 +140,7 @@ internal fun btFormatMoneyCore(
     // the app funnels through, so no screen can opt out by accident.
     if (BtDiscreetMode.masking) return btMaskedMoney(currencyCode, locale)
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!)).setScale(2, RoundingMode.HALF_UP)
-    val nf = NumberFormat.getNumberInstance(locale).apply {
-        minimumFractionDigits = 2
-        maximumFractionDigits = 2
-        isGroupingUsed = true
-    }
-    val num = nf.format(bd)
+    val num = btNumberFormat(locale, NfShape.FIXED_2).format(bd)
     val signed = if (showSign && bd.signum() > 0) "+$num" else num
     return "$signed ${btMoneySymbol(currencyCode, locale)}"
 }
@@ -105,12 +159,7 @@ internal fun btFormatUnitPriceCore(value: Double?, currencyCode: String, locale:
         val bd = BigDecimal.valueOf(v)
             .round(MathContext(6, RoundingMode.HALF_UP))
             .stripTrailingZeros()
-        val nf = NumberFormat.getNumberInstance(locale).apply {
-            minimumFractionDigits = 0
-            maximumFractionDigits = 20
-            roundingMode = RoundingMode.HALF_UP
-            isGroupingUsed = true
-        }
+        val nf = btNumberFormat(locale, NfShape.SIGNIFICANT)
         return "${nf.format(bd)} ${btMoneySymbol(currencyCode, locale)}"
     }
     return btFormatMoneyCore(v, currencyCode, locale, showSign = false)
@@ -127,12 +176,7 @@ internal fun btFormatPercentCore(value: Double?, locale: Locale, signed: Boolean
     val rounded = BigDecimal.valueOf(value!!).setScale(2, RoundingMode.HALF_UP)
     // Collapse a value that rounds to zero (incl. -0.00) so no stray sign shows.
     val display = if (rounded.signum() == 0) BigDecimal.ZERO.setScale(2) else rounded
-    val nf = NumberFormat.getNumberInstance(locale).apply {
-        minimumFractionDigits = 2
-        maximumFractionDigits = 2
-        isGroupingUsed = true
-    }
-    val num = nf.format(display)
+    val num = btNumberFormat(locale, NfShape.FIXED_2).format(display)
     val sign = if (signed && display.signum() > 0) "+" else ""
     val space = if (locale.language == "en") "" else " "
     return "$sign$num$space%"
@@ -145,11 +189,5 @@ internal fun btFormatPercentCore(value: Double?, locale: Locale, signed: Boolean
 internal fun btFormatQuantityCore(value: Double?, locale: Locale): String {
     if (!isFinite(value)) return BT_EM_DASH
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!))
-    val nf = NumberFormat.getNumberInstance(locale).apply {
-        minimumFractionDigits = 0
-        maximumFractionDigits = 8
-        roundingMode = RoundingMode.HALF_UP
-        isGroupingUsed = true
-    }
-    return nf.format(bd)
+    return btNumberFormat(locale, NfShape.QUANTITY).format(bd)
 }

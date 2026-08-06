@@ -417,28 +417,46 @@ fun BtApp() {
     // home, e.g. overflow or profile, not bar chrome"). Home's overflow is that
     // home; the Settings row stays the canonical control.
     val discreetMode by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
-    // A local fun rather than a val lambda because it now has THREE call sites —
-    // Home's overflow item, Home's in-content quick-links row (Fable's rule: an
-    // overflow entry may never be the only path to its act), and its own Retry
-    // below. One implementation, so they can never diverge on what "flip
-    // discreet mode" means; being a fun is what lets it name itself as the way
-    // out, which a self-referencing local val cannot do.
-    fun toggleDiscreet(wanted: Boolean) {
-        // Flip locally FIRST — the point of masking is that amounts vanish the
-        // instant the user asks, not a round-trip later.
-        AppGraph.discreetModeStore.set(wanted)
-        scope.launch {
-            val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
-            if (r is BtResult.Err) {
-                // Roll back AND say why. Settings stays the canonical control and
-                // renders this same `asMessage()` line inline beside its row; the
-                // shell has no inline place for it, so it goes to the one feedback
-                // idiom instead. Letting the revert speak for itself — as this
-                // call site did before the app-wide snackbar existed — leaves the
-                // user watching the switch flick back with no reason given, which
-                // is the exact silence S6 P1-9 set out to remove.
-                AppGraph.discreetModeStore.set(!wanted)
-                snackbar.controller.showError(r.error.asMessage()) { toggleDiscreet(wanted) }
+    // ONE implementation with THREE call sites — Home's overflow item, Home's
+    // in-content quick-links row (Fable's rule: an overflow entry may never be
+    // the only path to its act), and its own Retry below — so they can never
+    // diverge on what "flip discreet mode" means.
+    //
+    // Written as a REMEMBERED anonymous function object rather than the local
+    // `fun` it used to be (perf pass 2026-08-06). `::localFun` compiles to a
+    // fresh `Lambda` instance on every composition, with no `equals`, so
+    // `onToggleDiscreet` was a different value each time and `BtNavHost` could
+    // never skip. That is not a cheap miss: an unskippable `BtNavHost` also
+    // re-evaluates its `NavGraphBuilder` lambda, which invalidates `NavHost`'s
+    // internal `remember(builder) { createGraph(...) }` and rebuilds the whole
+    // 43-destination typed graph — kotlinx-serialization route reflection and
+    // all — on every navigation and every badge tick. Remembering it makes the
+    // instance stable and the whole subtree skippable again.
+    //
+    // An `object : (Boolean) -> Unit` rather than a lambda because the retry
+    // needs to name the act as the way out of its own failure, and a lambda
+    // cannot refer to itself; `invoke` can.
+    val toggleDiscreet: (Boolean) -> Unit = remember(scope, snackbar) {
+        object : (Boolean) -> Unit {
+            override fun invoke(wanted: Boolean) {
+                // Flip locally FIRST — the point of masking is that amounts
+                // vanish the instant the user asks, not a round-trip later.
+                AppGraph.discreetModeStore.set(wanted)
+                scope.launch {
+                    val r = AppGraph.accountRepository.updateDiscreetMode(wanted)
+                    if (r is BtResult.Err) {
+                        // Roll back AND say why. Settings stays the canonical
+                        // control and renders this same `asMessage()` line inline
+                        // beside its row; the shell has no inline place for it, so
+                        // it goes to the one feedback idiom instead. Letting the
+                        // revert speak for itself — as this call site did before
+                        // the app-wide snackbar existed — leaves the user watching
+                        // the switch flick back with no reason given, which is the
+                        // exact silence S6 P1-9 set out to remove.
+                        AppGraph.discreetModeStore.set(!wanted)
+                        snackbar.controller.showError(r.error.asMessage()) { invoke(wanted) }
+                    }
+                }
             }
         }
     }
@@ -497,7 +515,7 @@ fun BtApp() {
                 onDeepLink = navigateDeepLink,
                 onSwitchTab = switchToTab,
                 discreetMode = discreetMode,
-                onToggleDiscreet = ::toggleDiscreet,
+                onToggleDiscreet = toggleDiscreet,
                 notifUnread = notifUnread,
                 showNotifications = showNotificationSurfaces,
             )

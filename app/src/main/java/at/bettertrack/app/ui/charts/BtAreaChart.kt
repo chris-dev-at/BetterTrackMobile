@@ -223,17 +223,18 @@ fun BtAreaChart(
             fun px(p: HistoryPoint) = (plotW * ((p.epochMillis - tMin) / tSpan)).toFloat()
             fun py(p: HistoryPoint) = plotH * (1f - scale.normalize(p.valueEur))
 
-            // S6 P0-3: market-closed stretches are GAPS, not diagonal ramps.
-            // Each connected run is stroked and filled on its own.
+            // The chart draws every connected run [chartSegments] hands it.
+            //
+            // OWNER OVERRIDE 2026-08-06: that is now always exactly ONE run over
+            // the whole series. S6 P0-3 used to break the line wherever the gap
+            // between observations exceeded a derived threshold, so that a market
+            // close read as a gap rather than as a diagonal ramp; the owner
+            // reviewed it on the device and asked for a continuous line instead,
+            // accepting the ramp. The decision and its reasoning live on
+            // [chartSegments], which is where the tests pin it — this loop simply
+            // draws what it is given, and would still draw several runs correctly
+            // if the call were ever reversed.
             chartSegments(series.map { it.epochMillis }).forEach { range ->
-                if (range.first == range.last) {
-                    // An observation isolated between two gaps: a stroke of zero
-                    // length would vanish, so mark it with a dot instead of
-                    // silently dropping the point.
-                    val p = series[range.first]
-                    drawCircle(color = lineColor, radius = 2.dp.toPx(), center = Offset(px(p), py(p)))
-                    return@forEach
-                }
                 val linePath = Path()
                 for (i in range) {
                     val p = series[i]

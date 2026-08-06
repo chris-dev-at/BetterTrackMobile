@@ -14,7 +14,9 @@ import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.storage.PortfolioBackend
 import at.bettertrack.app.sync.PostSyncRefresher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -60,10 +62,28 @@ class PortfolioRepository(
     fun cashMovements(portfolioId: String): Flow<List<CashMovementEntity>> =
         db.cashDao().observeMovements(portfolioId)
 
-    /** Parsed cached history series for one portfolio × range (§6.1 graph). */
+    /**
+     * Parsed cached history series for one portfolio × range (§6.1 graph).
+     *
+     * ## Why the `flowOn` is load-bearing (perf pass 2026-08-06)
+     *
+     * Room runs the QUERY on its own dispatcher, but nothing else: everything
+     * downstream of the DAO flow executes in the **collector's** context, and
+     * the collector here is a `stateIn(viewModelScope, …)` — i.e.
+     * `Dispatchers.Main.immediate`. So [parsePortfolioHistory] — two
+     * `decodeFromString` passes over the whole series plus an `Instant.parse`
+     * per point — was running on the UI thread, for a 1D or MAX range that is
+     * hundreds to thousands of points, every time the cached row changed and on
+     * every range switch. Which is to say: precisely while the chart is
+     * animating the range morph the user just asked for.
+     *
+     * `flowOn` moves the decode (and only the decode) to [Dispatchers.Default];
+     * the state still lands on Main because `stateIn` collects there.
+     */
     fun history(portfolioId: String, range: HistoryRange): Flow<PortfolioHistory?> =
         db.portfolioHistoryDao().observe(portfolioId, range.wire)
             .map { entity -> entity?.let { parsePortfolioHistory(it, json) } }
+            .flowOn(Dispatchers.Default)
 
     /** Wall-clock ms of the last successful portfolio-scope sync (banner age, §7.4). */
     val portfolioDataAgeMs: Flow<Long?> =

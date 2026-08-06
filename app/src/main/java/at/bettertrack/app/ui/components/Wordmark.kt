@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.components
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -28,8 +29,12 @@ fun Wordmark(
     edition: String? = null,
 ) {
     val bt = BtTheme.colors
-    Text(
-        text = buildAnnotatedString {
+    // Remembered because the wordmark now sits in the app's collapsing header
+    // (owner report 2026-08-06), which recomposes as the bar collapses — and
+    // rebuilding an AnnotatedString means re-running the builder and allocating
+    // a fresh span list every time. Nothing in it varies per frame.
+    val text = remember(bt, fontSize, edition) {
+        buildAnnotatedString {
             withStyle(SpanStyle(color = bt.textPrimary)) { append("Better") }
             withStyle(SpanStyle(color = bt.gold)) { append("Track") }
             if (edition != null) {
@@ -42,7 +47,10 @@ fun Wordmark(
                     ),
                 ) { append(edition) }
             }
-        },
+        }
+    }
+    Text(
+        text = text,
         modifier = modifier,
         fontSize = fontSize,
         fontWeight = FontWeight.Bold,
