@@ -102,6 +102,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtHeaderWordmark
 import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -111,7 +112,7 @@ import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.LocalBtSnackbar
-import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.fabVisibleForList
@@ -337,7 +338,11 @@ fun SocialScreen(
     SocialToastEffect(toast) { vm.consumeToast() }
 
     val refreshState = rememberPullToRefreshState()
-    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). Still
+    // a real behaviour rather than null: it is what keeps the tonal lift as the
+    // friends list travels under the bar. See BtCollapsingHeader's `pinned`
+    // branch.
+    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     val fabVisibility = rememberBtFabVisibility()
     val friendsListState = rememberLazyListState()
     // Back at the very top = nothing to get out of the way of. Without this the
@@ -355,16 +360,25 @@ fun SocialScreen(
         Column(
             Modifier
                 .fillMaxSize()
-                // Same ordering rule as Portfolio (see PortfolioOverviewScreen's
-                // comment): the FAB connection observes and consumes nothing, so
-                // it must be OUTER or it would only ever see the delta the
-                // collapsing header had already eaten.
+                // Ordering kept from Portfolio (see its comment). Both of these
+                // connections observe and consume nothing now that the header is
+                // pinned, so today the order decides nothing — it stays because
+                // the day this bar goes back to collapsing, an inner FAB
+                // connection would silently start seeing only the delta the
+                // header had left over, and a FAB that stops hiding is a bug
+                // nobody would trace back to a line ordering.
                 .nestedScroll(fabVisibility.nestedScroll)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
         ) {
             BtCollapsingHeader(
-                title = stringResource(R.string.bt_tab_people),
+                // No text title: the bottom bar's selected label already says
+                // "People" a few dp below, and the segments directly under the
+                // bar name this tab's contents more usefully than the tab's own
+                // word does. See the `title` KDoc.
+                title = null,
                 scrollBehavior = scrollBehavior,
+                pinned = true,
+                navigationIcon = { BtHeaderWordmark() },
                 // R1 put Messages in the shell bar as People's ONE action; R2
                 // gives People its own header, so the action moves with it —
                 // same affordance, same place on screen. The unread COUNT stays

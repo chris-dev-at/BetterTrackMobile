@@ -85,6 +85,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtHeaderWordmark
 import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -94,7 +95,7 @@ import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.fabVisibleForList
-import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.ideas.IdeasSection
@@ -132,8 +133,8 @@ private enum class WorkboardSection { Conglomerates, Ideas, Alerts }
  *
  * ## Two design calls worth stating
  *
- * **The lead block does not scroll away.** It sits between the collapsing header
- * and the segments, fixed. That is deliberate: it renders at zero height
+ * **The lead block does not scroll away.** It sits between the header and the
+ * segments, fixed. That is deliberate: it renders at zero height
  * whenever there is nothing to act on (the common case), so the space it takes
  * is, by construction, only ever spent when something is genuinely waiting. The
  * alternative — folding it into each segment's list — would have meant three
@@ -194,15 +195,25 @@ fun WorkboardScreen(
         }
     }
 
-    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). Still
+    // a real behaviour rather than null: it is what keeps the tonal lift as the
+    // segment's list travels under the bar. See BtCollapsingHeader's `pinned`
+    // branch.
+    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     Column(
         Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
     ) {
         BtCollapsingHeader(
-            title = stringResource(R.string.bt_tab_workbench),
+            // No text title: the bottom bar's selected label already says
+            // "Workbench" a few dp below, and this tab states what it is far
+            // better with the Needs-you block directly under the bar than with
+            // its own name repeated. See the `title` KDoc.
+            title = null,
             scrollBehavior = scrollBehavior,
+            pinned = true,
+            navigationIcon = { BtHeaderWordmark() },
             settings = { BtSettingsGear(onOpenSettings) },
         )
         WorkbenchNeedsYou(

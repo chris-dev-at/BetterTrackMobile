@@ -1,7 +1,6 @@
 package at.bettertrack.app.ui.portfolio
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -60,7 +58,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
-import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.HoldingEntity
@@ -78,6 +75,7 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtHeaderWordmark
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSettingsGear
@@ -87,7 +85,6 @@ import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
-import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -246,7 +243,6 @@ fun PortfolioOverviewScreen(
     }
 
     val bt = BtTheme.colors
-    val wordmarkInteraction = remember { MutableInteractionSource() }
     val pullState = rememberPullToRefreshState()
     // S6 P1-7: the buy/sell FAB sits exactly over the allocation legend's value
     // column, so on a portfolio with more than a couple of slices the reader
@@ -322,34 +318,17 @@ fun PortfolioOverviewScreen(
             // and the empty row now has a subject. It does NOT fade with the
             // collapse — brand is not context, and a logo that dissolves when you
             // scroll reads as a rendering bug, which is precisely the report this
-            // change is answering. It stays on this tab only; the pushed screens'
-            // leading slot is their back arrow, and the other tabs' headers state
-            // their own subject.
-            navigationIcon = {
-                Wordmark(
-                    fontSize = 19.sp,
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 4.dp)
-                        // Debug-only long-press → component gallery. `indication
-                        // = null` and no click label: it must stay invisible and
-                        // silent to TalkBack in the shipping sense — this is a
-                        // developer door on a brand mark, not an action the
-                        // wordmark advertises. `onClick` is deliberately absent,
-                        // so a normal tap on the logo still does nothing.
-                        .then(
-                            if (BuildConfig.DEBUG) {
-                                Modifier.combinedClickable(
-                                    interactionSource = wordmarkInteraction,
-                                    indication = null,
-                                    onLongClick = onLongPressWordmark,
-                                    onClick = {},
-                                )
-                            } else {
-                                Modifier
-                            },
-                        ),
-                )
-            },
+            // change is answering.
+            //
+            // As of the owner's 2026-08-07 order it is on all four tabs, not this
+            // one, so the mark itself moved into [BtHeaderWordmark] and this slot
+            // just names it — identical padding and size on every tab by
+            // construction rather than by four authors agreeing. The pushed
+            // screens' leading slot is still their back arrow.
+            //
+            // This tab is the only caller that passes the gallery door, because it
+            // is the only screen that has one to pass.
+            navigationIcon = { BtHeaderWordmark(onLongPress = onLongPressWordmark) },
             // Always tappable now. The switcher stopped being an optional
             // convenience the moment it became the only way between Overview and
             // the portfolios: an account with zero portfolios still needs the

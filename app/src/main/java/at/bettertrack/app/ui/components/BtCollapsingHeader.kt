@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.shell.BtNavMotion
 import at.bettertrack.app.ui.theme.BtTheme
@@ -127,6 +129,21 @@ import kotlin.math.roundToInt
  * @param title the screen's subject. One line, ellipsized: a portfolio name can
  *   be arbitrarily long and a wrapping header would change the bar's height on
  *   content the user chose, which is worse than a truncated name.
+ *
+ *   **Null renders no title at all**, and three screens use it: Workbench,
+ *   Markets and People (owner order 2026-08-07). Their name is already on screen,
+ *   56dp below, as the selected label in the bottom navigation bar — printing it
+ *   again in the strip directly above would be the same word twice in one
+ *   viewport, and the *second* time is the one that has to justify itself. What
+ *   the slot is worth more as is empty: the leading [BtHeaderWordmark] then reads
+ *   as the row's subject on all four tabs instead of being a prefix to a label on
+ *   three of them, and the strip means one thing app-wide — brand, then actions.
+ *   Portfolio keeps a title because its title is not a label but the selector
+ *   *control*, which is a capability rather than a repetition.
+ *
+ *   Null is not offered to pushed screens by convention rather than by type: a
+ *   sub-page has no bottom-bar label naming it, so its title is the only thing
+ *   that says where the back arrow leads back from.
  * @param subtitle optional orienting second line — see above. Fades on collapse.
  * @param titleColor overrides the title's colour. Exists for exactly one case:
  *   "Where your data lives" turns its title red while the user is inside the
@@ -144,9 +161,9 @@ import kotlin.math.roundToInt
  *   button described above.
  * @param titleClickLabel the accessible description of [onTitleClick].
  * @param navigationIcon the leading slot of the always-visible top row: the back
- *   affordance on pushed screens, and the [Wordmark] on the app's root tab (see
- *   [at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen] — it is what stops
- *   that row from being 64dp of nothing while the header is expanded).
+ *   affordance on pushed screens, and [BtHeaderWordmark] on all four top-level
+ *   tabs (owner order 2026-08-07 — see that component for why the brand is a
+ *   component rather than four copies, and why it stops at the tab roots).
  * @param action the ONE contextual action, or null. Not a slot list — see above.
  * @param overflow the ⋮ menu, or null. Renders after [action].
  *
@@ -160,9 +177,17 @@ import kotlin.math.roundToInt
  *   and that ordering is the whole point — see [BtSettingsGear].
  * @param pinned draw as a fixed single-row bar that never expands or collapses,
  *   with the title slot locked to its compact form. Pair it with
- *   [rememberBtPinnedHeaderBehavior]. Used by the Portfolio tab only — every
- *   other screen keeps the collapse, because every other screen's title is a
- *   *title* rather than a control the user reaches for.
+ *   [rememberBtPinnedHeaderBehavior].
+ *
+ *   **Used by all four top-level tabs, and by nothing else** (owner order
+ *   2026-08-07, extending the Portfolio directive of 2026-08-06 to its peers).
+ *   The line is exactly the tab/sub-page line: a root tab's bar carries the app's
+ *   identity and its two fixed controls, none of which are things you read once
+ *   and are done with, so none of them should shrink away — and a tab is a place
+ *   you re-enter constantly, where a bar that looks different depending on where
+ *   the last visit left the scroll is a bar you have to re-read every time.
+ *   Pushed screens keep the collapse: their title genuinely IS read once, on
+ *   arrival, and their content deserves the 48dp back afterwards.
  * @param windowInsets defaults to the status-bar inset, which is correct
  *   everywhere in this app; pass `WindowInsets(0,0,0,0)` only when an ancestor
  *   has provably consumed it already (the debug gallery does, for instance).
@@ -170,7 +195,7 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BtCollapsingHeader(
-    title: String,
+    title: String?,
     scrollBehavior: TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
@@ -217,7 +242,14 @@ fun BtCollapsingHeader(
             // scroll position and the title stops recomposing on scroll entirely.
             val fraction = if (pinned) 1f else step / COLLAPSE_STEPS.toFloat()
 
-            if (onTitleClick != null) {
+            if (title == null) {
+                // Nothing — see the `title` KDoc. Composing an empty `Text("")`
+                // instead would measure a full line box in the middle of the bar
+                // and push the wordmark's neighbours around for a glyph nobody
+                // can see; an absent slot measures 0×0 and the row is genuinely
+                // just brand + actions.
+                Unit
+            } else if (onTitleClick != null) {
                 // A title that acts is drawn as the control it is. No subtitle
                 // branch here on purpose: the two screens that own a selector
                 // (Overview and a portfolio) have nothing to orient the user
@@ -297,6 +329,14 @@ fun BtCollapsingHeader(
     // the same compact pill, in the same place, at every scroll position. The
     // content simply travels underneath it.
     //
+    // The owner extended this to the other three tabs on 2026-08-07 ("do the same
+    // as with the portfolio page where it just gets put up top, that works
+    // great"), and the reasoning generalises without needing a pill: on Workbench,
+    // Markets and People the expanded row was holding a word the bottom bar was
+    // already saying, so the large-title state was spending 48dp to repeat itself
+    // — and it did so only until the first scroll, which made the tab's own
+    // height depend on when you last looked at it.
+    //
     // What it deliberately KEEPS is the tonal scrolled container colour — that is
     // the one thing the collapse was doing that still earns its place, because it
     // is what tells the eye the bar is floating over content rather than sitting
@@ -337,6 +377,68 @@ fun BtCollapsingHeader(
         windowInsets = windowInsets,
         colors = barColors,
         scrollBehavior = scrollBehavior,
+    )
+}
+
+/**
+ * The BetterTrack wordmark as a top bar's leading slot — the brand strip that
+ * opens **every** top-level tab (owner order 2026-08-07).
+ *
+ * ## The report this answers
+ *
+ * *"Have the BetterTrack logo on the top of the main pages — like on EVERY main
+ * page, not a sub page (not asset view etc.), main stuff like social and so on —
+ * and do the same as with the portfolio page where it just gets put up top, that
+ * works great."*
+ *
+ * The wordmark's return on 2026-08-06 landed on Portfolio alone, so the app said
+ * its own name on the tab it opens on and then fell silent the moment the user
+ * moved sideways. Brand that appears on one of four peers reads as a property of
+ * that page rather than of the app — which is the opposite of what a wordmark is
+ * for.
+ *
+ * ## Why a component, not four call sites
+ *
+ * Identical reasoning to [BtSettingsGear], and it has already been proven on this
+ * exact surface: there are exactly four top-level tabs, the mark must be the same
+ * size, in the same corner, with the same padding on all of them, and one
+ * composable is how "the same" stops depending on four authors agreeing. Written
+ * out four times it would drift by a `sp` within two milestones — the shell's old
+ * top bar grew to six elements the same way.
+ *
+ * ## What it deliberately is NOT
+ *
+ * Not a button, and not on sub-pages. The leading slot of a pushed screen belongs
+ * to its back arrow — that is the one affordance a user must never have to hunt
+ * for — so the brand stops at the tab roots, exactly as the owner drew the line.
+ *
+ * @param onLongPress the debug-only door to the component gallery, or null. It is
+ *   gated on [BuildConfig.DEBUG] here rather than at the call site so the four
+ *   tabs cannot disagree about whether a shipping build has a hidden gesture on
+ *   its logo. `indication = null` and no click label: it must stay invisible and
+ *   silent to TalkBack — this is a developer door on a brand mark, not an action
+ *   the wordmark advertises. `onClick` is deliberately a no-op, so a normal tap
+ *   on the logo does nothing on every tab.
+ */
+@Composable
+fun BtHeaderWordmark(onLongPress: (() -> Unit)? = null) {
+    val interaction = remember { MutableInteractionSource() }
+    Wordmark(
+        fontSize = 19.sp,
+        modifier = Modifier
+            .padding(start = 16.dp, end = 4.dp)
+            .then(
+                if (BuildConfig.DEBUG && onLongPress != null) {
+                    Modifier.combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onLongClick = onLongPress,
+                        onClick = {},
+                    )
+                } else {
+                    Modifier
+                },
+            ),
     )
 }
 
@@ -588,9 +690,10 @@ fun rememberBtCollapsingHeaderBehavior(
  * The scroll behaviour [BtCollapsingHeader] expects when `pinned = true`.
  *
  * A pinned behaviour never writes `heightOffset`, so the bar cannot shrink, grow
- * or scroll away — which is the entire point on the Portfolio tab, where the
- * selector pill must stay reachable at the same coordinates at every scroll
- * position (owner directive 2026-08-06).
+ * or scroll away — which is the entire point on the four top-level tabs, where
+ * the wordmark, the gear and (on Portfolio) the selector pill must stay at the
+ * same coordinates at every scroll position (owner directive 2026-08-06,
+ * extended to all four tabs 2026-08-07).
  *
  * It is NOT the same as passing no behaviour at all, and the difference is the
  * reason this function exists rather than a comment saying "use pinned". A

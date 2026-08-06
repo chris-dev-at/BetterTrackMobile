@@ -7,7 +7,8 @@ import java.io.File
 
 /**
  * Structural guard for the navigation restoration of 2026-08-06 (owner directive,
- * board #66).
+ * board #66), extended on 2026-08-07 to the top-level tabs' shared identity strip
+ * — wordmark leading, pinned, gear last.
  *
  * ## Why this is a test and not a code review note
  *
@@ -73,21 +74,28 @@ class TopBarNavigationTest {
     }
 
     /**
+     * The file that hosts each top-level tab's header, by tab.
+     *
+     * Named explicitly, and shared by every per-tab test below, so that adding a
+     * fifth tab fails all of them at once until its author has decided about the
+     * gear, the wordmark and the pin — which is exactly the moment to decide them,
+     * and exactly the set of decisions that made the first four disagree.
+     */
+    private val tabScreens = mapOf(
+        "PortfolioOverviewScreen.kt" to "Portfolio",
+        "WorkboardScreen.kt" to "Workbench",
+        "TabScreens.kt" to "Markets",
+        "SocialScreen.kt" to "People",
+    )
+
+    /**
      * Each of the four top-level tabs puts the gear in its header's trailing slot.
      *
      * Checked per FILE rather than per composable because that is the unit a
-     * regression arrives in: someone edits one tab's screen. The four files are
-     * named explicitly so that adding a fifth tab fails here until its author has
-     * decided about the gear, which is exactly the moment to decide it.
+     * regression arrives in: someone edits one tab's screen.
      */
     @Test
     fun `every top-level tab bar carries the settings gear`() {
-        val tabScreens = mapOf(
-            "PortfolioOverviewScreen.kt" to "Portfolio",
-            "WorkboardScreen.kt" to "Workbench",
-            "TabScreens.kt" to "Markets",
-            "SocialScreen.kt" to "People",
-        )
         val sources = uiSources().associateBy { it.name }
         tabScreens.forEach { (file, tab) ->
             val src = (sources[file] ?: error("$file not found")).readText()
@@ -97,6 +105,124 @@ class TopBarNavigationTest {
                 src.contains("settings = { BtSettingsGear("),
             )
         }
+    }
+
+    /**
+     * Each of the four top-level tabs leads its header with the BetterTrack
+     * wordmark (owner order 2026-08-07).
+     *
+     * *"Have the BetterTrack logo on the top of the main pages — like on EVERY
+     * main page ... and do the same as with the portfolio page where it just gets
+     * put up top, that works great."*
+     *
+     * This is the same class of invariant as the gear, and it decayed the same way
+     * once already: the wordmark's 2026-08-06 restoration reached Portfolio and
+     * stopped, so the brand was a property of one tab for a day. "Every" is the
+     * word in the order, so "every" is what gets checked.
+     *
+     * Anchored to [at.bettertrack.app.ui.components.BtHeaderWordmark] rather than
+     * to a bare `Wordmark(` on purpose. A tab that hand-rolled the mark would
+     * satisfy a looser assertion while drifting in size, padding or the debug
+     * gesture — which is precisely what the component exists to prevent.
+     */
+    @Test
+    fun `every top-level tab bar leads with the wordmark`() {
+        val sources = uiSources().associateBy { it.name }
+        tabScreens.forEach { (file, tab) ->
+            val src = (sources[file] ?: error("$file not found")).readText()
+            assertTrue(
+                "The $tab tab's header ($file) no longer passes " +
+                    "`navigationIcon = { BtHeaderWordmark(`. The BetterTrack mark must lead " +
+                    "every top-level tab — owner order 2026-08-07.",
+                src.contains("navigationIcon = { BtHeaderWordmark("),
+            )
+        }
+    }
+
+    /**
+     * The wordmark stops at the tab roots — no sub-page wears it.
+     *
+     * The other half of the same order: *"not a sub page (not asset view etc.)"*.
+     * A pushed screen's leading slot belongs to its back arrow, and a brand mark
+     * that displaced it would cost the one affordance a user must never have to
+     * hunt for. Stated as a whole-app property because "don't put it on the other
+     * thirty-odd screens" is not something any one of those screens knows.
+     */
+    @Test
+    fun `no screen outside the four tabs carries the header wordmark`() {
+        val offenders = uiSources().filter { f ->
+            f.name !in tabScreens.keys &&
+                f.name != "BtCollapsingHeader.kt" &&
+                f.readText().contains("BtHeaderWordmark(")
+        }
+        assertEquals(
+            "These non-tab screens render BtHeaderWordmark. The brand mark belongs to the " +
+                "four top-level tabs only; a pushed screen's leading slot is its back arrow " +
+                "— owner order 2026-08-07.",
+            emptyList<String>(),
+            offenders.map { it.name }.sorted(),
+        )
+    }
+
+    /**
+     * Each of the four top-level tabs draws the PINNED bar, with the pinned
+     * behaviour to match.
+     *
+     * *"Do the same as with the portfolio page where it just gets put up top, that
+     * works great."* — the praised property is that the bar does not move, so the
+     * test checks the two things that make it not move, together.
+     *
+     * Both halves are required and neither implies the other, which is the whole
+     * reason this is one test and not two:
+     *
+     *  - `pinned = true` with a *collapsing* behaviour gives a bar that renders at
+     *    a fixed height while its behaviour still writes `heightOffset` — it
+     *    scrolls partly off-screen, which is the exact failure the order is about,
+     *    and it looks correct in a screenshot taken at the top.
+     *  - [at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior] without
+     *    `pinned = true` gives a `LargeTopAppBar` that can never collapse — a
+     *    permanently expanded 112dp bar, i.e. the opposite mistake.
+     */
+    @Test
+    fun `every top-level tab bar is the pinned variant`() {
+        val sources = uiSources().associateBy { it.name }
+        tabScreens.forEach { (file, tab) ->
+            val src = (sources[file] ?: error("$file not found")).readText()
+            assertTrue(
+                "The $tab tab's header ($file) no longer passes `pinned = true`. Every " +
+                    "top-level tab bar is a fixed 64dp strip — owner order 2026-08-07.",
+                src.contains("pinned = true"),
+            )
+            assertTrue(
+                "The $tab tab ($file) passes `pinned = true` but does not use " +
+                    "`rememberBtPinnedHeaderBehavior()`. A pinned bar on a collapsing " +
+                    "behaviour still scrolls off — see this test's KDoc.",
+                src.contains("rememberBtPinnedHeaderBehavior()"),
+            )
+        }
+    }
+
+    /**
+     * App-wide: `pinned = true` and the pinned behaviour travel together.
+     *
+     * The per-tab test above pins that pairing for the four files that have it
+     * today; this one states it as the rule, so a fifth pinned bar anywhere in the
+     * app cannot be built on `rememberBtCollapsingHeaderBehavior` and half-work.
+     */
+    @Test
+    fun `no screen pins a bar on a collapsing behaviour`() {
+        val offenders = uiSources().filter { f ->
+            if (f.name == "BtCollapsingHeader.kt") return@filter false
+            val src = f.readText()
+            src.contains("pinned = true") && !src.contains("rememberBtPinnedHeaderBehavior()")
+        }
+        assertEquals(
+            "These screens pass `pinned = true` to BtCollapsingHeader without pairing it " +
+                "with rememberBtPinnedHeaderBehavior(). The bar would render at a fixed " +
+                "height and still scroll away.",
+            emptyList<String>(),
+            offenders.map { it.name }.sorted(),
+        )
     }
 
     /**

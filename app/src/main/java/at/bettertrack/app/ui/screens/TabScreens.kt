@@ -33,9 +33,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtHeaderWordmark
 import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.btPressScale
-import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -59,9 +60,11 @@ import at.bettertrack.app.ui.theme.BtTheme
  * 1. **The search field leads** — review-blessed, and unchanged. It is the
  *    reason people open this tab, and after R1 it is also the tab's ONLY search
  *    entry: the duplicate top-bar Search glyph is gone (S6 P1-11 killed at the
- *    root rather than restyled). It stays pinned under the collapsing header
- *    rather than scrolling with the list, because a search entry you have to
- *    scroll back up to reach is a search entry that has stopped leading.
+ *    root rather than restyled). It stays fixed under the header rather than
+ *    scrolling with the list, because a search entry you have to scroll back up
+ *    to reach is a search entry that has stopped leading — and since 2026-08-07
+ *    the header above it is pinned too, so the whole top of this tab is now at
+ *    one set of coordinates forever.
  * 2. **Watchlists with live quotes** — the tab's actual content.
  * 3. **The market-intel doorway** — *moved*. It used to sit above the
  *    watchlists, which put a page you visit occasionally ahead of the rows you
@@ -83,15 +86,24 @@ fun MarketsTabScreen(
     onOpenSettings: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
-    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). The
+    // behaviour is still a real one rather than null — that is what keeps the
+    // tonal lift when the watchlist travels under the bar. See
+    // BtCollapsingHeader's `pinned` branch.
+    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     Column(
         Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
     ) {
         BtCollapsingHeader(
-            title = stringResource(R.string.bt_tab_markets),
+            // No text title: the bottom bar's selected label already says
+            // "Markets" a few dp below, and this tab's real subject is the search
+            // field immediately under the bar. See the `title` KDoc.
+            title = null,
             scrollBehavior = scrollBehavior,
+            pinned = true,
+            navigationIcon = { BtHeaderWordmark() },
             settings = { BtSettingsGear(onOpenSettings) },
         )
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
