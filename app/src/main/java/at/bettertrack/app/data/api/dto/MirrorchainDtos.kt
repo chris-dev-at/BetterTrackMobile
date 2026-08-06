@@ -145,3 +145,41 @@ data class MirrorAcceptInviteResponse(
 data class MirrorOkResponse(
     val ok: Boolean = false,
 )
+
+// ── Chain administration request bodies ─────────────────────────────────────
+//
+// Every route these belong to is session-only for a bearer today (403
+// API_KEY_FORBIDDEN by the platform's method-aware allowlist). They are modelled
+// now so the shapes are reviewed against the contract while it is in front of
+// us, and so the app's admin surface can light up on a platform config change
+// rather than an app release. See the admin block in BtApi.
+//
+// All are `.strict()` server-side: an unknown key is a 400, so none of these may
+// grow a convenience field the contract does not have.
+
+/** Chain name: trimmed, 1–120 characters. */
+@Serializable
+data class MirrorRenameChainRequest(val name: String)
+
+/** The friend to invite. Must be an existing friendship at send AND at accept. */
+@Serializable
+data class MirrorCreateInviteRequest(val userId: String)
+
+/**
+ * `manager` | `member` only. `owner` is deliberately not assignable — ownership
+ * moves solely through the transfer route, so there is no way to accidentally
+ * end up with two owners.
+ */
+@Serializable
+data class MirrorSetRoleRequest(val role: String)
+
+/** The member who becomes the new owner. */
+@Serializable
+data class MirrorTransferRequest(val toUserId: String)
+
+/** Convert one of my portfolios into a group; [name] defaults to its own. */
+@Serializable
+data class MirrorConvertRequest(
+    val portfolioId: String,
+    val name: String? = null,
+)

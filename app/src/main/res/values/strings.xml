@@ -2173,4 +2173,170 @@
     <string name="bt_overview_title">Overview</string>
     <string name="bt_overview_switcher_sub">Everything, across all portfolios</string>
     <string name="bt_overview_selected_cd">Overview selected</string>
+
+    <!-- == Full management parity 2026-08-06 == APPEND-ONLY BLOCK.
+         Per-portfolio settings, the tax capability (user default + per-portfolio
+         override + per-year reports), group administration, and the account
+         fields the app did not expose. Keep DE in lockstep - StringParityTest
+         fails the build on a missing or identical translation. -->
+
+    <!-- Destinations -->
+    <string name="bt_dest_portfolio_settings">Portfolio settings</string>
+    <string name="bt_dest_tax_settings">Taxes</string>
+    <string name="bt_dest_portfolio_tax">Tax treatment</string>
+    <string name="bt_dest_group_manage">Manage group</string>
+
+    <!-- Per-portfolio settings -->
+    <string name="bt_psettings_row">Portfolio settings</string>
+    <string name="bt_psettings_general">General</string>
+    <string name="bt_psettings_name">Name</string>
+    <string name="bt_psettings_sharing">Sharing</string>
+    <string name="bt_psettings_audience">Who can see this</string>
+    <string name="bt_psettings_audience_private">Only you</string>
+    <string name="bt_psettings_audience_friends">All friends</string>
+    <string name="bt_psettings_audience_specific">Selected friends</string>
+    <string name="bt_psettings_audience_group">A friend group</string>
+    <string name="bt_psettings_audience_link">Anyone with the link</string>
+    <string name="bt_psettings_taxes">Taxes</string>
+    <string name="bt_psettings_tax_row">Tax treatment</string>
+    <string name="bt_psettings_tax_reports_row">Tax reports</string>
+    <string name="bt_psettings_tax_reports_sub">Per year, with CSV export</string>
+    <string name="bt_psettings_group">Group</string>
+    <!-- Member counts reuse the existing bt_mirror_members plural. -->
+    <string name="bt_psettings_danger">Danger zone</string>
+    <string name="bt_psettings_archive_sub">Hide it from the switcher. Nothing is deleted.</string>
+    <string name="bt_psettings_restore_sub">Bring it back into the switcher.</string>
+    <string name="bt_psettings_delete_sub">Permanently remove this portfolio and its history.</string>
+    <string name="bt_psettings_gone">This portfolio is no longer available.</string>
+
+    <!-- Tax - shared vocabulary -->
+    <string name="bt_tax_mode">Tax mode</string>
+    <string name="bt_tax_mode_none">No tax tracking</string>
+    <string name="bt_tax_mode_none_sub">BetterTrack records no tax on your trades.</string>
+    <string name="bt_tax_mode_manual">Enter tax per trade</string>
+    <string name="bt_tax_mode_manual_sub">You type the tax on each sell and dividend. Nothing is calculated for you.</string>
+    <string name="bt_tax_mode_country">Follow a country\'s rules</string>
+    <string name="bt_tax_mode_country_sub">Automated for Austria, Germany and Finland.</string>
+    <string name="bt_tax_mode_custom">Describe your own rules</string>
+    <string name="bt_tax_mode_custom_sub">For a tax system we don\'t ship yet. You set the rate and the rules.</string>
+    <string name="bt_tax_mode_unknown">Set on another device</string>
+    <string name="bt_tax_mode_unknown_sub">This version of the app doesn\'t know this tax mode yet. Update the app, or change it on the web.</string>
+    <string name="bt_tax_country">Country</string>
+    <string name="bt_tax_country_at">Austria</string>
+    <string name="bt_tax_country_de">Germany</string>
+    <string name="bt_tax_country_fi">Finland</string>
+    <string name="bt_tax_country_required">Pick a country to use this mode.</string>
+    <string name="bt_tax_manual_defaults">Prefilled amounts</string>
+    <string name="bt_tax_manual_defaults_sub">Optional. Used when you don\'t type a tax on a row.</string>
+    <string name="bt_tax_manual_amount">Default amount (EUR)</string>
+    <string name="bt_tax_manual_rate">Default rate (%)</string>
+    <string name="bt_tax_manual_either">Set an amount or a rate — not both.</string>
+    <string name="bt_tax_manual_amount_invalid">Enter an amount of zero or more.</string>
+    <string name="bt_tax_manual_rate_invalid">Enter a rate between 0 and 100.</string>
+    <string name="bt_tax_custom_params">Your rules</string>
+    <string name="bt_tax_custom_rate">Rate (%)</string>
+    <string name="bt_tax_custom_rate_invalid">Enter a rate between 0 and 100.</string>
+    <string name="bt_tax_custom_loss_offset">Losses reduce the taxable amount</string>
+    <string name="bt_tax_custom_loss_offset_sub">Off means losses are ignored entirely.</string>
+    <string name="bt_tax_custom_refund">Refund tax already paid</string>
+    <string name="bt_tax_custom_refund_sub">Off means tax only ever goes up.</string>
+    <string name="bt_tax_custom_year_reset">Start fresh every January</string>
+    <string name="bt_tax_custom_year_reset_sub">Off means the taxable amount keeps accumulating.</string>
+    <string name="bt_tax_custom_carry">Carry losses into the next year</string>
+    <string name="bt_tax_custom_carry_sub">Off means a year-end loss is forfeited.</string>
+    <string name="bt_tax_custom_cost_basis">Cost basis</string>
+    <string name="bt_tax_custom_basis_avg">Moving average</string>
+    <string name="bt_tax_custom_basis_fifo">First in, first out</string>
+    <string name="bt_tax_forward_only">Changing this applies from now on. Trades you already recorded keep the tax they were recorded with.</string>
+
+    <!-- Tax - user default (Settings) -->
+    <string name="bt_tax_settings_row">Taxes</string>
+    <string name="bt_tax_settings_row_sub">How BetterTrack treats tax on your trades</string>
+    <string name="bt_tax_settings_intro">This is the default for new portfolios. Any portfolio can override it.</string>
+    <string name="bt_tax_settings_saved">Tax settings saved</string>
+
+    <!-- Tax - per portfolio -->
+    <string name="bt_ptax_effective">In effect here</string>
+    <string name="bt_ptax_source_portfolio">Set for this portfolio</string>
+    <string name="bt_ptax_source_user">Inherited from your default</string>
+    <string name="bt_ptax_source_system">BetterTrack\'s default</string>
+    <string name="bt_ptax_override_on">Use different rules here</string>
+    <string name="bt_ptax_override_on_sub">Off means this portfolio follows your account default.</string>
+    <string name="bt_ptax_reset">Use my default again</string>
+    <string name="bt_ptax_reset_title">Use your default?</string>
+    <string name="bt_ptax_reset_message">This portfolio will follow your account setting (%1$s). Open tax years are recalculated straight away.</string>
+    <string name="bt_ptax_reset_action">Use my default</string>
+    <string name="bt_ptax_recalc_note">Saving recalculates this year\'s tax immediately and can post correction entries to your cash.</string>
+
+    <!-- Tax - reports -->
+    <string name="bt_taxyears_title">Tax reports</string>
+    <string name="bt_taxyears_empty">No tax years yet</string>
+    <string name="bt_taxyears_empty_sub">A year appears here once this portfolio has a sell or a dividend in it.</string>
+    <string name="bt_taxyears_net">Tax for the year</string>
+    <string name="bt_taxyears_locked">Closed</string>
+    <string name="bt_taxyears_open">Still open</string>
+    <string name="bt_taxyears_locked_note">A closed year keeps the tax it was recorded with and never changes.</string>
+    <string name="bt_taxyears_open_note">This year is still open — its figures update as you trade and if you change the tax mode.</string>
+    <string name="bt_taxyear_realized">Realized gain/loss</string>
+    <string name="bt_taxyear_dividends">Dividends (gross)</string>
+    <string name="bt_taxyear_withheld">Tax withheld</string>
+    <string name="bt_taxyear_refunded">Tax refunded</string>
+    <string name="bt_taxyear_net">Net tax</string>
+    <string name="bt_taxyear_de_section">Germany</string>
+    <string name="bt_taxyear_de_allowance_used">Allowance used</string>
+    <string name="bt_taxyear_de_allowance_left">Allowance left</string>
+    <string name="bt_taxyear_de_allowance_note">The Sparer-Pauschbetrag does not carry over — anything unused is lost at year end.</string>
+    <string name="bt_taxyear_de_aktien">Share losses</string>
+    <string name="bt_taxyear_de_sonstige">Other losses</string>
+    <string name="bt_taxyear_de_pot_in">brought in</string>
+    <string name="bt_taxyear_de_pot_out">carried out</string>
+    <string name="bt_taxyear_de_kapest">Capital gains tax</string>
+    <string name="bt_taxyear_de_soli">Solidarity surcharge</string>
+    <string name="bt_taxyear_positions">By position</string>
+    <string name="bt_taxyear_positions_note">Year-wide corrections appear only in the totals above, so positions won\'t always add up to the net.</string>
+    <plurals name="bt_taxyear_sells">
+        <item quantity="one">%1$d sell</item>
+        <item quantity="other">%1$d sells</item>
+    </plurals>
+    <plurals name="bt_taxyear_divs">
+        <item quantity="one">%1$d dividend</item>
+        <item quantity="other">%1$d dividends</item>
+    </plurals>
+    <string name="bt_taxyear_no_tax">—</string>
+    <string name="bt_taxyear_export">Export as CSV</string>
+    <string name="bt_taxyear_export_sub">Share the full year as a spreadsheet file</string>
+    <string name="bt_taxyear_export_chooser">Share tax report</string>
+    <string name="bt_taxyear_export_failed">Couldn\'t create the CSV file.</string>
+    <string name="bt_taxyear_disclaimer">Figures are BetterTrack\'s own calculation and are not tax advice.</string>
+
+    <!-- Group administration -->
+    <string name="bt_chainadmin_section">Administration</string>
+    <string name="bt_chainadmin_rename">Rename group</string>
+    <string name="bt_chainadmin_invite">Invite a friend</string>
+    <string name="bt_chainadmin_roles">Change roles</string>
+    <string name="bt_chainadmin_remove">Remove a member</string>
+    <string name="bt_chainadmin_transfer">Transfer ownership</string>
+    <string name="bt_chainadmin_dissolve">Dissolve group</string>
+    <string name="bt_chainadmin_web_title">Manage on the web</string>
+    <string name="bt_chainadmin_web_body">Group administration isn\'t open to the app yet. Sign in on the web to rename this group, invite people, change roles or transfer ownership. This screen switches on by itself once the app is allowed to do it.</string>
+    <string name="bt_chainadmin_web_open">Open BetterTrack on the web</string>
+    <string name="bt_chainadmin_member_role">Role</string>
+    <string name="bt_chainadmin_role_owner">Owner</string>
+    <string name="bt_chainadmin_role_manager">Manager</string>
+    <string name="bt_chainadmin_role_member">Member</string>
+    <string name="bt_chainadmin_not_admin">Only the group\'s owner and managers can change these.</string>
+
+    <!-- Account completeness -->
+    <string name="bt_settings_base_currency">Display currency</string>
+    <string name="bt_settings_base_currency_sub">What your totals are converted to for display.</string>
+    <string name="bt_settings_default_visibility">New portfolios are</string>
+    <string name="bt_settings_default_visibility_sub">Applies when you create a portfolio. Existing ones keep their own setting.</string>
+    <string name="bt_settings_visibility_private">Private</string>
+    <string name="bt_settings_visibility_friends">Visible to friends</string>
+    <string name="bt_settings_profile_section">Profile</string>
+    <string name="bt_settings_profile_icon">Profile icon</string>
+    <string name="bt_settings_profile_icon_sub">Shown next to your name to friends and in groups.</string>
+    <string name="bt_settings_profile_icon_title">Pick an icon</string>
+    <string name="bt_settings_profile_icon_none">No icon</string>
+    <string name="bt_settings_profile_saved">Profile updated</string>
 </resources>

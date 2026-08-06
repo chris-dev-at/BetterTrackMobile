@@ -141,4 +141,76 @@ data class AccountSettingsResponse(
 data class UpdateAccountSettingsRequest(
     val locale: String? = null,
     val discreetMode: Boolean? = null,
+    /**
+     * `EUR` | `USD` | `CHF` | `GBP` — exactly these four (`BASE_CURRENCIES`).
+     * A read-time RENDER parameter only: stored amounts stay in their native
+     * currency, so changing this never rewrites a single row.
+     */
+    val baseCurrency: String? = null,
+    /**
+     * `private` | `friends`. Applies at portfolio CREATION time only — existing
+     * portfolios keep whatever they were set to, which is why the settings copy
+     * says "new portfolios are" rather than "portfolios are".
+     */
+    val defaultPortfolioVisibility: String? = null,
+)
+
+/**
+ * The four display currencies the platform converts totals to
+ * (`BASE_CURRENCIES` in `packages/contracts/src/settings.ts`). A closed enum on
+ * the wire, so the picker is a fixed list rather than a text field.
+ */
+val BT_BASE_CURRENCIES: List<String> = listOf("EUR", "USD", "CHF", "GBP")
+
+// ── GET /social/profile · PUT /social/profile ────────────────────────────────
+
+/**
+ * The caller's own profile. `profileIcon` is one of [BT_PROFILE_ICONS] or null
+ * (never picked) — clients resolve the id to a bundled asset themselves; the
+ * platform ships no image and no URL.
+ */
+@Serializable
+data class ProfileSettingsResponse(
+    val username: String = "",
+    val isPublic: Boolean = false,
+    val bio: String? = null,
+    val publicItemCount: Int = 0,
+    val profileIcon: String? = null,
+)
+
+/**
+ * PUT /social/profile.
+ *
+ * Two traps live in this body, both of which the app has to respect rather than
+ * work around:
+ *
+ *  - **`isPublic` is REQUIRED**, even when all you are changing is the icon. The
+ *    route is a PUT, not a PATCH: a caller that omitted it would be asking to
+ *    make the profile private. Every call must therefore send the value the
+ *    profile currently has, which is why the icon picker reads the profile first.
+ *  - **`acknowledgePublic` must be `true` when turning `isPublic` ON** (the §16
+ *    friction ladder, enforced server-side). It is meaningless otherwise.
+ *
+ * `profileIcon` follows the omitted-vs-null rule: omit to leave it untouched,
+ * send `null` to clear it back to the default, send an id to set it. An unknown
+ * id is a 400.
+ */
+@Serializable
+data class UpdateProfileSettingsRequest(
+    val isPublic: Boolean,
+    val bio: String? = null,
+    val acknowledgePublic: Boolean? = null,
+    val profileIcon: String? = null,
+)
+
+/**
+ * The curated profile-icon set (`PROFILE_ICON_IDS`, `packages/contracts/src/social.ts`).
+ *
+ * Order is the picker's render order and is part of the contract — new icons are
+ * APPENDED, never inserted, so a user's icon never silently becomes a different
+ * one. There are no uploads and no external URLs by design.
+ */
+val BT_PROFILE_ICONS: List<String> = listOf(
+    "astronaut", "fox", "panda", "robot", "star", "wave", "mountain", "leaf",
+    "flame", "bolt", "moon", "planet", "ghost", "crown", "compass", "anchor",
 )

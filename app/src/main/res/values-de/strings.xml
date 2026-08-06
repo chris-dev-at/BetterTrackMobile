@@ -2103,4 +2103,166 @@
     <string name="bt_overview_title">Übersicht</string>
     <string name="bt_overview_switcher_sub">Alles, über alle Portfolios hinweg</string>
     <string name="bt_overview_selected_cd">Übersicht ausgewählt</string>
+
+    <!-- == Volle Verwaltung 2026-08-06 == APPEND-ONLY BLOCK - siehe EN-Datei. -->
+
+    <!-- Ziele -->
+    <string name="bt_dest_portfolio_settings">Portfolio-Einstellungen</string>
+    <string name="bt_dest_tax_settings">Steuern</string>
+    <string name="bt_dest_portfolio_tax">Steuerliche Behandlung</string>
+    <string name="bt_dest_group_manage">Gruppe verwalten</string>
+
+    <!-- Portfolio-Einstellungen -->
+    <string name="bt_psettings_row">Portfolio-Einstellungen</string>
+    <string name="bt_psettings_general">Allgemein</string>
+    <string name="bt_psettings_name">Name</string>
+    <string name="bt_psettings_sharing">Freigabe</string>
+    <string name="bt_psettings_audience">Wer das sehen darf</string>
+    <string name="bt_psettings_audience_private">Nur du</string>
+    <string name="bt_psettings_audience_friends">Alle Freunde</string>
+    <string name="bt_psettings_audience_specific">Ausgewählte Freunde</string>
+    <string name="bt_psettings_audience_group">Eine Freundesgruppe</string>
+    <string name="bt_psettings_audience_link">Jeder mit dem Link</string>
+    <string name="bt_psettings_taxes">Steuern</string>
+    <string name="bt_psettings_tax_row">Steuerliche Behandlung</string>
+    <string name="bt_psettings_tax_reports_row">Steuerberichte</string>
+    <string name="bt_psettings_tax_reports_sub">Pro Jahr, mit CSV-Export</string>
+    <string name="bt_psettings_group">Gruppe</string>
+    <!-- Mitgliederzahlen nutzen den bestehenden Plural bt_mirror_members. -->
+    <string name="bt_psettings_danger">Gefahrenzone</string>
+    <string name="bt_psettings_archive_sub">Blendet es in der Auswahl aus. Es wird nichts gelöscht.</string>
+    <string name="bt_psettings_restore_sub">Holt es zurück in die Auswahl.</string>
+    <string name="bt_psettings_delete_sub">Entfernt dieses Portfolio samt Historie unwiderruflich.</string>
+    <string name="bt_psettings_gone">Dieses Portfolio gibt es nicht mehr.</string>
+
+    <!-- Steuern - gemeinsame Begriffe -->
+    <string name="bt_tax_mode">Steuermodus</string>
+    <string name="bt_tax_mode_none">Keine Steuererfassung</string>
+    <string name="bt_tax_mode_none_sub">BetterTrack erfasst zu deinen Trades keine Steuer.</string>
+    <string name="bt_tax_mode_manual">Steuer je Trade eintragen</string>
+    <string name="bt_tax_mode_manual_sub">Du trägst die Steuer bei jedem Verkauf und jeder Dividende selbst ein. Es wird nichts berechnet.</string>
+    <string name="bt_tax_mode_country">Regeln eines Landes folgen</string>
+    <string name="bt_tax_mode_country_sub">Automatisch für Österreich, Deutschland und Finnland.</string>
+    <string name="bt_tax_mode_custom">Eigene Regeln beschreiben</string>
+    <string name="bt_tax_mode_custom_sub">Für ein Steuersystem, das wir noch nicht mitliefern. Du legst Satz und Regeln fest.</string>
+    <string name="bt_tax_mode_unknown">Auf einem anderen Gerät gesetzt</string>
+    <string name="bt_tax_mode_unknown_sub">Diese App-Version kennt diesen Steuermodus noch nicht. Aktualisiere die App oder ändere ihn im Web.</string>
+    <string name="bt_tax_country">Land</string>
+    <string name="bt_tax_country_at">Österreich</string>
+    <string name="bt_tax_country_de">Deutschland</string>
+    <string name="bt_tax_country_fi">Finnland</string>
+    <string name="bt_tax_country_required">Wähle ein Land für diesen Modus.</string>
+    <string name="bt_tax_manual_defaults">Vorbelegte Beträge</string>
+    <string name="bt_tax_manual_defaults_sub">Optional. Wird verwendet, wenn du bei einer Zeile nichts einträgst.</string>
+    <string name="bt_tax_manual_amount">Standardbetrag (EUR)</string>
+    <string name="bt_tax_manual_rate">Standardsatz (%)</string>
+    <string name="bt_tax_manual_either">Setze einen Betrag oder einen Satz — nicht beides.</string>
+    <string name="bt_tax_manual_amount_invalid">Gib einen Betrag ab null ein.</string>
+    <string name="bt_tax_manual_rate_invalid">Gib einen Satz zwischen 0 und 100 ein.</string>
+    <string name="bt_tax_custom_params">Deine Regeln</string>
+    <string name="bt_tax_custom_rate">Satz (%)</string>
+    <string name="bt_tax_custom_rate_invalid">Gib einen Satz zwischen 0 und 100 ein.</string>
+    <string name="bt_tax_custom_loss_offset">Verluste mindern die Bemessungsgrundlage</string>
+    <string name="bt_tax_custom_loss_offset_sub">Aus bedeutet, Verluste bleiben völlig unberücksichtigt.</string>
+    <string name="bt_tax_custom_refund">Bereits gezahlte Steuer erstatten</string>
+    <string name="bt_tax_custom_refund_sub">Aus bedeutet, die Steuer steigt nur.</string>
+    <string name="bt_tax_custom_year_reset">Jeden Jänner neu beginnen</string>
+    <string name="bt_tax_custom_year_reset_sub">Aus bedeutet, die Bemessungsgrundlage läuft weiter.</string>
+    <string name="bt_tax_custom_carry">Verluste ins Folgejahr mitnehmen</string>
+    <string name="bt_tax_custom_carry_sub">Aus bedeutet, ein Jahresverlust verfällt.</string>
+    <string name="bt_tax_custom_cost_basis">Anschaffungskosten</string>
+    <string name="bt_tax_custom_basis_avg">Gleitender Durchschnitt</string>
+    <string name="bt_tax_custom_basis_fifo">Zuerst gekauft, zuerst verkauft</string>
+    <string name="bt_tax_forward_only">Die Änderung gilt ab jetzt. Bereits erfasste Trades behalten die Steuer, mit der sie erfasst wurden.</string>
+
+    <!-- Steuern - Konto-Standard -->
+    <string name="bt_tax_settings_row">Steuern</string>
+    <string name="bt_tax_settings_row_sub">Wie BetterTrack Steuern auf deine Trades behandelt</string>
+    <string name="bt_tax_settings_intro">Das ist der Standard für neue Portfolios. Jedes Portfolio kann davon abweichen.</string>
+    <string name="bt_tax_settings_saved">Steuereinstellungen gespeichert</string>
+
+    <!-- Steuern - je Portfolio -->
+    <string name="bt_ptax_effective">Hier in Kraft</string>
+    <string name="bt_ptax_source_portfolio">Für dieses Portfolio gesetzt</string>
+    <string name="bt_ptax_source_user">Von deinem Standard übernommen</string>
+    <string name="bt_ptax_source_system">Standard von BetterTrack</string>
+    <string name="bt_ptax_override_on">Hier andere Regeln verwenden</string>
+    <string name="bt_ptax_override_on_sub">Aus bedeutet, dieses Portfolio folgt deinem Kontostandard.</string>
+    <string name="bt_ptax_reset">Wieder meinen Standard verwenden</string>
+    <string name="bt_ptax_reset_title">Deinen Standard verwenden?</string>
+    <string name="bt_ptax_reset_message">Dieses Portfolio folgt dann deiner Kontoeinstellung (%1$s). Offene Steuerjahre werden sofort neu berechnet.</string>
+    <string name="bt_ptax_reset_action">Meinen Standard verwenden</string>
+    <string name="bt_ptax_recalc_note">Beim Speichern wird die Steuer dieses Jahres sofort neu berechnet; dabei können Korrekturbuchungen in deiner Kasse entstehen.</string>
+
+    <!-- Steuern - Berichte -->
+    <string name="bt_taxyears_title">Steuerberichte</string>
+    <string name="bt_taxyears_empty">Noch keine Steuerjahre</string>
+    <string name="bt_taxyears_empty_sub">Ein Jahr erscheint hier, sobald dieses Portfolio darin einen Verkauf oder eine Dividende hat.</string>
+    <string name="bt_taxyears_net">Steuer für das Jahr</string>
+    <string name="bt_taxyears_locked">Abgeschlossen</string>
+    <string name="bt_taxyears_open">Noch offen</string>
+    <string name="bt_taxyears_locked_note">Ein abgeschlossenes Jahr behält die erfasste Steuer und ändert sich nicht mehr.</string>
+    <string name="bt_taxyears_open_note">Dieses Jahr ist noch offen — die Zahlen ändern sich beim Handeln und bei einem Wechsel des Steuermodus.</string>
+    <string name="bt_taxyear_realized">Realisierter Gewinn/Verlust</string>
+    <string name="bt_taxyear_dividends">Dividenden (brutto)</string>
+    <string name="bt_taxyear_withheld">Einbehaltene Steuer</string>
+    <string name="bt_taxyear_refunded">Erstattete Steuer</string>
+    <string name="bt_taxyear_net">Steuer netto</string>
+    <string name="bt_taxyear_de_section">Deutschland</string>
+    <string name="bt_taxyear_de_allowance_used">Freibetrag genutzt</string>
+    <string name="bt_taxyear_de_allowance_left">Freibetrag übrig</string>
+    <string name="bt_taxyear_de_allowance_note">Der Sparer-Pauschbetrag wird nicht übertragen — was übrig bleibt, verfällt zum Jahresende.</string>
+    <string name="bt_taxyear_de_aktien">Aktienverluste</string>
+    <string name="bt_taxyear_de_sonstige">Sonstige Verluste</string>
+    <string name="bt_taxyear_de_pot_in">eingebracht</string>
+    <string name="bt_taxyear_de_pot_out">vorgetragen</string>
+    <string name="bt_taxyear_de_kapest">Kapitalertragsteuer</string>
+    <string name="bt_taxyear_de_soli">Solidaritätszuschlag</string>
+    <string name="bt_taxyear_positions">Nach Position</string>
+    <string name="bt_taxyear_positions_note">Jahresweite Korrekturen stehen nur in den Summen oben — die Positionen ergeben daher nicht immer den Nettobetrag.</string>
+    <plurals name="bt_taxyear_sells">
+        <item quantity="one">%1$d Verkauf</item>
+        <item quantity="other">%1$d Verkäufe</item>
+    </plurals>
+    <plurals name="bt_taxyear_divs">
+        <item quantity="one">%1$d Dividende</item>
+        <item quantity="other">%1$d Dividenden</item>
+    </plurals>
+    <string name="bt_taxyear_no_tax">—</string>
+    <string name="bt_taxyear_export">Als CSV exportieren</string>
+    <string name="bt_taxyear_export_sub">Das ganze Jahr als Tabellendatei teilen</string>
+    <string name="bt_taxyear_export_chooser">Steuerbericht teilen</string>
+    <string name="bt_taxyear_export_failed">Die CSV-Datei konnte nicht erstellt werden.</string>
+    <string name="bt_taxyear_disclaimer">Die Zahlen sind eine eigene Berechnung von BetterTrack und keine Steuerberatung.</string>
+
+    <!-- Gruppenverwaltung -->
+    <string name="bt_chainadmin_section">Verwaltung</string>
+    <string name="bt_chainadmin_rename">Gruppe umbenennen</string>
+    <string name="bt_chainadmin_invite">Freund einladen</string>
+    <string name="bt_chainadmin_roles">Rollen ändern</string>
+    <string name="bt_chainadmin_remove">Mitglied entfernen</string>
+    <string name="bt_chainadmin_transfer">Eigentum übertragen</string>
+    <string name="bt_chainadmin_dissolve">Gruppe auflösen</string>
+    <string name="bt_chainadmin_web_title">Im Web verwalten</string>
+    <string name="bt_chainadmin_web_body">Die Gruppenverwaltung ist für die App noch nicht freigegeben. Melde dich im Web an, um diese Gruppe umzubenennen, Leute einzuladen, Rollen zu ändern oder das Eigentum zu übertragen. Dieser Bereich schaltet sich von selbst frei, sobald die App das darf.</string>
+    <string name="bt_chainadmin_web_open">BetterTrack im Web öffnen</string>
+    <string name="bt_chainadmin_member_role">Rolle</string>
+    <string name="bt_chainadmin_role_owner">Eigentümer</string>
+    <string name="bt_chainadmin_role_manager">Verwalter</string>
+    <string name="bt_chainadmin_role_member">Mitglied</string>
+    <string name="bt_chainadmin_not_admin">Das können nur Eigentümer und Verwalter der Gruppe ändern.</string>
+
+    <!-- Konto-Vervollständigung -->
+    <string name="bt_settings_base_currency">Anzeigewährung</string>
+    <string name="bt_settings_base_currency_sub">Worin deine Summen zur Anzeige umgerechnet werden.</string>
+    <string name="bt_settings_default_visibility">Neue Portfolios sind</string>
+    <string name="bt_settings_default_visibility_sub">Gilt beim Anlegen eines Portfolios. Bestehende behalten ihre eigene Einstellung.</string>
+    <string name="bt_settings_visibility_private">Privat</string>
+    <string name="bt_settings_visibility_friends">Für Freunde sichtbar</string>
+    <string name="bt_settings_profile_section">Profil</string>
+    <string name="bt_settings_profile_icon">Profilsymbol</string>
+    <string name="bt_settings_profile_icon_sub">Wird Freunden und in Gruppen neben deinem Namen gezeigt.</string>
+    <string name="bt_settings_profile_icon_title">Symbol wählen</string>
+    <string name="bt_settings_profile_icon_none">Kein Symbol</string>
+    <string name="bt_settings_profile_saved">Profil aktualisiert</string>
 </resources>

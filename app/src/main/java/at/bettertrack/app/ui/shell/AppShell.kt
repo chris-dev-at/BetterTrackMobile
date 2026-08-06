@@ -100,7 +100,13 @@ import at.bettertrack.app.navigation.ActiveSessionsRoute
 import at.bettertrack.app.navigation.DeleteAccountRoute
 import at.bettertrack.app.navigation.SettingsLanguageRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
+import at.bettertrack.app.navigation.ChainManageRoute
+import at.bettertrack.app.navigation.PortfolioSettingsRoute
+import at.bettertrack.app.navigation.PortfolioTaxRoute
 import at.bettertrack.app.navigation.SettingsRoute
+import at.bettertrack.app.navigation.TaxSettingsRoute
+import at.bettertrack.app.navigation.TaxYearRoute
+import at.bettertrack.app.navigation.TaxYearsRoute
 import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SettingsSecurityRoute
 import at.bettertrack.app.navigation.SharedConglomerateViewRoute
@@ -788,6 +794,15 @@ private fun BtNavHost(
                         BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
                     },
                     onOpenSettings = { navController.navigate(SettingsRoute) },
+                    // The in-content door to one portfolio's own settings. The
+                    // gear in the corner is the APP's settings and must keep
+                    // meaning only that — so per-portfolio management gets a row
+                    // in the page's management area instead, where it sits next
+                    // to Cash and Transactions as another thing about THIS
+                    // portfolio. The switcher's ⋮ carries the second path.
+                    onOpenPortfolioSettings = { portfolioId ->
+                        navController.navigate(PortfolioSettingsRoute(portfolioId))
+                    },
                     onLongPressWordmark = {
                         if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
@@ -1089,6 +1104,7 @@ private fun BtNavHost(
                 onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
                 onOpenChangePassword = { navController.navigate(ChangePasswordRoute) },
                 onOpenLanguage = { navController.navigate(SettingsLanguageRoute) },
+                onOpenTaxSettings = { navController.navigate(TaxSettingsRoute) },
                 onOpenAbout = { navController.navigate(SettingsAboutRoute) },
                 onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
                 onOpenChangelog = { navController.navigate(ChangelogRoute) },
@@ -1101,6 +1117,84 @@ private fun BtNavHost(
         composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
         composable<StorageHomeRoute> {
             at.bettertrack.app.ui.storage.WhereYourDataLivesScreen(onBack = back)
+        }
+
+        // ── Management parity 2026-08-06 ─────────────────────────────────────
+        //
+        // Every one of these is portfolio- or chain-SCOPED and takes its subject
+        // from the route rather than from the ambient switcher selection, so a
+        // selection change while one of them is open cannot silently retarget
+        // the settings the user is editing.
+        //
+        // They sit behind ParanoidGate for the same reason the rest of the
+        // portfolio family does: a paranoid account's server-side portfolio
+        // routes are 403 by a platform route guard, so these screens have
+        // nothing to show and must not pretend otherwise.
+
+        composable<PortfolioSettingsRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<PortfolioSettingsRoute>()
+                at.bettertrack.app.ui.portfolio.PortfolioSettingsScreen(
+                    portfolioId = route.portfolioId,
+                    onBack = back,
+                    onOpenTax = { navController.navigate(PortfolioTaxRoute(it)) },
+                    onOpenTaxReports = { navController.navigate(TaxYearsRoute(it)) },
+                    onOpenGroup = { navController.navigate(ChainManageRoute(it)) },
+                    onOpenFriendGroups = { navController.navigate(FriendGroupsRoute) },
+                    // A deleted portfolio has no settings screen to return to.
+                    onDeleted = back,
+                )
+            }
+        }
+
+        composable<TaxSettingsRoute> {
+            ParanoidGate(onBack = back) {
+                at.bettertrack.app.ui.tax.TaxSettingsScreen(onBack = back)
+            }
+        }
+
+        composable<PortfolioTaxRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<PortfolioTaxRoute>()
+                at.bettertrack.app.ui.tax.PortfolioTaxScreen(
+                    portfolioId = route.portfolioId,
+                    onBack = back,
+                )
+            }
+        }
+
+        composable<TaxYearsRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<TaxYearsRoute>()
+                at.bettertrack.app.ui.tax.TaxYearsScreen(
+                    portfolioId = route.portfolioId,
+                    onBack = back,
+                    onOpenYear = { year ->
+                        navController.navigate(TaxYearRoute(route.portfolioId, year))
+                    },
+                )
+            }
+        }
+
+        composable<TaxYearRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<TaxYearRoute>()
+                at.bettertrack.app.ui.tax.TaxYearDetailScreen(
+                    portfolioId = route.portfolioId,
+                    year = route.year,
+                    onBack = back,
+                )
+            }
+        }
+
+        composable<ChainManageRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<ChainManageRoute>()
+                at.bettertrack.app.ui.mirrorchain.ChainManageScreen(
+                    chainId = route.chainId,
+                    onBack = back,
+                )
+            }
         }
         composable<SettingsSecurityRoute> {
             SecurityScreen(

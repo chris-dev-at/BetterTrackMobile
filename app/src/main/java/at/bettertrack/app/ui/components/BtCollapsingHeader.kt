@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.TopAppBarState
@@ -157,6 +158,11 @@ import kotlin.math.roundToInt
  *   gets to ask; an absent parameter is a decision nobody remembers making.
  * @param settings the Settings gear, or null. **Renders LAST, after [overflow]**,
  *   and that ordering is the whole point — see [BtSettingsGear].
+ * @param pinned draw as a fixed single-row bar that never expands or collapses,
+ *   with the title slot locked to its compact form. Pair it with
+ *   [rememberBtPinnedHeaderBehavior]. Used by the Portfolio tab only — every
+ *   other screen keeps the collapse, because every other screen's title is a
+ *   *title* rather than a control the user reaches for.
  * @param windowInsets defaults to the status-bar inset, which is correct
  *   everywhere in this app; pass `WindowInsets(0,0,0,0)` only when an ancestor
  *   has provably consumed it already (the debug gallery does, for instance).
@@ -176,12 +182,11 @@ fun BtCollapsingHeader(
     action: (@Composable () -> Unit)? = null,
     overflow: (@Composable () -> Unit)? = null,
     settings: (@Composable () -> Unit)? = null,
+    pinned: Boolean = false,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
     val bt = BtTheme.colors
-    LargeTopAppBar(
-        modifier = modifier,
-        title = {
+    val titleSlot: @Composable () -> Unit = {
             // ── Collapse fraction, QUANTIZED (perf pass 2026-08-06) ──────────
             //
             // M3 renders this same lambda in BOTH the collapsed row and the
@@ -205,7 +210,12 @@ fun BtCollapsingHeader(
                     (scrollBehavior.state.collapsedFraction * COLLAPSE_STEPS).roundToInt()
                 }
             }
-            val fraction = step / COLLAPSE_STEPS.toFloat()
+            // A [pinned] bar never interpolates — it sits at the compact end of
+            // every ramp above, permanently. Short-circuiting the fraction here
+            // rather than at each `lerp` also means `step` is never READ in
+            // pinned mode, so the derived state takes no subscription on the
+            // scroll position and the title stops recomposing on scroll entirely.
+            val fraction = if (pinned) 1f else step / COLLAPSE_STEPS.toFloat()
 
             if (onTitleClick != null) {
                 // A title that acts is drawn as the control it is. No subtitle
@@ -256,14 +266,62 @@ fun BtCollapsingHeader(
                     }
                 }
             }
-        },
+    }
+    val actionsSlot: @Composable RowScope.() -> Unit = {
+        action?.invoke()
+        overflow?.invoke()
+        // Last, always — the corner is the gear's address. See [BtSettingsGear].
+        settings?.invoke()
+    }
+    val barColors = TopAppBarDefaults.topAppBarColors(
+        containerColor = bt.bg,
+        scrolledContainerColor = bt.surface,
+        titleContentColor = bt.textPrimary,
+        actionIconContentColor = bt.textSecondary,
+        navigationIconContentColor = bt.textSecondary,
+    )
+
+    // ── The pinned branch (owner directive 2026-08-06) ───────────────────────
+    //
+    // *"The selector for portfolio can always be on top and doesn't need to drop
+    // down when scrolled all the way up."*
+    //
+    // On the Portfolio tab the large-title state was costing more than it bought.
+    // The expanded bar's subject is a PILL the user taps — not a page title they
+    // read — and a control that changes size depending on scroll position is a
+    // control you have to re-find every time. The tab also opens at the top, so
+    // the expanded state was the state the user met first and lost immediately.
+    //
+    // So this branch renders the single-row [TopAppBar] at exactly
+    // [BT_HEADER_COLLAPSED_HEIGHT] with the title slot forced to `fraction = 1f`:
+    // the same compact pill, in the same place, at every scroll position. The
+    // content simply travels underneath it.
+    //
+    // What it deliberately KEEPS is the tonal scrolled container colour — that is
+    // the one thing the collapse was doing that still earns its place, because it
+    // is what tells the eye the bar is floating over content rather than sitting
+    // on the background. That is also why this pairs with
+    // [rememberBtPinnedHeaderBehavior] and not a bare `null`: a pinned behaviour
+    // still tracks `contentOffset`, which is what drives that colour swap.
+    if (pinned) {
+        TopAppBar(
+            modifier = modifier,
+            title = titleSlot,
+            navigationIcon = navigationIcon,
+            actions = actionsSlot,
+            expandedHeight = BT_HEADER_COLLAPSED_HEIGHT,
+            windowInsets = windowInsets,
+            colors = barColors,
+            scrollBehavior = scrollBehavior,
+        )
+        return
+    }
+
+    LargeTopAppBar(
+        modifier = modifier,
+        title = titleSlot,
         navigationIcon = navigationIcon,
-        actions = {
-            action?.invoke()
-            overflow?.invoke()
-            // Last, always — the corner is the gear's address. See [BtSettingsGear].
-            settings?.invoke()
-        },
+        actions = actionsSlot,
         collapsedHeight = BT_HEADER_COLLAPSED_HEIGHT,
         expandedHeight = if (subtitle != null) {
             BT_HEADER_EXPANDED_HEIGHT_SUBTITLE
@@ -277,13 +335,7 @@ fun BtCollapsingHeader(
         // the caller would make "the portfolio name is drawn under the clock" a
         // mistake each of R2's screens gets to rediscover.
         windowInsets = windowInsets,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = bt.bg,
-            scrolledContainerColor = bt.surface,
-            titleContentColor = bt.textPrimary,
-            actionIconContentColor = bt.textSecondary,
-            navigationIconContentColor = bt.textSecondary,
-        ),
+        colors = barColors,
         scrollBehavior = scrollBehavior,
     )
 }
@@ -531,6 +583,30 @@ fun rememberBtCollapsingHeaderBehavior(
     canScroll: () -> Boolean = { true },
 ): TopAppBarScrollBehavior =
     TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state, canScroll = canScroll)
+
+/**
+ * The scroll behaviour [BtCollapsingHeader] expects when `pinned = true`.
+ *
+ * A pinned behaviour never writes `heightOffset`, so the bar cannot shrink, grow
+ * or scroll away — which is the entire point on the Portfolio tab, where the
+ * selector pill must stay reachable at the same coordinates at every scroll
+ * position (owner directive 2026-08-06).
+ *
+ * It is NOT the same as passing no behaviour at all, and the difference is the
+ * reason this function exists rather than a comment saying "use pinned". A
+ * pinned behaviour still accumulates `contentOffset`, and `contentOffset` is what
+ * `TopAppBar` reads to cross-fade `containerColor` → `scrolledContainerColor`.
+ * Drop the behaviour and the bar keeps its position but loses the tonal lift, so
+ * content scrolls *through* a bar that looks like background — the exact seam
+ * this app spent its header work removing.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberBtPinnedHeaderBehavior(
+    state: TopAppBarState = rememberTopAppBarState(),
+    canScroll: () -> Boolean = { true },
+): TopAppBarScrollBehavior =
+    TopAppBarDefaults.pinnedScrollBehavior(state, canScroll = canScroll)
 
 /**
  * Return a collapsed header to fully expanded, animated (R3 §1).

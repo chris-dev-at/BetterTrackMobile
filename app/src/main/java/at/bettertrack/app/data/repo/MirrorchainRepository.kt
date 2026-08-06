@@ -5,9 +5,15 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.MirrorActivityEntryDto
 import at.bettertrack.app.data.api.dto.MirrorChainSummaryDto
+import at.bettertrack.app.data.api.dto.MirrorConvertRequest
+import at.bettertrack.app.data.api.dto.MirrorCreateInviteRequest
 import at.bettertrack.app.data.api.dto.MirrorInviteDto
 import at.bettertrack.app.data.api.dto.MirrorMemberDto
+import at.bettertrack.app.data.api.dto.MirrorRenameChainRequest
+import at.bettertrack.app.data.api.dto.MirrorSetRoleRequest
 import at.bettertrack.app.data.api.dto.MirrorSyncStateDto
+import at.bettertrack.app.data.api.dto.MirrorTransferRequest
+import at.bettertrack.app.data.api.unitApiCall
 import kotlinx.serialization.json.Json
 
 /**
@@ -15,12 +21,26 @@ import kotlinx.serialization.json.Json
  * else is in them, what has happened, and the three things I can actually do —
  * accept an invite, decline one, leave.
  *
- * Chain *administration* (create, rename, invite, revoke, roles, transfer, kick,
- * dissolve) is session-only by a deliberate platform allowlist and answers a
- * bearer with `403 API_KEY_FORBIDDEN`. This repository therefore has no methods
- * for it at all — the absence is the design. A disabled button would promise a
- * permission the mobile client can never hold; the app just doesn't draw one,
- * and points at the web where the capability really lives.
+ * Chain *administration* (rename, invite, revoke, roles, transfer, kick,
+ * dissolve, convert) is session-only by a deliberate platform allowlist and
+ * answers a bearer with `403 API_KEY_FORBIDDEN` — verified live against the dev
+ * stack, and pinned platform-side by their own allowlist test.
+ *
+ * ## Why the methods exist anyway (changed 2026-08-06)
+ *
+ * They used to be absent, on the reasoning that a disabled button promises a
+ * permission the client can never hold. That reasoning was right about the
+ * BUTTON and wrong about the repository. The owner's ask is full management
+ * parity, and the honest reading of "not yet" is not "pretend the feature does
+ * not exist" — it is to build the surface, state plainly where the capability
+ * currently lives, and make the switch-on a platform config change rather than
+ * an app release.
+ *
+ * So: every admin call is modelled and reviewed against the contract, the UI is
+ * drawn in a designed "manage on the web" state, and [adminCapability] probes
+ * once per session to decide which of the two the user sees. The day the
+ * platform allowlists these routes, the probe stops returning
+ * [ChainAdminCapability.WebOnly] and the screens light up untouched.
  */
 
 /** Roles as the platform names them. Unknown → [Member] (the least authority). */
@@ -124,6 +144,25 @@ data class MirrorInvites(
     val isEmpty: Boolean get() = incoming.isEmpty() && outgoing.isEmpty()
 }
 
+/**
+ * Whether this session may administer chains from the app.
+ *
+ * Three states rather than a Boolean, because "we asked and were refused" and
+ * "we could not ask" have to look different on screen: the first is a settled
+ * fact worth explaining once ("manage on the web"), the second is a transient
+ * failure that should not harden into a permanent-sounding message.
+ */
+enum class ChainAdminCapability {
+    /** The bearer is allowed through; the chain's own role rules still apply. */
+    Allowed,
+
+    /** Refused by the platform's bearer allowlist — administration lives on the web. */
+    WebOnly,
+
+    /** Offline or a server fault; ask again later rather than concluding anything. */
+    Unknown,
+}
+
 class MirrorchainRepository(
     private val api: BtApi,
     private val json: Json,
@@ -212,6 +251,88 @@ class MirrorchainRepository(
             is BtResult.Err -> r
         }
 
+    // ── Administration ───────────────────────────────────────────────────────
+
+    /**
+     * Whether this session's bearer may perform chain administration.
+     *
+     * Probed ONCE per process and cached, because the answer is a property of
+     * the token's allowlist rather than of any chain: it cannot change while the
+     * app runs, and re-asking on every screen would spend a round trip to be
+     * told the same 403. A failure that is NOT a refusal (offline, 500) is left
+     * uncached — that is a question we genuinely could not answer, and caching
+     * "no" from a flaky network would strand the surface in its blocked state
+     * for the rest of the session.
+     *
+     * The probe is [renameChain] against the chain the caller is looking at,
+     * sending its CURRENT name: the platform checks the bearer allowlist before
+     * it validates or applies anything, so a permitted call is a no-op rename to
+     * the same string, and a refused one never reaches the service at all. That
+     * is why the probe needs a real chain id and a real name rather than being a
+     * standalone endpoint — there isn't one.
+     */
+    suspend fun adminCapability(chainId: String, currentName: String): ChainAdminCapability {
+        cachedAdminCapability?.let { return it }
+        val result = when (val r = apiCall(json) { api.renameMirrorChain(chainId, MirrorRenameChainRequest(currentName)) }) {
+            is BtResult.Ok -> ChainAdminCapability.Allowed
+            is BtResult.Err -> when {
+                r.error.code == CODE_API_KEY_FORBIDDEN || r.error.isForbidden ->
+                    ChainAdminCapability.WebOnly
+                // A role refusal is not a CAPABILITY refusal: the bearer was
+                // allowed through and the service said "you are only a member".
+                // Caching that as WebOnly would tell an owner of another chain
+                // that the app cannot administer chains at all.
+                r.error.code == CODE_MIRROR_FORBIDDEN -> ChainAdminCapability.Allowed
+                else -> ChainAdminCapability.Unknown
+            }
+        }
+        if (result != ChainAdminCapability.Unknown) cachedAdminCapability = result
+        return result
+    }
+
+    suspend fun renameChain(chainId: String, name: String): BtResult<Unit> =
+        when (val r = apiCall(json) { api.renameMirrorChain(chainId, MirrorRenameChainRequest(name)) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
+    suspend fun invite(chainId: String, userId: String): BtResult<Unit> =
+        when (val r = apiCall(json) { api.createMirrorInvite(chainId, MirrorCreateInviteRequest(userId)) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
+    suspend fun revokeInvite(inviteId: String): BtResult<Unit> =
+        when (val r = apiCall(json) { api.revokeMirrorInvite(inviteId) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
+    /** [role] is `manager` or `member`; `owner` moves only via [transferOwnership]. */
+    suspend fun setRole(chainId: String, userId: String, role: MirrorRole): BtResult<Unit> =
+        when (val r = apiCall(json) { api.setMirrorMemberRole(chainId, userId, MirrorSetRoleRequest(role.wire)) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
+    suspend fun removeMember(chainId: String, userId: String): BtResult<Unit> =
+        unitApiCall(json) { api.removeMirrorMember(chainId, userId) }
+
+    suspend fun transferOwnership(chainId: String, toUserId: String): BtResult<Unit> =
+        when (val r = apiCall(json) { api.transferMirrorChain(chainId, MirrorTransferRequest(toUserId)) }) {
+            is BtResult.Ok -> BtResult.Ok(Unit)
+            is BtResult.Err -> r
+        }
+
+    suspend fun dissolve(chainId: String): BtResult<Unit> =
+        unitApiCall(json) { api.dissolveMirrorChain(chainId) }
+
+    suspend fun convertPortfolio(portfolioId: String, name: String? = null): BtResult<String> =
+        when (val r = apiCall(json) { api.convertPortfolioToChain(MirrorConvertRequest(portfolioId, name)) }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.chainId)
+            is BtResult.Err -> r
+        }
+
     private fun MirrorChainSummaryDto.toDomain() = MirrorChain(
         chainId = chainId,
         name = name,
@@ -245,6 +366,25 @@ class MirrorchainRepository(
     companion object {
         /** Server allows 1..100; 30 is its own default and a sensible page. */
         const val ACTIVITY_PAGE = 30
+
+        /**
+         * 403 — the bearer allowlist refused the route outright. Distinct from
+         * [CODE_MIRROR_FORBIDDEN], which is the chain's own role check: this one
+         * says "no API key may do this", that one says "you specifically may not".
+         */
+        const val CODE_API_KEY_FORBIDDEN = "API_KEY_FORBIDDEN"
+
+        /** 403/400 — the §5 role matrix, or an illegal self-targeting action. */
+        const val CODE_MIRROR_FORBIDDEN = "MIRROR_FORBIDDEN"
+
+        /**
+         * Process-wide cache for [adminCapability]. A token's allowlist cannot
+         * change while the app runs, so this is asked once and reused; it lives
+         * in the companion rather than the instance because the repository is a
+         * lazy singleton and this keeps the lifetime honest about being global.
+         */
+        @Volatile
+        private var cachedAdminCapability: ChainAdminCapability? = null
 
         /** 404 — unknown chain, or a membership that is no longer active. */
         const val CODE_CHAIN_NOT_FOUND = "MIRROR_CHAIN_NOT_FOUND"

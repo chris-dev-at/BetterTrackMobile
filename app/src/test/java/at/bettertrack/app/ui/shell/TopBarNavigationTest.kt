@@ -105,11 +105,33 @@ class TopBarNavigationTest {
      * This is the "same slot app-wide" half of the directive. A bar that grew an
      * action or an overflow between `action` and `settings` would slide the gear
      * inward on that one screen, and a landmark that moves is not a landmark.
+     *
+     * ## Why this reads `actionsSlot` and no longer an inline `actions = {`
+     *
+     * The Portfolio tab's header was pinned (owner directive 2026-08-06), which
+     * gave [at.bettertrack.app.ui.components.BtCollapsingHeader] two bars to
+     * render — a `TopAppBar` when `pinned`, the `LargeTopAppBar` otherwise. The
+     * actions row was lifted into ONE named `actionsSlot` handed to both, rather
+     * than written out twice.
+     *
+     * That is a stronger guarantee than the one this test used to check, not a
+     * weaker one: with a single definition the two bars cannot drift into
+     * different orders, so the rule now has exactly one place it can be broken.
+     * The assertion below is deliberately anchored to that definition and fails
+     * loudly if it is ever inlined again — at which point whoever inlines it has
+     * to come here and decide what the rule means for two bars.
      */
     @Test
     fun `the header renders settings last in its actions row`() {
         val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()
-        val actions = header.substringAfter("actions = {").substringBefore("},")
+        val marker = "val actionsSlot: @Composable RowScope.() -> Unit = {"
+        assertTrue(
+            "BtCollapsingHeader no longer defines a single `actionsSlot`. Both the pinned " +
+                "and collapsing bars must share one actions row, or the gear can sit in a " +
+                "different place on each — see this test's KDoc.",
+            header.contains(marker),
+        )
+        val actions = header.substringAfter(marker).substringBefore("}")
         val order = listOf("action?.invoke()", "overflow?.invoke()", "settings?.invoke()")
             .map { actions.indexOf(it) }
         assertTrue("BtCollapsingHeader's actions row is missing a slot: $order", order.all { it >= 0 })
@@ -118,5 +140,30 @@ class TopBarNavigationTest {
             order.sorted(),
             order,
         )
+    }
+
+    /**
+     * The pinned bar and the collapsing bar are handed the SAME slots.
+     *
+     * The pinned branch exists only to stop the Portfolio tab's selector pill
+     * from resizing under the user's thumb; it is not licence for that tab to
+     * carry a different set of controls. If a future edit gives one bar a slot
+     * the other lacks, the gear's address stops being universal — which is the
+     * exact failure the whole navigation restoration was undoing.
+     */
+    @Test
+    fun `both header variants render the same slots`() {
+        val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()
+        listOf("TopAppBar(", "LargeTopAppBar(").forEach { bar ->
+            val body = header.substringAfter(bar).substringBefore("scrollBehavior = scrollBehavior,")
+            listOf("title = titleSlot", "navigationIcon = navigationIcon", "actions = actionsSlot")
+                .forEach { slot ->
+                    assertTrue(
+                        "$bar in BtCollapsingHeader does not pass `$slot` — the pinned and " +
+                            "collapsing bars must expose an identical control surface.",
+                        body.contains(slot),
+                    )
+                }
+        }
     }
 }

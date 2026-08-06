@@ -464,6 +464,14 @@ object AppGraph {
         MirrorchainRepository(api = btApi, json = json)
     }
 
+    /**
+     * Taxes — the user-level default, one portfolio's override, and the per-year
+     * reports incl. the CSV export.
+     */
+    val taxRepository: at.bettertrack.app.data.repo.TaxRepository by lazy {
+        at.bettertrack.app.data.repo.TaxRepository(api = btApi, json = json)
+    }
+
     /** Workboard ideas — saved backtest analyses. */
     val ideasRepository: IdeasRepository by lazy {
         IdeasRepository(api = btApi, json = json)

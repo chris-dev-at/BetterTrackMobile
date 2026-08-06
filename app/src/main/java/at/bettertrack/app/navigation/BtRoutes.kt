@@ -165,6 +165,36 @@ import kotlinx.serialization.Serializable
  */
 @Serializable data object StorageHomeRoute
 
+/**
+ * Settings → Taxes: the USER-level tax default, i.e. what a newly created
+ * portfolio inherits. The per-portfolio override is [PortfolioTaxRoute].
+ */
+@Serializable data object TaxSettingsRoute
+
+// ── Management parity 2026-08-06 ───────────────────────────────────────────
+//
+// The owner's ask was full parity with the web app for portfolios and groups.
+// These four routes are what that needed, and they are all portfolio-SCOPED —
+// each carries the id it acts on rather than reading the ambient switcher
+// selection. That is deliberate: a settings screen that silently retargeted
+// itself because the selection changed underneath it would be the worst
+// possible place for that class of bug.
+
+/** One portfolio's settings: name, sharing, taxes, group, archive/delete. */
+@Serializable data class PortfolioSettingsRoute(val portfolioId: String)
+
+/** One portfolio's tax override, rendered through the effective/override cascade. */
+@Serializable data class PortfolioTaxRoute(val portfolioId: String)
+
+/** One portfolio's tax years — the report list. */
+@Serializable data class TaxYearsRoute(val portfolioId: String)
+
+/** One tax year's drill-down, with the CSV export. */
+@Serializable data class TaxYearRoute(val portfolioId: String, val year: Int)
+
+/** Group (mirrorchain) administration for one chain. */
+@Serializable data class ChainManageRoute(val chainId: String)
+
 // ── Sync & debug ───────────────────────────────────────────────────────────
 @Serializable data object PendingSyncRoute
 @Serializable data object GalleryRoute                                      // debug component gallery

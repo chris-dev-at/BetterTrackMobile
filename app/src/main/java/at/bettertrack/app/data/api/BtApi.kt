@@ -32,6 +32,13 @@ import at.bettertrack.app.data.api.dto.UpdateCashBudgetRequest
 import at.bettertrack.app.data.api.dto.UpdateCashRuleRequest
 import at.bettertrack.app.data.api.dto.UpdateCashTagRequest
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
+import at.bettertrack.app.data.api.dto.PortfolioTaxSettingsResponse
+import at.bettertrack.app.data.api.dto.ProfileSettingsResponse
+import at.bettertrack.app.data.api.dto.UpdateProfileSettingsRequest
+import at.bettertrack.app.data.api.dto.TaxSettingsDto
+import at.bettertrack.app.data.api.dto.TaxYearListResponse
+import at.bettertrack.app.data.api.dto.TaxYearReportResponse
+import at.bettertrack.app.data.api.dto.UpdateTaxSettingsRequest
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
 import at.bettertrack.app.data.api.dto.RevokeSessionsResponse
@@ -74,9 +81,15 @@ import at.bettertrack.app.data.api.dto.MarketIntelStatusResponse
 import at.bettertrack.app.data.api.dto.MirrorAcceptInviteResponse
 import at.bettertrack.app.data.api.dto.MirrorActivityResponse
 import at.bettertrack.app.data.api.dto.MirrorChainListResponse
+import at.bettertrack.app.data.api.dto.MirrorChainSummaryDto
+import at.bettertrack.app.data.api.dto.MirrorConvertRequest
+import at.bettertrack.app.data.api.dto.MirrorCreateInviteRequest
 import at.bettertrack.app.data.api.dto.MirrorInviteListResponse
 import at.bettertrack.app.data.api.dto.MirrorMemberListResponse
 import at.bettertrack.app.data.api.dto.MirrorOkResponse
+import at.bettertrack.app.data.api.dto.MirrorRenameChainRequest
+import at.bettertrack.app.data.api.dto.MirrorSetRoleRequest
+import at.bettertrack.app.data.api.dto.MirrorTransferRequest
 import at.bettertrack.app.data.api.dto.NewsDigestResponse
 import at.bettertrack.app.data.api.dto.NewsResponse
 import at.bettertrack.app.data.api.dto.ReactionListResponse
@@ -150,6 +163,7 @@ import at.bettertrack.app.data.api.dto.ValuePointsResponse
 import at.bettertrack.app.data.api.dto.VersionResponse
 import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.dto.WorkboardListResponse
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import kotlinx.serialization.json.JsonObject
@@ -163,6 +177,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 /**
  * The public OAuth token endpoint. Deliberately a SEPARATE interface served by a
@@ -1064,6 +1079,84 @@ interface BtApi {
     @POST("mirrorchain/chains/{chainId}/leave")
     suspend fun leaveMirrorChain(@Path("chainId") chainId: String): Response<MirrorOkResponse>
 
+    // ── Chain ADMINISTRATION — session-only on the platform today ────────────
+    //
+    // Every call below is refused for a bearer with `403 API_KEY_FORBIDDEN`, by
+    // a deliberate method-aware allowlist in the platform's `bearerAuth`
+    // middleware (and pinned there by a test, so it will not drift silently).
+    // The mobile client holds a bearer and nothing else, so today all of these
+    // fail — verified live, see the probe in [MirrorchainRepository].
+    //
+    // They are declared anyway, and that is a considered choice rather than
+    // dead code. The app now draws the admin surface in a designed
+    // "manage on the web" state and runs ONE capability probe per session; when
+    // the platform adds these routes to the allowlist, the probe stops seeing
+    // 403 and the same screens light up with no further app change. Declaring
+    // the calls is what makes that a config change on their side instead of a
+    // release on ours — and it keeps the exact request shapes reviewed against
+    // the contract now, while the contract is in front of us.
+    //
+    // Roles (§5): rename/invite/revoke/kick-member = owner or manager;
+    // kick-manager/roles/transfer/dissolve = owner only.
+
+    /** Rename a chain. Owner or manager. */
+    @Headers("Content-Type: application/json")
+    @PATCH("mirrorchain/chains/{chainId}")
+    suspend fun renameMirrorChain(
+        @Path("chainId") chainId: String,
+        @Body body: MirrorRenameChainRequest,
+    ): Response<MirrorChainSummaryDto>
+
+    /** Invite a friend. Owner or manager; the invitee must already be a friend. */
+    @Headers("Content-Type: application/json")
+    @POST("mirrorchain/chains/{chainId}/invites")
+    suspend fun createMirrorInvite(
+        @Path("chainId") chainId: String,
+        @Body body: MirrorCreateInviteRequest,
+    ): Response<MirrorOkResponse>
+
+    /** Revoke an invite you sent. Owner or manager. */
+    @POST("mirrorchain/invites/{inviteId}/revoke")
+    suspend fun revokeMirrorInvite(@Path("inviteId") inviteId: String): Response<MirrorOkResponse>
+
+    /**
+     * Grant or revoke manager. Owner only. `owner` is NOT assignable here — the
+     * only route to it is [transferMirrorChain].
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("mirrorchain/chains/{chainId}/members/{userId}/role")
+    suspend fun setMirrorMemberRole(
+        @Path("chainId") chainId: String,
+        @Path("userId") userId: String,
+        @Body body: MirrorSetRoleRequest,
+    ): Response<MirrorOkResponse>
+
+    /** Hand the chain to another member. Owner only. */
+    @Headers("Content-Type: application/json")
+    @POST("mirrorchain/chains/{chainId}/transfer")
+    suspend fun transferMirrorChain(
+        @Path("chainId") chainId: String,
+        @Body body: MirrorTransferRequest,
+    ): Response<MirrorOkResponse>
+
+    /** Remove a member. The owner can never be removed; use Leave for yourself. */
+    @DELETE("mirrorchain/chains/{chainId}/members/{userId}")
+    suspend fun removeMirrorMember(
+        @Path("chainId") chainId: String,
+        @Path("userId") userId: String,
+    ): Response<Unit>
+
+    /** Dissolve the chain for everyone. Owner only. Irreversible. */
+    @DELETE("mirrorchain/chains/{chainId}")
+    suspend fun dissolveMirrorChain(@Path("chainId") chainId: String): Response<Unit>
+
+    /** Turn one of my own portfolios into a group portfolio. */
+    @Headers("Content-Type: application/json")
+    @POST("mirrorchain/chains/convert")
+    suspend fun convertPortfolioToChain(
+        @Body body: MirrorConvertRequest,
+    ): Response<MirrorChainSummaryDto>
+
     // ── V5: workboard ideas (saved backtest analyses) ────────────────────────
     // Bearer-reachable under the same `workboard:*` pair as conglomerates and
     // backtest (its own MODULE_POLICIES row). Write bodies are composed as
@@ -1298,6 +1391,118 @@ interface BtApi {
     @Headers("Content-Type: application/json")
     @PATCH("settings/account")
     suspend fun updateAccountSettings(@Body body: UpdateAccountSettingsRequest): Response<AccountSettingsResponse>
+
+    /** The caller's own profile — username, public flag, bio, icon. [social:read] */
+    @GET("social/profile")
+    suspend fun socialProfile(): Response<ProfileSettingsResponse>
+
+    /**
+     * Replace the caller's profile. A PUT, not a PATCH: `isPublic` must always
+     * be sent, and turning it on additionally requires `acknowledgePublic=true`.
+     *
+     * The body is a raw [JsonObject] rather than [UpdateProfileSettingsRequest],
+     * for one reason that is invisible until you hit it: `profileIcon` uses the
+     * omitted-vs-null distinction — **omitted** means "leave it alone", **null**
+     * means "clear it back to the default". The app's shared `Json` is configured
+     * `explicitNulls = false`, which DROPS a null property, so a typed DTO
+     * physically cannot express "clear". Clearing an icon would silently become a
+     * no-op that the server answers 200 to.
+     *
+     * Composing the object by hand is what makes both intents sendable. See
+     * [at.bettertrack.app.data.account.AccountRepository.updateProfileIcon].
+     * [social:write]
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("social/profile")
+    suspend fun updateSocialProfile(
+        @Body body: JsonObject,
+    ): Response<ProfileSettingsResponse>
+
+    // ── Taxes (V3-P4 / V5-P4) ────────────────────────────────────────────────
+    //
+    // Three tiers, and they are genuinely different resources rather than one
+    // resource read three ways:
+    //   1. `/settings/taxes`                     — the USER's default, i.e. what a
+    //      newly created portfolio inherits.
+    //   2. `/portfolios/:id/settings/tax`        — ONE portfolio's override, plus
+    //      the resolved cascade (`effective`/`override`/`userDefault`/`source`).
+    //   3. `/portfolios/:id/reports/tax-years…`  — the derived per-year report.
+    //
+    // Note the path asymmetry, which is the contract's and not a typo to be
+    // "fixed" here: the user-level route is plural (`taxes`), the per-portfolio
+    // one is singular (`tax`).
+
+    /** The caller's user-level tax default. [portfolio:read] */
+    @GET("settings/taxes")
+    suspend fun taxSettings(): Response<TaxSettingsDto>
+
+    /**
+     * Replace the user-level tax default. The body's mode-dependent fields are
+     * validated by a `superRefine` that rejects an inconsistent combination
+     * (a `country` outside `country_specific`, `custom` params outside `custom`,
+     * a manual default outside `manual_per_trade`, or an amount AND a rate), so
+     * the caller must send the exact field set the mode allows — see
+     * [at.bettertrack.app.domain.TaxSettingsDraft]. [portfolio:write]
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("settings/taxes")
+    suspend fun updateTaxSettings(@Body body: UpdateTaxSettingsRequest): Response<TaxSettingsDto>
+
+    /** One portfolio's tax treatment, resolved through the cascade. [portfolio:read] */
+    @GET("portfolios/{portfolioId}/settings/tax")
+    suspend fun portfolioTaxSettings(
+        @Path("portfolioId") portfolioId: String,
+    ): Response<PortfolioTaxSettingsResponse>
+
+    /** Pin an override on this portfolio. [portfolio:write] */
+    @Headers("Content-Type: application/json")
+    @PUT("portfolios/{portfolioId}/settings/tax")
+    suspend fun putPortfolioTaxSettings(
+        @Path("portfolioId") portfolioId: String,
+        @Body body: UpdateTaxSettingsRequest,
+    ): Response<PortfolioTaxSettingsResponse>
+
+    /**
+     * Drop the override so the portfolio inherits the user default again.
+     * Returns the re-resolved cascade rather than 204, so the caller never has
+     * to guess what it fell back TO. [portfolio:write]
+     */
+    @DELETE("portfolios/{portfolioId}/settings/tax")
+    suspend fun deletePortfolioTaxSettings(
+        @Path("portfolioId") portfolioId: String,
+    ): Response<PortfolioTaxSettingsResponse>
+
+    /** Every Vienna calendar year this portfolio has tax facts for, newest first. [portfolio:read] */
+    @GET("portfolios/{portfolioId}/reports/tax-years")
+    suspend fun taxYears(@Path("portfolioId") portfolioId: String): Response<TaxYearListResponse>
+
+    /** One year's drill-down: summary + per-position sells and dividends. [portfolio:read] */
+    @GET("portfolios/{portfolioId}/reports/tax-years/{year}")
+    suspend fun taxYearReport(
+        @Path("portfolioId") portfolioId: String,
+        @Path("year") year: Int,
+    ): Response<TaxYearReportResponse>
+
+    /**
+     * The same year, serialized as a labeled-section CSV (V5-P4b).
+     *
+     * `locale` (`en` | `de`) picks the header/label language ONLY — the numbers
+     * are the identical source-of-truth values [taxYearReport] returns, because
+     * the server serializes that response rather than recomputing. So the export
+     * can never disagree with the screen the user is looking at.
+     *
+     * `@Streaming` because this is a file, not a model: without it OkHttp buffers
+     * the whole body into memory before Retrofit hands it over, which is the
+     * wrong shape for something whose only destination is a file on disk.
+     * [portfolio:read]
+     */
+    @Streaming
+    @GET("portfolios/{portfolioId}/reports/tax-years/{year}/export.csv")
+    suspend fun taxYearCsv(
+        @Path("portfolioId") portfolioId: String,
+        @Path("year") year: Int,
+        @Query("locale") locale: String? = null,
+    ): Response<ResponseBody>
 
     /**
      * Hard-delete the account (#362, spec §6.12; a Play publishing requirement).

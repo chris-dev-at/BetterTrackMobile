@@ -138,6 +138,33 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+
+        <!--
+          Lets the tax-report CSV export leave the app through the share sheet.
+
+          `exported="false"` + `grantUriPermissions="true"` is the pair that
+          matters: no other app may query this provider on its own, and the only
+          way to read anything through it is a URI we handed over inside an
+          Intent carrying FLAG_GRANT_READ_URI_PERMISSION — a grant scoped to that
+          one file and revoked when the receiving activity finishes.
+
+          The authority is derived from ${applicationId} rather than written out,
+          because both product flavors ship the same id today and a future suffix
+          must not silently break sharing (or, worse, make two installed builds
+          fight over one authority, which is an install-time failure).
+
+          See res/xml/file_paths.xml for why the declared path is one cache
+          subdirectory and not the whole cache.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

@@ -82,7 +82,7 @@ import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtSkeleton
-import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
@@ -175,6 +175,8 @@ fun PortfolioOverviewScreen(
     onNewTransaction: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
+    /** Opens ONE portfolio's settings page (name, sharing, taxes, group, danger). */
+    onOpenPortfolioSettings: (String) -> Unit,
     /**
      * What to draw when the switcher's pinned **Overview** entry is selected —
      * the account-wide index that used to be the Home tab (owner IA change).
@@ -252,7 +254,11 @@ fun PortfolioOverviewScreen(
     // would waste that width on every screen, FAB or no FAB), the FAB gets out of
     // the way while the user scrolls down and comes straight back on the way up.
     val fabVisibility = rememberBtFabVisibility()
-    val scrollBehavior = rememberBtCollapsingHeaderBehavior()
+    // Pinned, not collapsing (owner directive 2026-08-06): "the selector for
+    // portfolio can always be on top and doesn't need to drop down when scrolled
+    // all the way up". See BtCollapsingHeader's `pinned` branch for why the
+    // behaviour is still a real one rather than null.
+    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     val listState = rememberLazyListState()
     // Back at the very top = nothing to get out of the way of. This also covers
     // the short-list case, where the FAB must never be able to stay hidden.
@@ -292,6 +298,7 @@ fun PortfolioOverviewScreen(
                 selected?.name ?: stringResource(R.string.bt_tab_portfolio)
             },
             scrollBehavior = scrollBehavior,
+            pinned = true,
             // The selector's leading glyph is the Portfolio TAB's glyph, on
             // purpose: the pill states which entry of that tab you are in, so
             // wearing the tab's own icon makes the relationship legible without a
@@ -432,6 +439,7 @@ fun PortfolioOverviewScreen(
                             onOpenTransactions = onOpenTransactions,
                             onOpenPendingSync = onOpenPendingSync,
                             onOpenCash = onOpenCash,
+                            onOpenPortfolioSettings = onOpenPortfolioSettings,
                             onNewTransaction = onNewTransaction,
                         )
                     }
@@ -491,6 +499,13 @@ fun PortfolioOverviewScreen(
                 vm.selectPortfolio(id)
                 vm.dismissSwitcher()
             },
+            // Closing the sheet before navigating: a modal left standing behind
+            // a pushed screen re-appears on back, which reads as the app having
+            // undone the navigation.
+            onOpenSettings = { id ->
+                vm.dismissSwitcher()
+                onOpenPortfolioSettings(id)
+            },
             onCreate = { name, onDone -> vm.createPortfolio(name) { ok -> onDone(ok) } },
             onRename = { id, name, onDone -> vm.renamePortfolio(id, name) { ok -> onDone(ok) } },
             onArchive = { id, onDone -> vm.archivePortfolio(id) { ok -> onDone(ok) } },
@@ -515,6 +530,7 @@ private fun OverviewContent(
     onOpenTransactions: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
+    onOpenPortfolioSettings: (String) -> Unit,
     onNewTransaction: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -794,6 +810,17 @@ private fun OverviewContent(
                     label = stringResource(R.string.bt_tx_title),
                     value = null,
                     onClick = { onOpenTransactions(portfolio.id) },
+                )
+                // Per-portfolio settings — name, sharing, taxes, group,
+                // archive/delete. It belongs in this group and NOT behind the
+                // header gear: the gear is the app's one fixed landmark and
+                // means "the app's settings". A second gear meaning "this
+                // portfolio's settings" would make the landmark ambiguous, which
+                // is exactly the failure the nav restoration removed.
+                SecondaryRow(
+                    label = stringResource(R.string.bt_psettings_row),
+                    value = null,
+                    onClick = { onOpenPortfolioSettings(portfolio.id) },
                 )
             }
         }

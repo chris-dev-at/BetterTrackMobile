@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -103,6 +104,8 @@ fun PortfolioSwitcherSheet(
     onArchive: (String, onDone: (Boolean) -> Unit) -> Unit,
     onRestore: (String, onDone: (Boolean) -> Unit) -> Unit,
     onDelete: (String, onResult: (PortfolioDeleteResult) -> Unit) -> Unit,
+    /** Opens one portfolio's settings page — the menu's second path to it. */
+    onOpenSettings: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -203,6 +206,7 @@ fun PortfolioSwitcherSheet(
                     onArchive = { archiveTarget = p },
                     onDelete = { deleteTarget = p },
                     onOpenChain = { chainTarget = it },
+                    onOpenSettings = { onOpenSettings(p.id) },
                 )
             }
 
@@ -401,6 +405,7 @@ private fun SwitcherRow(
     onArchive: () -> Unit,
     onDelete: () -> Unit,
     onOpenChain: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -551,6 +556,26 @@ private fun SwitcherRow(
                         },
                     )
                 }
+                // The door to this portfolio's full settings page. It leads the
+                // menu's own actions on purpose: rename/archive/delete are the
+                // three fast verbs, but everything ELSE about a portfolio —
+                // sharing, taxes, the group — lives on that page, and a user
+                // hunting for any of it opens this menu first.
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Tune,
+                            contentDescription = null,
+                            tint = bt.textSecondary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    text = { Text(stringResource(R.string.bt_psettings_row), color = bt.textPrimary) },
+                    onClick = {
+                        menuOpen = false
+                        onOpenSettings()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_switcher_rename), color = bt.textPrimary) },
                     onClick = {
@@ -696,7 +721,11 @@ private fun ArchivedRow(
  * failure) surfaces inline; the dialog stays open so the user can react.
  */
 @Composable
-private fun DeletePortfolioDialog(
+// `internal`, not private: the portfolio settings screen reuses this dialog
+// verbatim. The same destructive act must ask the same question wherever it is
+// reached from — two dialogs would drift, and the milder-looking one would be
+// the one people learn to trust.
+internal fun DeletePortfolioDialog(
     portfolio: PortfolioEntity,
     busy: Boolean,
     onDelete: (String, onResult: (PortfolioDeleteResult) -> Unit) -> Unit,
