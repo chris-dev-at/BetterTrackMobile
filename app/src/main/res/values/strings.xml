@@ -1199,6 +1199,10 @@
     <string name="bt_cash_menu_manage_tags">Manage tags</string>
     <string name="bt_cash_menu_rules">Auto-tag rules</string>
     <string name="bt_cash_menu_standing_orders">Standing orders</string>
+    <string name="bt_cash_manage_section">Manage</string>
+    <string name="bt_cash_menu_manage_tags_sub">Label movements so they can be grouped</string>
+    <string name="bt_cash_menu_rules_sub">Tag matching movements automatically</string>
+    <string name="bt_cash_menu_standing_orders_sub">Payments that repeat on a schedule</string>
 
     <!-- Tags -->
     <string name="bt_tags_title">Manage tags</string>

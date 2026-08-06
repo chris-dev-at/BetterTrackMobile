@@ -56,7 +56,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -96,6 +95,8 @@ import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtSkeleton
@@ -151,10 +152,9 @@ fun NotificationsInboxScreen(
     // and behind a different scrim — than every other screen's.
     val snackbar = LocalBtSnackbar.current
 
-    // Dialog + menu state.
+    // Dialog state. (The `overflowOpen` flag went with the overflow itself.)
     var deleteTarget by remember { mutableStateOf<AppNotification?>(null) }
     var bulkConfirm by remember { mutableStateOf<BulkConfirm?>(null) }
-    var overflowOpen by remember { mutableStateOf(false) }
 
     // (Re)load whenever the selected view changes; also runs on first composition.
     LaunchedEffect(selectedView) {
@@ -243,59 +243,17 @@ fun NotificationsInboxScreen(
                         }
                     }
                 },
-                // S6 P2-21: the debug "simulate a notification" flask used to sit
-                // inline with the real actions, as if shipping. It is an overflow
-                // ENTRY now, and only in debug builds — so the release toolbar is
-                // exactly the actions a user has.
-                overflow = {
-                    if (actionsEnabled || BuildConfig.DEBUG) {
-                        Box {
-                            IconButton(onClick = { overflowOpen = true }) {
-                                Icon(
-                                    Icons.Outlined.MoreVert,
-                                    contentDescription = stringResource(R.string.bt_notif_more_actions),
-                                    tint = bt.textSecondary,
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = overflowOpen,
-                                onDismissRequest = { overflowOpen = false },
-                            ) {
-                                // The old bulk "Archive all read" is retired: on v4 a read
-                                // row is ALREADY archived, so there are no read+active rows
-                                // to sweep. "Archive all" (the toolbar action above) covers
-                                // clearing the active inbox; the Archive view manages history.
-                                if (actionsEnabled) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.bt_notif_bulk_delete_archived), color = bt.loss) },
-                                        leadingIcon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null, tint = bt.loss) },
-                                        enabled = archivedCount > 0,
-                                        onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteArchived },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.bt_notif_bulk_delete_all), color = bt.loss) },
-                                        leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = bt.loss) },
-                                        enabled = totalCount > 0,
-                                        onClick = { overflowOpen = false; bulkConfirm = BulkConfirm.DeleteAll },
-                                    )
-                                }
-                                if (BuildConfig.DEBUG) {
-                                    if (actionsEnabled) HorizontalDivider(color = bt.border)
-                                    DropdownMenuItem(
-                                        // Debug-only affordance: deliberately not localized.
-                                        text = { Text("Simulate a notification", color = bt.textMuted) },
-                                        leadingIcon = { Icon(Icons.Outlined.Science, contentDescription = null, tint = bt.textMuted) },
-                                        onClick = {
-                                            overflowOpen = false
-                                            BtMessagingService.debugSimulate(context, simulateIndex)
-                                            simulateIndex++
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
+                // ── No ⋮ here any more (nav restoration 2026-08-06) ──────────
+                //
+                // This bar held the app's last top-bar overflow: two bulk deletes
+                // and, in debug builds, the simulate-a-notification tool. Both
+                // moved INTO the list — the deletes as a red row at its foot,
+                // matching whichever view is showing, the debug tool below them.
+                //
+                // "Archive all" stays as the bar's ONE action. It is the only one
+                // of the four that is a per-visit act rather than a management
+                // decision, and it is already gated on there being unread rows to
+                // archive, so the bar shows it exactly when it can be used.
             )
         },
     ) { innerPadding ->
@@ -354,6 +312,63 @@ fun NotificationsInboxScreen(
                                         onUnarchive = { onUnarchive(n) },
                                         onDelete = { deleteTarget = n },
                                     )
+                                }
+
+                                // ── The bulk deletes, at the foot of the list ──
+                                //
+                                // Promoted out of the retired top-bar ⋮ (see the
+                                // header). The foot is the honest place for a
+                                // destructive sweep: the user arrives at it having
+                                // just scrolled past everything it would destroy,
+                                // which no menu item can ever offer. It is also
+                                // exactly the idiom Settings already ends on — a
+                                // red "danger" group after everything else.
+                                //
+                                // Which sweep is offered follows the view, so the
+                                // action always matches the list it is under: no
+                                // sweep at all on Active (whose rows are still
+                                // work), delete-archived under Archived,
+                                // delete-everything under All.
+                                if (actionsEnabled) {
+                                    val bulk = when (selectedView) {
+                                        NotifView.Active -> null
+                                        NotifView.Archived ->
+                                            BulkConfirm.DeleteArchived.takeIf { archivedCount > 0 }
+                                        NotifView.All ->
+                                            BulkConfirm.DeleteAll.takeIf { totalCount > 0 }
+                                    }
+                                    if (bulk != null) {
+                                        item(key = "bulk-danger") {
+                                            InboxDangerRow(
+                                                which = bulk,
+                                                onClick = { bulkConfirm = bulk },
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Debug-only: the simulate-a-notification tool,
+                                // also out of the retired ⋮. It stays on this
+                                // screen rather than moving to Settings →
+                                // Developer because it is tested BY watching this
+                                // list, and a debug tool two screens from its own
+                                // output is a debug tool nobody uses.
+                                if (BuildConfig.DEBUG) {
+                                    item(key = "debug-simulate") {
+                                        BtGroup(Modifier.padding(top = 4.dp)) {
+                                            BtGroupRow(
+                                                icon = Icons.Outlined.Science,
+                                                // Deliberately not localized: debug-only.
+                                                title = "Simulate a notification",
+                                                titleColor = bt.textMuted,
+                                                iconTint = bt.textMuted,
+                                                onClick = {
+                                                    BtMessagingService.debugSimulate(context, simulateIndex)
+                                                    simulateIndex++
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -430,6 +445,38 @@ fun NotificationsInboxScreen(
             dismissButton = {
                 TextButton(onClick = { bulkConfirm = null }) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) }
             },
+        )
+    }
+}
+
+/**
+ * The bulk-delete door, at the foot of the list it would empty.
+ *
+ * Drawn in the app's destructive red and stated in full ("Delete all archived"),
+ * not as an icon: this is the one row on the screen that cannot be undone, so it
+ * has to be the one row that can be read without being interpreted. It opens the
+ * existing confirmation dialog — the row is a door, never the act.
+ */
+@Composable
+private fun InboxDangerRow(which: BulkConfirm, onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    BtGroup(Modifier.padding(top = 6.dp)) {
+        BtGroupRow(
+            icon = if (which == BulkConfirm.DeleteArchived) {
+                Icons.Outlined.DeleteSweep
+            } else {
+                Icons.Outlined.DeleteOutline
+            },
+            title = stringResource(
+                if (which == BulkConfirm.DeleteArchived) {
+                    R.string.bt_notif_bulk_delete_archived
+                } else {
+                    R.string.bt_notif_bulk_delete_all
+                },
+            ),
+            titleColor = bt.loss,
+            iconTint = bt.loss,
+            onClick = onClick,
         )
     }
 }

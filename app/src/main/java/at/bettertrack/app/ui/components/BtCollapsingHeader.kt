@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,9 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.lerp as lerpTextStyle
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.R
 import at.bettertrack.app.ui.shell.BtNavMotion
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.math.roundToInt
@@ -144,8 +147,16 @@ import kotlin.math.roundToInt
  *   [at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen] — it is what stops
  *   that row from being 64dp of nothing while the header is expanded).
  * @param action the ONE contextual action, or null. Not a slot list — see above.
- * @param overflow the ⋮ menu, or null. Renders after [action], as the last thing
- *   in the row, which is where every Android user's thumb expects to find it.
+ * @param overflow the ⋮ menu, or null. Renders after [action].
+ *
+ *   **As of the 2026-08-06 navigation restoration there is no ⋮ left on any top
+ *   bar in this app** — see [BtSettingsGear]. The slot survives for one reason:
+ *   deleting it would make "add an overflow" a one-line change again, and the
+ *   rule that has to stay enforceable is that a ⋮ must justify itself against an
+ *   in-content second path. A parameter with no callers is a question a reviewer
+ *   gets to ask; an absent parameter is a decision nobody remembers making.
+ * @param settings the Settings gear, or null. **Renders LAST, after [overflow]**,
+ *   and that ordering is the whole point — see [BtSettingsGear].
  * @param windowInsets defaults to the status-bar inset, which is correct
  *   everywhere in this app; pass `WindowInsets(0,0,0,0)` only when an ancestor
  *   has provably consumed it already (the debug gallery does, for instance).
@@ -164,6 +175,7 @@ fun BtCollapsingHeader(
     navigationIcon: @Composable () -> Unit = {},
     action: (@Composable () -> Unit)? = null,
     overflow: (@Composable () -> Unit)? = null,
+    settings: (@Composable () -> Unit)? = null,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
     val bt = BtTheme.colors
@@ -249,6 +261,8 @@ fun BtCollapsingHeader(
         actions = {
             action?.invoke()
             overflow?.invoke()
+            // Last, always — the corner is the gear's address. See [BtSettingsGear].
+            settings?.invoke()
         },
         collapsedHeight = BT_HEADER_COLLAPSED_HEIGHT,
         expandedHeight = if (subtitle != null) {
@@ -272,6 +286,56 @@ fun BtCollapsingHeader(
         ),
         scrollBehavior = scrollBehavior,
     )
+}
+
+/**
+ * The Settings gear — the app's one fixed landmark (owner directive 2026-08-06).
+ *
+ * ## The report this answers
+ *
+ * The R-arc's austerity rule sent Settings behind Overview's ⋮, on the reasoning
+ * that it is a rarely-used surface and a bar icon is expensive. The owner's
+ * verdict on the device: *"the settings menu is absolutely inaccessible, so
+ * niche"* — and *"the nav on the old version was 10 times better"*.
+ *
+ * Both halves of that are true at once, and the resolution is not to undo the
+ * new style but to notice what the old nav actually had: a **fixed** thing in a
+ * **fixed** place. Frequency was never the point. A landmark is not something you
+ * use often; it is something you can steer by, and its value is that it is in the
+ * same corner on every screen you might be lost on. Settings behind a menu whose
+ * contents changed per page had no address at all — the user had to remember
+ * which page's ⋮ was the one with Settings in it.
+ *
+ * ## Why it is drawn as a component and not written four times
+ *
+ * There are exactly four top-level tabs and the gear must be identical on all of
+ * them — same glyph, same tint, same accessible name, same trailing position. One
+ * composable is how "identical" stops depending on four authors agreeing.
+ *
+ * ## Why it renders LAST in the actions row
+ *
+ * `settings` is invoked after `action` and after `overflow`, so the gear owns the
+ * final slot before the screen edge no matter what else a bar carries. If it were
+ * placed before the overflow, a bar that grew a ⋮ would shift the gear inward and
+ * the landmark would move — which is precisely the failure being fixed. It costs
+ * the Android convention that ⋮ sits last; that convention is worth less here
+ * than an anchor that never moves, and after this change no top bar in the app
+ * carries a ⋮ for it to conflict with anyway.
+ *
+ * Deliberately carries **no badge**. The gear means one thing — "the app's
+ * settings are here" — and a dot on it would make it mean "something happened",
+ * which is the ⋮'s old job and the reason the ⋮ was ambiguous.
+ */
+@Composable
+fun BtSettingsGear(onClick: () -> Unit) {
+    val bt = BtTheme.colors
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = Icons.Outlined.Settings,
+            contentDescription = stringResource(R.string.bt_top_settings),
+            tint = bt.textSecondary,
+        )
+    }
 }
 
 /**
@@ -359,8 +423,25 @@ private fun BtHeaderSelector(
             .btPressScale(interaction)
             .padding(vertical = 2.dp)
             .height(height)
-            .clip(shape)
-            .background(bt.surface)
+            // ── `background(colour, shape)`, NOT `clip(shape) + background()` ──
+            //
+            // (Perf claw-back 2026-08-06.) The two forms paint identically here,
+            // and they cost very differently. `Modifier.clip` is a graphics
+            // LAYER: it allocates a RenderNode and a clip path so that anything
+            // drawn by the children can be cut to the rounded rect. The
+            // shape-taking `background` overload has no children to cut — it
+            // simply rasterises the rounded rect it was handed.
+            //
+            // Nothing in this pill needs the clip. The label is `maxLines = 1`
+            // + `Ellipsis` and the chevron is a fixed-size glyph inside the
+            // padding, so no child can reach the rounded corners to be clipped
+            // BY them; the clip was only ever paying for a guarantee the layout
+            // already made. And M3 composes this whole lambda TWICE — once for
+            // the collapsed row, once for the expanded one — so a layer here is
+            // two RenderNodes on every frame of every scroll, one of which is
+            // sitting at alpha 0 whenever the header is at either end of its
+            // travel (i.e. nearly always).
+            .background(bt.surface, shape)
             .border(1.dp, bt.borderStrong, shape)
             .padding(start = startPad, end = endPad),
     ) {
@@ -369,8 +450,10 @@ private fun BtHeaderSelector(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(chip)
-                    .clip(chipShape)
-                    .background(bt.gold.copy(alpha = 0.14f))
+                    // Same reasoning as the pill above: the glyph is centred and
+                    // strictly smaller than the chip, so the clip could never
+                    // cut anything — it only cost a second RenderNode per copy.
+                    .background(bt.gold.copy(alpha = 0.14f), chipShape)
                     .border(1.dp, bt.gold.copy(alpha = 0.26f), chipShape),
             ) {
                 Icon(

@@ -102,6 +102,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroup
@@ -309,6 +310,7 @@ fun SocialScreen(
     onOpenChats: () -> Unit,
     onOpenChatWith: (friendUserId: String, username: String) -> Unit,
     onOpenGroups: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val vm: SocialViewModel = viewModel {
         SocialViewModel(AppGraph.socialRepository, AppGraph.friendGroupRepository, AppGraph.connectivityMonitor)
@@ -377,7 +379,16 @@ fun SocialScreen(
                         )
                     }
                 },
-                overflow = { PeopleOverflow(onOpenGroups = onOpenGroups) },
+                // The ⋮ that used to sit here carried exactly one entry, "Friend
+                // groups", and that entry already had an in-content home: the
+                // doorways group at the foot of the friends list, where it sits
+                // beside Messages with an icon, a subtitle and a chevron. A menu
+                // whose whole contents are visible on the screen behind it is not
+                // a shortcut, it is a second name for the same door — and it was
+                // one of the ⋮s the owner meant by "every page shouldn't have the
+                // same 3 dots leading to 1000 different results". Dissolved; the
+                // slot it vacated is the gear's, app-wide.
+                settings = { BtSettingsGear(onOpenSettings) },
             )
             SegmentedTabs(
                 selected = section,
@@ -756,28 +767,9 @@ private fun RequestDecisionRow(req: FriendRequest, onAccept: () -> Unit, onDecli
     }
 }
 
-/** People's overflow — the ⋮ the mandate allows as a bar's third and last slot. */
-@Composable
-private fun PeopleOverflow(onOpenGroups: () -> Unit) {
-    val bt = BtTheme.colors
-    var open by remember { mutableStateOf(false) }
-    IconButton(onClick = { open = true }) {
-        Icon(
-            Icons.Outlined.MoreVert,
-            contentDescription = stringResource(R.string.bt_top_more),
-            tint = bt.textSecondary,
-        )
-    }
-    DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = bt.surface) {
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.bt_groups_entry_title), color = bt.textPrimary) },
-            onClick = {
-                open = false
-                onOpenGroups()
-            },
-        )
-    }
-}
+// `PeopleOverflow` is deleted (nav restoration 2026-08-06). Its single entry,
+// "Friend groups", is reached from the doorways group at the foot of the friends
+// list — see the `settings =` comment on this screen's header.
 
 // R2: `GroupsEntryRow` and this file's private `SectionHeader` are gone. Groups
 // is now a row in the doorways group at the foot of the friends list, and the

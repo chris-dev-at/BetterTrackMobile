@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
@@ -79,6 +80,7 @@ fun MarketsTabScreen(
     onOpenAsset: (String) -> Unit = {},
     onAddToWatchlist: () -> Unit = {},
     onOpenMarketIntel: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val scrollBehavior = rememberBtCollapsingHeaderBehavior()
@@ -90,6 +92,7 @@ fun MarketsTabScreen(
         BtCollapsingHeader(
             title = stringResource(R.string.bt_tab_markets),
             scrollBehavior = scrollBehavior,
+            settings = { BtSettingsGear(onOpenSettings) },
         )
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             SearchBarButton(onClick = onOpenSearch)
@@ -240,11 +243,13 @@ fun WorkbenchTabScreen(
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
     onOpenIdea: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
         onOpenAsset = onOpenAsset,
         onOpenIdea = onOpenIdea,
+        onOpenSettings = onOpenSettings,
     )
 }

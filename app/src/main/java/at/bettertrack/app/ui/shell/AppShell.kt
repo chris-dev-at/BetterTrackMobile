@@ -7,11 +7,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.mutableStateOf
@@ -26,11 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -119,8 +112,6 @@ import at.bettertrack.app.navigation.SyncDebugRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
 import at.bettertrack.app.navigation.WorkbenchTabRoute
-import at.bettertrack.app.ui.components.BtBadgeOverlay
-import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.BtSnackbarHost
 import at.bettertrack.app.ui.components.LocalBtSnackbar
@@ -183,6 +174,19 @@ private enum class TabBadge {
 
     /** Alerts that have fired — the other badge the top bar used to carry. */
     Alerts,
+
+    /**
+     * Unread notifications — inherited from Overview's ⋮ when that menu was
+     * dissolved (nav restoration 2026-08-06).
+     *
+     * It belongs on **Portfolio** because that is the tab the inbox is reached
+     * from: Overview lives inside it, and Overview is where both entry points to
+     * the inbox are (the "Needs you" card and the quiet tail's Inbox row). The
+     * old home for this dot was the ⋮ glyph itself, which meant the app could
+     * only tell you something was waiting while you were already looking at the
+     * screen that would have told you anyway.
+     */
+    Inbox,
 }
 
 /**
@@ -214,7 +218,7 @@ private data class TabSpec(
 )
 
 private val Tabs = listOf(
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
     TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
     TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
     TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
@@ -485,6 +489,7 @@ fun BtApp() {
                             TabBadge.None -> false
                             TabBadge.Chat -> showSocialSurfaces && chatUnread > 0
                             TabBadge.Alerts -> showNotificationSurfaces && triggeredAlerts > 0
+                            TabBadge.Inbox -> showNotificationSurfaces && notifUnread > 0
                         }
                     },
                     onSelect = { tab -> switchToTab(tab.tab) },
@@ -567,109 +572,28 @@ private fun BtOverviewSearchAction(onSearch: () -> Unit) {
     }
 }
 
-/**
- * The overflow (⋮) — the third and last thing a top bar may carry.
+/*
+ * `BtOverviewOverflow` is deleted (nav restoration 2026-08-06, owner directive).
  *
- * This is where the secondary surfaces the mandate evicted from the bar live:
- * "settings, sync status, dev screen, About live behind overflow/profile, never
- * as bar icons" (§2). The notification inbox keeps its unread count here,
- * because a number the user could act on is exactly what an overflow item may
- * carry — it is the persistent *bell competing for bar space* that had to go,
- * not the information.
+ * It held four entries and every one of them already lived on the screen it hung
+ * over, because the second-path rule was in force when it was written — which is
+ * what made it removable rather than merely undesirable:
+ *
+ *   Notifications      -> Overview's "Needs you" card when there IS unread mail,
+ *                         and unconditionally the Inbox row in Home's quiet tail,
+ *                         which carries the same count.
+ *   Discreet mode      -> the tail's discreet row (with its On/Off state) and
+ *                         Settings -> Privacy, which is the canonical toggle.
+ *   Settings           -> [BtSettingsGear], now on all four tab bars, plus the
+ *                         tail's own Settings row.
+ *   Component gallery  -> the wordmark's long-press (debug), restored with the
+ *                         wordmark itself, and Settings -> Developer.
+ *
+ * The one thing that did NOT have a second home was the unread DOT the menu wore
+ * on its ⋮. That signal moved to the Portfolio tab's bottom-bar dot
+ * ([TabBadge.Inbox]) — a better address for it than the old one, since the bottom
+ * bar is on screen from every tab while the ⋮ was only ever visible on Overview.
  */
-@Composable
-private fun BtOverviewOverflow(
-    notifUnread: Int,
-    showNotifications: Boolean,
-    discreetMode: Boolean,
-    onNotifications: () -> Unit,
-    onSettings: () -> Unit,
-    /** Debug builds only — inherited from the retired wordmark long-press. */
-    onOpenGallery: () -> Unit,
-    onToggleDiscreet: (Boolean) -> Unit,
-) {
-    val bt = BtTheme.colors
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = stringResource(R.string.bt_top_more),
-                tint = bt.textSecondary,
-            )
-        }
-        // The inbox count rides the ⋮ itself as a dot, so "something is waiting"
-        // survives the bell's removal without a second glyph. The exact number
-        // is on the menu item one tap in.
-        BtBadgeOverlay(
-            count = 0,
-            showDot = showNotifications && notifUnread > 0,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = (-6).dp, y = 8.dp),
-        )
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = bt.surface,
-        ) {
-            if (showNotifications) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_top_notifications)) },
-                    onClick = { open = false; onNotifications() },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Notifications,
-                            contentDescription = null,
-                            tint = bt.textSecondary,
-                        )
-                    },
-                    trailingIcon = { BtCountBadge(count = notifUnread) },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.bt_settings_discreet)) },
-                onClick = { open = false; onToggleDiscreet(!discreetMode) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (discreetMode) {
-                            Icons.Outlined.VisibilityOff
-                        } else {
-                            Icons.Outlined.Visibility
-                        },
-                        contentDescription = null,
-                        // Gold while ON: the one state in this menu that
-                        // changes what every other screen renders should not
-                        // look like the rows that merely navigate.
-                        tint = if (discreetMode) bt.gold else bt.textSecondary,
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.bt_top_settings)) },
-                onClick = { open = false; onSettings() },
-                leadingIcon = {
-                    Icon(
-                        Icons.Outlined.Settings,
-                        contentDescription = null,
-                        tint = bt.textSecondary,
-                    )
-                },
-            )
-            if (BuildConfig.DEBUG) {
-                // The wordmark's hidden long-press, made explicit — see
-                // [BtOverviewSearchAction]'s KDoc.
-                // NOTE: no "Server" entry here. Settings → Server and the login
-                // screen's affordance are the two paths, deliberately — a third
-                // one in the overflow is the second-path rule being broken.
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_settings_dev_gallery)) },
-                    onClick = { open = false; onOpenGallery() },
-                )
-            }
-        }
-    }
-}
 
 /**
  * The bottom bar — the backbone the mandate keeps (§2), now five wide and
@@ -863,18 +787,9 @@ private fun BtNavHost(
                         // only screen that is about all of it.
                         BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
                     },
-                    overviewOverflow = {
-                        BtOverviewOverflow(
-                            notifUnread = notifUnread,
-                            showNotifications = showNotifications,
-                            discreetMode = discreetMode,
-                            onNotifications = { navController.navigate(NotificationsInboxRoute) },
-                            onSettings = { navController.navigate(SettingsRoute) },
-                            onOpenGallery = {
-                                if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
-                            },
-                            onToggleDiscreet = onToggleDiscreet,
-                        )
+                    onOpenSettings = { navController.navigate(SettingsRoute) },
+                    onLongPressWordmark = {
+                        if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                     },
                 )
             }
@@ -886,6 +801,7 @@ private fun BtNavHost(
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                 onAddToWatchlist = { navController.navigate(SearchRoute) },
                 onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
+                onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }
         composable<PeopleTabRoute> {
@@ -898,6 +814,7 @@ private fun BtNavHost(
                     navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
                 },
                 onOpenGroups = { navController.navigate(FriendGroupsRoute) },
+                onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }
         composable<FriendGroupsRoute> {
@@ -909,6 +826,7 @@ private fun BtNavHost(
                 onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                 onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
+                onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }
 

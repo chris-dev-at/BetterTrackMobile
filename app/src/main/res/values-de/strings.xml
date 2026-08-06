@@ -1155,6 +1155,10 @@
     <string name="bt_cash_menu_manage_tags">Tags verwalten</string>
     <string name="bt_cash_menu_rules">Auto-Tag-Regeln</string>
     <string name="bt_cash_menu_standing_orders">Daueraufträge</string>
+    <string name="bt_cash_manage_section">Verwalten</string>
+    <string name="bt_cash_menu_manage_tags_sub">Bewegungen benennen, um sie zu gruppieren</string>
+    <string name="bt_cash_menu_rules_sub">Passende Bewegungen automatisch taggen</string>
+    <string name="bt_cash_menu_standing_orders_sub">Zahlungen, die sich regelmäßig wiederholen</string>
 
     <!-- Tags -->
     <string name="bt_tags_title">Tags verwalten</string>

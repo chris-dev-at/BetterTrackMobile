@@ -85,6 +85,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroupRow
@@ -153,6 +154,7 @@ fun WorkboardScreen(
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
     onOpenIdea: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(WorkboardSection.Conglomerates) }
 
@@ -201,6 +203,7 @@ fun WorkboardScreen(
         BtCollapsingHeader(
             title = stringResource(R.string.bt_tab_workbench),
             scrollBehavior = scrollBehavior,
+            settings = { BtSettingsGear(onOpenSettings) },
         )
         WorkbenchNeedsYou(
             triggered = triggeredAlerts,

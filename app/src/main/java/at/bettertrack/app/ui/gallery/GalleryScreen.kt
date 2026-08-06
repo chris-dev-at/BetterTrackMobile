@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -59,6 +58,7 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
@@ -222,11 +222,11 @@ private fun CollapsingHeaderSection() {
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 onTitleClick = {},
                 titleClickLabel = "Switch portfolio",
-                overflow = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = bt.textSecondary)
-                    }
-                },
+                // The gear, not a ⋮: after the 2026-08-06 navigation restoration
+                // this is what a tab bar's trailing slot holds app-wide, so the
+                // gallery's demo bar has to hold it too — a showcase that still
+                // rendered the retired overflow would be teaching the old rule.
+                settings = { BtSettingsGear({}) },
             )
         }
         Text("Collapsed — scrolled state (tonal lift, no divider)", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
@@ -244,11 +244,11 @@ private fun CollapsingHeaderSection() {
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 onTitleClick = {},
                 titleClickLabel = "Switch portfolio",
-                overflow = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = bt.textSecondary)
-                    }
-                },
+                // The gear, not a ⋮: after the 2026-08-06 navigation restoration
+                // this is what a tab bar's trailing slot holds app-wide, so the
+                // gallery's demo bar has to hold it too — a showcase that still
+                // rendered the retired overflow would be teaching the old rule.
+                settings = { BtSettingsGear({}) },
             )
         }
         Text("No title action — a plain large title", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)

@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,21 +17,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,6 +60,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
+import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.HoldingEntity
@@ -81,6 +80,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
@@ -196,8 +196,27 @@ fun PortfolioOverviewScreen(
     ) -> Unit,
     /** Overview's ONE header action (search) — the mandate's §1 budget. */
     overviewAction: @Composable () -> Unit,
-    /** Overview's header overflow: inbox · discreet · settings · dev backend. */
-    overviewOverflow: @Composable () -> Unit,
+    /**
+     * The Settings gear — this tab's trailing anchor, on BOTH of the header's
+     * modes (Overview and a selected portfolio), because a landmark that is
+     * present only on one of a tab's two states is not a landmark.
+     *
+     * A callback rather than a slot (unlike [overviewAction]): the gear is
+     * identical on all four tabs by design, so there is nothing here for a
+     * caller to vary and a slot would only be an invitation to try.
+     */
+    onOpenSettings: () -> Unit,
+    /**
+     * Debug builds: the wordmark's long-press opens the component gallery.
+     *
+     * The owner asked for this affordance twice — once as the original hidden
+     * gallery entry, and again in the Step-18 "secret menu" request ("keep the
+     * wordmark long-press too"). It was lost when the R-arc retired the shell top
+     * bar and the wordmark with it, and the gallery moved into Overview's ⋮
+     * instead. The wordmark is back in this header, so the long-press comes back
+     * with it — which is what lets that ⋮ entry, and with it the whole menu, go.
+     */
+    onLongPressWordmark: () -> Unit,
 ) {
     val vm: PortfolioOverviewViewModel = viewModel(initializer = PortfolioOverviewVmInitializer)
 
@@ -225,6 +244,7 @@ fun PortfolioOverviewScreen(
     }
 
     val bt = BtTheme.colors
+    val wordmarkInteraction = remember { MutableInteractionSource() }
     val pullState = rememberPullToRefreshState()
     // S6 P1-7: the buy/sell FAB sits exactly over the allocation legend's value
     // column, so on a portfolio with more than a couple of slices the reader
@@ -301,7 +321,26 @@ fun PortfolioOverviewScreen(
             navigationIcon = {
                 Wordmark(
                     fontSize = 19.sp,
-                    modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 4.dp)
+                        // Debug-only long-press → component gallery. `indication
+                        // = null` and no click label: it must stay invisible and
+                        // silent to TalkBack in the shipping sense — this is a
+                        // developer door on a brand mark, not an action the
+                        // wordmark advertises. `onClick` is deliberately absent,
+                        // so a normal tap on the logo still does nothing.
+                        .then(
+                            if (BuildConfig.DEBUG) {
+                                Modifier.combinedClickable(
+                                    interactionSource = wordmarkInteraction,
+                                    indication = null,
+                                    onLongClick = onLongPressWordmark,
+                                    onClick = {},
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
                 )
             },
             // Always tappable now. The switcher stopped being an optional
@@ -314,21 +353,23 @@ fun PortfolioOverviewScreen(
             onTitleClick = { vm.openSwitcher() },
             titleClickLabel = stringResource(R.string.bt_switcher_open_cd),
             action = if (overviewSelected) overviewAction else null,
-            overflow = if (overviewSelected) {
-                overviewOverflow
-            } else {
-                {
-                    PortfolioOverflow(
-                        portfolioId = selected?.id,
-                        canSwitch = canSwitch,
-                        hasPending = pendingTx.isNotEmpty(),
-                        onOpenTransactions = onOpenTransactions,
-                        onOpenCash = onOpenCash,
-                        onOpenPendingSync = onOpenPendingSync,
-                        onManagePortfolios = { vm.openSwitcher() },
-                    )
-                }
-            },
+            // ── Both of this tab's ⋮ menus are gone (nav restoration 2026-08-06) ──
+            //
+            // Overview's carried inbox · discreet · settings · gallery; a
+            // portfolio's carried transactions · cash · pending · manage. Between
+            // them they were the clearest case of the owner's report — the SAME
+            // glyph in the SAME corner of the SAME tab, meaning two entirely
+            // different things depending on which entry the switcher was on.
+            //
+            // Every one of those eight entries had an in-content twin already
+            // (that was the design rule when they were written), so dissolving
+            // them removed no capability: Settings and the inbox and discreet
+            // mode are rows on Overview itself, cash and transactions are rows
+            // under the holdings, pending sync is the strip that appears with the
+            // pending work it is about, manage-portfolios is the pill above, and
+            // the gallery is back on the wordmark's long-press. What the corner
+            // holds now is one thing that never changes.
+            settings = { BtSettingsGear(onOpenSettings) },
         )
 
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -769,66 +810,15 @@ private fun OverviewContent(
     }
 }
 
-/**
- * The Portfolio header's ⋮ (mandate §1: context, ONE action, overflow).
- *
- * Every entry here has an in-content twin on the screen below — Transactions and
- * Cash as the secondary rows under the holdings, Pending sync as the strip,
- * Manage portfolios as the tap on the title itself. That pairing is Fable's
- * design-review rule, and it is also why "Pending sync" is gated on there being
- * something pending: it appears and disappears together with the strip, so the
- * menu never offers a path the screen itself does not.
- */
-@Composable
-private fun PortfolioOverflow(
-    portfolioId: String?,
-    canSwitch: Boolean,
-    hasPending: Boolean,
-    onOpenTransactions: (String) -> Unit,
-    onOpenCash: (String) -> Unit,
-    onOpenPendingSync: () -> Unit,
-    onManagePortfolios: () -> Unit,
-) {
-    val bt = BtTheme.colors
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                contentDescription = stringResource(R.string.bt_top_more),
-                tint = bt.textSecondary,
-            )
-        }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = bt.surface,
-        ) {
-            if (portfolioId != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_tx_title)) },
-                    onClick = { open = false; onOpenTransactions(portfolioId) },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_overview_cash)) },
-                    onClick = { open = false; onOpenCash(portfolioId) },
-                )
-            }
-            if (hasPending) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_pending_title)) },
-                    onClick = { open = false; onOpenPendingSync() },
-                )
-            }
-            if (canSwitch) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_overview_manage_portfolios)) },
-                    onClick = { open = false; onManagePortfolios() },
-                )
-            }
-        }
-    }
-}
+// `PortfolioOverflow` is deleted (nav restoration 2026-08-06). Its four entries
+// and their in-content twins:
+//   Transactions      -> the "Transactions" row under the holdings ([SecondaryRow])
+//   Cash              -> the "Cash" row under the holdings, carrying the balance
+//   Pending sync      -> [PendingStrip], which appears on exactly the same
+//                        condition the menu entry used to be gated on
+//   Manage portfolios -> tapping the selector pill, which is now drawn as a
+//                        button and is the screen's most obvious control
+// See the `settings =` comment on this screen's header.
 
 // ── Pieces ───────────────────────────────────────────────────────────────────
 

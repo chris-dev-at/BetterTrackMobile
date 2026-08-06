@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NorthEast
 import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.SouthWest
@@ -98,6 +100,9 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtDateField
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtEmptyState
@@ -929,38 +934,23 @@ fun CashScreen(
                         )
                     }
                 },
-                // V5 S2c. The three classification surfaces are per-account
-                // management screens, not per-visit actions, so they live behind
-                // one overflow rather than adding permanent chrome to a screen
-                // whose primary job is recording money.
-                overflow = {
-                    var menuOpen by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(
-                            Icons.Outlined.MoreVert,
-                            contentDescription = stringResource(R.string.bt_cash_menu),
-                            tint = bt.textSecondary,
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                        containerColor = bt.surface,
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bt_cash_menu_manage_tags)) },
-                            onClick = { menuOpen = false; onOpenTags() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bt_cash_menu_rules)) },
-                            onClick = { menuOpen = false; onOpenRules() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bt_cash_menu_standing_orders)) },
-                            onClick = { menuOpen = false; onOpenStandingOrders() },
-                        )
-                    }
-                },
+                // ── No ⋮ here any more (nav restoration 2026-08-06) ──────────
+                //
+                // V5 S2c put tags, auto-tag rules and standing orders behind one
+                // overflow on the reasoning that they are per-account management
+                // screens rather than per-visit actions, and should not add
+                // permanent chrome to a screen whose job is recording money. The
+                // reasoning about chrome was right; the conclusion was wrong.
+                //
+                // These three were the ONLY entries in the whole app's five
+                // top-bar menus with no in-content second path — three entire
+                // screens whose sole door was a glyph that names nothing. Audited
+                // during the dissolution: `onOpenTags`/`onOpenRules`/
+                // `onOpenStandingOrders` had exactly one call site each, this
+                // menu. So they are not dissolved into an existing path, they are
+                // PROMOTED to one — the doorways group at the foot of the
+                // movements list, which is the pattern People and Overview
+                // already use and which costs the top bar nothing.
             )
         },
     ) { innerPadding ->
@@ -1370,6 +1360,42 @@ fun CashScreen(
                                 null
                             },
                         )
+                    }
+
+                    // ── The three management screens, as doors ───────────────
+                    //
+                    // Promoted out of the retired top-bar ⋮ (see the header). At
+                    // the FOOT of the list on purpose: they configure how the
+                    // movements above them get classified, so they read as "and
+                    // here is how this is organised" after the thing being
+                    // organised, and they cost nothing above the fold. Same
+                    // BtGroup/BtGroupRow vocabulary as Settings and People's
+                    // doorways, so a row that opens a screen looks identical
+                    // wherever the user meets one.
+                    item(key = "manage-doors") {
+                        Column(Modifier.padding(top = 10.dp)) {
+                            BtSectionHeader(stringResource(R.string.bt_cash_manage_section))
+                            BtGroup {
+                                BtGroupRow(
+                                    icon = Icons.Outlined.Sell,
+                                    title = stringResource(R.string.bt_cash_menu_manage_tags),
+                                    subtitle = stringResource(R.string.bt_cash_menu_manage_tags_sub),
+                                    onClick = onOpenTags,
+                                )
+                                BtGroupRow(
+                                    icon = Icons.Outlined.AutoAwesome,
+                                    title = stringResource(R.string.bt_cash_menu_rules),
+                                    subtitle = stringResource(R.string.bt_cash_menu_rules_sub),
+                                    onClick = onOpenRules,
+                                )
+                                BtGroupRow(
+                                    icon = Icons.Outlined.EventRepeat,
+                                    title = stringResource(R.string.bt_cash_menu_standing_orders),
+                                    subtitle = stringResource(R.string.bt_cash_menu_standing_orders_sub),
+                                    onClick = onOpenStandingOrders,
+                                )
+                            }
+                        }
                     }
                 }
             }
