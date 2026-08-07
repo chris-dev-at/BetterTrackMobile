@@ -158,6 +158,75 @@ class BtContrastTest {
         }
     }
 
+    // ── Gold as a graphical mark ─────────────────────────────────────────────
+
+    @Test
+    fun `the graphical gold clears the 3 to 1 graphical floor on every surface`() {
+        // `goldGraphic` is the hero chart line, the bottom bar's selection ring
+        // and every `edge(gold, …)` hairline. WCAG asks 3:1 of a graphical
+        // object, not 4.5:1 — and for yellow that gap is the whole difference
+        // between an amber that still reads as the logo and one that does not.
+        // Holding it to the TEXT floor is what made the light hero read rusty.
+        tables.forEach { (name, bt) ->
+            bt.opaqueSurfaces().forEach { (sName, s) ->
+                val ratio = contrastRatio(bt.goldGraphic, s)
+                assertTrue(
+                    "$name goldGraphic on $sName is %.2f:1, below the 3:1 graphical floor"
+                        .format(ratio),
+                    ratio >= GRAPHICAL,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the light golds are the brand gold darkened, not a different colour`() {
+        // THE test this pair exists for. The old light ink `#8F5F00` passed
+        // every contrast assertion above and was still wrong: it zeroes the blue
+        // channel, and a yellow with no blue in it at that lightness is rust.
+        // Hue alone does not catch it — `#8F5F00` sits within 1.5° of the brand
+        // gold — so the invariant to test is the RAY: a legitimate darkening
+        // scales all three channels together and therefore preserves the
+        // channel ratios. `#8F5F00` deviates by 0.19 on blue; both current
+        // values deviate by under 0.005.
+        listOf(
+            "goldInk" to BtLightColors.goldInk,
+            "goldGraphic" to BtLightColors.goldGraphic,
+        ).forEach { (label, c) ->
+            val deviation = rayDeviation(c, BtLightColors.gold)
+            assertTrue(
+                "light $label is %.3f off the brand gold's RGB ray — darken it along the ray, do not re-pick the hue"
+                    .format(deviation),
+                deviation <= RAY_TOLERANCE,
+            )
+        }
+        // And each must be the LIGHTEST such point that clears its own floor:
+        // every extra step past the floor is brand thrown away for nothing.
+        assertTrue(
+            "goldInk must not be darker than it needs to be",
+            contrastRatio(BtLightColors.goldInk, BtLightColors.surfaceHighest) < AA + 0.25,
+        )
+        assertTrue(
+            "goldGraphic must not be darker than it needs to be",
+            contrastRatio(BtLightColors.goldGraphic, BtLightColors.surfaceHighest) < GRAPHICAL + 0.25,
+        )
+    }
+
+    /**
+     * How far [c] sits off the RGB ray through [reference], as the largest
+     * absolute difference between their red-normalised channel ratios. Zero
+     * means "the same colour, scaled" — i.e. a pure darkening.
+     */
+    private fun rayDeviation(c: Color, reference: Color): Double {
+        fun ratios(x: Color): Triple<Double, Double, Double> {
+            val m = maxOf(x.red, x.green, x.blue).toDouble()
+            return Triple(x.red / m, x.green / m, x.blue / m)
+        }
+        val (ar, ag, ab) = ratios(c)
+        val (br, bg, bb) = ratios(reference)
+        return maxOf(Math.abs(ar - br), Math.abs(ag - bg), Math.abs(ab - bb))
+    }
+
     @Test
     fun `gold is a constant across the tables and can never be text on white`() {
         assertEquals(BtDarkColors.gold, BtLightColors.gold)
@@ -193,13 +262,14 @@ class BtContrastTest {
     @Test
     fun `the skeleton shimmer is lighter than its own base in both tables`() {
         // A sweep darker than the block it crosses reads as a smear, not as
-        // light moving over a surface. Dark takes `surfaceLow → surfaceHighest`;
-        // light has to invert to `surfaceHighest → surface`, because in light the
-        // page sits in the MIDDLE of the compressed ramp. The gallery matrix
+        // light moving over a surface. Both modes take the SAME two ramp ends
+        // and light takes them in the opposite order, because since the
+        // white-page flip light's ramp runs the opposite way: dark's bright end
+        // is `surfaceHighest`, light's is `surfaceLow`. The gallery matrix
         // caught the naive port; this keeps it caught.
         listOf("dark" to BtDarkColors, "light" to BtLightColors).forEach { (name, bt) ->
             val base = if (bt.isLight) bt.surfaceHighest else bt.surfaceLow
-            val highlight = if (bt.isLight) bt.surface else bt.surfaceHighest
+            val highlight = if (bt.isLight) bt.surfaceLow else bt.surfaceHighest
             assertTrue(
                 "$name skeleton highlight must be lighter than its base",
                 relativeLuminance(highlight) > relativeLuminance(base),
@@ -217,5 +287,9 @@ class BtContrastTest {
 
     private companion object {
         const val AA = 4.5
+        /** WCAG 1.4.11: the floor for a graphical object, as opposed to text. */
+        const val GRAPHICAL = 3.0
+        /** Max red-normalised channel drift still counted as "the brand gold, darkened". */
+        const val RAY_TOLERANCE = 0.02
     }
 }

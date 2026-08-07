@@ -1072,11 +1072,14 @@ private fun HeroChart(
                     .fillMaxWidth()
                     .height(HERO_CHART_HEIGHT)
                     .semantics { contentDescription = chartCd },
-                // Coordinator call on the B2-B report's open item: the hero
-                // stays GOLD by §4.3 rule, but raw gold is ~1.7:1 on the light
-                // page — below the 3:1 graphical floor. Light draws the line in
-                // the emphasized gold ink; dark keeps the brand value untouched.
-                lineColor = if (bt.isLight) bt.goldEmphasis else bt.gold,
+                // The hero stays GOLD by the §4.3 rule, but raw gold is ~1.6:1
+                // on a light card — below the 3:1 graphical floor. That floor is
+                // now a token: `goldGraphic` is the brand value in dark and the
+                // lightest on-ray darkening that clears 3:1 in light, so this
+                // reads one name instead of branching. It used to substitute
+                // `goldEmphasis` here, which is the TEXT ink — a line paying
+                // 4.5:1 for no reason, and the reason the light hero read rusty.
+                lineColor = bt.goldGraphic,
                 minimal = true,
                 baseline = mode.plotsPerformance,
                 onScrub = onScrub,

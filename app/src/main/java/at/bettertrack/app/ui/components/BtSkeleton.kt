@@ -50,25 +50,30 @@ fun rememberReducedMotion(): Boolean {
  *  2. The sweep must be **lighter than the block**. A band darker than its base
  *     does not read as light moving across a surface; it reads as a smear.
  *
- * In dark, `surfaceLow → surfaceHighest` satisfies both: the ramp rises away
- * from the page, so the block is lighter than the page and the highlight is
- * lighter still. In light the ramp is compressed into ~5 L\* and the page sits
- * in the *middle* of it — `surfaceLow` (`#F4F5F7`) is barely a hair lighter than
- * `bg` (`#EEF0F2`), and `surfaceHighest` (`#E8EAEC`) is *darker* than both. Used
- * unchanged, the light skeleton became an almost invisible block with a sweep
- * that travelled dark. (Caught in the B2-A gallery matrix, light shot 06.)
+ * Both modes take the **same two ends of the neutral ramp**,
+ * `surfaceLow`/`surfaceHighest` — and light takes them in the opposite order,
+ * because since the white-page flip light's ramp runs the opposite way.
+ * `BtColors` states that rule in full; the consequence here is one line:
  *
- * So light inverts which end of the ramp it takes: the block is the darkest
- * step and the sweep is pure `surface`. This is the same "the ramp does not
- * separate on its own in light" fact as the tone-vs-hairline rule, and it is
- * resolved here once rather than at any call site.
+ *  - dark raises by getting lighter, so `surfaceHighest` is its bright end →
+ *    `surfaceLow → surfaceHighest`.
+ *  - light raises by getting more tinted, so `surfaceLow` is its bright end →
+ *    `surfaceHighest → surfaceLow`.
+ *
+ * Both give a block that is ~3 L\* off the card it sits in (requirement 1) and
+ * a sweep ~5 L\* brighter than that block (requirement 2). Reading the pairing
+ * off the ramp in both directions is what keeps the two honest: the earlier
+ * light pairing topped out at exactly `surface`, so the sweep vanished into the
+ * card at its own peak. (The naive un-inverted port was caught in the B2-A
+ * gallery matrix, light shot 06 — an invisible block with a sweep that
+ * travelled dark. This keeps it caught.)
  */
 private data class SkeletonTones(val base: androidx.compose.ui.graphics.Color, val highlight: androidx.compose.ui.graphics.Color)
 
 @Composable
 private fun skeletonTones(): SkeletonTones {
     val bt = BtTheme.colors
-    return if (bt.isLight) SkeletonTones(bt.surfaceHighest, bt.surface)
+    return if (bt.isLight) SkeletonTones(bt.surfaceHighest, bt.surfaceLow)
     else SkeletonTones(bt.surfaceLow, bt.surfaceHighest)
 }
 

@@ -278,10 +278,19 @@ class BtThemeDisciplineTest {
     }
 
     @Test
-    fun `a light gold edge is drawn in the ink hue, not in gold`() {
+    fun `a light gold edge is drawn in the graphical gold, not in gold`() {
         // A pale gold hairline on white is invisible; this is the one hue swap
         // edge() performs and the reason it exists as a separate helper.
-        assertEquals(BtLightColors.goldInk.copy(alpha = 0.3f), BtLightColors.edge(BtLightColors.gold, 0.3f))
+        //
+        // It darkens to `goldGraphic`, NOT to `goldInk`. A hairline is a
+        // graphical object and owes 3:1, so making it pay the text ink's 4.5:1
+        // spent three extra steps of darkening — and the brand's whole hue —
+        // on a floor it never had to meet.
+        assertEquals(BtLightColors.goldGraphic.copy(alpha = 0.3f), BtLightColors.edge(BtLightColors.gold, 0.3f))
+        assertTrue(
+            "the graphical gold must be lighter than the text ink, or it has no reason to exist",
+            BtLightColors.goldGraphic.red > BtLightColors.goldInk.red,
+        )
         // Non-gold hues pass through untouched — gain/loss inks are already dark.
         assertEquals(BtLightColors.loss.copy(alpha = 0.4f), BtLightColors.edge(BtLightColors.loss, 0.4f))
     }

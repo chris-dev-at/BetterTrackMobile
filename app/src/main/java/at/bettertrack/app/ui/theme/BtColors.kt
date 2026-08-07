@@ -16,9 +16,55 @@ import androidx.compose.ui.graphics.Color
  * > **Tone separates in dark; tone + hairline separates in light.**
  *
  * Dark has a five-step neutral ramp spanning ~13 L\*, so raising a surface is
- * enough to say "this is above that". Light spans only ~5 L\* between page and
+ * enough to say "this is above that". Light spans ~3.9 L\* between page and
  * card, so it cannot — light needs the hairline back. That rule is applied in a
  * handful of shared components, never per screen.
+ *
+ * ## Which way "up" points — and why it is not the same way twice
+ *
+ * Until the white-page flip both tables obeyed *raised = lighter*, because the
+ * light page was `#EEF0F2` and a card could still climb above it to `#FFFFFF`.
+ * **That is no longer true, and it cannot be made true again**: the light page
+ * is now pure `#FFFFFF`, which is the top of the display's gamut. Nothing can
+ * be raised above it, so "up" has to be spelled differently in each table:
+ *
+ * > **Dark raises by getting lighter; light raises by getting more tinted.**
+ *
+ * What is *invariant* is the RANK, which is carried by the token names and is
+ * identical in both tables:
+ *
+ * ```
+ *   bgAlt  <  bg  <  surfaceLow  <  surface  <  surfaceHigh  <  surfaceHighest
+ *   (behind)  (page)  (well)        (card)      (sheet)        (pressed)
+ * ```
+ *
+ * A component that wants "one step above a card" reads [surfaceHigh] in both
+ * modes and is correct in both; only the *direction* the value moved changes,
+ * and no component ever has to know which. This is the same trade the ramp
+ * already made for text (`textPrimary` is near-white in dark and near-black in
+ * light) applied to containers.
+ *
+ * Two consequences worth stating, because both are load-bearing:
+ *
+ *  - **[bgAlt] is the one token that points the same way in both tables.** It
+ *    means "behind the page — the scrim, the dimmest recess", and with a white
+ *    page *behind* and *above* both have to be expressed as tint. So light's
+ *    ramp is not monotonic through zero: the page is the extreme, and depth in
+ *    either direction darkens. That is honest rather than tidy, and it is why
+ *    [bgAlt] sits at the bottom of the list above rather than between the page
+ *    and the card.
+ *  - **[surfaceLow] is a recess, so in light it moves TOWARD the page, not away
+ *    from it.** A well punched into a card reads as a hole back to the ground
+ *    in both modes: darker than the card in dark, *lighter* than the card in
+ *    light. Same token, same sentence, opposite sign.
+ *
+ * The app is deliberately shadowless (every `shadowElevation` is `0.dp`), so
+ * none of this is propped up by a drop shadow: separation in light is tone plus
+ * the [groupBorder] hairline, and nothing else. Every container that leans on
+ * that pair draws the hairline unconditionally — [at.bettertrack.app.ui.components.BtCard],
+ * [at.bettertrack.app.ui.components.BtGroup], the sheets, the bottom bar's top
+ * edge — so shrinking the page-to-card step from 5.3 L\* to 3.9 L\* costs no
+ * separation anywhere.
  *
  * ## Why the ramp is one hue family
  *
@@ -102,8 +148,45 @@ data class BtColors(
      * light mode; [goldInk] is the text/icon form.
      */
     val gold: Color,
-    /** Gold as text/icon *on a surface*. Identical to [gold] in dark; darkened for AA in light. */
+    /**
+     * Gold as **reading text** on a surface. Identical to [gold] in dark;
+     * darkened for AA in light.
+     *
+     * The light value is the *least-dark* point on the brand gold's own RGB ray
+     * that still clears 4.5:1 on all five light surfaces. Both halves of that
+     * sentence are the correction (see [goldGraphic] for the other half):
+     *
+     *  - **On the ray.** The previous light ink `#8F5F00` was not a darkened
+     *    brand gold, it was a different colour: it zeroes the blue channel,
+     *    and `B = 0` at that lightness is what the eye calls *rust*. The brand
+     *    gold carries `B = 46`; keeping the channel ratio keeps the hue.
+     *  - **Least-dark.** Yellow is the hue AA punishes hardest — anything that
+     *    clears 4.5:1 on white is necessarily a dark amber — so every extra
+     *    step of darkening past the floor is spent making the brand look
+     *    muddier for nothing. `#866419` sits 4.56:1 on the worst light surface.
+     *
+     * Use this ONLY where gold is literal text or a text-equivalent glyph.
+     * Anything graphical reads [goldGraphic] and gets to stay much closer to
+     * the logo.
+     */
     val goldInk: Color,
+    /**
+     * Gold as a **graphical mark** — chart lines, selection rings, gold
+     * hairlines, indicator strokes. Identical to [gold] in dark.
+     *
+     * WCAG asks 3:1 of a graphical object and 4.5:1 of text, and for yellow
+     * that gap is enormous: it is the difference between an amber that still
+     * reads as the logo (`#A77D1F`, 3.13:1 worst case) and one that does not
+     * (`#866419`). Collapsing both jobs onto [goldInk] — which is what the app
+     * did before this token existed — paid the *text* penalty on the hero chart
+     * line, the bottom bar's selection pill and every `edge(gold, …)` hairline,
+     * none of which is text. The brand is the app's one accent; spending it at
+     * the wrong floor is not a rounding error.
+     *
+     * It is a separate token rather than a mode branch so [edge] and the chart
+     * call sites read one name and dark keeps the brand value untouched.
+     */
+    val goldGraphic: Color,
     /** Emphasised gold ink (brighter in dark; collapses onto [goldInk] in light — "soft" fails on white). */
     val goldEmphasis: Color,
     /** Soft gold ink (same asymmetry as [goldEmphasis]). */
@@ -118,7 +201,7 @@ data class BtColors(
     val goldWash: Color,
     /** Selected chip / indicator fill. */
     val goldWashStrong: Color,
-    /** Wash borders. Light uses the *ink* hue — a pale gold hairline on white is invisible. */
+    /** Wash borders. Light uses [goldGraphic] — a pale gold hairline on white is invisible. */
     val goldEdge: Color,
 
     // ── Semantic ─────────────────────────────────────────────────────────────
@@ -223,19 +306,36 @@ data class BtColors(
      * Composite [hue] as a **hairline** at [alpha].
      *
      * Same job as [wash] with one extra correction: in light mode a gold edge
-     * must be drawn in the *ink* hue, because pale gold on white is invisible
-     * (§1.4, `goldEdge`).
+     * must be drawn darkened, because pale gold on white is invisible (§1.4,
+     * `goldEdge`). It darkens to [goldGraphic], **not** to [goldInk] — a
+     * hairline is a graphical object, so it owes 3:1 and not 4.5:1, and the
+     * three extra steps of darkening the text ink carries would cost the brand
+     * hue for a floor this never had to meet.
      */
     fun edge(hue: Color, alpha: Float): Color {
         if (!isLight) return hue.copy(alpha = alpha)
-        val ink = if (hue == gold) goldInk else hue
+        val ink = if (hue == gold) goldGraphic else hue
         return ink.copy(alpha = alpha.coerceIn(0f, 1f))
     }
 
     private companion object {
-        /** §1.4: gold washes 14%→16% and 22%→26% on white. */
+        /**
+         * §1.4: gold washes 14%→16% and 22%→26% on white.
+         *
+         * Re-checked against the white page: a wash's visibility is
+         * `alpha × (hue − ground)`, and moving the ground from `#EEF0F2` to
+         * `#FFFFFF` moves gold's per-channel distance from (+8,−56,−196) to
+         * (−9,−71,−209) — slightly *larger*, so the correction is still the
+         * right sign and does not need re-tuning.
+         */
         const val LIGHT_GOLD_WASH_GAIN = 1.16f
-        /** §1.4: gain/loss washes 14%→12% on white (the light inks are already dark). */
+        /**
+         * §1.4: gain/loss washes 14%→12% on white (the light inks are already dark).
+         *
+         * Same re-check: the gain ink's distance to the ground grows ~7% on a
+         * white page, so if anything this correction now has a little more room
+         * than it needs. Left as-is — the drift is well inside a 12% alpha.
+         */
         const val LIGHT_ACCENT_WASH_GAIN = 0.86f
     }
 }
@@ -251,7 +351,15 @@ private val DarkHairlineInk = Color(0xFFDEE6EF)
 private val LightHairlineInk = Color(0xFF141B23)
 
 private val BtGold = Color(0xFFF6B82E)
-private val BtGoldInkLight = Color(0xFF8F5F00)
+
+// The two light golds, both struck from the brand gold's own RGB ray
+// (246,184,46) so the hue survives the darkening — see `goldInk`/`goldGraphic`.
+// `#8F5F00` (the pre-flip ink) was NOT on that ray: zeroing blue turns the logo
+// yellow into rust, which is the whole defect these two values exist to undo.
+/** Brand gold × 0.545 — the lightest point on the ray that holds 4.5:1 on every light surface. */
+private val BtGoldInkLight = Color(0xFF866419)
+/** Brand gold × 0.68 — the lightest point on the ray that holds 3:1 on every light surface. */
+private val BtGoldGraphicLight = Color(0xFFA77D1F)
 private val BtGainDark = Color(0xFF34D399)
 // #0F7A55 → #0F7853: byte-converged with web (board 94b5145) — the platform
 // darkened our value along its own RGB ray to clear 4.5:1 on the web's two
@@ -290,6 +398,9 @@ val BtDarkColors = BtColors(
 
     gold = BtGold,
     goldInk = BtGold,
+    // Dark never had to trade the brand away for contrast, so text and graphics
+    // are the same colour here and this token changes nothing about dark.
+    goldGraphic = BtGold,
     goldEmphasis = Color(0xFFFBBF24),
     goldSoft = Color(0xFFFCD34D),
     goldSurface = Color(0xFF451A03),
@@ -348,25 +459,68 @@ val BtDarkColors = BtColors(
  * the gain/loss pair, both of which fail AA on white as the web ships them
  * (§1.4, §8 item 3).
  *
- * **Raised = lighter in both modes**, following the web (`--bt-surface #fafafa`
- * sits above `--bt-bg #f1f2f3`). That is deliberate: it means every "one tonal
- * step up" component needs no inversion.
+ * ## The white-page ramp
+ *
+ * The page is **clean `#FFFFFF`**. It used to be `#EEF0F2` with white cards on
+ * top, which put the app's largest single area — the page, the top bar, every
+ * gutter — on a grey that reads as *dirty white* rather than as a ground.
+ * White is the only value that reads as "no colour"; a near-white reads as a
+ * colour you failed to pick.
+ *
+ * Flipping the page to white means the card can no longer be raised *above* it,
+ * so the whole ramp inverts direction (see [BtColors] — "which way up points").
+ * The steps, and why each one is where it is:
+ *
+ * | token | value | ΔL\* below the page | why here |
+ * |---|---|---|---|
+ * | `bg` | `#FFFFFF` | 0.0 | the ground. Nothing is allowed above it. |
+ * | `surfaceLow` | `#F8F9FB` | 2.1 | a well is a hole back to the ground, so it sits nearer the page than the card it is cut into. |
+ * | `surface` | `#F2F4F7` | 3.9 | cards/groups. Enough tint to hold their own shape, little enough that a screen of cards still reads white. |
+ * | `surfaceHigh` | `#ECEFF4` | 5.7 | sheets, dialogs, the bar. One clear step further in — an overlay is *more* separated from the page than a card is. |
+ * | `surfaceHighest` | `#E7EBF0` | 7.1 | pressed/hover. Press darkens, because on a white page there is nowhere to go but in. |
+ * | `bgAlt` | `#DAE1E9` | 10.8 | behind the page: the scrim and the deepest recess. The one step that means "below". |
+ *
+ * ### The card step is deliberately small
+ *
+ * 3.9 L\* is *less* separation than the 5.3 L\* the old table had, and that is
+ * the point rather than a compromise. Cards cover most of a BetterTrack screen,
+ * so the card tone — not the page tone — is what the eye averages into "what
+ * colour is this app". A literal swap of the old two values (page white, cards
+ * `#EEF0F2`) satisfies the letter of "clean white page" and loses its spirit:
+ * the screen would read *greyer* than before, just with white gutters. Keeping
+ * the card a whisper off white and letting the [groupBorder] hairline state the
+ * edge — which is exactly what the tone-vs-hairline rule already mandates in
+ * light, and which every container already draws unconditionally — keeps the
+ * whole surface reading white while the structure stays legible.
+ *
+ * ### What this does NOT change
+ *
+ * The dark table is byte-identical across this flip. So is every ink: the AA
+ * floors all move in the *safe* direction on a lighter ground, and the two
+ * genuinely darker new surfaces (`surfaceHigh`, `surfaceHighest`) still clear
+ * 4.5:1 for `textMuted` (5.48/5.27), `textFaint` (4.99/4.80), `gain`
+ * (4.75/4.58), `loss` (5.05/4.86) and `goldInk` (4.73/4.56). BtContrastTest
+ * holds all of it.
  */
 val BtLightColors = BtColors(
     isLight = true,
 
-    bg = Color(0xFFEEF0F2),
-    bgAlt = Color(0xFFE4E7EA),
-    surfaceLow = Color(0xFFF4F5F7),
-    surface = Color(0xFFFFFFFF),
-    surfaceHigh = Color(0xFFFFFFFF),
-    surfaceHighest = Color(0xFFE8EAEC),
+    bg = Color(0xFFFFFFFF),
+    bgAlt = Color(0xFFDAE1E9),
+    surfaceLow = Color(0xFFF8F9FB),
+    surface = Color(0xFFF2F4F7),
+    surfaceHigh = Color(0xFFECEFF4),
+    surfaceHighest = Color(0xFFE7EBF0),
 
     border = LightHairlineInk.copy(alpha = 0.10f),
     borderStrong = LightHairlineInk.copy(alpha = 0.16f),
-    // Light spans ~5 L* from page to card, so tone alone cannot separate.
+    // Light spans 3.9 L* from page to card, so tone alone cannot separate.
     groupBorder = LightHairlineInk.copy(alpha = 0.10f),
-    navBar = Color(0xFFFFFFFF), // ΔL* 5.3 above the page — hence the hairline
+    // == surfaceHigh, ΔL* 5.7 INTO the page. The bar is the app's frame, and a
+    // frame that matched the page would be nothing but its own hairline; one
+    // clear step deeper than a card is what makes it read as a tray the cards
+    // scroll over rather than as one more card stuck to the bottom.
+    navBar = Color(0xFFECEFF4),
 
     textPrimary = Color(0xFF131820),
     textSecondary = Color(0xFF3E4650),
@@ -375,8 +529,12 @@ val BtLightColors = BtColors(
 
     gold = BtGold,
     goldInk = BtGoldInkLight,
+    goldGraphic = BtGoldGraphicLight,
     // "Emphasis"/"soft" mean LIGHTER, and lighter fails on white — both collapse
     // onto the ink so `wash fill + emphasis ink` stays legible with no branching.
+    // They stay on the TEXT ink rather than the graphical one because the sites
+    // that read them are mixed (icon tints, but also `Text(color = …)` in ~20
+    // places), and a token cannot be 3:1 for half its callers.
     goldEmphasis = BtGoldInkLight,
     goldSoft = BtGoldInkLight,
     goldSurface = Color(0xFFFCF1DB),
@@ -384,7 +542,9 @@ val BtLightColors = BtColors(
     onGold = Color(0xFF171105),
     goldWash = BtGold.copy(alpha = 0.16f),
     goldWashStrong = BtGold.copy(alpha = 0.26f),
-    goldEdge = BtGoldInkLight.copy(alpha = 0.30f),
+    // The graphical gold, not the text ink: this is a hairline, and it is the
+    // single most visible place the brand hue survives the light table.
+    goldEdge = BtGoldGraphicLight.copy(alpha = 0.30f),
 
     gain = BtGainLight,
     gainSoft = BtGainLight,
@@ -415,8 +575,14 @@ val BtLightColors = BtColors(
     //   • yellow #9A6600 → #96600A — knock-on: once lime moved, yellow↔green
     //     became the binding pair at ΔE 7.9, just under the target.
     //
-    // Final: all six checks PASS on `surface` (#FFFFFF) and on `bg` (#EEF0F2),
-    // worst adjacent CVD pair yellow↔green ΔE 8.6 (deutan).
+    // Re-validated after the white-page flip against all three grounds a chart
+    // is actually drawn on — `bg` #FFFFFF, `surface` #F2F4F7, `surfaceHigh`
+    // #ECEFF4 — and all six checks PASS on each, unchanged: worst adjacent CVD
+    // pair yellow↔green ΔE 8.6 (deutan), normal-vision worst 16.1, every slot
+    // over 3:1. The values needed no correction, and that is arithmetic rather
+    // than luck: the old binding ground was the DARKEST one the palette had to
+    // sit on (`#EEF0F2`), and every new ground is lighter than it, so contrast
+    // could only improve. The CVD and chroma checks never involved the ground.
     chartSeries = listOf(
         Color(0xFF1F6AC4), // blue      — web light counterpart
         Color(0xFFB8431A), // orange    — web light counterpart

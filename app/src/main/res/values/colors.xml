@@ -10,9 +10,9 @@
       The Compose tokens are alpha hairlines over a surface; XML has no substrate
       to composite against, so bt_border is the flattened result over bt_surface.
     -->
-    <color name="bt_bg">#FFEEF0F2</color>
-    <color name="bt_surface">#FFFFFFFF</color>
-    <color name="bt_border">#FFE8E8E9</color>
+    <color name="bt_bg">#FFFFFFFF</color>
+    <color name="bt_surface">#FFF2F4F7</color>
+    <color name="bt_border">#FFDCDEE2</color>
     <!-- Constant across modes: gold is the brand, and brand does not flip. -->
     <color name="bt_gold">#FFF6B82E</color>
 
