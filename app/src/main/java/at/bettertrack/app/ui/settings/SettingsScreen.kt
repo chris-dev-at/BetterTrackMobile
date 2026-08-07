@@ -88,6 +88,7 @@ import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
+import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.update.UpdateAvailableRow
 import androidx.compose.foundation.background
@@ -493,7 +494,7 @@ fun SettingsScreen(
                 // choice says the honest thing, that this tunes your dark theme.
                 if (themeMode != BtThemeMode.Light) {
                     SettingsToggleRow(
-                        icon = Icons.Outlined.DarkMode,
+                        icon = BtIcons.Moon,
                         title = stringResource(R.string.bt_settings_true_black),
                         subtitle = stringResource(R.string.bt_settings_true_black_sub),
                         checked = trueBlack,

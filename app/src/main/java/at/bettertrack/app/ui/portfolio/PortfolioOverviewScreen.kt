@@ -243,6 +243,9 @@ fun PortfolioOverviewScreen(
     val portfolioKinds by vm.portfolioKinds.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
+    // The selected portfolio's kind (null on Overview or when unset) drives the
+    // header chip's scope hue + glyph (B2-C handover).
+    val selectedKindOrNull = if (overviewSelected) null else selected?.id?.let { portfolioKinds[it] }
     val history by vm.history.collectAsStateWithLifecycle()
     val range by vm.range.collectAsStateWithLifecycle()
     val chartMode by vm.chartMode.collectAsStateWithLifecycle()
@@ -336,7 +339,10 @@ fun PortfolioOverviewScreen(
             // no per-portfolio icon or hue in its model, so one glyph in the
             // house accent is the honest equivalent rather than a colour invented
             // client-side.
-            titleIcon = Icons.Outlined.PieChart,
+            titleIcon = selectedKindOrNull?.let { portfolioKindIcon(it) } ?: Icons.Outlined.PieChart,
+            // Scope hue per B2-C: a portfolio wears its own kind hue (same as its
+            // switcher row); Overview keeps gold by rule — account-wide = brand.
+            titleIconTint = selectedKindOrNull?.let { portfolioKindTint(it) },
             // The wordmark lives in the leading slot of the always-visible top
             // row (owner report 2026-08-06: "the BetterTrack logo up top is
             // missing — just an empty space now"). Two things were true and both
@@ -1066,7 +1072,11 @@ private fun HeroChart(
                     .fillMaxWidth()
                     .height(HERO_CHART_HEIGHT)
                     .semantics { contentDescription = chartCd },
-                lineColor = bt.gold,
+                // Coordinator call on the B2-B report's open item: the hero
+                // stays GOLD by §4.3 rule, but raw gold is ~1.7:1 on the light
+                // page — below the 3:1 graphical floor. Light draws the line in
+                // the emphasized gold ink; dark keeps the brand value untouched.
+                lineColor = if (bt.isLight) bt.goldEmphasis else bt.gold,
                 minimal = true,
                 baseline = mode.plotsPerformance,
                 onScrub = onScrub,

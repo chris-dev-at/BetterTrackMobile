@@ -157,6 +157,9 @@ import kotlin.math.roundToInt
  *   scrollable or the header will never collapse.
  * @param titleIcon the glyph for the selector pill's leading chip. Only read when
  *   [onTitleClick] is set; a pill with no icon simply omits the chip.
+ * @param titleIconTint the hue for that chip, or null for the brand gold. A
+ *   portfolio passes its own icon hue (the same colour its switcher row wears);
+ *   Overview keeps gold BY RULE — account-wide is brand scope.
  * @param onTitleClick when non-null, the title renders as the [BtHeaderSelector]
  *   button described above.
  * @param titleClickLabel the accessible description of [onTitleClick].
@@ -201,6 +204,7 @@ fun BtCollapsingHeader(
     subtitle: String? = null,
     titleColor: Color? = null,
     titleIcon: ImageVector? = null,
+    titleIconTint: Color? = null,
     onTitleClick: (() -> Unit)? = null,
     titleClickLabel: String? = null,
     navigationIcon: @Composable () -> Unit = {},
@@ -257,6 +261,7 @@ fun BtCollapsingHeader(
                 BtHeaderSelector(
                     label = title,
                     icon = titleIcon,
+                    iconTint = titleIconTint,
                     fraction = fraction,
                     labelColor = titleColor ?: bt.textPrimary,
                     clickLabel = titleClickLabel,
@@ -539,6 +544,7 @@ private const val COLLAPSE_STEPS = 32
 private fun BtHeaderSelector(
     label: String,
     icon: ImageVector?,
+    iconTint: Color?,
     fraction: Float,
     labelColor: Color,
     clickLabel: String?,
@@ -607,8 +613,8 @@ private fun BtHeaderSelector(
                     // Same reasoning as the pill above: the glyph is centred and
                     // strictly smaller than the chip, so the clip could never
                     // cut anything — it only cost a second RenderNode per copy.
-                    .background(bt.goldWash, chipShape)
-                    .border(1.dp, bt.edge(bt.gold, 0.26f), chipShape),
+                    .background(if (iconTint == null) bt.goldWash else bt.wash(iconTint, 0.14f), chipShape)
+                    .border(1.dp, bt.edge(iconTint ?: bt.gold, 0.26f), chipShape),
             ) {
                 Icon(
                     imageVector = icon,
@@ -616,7 +622,7 @@ private fun BtHeaderSelector(
                     // description on a garnish glyph would make a screen reader
                     // read the same control twice.
                     contentDescription = null,
-                    tint = bt.goldInk,
+                    tint = iconTint ?: bt.goldInk,
                     modifier = Modifier.size(glyph),
                 )
             }
