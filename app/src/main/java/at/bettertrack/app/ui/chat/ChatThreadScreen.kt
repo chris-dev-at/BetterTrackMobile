@@ -449,8 +449,8 @@ private fun MessageBubble(m: at.bettertrack.app.data.repo.ChatMessage, onOpenChi
     } else {
         RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 3.dp, bottomEnd = 12.dp)
     }
-    val container = if (m.fromMe) bt.gold.copy(alpha = 0.14f) else bt.surface
-    val border = if (m.fromMe) bt.gold.copy(alpha = 0.40f) else bt.border
+    val container = if (m.fromMe) bt.goldWash else bt.surface
+    val border = if (m.fromMe) bt.edge(bt.gold, 0.4f) else bt.border
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (m.fromMe) Arrangement.End else Arrangement.Start,
@@ -493,7 +493,7 @@ private fun ShareChipView(chip: ShareChip, onClick: () -> Unit) {
             onClick = onClick,
             shape = RoundedCornerShape(8.dp),
             color = bt.bg,
-            border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, bt.edge(bt.gold, 0.35f)),
             modifier = Modifier.widthIn(min = 200.dp),
         ) {
             Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {

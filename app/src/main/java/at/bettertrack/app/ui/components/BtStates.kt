@@ -108,7 +108,7 @@ private fun BtStateScaffold(
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = bt.textSecondary.copy(alpha = 0.6f),
+                color = bt.textMuted,
                 textAlign = TextAlign.Center,
             )
         }
@@ -389,7 +389,7 @@ fun BtInlineEmpty(
             Text(
                 text = message,
                 style = MaterialTheme.typography.labelSmall,
-                color = bt.textMuted.copy(alpha = 0.8f),
+                color = bt.textFaint,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

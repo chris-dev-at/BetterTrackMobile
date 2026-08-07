@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Dark table (B2 design spec §1.4). Mirrors BtDarkColors; see
+      res/values/colors.xml for the light table and for why bt_window_bg is
+      pinned in both.
+
+      bt_border is the alpha hairline (#DEE6EF @ 8.5%) flattened over bt_surface,
+      because an XML colour has no substrate to composite against.
+    -->
+    <color name="bt_bg">#FF0A0D12</color>
+    <color name="bt_surface">#FF161B22</color>
+    <color name="bt_border">#FF272C33</color>
+</resources>

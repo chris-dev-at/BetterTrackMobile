@@ -242,8 +242,8 @@ private fun PermissionStatusCard(granted: Boolean, needsPermission: Boolean, onE
     val on = granted || !needsPermission
     Surface(
         onClick = onEnable,
-        color = if (on) bt.surface else bt.gold.copy(alpha = 0.10f),
-        border = BorderStroke(1.dp, if (on) bt.border else bt.gold.copy(alpha = 0.35f)),
+        color = if (on) bt.surface else bt.wash(bt.gold, 0.1f),
+        border = BorderStroke(1.dp, if (on) bt.border else bt.edge(bt.gold, 0.35f)),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {

@@ -607,8 +607,8 @@ private fun BtHeaderSelector(
                     // Same reasoning as the pill above: the glyph is centred and
                     // strictly smaller than the chip, so the clip could never
                     // cut anything — it only cost a second RenderNode per copy.
-                    .background(bt.gold.copy(alpha = 0.14f), chipShape)
-                    .border(1.dp, bt.gold.copy(alpha = 0.26f), chipShape),
+                    .background(bt.goldWash, chipShape)
+                    .border(1.dp, bt.edge(bt.gold, 0.26f), chipShape),
             ) {
                 Icon(
                     imageVector = icon,

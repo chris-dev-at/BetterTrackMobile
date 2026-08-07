@@ -172,7 +172,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
             // Overall state banner.
             Surface(
                 color = if (s.anyEnabled) bt.gainSoft else bt.surface,
-                border = BorderStroke(1.dp, if (s.anyEnabled) bt.gain.copy(alpha = 0.4f) else bt.border),
+                border = BorderStroke(1.dp, if (s.anyEnabled) bt.edge(bt.gain, 0.4f) else bt.border),
                 shape = BtShapes.card,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -427,7 +427,7 @@ private fun EnrollCard(
 ) {
     val bt = BtTheme.colors
     val clipboard = LocalClipboardManager.current
-    Surface(color = bt.surface, border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.4f)), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = bt.surface, border = BorderStroke(1.dp, bt.edge(bt.gold, 0.4f)), shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(R.string.bt_2fa_enroll_scan), style = MaterialTheme.typography.bodySmall, color = bt.textSecondary)
             BtQrCode(data = enrollment.otpauthUri)

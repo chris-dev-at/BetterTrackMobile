@@ -1,11 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand tokens mirrored from the Compose theme (spec §3.3) for XML use
-         (window background, launcher icon, splash). -->
-    <color name="bt_bg">#FF0B0E14</color>
-    <color name="bt_surface">#FF171717</color>
-    <color name="bt_border">#FF262626</color>
+    <!--
+      Brand tokens mirrored from the Compose theme (B2 design spec §1.4) for XML
+      use (window background, launcher icon, splash).
+
+      THIS FILE IS THE LIGHT TABLE; res/values-night/colors.xml carries the dark
+      one. Only the values that actually differ are overridden there.
+
+      The Compose tokens are alpha hairlines over a surface; XML has no substrate
+      to composite against, so bt_border is the flattened result over bt_surface.
+    -->
+    <color name="bt_bg">#FFEEF0F2</color>
+    <color name="bt_surface">#FFFFFFFF</color>
+    <color name="bt_border">#FFE8E8E9</color>
+    <!-- Constant across modes: gold is the brand, and brand does not flip. -->
     <color name="bt_gold">#FFF6B82E</color>
+
+    <!--
+      Window + splash background.
+
+      Deliberately pinned to the DARK page colour in BOTH configurations while
+      `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false. The app resolves every theme
+      mode to dark until the shared components have been swept for light (B2-B),
+      so on a light-system phone an unpinned `bt_bg` would flash a white window
+      and a white splash before Compose draws the dark app.
+
+      B2-B deletes this override from the day config, at which point the splash
+      follows the SYSTEM theme while the app follows the user's — the one-frame
+      mismatch documented in §1.5 B7.
+    -->
+    <color name="bt_window_bg">#FF0A0D12</color>
+
     <!-- Launcher-icon tile color, sampled exactly from BT_AppIcon.png so the
          foreground's full-bleed tile blends invisibly into the background layer. -->
     <color name="bt_icon_bg">#FF111315</color>

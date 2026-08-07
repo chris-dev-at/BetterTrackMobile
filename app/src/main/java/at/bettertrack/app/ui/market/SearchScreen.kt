@@ -469,9 +469,9 @@ private fun QuickBuyButton(onClick: () -> Unit, enabled: Boolean) {
         onClick = onClick,
         enabled = enabled,
         shape = BtShapes.pill,
-        color = if (enabled) bt.gold.copy(alpha = 0.14f) else bt.surface,
+        color = if (enabled) bt.goldWash else bt.surface,
         contentColor = if (enabled) bt.goldEmphasis else bt.textMuted,
-        border = BorderStroke(1.dp, if (enabled) bt.gold.copy(alpha = 0.45f) else bt.border),
+        border = BorderStroke(1.dp, if (enabled) bt.edge(bt.gold, 0.45f) else bt.border),
         interactionSource = interaction,
         modifier = Modifier.btPressScale(interaction, pressedScale = 0.94f),
     ) {

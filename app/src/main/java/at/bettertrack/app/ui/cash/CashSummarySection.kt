@@ -276,7 +276,7 @@ private fun SummaryTagRow(
     val name = row.name ?: stringResource(R.string.bt_cash_summary_untagged)
     // The untagged bucket has no colour of its own — a muted dot keeps the row
     // aligned with the tagged ones without inventing an identity for it.
-    val dot = if (row.tagId == null) bt.borderStrong else parseTagColor(row.color)
+    val dot = if (row.tagId == null) bt.borderStrong else parseTagColor(row.color, bt.tagFallback)
 
     Column(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -312,7 +312,7 @@ private fun SummaryTagRow(
                         .fillMaxWidth(fraction)
                         .height(4.dp)
                         .clip(BtShapes.pill)
-                        .background(tint.copy(alpha = 0.75f)),
+                        .background(bt.wash(tint, 0.75f)),
                 )
             }
         }
@@ -423,7 +423,7 @@ private fun TrendBar(fraction: Float, tint: Color, modifier: Modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(fraction.coerceAtLeast(0.02f))
                     .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                    .background(tint.copy(alpha = 0.85f)),
+                    .background(bt.wash(tint, 0.85f)),
             )
         }
     }

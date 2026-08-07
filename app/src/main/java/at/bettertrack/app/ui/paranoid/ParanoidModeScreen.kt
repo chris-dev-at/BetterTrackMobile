@@ -66,7 +66,7 @@ fun ParanoidModeScreen(
         Surface(
             shape = CircleShape,
             color = bt.goldSurface,
-            border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.4f)),
+            border = BorderStroke(1.dp, bt.edge(bt.gold, 0.4f)),
         ) {
             Icon(
                 Icons.Outlined.Shield,

@@ -56,7 +56,7 @@ fun BtQrCode(
     }
 }
 
-private const val QR_DARK = 0xFF0B0E14.toInt() // brand near-black modules
+private const val QR_DARK = 0xFF0A0D12.toInt() // brand near-black modules (BtDarkColors.bg)
 private const val QR_LIGHT = 0xFFFFFFFF.toInt()
 
 private fun encodeQr(data: String, sizePx: Int): Bitmap {

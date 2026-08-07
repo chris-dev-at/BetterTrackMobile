@@ -229,7 +229,7 @@ fun BtNeedsYouGroup(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = BtShapes.group,
-        color = bt.gold.copy(alpha = 0.07f),
+        color = bt.wash(bt.gold, 0.07f),
         contentColor = bt.textPrimary,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,

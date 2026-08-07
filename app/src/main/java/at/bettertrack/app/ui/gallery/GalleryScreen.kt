@@ -20,9 +20,11 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Translate
@@ -53,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.debug.DebugPreviewState
-import at.bettertrack.app.ui.charts.BtChartPalette
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtChip
@@ -78,6 +79,8 @@ import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.data.prefs.BtThemeMode
+import at.bettertrack.app.ui.theme.BetterTrackTheme
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -87,13 +90,47 @@ import java.util.Locale
  * Debug-only component gallery: renders EVERY design-system component in all
  * meaningful states for visual verification against the brand (spec §3).
  * Hidden entry: long-press the top-bar wordmark in debug builds.
+ *
+ * ## The theme toggle
+ *
+ * This screen is the **only** place the light colour table is reachable while
+ * `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false (B2 §1.6). That is deliberate and
+ * it is the reason the toggle ships in package B2-A rather than with the
+ * Settings → Appearance picker: the 16 sections below are the entire shared
+ * component system in one scroll, so 16 × 2 screenshots catch component-level
+ * light-mode defects *before* any real screen is migrated.
+ *
+ * It re-wraps its own subtree in [BetterTrackTheme] with `allowLight = true`,
+ * so nothing outside this composable can observe the light table, and closing
+ * the gallery returns to the app's own theme with no state to unwind.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
     onClose: () -> Unit,
     /** Step-5 sync-queue debug screen entry (debug builds reach it from here). */
     onOpenSyncDebug: () -> Unit = {},
+) {
+    var light by remember { mutableStateOf(false) }
+    BetterTrackTheme(
+        mode = if (light) BtThemeMode.Light else BtThemeMode.Dark,
+        allowLight = true,
+    ) {
+        GalleryContent(
+            light = light,
+            onToggleTheme = { light = !light },
+            onClose = onClose,
+            onOpenSyncDebug = onOpenSyncDebug,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GalleryContent(
+    light: Boolean,
+    onToggleTheme: () -> Unit,
+    onClose: () -> Unit,
+    onOpenSyncDebug: () -> Unit,
 ) {
     val bt = BtTheme.colors
     Scaffold(
@@ -106,7 +143,16 @@ fun GalleryScreen(
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
-                actions = { BtBadge("DEBUG", kind = BtBadgeKind.Gold) },
+                actions = {
+                    IconButton(onClick = onToggleTheme) {
+                        Icon(
+                            imageVector = if (light) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
+                            contentDescription = if (light) "Switch to dark theme" else "Switch to light theme",
+                            tint = bt.goldInk,
+                        )
+                    }
+                    BtBadge(if (light) "LIGHT" else "DARK", kind = BtBadgeKind.Gold)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = bt.bg,
                     titleContentColor = bt.textPrimary,
@@ -470,7 +516,7 @@ private fun AllocationBarSection() {
                         .weight(share)
                         .height(10.dp)
                         .background(
-                            if (i < BtChartPalette.series.size) BtChartPalette.series[i] else BtChartPalette.cash,
+                            if (i < bt.chartSeries.size) bt.chartSeries[i] else bt.chartCash,
                             BtShapes.pill,
                         ),
                 )
@@ -481,7 +527,7 @@ private fun AllocationBarSection() {
                 .forEachIndexed { i, (label, pct) ->
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(6.dp).background(BtChartPalette.series[i], CircleShape))
+                            Box(Modifier.size(6.dp).background(bt.chartSeries[i], CircleShape))
                             Spacer(Modifier.width(6.dp))
                             Text(label, style = MaterialTheme.typography.labelMedium, color = bt.textSecondary)
                         }

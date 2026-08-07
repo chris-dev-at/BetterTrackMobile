@@ -44,9 +44,6 @@ import at.bettertrack.app.ui.theme.BtTheme
  * source badges instead of fighting them.
  */
 
-/** Fallback tint for a malformed or absent colour — never crash on wire data. */
-private val FallbackTagColor = Color(0xFF94A3B8)
-
 /**
  * Parse a `#RRGGBB` wire tint into a Compose [Color].
  *
@@ -54,10 +51,10 @@ private val FallbackTagColor = Color(0xFF94A3B8)
  * malformed string must degrade to a neutral dot rather than take down the row.
  * Accepts an optional leading `#` and both `RRGGBB` and `AARRGGBB`.
  */
-fun parseTagColor(raw: String?): Color {
-    val hex = raw?.trim()?.removePrefix("#") ?: return FallbackTagColor
-    if (hex.length != 6 && hex.length != 8) return FallbackTagColor
-    val value = hex.toLongOrNull(16) ?: return FallbackTagColor
+fun parseTagColor(raw: String?, fallback: Color): Color {
+    val hex = raw?.trim()?.removePrefix("#") ?: return fallback
+    if (hex.length != 6 && hex.length != 8) return fallback
+    val value = hex.toLongOrNull(16) ?: return fallback
     return if (hex.length == 6) Color(value or 0xFF000000L) else Color(value)
 }
 
@@ -102,7 +99,7 @@ fun CashTagChip(
                 Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(parseTagColor(color)),
+                    .background(parseTagColor(color, bt.tagFallback)),
             )
             Spacer(Modifier.width(6.dp))
             Text(

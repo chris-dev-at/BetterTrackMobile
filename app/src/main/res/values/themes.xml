@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Dark-only app theme. Uses a platform Material parent (no support-library
+      DAY configuration. Uses a platform Material parent (no support-library
       dependency) purely as a window/system-bar host; all real UI styling is done
-      in Compose (BetterTrackTheme). Edge-to-edge is enabled in code with dark
-      system bars.
+      in Compose (BetterTrackTheme). Edge-to-edge is enabled in code, and the bar
+      icon polarity is driven there from the user's theme choice (§1.5 B6) — the
+      values below only matter for the frames before Compose draws.
+
+      The window background is @color/bt_window_bg, not @color/bt_bg: while
+      `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false the app renders dark on every
+      system, so a light-system phone must not flash a white window. See
+      res/values/colors.xml. res/values-night/themes.xml is the dark twin.
     -->
     <style name="Theme.BetterTrack" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/bt_bg</item>
+        <item name="android:windowBackground">@color/bt_window_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -19,7 +25,7 @@
       near-black page background (§3.1 — the BT glyph as splash brand mark).
     -->
     <style name="Theme.BetterTrack.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/bt_bg</item>
+        <item name="windowSplashScreenBackground">@color/bt_window_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bt_glyph</item>
         <item name="postSplashScreenTheme">@style/Theme.BetterTrack</item>
     </style>

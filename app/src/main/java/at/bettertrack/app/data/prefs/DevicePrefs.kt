@@ -47,6 +47,24 @@ fun orientationModeFor(locked: Boolean): ScreenOrientationMode =
     if (locked) ScreenOrientationMode.LOCKED_PORTRAIT else ScreenOrientationMode.FOLLOW_SENSOR
 
 /**
+ * Which colour table the app renders in (B2 design spec §1.3).
+ *
+ * Three-valued on purpose. AMOLED true-black is a **boolean under [Dark]**
+ * ([DevicePrefs.trueBlack]), not a fourth entry — it overrides two neutrals and
+ * nothing else, and keeping the enum at three means every `when` in the app
+ * stays exhaustive when the toggle lands.
+ */
+enum class BtThemeMode { System, Light, Dark }
+
+/**
+ * Decode a stored [BtThemeMode] name, falling back to [BtThemeMode.System] for
+ * anything unrecognised (absent, or written by a build that knew a mode this one
+ * does not). Pure, so the fallback is unit-tested rather than assumed.
+ */
+fun themeModeFromName(raw: String?): BtThemeMode =
+    BtThemeMode.entries.firstOrNull { it.name == raw } ?: BtThemeMode.System
+
+/**
  * Device-scoped UI preferences (owner ask 2026-07-10). Deliberately NOT the
  * account-scoped Room `meta` KV — these are device/UI settings that must SURVIVE
  * logout and carry no secrets. Plain [SharedPreferences] so the value is readable
@@ -137,6 +155,53 @@ class DevicePrefs(context: Context) {
         _chartMode.value = mode
     }
 
+    // ── Which colour table the app renders in (B2 §1.3) ─────────────────────
+
+    private val _themeMode = MutableStateFlow(themeModeFromName(prefs.getString(KEY_THEME_MODE, null)))
+
+    /**
+     * The user's theme choice — see [BtThemeMode].
+     *
+     * Device-scoped for the same reason the flags above are: it is a view
+     * preference, it says nothing about the account, and it must survive logout
+     * (the login screen itself has to render in the chosen theme). Stored by
+     * enum NAME so reordering the enum can never reinterpret a saved value.
+     *
+     * **Note:** a stored value of [BtThemeMode.System] or [BtThemeMode.Light]
+     * does not yet make the app render light — `BtThemeFeatures.LIGHT_MODE_PUBLIC`
+     * still gates that, because the shared components have not been swept for
+     * light mode yet (B2-B). Until that flips, this preference is written by
+     * nothing but the debug gallery.
+     */
+    val themeMode: StateFlow<BtThemeMode> = _themeMode.asStateFlow()
+
+    /** Synchronous read — the Activity needs the value before the first frame. */
+    fun themeModeNow(): BtThemeMode = _themeMode.value
+
+    fun setThemeMode(mode: BtThemeMode) {
+        if (_themeMode.value == mode) return
+        prefs.edit { putString(KEY_THEME_MODE, mode.name) }
+        _themeMode.value = mode
+    }
+
+    private val _trueBlack = MutableStateFlow(prefs.getBoolean(KEY_TRUE_BLACK, DEFAULT_TRUE_BLACK))
+
+    /**
+     * AMOLED true-black, a sub-toggle **under Dark only**: it overrides the page
+     * background to `#000000` and the recessed level to `#050608`, and nothing
+     * else. Ignored entirely while the resolved mode is light.
+     */
+    val trueBlack: StateFlow<Boolean> = _trueBlack.asStateFlow()
+
+    /** Synchronous read — the Activity needs the value before the first frame. */
+    fun trueBlackNow(): Boolean = _trueBlack.value
+
+    fun setTrueBlack(enabled: Boolean) {
+        if (_trueBlack.value == enabled) return
+        prefs.edit { putBoolean(KEY_TRUE_BLACK, enabled) }
+        _trueBlack.value = enabled
+    }
+
     private companion object {
         const val PREFS = "bt_device_prefs"
         const val KEY_ORIENTATION_LOCKED = "orientation_locked"
@@ -144,5 +209,8 @@ class DevicePrefs(context: Context) {
         const val KEY_OVERVIEW_SELECTED = "overview_selected"
         const val DEFAULT_OVERVIEW_SELECTED = true
         const val KEY_CHART_MODE = "chart_mode"
+        const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_TRUE_BLACK = "true_black"
+        const val DEFAULT_TRUE_BLACK = false
     }
 }

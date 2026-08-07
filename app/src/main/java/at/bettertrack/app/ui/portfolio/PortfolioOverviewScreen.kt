@@ -67,7 +67,7 @@ import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.charts.BtAreaChart
-import at.bettertrack.app.ui.charts.BtChartPalette
+import at.bettertrack.app.ui.theme.BtColors
 import at.bettertrack.app.ui.charts.BtDonutChart
 import at.bettertrack.app.ui.charts.DonutSegment
 import at.bettertrack.app.ui.components.BtCard
@@ -1292,8 +1292,9 @@ private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, lo
     // mapping for exactly these server type strings, and it already carried the
     // identical unknown-type fallback; the duplicate is gone.
     val categoryLabels = rememberAssetTypeLabeller()
-    val segments = remember(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels) {
-        allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels)
+    val palette = BtTheme.colors
+    val segments = remember(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels, palette) {
+        allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels, palette)
     }
     val total = segments.sumOf { it.value }
     if (segments.isEmpty() || total <= 0.0) return
@@ -1648,6 +1649,7 @@ private fun allocationSegments(
     otherLabel: String,
     cashLabel: String,
     categoryLabel: (String) -> String,
+    palette: BtColors,
 ): List<DonutSegment> {
     data class Part(val label: String, val value: Double)
 
@@ -1661,16 +1663,16 @@ private fun allocationSegments(
         .filter { it.value > 0.0 }
         .sortedByDescending { it.value }
 
-    val maxSlots = BtChartPalette.series.size
+    val maxSlots = palette.chartSeries.size
     val top = parts.take(maxSlots)
     val rest = parts.drop(maxSlots).sumOf { it.value }
 
     return buildList {
         top.forEachIndexed { i, part ->
-            add(DonutSegment(part.label, part.value, BtChartPalette.series[i]))
+            add(DonutSegment(part.label, part.value, palette.chartSeries[i]))
         }
-        if (rest > 0.0) add(DonutSegment(otherLabel, rest, BtChartPalette.rest))
-        if (cashEur > 0.0) add(DonutSegment(cashLabel, cashEur, BtChartPalette.cash))
+        if (rest > 0.0) add(DonutSegment(otherLabel, rest, palette.chartRest))
+        if (cashEur > 0.0) add(DonutSegment(cashLabel, cashEur, palette.chartCash))
     }
 }
 

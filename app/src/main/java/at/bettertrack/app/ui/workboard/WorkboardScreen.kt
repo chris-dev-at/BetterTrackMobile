@@ -342,9 +342,9 @@ private fun Segment(
     Surface(
         onClick = onClick,
         shape = BtShapes.pill,
-        color = if (selected) bt.gold.copy(alpha = 0.14f) else bt.surface,
+        color = if (selected) bt.goldWash else bt.surface,
         contentColor = if (selected) bt.goldEmphasis else bt.textSecondary,
-        border = BorderStroke(1.dp, if (selected) bt.gold.copy(alpha = 0.45f) else bt.border),
+        border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.45f) else bt.border),
         modifier = modifier,
     ) {
         Row(
@@ -1183,9 +1183,9 @@ private fun KindChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = BtShapes.pill,
-        color = if (selected) bt.gold.copy(alpha = 0.14f) else bt.surface,
+        color = if (selected) bt.goldWash else bt.surface,
         contentColor = if (selected) bt.goldEmphasis else bt.textSecondary,
-        border = BorderStroke(1.dp, if (selected) bt.gold.copy(alpha = 0.45f) else bt.border),
+        border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.45f) else bt.border),
     ) {
         Text(
             text = label,

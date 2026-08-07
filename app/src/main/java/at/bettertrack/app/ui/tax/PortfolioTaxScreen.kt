@@ -248,8 +248,8 @@ private fun EffectiveTaxCard(
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.card,
-        color = if (pinnedHere) bt.gold.copy(alpha = 0.08f) else bt.surface,
-        border = BorderStroke(1.dp, if (pinnedHere) bt.gold.copy(alpha = 0.35f) else bt.border),
+        color = if (pinnedHere) bt.wash(bt.gold, 0.08f) else bt.surface,
+        border = BorderStroke(1.dp, if (pinnedHere) bt.edge(bt.gold, 0.35f) else bt.border),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

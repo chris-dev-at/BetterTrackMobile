@@ -563,8 +563,8 @@ private fun CommentReactionRow(
         Surface(
             onClick = onTogglePicker,
             shape = BtShapes.pill,
-            color = if (pickerOpen) bt.gold.copy(alpha = 0.14f) else bt.bg,
-            border = BorderStroke(1.dp, if (pickerOpen) bt.gold.copy(alpha = 0.45f) else bt.border),
+            color = if (pickerOpen) bt.goldWash else bt.bg,
+            border = BorderStroke(1.dp, if (pickerOpen) bt.edge(bt.gold, 0.45f) else bt.border),
         ) {
             Icon(
                 Icons.Outlined.Add,
@@ -605,8 +605,8 @@ private fun ReactionChip(
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val container = if (mine) bt.gold.copy(alpha = 0.14f) else bt.bg
-    val border = if (mine) bt.gold.copy(alpha = 0.45f) else bt.border
+    val container = if (mine) bt.goldWash else bt.bg
+    val border = if (mine) bt.edge(bt.gold, 0.45f) else bt.border
     val cd = stringResource(
         if (mine) R.string.bt_thread_unreact_cd else R.string.bt_thread_react_cd,
         emoji,

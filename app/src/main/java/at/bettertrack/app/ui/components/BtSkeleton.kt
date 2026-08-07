@@ -40,6 +40,39 @@ fun rememberReducedMotion(): Boolean {
 }
 
 /**
+ * The two tones a skeleton is built from, picked per colour table.
+ *
+ * A shimmer has exactly two requirements, and only one of them survives naively
+ * porting the dark pairing to light:
+ *
+ *  1. The block must read as a **placeholder**, i.e. differ from whatever it
+ *     sits on (the page or a card).
+ *  2. The sweep must be **lighter than the block**. A band darker than its base
+ *     does not read as light moving across a surface; it reads as a smear.
+ *
+ * In dark, `surfaceLow → surfaceHighest` satisfies both: the ramp rises away
+ * from the page, so the block is lighter than the page and the highlight is
+ * lighter still. In light the ramp is compressed into ~5 L\* and the page sits
+ * in the *middle* of it — `surfaceLow` (`#F4F5F7`) is barely a hair lighter than
+ * `bg` (`#EEF0F2`), and `surfaceHighest` (`#E8EAEC`) is *darker* than both. Used
+ * unchanged, the light skeleton became an almost invisible block with a sweep
+ * that travelled dark. (Caught in the B2-A gallery matrix, light shot 06.)
+ *
+ * So light inverts which end of the ramp it takes: the block is the darkest
+ * step and the sweep is pure `surface`. This is the same "the ramp does not
+ * separate on its own in light" fact as the tone-vs-hairline rule, and it is
+ * resolved here once rather than at any call site.
+ */
+private data class SkeletonTones(val base: androidx.compose.ui.graphics.Color, val highlight: androidx.compose.ui.graphics.Color)
+
+@Composable
+private fun skeletonTones(): SkeletonTones {
+    val bt = BtTheme.colors
+    return if (bt.isLight) SkeletonTones(bt.surfaceHighest, bt.surface)
+    else SkeletonTones(bt.surfaceLow, bt.surfaceHighest)
+}
+
+/**
  * Loading skeleton block with a subtle shimmer sweep. Under reduced motion the
  * shimmer is skipped and a static placeholder block is shown instead.
  */
@@ -48,10 +81,10 @@ fun BtSkeleton(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(6.dp),
 ) {
-    val bt = BtTheme.colors
+    val tones = skeletonTones()
     val reducedMotion = rememberReducedMotion()
     if (reducedMotion) {
-        Box(modifier.clip(shape).background(bt.skeletonBase))
+        Box(modifier.clip(shape).background(tones.base))
         return
     }
     val transition = rememberInfiniteTransition(label = "skeleton")
@@ -64,8 +97,8 @@ fun BtSkeleton(
         ),
         label = "skeletonSweep",
     )
-    val base = bt.skeletonBase
-    val highlight = bt.skeletonHighlight
+    val base = tones.base
+    val highlight = tones.highlight
     Box(
         modifier
             .clip(shape)

@@ -1,6 +1,8 @@
 package at.bettertrack.app.ui.cash
 
 import androidx.compose.ui.graphics.Color
+import at.bettertrack.app.ui.theme.BtDarkColors
+import at.bettertrack.app.ui.theme.BtLightColors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,40 +21,53 @@ class CashTagUiTest {
 
     // ── Tag tints ─────────────────────────────────────────────────────────────
 
+    /**
+     * The fallback is a THEME token now (`BtColors.tagFallback`), passed in by
+     * the caller, so the parser has no colour of its own to assert. A sentinel
+     * that could never be produced by parsing proves the fallback branch is the
+     * one that fired.
+     */
+    private val FB = Color(0xFF010203)
+
+    private fun parse(raw: String?) = parseTagColor(raw, FB)
+
     @Test
     fun `a six-digit hex tint parses opaque`() {
-        assertEquals(Color(0xFF22C55E), parseTagColor("#22c55e"))
-        assertEquals(Color(0xFFEF4444), parseTagColor("#ef4444"))
+        assertEquals(Color(0xFF22C55E), parse("#22c55e"))
+        assertEquals(Color(0xFFEF4444), parse("#ef4444"))
     }
 
     @Test
     fun `the leading hash is optional and case does not matter`() {
-        assertEquals(parseTagColor("#22c55e"), parseTagColor("22c55e"))
-        assertEquals(parseTagColor("#22c55e"), parseTagColor("#22C55E"))
+        assertEquals(parse("#22c55e"), parse("22c55e"))
+        assertEquals(parse("#22c55e"), parse("#22C55E"))
     }
 
     @Test
     fun `surrounding whitespace is tolerated`() {
-        assertEquals(parseTagColor("#22c55e"), parseTagColor("  #22c55e  "))
+        assertEquals(parse("#22c55e"), parse("  #22c55e  "))
     }
 
     @Test
     fun `an eight-digit value keeps its alpha`() {
-        assertEquals(Color(0x8022C55E), parseTagColor("#8022c55e"))
+        assertEquals(Color(0x8022C55E), parse("#8022c55e"))
     }
 
     @Test
     fun `malformed absent and nonsense tints fall back instead of throwing`() {
         // This is wire data rendered inside a LazyColumn row — a crash here would
         // take down the whole ledger for one bad colour string.
-        val fallback = parseTagColor(null)
+        val fallback = parse(null)
         listOf("", "   ", "#", "#12345", "#1234567", "red", "#gggggg", "0x22c55e")
-            .forEach { assertEquals("expected fallback for '$it'", fallback, parseTagColor(it)) }
+            .forEach { assertEquals("expected fallback for '$it'", fallback, parse(it)) }
     }
 
     @Test
-    fun `the fallback tint is opaque so a dot is always visible`() {
-        assertEquals(1f, parseTagColor(null).alpha, 0.0f)
+    fun `the fallback tint is opaque in both themes so a dot is always visible`() {
+        // The parser returns whatever it is handed, so the guarantee lives on the
+        // token itself — a translucent fallback would render an invisible dot.
+        assertEquals(1f, BtDarkColors.tagFallback.alpha, 0.0f)
+        assertEquals(1f, BtLightColors.tagFallback.alpha, 0.0f)
     }
 
     @Test
@@ -61,7 +76,7 @@ class CashTagUiTest {
         CashTagPalette.forEach {
             assertTrue("malformed palette entry $it", Regex("^#[0-9a-f]{6}$").matches(it))
             // Every offered tint must survive its own parser.
-            assertEquals(1f, parseTagColor(it).alpha, 0.0f)
+            assertEquals(1f, parse(it).alpha, 0.0f)
         }
     }
 

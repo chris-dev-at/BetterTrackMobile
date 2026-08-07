@@ -131,7 +131,7 @@ private fun LanguageOption(
     val bt = BtTheme.colors
     Surface(
         color = if (selected) bt.goldSurface else bt.surface,
-        border = BorderStroke(1.dp, if (selected) bt.gold.copy(alpha = 0.5f) else bt.border),
+        border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.5f) else bt.border),
         shape = BtShapes.card,
         modifier = Modifier
             .fillMaxWidth()

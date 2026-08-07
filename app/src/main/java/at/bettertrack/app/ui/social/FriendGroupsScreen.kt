@@ -549,8 +549,8 @@ private fun GroupCard(
                     onClick = onToggleAdding,
                     enabled = !busy,
                     shape = BtShapes.pill,
-                    color = if (addingOpen) bt.gold.copy(alpha = 0.14f) else bt.bg,
-                    border = BorderStroke(1.dp, if (addingOpen) bt.gold.copy(alpha = 0.45f) else bt.border),
+                    color = if (addingOpen) bt.goldWash else bt.bg,
+                    border = BorderStroke(1.dp, if (addingOpen) bt.edge(bt.gold, 0.45f) else bt.border),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),

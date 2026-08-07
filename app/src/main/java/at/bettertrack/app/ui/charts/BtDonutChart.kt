@@ -18,7 +18,8 @@ import at.bettertrack.app.ui.components.rememberReducedMotion
 import kotlin.math.min
 
 /**
- * One slice of the allocation donut. Colors come from [BtChartPalette] — a
+ * One slice of the allocation donut. Colors come from the theme's categorical
+ * ramp ([at.bettertrack.app.ui.theme.BtColors.chartSeries]) — a
  * validated categorical ramp (gold stays reserved for the brand, §3.3/§3.6).
  */
 data class DonutSegment(
@@ -85,27 +86,9 @@ fun BtDonutChart(
 }
 
 /**
- * The chart-series palette — muted categorical ramp for allocation slices.
- * Validated with the dataviz six-checks against the card surface `#171717`
- * (dark band, chroma floor, contrast ≥3:1 all pass; worst CVD pair 8.6 sits in
- * the 8–12 floor band, which is legal because slices always ship secondary
- * encoding: 2dp gaps + a labeled legend with percentages). Gold is the brand
- * accent and NEVER a series color; emerald/red stay reserved for money deltas.
- * Assign slots IN ORDER by descending weight; never cycle past the last slot —
- * fold the tail into "Other" ([rest]) instead.
+ * The chart-series palette now lives in the theme, as
+ * [at.bettertrack.app.ui.theme.BtColors.chartSeries] / `chartRest` / `chartCash`
+ * — a categorical ramp is a colour table, and a colour table has to flip with
+ * the mode (B2 §1.5 B2). Read it from `BtTheme.colors`, or take a [BtColors]
+ * parameter where the caller is not composable.
  */
-object BtChartPalette {
-    val series: List<Color> = listOf(
-        Color(0xFF3987E5), // blue
-        Color(0xFF1D9DBF), // cyan
-        Color(0xFF6D5BD0), // violet
-        Color(0xFFC25B8E), // magenta
-        Color(0xFFB58840), // bronze
-    )
-
-    /** The fold bucket ("Other") — deliberately reads as neutral, not identity. */
-    val rest: Color = Color(0xFF525252)
-
-    /** Cash slice — semantically "uninvested", quiet silver, distinct from [rest]. */
-    val cash: Color = Color(0xFF8A8A8A)
-}

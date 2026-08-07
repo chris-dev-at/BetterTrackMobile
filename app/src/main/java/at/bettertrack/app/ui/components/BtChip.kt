@@ -30,9 +30,9 @@ fun BtChip(
     // Selection reads as a clean translucent-gold highlight (consistent with
     // BtBadge's tint language) rather than a muddy filled surface — the deeper
     // amber-tinted fill stays reserved for large highlighted cards.
-    val container = if (selected) bt.gold.copy(alpha = 0.14f) else bt.surface
+    val container = if (selected) bt.goldWash else bt.surface
     val content = if (selected) bt.goldEmphasis else bt.textSecondary
-    val border = BorderStroke(1.dp, if (selected) bt.gold.copy(alpha = 0.45f) else bt.border)
+    val border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.45f) else bt.border)
     val label: @Composable () -> Unit = {
         Text(
             text = text,
@@ -80,9 +80,9 @@ fun BtBadge(
     val bt = BtTheme.colors
     val (container, content) = when (kind) {
         BtBadgeKind.Neutral -> bt.border to bt.textSecondary
-        BtBadgeKind.Gold -> bt.gold.copy(alpha = 0.14f) to bt.goldEmphasis
-        BtBadgeKind.Gain -> bt.gain.copy(alpha = 0.14f) to bt.gainSoft
-        BtBadgeKind.Loss -> bt.loss.copy(alpha = 0.14f) to bt.lossSoft
+        BtBadgeKind.Gold -> bt.goldWash to bt.goldEmphasis
+        BtBadgeKind.Gain -> bt.gainWash to bt.gainSoft
+        BtBadgeKind.Loss -> bt.lossWash to bt.lossSoft
     }
     Surface(
         modifier = modifier,

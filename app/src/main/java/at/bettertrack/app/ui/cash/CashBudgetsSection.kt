@@ -118,7 +118,7 @@ fun CashBudgetRow(
                 Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(parseTagColor(budget.tagColor)),
+                    .background(parseTagColor(budget.tagColor, bt.tagFallback)),
             )
             Spacer(Modifier.width(8.dp))
             Text(

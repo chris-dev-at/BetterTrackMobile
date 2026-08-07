@@ -152,7 +152,7 @@ fun BtAreaChart(
     val labelStyle = TextStyle(
         fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
-        color = bt.textMuted,
+        color = bt.chartAxis,
         fontFeatureSettings = FONT_FEATURE_TABULAR,
     )
 
@@ -208,7 +208,7 @@ fun BtAreaChart(
 
         // ── Gridlines + y labels (min / mid / max of the padded scale) ──────
         if (!minimal) {
-            val gridColor = bt.border.copy(alpha = 0.55f)
+            val gridColor = bt.chartGrid
             // One label format for the whole axis, driven by the scale's magnitude
             // (mixing "15,0k" with "9 440" on one axis reads as two scales).
             val compactAxis = scale.max >= 10_000
@@ -276,7 +276,7 @@ fun BtAreaChart(
         }
         val fillBrush: Brush = if (!baseline) {
             Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
+                colors = listOf(bt.wash(lineColor, bt.chartAreaTopAlpha), Color.Transparent),
                 startY = 0f,
                 endY = plotH,
             )
@@ -284,10 +284,10 @@ fun BtAreaChart(
             // Mirrored about zero: strongest at the top for gains, strongest at
             // the bottom for losses, faint where they meet.
             Brush.verticalGradient(
-                0f to upColor.copy(alpha = 0.24f),
-                zeroRatio to upColor.copy(alpha = 0.02f),
-                zeroRatio to downColor.copy(alpha = 0.02f),
-                1f to downColor.copy(alpha = 0.24f),
+                0f to bt.wash(upColor, bt.chartAreaTopAlpha),
+                zeroRatio to bt.wash(upColor, bt.chartAreaZeroAlpha),
+                zeroRatio to bt.wash(downColor, bt.chartAreaZeroAlpha),
+                1f to bt.wash(downColor, bt.chartAreaTopAlpha),
                 startY = 0f,
                 endY = plotH,
             )

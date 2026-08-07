@@ -234,8 +234,8 @@ fun MirrorInvitesCard(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = BtShapes.card,
-        color = bt.gold.copy(alpha = 0.07f),
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.30f)),
+        color = bt.wash(bt.gold, 0.07f),
+        border = BorderStroke(1.dp, bt.goldEdge),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

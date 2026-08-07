@@ -83,7 +83,7 @@ fun BtPriceChart(
     val labelStyle = TextStyle(
         fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
-        color = bt.textMuted,
+        color = bt.chartAxis,
         fontFeatureSettings = FONT_FEATURE_TABULAR,
     )
 
@@ -118,7 +118,7 @@ fun BtPriceChart(
         val morphing = progress.value < 1f && previousPoints.size >= 2
 
         // Gridlines + y (price) labels.
-        val gridColor = bt.border.copy(alpha = 0.55f)
+        val gridColor = bt.chartGrid
         val compactAxis = scale.max >= 10_000
         listOf(0f, 0.5f, 1f).forEach { f ->
             val y = plotH * (1f - f)
@@ -170,7 +170,7 @@ fun BtPriceChart(
         drawPath(
             path = fillPath,
             brush = Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
+                colors = listOf(bt.wash(lineColor, bt.chartAreaTopAlpha), Color.Transparent),
                 startY = 0f,
                 endY = plotH,
             ),

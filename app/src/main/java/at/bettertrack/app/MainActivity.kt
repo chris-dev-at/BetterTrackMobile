@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -14,14 +16,18 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import at.bettertrack.app.data.auth.AuthRepository
 import at.bettertrack.app.data.notifications.resolveDeepLink
+import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.shell.BtRoot
 import kotlinx.serialization.json.Json
 import at.bettertrack.app.ui.theme.BetterTrackTheme
+import at.bettertrack.app.ui.theme.resolveDarkTheme
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -67,13 +73,20 @@ class MainActivity : FragmentActivity() {
                 guarded("applyOrientation") { applyOrientation(locked) }
             }
         }
-        // Dark-only app ⇒ force dark system bars regardless of system setting.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-        )
+        // System bars follow the resolved theme (B2 §1.5 B6). Applied before the
+        // first frame from the synchronous preference read, then re-applied
+        // whenever the choice changes — a bar style is a window attribute, so it
+        // does not recompose with the Compose tree.
+        applySystemBars(AppGraph.devicePrefs.themeModeNow())
+        lifecycleScope.launch {
+            AppGraph.devicePrefs.themeMode.collect { mode ->
+                guarded("applySystemBars") { applySystemBars(mode) }
+            }
+        }
         setContent {
-            BetterTrackTheme {
+            val themeMode by AppGraph.devicePrefs.themeMode.collectAsState()
+            val trueBlack by AppGraph.devicePrefs.trueBlack.collectAsState()
+            BetterTrackTheme(mode = themeMode, trueBlack = trueBlack) {
                 BtRoot(
                     onStartLogin = { startLogin() },
                     onOpenUrl = { url -> openInBrowser(url) },
@@ -107,6 +120,36 @@ class MainActivity : FragmentActivity() {
         } catch (e: Exception) {
             Log.w(BtCrashGuard.NONFATAL_TAG, "$what failed; continuing.", e)
         }
+    }
+
+    /**
+     * Point the status/navigation bar icon polarity at whichever colour table
+     * the app is actually going to render in.
+     *
+     * `SystemBarStyle.auto` is given an explicit detector rather than its default
+     * (which reads the system's night mode) because the app's theme is a user
+     * choice that may deliberately disagree with the system — a forced-Dark app
+     * on a light phone still needs light icons. Both scrims stay transparent:
+     * the app draws edge-to-edge under the bars.
+     */
+    private fun applySystemBars(mode: BtThemeMode) {
+        val detectDark: (Resources) -> Boolean = { res ->
+            val systemInDark = (res.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+            resolveDarkTheme(mode, systemInDark)
+        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT,
+                detectDark,
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT,
+                detectDark,
+            ),
+        )
     }
 
     /**

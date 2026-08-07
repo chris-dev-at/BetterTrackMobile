@@ -468,7 +468,7 @@ fun ServerVaultSetupCard(onAdopted: () -> Unit = {}) {
 
     Surface(
         color = bt.surface,
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.4f)),
+        border = BorderStroke(1.dp, bt.edge(bt.gold, 0.4f)),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {

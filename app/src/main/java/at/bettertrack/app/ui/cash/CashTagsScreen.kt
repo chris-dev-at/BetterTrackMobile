@@ -478,7 +478,7 @@ private fun CashTagRow(
                 Modifier
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(parseTagColor(tag.color)),
+                    .background(parseTagColor(tag.color, bt.tagFallback)),
             )
             Spacer(Modifier.width(12.dp))
             Row(
@@ -663,7 +663,7 @@ private fun CashTagColorPicker(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(parseTagColor(hex)),
+                        .background(parseTagColor(hex, bt.tagFallback)),
                 )
             }
         }

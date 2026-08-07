@@ -33,12 +33,12 @@ fun BtAvatar(
 ) {
     val bt = BtTheme.colors
     val initials = initialsOf(name)
-    val tint = if (gold) bt.gold else avatarTint(name)
+    val tint = if (gold) bt.gold else avatarTint(name, bt.chartSeries)
     Surface(
         modifier = modifier.size(size),
         shape = CircleShape,
-        color = tint.copy(alpha = 0.16f),
-        border = BorderStroke(1.dp, tint.copy(alpha = 0.40f)),
+        color = bt.wash(tint, 0.16f),
+        border = BorderStroke(1.dp, bt.edge(tint, 0.40f)),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
@@ -63,15 +63,13 @@ private fun initialsOf(name: String): String {
     }
 }
 
-/** Deterministic muted tint from the validated ramp (blue/teal/violet/rose/gold-brown). */
-private fun avatarTint(name: String): Color {
-    val ramp = listOf(
-        Color(0xFF3987E5),
-        Color(0xFF1D9DBF),
-        Color(0xFF6D5BD0),
-        Color(0xFFC25B8E),
-        Color(0xFFB58840),
-    )
+/**
+ * Deterministic muted tint from the theme's validated categorical [ramp]
+ * (blue/teal/violet/rose/gold-brown). The ramp is passed in rather than
+ * hardcoded so it flips with the colour table — the same five hues that were
+ * validated against the dark card are too light to identify anyone on white.
+ */
+private fun avatarTint(name: String, ramp: List<Color>): Color {
     val idx = (name.trim().lowercase().hashCode().let { if (it == Int.MIN_VALUE) 0 else it } and 0x7fffffff) % ramp.size
     return ramp[idx]
 }

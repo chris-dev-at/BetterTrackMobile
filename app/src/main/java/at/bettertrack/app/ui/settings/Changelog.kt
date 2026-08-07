@@ -235,8 +235,8 @@ private fun WhatsNewCard(entry: WhatsNewEntry) {
             // Version tag — a small gold pill so each update reads as a header.
             Surface(
                 shape = BtShapes.pill,
-                color = bt.gold.copy(alpha = 0.14f),
-                border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.45f)),
+                color = bt.goldWash,
+                border = BorderStroke(1.dp, bt.edge(bt.gold, 0.45f)),
             ) {
                 Text(
                     text = stringResource(R.string.bt_settings_whatsnew_version, entry.version),

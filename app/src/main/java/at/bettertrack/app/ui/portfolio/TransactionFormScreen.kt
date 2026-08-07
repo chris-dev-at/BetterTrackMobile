@@ -1614,9 +1614,9 @@ private fun SideOption(
         onClick = onClick,
         enabled = enabled,
         shape = BtShapes.control,
-        color = if (selected) accent.copy(alpha = 0.14f) else bt.surface,
+        color = if (selected) bt.wash(accent, 0.14f) else bt.surface,
         contentColor = if (selected) accent else bt.textSecondary,
-        border = BorderStroke(1.dp, if (selected) accent.copy(alpha = 0.55f) else bt.border),
+        border = BorderStroke(1.dp, if (selected) bt.edge(accent, 0.55f) else bt.border),
         interactionSource = interaction,
         modifier = modifier
             .height(48.dp)
@@ -1783,7 +1783,7 @@ private fun MaxChip(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = BtShapes.pill,
-        color = bt.gold.copy(alpha = 0.14f),
+        color = bt.goldWash,
         contentColor = bt.goldEmphasis,
         interactionSource = interaction,
         modifier = Modifier
@@ -2011,7 +2011,7 @@ private fun UncoveredSellCard(
         shape = BtShapes.card,
         color = bt.goldSurface,
         contentColor = bt.textPrimary,
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, bt.edge(bt.gold, 0.35f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -2058,7 +2058,7 @@ private fun UncoveredSellCard(
                     onCheckedChange = null,
                     colors = CheckboxDefaults.colors(
                         checkedColor = bt.gold,
-                        uncheckedColor = bt.gold.copy(alpha = 0.6f),
+                        uncheckedColor = bt.edge(bt.gold, 0.6f),
                         checkmarkColor = bt.bg,
                     ),
                 )

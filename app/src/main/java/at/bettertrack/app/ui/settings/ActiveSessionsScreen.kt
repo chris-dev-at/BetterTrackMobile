@@ -140,7 +140,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
                             onClick = { showRevokeAll = true },
                             enabled = online && !busy,
                             color = bt.surface,
-                            border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.4f)),
+                            border = BorderStroke(1.dp, bt.edge(bt.loss, 0.4f)),
                             shape = BtShapes.card,
                             modifier = Modifier.fillMaxWidth(),
                         ) {

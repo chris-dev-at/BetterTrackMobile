@@ -226,7 +226,7 @@ fun WizardChoiceCard(
     Surface(
         onClick = onClick,
         shape = BtShapes.card,
-        color = if (selected) bt.gold.copy(alpha = 0.07f) else bt.surface,
+        color = if (selected) bt.wash(bt.gold, 0.07f) else bt.surface,
         border = BorderStroke(1.dp, if (selected) bt.gold else bt.border),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -294,8 +294,8 @@ fun BlockingAcknowledgment(
     // rare, so spending it anywhere else is what would weaken this one.
     Surface(
         shape = BtShapes.card,
-        color = bt.loss.copy(alpha = 0.09f),
-        border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.40f)),
+        color = bt.wash(bt.loss, 0.09f),
+        border = BorderStroke(1.dp, bt.edge(bt.loss, 0.4f)),
         modifier = Modifier
             .fillMaxWidth()
             .toggleable(
@@ -334,7 +334,7 @@ fun BlockingAcknowledgment(
                         onCheckedChange = { onToggle() },
                         colors = CheckboxDefaults.colors(
                             checkedColor = bt.loss,
-                            uncheckedColor = bt.loss.copy(alpha = 0.6f),
+                            uncheckedColor = bt.edge(bt.loss, 0.6f),
                             checkmarkColor = bt.textPrimary,
                         ),
                     )
@@ -364,8 +364,8 @@ fun RequiredTick(label: String, checked: Boolean, enabled: Boolean, onToggle: ()
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.card,
-        color = if (checked) bt.gold.copy(alpha = 0.07f) else bt.surface,
-        border = BorderStroke(1.dp, if (checked) bt.gold.copy(alpha = 0.5f) else bt.border),
+        color = if (checked) bt.wash(bt.gold, 0.07f) else bt.surface,
+        border = BorderStroke(1.dp, if (checked) bt.edge(bt.gold, 0.5f) else bt.border),
         modifier = Modifier
             .fillMaxWidth()
             .toggleable(
@@ -435,8 +435,8 @@ fun WizardNote(
         shape = BtShapes.group,
         color = when (tone) {
             NoteTone.NEUTRAL -> bt.surface
-            NoteTone.GOLD -> bt.gold.copy(alpha = 0.11f)
-            NoteTone.LOSS -> bt.loss.copy(alpha = 0.13f)
+            NoteTone.GOLD -> bt.wash(bt.gold, 0.11f)
+            NoteTone.LOSS -> bt.wash(bt.loss, 0.13f)
         },
         modifier = Modifier.fillMaxWidth(),
     ) {

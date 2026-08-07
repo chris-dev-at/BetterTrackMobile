@@ -701,7 +701,7 @@ private fun BtBottomBar(
                         selectedTextColor = bt.gold,
                         // Clean translucent-gold selection pill (matches the chip
                         // + badge tint language) instead of a muddy amber fill.
-                        indicatorColor = bt.gold.copy(alpha = 0.16f),
+                        indicatorColor = bt.wash(bt.gold, 0.16f),
                         unselectedIconColor = bt.textMuted,
                         unselectedTextColor = bt.textMuted,
                     ),

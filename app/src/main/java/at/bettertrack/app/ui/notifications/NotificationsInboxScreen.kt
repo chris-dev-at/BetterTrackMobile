@@ -503,9 +503,9 @@ private fun FilterSegment(label: String, selected: Boolean, modifier: Modifier, 
     Surface(
         onClick = onClick,
         shape = BtShapes.pill,
-        color = if (selected) bt.gold.copy(alpha = 0.14f) else bt.surface,
+        color = if (selected) bt.goldWash else bt.surface,
         contentColor = if (selected) bt.goldEmphasis else bt.textSecondary,
-        border = BorderStroke(1.dp, if (selected) bt.gold.copy(alpha = 0.45f) else bt.border),
+        border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.45f) else bt.border),
         modifier = modifier,
     ) {
         Row(
@@ -534,8 +534,8 @@ private fun EnablePushPrompt(onEnable: () -> Unit) {
     val bt = BtTheme.colors
     Surface(
         onClick = onEnable,
-        color = bt.gold.copy(alpha = 0.10f),
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.35f)),
+        color = bt.wash(bt.gold, 0.1f),
+        border = BorderStroke(1.dp, bt.edge(bt.gold, 0.35f)),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -566,11 +566,11 @@ private fun NotificationRow(
     onDelete: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val unreadTint = if (notification.isUnread) bt.gold.copy(alpha = 0.06f) else bt.surface
+    val unreadTint = if (notification.isUnread) bt.wash(bt.gold, 0.06f) else bt.surface
     Surface(
         onClick = onClick,
         color = unreadTint,
-        border = BorderStroke(1.dp, if (notification.isUnread) bt.gold.copy(alpha = 0.22f) else bt.border),
+        border = BorderStroke(1.dp, if (notification.isUnread) bt.edge(bt.gold, 0.22f) else bt.border),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -579,7 +579,7 @@ private fun NotificationRow(
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .background(bt.gold.copy(alpha = 0.12f), CircleShape),
+                    .background(bt.wash(bt.gold, 0.12f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(notifIcon(notification.kind), contentDescription = null, tint = bt.gold, modifier = Modifier.size(20.dp))

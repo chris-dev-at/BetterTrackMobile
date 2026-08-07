@@ -247,7 +247,7 @@ fun PortfolioSettingsScreen(
                 Surface(
                     color = bt.surface,
                     shape = BtShapes.group,
-                    border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
+                    border = BorderStroke(1.dp, bt.edge(bt.loss, 0.35f)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column {

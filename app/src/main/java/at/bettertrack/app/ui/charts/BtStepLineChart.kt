@@ -44,8 +44,9 @@ fun BtStepLineChart(
     lineColor: Color = BtTheme.colors.gold,
     interpolation: BtLineInterpolation = BtLineInterpolation.Step,
 ) {
-    val fillTop = lineColor.copy(alpha = 0.22f)
-    val gridColor = BtTheme.colors.border
+    val bt = BtTheme.colors
+    val fillTop = bt.wash(lineColor, bt.chartAreaTopAlpha)
+    val gridColor = bt.chartGrid
     Canvas(modifier = modifier) {
         if (points.size < 2) return@Canvas
         val padTop = 8f

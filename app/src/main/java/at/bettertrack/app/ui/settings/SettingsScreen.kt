@@ -583,7 +583,7 @@ fun SettingsScreen(
                 // elsewhere rather than by shouting louder.
                 Surface(
                     color = bt.surface,
-                    border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
+                    border = BorderStroke(1.dp, bt.edge(bt.loss, 0.35f)),
                     shape = BtShapes.group,
                     modifier = Modifier.fillMaxWidth(),
                 ) {

@@ -295,7 +295,7 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
         // without shouting; the emphasis is bought by the absence elsewhere.
         Surface(
             color = bt.surface,
-            border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, bt.edge(bt.loss, 0.35f)),
             shape = BtShapes.group,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -316,8 +316,8 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
 private fun ModeCard(mode: StorageMode) {
     val bt = BtTheme.colors
     Surface(
-        color = bt.gold.copy(alpha = 0.06f),
-        border = BorderStroke(1.dp, bt.gold.copy(alpha = 0.35f)),
+        color = bt.wash(bt.gold, 0.06f),
+        border = BorderStroke(1.dp, bt.edge(bt.gold, 0.35f)),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -648,7 +648,7 @@ private fun DeleteEverythingSection(onDone: () -> Unit) {
 
     Surface(
         color = bt.lossSurface,
-        border = BorderStroke(1.dp, bt.loss.copy(alpha = 0.4f)),
+        border = BorderStroke(1.dp, bt.edge(bt.loss, 0.4f)),
         shape = BtShapes.card,
         modifier = Modifier.fillMaxWidth(),
     ) {

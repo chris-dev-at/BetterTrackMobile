@@ -2540,8 +2540,8 @@ private fun HoldingCostToggle(
     val commit: (Boolean) -> Unit = { on -> haptics.toggle(on); onCheckedChange(on) }
     Surface(
         shape = BtShapes.card,
-        color = if (checked) bt.gold.copy(alpha = 0.10f) else bt.bg,
-        border = BorderStroke(1.dp, if (checked) bt.gold.copy(alpha = 0.45f) else bt.border),
+        color = if (checked) bt.wash(bt.gold, 0.1f) else bt.bg,
+        border = BorderStroke(1.dp, if (checked) bt.edge(bt.gold, 0.45f) else bt.border),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(

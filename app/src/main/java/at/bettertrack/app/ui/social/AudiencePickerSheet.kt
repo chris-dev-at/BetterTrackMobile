@@ -320,8 +320,8 @@ private fun AudienceOption(
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val container = if (selected) bt.gold.copy(alpha = 0.12f) else bt.bg
-    val border = if (selected) bt.gold.copy(alpha = 0.5f) else bt.border
+    val container = if (selected) bt.wash(bt.gold, 0.12f) else bt.bg
+    val border = if (selected) bt.edge(bt.gold, 0.5f) else bt.border
     Surface(
         onClick = onClick,
         shape = BtShapes.card,
@@ -378,7 +378,7 @@ private fun HintCard(text: String) {
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.group,
-        color = bt.gold.copy(alpha = 0.11f),
+        color = bt.wash(bt.gold, 0.11f),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -404,7 +404,7 @@ private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.group,
-        color = bt.loss.copy(alpha = 0.13f),
+        color = bt.wash(bt.loss, 0.13f),
         modifier = Modifier
             .fillMaxWidth()
             .toggleable(value = checked, role = Role.Checkbox, onValueChange = { onToggle() }),
@@ -432,7 +432,7 @@ private fun PublicAcknowledgment(checked: Boolean, onToggle: () -> Unit) {
                         onCheckedChange = { onToggle() },
                         colors = CheckboxDefaults.colors(
                             checkedColor = bt.loss,
-                            uncheckedColor = bt.loss.copy(alpha = 0.6f),
+                            uncheckedColor = bt.edge(bt.loss, 0.6f),
                             checkmarkColor = bt.textPrimary,
                         ),
                     )
