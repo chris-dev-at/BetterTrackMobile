@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -178,6 +179,7 @@ import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.workboard.WorkboardEntry
 import kotlin.reflect.KClass
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Which shell-level signal lights this tab's badge dot (R-arc mandate §1). */
@@ -346,23 +348,67 @@ fun BtApp() {
             }
         }
     }
-    // Swipe → tab hop. Returns whether a hop happened so the gesture layer can
-    // spring back at the ends of the bar instead of leaving the page displaced.
-    // It routes through the SAME [switchToTab] the bottom bar uses, which is what
-    // keeps saved state, restored back stacks and bar selection identical whether
-    // you tapped or swiped.
-    // ONE displacement, read by the page (via btTabSwipe) and by the bottom
-    // bar's indicator. See [BtTabSwipeState].
+    // ONE displacement, read by the outgoing page, the incoming page and the
+    // bottom bar's indicator. See [BtTabSwipeState].
     val swipeState = rememberBtTabSwipeState()
-    val onSwipeTab: (Boolean) -> Boolean = { forward ->
-        val here = currentTab?.tab
-        val next = here?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
-        if (next != null) {
-            switchToTab(next)
-            true
+    // The last frame each tab drew, so the neighbour can be ON SCREEN during the
+    // drag without being composed a second time. See [BtTabPeekLayers] for why a
+    // second composition is not an option in this app.
+    val peekLayers = rememberBtTabPeekLayers()
+    // Where a hop in this direction would land, or null at the ends of the bar.
+    // Consulted DURING the drag too: it is what decides between a 1:1 follow and
+    // the damped overscroll hint.
+    val neighbourOf: (Boolean) -> BtTab? = { forward ->
+        currentTab?.tab?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
+    }
+    // A committed swipe routes through the SAME [switchToTab] the bottom bar
+    // uses, which is what keeps saved state, restored back stacks and bar
+    // selection identical whether you tapped or swiped.
+    val onSwipeCommit: (BtTab) -> Unit = { tab -> switchToTab(tab) }
+    // The second page, or null for "draw one page". Pure — see [swipePeekTab].
+    val peekTab = swipePeekTab(
+        handoff = swipeState.handoff,
+        peekSide = swipeState.peekSide,
+        current = currentTab?.tab,
+        visible = visibleTabs.map { spec -> spec.tab },
+    )
+    // Freeze the face of the tab the user is LEAVING.
+    //
+    // This instant is the only one that works. Later, the tab root is gone and
+    // its recorded drawing commands resolve against render nodes that have been
+    // handed to something else (see [BtTabPeekLayers] — the layer would replay
+    // as a copy of whatever is on screen now). Earlier would freeze a page the
+    // user then carried on scrolling. Here the tab is complete AND still on its
+    // way out, so the picture is both correct and current.
+    //
+    // It fires for pushed screens too (`exactTab` goes null): opening a holding
+    // and coming back leaves Portfolio's face as it was before the push, which
+    // is what the next swipe should show.
+    var lastTabRoot by remember { mutableStateOf<BtTab?>(null) }
+    LaunchedEffect(exactTab) {
+        val leaving = lastTabRoot
+        lastTabRoot = exactTab
+        if (leaving != null && leaving != exactTab) peekLayers.freeze(leaving)
+    }
+    // Drop the handoff pin once the NavHost is actually showing the tab the
+    // swipe committed to. Until then the peek covers the swap, which is what
+    // makes the swap invisible: the pixels under it are already identical.
+    //
+    // The timeout is not decoration. If the hop is ever refused (a mode change
+    // that hides the target tab mid-gesture, say) `currentTab` never becomes
+    // `handoff`, and without this the peek would cover the app forever.
+    LaunchedEffect(swipeState.handoff, currentTab?.tab) {
+        val target = swipeState.handoff ?: return@LaunchedEffect
+        if (currentTab?.tab == target) {
+            // Two frames, so the NavHost has certainly DRAWN the new page — not
+            // merely composed it — before the cover comes off.
+            withFrameNanos {}
+            withFrameNanos {}
         } else {
-            false
+            delay(600)
         }
+        swipeState.handoff = null
+        swipeState.peekSide = null
     }
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
         // EVERY deep link lands the same way (S6 P1-8):
@@ -588,24 +634,55 @@ fun BtApp() {
                     onClick = { navController.navigate(PendingSyncRoute) },
                 )
             }
-            BtNavHost(
-                navController = navController,
-                onDeepLink = navigateDeepLink,
-                onSwitchTab = switchToTab,
-                discreetMode = discreetMode,
-                onToggleDiscreet = toggleDiscreet,
-                notifUnread = notifUnread,
-                showNotifications = showNotificationSurfaces,
-                // Owner ask 2026-08-07: swipe left/right between the four tabs.
-                // Only on a top-level page — a pushed screen keeps its whole
-                // horizontal axis for its own content. The neighbour is resolved
-                // against the VISIBLE bar, so a Drive-only install swipes
-                // Portfolio ↔ Markets and stops there rather than landing on a
-                // tab it does not render.
-                swipeState = swipeState,
-                swipeEnabled = isTopLevel,
-                onSwipeTab = onSwipeTab,
-            )
+            // The page area, and the surface the tab drag is detected on.
+            //
+            // The gesture lives on this Box rather than on the NavHost because
+            // the two page layers are SIBLINGS inside it: the outgoing page (the
+            // NavHost) and the incoming one (the peek). Detecting on the common
+            // parent also keeps chart-scrub precedence exactly as it was —
+            // children still see every pointer first, in the Main pass, and a
+            // change they consume aborts this layer's slop detection.
+            //
+            // Owner ask 2026-08-07: swipe left/right between the four tabs. Only
+            // on a top-level page — a pushed screen keeps its whole horizontal
+            // axis for its own content. The neighbour is resolved against the
+            // VISIBLE bar, so a Drive-only install swipes Portfolio ↔ Markets
+            // and stops there rather than landing on a tab it does not render.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .btTabSwipe(
+                        state = swipeState,
+                        enabled = isTopLevel,
+                        neighbourOf = neighbourOf,
+                        onCommit = onSwipeCommit,
+                    ),
+            ) {
+                BtNavHost(
+                    navController = navController,
+                    onDeepLink = navigateDeepLink,
+                    onSwitchTab = switchToTab,
+                    discreetMode = discreetMode,
+                    onToggleDiscreet = toggleDiscreet,
+                    notifUnread = notifUnread,
+                    showNotifications = showNotificationSurfaces,
+                    swipeState = swipeState,
+                    peekLayers = peekLayers,
+                )
+                // The incoming page. Composed ONLY while a drag or its settle is
+                // in flight (`peekTab` is null at rest, by construction), so an
+                // app sitting still draws exactly one page.
+                if (peekTab != null) {
+                    BtTabPeek(
+                        tab = peekTab,
+                        // `handoff` pins the peek at rest, where the side no
+                        // longer matters; `peekSide` is the live drag's.
+                        forward = swipeState.peekSide ?: true,
+                        layers = peekLayers,
+                        state = swipeState,
+                    )
+                }
+            }
         }
         }
     }
@@ -930,6 +1007,27 @@ private fun BtBottomBar(
     }
 }
 
+/**
+ * One top-level tab's page, recording its own face for the swipe peek.
+ *
+ * Wrapping the four tab roots individually — rather than the NavHost once — is
+ * what keeps a frozen face clean: around the NavHost the recording would also
+ * capture `AnimatedContent` mid-transition, so a tab frozen as it left would be
+ * frozen half-replaced by the tab arriving. Here each tab records only itself.
+ *
+ * Pushed screens are deliberately NOT wrapped. A holding detail lives under the
+ * Portfolio tab and would otherwise become Portfolio's face, so a swipe onto
+ * Portfolio would show a detail screen that is not even where the swipe lands.
+ */
+@Composable
+private fun BtTabPage(
+    peekLayers: BtTabPeekLayers,
+    tab: BtTab,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.fillMaxSize().btTabPeekCapture(peekLayers, tab)) { content() }
+}
+
 @Composable
 private fun BtNavHost(
     navController: NavHostController,
@@ -943,11 +1041,16 @@ private fun BtNavHost(
     showNotifications: Boolean,
     /** Shared with the bottom bar so page and indicator move together. */
     swipeState: BtTabSwipeState,
-    /** Top-level pages only — see [btTabSwipe]. */
-    swipeEnabled: Boolean,
-    onSwipeTab: (forward: Boolean) -> Boolean,
+    /** Where each tab records the face a swipe shows — see [BtTabPeekLayers]. */
+    peekLayers: BtTabPeekLayers,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
+    // A swipe that committed has already MOVED the pages into their final
+    // position before the NavHost is told anything, so the swap must not animate
+    // on top of that — a lateral slide here would be a second page turn over a
+    // picture that is already correct, which is exactly the double-draw the
+    // handoff exists to remove. Tap-driven hops are untouched and still slide.
+    val handingOff = swipeState.handoff != null
     // R3 §1 — the app's one screen-transition idiom. Read once, here, and
     // captured by the four lambdas below: they are plain (non-composable)
     // lambdas, so the reduced-motion preference cannot be sampled inside them.
@@ -962,7 +1065,7 @@ private fun BtNavHost(
         // Home runs popEnter/popExit, not enter/exit.
         enterTransition = {
             when {
-                reducedMotion -> EnterTransition.None
+                reducedMotion || handingOff -> EnterTransition.None
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
@@ -978,7 +1081,7 @@ private fun BtNavHost(
         },
         exitTransition = {
             when {
-                reducedMotion -> ExitTransition.None
+                reducedMotion || handingOff -> ExitTransition.None
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
@@ -994,7 +1097,7 @@ private fun BtNavHost(
         },
         popEnterTransition = {
             when {
-                reducedMotion -> EnterTransition.None
+                reducedMotion || handingOff -> EnterTransition.None
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
@@ -1010,7 +1113,7 @@ private fun BtNavHost(
         },
         popExitTransition = {
             when {
-                reducedMotion -> ExitTransition.None
+                reducedMotion || handingOff -> ExitTransition.None
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
@@ -1032,117 +1135,129 @@ private fun BtNavHost(
         // the two `popUpTo(findStartDestination())` call sites — the deep-link
         // tab switch and the bottom-bar tap — can never pop to a hidden tab.
         startDestination = PortfolioTabRoute,
+        // The outgoing page. The gesture itself is detected on the parent Box
+        // (see BtApp) because the incoming page is this one's sibling; all this
+        // layer does is follow the shared displacement. Each TAB ROOT records
+        // its own pixels separately — see [BtTabPage].
         modifier = Modifier
             .fillMaxSize()
-            .btTabSwipe(state = swipeState, enabled = swipeEnabled, onSwipe = onSwipeTab),
+            .btTabPageOffset { swipeState.pageOffsetPx },
     ) {
         // Tabs
         composable<PortfolioTabRoute> {
-            // V5 S2a: a paranoid account's portfolio family is server-blind. Route
-            // ONLY these killed surfaces to the explainer — Markets/People/
-            // Workbench and everything under them keep working, because they do.
-            // Top-level tab: no onBack — the shell's own bars are showing.
-            ParanoidGate {
-                PortfolioOverviewScreen(
-                    onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
-                    onOpenTransactions = { portfolioId ->
-                        navController.navigate(TransactionsRoute(portfolioId))
-                    },
-                    onNewTransaction = { portfolioId ->
-                        navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
-                    },
-                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-                    onOpenCash = { portfolioId ->
-                        navController.navigate(CashRoute(portfolioId = portfolioId))
-                    },
-                    // ── Overview: the former Home tab, as a switcher selection ──
-                    // Composed here rather than inside the portfolio screen so
-                    // that screen stays ignorant of Home, and so Home's whole
-                    // callback surface — which is all navigation — stays in the
-                    // one file that owns the graph.
-                    overviewContent = { openSwitcher, leaveOverview ->
-                        // Overview crosses tabs ONLY through onOpen/onSwitchTab —
-                        // see HomeScreen's KDoc. No `navController` is handed to
-                        // it, deliberately: a bare push from an index screen
-                        // stacks another tab's detail on it and the next
-                        // bottom-bar tap saves it under the wrong tab (S6 P1-8).
-                        HomeScreen(
-                            onOpen = onDeepLink,
-                            onSwitchTab = onSwitchTab,
-                            // "See all holdings" / "open this portfolio": leave
-                            // Overview for the portfolio page. This used to be
-                            // `onSwitchTab(BtTab.Portfolio)`, which after the IA
-                            // change would be a hop to the tab we are already on
-                            // — i.e. a no-op the user would read as a dead tap.
-                            onOpenPortfolioView = leaveOverview,
-                            // "Create a portfolio": open the switcher, which is
-                            // where creation lives. Sending the user to an empty
-                            // portfolio page and hoping they find the sheet was
-                            // the old behaviour and it was never good; it is
-                            // simply impossible now, since the page they would
-                            // land on is the one they are already looking at.
-                            onCreatePortfolio = openSwitcher,
-                            onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
-                            onOpenDataHome = { navController.navigate(StorageHomeRoute) },
-                            discreetMode = discreetMode,
-                            onToggleDiscreet = onToggleDiscreet,
-                        )
-                    },
-                    overviewAction = {
-                        // Overview's ONE action (R1 decision O-3): search is the
-                        // affordance the whole app shares and Overview is the
-                        // only screen that is about all of it.
-                        BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
-                    },
-                    onOpenSettings = { navController.navigate(SettingsRoute) },
-                    // The in-content door to one portfolio's own settings. The
-                    // gear in the corner is the APP's settings and must keep
-                    // meaning only that — so per-portfolio management gets a row
-                    // in the page's management area instead, where it sits next
-                    // to Cash and Transactions as another thing about THIS
-                    // portfolio. The switcher's ⋮ carries the second path.
-                    onOpenPortfolioSettings = { portfolioId ->
-                        navController.navigate(PortfolioSettingsRoute(portfolioId))
-                    },
-                    onLongPressWordmark = {
-                        if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
-                    },
-                )
+            BtTabPage(peekLayers, BtTab.Portfolio) {
+                // V5 S2a: a paranoid account's portfolio family is server-blind. Route
+                // ONLY these killed surfaces to the explainer — Markets/People/
+                // Workbench and everything under them keep working, because they do.
+                // Top-level tab: no onBack — the shell's own bars are showing.
+                ParanoidGate {
+                    PortfolioOverviewScreen(
+                        onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
+                        onOpenTransactions = { portfolioId ->
+                            navController.navigate(TransactionsRoute(portfolioId))
+                        },
+                        onNewTransaction = { portfolioId ->
+                            navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
+                        },
+                        onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                        onOpenCash = { portfolioId ->
+                            navController.navigate(CashRoute(portfolioId = portfolioId))
+                        },
+                        // ── Overview: the former Home tab, as a switcher selection ──
+                        // Composed here rather than inside the portfolio screen so
+                        // that screen stays ignorant of Home, and so Home's whole
+                        // callback surface — which is all navigation — stays in the
+                        // one file that owns the graph.
+                        overviewContent = { openSwitcher, leaveOverview ->
+                            // Overview crosses tabs ONLY through onOpen/onSwitchTab —
+                            // see HomeScreen's KDoc. No `navController` is handed to
+                            // it, deliberately: a bare push from an index screen
+                            // stacks another tab's detail on it and the next
+                            // bottom-bar tap saves it under the wrong tab (S6 P1-8).
+                            HomeScreen(
+                                onOpen = onDeepLink,
+                                onSwitchTab = onSwitchTab,
+                                // "See all holdings" / "open this portfolio": leave
+                                // Overview for the portfolio page. This used to be
+                                // `onSwitchTab(BtTab.Portfolio)`, which after the IA
+                                // change would be a hop to the tab we are already on
+                                // — i.e. a no-op the user would read as a dead tap.
+                                onOpenPortfolioView = leaveOverview,
+                                // "Create a portfolio": open the switcher, which is
+                                // where creation lives. Sending the user to an empty
+                                // portfolio page and hoping they find the sheet was
+                                // the old behaviour and it was never good; it is
+                                // simply impossible now, since the page they would
+                                // land on is the one they are already looking at.
+                                onCreatePortfolio = openSwitcher,
+                                onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
+                                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
+                                discreetMode = discreetMode,
+                                onToggleDiscreet = onToggleDiscreet,
+                            )
+                        },
+                        overviewAction = {
+                            // Overview's ONE action (R1 decision O-3): search is the
+                            // affordance the whole app shares and Overview is the
+                            // only screen that is about all of it.
+                            BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
+                        },
+                        onOpenSettings = { navController.navigate(SettingsRoute) },
+                        // The in-content door to one portfolio's own settings. The
+                        // gear in the corner is the APP's settings and must keep
+                        // meaning only that — so per-portfolio management gets a row
+                        // in the page's management area instead, where it sits next
+                        // to Cash and Transactions as another thing about THIS
+                        // portfolio. The switcher's ⋮ carries the second path.
+                        onOpenPortfolioSettings = { portfolioId ->
+                            navController.navigate(PortfolioSettingsRoute(portfolioId))
+                        },
+                        onLongPressWordmark = {
+                            if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
+                        },
+                    )
+                }
             }
         }
         composable<MarketsTabRoute> {
-            MarketsTabScreen(
-                onOpenSearch = { navController.navigate(SearchRoute) },
-                onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
-                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                onAddToWatchlist = { navController.navigate(SearchRoute) },
-                onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
-                onOpenSettings = { navController.navigate(SettingsRoute) },
-            )
+            BtTabPage(peekLayers, BtTab.Markets) {
+                MarketsTabScreen(
+                    onOpenSearch = { navController.navigate(SearchRoute) },
+                    onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
+                    onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                    onAddToWatchlist = { navController.navigate(SearchRoute) },
+                    onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
+                    onOpenSettings = { navController.navigate(SettingsRoute) },
+                )
+            }
         }
         composable<PeopleTabRoute> {
-            SocialScreen(
-                onOpenFriend = { userId, username ->
-                    navController.navigate(FriendOverviewRoute(userId, username))
-                },
-                onOpenChats = { navController.navigate(ChatListRoute) },
-                onOpenChatWith = { friendUserId, username ->
-                    navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
-                },
-                onOpenGroups = { navController.navigate(FriendGroupsRoute) },
-                onOpenSettings = { navController.navigate(SettingsRoute) },
-            )
+            BtTabPage(peekLayers, BtTab.People) {
+                SocialScreen(
+                    onOpenFriend = { userId, username ->
+                        navController.navigate(FriendOverviewRoute(userId, username))
+                    },
+                    onOpenChats = { navController.navigate(ChatListRoute) },
+                    onOpenChatWith = { friendUserId, username ->
+                        navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
+                    },
+                    onOpenGroups = { navController.navigate(FriendGroupsRoute) },
+                    onOpenSettings = { navController.navigate(SettingsRoute) },
+                )
+            }
         }
         composable<FriendGroupsRoute> {
             FriendGroupsScreen(onBack = back)
         }
         composable<WorkbenchTabRoute> {
-            WorkbenchTabScreen(
-                onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
-                onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
-                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                onOpenSettings = { navController.navigate(SettingsRoute) },
-            )
+            BtTabPage(peekLayers, BtTab.Workbench) {
+                WorkbenchTabScreen(
+                    onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
+                    onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
+                    onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                    onOpenSettings = { navController.navigate(SettingsRoute) },
+                )
+            }
         }
 
         // S6 P2-19: LoginRoute / AppLockRoute were registered here as "Under

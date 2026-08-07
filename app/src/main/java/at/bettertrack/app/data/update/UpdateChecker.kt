@@ -93,16 +93,21 @@ class UpdateChecker(
                 currentVersionCode = currentVersionCode,
                 latestVersionCode = manifest.versionCode,
                 ignoredVersionCode = prefs.ignoredVersionCode,
-                remindedThisSession = remindedThisSession,
+                remindedThisSession = remindedThisSession || nowMs() < prefs.remindAfterMs,
             )
         ) {
             _pendingDialog.value = update
         }
     }
 
-    /** "Remind me later" — hide the dialog; it returns next cold start. */
+    /**
+     * "Remind me later" — hide the dialog and stay quiet for 24 hours ACROSS
+     * cold starts (persisted; the in-session flag alone made the prompt return
+     * on every launch, which the owner reported as a nag).
+     */
     fun remindLater() {
         remindedThisSession = true
+        prefs.remindAfterMs = nowMs() + REMIND_SNOOZE_MS
         _pendingDialog.value = null
     }
 
@@ -146,6 +151,9 @@ class UpdateChecker(
     }
 
     companion object {
+        /** 24h quiet window after "remind me later". */
+        const val REMIND_SNOOZE_MS = 24L * 60 * 60 * 1000
+
         private const val TAG = "BtUpdateChecker"
         const val REPO = "chris-dev-at/BetterTrackMobile"
 

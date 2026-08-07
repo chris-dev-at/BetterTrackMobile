@@ -22,7 +22,10 @@ import at.bettertrack.app.ui.theme.BtTheme
  * weight, muted. All sizing is em-relative so the same construction scales from
  * top bar to login screen. Never recolor or restyle.
  *
- * ## "Track" is drawn in [at.bettertrack.app.ui.theme.BtColors.goldInk], not `gold`
+ * ## "Track" is drawn in the CONSTANT brand gold in BOTH themes (owner order
+ * 2026-08-07: "the yellow of the logo shouldn't change to a darker rusty gold —
+ * it should stay the BetterTrack yellow; don't change up the logo"). WCAG
+ * exempts logotypes from contrast minimums, so brand wins here — and ONLY here;
  *
  * The two are the same value in dark, so this is byte-identical there and the
  * mark is unchanged. They diverge in light, and they have to: `#F6B82E` is
@@ -50,7 +53,7 @@ fun Wordmark(
     val text = remember(bt, fontSize, edition) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = bt.textPrimary)) { append("Better") }
-            withStyle(SpanStyle(color = bt.goldInk)) { append("Track") }
+            withStyle(SpanStyle(color = bt.gold)) { append("Track") }
             if (edition != null) {
                 append(" ")
                 withStyle(

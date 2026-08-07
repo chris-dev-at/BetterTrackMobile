@@ -16,6 +16,14 @@ class UpdatePrefs(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("bt_update_prefs", Context.MODE_PRIVATE)
 
+    /**
+     * "Remind me later" persists across cold starts (owner report 2026-08-07:
+     * the dialog returned on EVERY launch): no update prompt before this time.
+     */
+    var remindAfterMs: Long
+        get() = sp.getLong("remindAfterMs", 0L)
+        set(v) { sp.edit().putLong("remindAfterMs", v).apply() }
+
     var lastCheckMs: Long
         get() = sp.getLong(KEY_LAST_CHECK, 0L)
         set(v) = sp.edit().putLong(KEY_LAST_CHECK, v).apply()
