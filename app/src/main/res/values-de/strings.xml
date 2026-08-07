@@ -79,7 +79,7 @@
     <string name="bt_chart_mode_balance_cd">Kontostand in Euro</string>
     <string name="bt_chart_mode_performance">%</string>
     <string name="bt_chart_mode_performance_cd">Performance in Prozent</string>
-    <string name="bt_chart_mode_hybrid">% + €</string>
+    <string name="bt_chart_mode_hybrid">€ / %</string>
     <string name="bt_chart_mode_hybrid_cd">Performance-Kurve, Kontostand als Anzeige</string>
     <string name="bt_chart_perf_hint">Ein- und Auszahlungen werden neutralisiert — die Kurve bewegt sich nur, wenn sich deine Bestände bewegen.</string>
     <string name="bt_range_1d">1D</string>

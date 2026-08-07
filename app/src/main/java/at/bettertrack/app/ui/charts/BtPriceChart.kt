@@ -178,7 +178,7 @@ fun BtPriceChart(
         drawPath(
             path = linePath,
             color = lineColor,
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = bt.chartLineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
         // x labels: first + last timestamp, muted.
@@ -206,8 +206,8 @@ fun BtPriceChart(
             val px = plotW * ((nearest.timeMs - tMin) / tSpan)
             val py = plotH * (1f - scale.normalize(nearest.close))
             drawLine(bt.borderStrong, Offset(px, 0f), Offset(px, plotH), strokeWidth = 1.dp.toPx())
-            drawCircle(bt.surface, radius = 6.dp.toPx(), center = Offset(px, py))
-            drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(px, py))
+            drawCircle(bt.surface, radius = bt.chartLineWidth.toPx() * 3f, center = Offset(px, py))
+            drawCircle(lineColor, radius = bt.chartLineWidth.toPx() * 2f, center = Offset(px, py))
         }
     }
 }

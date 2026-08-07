@@ -111,13 +111,28 @@ fun BtAreaChart(
      */
     minimal: Boolean = false,
     /**
-     * Zero-baseline mode for a performance-% series: the curve is emerald where
-     * it is above zero and red where it is below, with the fill mirrored about
-     * the zero line. Matches the web's `BaselineSeries` treatment of the same
-     * series, and stays inside the brand rule that emerald/red mean money
-     * direction — which is precisely what the sign of a return is.
+     * Zero-baseline **geometry** for a performance-% series: the y-scale is
+     * anchored to zero, a zero rule line is drawn, and the area fill is mirrored
+     * about it — strongest at the top for the part above zero, strongest at the
+     * bottom for the part below, faint where they meet.
+     *
+     * This says nothing about colour. See [colorBySign], which used to be the
+     * same flag and no longer is.
      */
     baseline: Boolean = false,
+    /**
+     * Paint the curve emerald above zero and red below it, rather than in
+     * [lineColor].
+     *
+     * Split out of [baseline] by owner order 2026-08-07. The two were one flag,
+     * which forced any chart wanting a zero baseline to also accept a gain/loss
+     * verdict — and that is wrong for the hero's hybrid mode, whose headline is
+     * the € balance while the curve is the % return: coloring it by sign states
+     * a verdict about a quantity the user is not reading.
+     *
+     * Defaults to [baseline] so every existing call site keeps its behaviour.
+     */
+    colorBySign: Boolean = baseline,
     onScrub: ((HistoryPoint?) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
@@ -238,12 +253,16 @@ fun BtAreaChart(
         }
 
         // ── The series: line + gradient fill (morphed while transitioning) ──
-        val upColor = if (baseline) bt.gain else lineColor
-        val downColor = if (baseline) bt.loss else lineColor
+        // Colour forks on `colorBySign`; geometry below still forks on `baseline`.
+        // When they disagree (the hero's hybrid mode) both halves are `lineColor`,
+        // so the mirrored-about-zero fill renders in one hue — a single-colour
+        // baseline area, which is exactly the intended look.
+        val upColor = if (colorBySign) bt.gain else lineColor
+        val downColor = if (colorBySign) bt.loss else lineColor
         val zeroY = if (baseline) plotH * (1f - scale.normalize(0.0)) else plotH
 
         val lineStroke = Stroke(
-            width = 2.dp.toPx(),
+            width = bt.chartLineWidth.toPx(),
             cap = StrokeCap.Round,
             join = StrokeJoin.Round,
         )
@@ -262,7 +281,7 @@ fun BtAreaChart(
         // the clipped version measured 19ms/88% janky against 14ms/27% for the
         // single-pass € chart.
         val zeroRatio = (zeroY / plotH).coerceIn(0f, 1f)
-        val lineBrush: Brush = if (!baseline) {
+        val lineBrush: Brush = if (!colorBySign) {
             SolidColor(lineColor)
         } else {
             Brush.verticalGradient(
@@ -387,7 +406,7 @@ fun BtAreaChart(
         val x = seriesX(i, size.width, series.size)
         val y = plotH * (1f - scale.normalize(p.valueEur))
         val dotColor = when {
-            !baseline -> lineColor
+            !colorBySign -> lineColor
             p.valueEur >= 0.0 -> bt.gain
             else -> bt.loss
         }
@@ -397,9 +416,11 @@ fun BtAreaChart(
             end = Offset(x, plotH),
             strokeWidth = 1.dp.toPx(),
         )
-        // Dot with a surface ring so it reads on top of the line.
-        drawCircle(color = bt.surface, radius = 6.dp.toPx(), center = Offset(x, y))
-        drawCircle(color = dotColor, radius = 4.dp.toPx(), center = Offset(x, y))
+        // Dot with a surface ring so it reads on top of the line. Both radii are
+        // multiples of the line weight, so dark keeps its exact 6dp/4dp and light
+        // scales with the fatter light curve instead of being swallowed by it.
+        drawCircle(color = bt.surface, radius = bt.chartLineWidth.toPx() * 3f, center = Offset(x, y))
+        drawCircle(color = dotColor, radius = bt.chartLineWidth.toPx() * 2f, center = Offset(x, y))
     }
     }
 }

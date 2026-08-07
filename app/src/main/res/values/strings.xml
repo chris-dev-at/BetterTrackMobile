@@ -112,7 +112,7 @@
     <string name="bt_chart_mode_balance_cd">Balance in euro</string>
     <string name="bt_chart_mode_performance">%</string>
     <string name="bt_chart_mode_performance_cd">Performance in percent</string>
-    <string name="bt_chart_mode_hybrid">% + €</string>
+    <string name="bt_chart_mode_hybrid">€ / %</string>
     <string name="bt_chart_mode_hybrid_cd">Performance curve, balance readout</string>
     <string name="bt_chart_perf_hint">Deposits and withdrawals are neutralized — the curve only moves when your holdings move.</string>
     <string name="bt_range_1d">1D</string>

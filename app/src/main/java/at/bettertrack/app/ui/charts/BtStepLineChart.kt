@@ -109,11 +109,12 @@ fun BtStepLineChart(
         drawPath(
             path = line,
             color = lineColor,
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = bt.chartLineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
-        // Dot each recorded observation.
+        // Dot each recorded observation. 1.3× the line weight — dark keeps its
+        // exact 2.6dp, light scales with the fatter curve.
         points.forEach { p ->
-            drawCircle(lineColor, radius = 2.6.dp.toPx(), center = Offset(x(p.epochDay), y(p.value)))
+            drawCircle(lineColor, radius = bt.chartLineWidth.toPx() * 1.3f, center = Offset(x(p.epochDay), y(p.value)))
         }
     }
 }

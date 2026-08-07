@@ -80,6 +80,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
@@ -635,7 +636,13 @@ private fun OverviewContent(
                             Text(
                                 text = formatPercent(s.valueEur, locale),
                                 style = BtTheme.type.numberCaption,
-                                color = deltaColor(s.valueEur),
+                                // Neutral, matching the curve it annotates.
+                                // Hybrid carries no red/green anywhere (owner
+                                // order 2026-08-07) — a green number under a
+                                // gold curve would re-introduce, in the one
+                                // place it is most closely read, exactly the
+                                // verdict-colouring the mode is meant not to do.
+                                color = bt.textSecondary,
                             )
                         }
                         // W6: with nothing priced, `dayChangeEur` is a sum of
@@ -959,9 +966,17 @@ private fun HeroChart(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ChartModeChip(BtChartMode.BALANCE, mode, R.string.bt_chart_mode_balance, R.string.bt_chart_mode_balance_cd, onMode)
-            ChartModeChip(BtChartMode.PERFORMANCE, mode, R.string.bt_chart_mode_performance, R.string.bt_chart_mode_performance_cd, onMode)
-            ChartModeChip(BtChartMode.HYBRID, mode, R.string.bt_chart_mode_hybrid, R.string.bt_chart_mode_hybrid_cd, onMode)
+            // ONE control, not three chips. The six range chips sit directly
+            // below this same chart, so a chip row here was the same pill
+            // vocabulary saying two different things on one screen — and an
+            // exclusive choice is exactly what a segmented control is for.
+            BtSegmented(
+                options = CHART_MODES,
+                selected = mode,
+                label = { stringResource(chartModeLabel(it)) },
+                onSelect = onMode,
+                contentDescription = { stringResource(chartModeContentDescription(it)) },
+            )
             Spacer(Modifier.weight(1f))
             // Hidden while scrubbing so the hero's scrub readout is the single
             // focus — the same rule this line has always followed.
@@ -1000,16 +1015,31 @@ private fun HeroChart(
                     .fillMaxWidth()
                     .height(HERO_CHART_HEIGHT)
                     .semantics { contentDescription = chartCd },
-                // The hero stays GOLD by the §4.3 rule, but raw gold is ~1.6:1
-                // on a light card — below the 3:1 graphical floor. That floor is
-                // now a token: `goldGraphic` is the brand value in dark and the
-                // lightest on-ray darkening that clears 3:1 in light, so this
-                // reads one name instead of branching. It used to substitute
-                // `goldEmphasis` here, which is the TEXT ink — a line paying
-                // 4.5:1 for no reason, and the reason the light hero read rusty.
-                lineColor = bt.goldGraphic,
+                // The hero is the brand gold in BOTH modes (§4.3 + owner order
+                // 2026-08-07). It is 1.78:1 on a white card, i.e. under even the
+                // 3:1 graphical floor, and that is the decision rather than an
+                // oversight: this line went through `goldEmphasis` (the 4.5:1
+                // text ink) and then `goldGraphic` (an on-ray 3:1 darkening), and
+                // the owner rejected both as rust. What makes it read in light is
+                // GEOMETRY — `chartLineWidth` is 3dp there against dark's 2dp and
+                // `chartAreaTopAlpha` is heavier — never a darker hue.
+                //
+                // Passing `gold` itself also repairs a quiet defect: `wash()`
+                // keys its light gold correction off `hue == gold`, so while this
+                // said `goldGraphic` the hero's area fill was taking the ×0.86
+                // ACCENT attenuation instead of the ×1.16 gold gain — the one
+                // chart in the app whose fill was being thinned rather than
+                // strengthened on white.
+                lineColor = bt.gold,
                 minimal = true,
                 baseline = mode.plotsPerformance,
+                // Only the pure % mode paints its verdict (owner order
+                // 2026-08-07). Hybrid keeps the zero-baseline GEOMETRY — the
+                // rule line and the fill mirrored about zero, which is what a
+                // return series needs — but draws it in the brand gold, because
+                // its headline is the € balance and colouring one quantity by
+                // the sign of another is just a wrong statement.
+                colorBySign = mode.colorsBySign,
                 onScrub = onScrub,
             )
         } else {
@@ -1077,22 +1107,27 @@ private fun HeroChart(
 internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
     points.minByOrNull { kotlin.math.abs(it.epochMillis - epochMillis) }?.valueEur
 
-/** One display-mode chip. Reuses [BtChip] so the control needs no new vocabulary. */
-@Composable
-private fun ChartModeChip(
-    value: BtChartMode,
-    selected: BtChartMode,
-    labelRes: Int,
-    contentDescriptionRes: Int,
-    onSelect: (BtChartMode) -> Unit,
-) {
-    val cd = stringResource(contentDescriptionRes)
-    BtChip(
-        text = stringResource(labelRes),
-        selected = value == selected,
-        onClick = { onSelect(value) },
-        modifier = Modifier.semantics { contentDescription = cd },
-    )
+/**
+ * The display modes in picker order: € → % → both.
+ *
+ * Ordered by what each one shows rather than by which is default. The hybrid
+ * sits last because its label literally contains the other two, so the row reads
+ * as "money, return, or both" left to right.
+ */
+private val CHART_MODES = listOf(BtChartMode.BALANCE, BtChartMode.PERFORMANCE, BtChartMode.HYBRID)
+
+/** The segment label for a mode. */
+private fun chartModeLabel(mode: BtChartMode): Int = when (mode) {
+    BtChartMode.BALANCE -> R.string.bt_chart_mode_balance
+    BtChartMode.PERFORMANCE -> R.string.bt_chart_mode_performance
+    BtChartMode.HYBRID -> R.string.bt_chart_mode_hybrid
+}
+
+/** The spoken form — the labels are currency/percent glyphs and do not read aloud. */
+private fun chartModeContentDescription(mode: BtChartMode): Int = when (mode) {
+    BtChartMode.BALANCE -> R.string.bt_chart_mode_balance_cd
+    BtChartMode.PERFORMANCE -> R.string.bt_chart_mode_performance_cd
+    BtChartMode.HYBRID -> R.string.bt_chart_mode_hybrid_cd
 }
 
 /**

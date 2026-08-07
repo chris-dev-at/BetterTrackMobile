@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
 import at.bettertrack.app.data.prefs.BtChartMode
+import at.bettertrack.app.data.prefs.DEFAULT_CHART_MODE
 import at.bettertrack.app.data.prefs.chartModeFromName
 import at.bettertrack.app.data.repo.HistoryPoint
 import org.junit.Assert.assertEquals
@@ -30,10 +31,34 @@ class ChartModeTest {
     }
 
     @Test
-    fun `an unset preference opens on the balance chart`() {
-        // The mode that existed before this feature; a first run must not change
-        // what a returning user's chart looks like.
-        assertEquals(BtChartMode.BALANCE, chartModeFromName(null))
+    fun `only the pure percent mode colours its curve by sign`() {
+        // Owner order 2026-08-07: "don't color it red or green — only color in
+        // % mode." Hybrid used to inherit the gain/loss paint because this was
+        // the same flag as `plotsPerformance`; splitting them is the fix, and
+        // this is the assertion that keeps them split.
+        assertTrue(BtChartMode.PERFORMANCE.colorsBySign)
+        assertFalse(BtChartMode.HYBRID.colorsBySign)
+        assertFalse(BtChartMode.BALANCE.colorsBySign)
+        // The hybrid plots the % series AND stays neutral — the exact
+        // combination the old single flag could not express.
+        assertTrue(BtChartMode.HYBRID.plotsPerformance && !BtChartMode.HYBRID.colorsBySign)
+    }
+
+    @Test
+    fun `an unset preference opens on the hybrid chart`() {
+        // The default moved BALANCE → HYBRID by owner order 2026-08-07 ("make
+        // this one the DEFAULT"). "Unset" is the ONLY state that moves.
+        assertEquals(BtChartMode.HYBRID, chartModeFromName(null))
+        assertEquals(DEFAULT_CHART_MODE, chartModeFromName(null))
+    }
+
+    @Test
+    fun `an explicit stored choice survives the default move`() {
+        // The other half of the migration, and the half that is easy to get
+        // wrong: a user who actually picked € must stay on €, even though € is
+        // no longer the default. A stored name is an explicit choice, always.
+        assertEquals(BtChartMode.BALANCE, chartModeFromName("BALANCE"))
+        assertEquals(BtChartMode.PERFORMANCE, chartModeFromName("PERFORMANCE"))
     }
 
     @Test
@@ -44,12 +69,14 @@ class ChartModeTest {
     }
 
     @Test
-    fun `an unrecognised stored mode falls back instead of crashing`() {
+    fun `an unrecognised stored mode falls back to the default instead of crashing`() {
         // A downgrade, or a hand-edited pref: names are stored rather than
-        // ordinals precisely so this is a miss and not a misread.
-        assertEquals(BtChartMode.BALANCE, chartModeFromName("SOMETHING_ELSE"))
-        assertEquals(BtChartMode.BALANCE, chartModeFromName(""))
-        assertEquals(BtChartMode.BALANCE, chartModeFromName("balance"))
+        // ordinals precisely so this is a miss and not a misread. Note "balance"
+        // lowercase is NOT a valid stored name and therefore is not an explicit
+        // choice — it falls back like any other garbage.
+        assertEquals(DEFAULT_CHART_MODE, chartModeFromName("SOMETHING_ELSE"))
+        assertEquals(DEFAULT_CHART_MODE, chartModeFromName(""))
+        assertEquals(DEFAULT_CHART_MODE, chartModeFromName("balance"))
     }
 
     // ── The hybrid readout ────────────────────────────────────────────────────

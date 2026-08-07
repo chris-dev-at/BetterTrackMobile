@@ -3,6 +3,8 @@ package at.bettertrack.app.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * First-class BetterTrack color tokens — **one token set, two value tables**
@@ -157,50 +159,66 @@ data class BtColors(
 
     // ── Brand ────────────────────────────────────────────────────────────────
     /**
-     * The brand accent, and a **constant across modes** — it is the wordmark and
-     * every gold FILL. It is 1.78:1 against white, so it can never be text in
-     * light mode; [goldInk] is the text/icon form.
+     * The brand accent, and a **constant across modes** — the wordmark, every
+     * gold FILL, and (since the owner order of 2026-08-07) **every graphical
+     * mark in both tables**: chart lines, area gradients, selection indicators,
+     * pills, washes, progress, the bottom bar's indicator, every gold hairline.
+     *
+     * ## Why there is no longer a darkened graphical gold
+     *
+     * There used to be a third token, `goldGraphic` (`#A77D1F` in light), which
+     * held gold marks to WCAG's 3:1 graphical floor instead of the text ink's
+     * 4.5:1. It was retired by explicit owner decision:
+     *
+     * > *"still the graphs are this muddy gold rusty color, not a nice yellow.
+     * > And the highlights not either. Go make it ALL nice bright yellow, not
+     * > rusty gold."*
+     *
+     * Yellow is the hue WCAG punishes hardest, so **any** value that clears even
+     * the 3:1 graphical floor on white is necessarily a dark amber — `#A77D1F`
+     * is 3.75:1 and reads as rust, and there is no point on the brand ray that
+     * is both compliant and recognisably the logo. The floor and the brand are
+     * genuinely irreconcilable here, and the owner chose the brand.
+     *
+     * **The readability that floor was buying is bought back by GEOMETRY, not by
+     * hue** — that is the whole trade, and it is why this is not simply a
+     * regression to the pre-split state:
+     *
+     *  - chart lines draw at [chartLineWidth], which is 3dp in light against
+     *    dark's 2dp, so the curve reads by mass rather than by darkness;
+     *  - the area gradient under them is stronger in light ([chartAreaTopAlpha]);
+     *  - every `edge(gold, …)` hairline doubles its alpha in light, which
+     *    reproduces the retired `goldGraphic`'s exact luminance (see [edge]).
+     *
+     * It is 1.78:1 against white, so it still can never be reading text in
+     * light; [goldInk] remains the text/glyph form.
      */
     val gold: Color,
     /**
-     * Gold as **reading text** on a surface. Identical to [gold] in dark;
-     * darkened for AA in light.
+     * Gold as **reading text or a meaning-carrying glyph** on a surface.
+     * Identical to [gold] in dark; one step down the brand ray in light.
      *
-     * The light value is the *least-dark* point on the brand gold's own RGB ray
-     * that still clears 4.5:1 on all five light surfaces. Both halves of that
-     * sentence are the correction (see [goldGraphic] for the other half):
+     * This is the *only* place light gold is allowed to differ from [gold] at
+     * all, and the gap is now deliberately small. The owner's ceiling was named
+     * directly — *"the darkest value that still reads as the logo yellow …
+     * think #D99A00-class at the darkest, never brown-leaning"* — so the light
+     * value is that exact lightness taken **on the brand gold's own RGB ray**:
+     * `#D49E28` is 2.41:1 on white against `#D99A00`'s 2.45:1, i.e. visually the
+     * value the owner named, but with the blue channel intact.
      *
-     *  - **On the ray.** The previous light ink `#8F5F00` was not a darkened
-     *    brand gold, it was a different colour: it zeroes the blue channel,
-     *    and `B = 0` at that lightness is what the eye calls *rust*. The brand
-     *    gold carries `B = 46`; keeping the channel ratio keeps the hue.
-     *  - **Least-dark.** Yellow is the hue AA punishes hardest — anything that
-     *    clears 4.5:1 on white is necessarily a dark amber — so every extra
-     *    step of darkening past the floor is spent making the brand look
-     *    muddier for nothing. `#866419` sits 4.56:1 on the worst light surface.
+     * Keeping the channel ratio is what keeps it from reading rusty. `#D99A00`
+     * and the older `#8F5F00` both zero the blue channel, and a yellow with no
+     * blue in it is what the eye calls rust — the exact defect this token has
+     * twice been rewritten to remove.
      *
-     * Use this ONLY where gold is literal text or a text-equivalent glyph.
-     * Anything graphical reads [goldGraphic] and gets to stay much closer to
-     * the logo.
+     * This sits **far below the 4.5:1 AA floor** and that is the owner's
+     * explicit, documented decision, not an oversight. See `BtContrastTest`,
+     * which pins the value so the decision cannot drift silently.
+     *
+     * Use this ONLY where gold is literal text or a glyph read as meaning.
+     * Anything graphical — a line, a fill, a ring, a hairline — reads [gold].
      */
     val goldInk: Color,
-    /**
-     * Gold as a **graphical mark** — chart lines, selection rings, gold
-     * hairlines, indicator strokes. Identical to [gold] in dark.
-     *
-     * WCAG asks 3:1 of a graphical object and 4.5:1 of text, and for yellow
-     * that gap is enormous: it is the difference between an amber that still
-     * reads as the logo (`#A77D1F`, 3.13:1 worst case) and one that does not
-     * (`#866419`). Collapsing both jobs onto [goldInk] — which is what the app
-     * did before this token existed — paid the *text* penalty on the hero chart
-     * line, the bottom bar's selection pill and every `edge(gold, …)` hairline,
-     * none of which is text. The brand is the app's one accent; spending it at
-     * the wrong floor is not a rounding error.
-     *
-     * It is a separate token rather than a mode branch so [edge] and the chart
-     * call sites read one name and dark keeps the brand value untouched.
-     */
-    val goldGraphic: Color,
     /** Emphasised gold ink (brighter in dark; collapses onto [goldInk] in light — "soft" fails on white). */
     val goldEmphasis: Color,
     /** Soft gold ink (same asymmetry as [goldEmphasis]). */
@@ -215,7 +233,10 @@ data class BtColors(
     val goldWash: Color,
     /** Selected chip / indicator fill. */
     val goldWashStrong: Color,
-    /** Wash borders. Light uses [goldGraphic] — a pale gold hairline on white is invisible. */
+    /**
+     * Wash borders. Both tables now draw the brand hue; light carries **twice
+     * the alpha** so a pale gold hairline on white still has mass (see [edge]).
+     */
     val goldEdge: Color,
 
     // ── Semantic ─────────────────────────────────────────────────────────────
@@ -240,10 +261,36 @@ data class BtColors(
     /** Axis labels. */
     val chartAxis: Color,
     /**
-     * Top-of-gradient alpha for area fills. 24% of a saturated hue reads far
-     * heavier on white than on near-black, so the alpha itself is a token.
+     * Top-of-gradient alpha for area fills.
+     *
+     * It was 0.18 in light against dark's 0.24 on the reasoning that a
+     * saturated hue reads heavier on white than on near-black. **That reasoning
+     * does not survive the hue it is applied to here.** It holds for a
+     * mid-lightness blue or green; yellow is the lightest hue on the wheel, and
+     * `#F6B82E` at 18% over white is a cream tint with no mass at all. The
+     * light value is now 0.26 — one of the two geometry compensations that pay
+     * for keeping the brand hue on the light hero chart (owner order
+     * 2026-08-07); the other is [chartLineWidth].
+     *
+     * Note this is pre-[wash] alpha: gold takes the ×1.16 gold gain on top
+     * (→ 0.30 effective) and gain/loss the ×0.86 accent attenuation (→ 0.22).
      */
     val chartAreaTopAlpha: Float,
+    /**
+     * Stroke weight for every line/area chart curve.
+     *
+     * A token rather than a constant because it is the **primary** geometry
+     * compensation for the 2026-08-07 owner order: light draws the brand
+     * `#F6B82E` on white at 1.78:1, and what makes that curve read is width,
+     * not darkness — the TradingView yellow-on-white reference is a fat line,
+     * not a dark one. Light is 3dp; dark keeps its 2dp, where a bright gold on
+     * near-black never needed the help.
+     *
+     * The crosshair dot and its halo are sized off this too, so dark stays
+     * byte-identical (2dp → 4dp dot, 6dp halo — exactly the previous constants)
+     * and light gains proportionate mass for free.
+     */
+    val chartLineWidth: Dp,
     /** Alpha where a baseline (gain/loss split) gradient meets zero. */
     val chartAreaZeroAlpha: Float,
     /**
@@ -319,17 +366,26 @@ data class BtColors(
     /**
      * Composite [hue] as a **hairline** at [alpha].
      *
-     * Same job as [wash] with one extra correction: in light mode a gold edge
-     * must be drawn darkened, because pale gold on white is invisible (§1.4,
-     * `goldEdge`). It darkens to [goldGraphic], **not** to [goldInk] — a
-     * hairline is a graphical object, so it owes 3:1 and not 4.5:1, and the
-     * three extra steps of darkening the text ink carries would cost the brand
-     * hue for a floor this never had to meet.
+     * Same job as [wash] with one extra correction: pale gold on white is
+     * invisible, so a gold edge needs help in light (§1.4, `goldEdge`).
+     *
+     * **That help used to be a hue swap and is now an alpha gain** — the single
+     * mechanical change the 2026-08-07 owner order comes down to. This function
+     * previously darkened gold to the retired `goldGraphic` (`#A77D1F`), which
+     * bought its mass by making the brand rusty. It now keeps `#F6B82E` and
+     * doubles the alpha instead, and the two are *the same weight*: `#A77D1F` at
+     * 30% over white composites to `#E5D8BC` (relative luminance 0.694), and
+     * `#F6B82E` at 60% composites to `#FAD482` (0.690). Identical mass, brand
+     * hue restored — which is exactly the trade the order asks for.
+     *
+     * Applying it here rather than at the ~25 `edge(gold, …)` call sites is the
+     * point of the helper: no screen has to know the correction, and the high-
+     * alpha sites clamp rather than overflow.
      */
     fun edge(hue: Color, alpha: Float): Color {
         if (!isLight) return hue.copy(alpha = alpha)
-        val ink = if (hue == gold) goldGraphic else hue
-        return ink.copy(alpha = alpha.coerceIn(0f, 1f))
+        val gain = if (hue == gold) LIGHT_GOLD_EDGE_GAIN else 1f
+        return hue.copy(alpha = (alpha * gain).coerceIn(0f, 1f))
     }
 
     private companion object {
@@ -351,6 +407,12 @@ data class BtColors(
          * than it needs. Left as-is — the drift is well inside a 12% alpha.
          */
         const val LIGHT_ACCENT_WASH_GAIN = 0.86f
+        /**
+         * Owner order 2026-08-07: a gold hairline in light keeps the brand hue
+         * and buys its mass with alpha instead. Derived, not guessed — see
+         * [edge] for the luminance match against the retired `goldGraphic`.
+         */
+        const val LIGHT_GOLD_EDGE_GAIN = 2.0f
     }
 }
 
@@ -366,14 +428,23 @@ private val LightHairlineInk = Color(0xFF141B23)
 
 private val BtGold = Color(0xFFF6B82E)
 
-// The two light golds, both struck from the brand gold's own RGB ray
-// (246,184,46) so the hue survives the darkening — see `goldInk`/`goldGraphic`.
-// `#8F5F00` (the pre-flip ink) was NOT on that ray: zeroing blue turns the logo
-// yellow into rust, which is the whole defect these two values exist to undo.
-/** Brand gold × 0.545 — the lightest point on the ray that holds 4.5:1 on every light surface. */
-private val BtGoldInkLight = Color(0xFF866419)
-/** Brand gold × 0.68 — the lightest point on the ray that holds 3:1 on every light surface. */
-private val BtGoldGraphicLight = Color(0xFFA77D1F)
+/**
+ * The **one** light gold that is not the brand value itself — gold as text.
+ *
+ * Brand gold × 0.86, i.e. struck from the brand's own RGB ray (246,184,46) so
+ * the channel ratios survive the darkening. That ray is load-bearing: `#8F5F00`
+ * (two inks ago) and `#D99A00` both zero the blue channel, and a yellow with no
+ * blue in it is what the eye calls rust.
+ *
+ * The *depth* is the owner's ceiling of 2026-08-07 — "#D99A00-class at the
+ * darkest, never brown-leaning" — taken at equal lightness rather than equal
+ * hex: 2.41:1 on white against `#D99A00`'s 2.45:1.
+ *
+ * Its predecessor `#866419` (× 0.545) was the lightest point that cleared 4.5:1
+ * on every light surface. That floor is no longer met by anything gold in this
+ * app, by explicit owner decision — see [BtColors.goldInk].
+ */
+private val BtGoldInkLight = Color(0xFFD49E28)
 private val BtGainDark = Color(0xFF34D399)
 // #0F7A55 → #0F7853: byte-converged with web (board 94b5145) — the platform
 // darkened our value along its own RGB ray to clear 4.5:1 on the web's two
@@ -413,9 +484,6 @@ val BtDarkColors = BtColors(
 
     gold = BtGold,
     goldInk = BtGold,
-    // Dark never had to trade the brand away for contrast, so text and graphics
-    // are the same colour here and this token changes nothing about dark.
-    goldGraphic = BtGold,
     goldEmphasis = Color(0xFFFBBF24),
     goldSoft = Color(0xFFFCD34D),
     goldSurface = Color(0xFF451A03),
@@ -437,6 +505,8 @@ val BtDarkColors = BtColors(
     chartAxis = Color(0xFF77818D),
     chartAreaTopAlpha = 0.24f,
     chartAreaZeroAlpha = 0.02f,
+    // Bright gold on near-black never needed the help light needs.
+    chartLineWidth = 2.dp,
     // `CATEGORICAL_SERIES` verbatim. Re-validated against THIS ramp's card
     // (#161B22, lighter than the #10151b the web checked): all six checks pass,
     // worst adjacent CVD pair yellow↔green ΔE 8.4 (protan).
@@ -504,18 +574,16 @@ val BtDarkColors = BtColors(
  *
  * The order asks for the lightest tint that still works, and `#E9EDF2` (ΔL\* 6.4
  * below white) is lighter than the `#E7EBF0` it replaces but nowhere near the
- * `#F3F4F6` class one might reach for. The binding constraint is not visibility
- * — it is `BtContrastTest`'s *"must not be darker than it needs to be"* guard on
- * the two light golds, which measures them against the darkest opaque surface in
- * the table. Lightening `surfaceHighest` past ~`#EAEEF3` makes the current
- * [goldInk] `#866419` and [goldGraphic] `#A77D1F` provably darker than the table
- * requires, and the honest fix for that is to lighten the GOLDS along the brand
- * ray — a change to the app's brand colour, settled one commit before this one
- * after a whole investigation into a rusty-gold regression, and not something an
- * "all white" order authorises by implication.
+ * `#F3F4F6` class one might reach for.
  *
- * That trade is real and it is the owner's to make: a whiter pressed state is
- * available, and its price is a slightly brighter gold everywhere in light.
+ * The constraint that used to pin it here was `BtContrastTest`'s *"must not be
+ * darker than it needs to be"* guard on the two light golds, measured against
+ * the darkest opaque surface in the table. **That guard is gone**: the golds are
+ * now fixed by owner decision rather than derived from a floor (2026-08-07), so
+ * they no longer chase this value and this value no longer constrains them. What
+ * keeps `#E9EDF2` is now only its own job — pressed feedback and the skeleton
+ * shimmer have to be perceivable — and it is free to be lightened on evidence
+ * from the device rather than on arithmetic.
  *
  * ### What this does NOT change
  *
@@ -560,22 +628,29 @@ val BtLightColors = BtColors(
 
     gold = BtGold,
     goldInk = BtGoldInkLight,
-    goldGraphic = BtGoldGraphicLight,
     // "Emphasis"/"soft" mean LIGHTER, and lighter fails on white — both collapse
     // onto the ink so `wash fill + emphasis ink` stays legible with no branching.
-    // They stay on the TEXT ink rather than the graphical one because the sites
-    // that read them are mixed (icon tints, but also `Text(color = …)` in ~20
-    // places), and a token cannot be 3:1 for half its callers.
+    // The sites that read them are mixed (icon tints, but also `Text(color = …)`
+    // in ~20 places), so they take the text form; the ink is now within one step
+    // of the brand value anyway, so the brand cost of that choice is ~nil.
     goldEmphasis = BtGoldInkLight,
     goldSoft = BtGoldInkLight,
     goldSurface = Color(0xFFFCF1DB),
-    goldSurfaceStrong = Color(0xFFD2B37A),
+    // Was #D2B37A — a desaturated tan, i.e. exactly the brown-adjacent cast the
+    // 2026-08-07 order rejects, and it was doing its job badly on top of that:
+    // 1.79:1 on the cream `goldSurface` it borders. The ink value is brighter,
+    // on the brand ray, AND a stronger edge (2.15:1). It stops one step short of
+    // `gold` because this is an opaque 1dp stroke on a cream fill, where the
+    // brand value itself falls to 1.59:1 and the selected state stops reading at
+    // all — the alpha compensation `edge()` uses is not available to an opaque
+    // token, so this is the "darkest value that still reads as the logo yellow".
+    goldSurfaceStrong = BtGoldInkLight,
     onGold = Color(0xFF171105),
     goldWash = BtGold.copy(alpha = 0.16f),
     goldWashStrong = BtGold.copy(alpha = 0.26f),
-    // The graphical gold, not the text ink: this is a hairline, and it is the
-    // single most visible place the brand hue survives the light table.
-    goldEdge = BtGoldGraphicLight.copy(alpha = 0.30f),
+    // The brand hue, at double alpha — the same luminance the retired
+    // `goldGraphic` hairline had, without the rust. Agrees with `edge(gold, 0.3)`.
+    goldEdge = BtGold.copy(alpha = 0.60f),
 
     gain = BtGainLight,
     gainSoft = BtGainLight,
@@ -587,8 +662,11 @@ val BtLightColors = BtColors(
 
     chartGrid = LightHairlineInk.copy(alpha = 0.08f),
     chartAxis = Color(0xFF5D6773),
-    chartAreaTopAlpha = 0.18f,
+    // 0.18 → 0.26 and 2dp → 3dp: the two geometry compensations that pay for
+    // keeping `#F6B82E` on a white canvas. See the token KDocs.
+    chartAreaTopAlpha = 0.26f,
     chartAreaZeroAlpha = 0.015f,
+    chartLineWidth = 3.dp,
     // Same-hue darkened counterparts of the dark ramp, because the platform
     // validated `CATEGORICAL_SERIES` against a dark canvas ONLY — the dark inks
     // sit at ~2.5:1 on white. Six of the ten already had web light counterparts

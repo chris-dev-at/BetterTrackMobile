@@ -265,7 +265,7 @@ private fun BiometricKey(onClick: () -> Unit) {
             .clip(CircleShape)
             .clickable(
                 interactionSource = interaction,
-                indication = ripple(bounded = true, color = bt.goldInk),
+                indication = ripple(bounded = true, color = bt.gold),
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,

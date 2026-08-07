@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,14 +27,21 @@ import org.junit.Test
  *    **4.5:1 on all five opaque surfaces**, in both tables and under true black.
  *    These are the quietest text tokens in the app; if they pass, everything
  *    above them passes.
- *  - The accent inks ([BtColors.goldInk], [BtColors.gain], [BtColors.loss])
- *    clear 4.5:1 on `bg` and `surface` — the two substrates they actually
- *    appear on as text.
+ *  - The accent inks ([BtColors.gain], [BtColors.loss]) clear 4.5:1 on `bg` and
+ *    `surface` — the two substrates they actually appear on as text.
  *  - [BtColors.gold] as a FILL clears 4.5:1 against [BtColors.onGold], which is
  *    the pairing that makes gold buttons legible.
  *
  * Alpha tokens (`border`, the washes) are deliberately out of scope: they are
  * not text and WCAG's ratio is undefined for a colour without a substrate.
+ *
+ * ## What it deliberately does NOT check
+ *
+ * **Gold in the light table has no contrast floor.** That is an owner decision
+ * of 2026-08-07, not an omission, and the tests that used to enforce a floor
+ * there now pin the chosen VALUES instead so the decision still fails the build
+ * when it drifts. The full reasoning sits above those tests — read it before
+ * "fixing" a gold contrast number.
  */
 class BtContrastTest {
 
@@ -120,11 +128,12 @@ class BtContrastTest {
     // ── Accent inks where they are actually used as text ─────────────────────
 
     @Test
-    fun `gold ink clears AA on page and card in both tables`() {
-        listOf("dark" to BtDarkColors, "light" to BtLightColors).forEach { (name, bt) ->
-            assertAA("$name goldInk", bt.goldInk, "bg", bt.bg)
-            assertAA("$name goldInk", bt.goldInk, "surface", bt.surface)
-        }
+    fun `gold ink clears AA on page and card in dark`() {
+        // Light is exempt by owner order — see `the light gold is the owner's
+        // chosen value`, which pins the value instead of a floor. Dark is not
+        // exempt and never needed to be: gold on near-black passes comfortably.
+        assertAA("dark goldInk", BtDarkColors.goldInk, "bg", BtDarkColors.bg)
+        assertAA("dark goldInk", BtDarkColors.goldInk, "surface", BtDarkColors.surface)
     }
 
     @Test
@@ -145,8 +154,10 @@ class BtContrastTest {
         listOf("dark" to BtDarkColors, "light" to BtLightColors).forEach { (name, bt) ->
             assertAA("$name gainSoft", bt.gainSoft, "surface", bt.surface)
             assertAA("$name lossSoft", bt.lossSoft, "surface", bt.surface)
-            assertAA("$name goldEmphasis", bt.goldEmphasis, "surface", bt.surface)
         }
+        // `goldEmphasis` collapses onto `goldInk`, so in light it inherits that
+        // token's owner-ordered exemption and only dark is checked here.
+        assertAA("dark goldEmphasis", BtDarkColors.goldEmphasis, "surface", BtDarkColors.surface)
     }
 
     // ── Gold as a fill ──────────────────────────────────────────────────────
@@ -158,58 +169,115 @@ class BtContrastTest {
         }
     }
 
-    // ── Gold as a graphical mark ─────────────────────────────────────────────
+    // ── Gold as a graphical mark: the owner-ordered exemption ────────────────
+
+    /*
+     * OWNER ORDER, 2026-08-07 — Christian, final word after two rejected
+     * compromises:
+     *
+     *   "still the graphs are this muddy gold rusty color, not a nice yellow.
+     *    And the highlights not either. Go make it ALL nice bright yellow, not
+     *    rusty gold."
+     *
+     * Everything below replaces a CONTRAST FLOOR with a PINNED VALUE, and that
+     * substitution is the whole design of these tests now. The reasoning:
+     *
+     *  - Yellow is the hue WCAG punishes hardest. On white, the brand `#F6B82E`
+     *    is 1.78:1; the lightest point on its own RGB ray clearing even the 3:1
+     *    graphical floor is `#A77D1F`, which the owner sees — correctly — as
+     *    rust. There is no value that is both compliant and recognisably the
+     *    logo, so the floor and the brand are irreconcilable and the owner chose
+     *    the brand. A test cannot re-litigate that.
+     *  - But a decision that is merely *absent* from the tests is a decision
+     *    that drifts back in six months. So each exempted token asserts its
+     *    EXACT VALUE: the build still fails on any change, it just fails for
+     *    "you changed what the owner picked" instead of "you missed a floor".
+     *  - The readability the floors bought is bought back by GEOMETRY instead —
+     *    `chartLineWidth` (3dp light / 2dp dark), a heavier `chartAreaTopAlpha`,
+     *    and the 2× alpha gain in `edge()`. Those are asserted below too,
+     *    because they are now the only thing holding the light charts up.
+     */
 
     @Test
-    fun `the graphical gold clears the 3 to 1 graphical floor on every surface`() {
-        // `goldGraphic` is the hero chart line, the bottom bar's selection ring
-        // and every `edge(gold, …)` hairline. WCAG asks 3:1 of a graphical
-        // object, not 4.5:1 — and for yellow that gap is the whole difference
-        // between an amber that still reads as the logo and one that does not.
-        // Holding it to the TEXT floor is what made the light hero read rusty.
-        tables.forEach { (name, bt) ->
-            bt.opaqueSurfaces().forEach { (sName, s) ->
-                val ratio = contrastRatio(bt.goldGraphic, s)
-                assertTrue(
-                    "$name goldGraphic on $sName is %.2f:1, below the 3:1 graphical floor"
-                        .format(ratio),
-                    ratio >= GRAPHICAL,
-                )
-            }
+    fun `the light gold is the owner's chosen value, not a derived floor`() {
+        // Pinned, not derived. If you are changing this line, you are changing
+        // the owner's decision — get his word, not a contrast calculator's.
+        assertEquals(Color(0xFFD49E28), BtLightColors.goldInk)
+        assertEquals(BtGold_ForTest, BtLightColors.gold)
+
+        // The ONE property that is still derived rather than dictated, and the
+        // reason two previous inks were rejected: it must sit on the brand
+        // gold's RGB ray. `#8F5F00` and `#D99A00` both zero the blue channel,
+        // and a yellow with no blue in it at that lightness is what the eye
+        // calls rust — hue alone does not catch it (`#8F5F00` is within 1.5° of
+        // the brand gold), so the invariant is the CHANNEL RATIO.
+        val deviation = rayDeviation(BtLightColors.goldInk, BtLightColors.gold)
+        assertTrue(
+            "light goldInk is %.3f off the brand gold's RGB ray — darken along the ray, never re-pick the hue"
+                .format(deviation),
+            deviation <= RAY_TOLERANCE,
+        )
+
+        // And it must stay BRIGHT. This is the guard that actually protects the
+        // owner's intent: the failure mode here has always been someone nudging
+        // the ink darker one defensible step at a time until it is rust again.
+        // `#D99A00` — the ceiling the owner named himself — is 2.45:1 on white.
+        val onWhite = contrastRatio(BtLightColors.goldInk, BtLightColors.bg)
+        assertTrue(
+            "light goldInk is %.2f:1 on white — darker than the #D99A00-class ceiling the owner set"
+                .format(onWhite),
+            onWhite <= OWNER_INK_CEILING,
+        )
+    }
+
+    @Test
+    fun `every gold graphical mark is the brand value in both tables`() {
+        // The retired `goldGraphic` (`#A77D1F`) used to sit here holding chart
+        // lines, selection rings and gold hairlines to 3:1. It is gone: a
+        // graphical gold mark is now `gold` itself in BOTH tables, which is what
+        // "make it ALL nice bright yellow" means mechanically.
+        assertEquals("light gold must equal dark gold", BtDarkColors.gold, BtLightColors.gold)
+        // The hairline helper keeps the hue in light instead of swapping it.
+        assertEquals(
+            "edge() must no longer darken gold — it gains alpha instead",
+            BtLightColors.gold.red,
+            BtLightColors.edge(BtLightColors.gold, 0.3f).red,
+        )
+        // The named wash/edge tokens are all struck from the brand value.
+        listOf(
+            "goldWash" to BtLightColors.goldWash,
+            "goldWashStrong" to BtLightColors.goldWashStrong,
+            "goldEdge" to BtLightColors.goldEdge,
+        ).forEach { (label, c) ->
+            assertEquals(
+                "light $label must carry the brand hue",
+                Triple(BtLightColors.gold.red, BtLightColors.gold.green, BtLightColors.gold.blue),
+                Triple(c.red, c.green, c.blue),
+            )
         }
     }
 
     @Test
-    fun `the light golds are the brand gold darkened, not a different colour`() {
-        // THE test this pair exists for. The old light ink `#8F5F00` passed
-        // every contrast assertion above and was still wrong: it zeroes the blue
-        // channel, and a yellow with no blue in it at that lightness is rust.
-        // Hue alone does not catch it — `#8F5F00` sits within 1.5° of the brand
-        // gold — so the invariant to test is the RAY: a legitimate darkening
-        // scales all three channels together and therefore preserves the
-        // channel ratios. `#8F5F00` deviates by 0.19 on blue; both current
-        // values deviate by under 0.005.
-        listOf(
-            "goldInk" to BtLightColors.goldInk,
-            "goldGraphic" to BtLightColors.goldGraphic,
-        ).forEach { (label, c) ->
-            val deviation = rayDeviation(c, BtLightColors.gold)
-            assertTrue(
-                "light $label is %.3f off the brand gold's RGB ray — darken it along the ray, do not re-pick the hue"
-                    .format(deviation),
-                deviation <= RAY_TOLERANCE,
-            )
-        }
-        // And each must be the LIGHTEST such point that clears its own floor:
-        // every extra step past the floor is brand thrown away for nothing.
+    fun `the geometry compensations that replace the contrast floors are present`() {
+        // These are load-bearing: they are the ONLY thing making a 1.78:1 curve
+        // read on white now that the darkening is gone. Weakening either without
+        // a matching owner decision re-opens the defect the floors used to cover.
         assertTrue(
-            "goldInk must not be darker than it needs to be",
-            contrastRatio(BtLightColors.goldInk, BtLightColors.surfaceHighest) < AA + 0.25,
+            "light chart lines must be drawn heavier than dark's to read on white",
+            BtLightColors.chartLineWidth > BtDarkColors.chartLineWidth,
         )
+        assertEquals(3.dp, BtLightColors.chartLineWidth)
+        assertEquals(2.dp, BtDarkColors.chartLineWidth)
         assertTrue(
-            "goldGraphic must not be darker than it needs to be",
-            contrastRatio(BtLightColors.goldGraphic, BtLightColors.surfaceHighest) < GRAPHICAL + 0.25,
+            "the light area gradient must carry more mass than it did at 0.18",
+            BtLightColors.chartAreaTopAlpha >= 0.26f,
         )
+        // `edge()` doubles gold's alpha in light, which reproduces the retired
+        // `goldGraphic` hairline's luminance exactly (0.690 vs 0.694 over white).
+        // Dark is untouched. The delta clears one 8-bit quantization step
+        // (1/255 = 0.0039), which is how Compose stores an sRGB alpha channel.
+        assertEquals(0.60f, BtLightColors.edge(BtLightColors.gold, 0.30f).alpha, ALPHA_STEP)
+        assertEquals(0.30f, BtDarkColors.edge(BtDarkColors.gold, 0.30f).alpha, ALPHA_STEP)
     }
 
     /**
@@ -252,7 +320,7 @@ class BtContrastTest {
             val ratio = contrastRatio(bt.chartAxis, bt.bg)
             assertTrue(
                 "$name chartAxis on bg is %.2f:1, below 3:1".format(ratio),
-                ratio >= 3.0,
+                ratio >= GRAPHICAL,
             )
         }
     }
@@ -291,5 +359,16 @@ class BtContrastTest {
         const val GRAPHICAL = 3.0
         /** Max red-normalised channel drift still counted as "the brand gold, darkened". */
         const val RAY_TOLERANCE = 0.02
+        /**
+         * The owner's own darkness ceiling for gold-as-text, as a contrast ratio
+         * on white: `#D99A00` — the value he named — measures 2.45:1, and a
+         * SMALLER ratio means a BRIGHTER ink. Slack of 0.05 so a rounding step
+         * along the ray does not fail the build.
+         */
+        const val OWNER_INK_CEILING = 2.50
+        /** The brand gold. Duplicated here on purpose: a test that reads the value it checks proves nothing. */
+        val BtGold_ForTest = Color(0xFFF6B82E)
+        /** One 8-bit alpha quantization step, with room to spare — Compose stores sRGB alpha in 8 bits. */
+        const val ALPHA_STEP = 0.01f
     }
 }

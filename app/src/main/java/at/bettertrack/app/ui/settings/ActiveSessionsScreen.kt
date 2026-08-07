@@ -119,7 +119,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
 
             when {
                 loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = bt.goldInk, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = bt.gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
                 error != null -> Text(error!!.resolveWithDiagnostic(), style = MaterialTheme.typography.bodyMedium, color = bt.loss)
                 sessions.isEmpty() -> Text(stringResource(R.string.bt_sessions_none), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)

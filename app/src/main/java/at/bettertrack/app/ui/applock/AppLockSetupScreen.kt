@@ -331,7 +331,7 @@ fun AppLockSetupScreen(
                 modifier = Modifier.fillMaxSize().padding(pad),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = bt.goldInk)
+                CircularProgressIndicator(color = bt.gold)
             }
             return@Scaffold
         }

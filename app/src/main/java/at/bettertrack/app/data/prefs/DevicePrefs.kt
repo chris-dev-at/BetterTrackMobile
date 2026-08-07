@@ -24,6 +24,7 @@ enum class ScreenOrientationMode { LOCKED_PORTRAIT, FOLLOW_SENSOR }
  * - [HYBRID] — the owner's ask (2026-08-07): the % curve's SHAPE, because that is
  *   the shape that says how the investments actually did, with the € balance as
  *   the readout, because that is the number you want when you point at a day.
+ *   **The default since 2026-08-07** — see [DEFAULT_CHART_MODE].
  */
 enum class BtChartMode {
     BALANCE,
@@ -33,15 +34,48 @@ enum class BtChartMode {
 
     /** True when this mode plots the performance-% series rather than the € one. */
     val plotsPerformance: Boolean get() = this != BALANCE
+
+    /**
+     * True when the curve is painted green above zero and red below it.
+     *
+     * **Only [PERFORMANCE] is.** Owner order 2026-08-07: *"don't color it red or
+     * green — only color in % mode."*
+     *
+     * The rule underneath it is the app's own (§4.1, `rangeAccent`): gold *is*
+     * the portfolio and never means "up"; a red/green verdict belongs to an
+     * asset, which is a bet. [PERFORMANCE] earns the exception because in that
+     * mode the curve is *literally* the return — the number and the verdict are
+     * the same thing. [HYBRID] does not: its headline is the € balance, so a
+     * red/green curve would be colouring one quantity by the sign of another.
+     *
+     * Separate from [plotsPerformance] precisely because the two used to be one
+     * flag, which is what made [HYBRID] inherit the gain/loss paint it should
+     * never have had.
+     */
+    val colorsBySign: Boolean get() = this == PERFORMANCE
 }
 
 /**
- * Decode a stored [BtChartMode] name, falling back to [BtChartMode.BALANCE] for
+ * The mode a user who has never chosen one gets.
+ *
+ * Was [BtChartMode.BALANCE]; [BtChartMode.HYBRID] by owner order 2026-08-07
+ * (*"make this one the DEFAULT"*). A constant rather than an inline fallback so
+ * the default is one edit in one place and the migration below can name it.
+ */
+val DEFAULT_CHART_MODE: BtChartMode = BtChartMode.HYBRID
+
+/**
+ * Decode a stored [BtChartMode] name, falling back to [DEFAULT_CHART_MODE] for
  * anything unrecognised (absent, or written by a build that knew a mode this one
  * does not). Pure, so the fallback is unit-tested rather than assumed.
+ *
+ * This IS the default-migration: a stored name is an explicit choice and is
+ * honoured verbatim, including `"BALANCE"`, so moving the default does not
+ * overrule anyone who actually picked a mode. Absent means never chose, which
+ * now means hybrid.
  */
 fun chartModeFromName(raw: String?): BtChartMode =
-    BtChartMode.entries.firstOrNull { it.name == raw } ?: BtChartMode.BALANCE
+    BtChartMode.entries.firstOrNull { it.name == raw } ?: DEFAULT_CHART_MODE
 
 fun orientationModeFor(locked: Boolean): ScreenOrientationMode =
     if (locked) ScreenOrientationMode.LOCKED_PORTRAIT else ScreenOrientationMode.FOLLOW_SENSOR
@@ -146,12 +180,24 @@ class DevicePrefs(context: Context) {
      * is for the phone to reopen on the view it was left on. Stored by enum NAME
      * rather than ordinal so reordering the enum can never silently reinterpret a
      * saved preference as a different mode.
+     *
+     * An ABSENT key means "never chose" and resolves to [DEFAULT_CHART_MODE].
+     * That distinction is what lets the default move without overruling anyone,
+     * so [setChartMode] is careful to persist every explicit tap — see there.
      */
     val chartMode: StateFlow<BtChartMode> = _chartMode.asStateFlow()
 
     fun setChartMode(mode: BtChartMode) {
-        if (_chartMode.value == mode) return
+        // Persist FIRST and unconditionally, even when the value is unchanged.
+        //
+        // This used to early-return on "same value", which silently made an
+        // explicit tap on the already-selected mode a no-op that wrote nothing —
+        // so a user who deliberately chose the then-default € was, on disk,
+        // indistinguishable from one who never opened the app. Writing every tap
+        // means the key genuinely records "the user chose this", which is exactly
+        // what the next default move will need in order to respect them.
         prefs.edit { putString(KEY_CHART_MODE, mode.name) }
+        if (_chartMode.value == mode) return
         _chartMode.value = mode
     }
 

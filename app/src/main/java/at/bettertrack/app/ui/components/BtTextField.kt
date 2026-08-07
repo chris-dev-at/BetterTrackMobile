@@ -24,10 +24,17 @@ import androidx.compose.ui.text.input.VisualTransformation
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.theme.BtTheme
 
-/** Brand colors for an [OutlinedTextField] (gold focus, red error) — the app-wide field look. */
+/**
+ * Brand colors for an [OutlinedTextField] (gold focus, red error) — the app-wide
+ * field look.
+ *
+ * The focus RING and the caret are graphical marks, so they carry the brand
+ * `gold` in both modes (owner order 2026-08-07). The floating LABEL is a word
+ * and keeps `goldInk`, which is the same yellow one step down the brand ray.
+ */
 @Composable
 fun btFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = BtTheme.colors.goldInk,
+    focusedBorderColor = BtTheme.colors.gold,
     unfocusedBorderColor = BtTheme.colors.borderStrong,
     disabledBorderColor = BtTheme.colors.border,
     errorBorderColor = BtTheme.colors.loss,
@@ -38,7 +45,7 @@ fun btFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
     focusedTextColor = BtTheme.colors.textPrimary,
     unfocusedTextColor = BtTheme.colors.textPrimary,
     disabledTextColor = BtTheme.colors.textMuted,
-    cursorColor = BtTheme.colors.goldInk,
+    cursorColor = BtTheme.colors.gold,
 )
 
 /**

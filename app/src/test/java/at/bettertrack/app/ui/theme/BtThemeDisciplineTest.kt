@@ -278,19 +278,30 @@ class BtThemeDisciplineTest {
     }
 
     @Test
-    fun `a light gold edge is drawn in the graphical gold, not in gold`() {
-        // A pale gold hairline on white is invisible; this is the one hue swap
-        // edge() performs and the reason it exists as a separate helper.
+    fun `a light gold edge keeps the brand hue and buys its mass with alpha`() {
+        // A pale gold hairline on white is invisible, and this is the one
+        // correction edge() performs beyond wash() — the reason it exists as a
+        // separate helper.
         //
-        // It darkens to `goldGraphic`, NOT to `goldInk`. A hairline is a
-        // graphical object and owes 3:1, so making it pay the text ink's 4.5:1
-        // spent three extra steps of darkening — and the brand's whole hue —
-        // on a floor it never had to meet.
-        assertEquals(BtLightColors.goldGraphic.copy(alpha = 0.3f), BtLightColors.edge(BtLightColors.gold, 0.3f))
-        assertTrue(
-            "the graphical gold must be lighter than the text ink, or it has no reason to exist",
-            BtLightColors.goldGraphic.red > BtLightColors.goldInk.red,
+        // It used to make that correction by DARKENING gold to the retired
+        // `goldGraphic` (#A77D1F). Owner order 2026-08-07 ended that: the hue
+        // stays #F6B82E and the alpha doubles instead. The two are the same
+        // weight — #A77D1F @30% over white composites to #E5D8BC (relative
+        // luminance 0.694), #F6B82E @60% to #FAD482 (0.690) — so this is a
+        // straight swap of mass-by-darkness for mass-by-opacity.
+        assertEquals(BtLightColors.gold.copy(alpha = 0.6f), BtLightColors.edge(BtLightColors.gold, 0.3f))
+        assertEquals(
+            "a gold edge must keep the brand hue in light",
+            BtLightColors.gold.red,
+            BtLightColors.edge(BtLightColors.gold, 0.3f).red,
         )
+        assertTrue(
+            "the light gold edge must gain alpha, or it has no mass on white",
+            BtLightColors.edge(BtLightColors.gold, 0.3f).alpha > 0.3f,
+        )
+        // The gain clamps rather than overflowing at the high-alpha call sites
+        // (`edge(gold, 0.55f)` and `edge(gold, 0.6f)` both exist in the app).
+        assertEquals(1f, BtLightColors.edge(BtLightColors.gold, 0.6f).alpha, 1e-4f)
         // Non-gold hues pass through untouched — gain/loss inks are already dark.
         assertEquals(BtLightColors.loss.copy(alpha = 0.4f), BtLightColors.edge(BtLightColors.loss, 0.4f))
     }
