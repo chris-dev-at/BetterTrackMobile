@@ -1,7 +1,9 @@
 package at.bettertrack.app.ui.shell
 
 import at.bettertrack.app.navigation.BtTab
+import at.bettertrack.app.navigation.tabNeighbour
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -385,5 +387,219 @@ class BtChromeHandoffTest {
     @Test
     fun `an unmeasured page hands nothing over`() {
         assertEquals(0f, tabHeaderSwapFraction(-540f, 0f, handedOff = false))
+    }
+}
+
+/**
+ * Rapid flings, and the rule that they CHAIN (owner report 2026-08-07).
+ *
+ * *"If you swipe too fast left or right — imagine you want to go 3 pages left
+ * fast — it sometimes bugs and doesn't go a page forward."*
+ *
+ * Reproduced on device before the fix: three flicks at a 117ms cadence advanced
+ * exactly one page, ten trials out of ten, and the cadence sweep put the window
+ * at roughly 500ms — a swipe landing inside the previous swipe's settle was
+ * swallowed. Two separate causes, and these cases pin both:
+ *
+ *  1. the decision and the page-turn animation shared a coroutine, so the next
+ *     drag's first `snapTo` cancelled the commit along with the animation
+ *     ([swipeTakeover] delivers it instead of dropping it);
+ *  2. the next drag asked the NAV GRAPH where it was standing, and the nav graph
+ *     was still a page behind ([swipeOriginTab]).
+ *
+ * Both are pure here, which is the point: a swipe that gets eaten one time in
+ * three is close to untestable by hand.
+ */
+class BtFastSwipeChainTest {
+
+    private val visible = BtTab.entries.toList()
+
+    // ── Where the next gesture starts from ──────────────────────────────────
+
+    @Test
+    fun `at rest a gesture starts from the tab on screen`() {
+        assertEquals(
+            BtTab.Markets,
+            swipeOriginTab(pendingCommit = null, handoff = null, navCurrent = BtTab.Markets),
+        )
+    }
+
+    @Test
+    fun `a gesture starts from a hop the nav graph has not caught up to`() {
+        // THE bug: nav still says Portfolio, but the user is already going to
+        // Markets, so the next flick must be measured from Markets.
+        assertEquals(
+            BtTab.Markets,
+            swipeOriginTab(pendingCommit = null, handoff = BtTab.Markets, navCurrent = BtTab.Portfolio),
+        )
+    }
+
+    @Test
+    fun `a hop still animating outranks one already handed over`() {
+        // pendingCommit is always the NEWER decision of the two.
+        assertEquals(
+            BtTab.Workbench,
+            swipeOriginTab(
+                pendingCommit = BtTab.Workbench,
+                handoff = BtTab.Markets,
+                navCurrent = BtTab.Portfolio,
+            ),
+        )
+    }
+
+    @Test
+    fun `with nothing decided and nothing on screen there is no origin`() {
+        assertNull(swipeOriginTab(null, null, null))
+    }
+
+    // ── Three fast flicks are three pages ───────────────────────────────────
+
+    @Test
+    fun `three flicks that all land before the nav graph moves traverse three pages`() {
+        // The device repro, as arithmetic. The nav graph is FROZEN on Portfolio
+        // for the whole burst — which is what it really does at a 117ms cadence
+        // — and each flick delivers the previous one before deciding its own.
+        val navCurrent = BtTab.Portfolio
+        var pending: BtTab? = null
+        var handoff: BtTab? = null
+        // The page is at rest for the first flick and most of a turn along for
+        // every one after it, because each lands while the last is animating.
+        var liveOffsetPx = 0f
+        val landed = mutableListOf<BtTab>()
+
+        repeat(3) {
+            // A new finger delivers whatever was still animating (drag start)...
+            val takeover = swipeTakeover(pending, liveOffsetPx)
+            takeover.deliver?.let { handoff = it; pending = null }
+            // ...and every flick in the burst still starts from zero: the first
+            // because the page was at rest, the rest because completing a hop
+            // rebases onto the page it lands on. None inherits -900.
+            assertEquals(0f, takeover.startTotalPx)
+            // ...then decides its own hop on release (drag end).
+            val origin = swipeOriginTab(pending, handoff, navCurrent)!!
+            val target = tabNeighbour(origin, forward = true, visible = visible)!!
+            pending = target
+            landed += target
+            liveOffsetPx = -900f
+        }
+
+        assertEquals(listOf(BtTab.Markets, BtTab.Workbench, BtTab.People), landed)
+    }
+
+    @Test
+    fun `a chain stops at the end of the bar instead of wrapping`() {
+        val navCurrent = BtTab.Portfolio
+        var pending: BtTab? = null
+        var handoff: BtTab? = null
+        val landed = mutableListOf<BtTab>()
+
+        repeat(6) {
+            swipeTakeover(pending, -900f).deliver?.let { handoff = it; pending = null }
+            val origin = swipeOriginTab(pending, handoff, navCurrent)!!
+            val target = tabNeighbour(origin, forward = true, visible = visible)
+            if (target != null) {
+                pending = target
+                landed += target
+            }
+        }
+
+        // Six flicks, three pages: the extra three have nowhere to go and hint.
+        assertEquals(listOf(BtTab.Markets, BtTab.Workbench, BtTab.People), landed)
+    }
+
+    @Test
+    fun `flicking back out of a chain walks the same pages in reverse`() {
+        var pending: BtTab? = null
+        var handoff: BtTab? = BtTab.People
+        val landed = mutableListOf<BtTab>()
+
+        repeat(3) {
+            swipeTakeover(pending, -900f).deliver?.let { handoff = it; pending = null }
+            val origin = swipeOriginTab(pending, handoff, BtTab.People)!!
+            val target = tabNeighbour(origin, forward = false, visible = visible)!!
+            pending = target
+            landed += target
+        }
+
+        assertEquals(listOf(BtTab.Workbench, BtTab.Markets, BtTab.Portfolio), landed)
+    }
+
+    // ── Taking the page over, rather than snapping it ───────────────────────
+
+    @Test
+    fun `a decided hop is delivered rather than dropped when a finger interrupts it`() {
+        val takeover = swipeTakeover(BtTab.Markets, liveOffsetPx = -412f)
+        assertEquals(BtTab.Markets, takeover.deliver)
+    }
+
+    @Test
+    fun `a gesture that lands on a committed hop starts from a rebased zero`() {
+        // The page is most of the way through a turn, but that displacement
+        // belongs to the hop being delivered — carrying it into the new drag
+        // would start the finger half a page along a hop it never made.
+        assertEquals(0f, swipeTakeover(BtTab.Markets, liveOffsetPx = -1040f).startTotalPx)
+    }
+
+    @Test
+    fun `a gesture that interrupts a spring-back picks the page up where it is`() {
+        // Nothing is decided, so there is nothing to deliver and no reason to
+        // move the page: the finger continues from the pixels on screen.
+        val takeover = swipeTakeover(pendingCommit = null, liveOffsetPx = -213f)
+        assertNull(takeover.deliver)
+        assertEquals(-213f, takeover.startTotalPx)
+    }
+
+    @Test
+    fun `a gesture starting from rest starts from zero`() {
+        assertEquals(0f, swipeTakeover(null, 0f).startTotalPx)
+    }
+
+    @Test
+    fun `taking a spring-back over keeps the release honest`() {
+        // The seed feeds tabSwipeOutcome, so "is this page mostly under you"
+        // is answered about the page's REAL position. Picked up at -300 and
+        // dragged 300 further, a 1080-wide page is exactly at the half-page
+        // threshold and commits; picked up at rest, the same 300 would not.
+        val commit = swipeCommitDistancePx(1080f, 64f)
+        val seeded = swipeTakeover(null, -300f).startTotalPx - 300f
+        assertEquals(TabSwipe.Forward, tabSwipeOutcome(seeded, 0f, commit, 400f))
+        assertEquals(TabSwipe.None, tabSwipeOutcome(-300f, 0f, commit, 400f))
+    }
+
+    // ── The anti-flicker guarantee still holds through a chain ──────────────
+
+    @Test
+    fun `the bar never regresses across a chain of hops`() {
+        // Every hop pins the bar to its own target the moment it is delivered,
+        // and the shell only unpins once the nav graph agrees — so across a
+        // burst the selection walks forward and never once shows a tab the user
+        // has already left. This is the guarantee the previous batch bought.
+        val chain = listOf(BtTab.Markets, BtTab.Workbench, BtTab.People)
+        val navBehind = BtTab.Portfolio
+        val shown = chain.map { committed ->
+            BtTab.entries.first { tab -> tabSelectionFraction(committed, tab, tab == navBehind) == 1f }
+        }
+        assertEquals(chain, shown)
+        assertTrue(shown.none { it == navBehind })
+    }
+
+    @Test
+    fun `the peek is not torn down under a finger that is still dragging`() {
+        assertTrue(peekSurvivesHandoffEnd(dragging = true, hopInFlight = false))
+    }
+
+    @Test
+    fun `the peek is not torn down out from under a page turn`() {
+        // A chain hands each hop over as the NEXT finger lands, so the pin can
+        // now drop while a released flick is still animating. The incoming page
+        // IS the peek at that moment.
+        assertTrue(peekSurvivesHandoffEnd(dragging = false, hopInFlight = true))
+    }
+
+    @Test
+    fun `a settled gesture lets the peek go`() {
+        // The whole point of the peek being off at rest: one page composed, one
+        // page recorded. Nothing in flight means nothing to keep.
+        assertTrue(!peekSurvivesHandoffEnd(dragging = false, hopInFlight = false))
     }
 }

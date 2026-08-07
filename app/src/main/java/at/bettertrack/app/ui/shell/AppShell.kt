@@ -402,8 +402,17 @@ fun BtApp() {
     // Where a hop in this direction would land, or null at the ends of the bar.
     // Consulted DURING the drag too: it is what decides between a 1:1 follow and
     // the damped overscroll hint.
+    //
+    // The origin is the newest DECISION, not the nav graph — see [swipeOriginTab].
+    // Read at call time rather than at composition time, so a flick that lands
+    // before the shell has recomposed still chains off the hop before it instead
+    // of aiming at the tab the user has already left.
     val neighbourOf: (Boolean) -> BtTab? = { forward ->
-        currentTab?.tab?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
+        swipeOriginTab(
+            pendingCommit = swipeState.pendingCommit,
+            handoff = swipeState.handoff,
+            navCurrent = currentTab?.tab,
+        )?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
     }
     // A committed swipe routes through the SAME [switchToTab] the bottom bar
     // uses, which is what keeps saved state, restored back stacks and bar
@@ -452,7 +461,12 @@ fun BtApp() {
             delay(600)
         }
         swipeState.handoff = null
-        swipeState.peekSide = null
+        // Unless a finger is still down — a fast chain drops the pin mid-drag,
+        // and blanking the neighbour then would punch a one-frame hole in the
+        // page being dragged. See [peekSurvivesHandoffEnd].
+        if (!peekSurvivesHandoffEnd(swipeState.dragging, swipeState.pendingCommit != null)) {
+            swipeState.peekSide = null
+        }
     }
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
         // EVERY deep link lands the same way (S6 P1-8):

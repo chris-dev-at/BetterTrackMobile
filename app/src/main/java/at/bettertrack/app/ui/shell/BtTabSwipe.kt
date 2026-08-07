@@ -157,6 +157,97 @@ internal fun swipePeekSide(totalDx: Float): Boolean? = when {
 }
 
 /**
+ * The tab the NEXT gesture starts from — which is not always the tab the nav
+ * graph is showing.
+ *
+ * ## Why the nav graph is the last word, not the first (owner report 2026-08-07)
+ *
+ * *"If you swipe too fast left or right — imagine you want to go 3 pages left
+ * fast — it sometimes bugs and doesn't go a page forward."*
+ *
+ * A hop is DECIDED the moment a drag is released past the threshold, but the nav
+ * graph only learns about it after the page turn has animated and a back-stack
+ * `StateFlow` has propagated. A second flick arriving inside that window asked
+ * `tabNeighbour` where to go and got the answer for the tab the user had already
+ * left — so three fast flicks from Portfolio all resolved to Markets and the
+ * chain collapsed to a single page. Measured on device before the fix: three
+ * flicks at a 117ms cadence advanced exactly one page, 10 trials out of 10.
+ *
+ * So a gesture starts from the newest DECISION, and only falls back to the nav
+ * graph when there is no decision in flight. That is what lets rapid flings
+ * chain: each one steps off where the previous one landed, not where the screen
+ * happens to have caught up to.
+ *
+ * @param pendingCommit a hop whose page turn is still animating
+ *   ([BtTabSwipeState.pendingCommit]) — the newest decision there is.
+ * @param handoff a hop already handed to the NavHost, which has not yet drawn it
+ *   ([BtTabSwipeState.handoff]).
+ * @param navCurrent the tab the nav graph reports, which trails both.
+ */
+internal fun swipeOriginTab(
+    pendingCommit: BtTab?,
+    handoff: BtTab?,
+    navCurrent: BtTab?,
+): BtTab? = pendingCommit ?: handoff ?: navCurrent
+
+/**
+ * What a new drag does to a page that is still moving.
+ *
+ * ## Gestures are accepted at any moment (owner report 2026-08-07)
+ *
+ * Standard pager behaviour, and the second half of the fast-swipe bug: a finger
+ * arriving mid-animation must TAKE OVER, never be swallowed and never be made to
+ * wait. Two cases, and they differ in where the new drag's zero is:
+ *
+ *  - **A hop is already decided** ([pendingCommit] non-null — the page turn is
+ *    running). The hop is not up for renegotiation: it is delivered right now,
+ *    and the new drag starts from a clean zero **rebased on the tab it lands
+ *    on**. Carrying the old displacement across would put the finger most of a
+ *    page along a hop it never made.
+ *
+ *  - **Nothing is decided** (a spring-back is running). The new drag continues
+ *    from wherever the page currently IS, so it neither jumps nor loses the
+ *    ground the last drag covered. This is also what makes the release honest:
+ *    [swipeCommitDistancePx] asks "is this page mostly under you", and it can
+ *    only answer that if the seed is the page's real position.
+ *
+ * Returning the seed rather than mutating anything keeps the rule testable
+ * without a device — which matters, because it is the rule the bug was in.
+ *
+ * @param liveOffsetPx where the page is drawn at the instant the drag starts.
+ * @return [SwipeTakeover.deliver] = a hop to hand over immediately, or null;
+ *   [SwipeTakeover.startTotalPx] = the new drag's starting displacement.
+ */
+internal fun swipeTakeover(pendingCommit: BtTab?, liveOffsetPx: Float): SwipeTakeover =
+    if (pendingCommit != null) {
+        SwipeTakeover(deliver = pendingCommit, startTotalPx = 0f)
+    } else {
+        SwipeTakeover(deliver = null, startTotalPx = liveOffsetPx)
+    }
+
+/** The answer [swipeTakeover] gives. */
+internal data class SwipeTakeover(val deliver: BtTab?, val startTotalPx: Float)
+
+/**
+ * Whether the peek layer must OUTLIVE the handoff pin that is being released.
+ *
+ * The pin drops two frames after the NavHost draws the committed tab. Before the
+ * fast-swipe fix that instant was always the quiet end of a gesture, so tearing
+ * the second page down with it was free. Now a hop is handed over the moment the
+ * NEXT finger lands, so the pin can drop while the swipe stack is still busy —
+ * and in both of those cases the neighbour is still being looked at:
+ *
+ *  - [dragging]: a finger is down and the page is under it. Blanking the
+ *    neighbour would punch a hole in the page being dragged for the one frame
+ *    before the next drag event rewrites the side.
+ *  - [hopInFlight]: a released flick's page turn is still animating. The
+ *    incoming page IS the peek; dropping it mid-turn would slide the outgoing
+ *    page off over nothing.
+ */
+internal fun peekSurvivesHandoffEnd(dragging: Boolean, hopInFlight: Boolean): Boolean =
+    dragging || hopInFlight
+
+/**
  * Which tab the peek layer is showing, or `null` for "draw no second page".
  *
  * Pure, and the single place the answer is decided:
@@ -310,6 +401,33 @@ internal class BtTabSwipeState {
      * while a handoff is in flight.
      */
     var handoff: BtTab? by mutableStateOf(null)
+
+    /**
+     * A hop a released drag has DECIDED but whose page turn is still animating,
+     * so it has not been handed to the NavHost yet.
+     *
+     * This exists because the decision and the animation used to be the same
+     * coroutine, and `Animatable` cancels the coroutine that owns it whenever
+     * something else takes the handle. The next drag's very first `snapTo`
+     * therefore killed the commit that was queued behind the page turn: the
+     * pixels finished moving, `switchToTab` was never called, and the swipe
+     * vanished. Holding the decision out here — set the instant the finger
+     * lifts, delivered by whoever gets there first, the animation or the next
+     * gesture — is what makes a hop survive being interrupted.
+     *
+     * Deliberately NOT snapshot state: it is written and read only from the
+     * gesture callbacks and the `neighbourOf` lambda they call, all on the main
+     * thread, and making it observable would recompose the shell twice per
+     * gesture for something no composable draws.
+     */
+    var pendingCommit: BtTab? = null
+
+    /**
+     * Whether a finger is currently down and dragging. Read when a handoff pin
+     * is released — see [peekSurvivesHandoffEnd]. Plain, for the same reason as
+     * [pendingCommit].
+     */
+    var dragging: Boolean = false
 }
 
 @Composable
@@ -424,16 +542,49 @@ internal fun Modifier.btTabSwipe(
                 // Only now: the neighbour stays drawn while it slides back out.
                 state.peekSide = null
             }
+            // Hand a decided hop to the NavHost, pin the picture, and put the
+            // page back at rest for whatever comes next.
+            //
+            // Idempotent by way of [BtTabSwipeState.pendingCommit], because two
+            // callers race for it: the page-turn animation that finishes
+            // normally, and the next gesture that interrupts it. Whoever arrives
+            // first delivers; the other one finds the slot empty and does
+            // nothing. Everything the hop actually MEANS happens synchronously
+            // here — only the offset reset is launched, and only because
+            // `snapTo` suspends.
+            val deliver: (BtTab) -> Unit = { target ->
+                if (state.pendingCommit == target) {
+                    state.pendingCommit = null
+                    // 1. Pin the picture. The bar reads this too, and it is what
+                    //    keeps the selection from regressing to the tab we left.
+                    state.handoff = target
+                    // 2. Tell the NavHost, under a picture that is already final.
+                    onCommitState.value(target)
+                    // 3. Put the (still-old, still-covered) NavHost back at rest
+                    //    so the new destination composes where it belongs. The
+                    //    shell drops the pin once the NavHost is showing target.
+                    scope.launch { offset.snapTo(0f) }
+                }
+            }
             detectHorizontalDragGestures(
                 onDragStart = {
-                    total = 0f
+                    state.dragging = true
+                    // A new gesture is never queued behind a moving page: it
+                    // either completes the hop already decided and starts fresh
+                    // on the tab that hop lands on, or it picks the page up
+                    // exactly where the spring left it. See [swipeTakeover].
+                    val takeover = swipeTakeover(state.pendingCommit, offset.value)
+                    takeover.deliver?.let(deliver)
+                    total = takeover.startTotalPx
                     tracker.resetTracking()
                 },
                 onDragCancel = {
+                    state.dragging = false
                     total = 0f
                     scope.launch { settle() }
                 },
                 onDragEnd = {
+                    state.dragging = false
                     val velocity = tracker.calculateVelocity().x
                     val pageWidth = state.pageWidthPx
                     val commitPx = swipeCommitDistancePx(
@@ -448,6 +599,14 @@ internal fun Modifier.btTabSwipe(
                         TabSwipe.Back -> false
                     }
                     val target = forward?.let { neighbourState.value(it) }
+                    val followWidth = if (reducedMotion) 0f else pageWidth
+                    // The decision is recorded HERE, synchronously, before a
+                    // single suspending line runs — that is the whole fix. The
+                    // page turn below may be interrupted and its coroutine
+                    // cancelled at any moment; the hop it was going to deliver
+                    // survives in `pendingCommit` and the next gesture delivers
+                    // it. Nothing that can be cancelled is load-bearing.
+                    if (target != null && followWidth > 0f) state.pendingCommit = target
                     scope.launch {
                         if (forward == null || target == null) {
                             // Nothing to commit to, including the ends of the
@@ -455,25 +614,18 @@ internal fun Modifier.btTabSwipe(
                             settle()
                             return@launch
                         }
-                        val followWidth = if (reducedMotion) 0f else pageWidth
                         if (followWidth > 0f) {
-                            // 1. Finish the page turn. The incoming page rides
-                            //    the same offset, so it arrives at rest exactly
-                            //    as the outgoing one leaves.
+                            // Finish the page turn. The incoming page rides the
+                            // same offset, so it arrives at rest exactly as the
+                            // outgoing one leaves — then hand the hop over. If a
+                            // new finger lands first it delivers this instead,
+                            // and `deliver` makes the loser a no-op.
                             offset.animateTo(
                                 if (forward) -followWidth else followWidth,
                                 pageSpring,
                                 initialVelocity = velocity,
                             )
-                            // 2. Pin the picture and tell the NavHost. The pin
-                            //    is what lets step 3 happen invisibly.
-                            state.handoff = target
-                            onCommitState.value(target)
-                            // 3. Put the (still-old, still-covered) NavHost back
-                            //    at rest so the new destination composes where it
-                            //    belongs. The shell drops the pin once the
-                            //    NavHost is actually showing `target`.
-                            offset.snapTo(0f)
+                            deliver(target)
                         } else {
                             // Reduced motion: nothing moved, so there is nothing
                             // to hand over and no peek to keep on screen.
@@ -490,7 +642,15 @@ internal fun Modifier.btTabSwipe(
                     val side = swipePeekSide(total)
                     // A composition-visible write, but only when the direction
                     // actually flips — once per gesture in the normal case.
-                    if (side != state.peekSide && state.handoff == null) state.peekSide = side
+                    //
+                    // Written even while a handoff pin is up, which it did not
+                    // used to be. The pin decides what the peek DRAWS all by
+                    // itself ([swipePeekTab] answers `handoff` first), so this
+                    // changes nothing on screen while the pin holds — but the
+                    // pin can drop mid-drag during a fast chain, and when it
+                    // does the peek falls straight through to a side the live
+                    // drag has kept current instead of to a stale one.
+                    if (side != state.peekSide) state.peekSide = side
                     val follow = swipeFollowOffset(
                         totalDx = total,
                         pageWidthPx = if (reducedMotion) 0f else state.pageWidthPx,
