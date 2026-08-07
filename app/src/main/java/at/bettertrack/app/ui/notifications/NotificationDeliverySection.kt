@@ -450,6 +450,11 @@ private fun TimezonePickerDialog(
                             color = if (zone == selected) bt.goldWash else bt.surface,
                             contentColor = if (zone == selected) bt.goldEmphasis else bt.textPrimary,
                             shape = BtShapes.card,
+                            // Unselected rows are `surface` = white on the
+                            // all-white light table, inside a white dialog: with
+                            // no edge there was nothing separating one timezone
+                            // from the next except the gap between their text.
+                            border = BorderStroke(1.dp, bt.groupBorder),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {

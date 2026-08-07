@@ -28,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.TopAppBarState
@@ -40,6 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -178,19 +180,6 @@ import kotlin.math.roundToInt
  *   gets to ask; an absent parameter is a decision nobody remembers making.
  * @param settings the Settings gear, or null. **Renders LAST, after [overflow]**,
  *   and that ordering is the whole point — see [BtSettingsGear].
- * @param pinned draw as a fixed single-row bar that never expands or collapses,
- *   with the title slot locked to its compact form. Pair it with
- *   [rememberBtPinnedHeaderBehavior].
- *
- *   **Used by all four top-level tabs, and by nothing else** (owner order
- *   2026-08-07, extending the Portfolio directive of 2026-08-06 to its peers).
- *   The line is exactly the tab/sub-page line: a root tab's bar carries the app's
- *   identity and its two fixed controls, none of which are things you read once
- *   and are done with, so none of them should shrink away — and a tab is a place
- *   you re-enter constantly, where a bar that looks different depending on where
- *   the last visit left the scroll is a bar you have to re-read every time.
- *   Pushed screens keep the collapse: their title genuinely IS read once, on
- *   arrival, and their content deserves the 48dp back afterwards.
  * @param windowInsets defaults to the status-bar inset, which is correct
  *   everywhere in this app; pass `WindowInsets(0,0,0,0)` only when an ancestor
  *   has provably consumed it already (the debug gallery does, for instance).
@@ -211,7 +200,6 @@ fun BtCollapsingHeader(
     action: (@Composable () -> Unit)? = null,
     overflow: (@Composable () -> Unit)? = null,
     settings: (@Composable () -> Unit)? = null,
-    pinned: Boolean = false,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
     val bt = BtTheme.colors
@@ -239,12 +227,7 @@ fun BtCollapsingHeader(
                     (scrollBehavior.state.collapsedFraction * COLLAPSE_STEPS).roundToInt()
                 }
             }
-            // A [pinned] bar never interpolates — it sits at the compact end of
-            // every ramp above, permanently. Short-circuiting the fraction here
-            // rather than at each `lerp` also means `step` is never READ in
-            // pinned mode, so the derived state takes no subscription on the
-            // scroll position and the title stops recomposing on scroll entirely.
-            val fraction = if (pinned) 1f else step / COLLAPSE_STEPS.toFloat()
+            val fraction = step / COLLAPSE_STEPS.toFloat()
 
             if (title == null) {
                 // Nothing — see the `title` KDoc. Composing an empty `Text("")`
@@ -318,52 +301,29 @@ fun BtCollapsingHeader(
         navigationIconContentColor = bt.textSecondary,
     )
 
-    // ── The pinned branch (owner directive 2026-08-06) ───────────────────────
+    // ── Where the pinned branch went (owner report 2026-08-07) ───────────────
     //
-    // *"The selector for portfolio can always be on top and doesn't need to drop
-    // down when scrolled all the way up."*
+    // This component used to carry a `pinned = true` mode: a fixed single-row bar
+    // with the title locked to its compact form, used by all four top-level tabs
+    // after the owner's 2026-08-06 directive ("the selector for portfolio can
+    // always be on top") was extended to their peers.
     //
-    // On the Portfolio tab the large-title state was costing more than it bought.
-    // The expanded bar's subject is a PILL the user taps — not a page title they
-    // read — and a control that changes size depending on scroll position is a
-    // control you have to re-find every time. The tab also opens at the top, so
-    // the expanded state was the state the user met first and lost immediately.
+    // It is gone because those four call sites are gone. A pinned bar rendered
+    // per page meant four instances of one fixed object, and a swipe between tabs
+    // slid one of them out while sliding its twin in — the report this repo
+    // answered by hoisting the bar into the shell. There is now exactly ONE tab
+    // bar, it lives in [at.bettertrack.app.ui.shell.BtTabHeader], and it is not
+    // built from this component at all: it has to cross-fade two tabs' worth of
+    // variable content against a live gesture, which is not something a
+    // `title: String?` parameter can express.
     //
-    // So this branch renders the single-row [TopAppBar] at exactly
-    // [BT_HEADER_COLLAPSED_HEIGHT] with the title slot forced to `fraction = 1f`:
-    // the same compact pill, in the same place, at every scroll position. The
-    // content simply travels underneath it.
-    //
-    // The owner extended this to the other three tabs on 2026-08-07 ("do the same
-    // as with the portfolio page where it just gets put up top, that works
-    // great"), and the reasoning generalises without needing a pill: on Workbench,
-    // Markets and People the expanded row was holding a word the bottom bar was
-    // already saying, so the large-title state was spending 48dp to repeat itself
-    // — and it did so only until the first scroll, which made the tab's own
-    // height depend on when you last looked at it.
-    //
-    // What it deliberately KEEPS is the tonal scrolled container colour — that is
-    // the one thing the collapse was doing that still earns its place, because it
-    // is what tells the eye the bar is floating over content rather than sitting
-    // on the background. That is also why this pairs with
-    // [rememberBtPinnedHeaderBehavior] and not a bare `null`: a pinned behaviour
-    // still tracks `contentOffset`, which is what drives that colour swap.
-    if (pinned) {
-        TopAppBar(
-            modifier = modifier,
-            title = titleSlot,
-            navigationIcon = navigationIcon,
-            actions = actionsSlot,
-            expandedHeight = BT_HEADER_COLLAPSED_HEIGHT,
-            windowInsets = windowInsets,
-            colors = barColors,
-            scrollBehavior = scrollBehavior,
-        )
-        return
-    }
-
+    // What survives here is the collapse, which is what the name always described
+    // — and every remaining caller is a pushed screen, whose title genuinely is
+    // read once on arrival and whose content deserves the 48dp back afterwards.
+    // [rememberBtPinnedHeaderBehavior] also survives, with the shell as its one
+    // caller: the hoisted bar still needs `contentOffset` for its tonal lift.
     LargeTopAppBar(
-        modifier = modifier,
+        modifier = modifier.btBarScrolledHairline(scrollBehavior, bt.groupBorder),
         title = titleSlot,
         navigationIcon = navigationIcon,
         actions = actionsSlot,
@@ -498,6 +458,61 @@ fun BtSettingsGear(onClick: () -> Unit) {
 }
 
 /**
+ * The hairline a top bar grows along its bottom edge once content has gone under
+ * it — the light table's replacement for the tonal lift (owner order 2026-08-07:
+ * *"make the app all white"*).
+ *
+ * ## Why the tone stopped working
+ *
+ * A bar used to say "I am floating over your content" by swapping `containerColor`
+ * for `scrolledContainerColor`, i.e. page tone → card tone. With the light table
+ * collapsed to a single white, those two colours are the same colour, so in light
+ * the signal is simply gone; content scrolls *through* a bar that looks like
+ * background, which is the exact seam this app spent two milestones removing.
+ * Dark is untouched — its ramp still has the steps, and it keeps both signals.
+ *
+ * The hairline is the app's own stated fallback for precisely this case: the
+ * tone-vs-hairline rule says separation comes from tone where tone can carry it
+ * and from a hairline where it cannot. On an all-white table it never can, and
+ * the bottom bar has always been drawn this way (a `groupBorder` rule along its
+ * top edge); this gives the top bars the same treatment on the same token.
+ *
+ * ## Why `contentOffset` and not `overlappedFraction`
+ *
+ * `overlappedFraction` is what M3's own colour swap reads, and it is derived from
+ * `heightOffsetLimit` — a value a *collapsing* bar sets from its own travel and a
+ * pinned single-row bar has no reason to. Depending on it would make this line's
+ * behaviour a property of M3 internals that differ between the two bars.
+ * `contentOffset` is the accumulator a pinned behaviour keeps by definition (it
+ * is the documented reason [rememberBtPinnedHeaderBehavior] exists at all), it
+ * goes negative as soon as the first pixel of content passes under the bar, and
+ * it means the same thing for both bars.
+ *
+ * The fade is [HAIRLINE_FADE_PX] worth of scroll rather than a threshold, so the
+ * rule arrives with the content instead of blinking on at some arbitrary pixel.
+ * The whole thing is read in the DRAW phase, so a scroll frame costs one line.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun Modifier.btBarScrolledHairline(
+    scrollBehavior: TopAppBarScrollBehavior,
+    colour: Color,
+): Modifier = drawWithContent {
+    drawContent()
+    val over = (-scrollBehavior.state.contentOffset / HAIRLINE_FADE_PX).coerceIn(0f, 1f)
+    if (over <= 0f) return@drawWithContent
+    val h = 1.dp.toPx()
+    drawRect(
+        color = colour,
+        topLeft = Offset(0f, size.height - h),
+        size = Size(size.width, h),
+        alpha = over,
+    )
+}
+
+/** How much scroll the bottom hairline fades in over. ~half a text line. */
+private const val HAIRLINE_FADE_PX = 24f
+
+/**
  * The number of steps the collapse fraction is snapped to before anything is
  * sized from it. See the comment in [BtCollapsingHeader]'s title slot: this is a
  * recomposition budget, not a visual choice — 32 steps over a 48dp collapse and
@@ -507,6 +522,12 @@ private const val COLLAPSE_STEPS = 32
 
 /**
  * The clickable title, drawn as a button (owner change 2026-08-06).
+ *
+ * Public because it now has two homes: this header's title slot on the screens
+ * that still collapse, and the shell's one hoisted tab bar
+ * ([at.bettertrack.app.ui.shell.BtTabHeader]), which draws it at a permanent
+ * `fraction = 1f`. One pill, so the Portfolio tab's control cannot drift from the
+ * one the gallery documents.
  *
  * ## Shape of the thing
  *
@@ -541,7 +562,7 @@ private const val COLLAPSE_STEPS = 32
  * the 48dp of vertical room M3 gives the expanded title.
  */
 @Composable
-private fun BtHeaderSelector(
+fun BtHeaderSelector(
     label: String,
     icon: ImageVector?,
     iconTint: Color?,
@@ -693,13 +714,15 @@ fun rememberBtCollapsingHeaderBehavior(
     TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state, canScroll = canScroll)
 
 /**
- * The scroll behaviour [BtCollapsingHeader] expects when `pinned = true`.
+ * The scroll behaviour the shell's hoisted tab bar
+ * ([at.bettertrack.app.ui.shell.BtTabHeader]) runs on.
  *
  * A pinned behaviour never writes `heightOffset`, so the bar cannot shrink, grow
  * or scroll away — which is the entire point on the four top-level tabs, where
  * the wordmark, the gear and (on Portfolio) the selector pill must stay at the
  * same coordinates at every scroll position (owner directive 2026-08-06,
- * extended to all four tabs 2026-08-07).
+ * extended to all four tabs 2026-08-07, and made literally true by the 2026-08-07
+ * hoist: there is one bar now, and it is not inside anything that scrolls).
  *
  * It is NOT the same as passing no behaviour at all, and the difference is the
  * reason this function exists rather than a comment saying "use pinned". A

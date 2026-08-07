@@ -84,9 +84,6 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.BtCollapsingHeader
-import at.bettertrack.app.ui.components.BtHeaderWordmark
-import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroupRow
@@ -95,12 +92,12 @@ import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.fabVisibleForList
-import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
 import at.bettertrack.app.ui.ideas.IdeasSection
 import at.bettertrack.app.ui.ideas.IdeasUiState
 import at.bettertrack.app.ui.ideas.IdeasViewModel
+import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -176,7 +173,6 @@ fun WorkboardScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(WorkboardSection.Alerts) }
 
@@ -202,27 +198,16 @@ fun WorkboardScreen(
         }
     }
 
-    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). Still
-    // a real behaviour rather than null: it is what keeps the tonal lift as the
-    // segment's list travels under the bar. See BtCollapsingHeader's `pinned`
-    // branch.
-    val scrollBehavior = rememberBtPinnedHeaderBehavior()
+        // The bar this tab used to draw lives in the shell now (hoist
+        // 2026-08-07): one instance, above everything the swipe moves, so it
+        // cannot slide. All that is left here is the connection that lets the
+        // shared bar take its tonal lift when this tab's content goes under it.
+        // See [at.bettertrack.app.ui.shell.BtTabHeader].
     Column(
         Modifier
             .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .nestedScroll(LocalBtTabChrome.current.headerScroll),
     ) {
-        BtCollapsingHeader(
-            // No text title: the bottom bar's selected label already says
-            // "Workbench" a few dp below, and this tab states what it is far
-            // better with the Needs-you block directly under the bar than with
-            // its own name repeated. See the `title` KDoc.
-            title = null,
-            scrollBehavior = scrollBehavior,
-            pinned = true,
-            navigationIcon = { BtHeaderWordmark() },
-            settings = { BtSettingsGear(onOpenSettings) },
-        )
         WorkbenchNeedsYou(
             // No ideas rows any more (owner de-bloat, 2026-08-07). The block is
             // about what is WAITING on you, and with the Ideas segment gone from

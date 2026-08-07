@@ -91,8 +91,22 @@ data class BtColors(
     // ── Neutrals: the five-step ramp (§1.4) ──────────────────────────────────
     /** Page background. */
     val bg: Color,
-    /** Below the page — scrims, the dimmest recess. */
+    /** Below the page — the dimmest recess. */
     val bgAlt: Color,
+
+    /**
+     * The shade drawn OVER the app while a sheet or dialog is open.
+     *
+     * Its own token since the all-white flip (2026-08-07), because until then it
+     * was `bgAlt` and that only ever worked by coincidence. A scrim is not a
+     * surface — it is a shade, and it has to be DARK in both tables. In dark the
+     * dimmest recess happens to be near-black, so `bgAlt` was a serviceable
+     * stand-in; in light `bgAlt` is `#DAE1E9`, which M3 composites at 32% over a
+     * white page to a ~3% darkening — a white sheet on a white page with
+     * effectively nothing between them. Overlays in this app have no border and
+     * no shadow, so the scrim is the ONLY thing separating them.
+     */
+    val scrim: Color,
     /** Inset wells, recessed rows, skeleton base. */
     val surfaceLow: Color,
     /** Cards, groups. */
@@ -374,6 +388,7 @@ val BtDarkColors = BtColors(
 
     bg = Color(0xFF0A0D12),
     bgAlt = Color(0xFF06080C),
+    scrim = Color(0xFF06080C), // byte-identical to the bgAlt it replaces
     surfaceLow = Color(0xFF10141A),
     surface = Color(0xFF161B22),
     surfaceHigh = Color(0xFF1C222B),
@@ -459,68 +474,84 @@ val BtDarkColors = BtColors(
  * the gain/loss pair, both of which fail AA on white as the web ships them
  * (§1.4, §8 item 3).
  *
- * ## The white-page ramp
+ * ## All white (owner order 2026-08-07)
  *
- * The page is **clean `#FFFFFF`**. It used to be `#EEF0F2` with white cards on
- * top, which put the app's largest single area — the page, the top bar, every
- * gutter — on a grey that reads as *dirty white* rather than as a ground.
- * White is the only value that reads as "no colour"; a near-white reads as a
- * colour you failed to pick.
+ * *"Just try to make the app all white if possible. I don't like the grayish
+ * white at all."*
  *
- * Flipping the page to white means the card can no longer be raised *above* it,
- * so the whole ramp inverts direction (see [BtColors] — "which way up points").
- * The steps, and why each one is where it is:
+ * The page had been `#FFFFFF` since the previous flip, but everything the eye
+ * actually spends its time on was not: cards sat on `#F2F4F7`, sheets and the
+ * bottom bar on `#ECEFF4`. Cards cover most of a BetterTrack screen, so the CARD
+ * tone — not the page tone — is what the eye averages into "what colour is this
+ * app", and the answer it kept getting was grey. The previous table argued for
+ * exactly that ("keeping the card a whisper off white … keeps the whole surface
+ * reading white"); the owner looked at the result on the device and it did not.
  *
- * | token | value | ΔL\* below the page | why here |
- * |---|---|---|---|
- * | `bg` | `#FFFFFF` | 0.0 | the ground. Nothing is allowed above it. |
- * | `surfaceLow` | `#F8F9FB` | 2.1 | a well is a hole back to the ground, so it sits nearer the page than the card it is cut into. |
- * | `surface` | `#F2F4F7` | 3.9 | cards/groups. Enough tint to hold their own shape, little enough that a screen of cards still reads white. |
- * | `surfaceHigh` | `#ECEFF4` | 5.7 | sheets, dialogs, the bar. One clear step further in — an overlay is *more* separated from the page than a card is. |
- * | `surfaceHighest` | `#E7EBF0` | 7.1 | pressed/hover. Press darkens, because on a white page there is nowhere to go but in. |
- * | `bgAlt` | `#DAE1E9` | 10.8 | behind the page: the scrim and the deepest recess. The one step that means "below". |
+ * So the ramp collapses. Every surface a user reads content on is now the same
+ * pure white, and **separation in light is hairline-only**:
  *
- * ### The card step is deliberately small
+ * | token | value | why here |
+ * |---|---|---|
+ * | `bg` | `#FFFFFF` | the ground. |
+ * | `surfaceLow` | `#FFFFFF` | wells. |
+ * | `surface` | `#FFFFFF` | cards/groups — they are their [groupBorder] edge now, nothing else. |
+ * | `surfaceHigh` | `#FFFFFF` | sheets and dialogs; they are separated by the SCRIM, which is what an overlay is separated by on every white-first platform. |
+ * | `navBar` | `#FFFFFF` | the bottom bar — its top hairline is now the whole of its identity. |
+ * | `surfaceHighest` | `#E9EDF2` | the ONE surviving tint, and the only one that is not decoration: pressed feedback and the skeleton shimmer have to be *perceivable*, and a state you cannot see is not a state. |
+ * | `bgAlt` | `#DAE1E9` | behind the page: the scrim. Keeps its tint because dimming is its entire job. |
  *
- * 3.9 L\* is *less* separation than the 5.3 L\* the old table had, and that is
- * the point rather than a compromise. Cards cover most of a BetterTrack screen,
- * so the card tone — not the page tone — is what the eye averages into "what
- * colour is this app". A literal swap of the old two values (page white, cards
- * `#EEF0F2`) satisfies the letter of "clean white page" and loses its spirit:
- * the screen would read *greyer* than before, just with white gutters. Keeping
- * the card a whisper off white and letting the [groupBorder] hairline state the
- * edge — which is exactly what the tone-vs-hairline rule already mandates in
- * light, and which every container already draws unconditionally — keeps the
- * whole surface reading white while the structure stays legible.
+ * ### Why `surfaceHighest` is not lighter than this
+ *
+ * The order asks for the lightest tint that still works, and `#E9EDF2` (ΔL\* 6.4
+ * below white) is lighter than the `#E7EBF0` it replaces but nowhere near the
+ * `#F3F4F6` class one might reach for. The binding constraint is not visibility
+ * — it is `BtContrastTest`'s *"must not be darker than it needs to be"* guard on
+ * the two light golds, which measures them against the darkest opaque surface in
+ * the table. Lightening `surfaceHighest` past ~`#EAEEF3` makes the current
+ * [goldInk] `#866419` and [goldGraphic] `#A77D1F` provably darker than the table
+ * requires, and the honest fix for that is to lighten the GOLDS along the brand
+ * ray — a change to the app's brand colour, settled one commit before this one
+ * after a whole investigation into a rusty-gold regression, and not something an
+ * "all white" order authorises by implication.
+ *
+ * That trade is real and it is the owner's to make: a whiter pressed state is
+ * available, and its price is a slightly brighter gold everywhere in light.
  *
  * ### What this does NOT change
  *
- * The dark table is byte-identical across this flip. So is every ink: the AA
- * floors all move in the *safe* direction on a lighter ground, and the two
- * genuinely darker new surfaces (`surfaceHigh`, `surfaceHighest`) still clear
- * 4.5:1 for `textMuted` (5.48/5.27), `textFaint` (4.99/4.80), `gain`
- * (4.75/4.58), `loss` (5.05/4.86) and `goldInk` (4.73/4.56). BtContrastTest
- * holds all of it.
+ * The dark table is byte-identical across this flip. Every ink moves in the SAFE
+ * direction — all of them now sit on white or near-white rather than on a tinted
+ * card — so no contrast floor gets tighter anywhere. `BtContrastTest` holds all
+ * of it.
  */
 val BtLightColors = BtColors(
     isLight = true,
 
     bg = Color(0xFFFFFFFF),
+    // The dimmest recess. NOT the scrim any more — see [BtColors.scrim].
     bgAlt = Color(0xFFDAE1E9),
-    surfaceLow = Color(0xFFF8F9FB),
-    surface = Color(0xFFF2F4F7),
-    surfaceHigh = Color(0xFFECEFF4),
-    surfaceHighest = Color(0xFFE7EBF0),
+    // The light table's own ink, not its lightest neutral: M3 lays this at 32%,
+    // which over a white page gives a real dim instead of the 3% `bgAlt` gave.
+    scrim = LightHairlineInk,
+    surfaceLow = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFFFF),
+    surfaceHigh = Color(0xFFFFFFFF),
+    // The ONE surviving tint. See the KDoc: it is the pressed/skeleton tone, it
+    // has to be perceivable to do its job, and it is pinned near this value by
+    // BtContrastTest's "not darker than it needs to be" guard on the golds.
+    surfaceHighest = Color(0xFFE9EDF2),
 
     border = LightHairlineInk.copy(alpha = 0.10f),
     borderStrong = LightHairlineInk.copy(alpha = 0.16f),
     // Light spans 3.9 L* from page to card, so tone alone cannot separate.
     groupBorder = LightHairlineInk.copy(alpha = 0.10f),
-    // == surfaceHigh, ΔL* 5.7 INTO the page. The bar is the app's frame, and a
-    // frame that matched the page would be nothing but its own hairline; one
-    // clear step deeper than a card is what makes it read as a tray the cards
-    // scroll over rather than as one more card stuck to the bottom.
-    navBar = Color(0xFFECEFF4),
+    // White, like everything else the user reads on (owner order 2026-08-07).
+    // The previous comment here argued the opposite — that a bar matching the
+    // page "would be nothing but its own hairline" — and that is now precisely
+    // the intent: in light the bar IS its top hairline, the same way a card is
+    // its border. The tone that used to do the separating was also the single
+    // largest grey area on screen, which is what the owner was reacting to.
+    navBar = Color(0xFFFFFFFF),
 
     textPrimary = Color(0xFF131820),
     textSecondary = Color(0xFF3E4650),
@@ -622,6 +653,7 @@ val BtLightColors = BtColors(
 fun BtColors.asTrueBlack(): BtColors = copy(
     bg = Color(0xFF000000),
     bgAlt = Color(0xFF000000),
+    scrim = Color(0xFF000000),
     surfaceLow = Color(0xFF050608),
 )
 

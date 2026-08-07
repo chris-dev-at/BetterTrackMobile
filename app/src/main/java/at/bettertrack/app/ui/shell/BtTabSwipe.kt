@@ -203,6 +203,43 @@ internal fun peekPageOffsetPx(
 }
 
 /**
+ * Which tab the bottom bar should show as selected, as a 0f/1f fraction.
+ *
+ * ## The arbiter, and the latch (owner report 2026-08-07)
+ *
+ * *"You swipe, it shows the swap correctly on the bottom, then it jumps back for
+ * a brief second where you used to be, then goes back to where it should be."*
+ *
+ * Normally the NAV GRAPH owns the settled selection — [isCurrentDestination] is
+ * the whole answer. But a committed swipe writes [committed], calls
+ * `switchToTab` and snaps the page offset to zero in one breath, while the nav
+ * graph reports its new destination through a back-stack `StateFlow` that lands a
+ * frame or more later. In that window `isCurrentDestination` is still true for
+ * the tab the user just LEFT, and the bar used to believe it: the pill, the icon
+ * tint and the label tint all snapped backwards and then sprang forwards again.
+ * Measured on device at 120Hz before the fix: five visible regressions across ten
+ * rapid commits, each parked on the old tab for 91–142ms.
+ *
+ * So while a hop is in flight the bar believes the COMMIT. This cannot drift from
+ * the nav graph, because the shell only clears [committed] once `currentTab` has
+ * actually become that tab — the latch can be wrong for exactly as long as the
+ * nav graph takes to agree, and not one frame longer.
+ *
+ * @param committed the tab a swipe has committed to, or null when none is in
+ *   flight ([BtTabSwipeState.handoff]).
+ * @param isCurrentDestination whether the nav graph currently reports [tab].
+ */
+internal fun tabSelectionFraction(
+    committed: BtTab?,
+    tab: BtTab,
+    isCurrentDestination: Boolean,
+): Float = when {
+    committed != null -> if (tab == committed) 1f else 0f
+    isCurrentDestination -> 1f
+    else -> 0f
+}
+
+/**
  * How far the bottom bar's selection indicator leads a drag, **in item steps**.
  *
  * The rule is unchanged from Batch 1 — **the indicator travels the same fraction

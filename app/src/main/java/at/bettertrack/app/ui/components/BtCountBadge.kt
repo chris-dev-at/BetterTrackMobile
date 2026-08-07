@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -112,15 +113,25 @@ fun BtUnreadDot(modifier: Modifier = Modifier, size: Int = 8) {
  * without wrapping every use in an `if`.
  */
 @Composable
-fun BtTabBadgeDot(show: Boolean, modifier: Modifier = Modifier) {
+fun BtTabBadgeDot(show: Boolean, modifier: Modifier = Modifier, onIndicator: Boolean = false) {
     if (!show) return
-    // The ring must match WHAT THE DOT SITS ON, and this one sits on the bottom
-    // bar. Until B2-B the bar's container was `surface` — the card colour — so a
-    // ring in `surface` happened to be right by coincidence. §6.2 gives the bar
-    // its own `navBar` tone (that is the whole point: a bar that is not just a
-    // stuck card), and the moment it did, a `surface` ring became a visible
-    // halo around every badge. Naming the bar's colour keeps the two locked.
-    BtBorderedDot(modifier, ring = BtTheme.colors.navBar)
+    val bt = BtTheme.colors
+    // The ring must match WHAT THE DOT SITS ON — and on the SELECTED tab that is
+    // not the bar, it is the gold indicator pill drawn on top of the bar.
+    //
+    // This rule was already written here and already broken, in the one place it
+    // matters most: the ring was `navBar` unconditionally, so on the selected tab
+    // a bar-coloured ring punched a hole through the pill. It survived review
+    // because on the old grey bar the two tones were close enough to pass for a
+    // soft edge; the 2026-08-07 all-white flip made `navBar` pure white and the
+    // hole became a white bite out of the pill's corner. The owner's word for the
+    // result was "geeked".
+    //
+    // The pill's fill is `goldWashStrong` laid over the bar, so the ring is that
+    // same composite — resolved here rather than passed in, so a caller cannot
+    // hand the dot a colour the pill is not actually painted in.
+    val ring = if (onIndicator) bt.goldWashStrong.compositeOver(bt.navBar) else bt.navBar
+    BtBorderedDot(modifier, ring = ring)
 }
 
 /**

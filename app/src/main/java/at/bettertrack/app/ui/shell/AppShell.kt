@@ -12,15 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
@@ -29,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -51,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -277,6 +273,47 @@ private fun tabsFor(mode: StorageMode): List<TabSpec> {
 }
 
 /**
+ * What each tab puts in the ONE shared bar's variable slots — the entire
+ * difference between the four tabs' headers, in one `when`.
+ *
+ * Writing it out here rather than letting each tab pass its own content is the
+ * point of the hoist and not an accident of it. The bar has to be able to render
+ * a tab that is **not composed** (the incoming side of a swipe is a frozen
+ * bitmap, deliberately — see [BtTabPeekLayers]), so the answer cannot live in the
+ * page. It also puts the R-arc's 3-element budget back under one roof: this
+ * function is now the complete list of everything the tab chrome can say, which
+ * is a thing a reviewer can read in six lines instead of four files.
+ *
+ * Only Portfolio's face is dynamic, and it is dynamic through [BtTabChrome]
+ * rather than through a callback, so a Portfolio the user has swiped *away* from
+ * still has a face to show while its page slides back in.
+ */
+private fun headerFaceOf(tab: BtTab?, chrome: BtTabChrome): BtTabHeaderFace = when (tab) {
+    BtTab.Portfolio -> BtTabHeaderFace(
+        selector = chrome.portfolioSelector,
+        // Overview's ONE action (R1 decision O-3): search is the affordance the
+        // whole app shares and Overview is the only screen that is about all of
+        // it. A selected portfolio has no bar action — its verbs are in content.
+        action = if (chrome.portfolioIsOverview) {
+            BtTabHeaderAction.Search
+        } else {
+            BtTabHeaderAction.None
+        },
+    )
+
+    // R1 put Messages in the shell bar as People's ONE action; R2 moved it into
+    // People's own header; the hoist brings it back to the shell — same
+    // affordance, same pixel, now drawn by the thing that owns the bar. The
+    // unread COUNT stays off it (mandate §1): that is the People tab's dot.
+    BtTab.People -> BtTabHeaderFace(action = BtTabHeaderAction.Messages)
+
+    // Markets and Workbench carry brand and gear and nothing else — their own
+    // subjects (the search field, the segment row) are the first thing in their
+    // content, which is where a subject belongs when the bar is shared.
+    else -> BtTabHeaderFace.Plain
+}
+
+/**
  * The BetterTrack app shell: a 3-element top bar, 5-tab bottom navigation, the
  * global offline-banner scaffold and the full typed navigation graph.
  *
@@ -300,6 +337,7 @@ private fun tabsFor(mode: StorageMode): List<TabSpec> {
  *    search field, and the top-bar glyph was a duplicate of it — S6 P1-11);
  *  - **settings** and **discreet mode** → Home's overflow.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BtApp() {
     val bt = BtTheme.colors
@@ -355,6 +393,12 @@ fun BtApp() {
     // drag without being composed a second time. See [BtTabPeekLayers] for why a
     // second composition is not an option in this app.
     val peekLayers = rememberBtTabPeekLayers()
+    // The channel between the four tabs and the ONE bar they now share — see
+    // [BtTabChrome]. Portfolio publishes its pill up it; every tab hangs the
+    // bar's nested-scroll connection off it.
+    val chrome = remember { BtTabChrome() }
+    val headerBehavior = rememberBtTabHeaderBehavior(currentTab?.tab)
+    SideEffect { chrome.headerScroll = headerBehavior.nestedScrollConnection }
     // Where a hop in this direction would land, or null at the ends of the bar.
     // Consulted DURING the drag too: it is what decides between a 1:1 follow and
     // the damped overscroll hint.
@@ -582,12 +626,37 @@ fun BtApp() {
                     // draw phase. Two writers, and neither can be mistaken for
                     // the other. A future pager returns intermediate values here
                     // and nothing else changes.
+                    //
+                    // ── The latch (owner report 2026-08-07) ──────────────────
+                    //
+                    // *"You swipe, it shows the swap correctly on the bottom,
+                    // then it jumps back for a brief second where you used to be,
+                    // then goes back to where it should be."*
+                    //
+                    // A committed swipe writes `handoff` and calls `switchToTab`
+                    // in the same breath, then snaps the page offset to zero so
+                    // the NavHost can compose the new page where it belongs. The
+                    // nav graph, though, reports its new destination through a
+                    // back-stack `StateFlow` — it lands a frame or more later. In
+                    // that window `currentDestination` still names the tab the
+                    // user just LEFT, so this lambda used to answer 1f for it and
+                    // the whole selection (pill, icon tint, label tint) snapped
+                    // backwards and then sprang forwards again. Exactly the
+                    // report.
+                    //
+                    // So while a hop is in flight the bar believes the COMMIT,
+                    // not the coordinate. `handoff` is only cleared once
+                    // `currentTab` has actually become the target (see the effect
+                    // that drops the pin), which is what makes this a latch and
+                    // not a second source of truth: it can never contradict the
+                    // nav graph for longer than the nav graph takes to agree.
                     selectionFraction = { tab ->
-                        if (currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true) {
-                            1f
-                        } else {
-                            0f
-                        }
+                        tabSelectionFraction(
+                            committed = swipeState.handoff,
+                            tab = tab.tab,
+                            isCurrentDestination = currentDestination?.hierarchy
+                                ?.any { it.hasRoute(tab.routeClass) } == true,
+                        )
                     },
                     swipe = swipeState,
                     // The badges the top bar used to carry, on the tabs that own
@@ -616,12 +685,60 @@ fun BtApp() {
             }
         },
     ) { innerPadding ->
-        CompositionLocalProvider(LocalBtSnackbar provides snackbar.controller) {
+        CompositionLocalProvider(
+            LocalBtSnackbar provides snackbar.controller,
+            LocalBtTabChrome provides chrome,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            // ── The ONE tab bar (owner report 2026-08-07) ────────────────────
+            //
+            // *"Since the header is consistent in all the main pages it shouldn't
+            // scroll [with the swipe]."*
+            //
+            // It sits HERE — above the swiped area, outside everything that
+            // moves — which is the whole fix: the bar is static during a gesture
+            // because it is not in the thing being dragged, not because anything
+            // holds it still. See [BtTabHeader] for why its variable content is
+            // data rather than a slot, and how it hands over mid-swipe.
+            //
+            // It is also above the offline banner now, which it has to be: this
+            // bar consumes the status-bar inset (the shell's Scaffold zeroes its
+            // own), so anything drawn before it lands under the system clock.
+            // The banner used to be that anything.
+            if (isTopLevel) {
+                BtTabHeader(
+                    face = headerFaceOf(currentTab?.tab, chrome),
+                    // No `!=` filter against the current tab: during the last
+                    // frames of a hand-off the peek and the nav graph name the
+                    // SAME tab, and dropping the incoming face there would leave
+                    // the outgoing copy — pinned at alpha 0 by the latch — as the
+                    // only thing in the slot, i.e. an empty bar.
+                    incoming = peekTab?.let { headerFaceOf(it, chrome) },
+                    forward = swipeState.peekSide ?: true,
+                    swipe = swipeState,
+                    scrollBehavior = headerBehavior,
+                    onLongPressWordmark = {
+                        if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
+                    },
+                    // The shell cannot reach the Portfolio view model, and does
+                    // not need to: the switcher already has a shell-visible door,
+                    // opened for the bottom bar's re-tap. One signal, two
+                    // affordances, one implementation of what opening it means.
+                    onOpenSwitcher = { PortfolioTabEntry.requestSwitcher() },
+                    onAction = { action ->
+                        when (action) {
+                            BtTabHeaderAction.Search -> navController.navigate(SearchRoute)
+                            BtTabHeaderAction.Messages -> navController.navigate(ChatListRoute)
+                            BtTabHeaderAction.None -> Unit
+                        }
+                    },
+                    onOpenSettings = { navController.navigate(SettingsRoute) },
+                )
+            }
             // Global offline banner (§7.4): real connectivity + cached-data age.
             // The gallery's debug toggle can still force it for visual checks.
             val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
@@ -719,17 +836,17 @@ fun BtApp() {
  * was the one thing worth keeping, and it is now an explicit debug-only row in
  * the overflow, where a debug affordance is easier to find than a secret.
  */
-@Composable
-private fun BtOverviewSearchAction(onSearch: () -> Unit) {
-    val bt = BtTheme.colors
-    IconButton(onClick = onSearch) {
-        Icon(
-            Icons.Outlined.Search,
-            contentDescription = stringResource(R.string.bt_search_cd),
-            tint = bt.textSecondary,
-        )
-    }
-}
+/*
+ * `BtOverviewSearchAction` is gone with the per-page bars (hoist 2026-08-07).
+ *
+ * The action itself is untouched — Overview still owns exactly one, and it is
+ * still search. It is simply no longer a composable this file passes DOWN into
+ * the Portfolio tab for that tab to place in its own header, because there is no
+ * per-tab header left to place it in. It is [BtTabHeaderAction.Search], declared
+ * beside People's Messages in the one enum the shared bar renders from, and
+ * routed by [headerFaceOf] — which is also the only way the bar can show it while
+ * swiping ONTO a Portfolio tab that has not composed yet.
+ */
 
 /*
  * `BtOverviewOverflow` is deleted (nav restoration 2026-08-06, owner directive).
@@ -754,8 +871,23 @@ private fun BtOverviewSearchAction(onSearch: () -> Unit) {
  * bar is on screen from every tab while the ⋮ was only ever visible on Overview.
  */
 
-/** §6.2 metrics: the selection pill, unchanged from M3's own indicator tokens. */
-private val NAV_INDICATOR_WIDTH: Dp = 56.dp
+/**
+ * §6.2 metrics: the selection pill.
+ *
+ * **48dp, not M3's 56dp** (craft pass 2026-08-07). M3 sizes its indicator for a
+ * Material glyph, which is drawn edge to edge in its 24dp box; the four Origin
+ * glyphs are not. Measured on device at 2.625×, their ink is 15.6–17.9dp wide in
+ * that 24dp box — about 73% fill against Material's ~87% — so a 56dp pill left
+ * 19.3dp of air on each side of a 17.5dp glyph while leaving only 7.3dp above and
+ * below it. A 2.7:1 padding asymmetry around a square-ish mark is what reads as a
+ * lozenge with something small rattling inside it, and it is the geometry half of
+ * the owner's *"still a little geeked"*.
+ *
+ * 48dp brings that to 15.3 : 7.3 (2.1:1) and still clears the widest glyph
+ * (People, 17.9dp) by 15dp a side. The height is untouched: 32dp is set by the
+ * 64dp bar's icon+label stack, not by the glyph.
+ */
+private val NAV_INDICATOR_WIDTH: Dp = 48.dp
 private val NAV_INDICATOR_HEIGHT: Dp = 32.dp
 
 /**
@@ -877,11 +1009,19 @@ private fun BtBottomBar(
     // The travel. Snapped on the first placement (nothing to animate towards yet)
     // and under reduced motion; sprung otherwise, which is what makes a TAP slide
     // rather than jump — the same win the swipe gets, for free.
+    //
+    // Snapped during a hand-off too, and that is the second half of the flicker
+    // fix. A committed swipe has ALREADY carried the pill to the target under the
+    // finger (the in-flight lead reaches exactly one item step when the page
+    // reaches one page width), so animating to that same point afterwards is a
+    // journey the user has already watched. Left as a spring it did the visible
+    // damage: the offset snapped to zero, the lead collapsed with it, and the
+    // pill fell back a whole step before springing forward again.
     val travelX = remember { Animatable(0f) }
     var placed by remember { mutableStateOf(false) }
     LaunchedEffect(restCentre, reducedMotion) {
         val target = restCentre ?: return@LaunchedEffect
-        if (!placed || reducedMotion) {
+        if (!placed || reducedMotion || swipe.handoff != null) {
             travelX.snapTo(target.x)
             placed = true
         } else {
@@ -939,7 +1079,24 @@ private fun BtBottomBar(
                     val live = tabs.indices.mapNotNull { iconCentres[it]?.x }
                     val minX = live.minOrNull() ?: return@drawBehind
                     val maxX = live.maxOrNull() ?: return@drawBehind
-                    val x = (travelX.value + lead * step).coerceIn(minX, maxX) - barOriginX
+
+                    // While a hop is in flight the pill is simply AT its target,
+                    // derived here rather than assembled from `travelX` and the
+                    // lead. That is what makes the fix frame-exact instead of
+                    // merely fast: `handoff` is written and the offset is snapped
+                    // to zero by the same coroutine but not necessarily in the
+                    // same frame, so any formula that mixes the two can be caught
+                    // one frame with the latch applied and the lead not yet
+                    // dropped (a step too far) or the reverse (a step short).
+                    // Reading the destination straight from the commit cannot be
+                    // caught in between, because there is no in-between to catch.
+                    val committed = swipe.handoff
+                    val pinnedX = committed
+                        ?.let { target -> tabs.indexOfFirst { it.tab == target } }
+                        ?.takeIf { it >= 0 }
+                        ?.let { iconCentres[it]?.x }
+                    val x = (pinnedX ?: (travelX.value + lead * step))
+                        .coerceIn(minX, maxX) - barOriginX
                     val y = centre.y - barOriginY
 
                     val topLeft = Offset(x - indicatorW / 2f, y - indicatorH / 2f)
@@ -979,16 +1136,53 @@ private fun BtBottomBar(
                             // than the item's, so the dot reads as belonging to
                             // the icon and does not drift into the neighbour's
                             // touch target on a narrow screen.
+                            //
+                            // ── Placed against the PILL, not just the glyph ──
+                            //
+                            // (Craft pass 2026-08-07.) The old offset put the
+                            // dot's centre 12dp right and 10dp above the icon
+                            // box's centre. With the 1.5dp ring that is a 6.5dp
+                            // radius object whose outer edge reached 16.5dp from
+                            // the pill's right cap centre — and the cap's radius
+                            // is 16dp, so the ring poked half a dp THROUGH the
+                            // pill's edge. On screen that is a badge that looks
+                            // like it is falling out of its own container, which
+                            // is the placement half of "geeked".
+                            //
+                            // (13, -7) from the box centre puts the ring 8.6dp
+                            // from that cap centre, i.e. 0.9dp of clear pill all
+                            // the way round — the dot sits IN the pill instead of
+                            // straddling it. From the TopEnd anchor of a 24dp box
+                            // a 10dp dot starts at (7, -7), so the nudge is x
+                            // only. `onIndicator` gives its ring the pill's own
+                            // fill on the selected tab; see [BtTabBadgeDot].
                             BtTabBadgeDot(
                                 show = hasBadge(tab),
+                                onIndicator = fraction >= 0.5f,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .offset(x = 5.dp, y = (-3).dp),
+                                    .offset(x = 6.dp, y = 0.dp),
                             )
                         }
                     },
                     label = {
-                        Text(stringResource(tab.labelRes), style = BtTheme.type.labelNav)
+                        // The selected label carries WEIGHT, not only hue (craft
+                        // pass 2026-08-07). Both states used one 11sp Medium and
+                        // let colour do the ranking, and on the white bar the
+                        // colour ranks them backwards: `goldInk` #866419 sits at
+                        // 4.97:1 on white while the unselected `textMuted`
+                        // #56616D sits at 6.31:1, so the selected tab was the
+                        // FAINTEST word in the row. The pill said "here" and the
+                        // label quietly said "not here".
+                        //
+                        // Weight is the honest carrier — it ranks without
+                        // spending contrast, and it leaves the gold free to mean
+                        // brand rather than having to mean emphasis as well.
+                        Text(
+                            text = stringResource(tab.labelRes),
+                            style = BtTheme.type.labelNav,
+                            fontWeight = if (fraction >= 0.5f) FontWeight.SemiBold else null,
+                        )
                     },
                     colors = ShortNavigationBarItemDefaults.colors(
                         // Both states carry the SAME lerped ink, because the
@@ -1196,13 +1390,6 @@ private fun BtNavHost(
                                 onToggleDiscreet = onToggleDiscreet,
                             )
                         },
-                        overviewAction = {
-                            // Overview's ONE action (R1 decision O-3): search is the
-                            // affordance the whole app shares and Overview is the
-                            // only screen that is about all of it.
-                            BtOverviewSearchAction(onSearch = { navController.navigate(SearchRoute) })
-                        },
-                        onOpenSettings = { navController.navigate(SettingsRoute) },
                         // The in-content door to one portfolio's own settings. The
                         // gear in the corner is the APP's settings and must keep
                         // meaning only that — so per-portfolio management gets a row
@@ -1211,9 +1398,6 @@ private fun BtNavHost(
                         // portfolio. The switcher's ⋮ carries the second path.
                         onOpenPortfolioSettings = { portfolioId ->
                             navController.navigate(PortfolioSettingsRoute(portfolioId))
-                        },
-                        onLongPressWordmark = {
-                            if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
                         },
                     )
                 }
@@ -1227,7 +1411,6 @@ private fun BtNavHost(
                     onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                     onAddToWatchlist = { navController.navigate(SearchRoute) },
                     onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
-                    onOpenSettings = { navController.navigate(SettingsRoute) },
                 )
             }
         }
@@ -1242,7 +1425,6 @@ private fun BtNavHost(
                         navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
                     },
                     onOpenGroups = { navController.navigate(FriendGroupsRoute) },
-                    onOpenSettings = { navController.navigate(SettingsRoute) },
                 )
             }
         }
@@ -1255,7 +1437,6 @@ private fun BtNavHost(
                     onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
                     onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                     onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                    onOpenSettings = { navController.navigate(SettingsRoute) },
                 )
             }
         }

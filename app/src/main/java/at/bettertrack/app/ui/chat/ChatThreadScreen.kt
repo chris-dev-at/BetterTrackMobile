@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.chat
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -583,11 +584,19 @@ private fun MessageInputBar(
                 IconButton(onClick = onAttach) {
                     Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.bt_chat_share_item_cd), tint = bt.textSecondary)
                 }
+                // The composer is the app's ONE filled text field, and it was
+                // the only control the 2026-08-07 all-white flip made literally
+                // invisible: it fills with `surface` and switches M3's indicator
+                // line off, so once `surface` became #FFFFFF there was a white
+                // pill on a white row with nothing to say where to tap. The
+                // hairline is the same edge every other container in light draws
+                // — see the tone-vs-hairline rule.
                 TextField(
                     value = value,
                     onValueChange = onValueChange,
                     modifier = Modifier
                         .weight(1f)
+                        .border(1.dp, bt.border, RoundedCornerShape(22.dp))
                         .focusRequester(focusRequester),
                     placeholder = { Text(stringResource(R.string.bt_chat_message_placeholder), color = bt.textMuted) },
                     maxLines = 4,

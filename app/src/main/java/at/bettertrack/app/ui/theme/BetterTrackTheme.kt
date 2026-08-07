@@ -119,7 +119,7 @@ fun materialSchemeFrom(bt: BtColors, dark: Boolean): ColorScheme {
         onErrorContainer = bt.lossSoft,
         outline = bt.borderStrong,
         outlineVariant = bt.border,
-        scrim = bt.bgAlt,
+        scrim = bt.scrim,
         surfaceBright = bt.surfaceHigh,
         surfaceDim = bt.bgAlt,
         surfaceContainer = bt.surface,

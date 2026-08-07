@@ -81,6 +81,10 @@ class TopBarNavigationTest {
      * gear, the wordmark and the pin — which is exactly the moment to decide them,
      * and exactly the set of decisions that made the first four disagree.
      */
+    /** The ONE bar the four top-level tabs share since the 2026-08-07 hoist. */
+    private fun sharedTabBar(): String =
+        uiSources().first { it.name == "BtTabHeader.kt" }.readText()
+
     private val tabScreens = mapOf(
         "PortfolioOverviewScreen.kt" to "Portfolio",
         "WorkboardScreen.kt" to "Workbench",
@@ -89,139 +93,192 @@ class TopBarNavigationTest {
     )
 
     /**
-     * Each of the four top-level tabs puts the gear in its header's trailing slot.
+     * The gear is in the trailing slot of the ONE bar the top-level tabs share.
      *
-     * Checked per FILE rather than per composable because that is the unit a
-     * regression arrives in: someone edits one tab's screen.
+     * Until the 2026-08-07 hoist this was checked per file, because the gear was
+     * written out four times — once in each tab's own header — and "identical on
+     * every tab" was a property four authors had to keep agreeing on. There is
+     * one bar now ([at.bettertrack.app.ui.shell.BtTabHeader], drawn by the shell
+     * above everything the tab swipe moves), so the invariant has exactly one
+     * place it can be broken, and this test guards that place.
+     *
+     * The other half of the old guarantee — that no tab has quietly grown a
+     * SECOND gear of its own — is
+     * [`only the shell's shared bar renders the tab chrome`].
      */
     @Test
-    fun `every top-level tab bar carries the settings gear`() {
-        val sources = uiSources().associateBy { it.name }
-        tabScreens.forEach { (file, tab) ->
-            val src = (sources[file] ?: error("$file not found")).readText()
-            assertTrue(
-                "The $tab tab's header ($file) no longer passes `settings = { BtSettingsGear(...) }`. " +
-                    "Settings must stay one tap from every tab — board #66.",
-                src.contains("settings = { BtSettingsGear("),
-            )
-        }
+    fun `the shared tab bar carries the settings gear`() {
+        val bar = sharedTabBar()
+        assertTrue(
+            "BtTabHeader no longer renders BtSettingsGear. Settings must stay one tap from " +
+                "every tab — board #66.",
+            bar.contains("BtSettingsGear(onOpenSettings)"),
+        )
     }
 
     /**
-     * Each of the four top-level tabs leads its header with the BetterTrack
-     * wordmark (owner order 2026-08-07).
+     * The gear is the LAST thing in the shared bar's actions row.
+     *
+     * The "same slot app-wide" half of the directive. The bar's variable action
+     * (Overview's search, People's messages) is rendered by the swap zone
+     * immediately before it, so a future edit that appends anything after
+     * `BtSettingsGear` would slide the landmark inward on whichever tab carried
+     * it — and a landmark that moves is not a landmark. It is also now the
+     * literal guarantee the owner asked for on the swipe: the gear cannot travel
+     * during a hand-over if nothing is ever placed after it.
+     */
+    @Test
+    fun `the shared tab bar renders settings last in its actions row`() {
+        val bar = sharedTabBar()
+        val marker = "actions = {"
+        assertTrue("BtTabHeader has no `actions = {` row.", bar.contains(marker))
+        val actions = bar.substringAfter(marker).substringBefore("expandedHeight")
+        val swapZone = actions.indexOf("BtHeaderSwapZone(")
+        val gear = actions.indexOf("BtSettingsGear(")
+        assertTrue("BtTabHeader's actions row lost its swap zone or its gear.", swapZone >= 0 && gear >= 0)
+        assertTrue(
+            "The settings gear must be the LAST thing in BtTabHeader's actions row; the " +
+                "tab's own action is rendered before it.",
+            gear > swapZone,
+        )
+        assertEquals(
+            "Something is rendered after BtSettingsGear in BtTabHeader's actions row. The " +
+                "corner is the gear's address — nothing may push it inward.",
+            "",
+            actions.substringAfter("BtSettingsGear(onOpenSettings)")
+                .substringBefore("},")
+                .replace(Regex("//[^\n]*"), "")
+                .trim(),
+        )
+    }
+
+    /**
+     * The shared bar LEADS with the BetterTrack wordmark (owner order 2026-08-07).
      *
      * *"Have the BetterTrack logo on the top of the main pages — like on EVERY
      * main page ... and do the same as with the portfolio page where it just gets
      * put up top, that works great."*
      *
-     * This is the same class of invariant as the gear, and it decayed the same way
-     * once already: the wordmark's 2026-08-06 restoration reached Portfolio and
-     * stopped, so the brand was a property of one tab for a day. "Every" is the
-     * word in the order, so "every" is what gets checked.
+     * "Every" used to be four assertions over four files, and it decayed exactly
+     * that way once already: the wordmark's 2026-08-06 restoration reached
+     * Portfolio and stopped, so the brand was a property of one tab for a day.
+     * After the hoist "every" is not an invariant at all — it is arithmetic. One
+     * bar renders the mark unconditionally, and every top-level tab is drawn
+     * under that one bar, so a tab without the wordmark would have to be a tab
+     * outside the shell.
      *
      * Anchored to [at.bettertrack.app.ui.components.BtHeaderWordmark] rather than
-     * to a bare `Wordmark(` on purpose. A tab that hand-rolled the mark would
-     * satisfy a looser assertion while drifting in size, padding or the debug
-     * gesture — which is precisely what the component exists to prevent.
+     * to a bare `Wordmark(`: a hand-rolled mark would satisfy a looser assertion
+     * while drifting in size, padding or the debug gesture.
      */
     @Test
-    fun `every top-level tab bar leads with the wordmark`() {
-        val sources = uiSources().associateBy { it.name }
-        tabScreens.forEach { (file, tab) ->
-            val src = (sources[file] ?: error("$file not found")).readText()
-            assertTrue(
-                "The $tab tab's header ($file) no longer passes " +
-                    "`navigationIcon = { BtHeaderWordmark(`. The BetterTrack mark must lead " +
-                    "every top-level tab — owner order 2026-08-07.",
-                src.contains("navigationIcon = { BtHeaderWordmark("),
-            )
-        }
+    fun `the shared tab bar leads with the wordmark`() {
+        val bar = sharedTabBar()
+        assertTrue(
+            "BtTabHeader no longer passes `navigationIcon = { BtHeaderWordmark(`. The " +
+                "BetterTrack mark must lead the tab chrome — owner order 2026-08-07.",
+            bar.contains("navigationIcon = { BtHeaderWordmark("),
+        )
     }
 
     /**
-     * The wordmark stops at the tab roots — no sub-page wears it.
+     * The tab chrome — wordmark AND gear — is rendered in exactly one place.
      *
-     * The other half of the same order: *"not a sub page (not asset view etc.)"*.
-     * A pushed screen's leading slot belongs to its back arrow, and a brand mark
-     * that displaced it would cost the one affordance a user must never have to
-     * hunt for. Stated as a whole-app property because "don't put it on the other
-     * thirty-odd screens" is not something any one of those screens knows.
+     * This single test now carries what three used to: the "every tab has it"
+     * half, the "no sub-page wears it" half (*"not a sub page (not asset view
+     * etc.)"* — a pushed screen's leading slot belongs to its back arrow, the one
+     * affordance a user must never have to hunt for), and the half that had no
+     * test at all, which is that no tab quietly keeps a SECOND copy after the
+     * hoist.
+     *
+     * That last one is the regression this file exists to prevent in its newest
+     * form. A tab screen that still drew its own `BtHeaderWordmark` would
+     * compile, would look almost right standing still, and would go wrong only
+     * during a swipe — as a second brand strip sliding under a static one, which
+     * is the exact defect the hoist was ordered to fix.
      */
     @Test
-    fun `no screen outside the four tabs carries the header wordmark`() {
+    fun `only the shell's shared bar renders the tab chrome`() {
+        // The component definitions themselves, the one bar that calls them, and
+        // the debug gallery — which renders chrome as a SPECIMEN. A catalogue
+        // showing you the gear is not a screen carrying one: it is never on the
+        // navigation path, and the whole point of it is to render components out
+        // of context so they can be looked at.
+        val allowed = setOf("BtCollapsingHeader.kt", "BtTabHeader.kt", "GalleryScreen.kt")
         val offenders = uiSources().filter { f ->
-            f.name !in tabScreens.keys &&
-                f.name != "BtCollapsingHeader.kt" &&
-                f.readText().contains("BtHeaderWordmark(")
+            if (f.name in allowed) return@filter false
+            val src = f.readText()
+            src.contains("BtHeaderWordmark(") || src.contains("BtSettingsGear(")
         }
         assertEquals(
-            "These non-tab screens render BtHeaderWordmark. The brand mark belongs to the " +
-                "four top-level tabs only; a pushed screen's leading slot is its back arrow " +
-                "— owner order 2026-08-07.",
+            "These screens render tab chrome (BtHeaderWordmark / BtSettingsGear) of their " +
+                "own. Since the 2026-08-07 hoist there is exactly ONE tab bar — " +
+                "ui/shell/BtTabHeader.kt — drawn by the shell above everything the tab " +
+                "swipe moves. A second copy inside a page is what made the brand strip " +
+                "slide during a swipe.",
             emptyList<String>(),
             offenders.map { it.name }.sorted(),
         )
     }
 
     /**
-     * Each of the four top-level tabs draws the PINNED bar, with the pinned
-     * behaviour to match.
+     * The shared bar is a fixed 64dp strip on a PINNED behaviour.
      *
-     * *"Do the same as with the portfolio page where it just gets put up top, that
-     * works great."* — the praised property is that the bar does not move, so the
-     * test checks the two things that make it not move, together.
+     * *"Do the same as with the portfolio page where it just gets put up top,
+     * that works great."* — the praised property is that the bar does not move,
+     * so the test checks the two things that make it not move, together. Neither
+     * implies the other, which is why this is one test and not two:
      *
-     * Both halves are required and neither implies the other, which is the whole
-     * reason this is one test and not two:
+     *  - a fixed `expandedHeight` on a *collapsing* behaviour gives a bar that
+     *    renders at one height while its behaviour still writes `heightOffset` —
+     *    it scrolls partly off-screen, and looks correct in any screenshot taken
+     *    at the top of a list;
+     *  - a pinned behaviour without the fixed height gives a `LargeTopAppBar`
+     *    stuck permanently expanded — 112dp of chrome, the opposite mistake.
      *
-     *  - `pinned = true` with a *collapsing* behaviour gives a bar that renders at
-     *    a fixed height while its behaviour still writes `heightOffset` — it
-     *    scrolls partly off-screen, which is the exact failure the order is about,
-     *    and it looks correct in a screenshot taken at the top.
-     *  - [at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior] without
-     *    `pinned = true` gives a `LargeTopAppBar` that can never collapse — a
-     *    permanently expanded 112dp bar, i.e. the opposite mistake.
+     * Both are still worth pinning after the hoist even though the bar can no
+     * longer slide sideways: not scrolling away and not sliding are different
+     * properties with different causes, and only the second one was fixed by
+     * moving the bar out of the pages.
      */
     @Test
-    fun `every top-level tab bar is the pinned variant`() {
-        val sources = uiSources().associateBy { it.name }
-        tabScreens.forEach { (file, tab) ->
-            val src = (sources[file] ?: error("$file not found")).readText()
-            assertTrue(
-                "The $tab tab's header ($file) no longer passes `pinned = true`. Every " +
-                    "top-level tab bar is a fixed 64dp strip — owner order 2026-08-07.",
-                src.contains("pinned = true"),
-            )
-            assertTrue(
-                "The $tab tab ($file) passes `pinned = true` but does not use " +
-                    "`rememberBtPinnedHeaderBehavior()`. A pinned bar on a collapsing " +
-                    "behaviour still scrolls off — see this test's KDoc.",
-                src.contains("rememberBtPinnedHeaderBehavior()"),
-            )
-        }
+    fun `the shared tab bar is a fixed strip on a pinned behaviour`() {
+        val bar = sharedTabBar()
+        assertTrue(
+            "BtTabHeader no longer fixes its height to BT_HEADER_COLLAPSED_HEIGHT. The tab " +
+                "strip is a fixed 64dp row — owner order 2026-08-07.",
+            bar.contains("expandedHeight = BT_HEADER_COLLAPSED_HEIGHT"),
+        )
+        assertTrue(
+            "BtTabHeader's scroll behaviour is no longer built on " +
+                "rememberBtPinnedHeaderBehavior. A fixed height on a collapsing behaviour " +
+                "still scrolls away — see this test's KDoc.",
+            bar.contains("rememberBtPinnedHeaderBehavior("),
+        )
     }
 
     /**
-     * App-wide: `pinned = true` and the pinned behaviour travel together.
+     * The bar is drawn OUTSIDE the area the tab swipe displaces.
      *
-     * The per-tab test above pins that pairing for the four files that have it
-     * today; this one states it as the rule, so a fifth pinned bar anywhere in the
-     * app cannot be built on `rememberBtCollapsingHeaderBehavior` and half-work.
+     * The structural fact the whole hoist rests on, and the one a refactor is
+     * most likely to undo by accident: [at.bettertrack.app.ui.shell.BtTabHeader]
+     * must be a sibling *before* the `Box` that carries `btTabSwipe`, not a child
+     * of it. Inside that Box it would ride `pageOffsetPx` like the pages do and
+     * the owner's report would be back, with every other test still green —
+     * because nothing else in this suite can see a layout order.
      */
     @Test
-    fun `no screen pins a bar on a collapsing behaviour`() {
-        val offenders = uiSources().filter { f ->
-            if (f.name == "BtCollapsingHeader.kt") return@filter false
-            val src = f.readText()
-            src.contains("pinned = true") && !src.contains("rememberBtPinnedHeaderBehavior()")
-        }
-        assertEquals(
-            "These screens pass `pinned = true` to BtCollapsingHeader without pairing it " +
-                "with rememberBtPinnedHeaderBehavior(). The bar would render at a fixed " +
-                "height and still scroll away.",
-            emptyList<String>(),
-            offenders.map { it.name }.sorted(),
+    fun `the shared tab bar sits outside the swiped page area`() {
+        val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
+        val bar = shell.indexOf("BtTabHeader(")
+        val swipe = shell.indexOf(".btTabSwipe(")
+        assertTrue("AppShell no longer draws BtTabHeader.", bar >= 0)
+        assertTrue("AppShell no longer applies btTabSwipe.", swipe >= 0)
+        assertTrue(
+            "AppShell draws BtTabHeader after (i.e. inside) the swiped page area. The one " +
+                "tab bar must be a sibling ABOVE the Box that carries btTabSwipe, or it " +
+                "will slide with the pages again — owner report 2026-08-07.",
+            bar < swipe,
         )
     }
 
@@ -248,7 +305,7 @@ class TopBarNavigationTest {
      * to come here and decide what the rule means for two bars.
      */
     @Test
-    fun `the header renders settings last in its actions row`() {
+    fun `the collapsing header renders settings last in its actions row`() {
         val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()
         val marker = "val actionsSlot: @Composable RowScope.() -> Unit = {"
         assertTrue(
@@ -321,19 +378,59 @@ class TopBarNavigationTest {
         assertEquals("expected exactly four tabs in the shell list", 4, shellOrder.size)
     }
 
+    /**
+     * Every top-level tab hangs the SHARED bar's nested-scroll connection.
+     *
+     * The one thing each tab still owes the bar after the hoist. A pinned
+     * behaviour's only remaining job is to accumulate `contentOffset`, and
+     * `contentOffset` is what swaps the bar's container colour for its scrolled
+     * tone — so a tab that forgets this line gets a bar that looks like page
+     * background while its list slides through it, which is the exact seam the
+     * app's header work spent two milestones removing.
+     *
+     * It fails silently and only on that one tab, which is precisely the kind of
+     * regression a per-file assertion is for. Adding a fifth tab fails this test
+     * until its author has wired it up.
+     */
     @Test
-    fun `both header variants render the same slots`() {
-        val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()
-        listOf("TopAppBar(", "LargeTopAppBar(").forEach { bar ->
-            val body = header.substringAfter(bar).substringBefore("scrollBehavior = scrollBehavior,")
-            listOf("title = titleSlot", "navigationIcon = navigationIcon", "actions = actionsSlot")
-                .forEach { slot ->
-                    assertTrue(
-                        "$bar in BtCollapsingHeader does not pass `$slot` — the pinned and " +
-                            "collapsing bars must expose an identical control surface.",
-                        body.contains(slot),
-                    )
-                }
+    fun `every top-level tab hangs the shared bar's scroll connection`() {
+        val sources = uiSources().associateBy { it.name }
+        tabScreens.forEach { (file, tab) ->
+            val src = (sources[file] ?: error("$file not found")).readText()
+            assertTrue(
+                "The $tab tab ($file) does not hang `LocalBtTabChrome.current.headerScroll` " +
+                    "on its scroll container. Without it the one shared bar never takes its " +
+                    "tonal lift over this tab's content — see BtTabHeader.",
+                src.contains("LocalBtTabChrome.current.headerScroll") ||
+                    src.contains("chrome.headerScroll"),
+            )
         }
+    }
+
+    /**
+     * [at.bettertrack.app.ui.components.BtCollapsingHeader] renders ONE bar.
+     *
+     * It used to render two — a `TopAppBar` when `pinned`, a `LargeTopAppBar`
+     * otherwise — and a test here checked that both were handed identical slots,
+     * because a tab whose bar carried a different control surface would have
+     * broken the gear's universal address. The pinned branch left with the four
+     * per-page tab bars it existed for; this replaces that guard with the reason
+     * it is no longer needed, so that re-introducing a second bar in this file
+     * has to come past a failing test rather than past nobody.
+     */
+    @Test
+    fun `the collapsing header renders exactly one bar`() {
+        val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()
+        val code = header.lineSequence().filterNot { it.trimStart().startsWith("*") }
+            .joinToString("\n")
+        assertEquals(
+            "BtCollapsingHeader renders more than one app bar. Since the 2026-08-07 hoist " +
+                "the tab strip is ui/shell/BtTabHeader.kt and this component is the " +
+                "COLLAPSING bar for pushed screens only — a second variant here would give " +
+                "the app two control surfaces to keep in agreement again.",
+            1,
+            Regex("""\bLargeTopAppBar\(""").findAll(code).count() +
+                Regex("""(?<!Large)\bTopAppBar\(""").findAll(code).count(),
+        )
     }
 }

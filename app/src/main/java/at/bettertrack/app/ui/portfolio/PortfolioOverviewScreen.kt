@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -67,6 +68,8 @@ import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.charts.BtAreaChart
+import at.bettertrack.app.ui.shell.LocalBtTabChrome
+import at.bettertrack.app.ui.shell.BtTabSelector
 import at.bettertrack.app.ui.theme.BtColors
 import at.bettertrack.app.ui.charts.BtDonutChart
 import at.bettertrack.app.ui.charts.DonutSegment
@@ -75,12 +78,9 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
-import at.bettertrack.app.ui.components.BtHeaderWordmark
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
-import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtSkeleton
-import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
@@ -212,29 +212,6 @@ fun PortfolioOverviewScreen(
         onOpenSwitcher: () -> Unit,
         onOpenPortfolioView: () -> Unit,
     ) -> Unit,
-    /** Overview's ONE header action (search) — the mandate's §1 budget. */
-    overviewAction: @Composable () -> Unit,
-    /**
-     * The Settings gear — this tab's trailing anchor, on BOTH of the header's
-     * modes (Overview and a selected portfolio), because a landmark that is
-     * present only on one of a tab's two states is not a landmark.
-     *
-     * A callback rather than a slot (unlike [overviewAction]): the gear is
-     * identical on all four tabs by design, so there is nothing here for a
-     * caller to vary and a slot would only be an invitation to try.
-     */
-    onOpenSettings: () -> Unit,
-    /**
-     * Debug builds: the wordmark's long-press opens the component gallery.
-     *
-     * The owner asked for this affordance twice — once as the original hidden
-     * gallery entry, and again in the Step-18 "secret menu" request ("keep the
-     * wordmark long-press too"). It was lost when the R-arc retired the shell top
-     * bar and the wordmark with it, and the gallery moved into Overview's ⋮
-     * instead. The wordmark is back in this header, so the long-press comes back
-     * with it — which is what lets that ⋮ entry, and with it the whole menu, go.
-     */
-    onLongPressWordmark: () -> Unit,
 ) {
     val vm: PortfolioOverviewViewModel = viewModel(initializer = PortfolioOverviewVmInitializer)
 
@@ -280,6 +257,35 @@ fun PortfolioOverviewScreen(
     }
 
     val bt = BtTheme.colors
+
+    // ── This tab's half of the shared bar (hoist 2026-08-07) ────────────────
+    //
+    // Portfolio is the only tab whose bar content is not a constant, so it is the
+    // only tab that has anything to say up this channel. What it publishes is
+    // DATA, not a composable: the shell has to be able to draw this pill while
+    // the user is swiping ONTO this tab, at which point this screen is not
+    // composed and could not run a slot even if it had passed one.
+    //
+    // `title`/`titleIcon`/`titleIconTint` are the exact three values the retired
+    // local header was assembling; only their destination changed.
+    val chrome = LocalBtTabChrome.current
+    val overviewLabel = stringResource(R.string.bt_overview_title)
+    val fallbackLabel = stringResource(R.string.bt_tab_portfolio)
+    val selector = BtTabSelector(
+        label = if (overviewSelected) overviewLabel else selected?.name ?: fallbackLabel,
+        // The selector's leading glyph is the Portfolio TAB's glyph, on purpose:
+        // the pill states which entry of that tab you are in, so wearing the
+        // tab's own icon makes the relationship legible without a word.
+        icon = selectedKindOrNull?.let { portfolioKindIcon(it) } ?: Icons.Outlined.PieChart,
+        // Scope hue per B2-C: a portfolio wears its own kind hue (same as its
+        // switcher row); Overview keeps gold by rule — account-wide = brand.
+        tint = selectedKindOrNull?.let { portfolioKindTint(it) },
+    )
+    // A `SideEffect` and not a `LaunchedEffect`: this must land before the frame
+    // that composition is producing is drawn, or the bar would render one frame
+    // behind the page on every portfolio switch.
+    SideEffect { chrome.publishPortfolio(selector, overviewSelected) }
+
     val pullState = rememberPullToRefreshState()
     // S6 P1-7: the buy/sell FAB sits exactly over the allocation legend's value
     // column, so on a portfolio with more than a couple of slices the reader
@@ -287,11 +293,6 @@ fun PortfolioOverviewScreen(
     // would waste that width on every screen, FAB or no FAB), the FAB gets out of
     // the way while the user scrolls down and comes straight back on the way up.
     val fabVisibility = rememberBtFabVisibility()
-    // Pinned, not collapsing (owner directive 2026-08-06): "the selector for
-    // portfolio can always be on top and doesn't need to drop down when scrolled
-    // all the way up". See BtCollapsingHeader's `pinned` branch for why the
-    // behaviour is still a real one rather than null.
-    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     val listState = rememberLazyListState()
     // Back at the very top = nothing to get out of the way of. This also covers
     // the short-list case, where the FAB must never be able to stay hidden.
@@ -317,86 +318,13 @@ fun PortfolioOverviewScreen(
             // and the header still gets the full delta afterwards, because the
             // FAB consumed none of it.
             .nestedScroll(fabVisibility.nestedScroll)
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            // The bar this tab used to draw lives in the shell now (hoist
+            // 2026-08-07): one instance, above everything the swipe moves, so it
+            // cannot slide. All that is left here is the connection that lets the
+            // shared bar take its tonal lift when this tab's content goes under
+            // it. See [at.bettertrack.app.ui.shell.BtTabHeader].
+            .nestedScroll(chrome.headerScroll),
     ) {
-        val canSwitch = portfolios.isNotEmpty()
-        BtCollapsingHeader(
-            // The title says which of the switcher's entries you are looking at,
-            // and Overview is one of them — so it names itself here exactly the
-            // way a portfolio does. That is the whole IA change in one line: the
-            // former Home tab is now a selection, not a place.
-            title = if (overviewSelected) {
-                stringResource(R.string.bt_overview_title)
-            } else {
-                selected?.name ?: stringResource(R.string.bt_tab_portfolio)
-            },
-            scrollBehavior = scrollBehavior,
-            pinned = true,
-            // The selector's leading glyph is the Portfolio TAB's glyph, on
-            // purpose: the pill states which entry of that tab you are in, so
-            // wearing the tab's own icon makes the relationship legible without a
-            // word. The web app tints its trigger chip per portfolio; this app has
-            // no per-portfolio icon or hue in its model, so one glyph in the
-            // house accent is the honest equivalent rather than a colour invented
-            // client-side.
-            titleIcon = selectedKindOrNull?.let { portfolioKindIcon(it) } ?: Icons.Outlined.PieChart,
-            // Scope hue per B2-C: a portfolio wears its own kind hue (same as its
-            // switcher row); Overview keeps gold by rule — account-wide = brand.
-            titleIconTint = selectedKindOrNull?.let { portfolioKindTint(it) },
-            // The wordmark lives in the leading slot of the always-visible top
-            // row (owner report 2026-08-06: "the BetterTrack logo up top is
-            // missing — just an empty space now"). Two things were true and both
-            // are fixed here. The brand HAD left the app entirely when the shell
-            // top bar was retired — it survived only on login and About, so the
-            // running app never said its own name. And M3's `LargeTopAppBar`
-            // fades its collapsed title to nothing while the header is expanded,
-            // which left that 64dp row holding a search icon, an overflow, and
-            // ~200dp of deliberate blankness on the screen the app OPENS on.
-            //
-            // Putting the wordmark there answers both with one element: the app
-            // is named again, in the corner every Android app puts its identity,
-            // and the empty row now has a subject. It does NOT fade with the
-            // collapse — brand is not context, and a logo that dissolves when you
-            // scroll reads as a rendering bug, which is precisely the report this
-            // change is answering.
-            //
-            // As of the owner's 2026-08-07 order it is on all four tabs, not this
-            // one, so the mark itself moved into [BtHeaderWordmark] and this slot
-            // just names it — identical padding and size on every tab by
-            // construction rather than by four authors agreeing. The pushed
-            // screens' leading slot is still their back arrow.
-            //
-            // This tab is the only caller that passes the gallery door, because it
-            // is the only screen that has one to pass.
-            navigationIcon = { BtHeaderWordmark(onLongPress = onLongPressWordmark) },
-            // Always tappable now. The switcher stopped being an optional
-            // convenience the moment it became the only way between Overview and
-            // the portfolios: an account with zero portfolios still needs the
-            // sheet (to create its first one), and Overview itself is always in
-            // it, so there is no state in which opening it is a dead end. It used
-            // to be disabled while `portfolios` was empty, which after this change
-            // would strand a fresh account on Overview with no way out.
-            onTitleClick = { vm.openSwitcher() },
-            titleClickLabel = stringResource(R.string.bt_switcher_open_cd),
-            action = if (overviewSelected) overviewAction else null,
-            // ── Both of this tab's ⋮ menus are gone (nav restoration 2026-08-06) ──
-            //
-            // Overview's carried inbox · discreet · settings · gallery; a
-            // portfolio's carried transactions · cash · pending · manage. Between
-            // them they were the clearest case of the owner's report — the SAME
-            // glyph in the SAME corner of the SAME tab, meaning two entirely
-            // different things depending on which entry the switcher was on.
-            //
-            // Every one of those eight entries had an in-content twin already
-            // (that was the design rule when they were written), so dissolving
-            // them removed no capability: Settings and the inbox and discreet
-            // mode are rows on Overview itself, cash and transactions are rows
-            // under the holdings, pending sync is the strip that appears with the
-            // pending work it is about, manage-portfolios is the pill above, and
-            // the gallery is back on the wordmark's long-press. What the corner
-            // holds now is one thing that never changes.
-            settings = { BtSettingsGear(onOpenSettings) },
-        )
 
         Box(Modifier.fillMaxWidth().weight(1f)) {
             if (overviewSelected) {

@@ -311,3 +311,79 @@ class BtTabSwipeTest {
         assertTrue("lead was $lead", lead in 0.05f..0.15f)
     }
 }
+
+/**
+ * The two pure helpers the 2026-08-07 chrome work added: the bottom bar's
+ * selection latch and the shared top bar's hand-over fraction.
+ *
+ * Both exist to answer the same owner report from opposite ends of the screen —
+ * *"it jumps back for a brief second where you used to be"* — and both do it by
+ * believing the COMMIT rather than the coordinate for the length of a hand-off.
+ * That is exactly the kind of rule that is cheap to state, invisible to review
+ * and impossible to notice breaking, which is what these cases are for.
+ */
+class BtChromeHandoffTest {
+
+    // ── The bottom bar's selection latch ────────────────────────────────────
+
+    @Test
+    fun `at rest the nav graph owns the selection`() {
+        assertEquals(1f, tabSelectionFraction(null, BtTab.Markets, true))
+        assertEquals(0f, tabSelectionFraction(null, BtTab.Markets, false))
+    }
+
+    @Test
+    fun `a committed hop wins over a nav graph that has not caught up`() {
+        // The exact frame the bug lived in: the swipe has committed to Markets,
+        // the nav graph still says Portfolio. The bar must say Markets.
+        assertEquals(1f, tabSelectionFraction(BtTab.Markets, BtTab.Markets, false))
+        assertEquals(0f, tabSelectionFraction(BtTab.Markets, BtTab.Portfolio, true))
+    }
+
+    @Test
+    fun `the latch agrees with the nav graph once it catches up`() {
+        // Nothing changes when the two sources agree, which is what makes this a
+        // latch rather than a second source of truth.
+        assertEquals(1f, tabSelectionFraction(BtTab.Markets, BtTab.Markets, true))
+    }
+
+    @Test
+    fun `only the committed tab is selected while a hop is in flight`() {
+        val lit = BtTab.entries.filter { tabSelectionFraction(BtTab.People, it, true) == 1f }
+        assertEquals(listOf(BtTab.People), lit)
+    }
+
+    // ── The shared top bar's hand-over ──────────────────────────────────────
+
+    @Test
+    fun `the bar's content does not move until the page does`() {
+        assertEquals(0f, tabHeaderSwapFraction(0f, 1080f, handedOff = false))
+    }
+
+    @Test
+    fun `the bar's content hands over in step with the page`() {
+        assertEquals(0.5f, tabHeaderSwapFraction(-540f, 1080f, handedOff = false))
+        // Direction-blind: dragging either way is the same amount of hand-over.
+        assertEquals(0.5f, tabHeaderSwapFraction(540f, 1080f, handedOff = false))
+        assertEquals(1f, tabHeaderSwapFraction(-1080f, 1080f, handedOff = false))
+    }
+
+    @Test
+    fun `the hand-over is clamped to one page`() {
+        assertEquals(1f, tabHeaderSwapFraction(-5000f, 1080f, handedOff = false))
+    }
+
+    @Test
+    fun `a committed hop pins the hand-over complete`() {
+        // THE case. `btTabSwipe` snaps the offset back to zero the instant it
+        // tells the NavHost to swap, so a raw reading says "no swipe in
+        // progress" while the shell is still showing the OLD tab's face over the
+        // NEW tab's page — the top-bar twin of the bottom bar's flicker.
+        assertEquals(1f, tabHeaderSwapFraction(0f, 1080f, handedOff = true))
+    }
+
+    @Test
+    fun `an unmeasured page hands nothing over`() {
+        assertEquals(0f, tabHeaderSwapFraction(-540f, 0f, handedOff = false))
+    }
+}

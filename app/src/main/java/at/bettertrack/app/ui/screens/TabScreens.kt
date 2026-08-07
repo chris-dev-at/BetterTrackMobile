@@ -32,11 +32,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
-import at.bettertrack.app.ui.components.BtCollapsingHeader
-import at.bettertrack.app.ui.components.BtHeaderWordmark
-import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.btPressScale
-import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
+import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -83,29 +80,18 @@ fun MarketsTabScreen(
     onOpenAsset: (String) -> Unit = {},
     onAddToWatchlist: () -> Unit = {},
     onOpenMarketIntel: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
-    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). The
-    // behaviour is still a real one rather than null — that is what keeps the
-    // tonal lift when the watchlist travels under the bar. See
-    // BtCollapsingHeader's `pinned` branch.
-    val scrollBehavior = rememberBtPinnedHeaderBehavior()
+        // The bar this tab used to draw lives in the shell now (hoist
+        // 2026-08-07): one instance, above everything the swipe moves, so it
+        // cannot slide. All that is left here is the connection that lets the
+        // shared bar take its tonal lift when this tab's content goes under it.
+        // See [at.bettertrack.app.ui.shell.BtTabHeader].
     Column(
         Modifier
             .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .nestedScroll(LocalBtTabChrome.current.headerScroll),
     ) {
-        BtCollapsingHeader(
-            // No text title: the bottom bar's selected label already says
-            // "Markets" a few dp below, and this tab's real subject is the search
-            // field immediately under the bar. See the `title` KDoc.
-            title = null,
-            scrollBehavior = scrollBehavior,
-            pinned = true,
-            navigationIcon = { BtHeaderWordmark() },
-            settings = { BtSettingsGear(onOpenSettings) },
-        )
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             SearchBarButton(onClick = onOpenSearch)
             Spacer(Modifier.height(14.dp))
@@ -254,12 +240,10 @@ fun WorkbenchTabScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
         onOpenAsset = onOpenAsset,
-        onOpenSettings = onOpenSettings,
     )
 }

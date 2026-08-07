@@ -438,6 +438,10 @@ fun WizardNote(
             NoteTone.GOLD -> bt.wash(bt.gold, 0.11f)
             NoteTone.LOSS -> bt.wash(bt.loss, 0.13f)
         },
+        // The GOLD and LOSS tones are washes and state their own shape; NEUTRAL
+        // is `surface`, which on the all-white light table (2026-08-07) is the
+        // page itself — so without this the neutral note was an invisible block.
+        border = BorderStroke(1.dp, bt.groupBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {

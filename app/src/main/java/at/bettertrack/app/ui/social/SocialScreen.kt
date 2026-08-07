@@ -101,9 +101,6 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.BtCollapsingHeader
-import at.bettertrack.app.ui.components.BtHeaderWordmark
-import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroup
@@ -112,11 +109,11 @@ import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.LocalBtSnackbar
-import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
+import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -311,7 +308,6 @@ fun SocialScreen(
     onOpenChats: () -> Unit,
     onOpenChatWith: (friendUserId: String, username: String) -> Unit,
     onOpenGroups: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     val vm: SocialViewModel = viewModel {
         SocialViewModel(AppGraph.socialRepository, AppGraph.friendGroupRepository, AppGraph.connectivityMonitor)
@@ -338,11 +334,6 @@ fun SocialScreen(
     SocialToastEffect(toast) { vm.consumeToast() }
 
     val refreshState = rememberPullToRefreshState()
-    // Pinned brand strip, like every top-level tab (owner order 2026-08-07). Still
-    // a real behaviour rather than null: it is what keeps the tonal lift as the
-    // friends list travels under the bar. See BtCollapsingHeader's `pinned`
-    // branch.
-    val scrollBehavior = rememberBtPinnedHeaderBehavior()
     val fabVisibility = rememberBtFabVisibility()
     val friendsListState = rememberLazyListState()
     // Back at the very top = nothing to get out of the way of. Without this the
@@ -368,42 +359,13 @@ fun SocialScreen(
                 // header had left over, and a FAB that stops hiding is a bug
                 // nobody would trace back to a line ordering.
                 .nestedScroll(fabVisibility.nestedScroll)
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            // The bar this tab used to draw lives in the shell now (hoist
+            // 2026-08-07): one instance, above everything the swipe moves, so it
+            // cannot slide. All that is left here is the connection that lets the
+            // shared bar take its tonal lift when this tab's content goes under
+            // it. See [at.bettertrack.app.ui.shell.BtTabHeader].
+                .nestedScroll(LocalBtTabChrome.current.headerScroll),
         ) {
-            BtCollapsingHeader(
-                // No text title: the bottom bar's selected label already says
-                // "People" a few dp below, and the segments directly under the
-                // bar name this tab's contents more usefully than the tab's own
-                // word does. See the `title` KDoc.
-                title = null,
-                scrollBehavior = scrollBehavior,
-                pinned = true,
-                navigationIcon = { BtHeaderWordmark() },
-                // R1 put Messages in the shell bar as People's ONE action; R2
-                // gives People its own header, so the action moves with it —
-                // same affordance, same place on screen. The unread COUNT stays
-                // off it (mandate §1: badges left the top bar); it is carried by
-                // the People tab dot and by the Needs-you row below.
-                action = {
-                    IconButton(onClick = onOpenChats) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.Chat,
-                            contentDescription = stringResource(R.string.bt_top_messages),
-                            tint = bt.textSecondary,
-                        )
-                    }
-                },
-                // The ⋮ that used to sit here carried exactly one entry, "Friend
-                // groups", and that entry already had an in-content home: the
-                // doorways group at the foot of the friends list, where it sits
-                // beside Messages with an icon, a subtitle and a chevron. A menu
-                // whose whole contents are visible on the screen behind it is not
-                // a shortcut, it is a second name for the same door — and it was
-                // one of the ⋮s the owner meant by "every page shouldn't have the
-                // same 3 dots leading to 1000 different results". Dissolved; the
-                // slot it vacated is the gear's, app-wide.
-                settings = { BtSettingsGear(onOpenSettings) },
-            )
             SegmentedTabs(
                 selected = section,
                 onSelect = { section = it },
