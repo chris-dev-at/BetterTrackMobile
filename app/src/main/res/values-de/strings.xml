@@ -656,7 +656,7 @@
     <string name="bt_settings_applock_biometric_none">Richte in den Android-Einstellungen einen Fingerabdruck ein, um dies zu aktivieren</string>
     <string name="bt_settings_applock_biometric_unavailable">Biometrische Entsperrung ist auf diesem Gerät nicht verfügbar</string>
     <string name="bt_settings_applock_threshold">Entsperrung verlangen</string>
-    <string name="bt_settings_applock_footnote">Die App-Sperre wird nur auf diesem Gerät gespeichert und ist von deinem BetterTrack-Konto-Passwort getrennt. Wenn du den PIN vergisst, wirst du abgemeldet.</string>
+    <string name="bt_settings_applock_footnote">Getrennt von deinem Konto-Passwort. Wenn du den PIN vergisst, wirst du abgemeldet.</string>
     <string name="bt_settings_applock_disable_title">App-Sperre ausschalten?</string>
     <string name="bt_settings_applock_disable_message">Dein PIN wird entfernt und die App fragt nicht mehr nach dem Entsperren.</string>
     <string name="bt_settings_applock_disable_confirm">Ausschalten</string>
@@ -689,7 +689,7 @@
     <string name="bt_applock_setup_choice_bt_title">Meinen BetterTrack-PIN verwenden</string>
     <string name="bt_applock_setup_choice_bt_sub">Derselbe 4-stellige PIN wie bei deinem BetterTrack-Konto</string>
     <string name="bt_applock_setup_bt_enter">Gib deinen BetterTrack-PIN ein</string>
-    <string name="bt_applock_setup_bt_hint">Verwende denselben 4-stelligen PIN wie bei deinem BetterTrack-Konto. Wir prüfen ihn einmal und behalten dann nur eine gesperrte Kopie auf diesem Gerät.</string>
+    <string name="bt_applock_setup_bt_hint">Verwende den PIN deines BetterTrack-Kontos. Wir prüfen ihn einmal und behalten nur eine gesperrte Kopie.</string>
     <string name="bt_applock_mismatch">PINs stimmten nicht überein, versuch es noch einmal</string>
     <string name="bt_applock_continue">Weiter</string>
     <string name="bt_applock_bt_verifying">Prüfe deinen BetterTrack-PIN…</string>
@@ -772,7 +772,7 @@
 
     <!-- Zwei-Faktor-Authentifizierung -->
     <string name="bt_dest_two_factor">Zwei-Faktor-Authentifizierung</string>
-    <string name="bt_2fa_intro">Füge für zusätzliche Sicherheit einen zweiten Schritt bei der Anmeldung hinzu. Nutze eine Authenticator-App, E-Mail-Codes oder beides.</string>
+    <string name="bt_2fa_intro">Nutze eine Authenticator-App, E-Mail-Codes oder beides.</string>
     <string name="bt_2fa_status_on">Zwei-Faktor-Authentifizierung ist an</string>
     <string name="bt_2fa_status_off">Zwei-Faktor-Authentifizierung ist aus</string>
     <string name="bt_2fa_set_up">Einrichten</string>
@@ -789,7 +789,7 @@
     <string name="bt_2fa_email_sub_on">An</string>
     <string name="bt_2fa_email_sub_off">Erhalte beim Login einen Code per E-Mail</string>
     <string name="bt_2fa_email_sent">Wir haben einen Code an deine E-Mail geschickt. Gib ihn unten ein, um E-Mail-Codes zu aktivieren.</string>
-    <string name="bt_2fa_enroll_scan">Scanne diesen QR-Code mit deiner Authenticator-App und gib dann den angezeigten 6-stelligen Code ein.</string>
+    <string name="bt_2fa_enroll_scan">Scanne mit deiner Authenticator-App und gib den 6-stelligen Code ein.</string>
     <string name="bt_2fa_enroll_secret">Oder gib diesen Schlüssel manuell ein:</string>
     <string name="bt_2fa_enroll_code">6-stelliger Code</string>
     <string name="bt_2fa_enroll_verify">Bestätigen &amp; aktivieren</string>
@@ -810,7 +810,7 @@
 
     <!-- Aktive Sitzungen -->
     <string name="bt_dest_active_sessions">Aktive Sitzungen</string>
-    <string name="bt_sessions_intro">Das sind die Orte, an denen du bei BetterTrack angemeldet bist — im Web und auf anderen Geräten. Meld alle ab, die du nicht kennst.</string>
+    <string name="bt_sessions_intro">Meld alles ab, was du nicht kennst.</string>
     <string name="bt_sessions_current">Aktuell</string>
     <string name="bt_sessions_revoke">Abmelden</string>
     <string name="bt_sessions_revoke_title">Diese Sitzung abmelden?</string>
@@ -929,7 +929,7 @@
     <string name="bt_chat_unavailable_title">Unterhaltung nicht verfügbar</string>
     <string name="bt_chat_unavailable_body">Dieser Chat ist nicht verfügbar. Möglicherweise kannst du dieser Person nicht mehr schreiben.</string>
     <string name="bt_chat_say_hi">Schreib @%1$s</string>
-    <string name="bt_chat_empty_hint">Beginne die Unterhaltung — mit der Büroklammer kannst du hier direkt einen Wert oder ein Portfolio teilen.</string>
+    <string name="bt_chat_empty_hint">Sag hallo — mit der Büroklammer teilst du einen Wert oder ein Portfolio.</string>
     <string name="bt_chat_chip_view">Ansehen</string>
     <string name="bt_chat_chip_not_shared">Nicht mit dir geteilt</string>
     <string name="bt_chat_share_item_cd">Element teilen</string>
@@ -972,7 +972,7 @@
 
     <!-- Mit-mir-geteilt-Bereich -->
     <string name="bt_social_swm_empty_title">Noch nichts mit dir geteilt</string>
-    <string name="bt_social_swm_empty_body">Wenn ein Freund ein Portfolio, eine Watchlist, ein Konglomerat oder eine Idee mit dir teilt, erscheint es hier — nach Freund gruppiert.</string>
+    <string name="bt_social_swm_empty_body">Was Freunde mit dir teilen, erscheint hier — nach Freund gruppiert.</string>
     <string name="bt_social_people_sharing">Personen, die mit dir teilen</string>
     <plurals name="bt_social_count_portfolios">
         <item quantity="one">%1$d Portfolio</item>
@@ -1058,7 +1058,7 @@
          ist die Aktion der Zeile ein ehrliches Kopieren, kein „Öffnen“. -->
     <string name="bt_shared_idea_has_thesis">Idee · mit These</string>
     <string name="bt_shared_idea_no_thesis">Idee · ohne These</string>
-    <string name="bt_shared_idea_copy_hint">Die Idee einer anderen Person lässt sich nicht öffnen. Beim Kopieren landet deine eigene private Kopie — These, Assets und Backtest-Aufbau — in deinen Ideen.</string>
+    <string name="bt_shared_idea_copy_hint">Beim Kopieren landet eine private Kopie — These, Assets und Backtest-Aufbau — in deinen Ideen.</string>
     <string name="bt_shared_idea_copy">In meine Ideen kopieren</string>
     <string name="bt_shared_idea_copying">Wird kopiert…</string>
     <string name="bt_shared_idea_copied_toast">„%1$s“ ist jetzt in deinen Ideen</string>
@@ -1098,15 +1098,11 @@
     <string name="bt_social_audience_specific_sub">Wähle genau aus, wer es sehen kann</string>
     <string name="bt_social_hint_add_friends_first">Füge zuerst Freunde hinzu — dann kannst du genau auswählen, wer das sieht.</string>
     <string name="bt_social_audience_all_friends_sub">Alle, mit denen du befreundet bist, können es sehen</string>
-    <string name="bt_social_hint_all_friends_portfolio">Deine Freunde sehen dieses Portfolio unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
-    <string name="bt_social_hint_all_friends_watchlist">Deine Freunde sehen diese Watchlist unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
-    <string name="bt_social_hint_all_friends_conglomerate">Deine Freunde sehen dieses Konglomerat unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
+    <string name="bt_social_hint_all_friends">Deine Freunde sehen das unter „Mit mir geteilt“. Du kannst den Zugriff jederzeit entziehen.</string>
+    <string name="bt_social_hint_public_active">Ein öffentlicher Link ist bereits aktiv. Wähle eine andere Sichtbarkeit, um ihn abzuschalten.</string>
     <string name="bt_social_audience_public_link_title">Öffentlicher Link</string>
     <string name="bt_social_audience_public_link_sub_active">Ein öffentlicher Link ist aktiv</string>
     <string name="bt_social_audience_public_link_sub_inactive">Jeder mit dem Link kann es ansehen</string>
-    <string name="bt_social_hint_public_active_portfolio">Für dieses Portfolio ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
-    <string name="bt_social_hint_public_active_watchlist">Für diese Watchlist ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
-    <string name="bt_social_hint_public_active_conglomerate">Für dieses Konglomerat ist bereits ein öffentlicher Link aktiv. Wähle eine andere Sichtbarkeit, um ihn zu widerrufen — der Link erlischt sofort.</string>
     <string name="bt_social_public_ack_title">Das wird öffentlich</string>
     <string name="bt_social_public_ack_body">Jeder mit dem Link kann deine Bestände und dein Vermögen sehen — auch Leute, die nicht mit dir befreundet sind. Du kannst den Link jederzeit widerrufen.</string>
     <string name="bt_social_public_ack_checkbox">Ich verstehe das und möchte einen öffentlichen Link</string>
@@ -1115,7 +1111,7 @@
 
     <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
     <string name="bt_paranoid_title">Dieses Konto ist im Paranoid-Modus</string>
-    <string name="bt_paranoid_body">Deine Portfolio-, Steuer- und Import-Daten liegen verschlüsselt in einem privaten Tresor, den die BetterTrack-Server nicht lesen können. Es geht nichts verloren — die App kann nur keine Zahlen zeigen, die sie nicht sehen darf.</string>
+    <string name="bt_paranoid_body">Deine Daten liegen in einem privaten Tresor, den die BetterTrack-Server nicht lesen können. Es geht nichts verloren — die App kann nur keine Zahlen zeigen, die sie nicht sehen darf.</string>
     <string name="bt_paranoid_works_title">Funktioniert hier weiterhin</string>
     <string name="bt_paranoid_works_social">Freunde, Teilen und Chat</string>
     <string name="bt_paranoid_works_watchlists">Watchlists und Wertsuche</string>
@@ -1229,7 +1225,7 @@
     <!-- Auto-Tag-Regeln -->
     <string name="bt_rules_title">Auto-Tag-Regeln</string>
     <string name="bt_rules_empty_title">Noch keine Regeln</string>
-    <string name="bt_rules_empty_message">Eine Regel liest die Notiz einer Bewegung und vergibt Tags automatisch — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
+    <string name="bt_rules_empty_message">Eine Regel vergibt Tags anhand der Notiz — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
     <string name="bt_rules_error_title">Regeln konnten nicht geladen werden</string>
     <string name="bt_rules_new">Neue Regel</string>
     <string name="bt_rules_new_title">Neue Regel</string>
@@ -1276,7 +1272,7 @@
     <string name="bt_so_title">Daueraufträge</string>
     <string name="bt_so_subtitle">Wiederkehrende Käufe und Bargeldbewegungen, die der Server für dich bucht.</string>
     <string name="bt_so_empty_title">Keine Daueraufträge</string>
-    <string name="bt_so_empty_message">Richte einen wiederkehrenden Kauf oder einen regelmäßigen Eingang wie dein Gehalt ein — BetterTrack bucht ihn nach Plan.</string>
+    <string name="bt_so_empty_message">Ein wiederkehrender Kauf oder ein regelmäßiger Eingang wie dein Gehalt — nach Plan gebucht.</string>
     <string name="bt_so_error_title">Daueraufträge konnten nicht geladen werden</string>
     <string name="bt_so_new">Neuer Dauerauftrag</string>
     <string name="bt_so_new_title">Neuer Dauerauftrag</string>
@@ -1327,7 +1323,7 @@
 
     <!-- V5 W5 — Speicher-Assistent, Tresor-Sperre, „Wo deine Daten liegen“ (S3/S4-Plan §4) -->
     <string name="bt_storage_wizard_title">Wo sollen deine Daten liegen?</string>
-    <string name="bt_storage_wizard_intro">Das legt fest, wo deine Portfolios gespeichert werden. Bis du fertig bist, wird nichts angelegt — und du kannst es später in den Einstellungen ändern.</string>
+    <string name="bt_storage_wizard_intro">Bis du fertig bist, wird nichts angelegt. Du kannst das später in den Einstellungen ändern.</string>
     <string name="bt_storage_not_available">Nicht verfügbar</string>
     <string name="bt_storage_continue">Weiter</string>
     <string name="bt_storage_choose_server_title">BetterTrack-Konto</string>
@@ -1376,7 +1372,7 @@
     <string name="bt_storage_create">Tresor anlegen</string>
 
     <string name="bt_storage_working_title">Dein Tresor wird angelegt</string>
-    <string name="bt_storage_working_body">Verschlüsseln, schreiben und wieder einlesen — damit wir erst dann von Sicherheit sprechen, wenn sie wirklich da ist.</string>
+    <string name="bt_storage_working_body">Verschlüsseln, schreiben und wieder einlesen.</string>
     <string name="bt_storage_fail_round_trip_title">Der Tresor konnte nicht bestätigt werden</string>
     <string name="bt_storage_fail_round_trip_body">Er wurde geschrieben, ließ sich aber nicht zurücklesen — deshalb behaupten wir nicht, er sei sicher. Prüfe den freien Speicher dieses Geräts und versuche es erneut.</string>
     <string name="bt_storage_fail_crypto_title">Dein Tresor-Schlüssel konnte nicht erzeugt werden</string>
@@ -1581,8 +1577,6 @@
     <!-- Die Freigabe-Art `idea` — eine gespeicherte Workboard-Analyse (Name + These + Backtest) -->
     <string name="bt_share_idea_subtitle">These und Backtest</string>
     <string name="bt_share_choose_idea">Lege fest, wer diese Idee lesen darf — deine These und den Backtest dahinter.</string>
-    <string name="bt_share_hint_all_friends_idea">Alle Freunde können dann die These lesen und sehen, wie der Backtest ausgegangen ist.</string>
-    <string name="bt_share_hint_public_active_idea">Jeder mit dem Link kann diese Idee lesen. Wähle eine andere Sichtbarkeit, um den Link abzuschalten.</string>
 
     <!-- Freundesgruppen -->
     <string name="bt_groups_title">Freundesgruppen</string>
@@ -1683,7 +1677,7 @@
     <!-- Workboard-Ideen: eine gespeicherte Backtest-Analyse (Titel + These + Setup). -->
     <string name="bt_ideas_segment">Ideen</string>
     <string name="bt_ideas_empty_title">Noch keine Ideen gespeichert</string>
-    <string name="bt_ideas_empty_message">Eine Idee ist ein Backtest, den du behalten hast: die getesteten Werte oder das Konglomerat, Zeitraum und Rebalancing — und eine Notiz, warum er dich überzeugt hat.</string>
+    <string name="bt_ideas_empty_message">Ein Backtest, den du behalten hast — mit einer Notiz, warum er dich überzeugt hat.</string>
     <string name="bt_ideas_create">Neue Idee</string>
     <string name="bt_ideas_create_title">Idee speichern</string>
     <string name="bt_ideas_name_label">Titel</string>
@@ -1758,13 +1752,13 @@
     <string name="bt_price_err_currency">Nimm einen dreibuchstabigen Währungscode, zum Beispiel EUR.</string>
     <string name="bt_price_err_rate">Auf diesem Gerät gibt es keinen Wechselkurs %1$s → %2$s, deshalb lässt sich ein Kurs in %1$s hier nicht verwenden. Trage ihn in %2$s ein.</string>
     <string name="bt_price_unpriced_title">Noch keine Kurse</string>
-    <string name="bt_price_unpriced_body">Deine Transaktionen und dein Bargeld liegen sicher auf diesem Gerät. Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
+    <string name="bt_price_unpriced_body">Trag pro Wert einen Kurs ein, dann bewertet BetterTrack das Portfolio — eine Null, für die es nicht geradestehen kann, zeigt es nicht.</string>
     <plurals name="bt_price_unpriced_note">
         <item quantity="one">Ohne %1$d Position ohne Kurs</item>
         <item quantity="other">Ohne %1$d Positionen ohne Kurs</item>
     </plurals>
     <string name="bt_price_search_title">Suche braucht Kursabfragen</string>
-    <string name="bt_price_search_body">In diesem Modus liegt kein Wertverzeichnis auf dem Gerät, es gibt also nichts zu durchsuchen. Du kannst jeden Wert weiterhin selbst anlegen und selbst bewerten.</string>
+    <string name="bt_price_search_body">Kein Wertverzeichnis auf diesem Gerät. Du kannst jeden Wert selbst anlegen und selbst bewerten.</string>
     <string name="bt_price_asset_unavailable">Diese Wertseite braucht Live-Kurse, die es in diesem Modus nicht gibt. Die Kurse, die du selbst eingetragen hast, stehen bei der Position.</string>
 
     <!-- ── V5 W6 — Opt-in „nur für Kurse“ ────────────────────────────────── -->
@@ -1773,7 +1767,7 @@
     <string name="bt_prices_toggle_subtitle">BetterTrack würde sehen, welche Werte du nachschlägst — nie, was du besitzt.</string>
     <string name="bt_prices_toggle_on_note">An. Suche und Kurse laufen über BetterTrack; Portfolio, Transaktionen und Bargeld bleiben auf diesem Gerät.</string>
     <string name="bt_prices_toggle_off_note">Aus. Nichts verlässt dieses Gerät, und als Kurse gelten die, die du selbst einträgst.</string>
-    <string name="bt_prices_toggle_needs_account">Kursabfragen sind angemeldete Anfragen, dafür braucht es ein BetterTrack-Konto. Füg unter „Wo deine Daten liegen“ eines hinzu — dein Portfolio bleibt trotzdem in Drive.</string>
+    <string name="bt_prices_toggle_needs_account">Kursabfragen brauchen ein BetterTrack-Konto. Füg unter „Wo deine Daten liegen“ eines hinzu — dein Portfolio bleibt in Drive.</string>
 
     <!-- ══ R-arc R1 ══ APPEND-ONLY BLOCK — see the EN file for the rule. -->
 
@@ -2257,7 +2251,7 @@
     <string name="bt_chainadmin_transfer">Eigentum übertragen</string>
     <string name="bt_chainadmin_dissolve">Gruppe auflösen</string>
     <string name="bt_chainadmin_web_title">Im Web verwalten</string>
-    <string name="bt_chainadmin_web_body">Die Gruppenverwaltung ist für die App noch nicht freigegeben. Melde dich im Web an, um diese Gruppe umzubenennen, Leute einzuladen, Rollen zu ändern oder das Eigentum zu übertragen. Dieser Bereich schaltet sich von selbst frei, sobald die App das darf.</string>
+    <string name="bt_chainadmin_web_body">Melde dich im Web an, um diese Gruppe umzubenennen, Leute einzuladen, Rollen zu ändern oder das Eigentum zu übertragen. Dieser Bereich schaltet sich von selbst frei, sobald die App das darf.</string>
     <string name="bt_chainadmin_web_open">BetterTrack im Web öffnen</string>
     <string name="bt_chainadmin_member_role">Rolle</string>
     <string name="bt_chainadmin_role_owner">Eigentümer</string>
@@ -2277,5 +2271,29 @@
     <string name="bt_settings_profile_icon_sub">Wird Freunden und in Gruppen neben deinem Namen gezeigt.</string>
     <string name="bt_settings_profile_icon_title">Symbol wählen</string>
     <string name="bt_settings_profile_icon_none">Kein Symbol</string>
+    <string name="bt_profile_icon_astronaut">Astronaut</string>
+    <string name="bt_profile_icon_fox">Fuchs</string>
+    <string name="bt_profile_icon_panda">Panda</string>
+    <string name="bt_profile_icon_robot">Roboter</string>
+    <string name="bt_profile_icon_star">Stern</string>
+    <string name="bt_profile_icon_wave">Welle</string>
+    <string name="bt_profile_icon_mountain">Berg</string>
+    <string name="bt_profile_icon_leaf">Blatt</string>
+    <string name="bt_profile_icon_flame">Flamme</string>
+    <string name="bt_profile_icon_bolt">Blitz</string>
+    <string name="bt_profile_icon_moon">Mond</string>
+    <string name="bt_profile_icon_planet">Planet</string>
+    <string name="bt_profile_icon_ghost">Geist</string>
+    <string name="bt_profile_icon_crown">Krone</string>
+    <string name="bt_profile_icon_compass">Kompass</string>
+    <string name="bt_profile_icon_anchor">Anker</string>
+    <string name="bt_pf_icon_section">Symbol</string>
+    <string name="bt_pf_icon_sub">Farbe und Zeichen in der Auswahl und im Kopfbereich.</string>
+    <string name="bt_pf_icon_local_note">Nur auf diesem Gerät gespeichert — das Web hat sein eigenes.</string>
+    <string name="bt_pf_kind_private">Privat</string>
+    <string name="bt_pf_kind_family">Familie</string>
+    <string name="bt_pf_kind_business">Geschäftlich</string>
+    <string name="bt_pf_kind_savings">Sparen</string>
+    <string name="bt_pf_kind_property">Immobilien</string>
     <string name="bt_settings_profile_saved">Profil aktualisiert</string>
 </resources>

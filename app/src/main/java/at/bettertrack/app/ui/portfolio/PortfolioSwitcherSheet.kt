@@ -22,7 +22,6 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -57,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.PortfolioEntity
+import at.bettertrack.app.data.repo.BtPortfolioKind
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -65,6 +65,7 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.mirrorchain.ChainDetailSheet
+import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -82,6 +83,13 @@ import at.bettertrack.app.ui.theme.BtTheme
 @Composable
 fun PortfolioSwitcherSheet(
     portfolios: List<PortfolioEntity>,
+    /**
+     * Each portfolio's chosen **Icon**, by id — the leading identity mark on every
+     * row. Ids with no stored choice are absent and fall back to
+     * [BtPortfolioKind.Default]; the map is client-only (see
+     * [at.bettertrack.app.data.repo.PortfolioRepository.portfolioKinds]).
+     */
+    kinds: Map<String, BtPortfolioKind>,
     selectedId: String?,
     /**
      * True when the pinned **Overview** entry is the current selection, not any
@@ -198,6 +206,11 @@ fun PortfolioSwitcherSheet(
             active.forEach { p ->
                 SwitcherRow(
                     portfolio = p,
+                    kind = kinds[p.id] ?: BtPortfolioKind.Default,
+                    // "Is this a synced copy?" is already answered by the row's
+                    // own mirror block — the same field that draws the group
+                    // badge — so the chip and the badge can never disagree.
+                    group = p.mirror?.mirrorChainId != null,
                     selected = !overviewSelected && p.id == selectedId,
                     valueGaveUp = p.id in valueFailedIds,
                     actionsEnabled = actionsEnabled,
@@ -359,12 +372,23 @@ private fun OverviewSwitcherRow(
                 .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Home,
-                contentDescription = null,
-                tint = if (selected) bt.gold else bt.textSecondary,
-                modifier = Modifier.size(20.dp),
-            )
+            // Gold, always — and pointedly NOT a kind chip. Every portfolio row
+            // below now carries one, so the leading slot is where the eye goes to
+            // ask "which book is this?"; answering "none of them, this is all of
+            // them" needs a mark from outside the kind palette, and gold is the
+            // one hue no portfolio can ever take. The 26dp box is the chips'
+            // width, so the two title columns still line up.
+            Box(
+                modifier = Modifier.size(BtPortfolioChipSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = BtIcons.Home,
+                    contentDescription = null,
+                    tint = bt.goldInk,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -397,6 +421,8 @@ private fun OverviewSwitcherRow(
 @Composable
 private fun SwitcherRow(
     portfolio: PortfolioEntity,
+    kind: BtPortfolioKind,
+    group: Boolean,
     selected: Boolean,
     valueGaveUp: Boolean,
     actionsEnabled: Boolean,
@@ -417,6 +443,11 @@ private fun SwitcherRow(
                 .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // The row's identity mark. It leads deliberately: a switcher is read
+            // by scanning down the left edge, and before this every row's left
+            // edge was the same character-height of grey text.
+            BtPortfolioChip(kind = kind, group = group)
+            Spacer(Modifier.width(12.dp))
             Column(
                 modifier = Modifier
                     .weight(1f)

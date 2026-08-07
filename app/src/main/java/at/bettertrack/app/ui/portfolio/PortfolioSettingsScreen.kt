@@ -3,14 +3,20 @@ package at.bettertrack.app.ui.portfolio
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Group
@@ -20,6 +26,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,10 +37,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,6 +51,7 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.AudienceState
+import at.bettertrack.app.data.repo.BtPortfolioKind
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendGroup
 import at.bettertrack.app.data.repo.PortfolioRepository
@@ -188,6 +198,43 @@ fun PortfolioSettingsScreen(
                         onClick = { renaming = true },
                     )
                 }
+
+                // ── Icon ─────────────────────────────────────────────────────
+                //
+                // ⚠️ The user-facing word is **Icon**, never "kind". What is
+                // being picked is a colour and a glyph for this book, not a
+                // taxonomy anyone has to reason about — `BtPortfolioKind` keeps
+                // the internal name and the wire values, the copy never does.
+                //
+                // It sits directly under the name because the two together ARE
+                // the portfolio's identity: the switcher renders exactly this
+                // pair, and a setting whose effect you can picture belongs next
+                // to the other half of what it changes.
+                BtSectionHeader(stringResource(R.string.bt_pf_icon_section))
+                Text(
+                    text = stringResource(R.string.bt_pf_icon_sub),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+                BtGroup {
+                    BtPortfolioKind.entries.forEach { option ->
+                        PortfolioIconOptionRow(
+                            kind = option,
+                            selected = ui.kind == option,
+                            onClick = { vm.setKind(option) },
+                        )
+                    }
+                }
+                // Said plainly, once. The choice lives in this device's meta
+                // table because the API carries no field for it on either
+                // client (see PortfolioRepository.portfolioKinds) — leaving a
+                // user to discover that by finding a different icon in the
+                // browser would read as the app losing their setting.
+                Text(
+                    text = stringResource(R.string.bt_pf_icon_local_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textFaint,
+                )
 
                 // ── Sharing ──────────────────────────────────────────────────
                 BtSectionHeader(stringResource(R.string.bt_psettings_sharing))
@@ -358,6 +405,59 @@ fun PortfolioSettingsScreen(
 }
 
 /**
+ * One selectable Icon.
+ *
+ * [BtGroupRow] cannot serve here: its leading slot takes an [ImageVector] drawn
+ * at one muted tint, and the whole point of this row is the CHIP — hue, border
+ * and glyph together — which is the thing the switcher will actually show. So
+ * the row is assembled by hand against `BtGroupRow`'s own metrics (16dp inset,
+ * `titleSmall`) rather than being a second, differently-shaped list inside a
+ * screen made of groups.
+ *
+ * `Role.RadioButton` and `selectable` rather than a plain click: five options of
+ * which exactly one holds is a radio group, and TalkBack should say so instead
+ * of announcing five unrelated buttons.
+ */
+@Composable
+private fun PortfolioIconOptionRow(
+    kind: BtPortfolioKind,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // `group = false` always: this picker has to show the five icons as
+        // themselves. Whether the portfolio is a synced copy is a fact about the
+        // portfolio, not one of the five things being chosen between — and a
+        // picker that drew the same group glyph five times would offer no choice
+        // at all.
+        BtPortfolioChip(kind = kind)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = portfolioKindLabel(kind),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (selected) bt.textPrimary else bt.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                // The row already announces its own selected state.
+                contentDescription = null,
+                tint = bt.goldInk,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
  * State for [PortfolioSettingsScreen].
  *
  * [gone] is separate from [error] deliberately: "this portfolio does not exist
@@ -367,6 +467,8 @@ fun PortfolioSettingsScreen(
  */
 data class PortfolioSettingsUi(
     val portfolio: PortfolioEntity? = null,
+    /** The chosen **Icon**. Never null — an unclassified portfolio is Private. */
+    val kind: BtPortfolioKind = BtPortfolioKind.Default,
     val audience: AudienceState? = null,
     val sharing: AudienceState? = null,
     val friends: List<Friend> = emptyList(),
@@ -405,7 +507,27 @@ class PortfolioSettingsViewModel(
                     )
                 }
         }
+        // Observed for the same reason the portfolio row is: the switcher reads
+        // this map too, and a pick made here must reach it without either screen
+        // re-fetching anything.
+        viewModelScope.launch {
+            portfolios.portfolioKinds
+                .map { it[portfolioId] ?: BtPortfolioKind.Default }
+                .collect { kind -> _state.value = _state.value.copy(kind = kind) }
+        }
         reload()
+    }
+
+    /**
+     * Store this portfolio's Icon.
+     *
+     * No busy flag and no error path, deliberately: this is a local write to the
+     * meta table, it cannot fail in a way the user could act on, and the row's
+     * check mark moves when the observed map re-emits — which is the honest
+     * confirmation, because it is the same value the switcher will read.
+     */
+    fun setKind(kind: BtPortfolioKind) {
+        viewModelScope.launch { portfolios.setPortfolioKind(portfolioId, kind) }
     }
 
     fun reload() {

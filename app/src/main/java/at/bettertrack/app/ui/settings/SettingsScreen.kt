@@ -92,25 +92,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Anchor
-import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Eco
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Face
-import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Percent
-import androidx.compose.material.icons.outlined.Pets
-import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.Rocket
-import androidx.compose.material.icons.outlined.SmartToy
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.Waves
-import androidx.compose.material.icons.outlined.WorkspacePremium
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
 import at.bettertrack.app.data.api.dto.BT_BASE_CURRENCIES
@@ -120,6 +105,15 @@ import at.bettertrack.app.data.api.dto.UpdateAccountSettingsRequest
 import at.bettertrack.app.data.api.dto.UpdateProfileSettingsRequest
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSkeleton
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import at.bettertrack.app.ui.components.BtAvatar
+import at.bettertrack.app.ui.components.profileIconLabelRes
 
 /**
  * Settings & account management (spec §6.12). Sections: **Account** (username /
@@ -451,15 +445,24 @@ fun SettingsScreen(
                 BtSectionHeader(stringResource(R.string.bt_settings_profile_section))
                 BtGroup {
                     BtGroupRow(
-                        // The row previews the choice: the leading glyph IS the
-                        // current icon, gold when one is set.
-                        icon = profileIconVector(profile?.profileIcon),
-                        iconTint = if (profile?.profileIcon != null) bt.gold else null,
                         title = stringResource(R.string.bt_settings_profile_icon),
                         subtitle = stringResource(R.string.bt_settings_profile_icon_sub),
                         onClick = {
                             if (profile == null) loadProfile()
                             picker = SettingsPicker.ProfileIcon
+                        },
+                        // The row previews the choice with the REAL avatar, in the
+                        // trailing "current value" position. It used to be a
+                        // leading Material glyph tinted gold — which showed the
+                        // user a stand-in for the artwork rather than the artwork,
+                        // and showed the same `Pets` glyph whether they had picked
+                        // fox or panda.
+                        trailing = {
+                            BtAvatar(
+                                name = profile?.username.orEmpty(),
+                                iconId = profile?.profileIcon,
+                                size = 32.dp,
+                            )
                         },
                     )
                 }
@@ -797,10 +800,15 @@ private fun SettingsChoiceDialog(
 /**
  * The 16 curated profile icons, plus "no icon".
  *
- * The platform ships **no artwork** for these ids — no bundled asset, no URL —
- * so each one is drawn as a Material glyph chosen by [profileIconVector]. The
- * grid is 4×4 in the contract's own order, which is part of the contract: ids
- * are appended, never inserted, so a user's icon cannot silently become a
+ * This grid used to render **Material glyphs**, because the platform shipped no
+ * artwork for the ids — fox and panda even shared `Pets`, since there is no fox
+ * in the Material set. That is no longer true: the web's own 16 avatars are now
+ * vendored as drawables (`ui/components/BtProfileIcon.kt`), so the picker shows
+ * the same artwork the user will see on the web, and picking one is no longer a
+ * guess about what it will look like.
+ *
+ * The grid is 4×4 in the contract's own order, which is part of the contract:
+ * ids are appended, never inserted, so a user's icon cannot silently become a
  * different one.
  *
  * [ready] is the `isPublic` precondition, not a spinner: until the current
@@ -912,7 +920,13 @@ private fun ProfileIconDialog(
 }
 
 private const val PROFILE_ICON_COLUMNS = 4
-private val PROFILE_ICON_CELL = 52.dp
+
+/**
+ * 52 → 56dp. The cell now holds real artwork rather than a 24dp glyph, and the
+ * selection ring is drawn around it instead of recolouring it, so it needs the
+ * extra 4dp to keep the same optical breathing room.
+ */
+private val PROFILE_ICON_CELL = 56.dp
 
 @Composable
 private fun ProfileIconCell(
@@ -922,58 +936,32 @@ private fun ProfileIconCell(
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    val isSelected = selected
+    // Closes the TalkBack gap the old grid documented and left open: every cell
+    // announced nothing at all, because the ids are wire tokens with no copy.
+    val label = profileIconLabelRes(id)?.let { stringResource(it) }
     Box(
         modifier = Modifier
             .size(PROFILE_ICON_CELL)
-            .background(if (selected) bt.goldSurface else bt.bg, CircleShape)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+            .background(if (isSelected) bt.goldWash else Color.Transparent, CircleShape)
+            .then(if (isSelected) Modifier.border(2.dp, bt.goldEdge, CircleShape) else Modifier)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics {
+                role = Role.RadioButton
+                this.selected = isSelected
+                if (label != null) contentDescription = label
+            },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = profileIconVector(id),
-            // No description: the ids are wire tokens, not translated copy, and
-            // this build has no string for them. The dialog's own title names the
-            // task. KNOWN GAP — the picker needs one label string per id (or a
-            // generic one) to be properly readable by TalkBack.
-            contentDescription = null,
-            tint = if (selected) bt.gold else bt.textSecondary,
-            modifier = Modifier.size(24.dp),
-        )
+        // The artwork is multicolour and carries its own tile, so selection is a
+        // ring + backing rather than a tint swap — tinting it would destroy the
+        // very thing the user is choosing between.
+        BtAvatar(name = id, iconId = id, size = PROFILE_ICON_ART)
     }
 }
 
-/**
- * Profile-icon id → Material glyph.
- *
- * The platform ships the ids only; picking the artwork is the client's job, and
- * this app deliberately does not invent 16 custom assets for a 24dp glyph. Two
- * ids share a glyph on purpose (fox and panda are both `Pets` — there is no
- * fox), which is a smaller lie than drawing something that is not the animal.
- *
- * **The `else` branch is load-bearing.** `PROFILE_ICON_IDS` is append-only on
- * the platform, so an id this build has never heard of WILL arrive — from the
- * user's own account after they pick one on the web, if nothing else. It renders
- * as a neutral avatar glyph rather than nothing, and the picker simply won't
- * offer it until the app ships a mapping.
- */
-private fun profileIconVector(id: String?): ImageVector = when (id) {
-    "astronaut" -> Icons.Outlined.Rocket
-    "fox", "panda" -> Icons.Outlined.Pets
-    "robot" -> Icons.Outlined.SmartToy
-    "star" -> Icons.Outlined.Star
-    "wave" -> Icons.Outlined.Waves
-    "mountain" -> Icons.Outlined.Terrain
-    "leaf" -> Icons.Outlined.Eco
-    "flame" -> Icons.Outlined.LocalFireDepartment
-    "bolt" -> Icons.Outlined.Bolt
-    "moon" -> Icons.Outlined.DarkMode
-    "planet" -> Icons.Outlined.Public
-    "ghost" -> Icons.Outlined.Face
-    "crown" -> Icons.Outlined.WorkspacePremium
-    "compass" -> Icons.Outlined.Explore
-    "anchor" -> Icons.Outlined.Anchor
-    else -> Icons.Outlined.AccountCircle
-}
+/** The artwork inside the 56dp cell — the ring needs the remaining 8dp. */
+private val PROFILE_ICON_ART = 44.dp
 
 private const val DEV_TAP_THRESHOLD = 7
 private const val DEV_TAP_HINT_AT = 4

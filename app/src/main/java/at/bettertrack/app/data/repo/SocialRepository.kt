@@ -81,6 +81,8 @@ data class Friend(
     val userId: String,
     val username: String,
     val since: String,
+    /** Curated-avatar id from `SocialUserDto.profileIcon`; null when they never picked one. */
+    val profileIcon: String? = null,
 )
 
 data class FriendRequest(
@@ -90,6 +92,8 @@ data class FriendRequest(
     /** `pending` | `accepted` | `declined` | `cancelled`. */
     val status: String,
     val createdAt: String,
+    /** Curated-avatar id from `SocialUserDto.profileIcon`; null when they never picked one. */
+    val profileIcon: String? = null,
 )
 
 data class FriendRequests(
@@ -116,6 +120,8 @@ data class SharedPortfolioSummary(
     val ownerName: String,
     val totalValueEur: Double,
     val activityAlertsEnabled: Boolean,
+    /** The owner's curated-avatar id from `SocialUserDto.profileIcon`; null when unset. */
+    val ownerIcon: String? = null,
 )
 
 data class SharedConglomerateSummary(
@@ -126,6 +132,8 @@ data class SharedConglomerateSummary(
     val status: String,
     val positionCount: Int,
     val activityAlertsEnabled: Boolean,
+    /** The owner's curated-avatar id from `SocialUserDto.profileIcon`; null when unset. */
+    val ownerIcon: String? = null,
 )
 
 data class SharedWatchlistSummary(
@@ -135,6 +143,8 @@ data class SharedWatchlistSummary(
     val ownerName: String,
     val itemCount: Int,
     val activityAlertsEnabled: Boolean,
+    /** The owner's curated-avatar id from `SocialUserDto.profileIcon`; null when unset. */
+    val ownerIcon: String? = null,
 )
 
 /**
@@ -153,6 +163,8 @@ data class SharedIdeaSummary(
     /** A written thesis is attached; its text is not on this wire. */
     val hasThesis: Boolean,
     val activityAlertsEnabled: Boolean,
+    /** The owner's curated-avatar id from `SocialUserDto.profileIcon`; null when unset. */
+    val ownerIcon: String? = null,
 )
 
 /** A single subject I own that I can share — with its current audience. */
@@ -203,6 +215,12 @@ data class PersonShares(
     val watchlists: List<SharedWatchlistSummary>,
     /** V5: ideas are the fourth kind a friend can share. */
     val ideas: List<SharedIdeaSummary> = emptyList(),
+    /**
+     * The person's curated-avatar id, carried up from whichever summary supplied
+     * [ownerName] — nullable for the same reason it is on the summaries: they may
+     * never have picked one.
+     */
+    val ownerIcon: String? = null,
 ) {
     val count: Int get() = portfolios.size + conglomerates.size + watchlists.size + ideas.size
 }
@@ -232,7 +250,14 @@ fun SharedWithMe.groupByPerson(): List<PersonShares> {
             ?: ws.firstOrNull()?.ownerName
             ?: ideas.firstOrNull()?.ownerName
             ?: ""
-        PersonShares(ownerId, name, ps, cs, ws, ideas)
+        // Same fallback chain as the name — the icon travels with whichever
+        // summary identified the person, and a person who set no icon stays null
+        // so the avatar falls back to the name-derived one rather than a hole.
+        val icon = ps.firstOrNull()?.ownerIcon
+            ?: cs.firstOrNull()?.ownerIcon
+            ?: ws.firstOrNull()?.ownerIcon
+            ?: ideas.firstOrNull()?.ownerIcon
+        PersonShares(ownerId, name, ps, cs, ws, ideas, icon)
     }.sortedWith(compareByDescending<PersonShares> { it.count }.thenBy { it.ownerName.lowercase() })
 }
 
@@ -280,7 +305,7 @@ class DefaultSocialRepository(
     override suspend fun friends(): BtResult<List<Friend>> =
         when (val r = apiCall(json) { api.friends() }) {
             is BtResult.Ok -> BtResult.Ok(
-                r.value.friends.map { Friend(it.user.id, it.user.username, it.createdAt) },
+                r.value.friends.map { Friend(it.user.id, it.user.username, it.createdAt, it.user.profileIcon) },
             )
             is BtResult.Err -> r
         }
@@ -289,8 +314,12 @@ class DefaultSocialRepository(
         when (val r = apiCall(json) { api.friendRequests() }) {
             is BtResult.Ok -> BtResult.Ok(
                 FriendRequests(
-                    incoming = r.value.incoming.map { FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt) },
-                    outgoing = r.value.outgoing.map { FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt) },
+                    incoming = r.value.incoming.map {
+                        FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt, it.user.profileIcon)
+                    },
+                    outgoing = r.value.outgoing.map {
+                        FriendRequest(it.id, it.user.username, it.user.id, it.status, it.createdAt, it.user.profileIcon)
+                    },
                 ),
             )
             is BtResult.Err -> r
@@ -301,16 +330,28 @@ class DefaultSocialRepository(
             is BtResult.Ok -> BtResult.Ok(
                 SharedWithMe(
                     portfolios = r.value.portfolios.map {
-                        SharedPortfolioSummary(it.portfolioId, it.name, it.owner.id, it.owner.username, it.totalValueEur, it.activityAlertsEnabled)
+                        SharedPortfolioSummary(
+                            it.portfolioId, it.name, it.owner.id, it.owner.username,
+                            it.totalValueEur, it.activityAlertsEnabled, it.owner.profileIcon,
+                        )
                     },
                     conglomerates = r.value.conglomerates.map {
-                        SharedConglomerateSummary(it.conglomerateId, it.name, it.owner.id, it.owner.username, it.status, it.positionCount, it.activityAlertsEnabled)
+                        SharedConglomerateSummary(
+                            it.conglomerateId, it.name, it.owner.id, it.owner.username,
+                            it.status, it.positionCount, it.activityAlertsEnabled, it.owner.profileIcon,
+                        )
                     },
                     watchlists = r.value.watchlists.map {
-                        SharedWatchlistSummary(it.watchlistId, it.name, it.owner.id, it.owner.username, it.itemCount, it.activityAlertsEnabled)
+                        SharedWatchlistSummary(
+                            it.watchlistId, it.name, it.owner.id, it.owner.username,
+                            it.itemCount, it.activityAlertsEnabled, it.owner.profileIcon,
+                        )
                     },
                     ideas = r.value.ideas.map {
-                        SharedIdeaSummary(it.ideaId, it.name, it.owner.id, it.owner.username, it.hasThesis, it.activityAlertsEnabled)
+                        SharedIdeaSummary(
+                            it.ideaId, it.name, it.owner.id, it.owner.username,
+                            it.hasThesis, it.activityAlertsEnabled, it.owner.profileIcon,
+                        )
                     },
                 ),
             )

@@ -384,7 +384,7 @@ private fun ChainHeader(roster: MirrorRoster) {
 private fun MemberRow(member: MirrorMember) {
     val bt = BtTheme.colors
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BtAvatar(name = member.username, size = 34.dp, gold = member.isSelf)
+        BtAvatar(name = member.username, iconId = member.profileIcon, size = 34.dp, gold = member.isSelf)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

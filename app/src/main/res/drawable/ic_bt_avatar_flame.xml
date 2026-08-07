@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `flame` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF3A0F16"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFFF7A59"
+        android:pathData="M32 12c4 8 12 12 12 22a12 12 0 01-24 0c0-4 3-6 6-6-2-4-2-10 6-16z" />
+
+    <path
+        android:fillColor="#FFFFD6CC"
+        android:pathData="M32 22c2 4 6 6 6 12a6 6 0 01-12 0c0-4 2-6 6-12z" />
+
+</vector>

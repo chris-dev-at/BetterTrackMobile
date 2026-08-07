@@ -9,6 +9,7 @@ import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
+import at.bettertrack.app.data.repo.BtPortfolioKind
 import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.data.repo.PortfolioRepository
@@ -70,6 +71,16 @@ class PortfolioOverviewViewModel(
     /** All portfolios, active and archived (the switcher shows both). */
     val portfolios: StateFlow<List<PortfolioEntity>> = repo.portfolios
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Each portfolio's chosen **Icon** (internally its "kind"), by id — the
+     * switcher's leading chip. Client-only and read straight from the same
+     * account-scoped meta table the selection lives in, so it needs no refresh
+     * path and survives being offline. Ids with no stored choice are simply
+     * absent from the map.
+     */
+    val portfolioKinds: StateFlow<Map<String, BtPortfolioKind>> = repo.portfolioKinds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
      * The governing selection (§6.1): the persisted choice while it exists and

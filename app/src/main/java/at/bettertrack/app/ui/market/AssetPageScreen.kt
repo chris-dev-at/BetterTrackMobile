@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import at.bettertrack.app.ui.portfolio.rangeAccent
 
 /** The error code [at.bettertrack.app.data.storage.NoLivePricesMarketDataSource] raises. */
 private const val NO_LIVE_PRICES_CODE = "NO_LIVE_PRICES"
@@ -443,6 +444,12 @@ private fun AssetLoadedContent(
                         is AssetHistoryUiState.Loaded -> BtPriceChart(
                             points = history.series.points,
                             modifier = Modifier.fillMaxWidth().height(180.dp),
+                            // §4.3: an asset chart is an ASSET-level value, so it
+                            // wears its verdict rather than the brand. Gold stays
+                            // on the portfolio hero, which is account-scope.
+                            // The area gradient follows automatically — it derives
+                            // from lineColor.
+                            lineColor = rangeAccent(rangePerformancePct(history.series.points)),
                             onScrub = { scrub = it },
                         )
                     }
@@ -565,4 +572,23 @@ private fun formatAsOf(iso: String, locale: Locale): String = try {
         .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale))
 } catch (_: Exception) {
     iso
+}
+
+/**
+ * Performance across the whole plotted series, as a percentage.
+ *
+ * This is the asset's own `rangePerformancePct`: the app's portfolio history
+ * ships one on the wire, an asset price series does not, and it is the same
+ * first-to-last arithmetic either way. Computed from the points actually drawn,
+ * so the accent can never disagree with the line the user is looking at.
+ *
+ * Null when there is nothing to compare (fewer than two points) or when the
+ * opening price is zero — a division that would otherwise produce a confident
+ * infinity.
+ */
+internal fun rangePerformancePct(points: List<PricePoint>): Double? {
+    val first = points.firstOrNull()?.close ?: return null
+    val last = points.lastOrNull()?.close ?: return null
+    if (first == 0.0) return null
+    return (last - first) / first * 100.0
 }

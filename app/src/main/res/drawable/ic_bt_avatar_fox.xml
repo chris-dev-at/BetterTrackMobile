@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `fox` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF3A1A10"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFFF924D"
+        android:pathData="M32 14l14 14v14a10 10 0 01-20 0V28z" />
+
+    <path
+        android:fillColor="#FFFF924D"
+        android:pathData="M20 20l8 12h-4z M44 20l-8 12h4z" />
+
+    <path
+        android:fillColor="#FFFFE1CF"
+        android:pathData="M24,34 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z" />
+
+    <path
+        android:fillColor="#FFFFE1CF"
+        android:pathData="M36,34 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z" />
+
+    <path
+        android:fillColor="#FFFFE1CF"
+        android:pathData="M32 42l-4 4h8z" />
+
+</vector>

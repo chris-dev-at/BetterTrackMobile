@@ -101,6 +101,7 @@ import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import androidx.compose.ui.unit.Dp
 import java.util.Locale
+import at.bettertrack.app.ui.components.BtRailedRow
 
 /**
  * The hero chart's canvas height.
@@ -239,6 +240,7 @@ fun PortfolioOverviewScreen(
 
     val overviewSelected by vm.overviewSelected.collectAsStateWithLifecycle()
     val portfolios by vm.portfolios.collectAsStateWithLifecycle()
+    val portfolioKinds by vm.portfolioKinds.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
@@ -497,6 +499,7 @@ fun PortfolioOverviewScreen(
     if (switcherOpen) {
         PortfolioSwitcherSheet(
             portfolios = portfolios,
+            kinds = portfolioKinds,
             selectedId = selected?.id,
             overviewSelected = overviewSelected,
             onSelectOverview = {
@@ -1472,65 +1475,69 @@ private fun HoldingRow(
 ) {
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = holding.assetName,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = bt.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                val amount = "${formatQuantity(holding.quantity, locale)} ${holding.assetSymbol}"
-                val weight = weightOfPortfolioPct?.let {
-                    " · " + formatWeight(it, locale)
-                } ?: ""
-                Text(
-                    text = amount + weight,
-                    style = BtTheme.type.numberCaption,
-                    color = bt.textMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                if (holding.marketValueEur != null) {
-                    MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneySmall)
-                } else {
-                    // W6: a dash says "nothing here". In Drive mode the truth is
-                    // "no price yet", which is a different and fixable statement.
+        // The rail states this holding's verdict at a glance; the P/L text below
+        // states it precisely. Colour is never the only carrier (§4.4).
+        BtRailedRow(rail = rangeRail(holding.unrealizedPnlPct ?: holding.unrealizedPnlEur)) {
+            Row(
+                modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(
-                            if (noLivePrices) R.string.bt_price_none else R.string.bt_switcher_value_pending,
-                        ),
-                        style = if (noLivePrices) {
-                            MaterialTheme.typography.bodySmall
-                        } else {
-                            BtTheme.type.moneySmall
-                        },
+                        text = holding.assetName,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    val amount = "${formatQuantity(holding.quantity, locale)} ${holding.assetSymbol}"
+                    val weight = weightOfPortfolioPct?.let {
+                        " · " + formatWeight(it, locale)
+                    } ?: ""
+                    Text(
+                        text = amount + weight,
+                        style = BtTheme.type.numberCaption,
                         color = bt.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.height(2.dp))
-                val plPct = holding.unrealizedPnlPct
-                val plEur = holding.unrealizedPnlEur
-                when {
-                    plPct != null -> Text(
-                        text = formatPercent(plPct, locale),
-                        style = BtTheme.type.numberCaption,
-                        color = deltaColor(plPct),
-                    )
+                Spacer(Modifier.width(12.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    if (holding.marketValueEur != null) {
+                        MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneySmall)
+                    } else {
+                        // W6: a dash says "nothing here". In Drive mode the truth is
+                        // "no price yet", which is a different and fixable statement.
+                        Text(
+                            text = stringResource(
+                                if (noLivePrices) R.string.bt_price_none else R.string.bt_switcher_value_pending,
+                            ),
+                            style = if (noLivePrices) {
+                                MaterialTheme.typography.bodySmall
+                            } else {
+                                BtTheme.type.moneySmall
+                            },
+                            color = bt.textMuted,
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    val plPct = holding.unrealizedPnlPct
+                    val plEur = holding.unrealizedPnlEur
+                    when {
+                        plPct != null -> Text(
+                            text = formatPercent(plPct, locale),
+                            style = BtTheme.type.numberCaption,
+                            color = deltaColor(plPct),
+                        )
 
-                    plEur != null -> Text(
-                        text = formatEur(plEur, locale, showSign = true),
-                        style = BtTheme.type.numberCaption,
-                        color = deltaColor(plEur),
-                    )
+                        plEur != null -> Text(
+                            text = formatEur(plEur, locale, showSign = true),
+                            style = BtTheme.type.numberCaption,
+                            color = deltaColor(plEur),
+                        )
+                    }
                 }
             }
         }
@@ -1692,6 +1699,50 @@ internal fun deltaColor(value: Double) = when {
     value < 0.0 -> BtTheme.colors.loss
     else -> BtTheme.colors.textSecondary
 }
+
+/**
+ * The accent an **asset-level** surface wears: gain or loss by the performance of
+ * the range the user is currently looking at (§4.1).
+ *
+ * The rule this encodes, and the reason it is a separate function from
+ * [deltaColor] even though the branches look the same:
+ *
+ * | scope | accent |
+ * |---|---|
+ * | **Portfolio-level** value — hero chart, hero number, portfolio identity | `gold`, always |
+ * | **Asset-level** value — asset charts, holding rows, watchlist rows | this |
+ * | **Controls** — range chips, buttons | `gold`, always |
+ *
+ * Gold *is* the portfolio; it never means "up". An asset is a bet, so its colour
+ * is its verdict. Keeping the two apart is what stops the accent leaking into
+ * chrome, which is how "colour as signal" decays back into decoration.
+ *
+ * Null (no data yet) and exactly zero both resolve to [textSecondary]: a rail
+ * that claims a verdict the numbers do not support is worse than no rail.
+ */
+@Composable
+internal fun rangeAccent(pct: Double?): Color = when {
+    pct == null -> BtTheme.colors.textSecondary
+    pct > 0.0 -> BtTheme.colors.gain
+    pct < 0.0 -> BtTheme.colors.loss
+    else -> BtTheme.colors.textSecondary
+}
+
+/**
+ * The rail colour for a row, or `null` when the row has no verdict to state.
+ *
+ * Distinct from [rangeAccent] because a *rail* has a third state the text does
+ * not: absent. A grey rail would read as a fourth verdict; no rail reads as
+ * "nothing to say yet", which is the truth for an unpriced holding.
+ */
+@Composable
+internal fun rangeRail(pct: Double?): Color? = when {
+    pct == null || pct == 0.0 -> null
+    else -> BtTheme.colors.edge(rangeAccent(pct), RAIL_ALPHA)
+}
+
+/** §4.3: the rail sits at 60% so it reads as a mark, not as a second border. */
+private const val RAIL_ALPHA = 0.60f
 
 /**
  * Scrub readout stamp. Sub-daily series (V5 intraday 1D/1W/1M) add the

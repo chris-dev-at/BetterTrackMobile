@@ -283,6 +283,12 @@ private fun InviteRow(
     val locale = rememberBtLocale()
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // No `iconId`: `MirrorInviteDto` carries a username and no
+            // profileIcon, and this card holds no friend list to join one from —
+            // so the inviter gets the deterministic name-derived avatar. It is
+            // the same artwork the web would draw for a user with no stored
+            // choice, not a placeholder, but it can disagree with the icon they
+            // actually picked until the invite payload grows the field.
             BtAvatar(name = invite.fromUsername ?: invite.chainName, size = 36.dp)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {

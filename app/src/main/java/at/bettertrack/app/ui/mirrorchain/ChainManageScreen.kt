@@ -463,7 +463,7 @@ private fun MembersSection(roster: MirrorRoster) {
 private fun ManageMemberRow(member: MirrorMember, modifier: Modifier = Modifier) {
     val bt = BtTheme.colors
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BtAvatar(name = member.username, size = 34.dp, gold = member.isSelf)
+        BtAvatar(name = member.username, iconId = member.profileIcon, size = 34.dp, gold = member.isSelf)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -914,6 +914,12 @@ private fun InviteFriendDialog(
                         picker.pending.forEach { invite ->
                             PendingInviteRow(
                                 username = invite.toUsername,
+                                // `MirrorInviteDto` carries no profileIcon, but the
+                                // invitee is by definition a friend and the friend
+                                // list in `candidates` does — so the icon is joined
+                                // by username here rather than left to the hash.
+                                iconId = picker.candidates
+                                    .firstOrNull { it.username == invite.toUsername }?.profileIcon,
                                 enabled = !busy,
                                 onRevoke = {
                                     failure = null
@@ -962,7 +968,7 @@ private fun FriendPickRow(friend: Friend, enabled: Boolean, onClick: () -> Unit)
             .then(if (enabled) Modifier.clickableRow(onClick) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BtAvatar(name = friend.username, size = 32.dp)
+        BtAvatar(name = friend.username, iconId = friend.profileIcon, size = 32.dp)
         Spacer(Modifier.width(10.dp))
         Text(
             text = "@${friend.username}",
@@ -976,10 +982,15 @@ private fun FriendPickRow(friend: Friend, enabled: Boolean, onClick: () -> Unit)
 }
 
 @Composable
-private fun PendingInviteRow(username: String, enabled: Boolean, onRevoke: () -> Unit) {
+private fun PendingInviteRow(
+    username: String,
+    enabled: Boolean,
+    onRevoke: () -> Unit,
+    iconId: String? = null,
+) {
     val bt = BtTheme.colors
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BtAvatar(name = username, size = 32.dp)
+        BtAvatar(name = username, iconId = iconId, size = 32.dp)
         Spacer(Modifier.width(10.dp))
         Text(
             text = "@$username",

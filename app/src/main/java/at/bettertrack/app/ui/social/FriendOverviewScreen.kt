@@ -96,6 +96,14 @@ data class FriendOverviewUi(
      */
     val offline: Boolean = false,
     val since: String? = null,
+    /**
+     * The friend's curated-avatar id. It is NOT a nav argument — the route
+     * carries a username and nothing else — so it is read off the friend row in
+     * `friends()`, which this screen already fetches for [since]. Null until
+     * that load lands (and for a friend who picked no icon), at which point the
+     * avatar falls back to the deterministic name-derived one.
+     */
+    val profileIcon: String? = null,
     val stillFriend: Boolean = true,
     val portfolios: List<SharedPortfolioSummary> = emptyList(),
     val conglomerates: List<SharedConglomerateSummary> = emptyList(),
@@ -146,7 +154,9 @@ class FriendOverviewViewModel(
             _state.value = _state.value.copy(loading = _state.value.sharesNothing, error = null)
             val friendsR = repo.friends()
             val sharedR = repo.sharedWithMe()
-            val since = (friendsR as? BtResult.Ok)?.value?.firstOrNull { it.userId == friendUserId }?.since
+            val friendRow = (friendsR as? BtResult.Ok)?.value?.firstOrNull { it.userId == friendUserId }
+            val since = friendRow?.since
+            val icon = friendRow?.profileIcon
             val stillFriend = (friendsR as? BtResult.Ok)?.value?.any { it.userId == friendUserId } ?: true
             val shared = (sharedR as? BtResult.Ok)?.value
             val err = listOf(friendsR, sharedR).filterIsInstance<BtResult.Err>().firstOrNull { !it.error.isNetwork }
@@ -157,6 +167,10 @@ class FriendOverviewViewModel(
                     // No catalogued error and no data ⇒ the request never made it
                     // out. Say "you're offline", not "they share nothing".
                     offline = err == null,
+                    // The two reads fail independently: the friend row can be in
+                    // hand while the shares read is not, and the header avatar is
+                    // rendered on this branch too.
+                    profileIcon = icon ?: _state.value.profileIcon,
                 )
                 return@launch
             }
@@ -175,6 +189,7 @@ class FriendOverviewViewModel(
                 error = null,
                 offline = false,
                 since = since,
+                profileIcon = icon ?: _state.value.profileIcon,
                 stillFriend = stillFriend,
                 portfolios = ps,
                 conglomerates = cs,
@@ -346,7 +361,7 @@ fun FriendOverviewScreen(
             // Profile header.
             item {
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    BtAvatar(name = username, size = 72.dp)
+                    BtAvatar(name = username, iconId = ui.profileIcon, size = 72.dp)
                     Spacer(Modifier.height(10.dp))
                     Text("@$username", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight_SemiBold(), color = bt.textPrimary)
                     ui.since?.let {

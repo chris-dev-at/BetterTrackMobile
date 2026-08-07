@@ -251,6 +251,11 @@ fun ChatThreadScreen(
     val listState = rememberLazyListState()
 
     val headerName = state.friendUsername.ifEmpty { friendUsername }
+    // The peer's curated avatar, straight off the thread's own conversation
+    // summary. The nav argument carries a name and no icon, so before the first
+    // load lands this is null and the avatar shows the name-derived default —
+    // which is the same artwork the list row was already showing.
+    val headerIcon = state.friendProfileIcon
     // Blank from both the thread and the nav argument ⇒ the other participant
     // deleted their account (#362). Labelled, never rendered as an @handle.
     val peerDeleted = headerName.isBlank()
@@ -308,7 +313,7 @@ fun ChatThreadScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BtAvatar(name = headerName, size = 34.dp)
+                        BtAvatar(name = headerName, iconId = headerIcon, size = 34.dp)
                         Spacer(Modifier.width(10.dp))
                         Text(
                             if (peerDeleted) stringResource(R.string.bt_chat_deleted_user) else "@$headerName",
@@ -372,7 +377,7 @@ fun ChatThreadScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    BtAvatar(name = headerName, size = 64.dp)
+                    BtAvatar(name = headerName, iconId = headerIcon, size = 64.dp)
                     Spacer(Modifier.size(16.dp))
                     Text(
                         // "Say hi to @…" needs a name to greet; a deleted account

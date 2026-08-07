@@ -758,7 +758,7 @@ private fun RequestDecisionRow(req: FriendRequest, onAccept: () -> Unit, onDecli
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BtAvatar(name = req.username, size = 36.dp)
+        BtAvatar(name = req.username, iconId = req.profileIcon, size = 36.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text("@${req.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
@@ -812,7 +812,7 @@ private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BtAvatar(name = f.username, size = 40.dp)
+            BtAvatar(name = f.username, iconId = f.profileIcon, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("@${f.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
@@ -839,7 +839,7 @@ private fun SentRequestRow(req: FriendRequest, onCancel: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BtAvatar(name = req.username, size = 40.dp)
+            BtAvatar(name = req.username, iconId = req.profileIcon, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("@${req.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
@@ -890,7 +890,7 @@ private fun PersonRow(p: PersonShares, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BtAvatar(name = p.ownerName, size = 40.dp)
+            BtAvatar(name = p.ownerName, iconId = p.ownerIcon, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("@${p.ownerName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
