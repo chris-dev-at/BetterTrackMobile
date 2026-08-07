@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `ghost` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF231636"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFE9E2FF"
+        android:pathData="M18 30c0-8 6-14 14-14s14 6 14 14v18l-4-3-4 3-3-3-3 3-3-3-4 3-4-3-3 3z" />
+
+    <path
+        android:fillColor="#FF231636"
+        android:pathData="M24.5,30 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
+
+    <path
+        android:fillColor="#FF231636"
+        android:pathData="M34.5,30 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
+
+    <path
+        android:strokeColor="#FFA58CFF"
+        android:strokeWidth="1.5"
+        android:pathData="M27 38c2 3 8 3 10 0" />
+
+</vector>

@@ -263,7 +263,7 @@ private fun ConversationRow(c: Conversation, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BtAvatar(name = c.friendUsername, size = 46.dp)
+            BtAvatar(name = c.friendUsername, iconId = c.friendProfileIcon, size = 46.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -329,7 +329,7 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            BtAvatar(name = f.username, size = 38.dp)
+                            BtAvatar(name = f.username, iconId = f.profileIcon, size = 38.dp)
                             Spacer(Modifier.width(12.dp))
                             Text("@${f.username}", style = MaterialTheme.typography.bodyLarge, color = bt.textPrimary, modifier = Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))

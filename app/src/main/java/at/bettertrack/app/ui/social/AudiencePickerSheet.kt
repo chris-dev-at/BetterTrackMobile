@@ -247,16 +247,11 @@ fun AudiencePickerSheet(
             )
             if (selected == ShareAudience.AllFriends) {
                 Spacer(Modifier.height(8.dp))
-                HintCard(
-                    stringResource(
-                        when (kind) {
-                            ShareableKind.Portfolio -> R.string.bt_social_hint_all_friends_portfolio
-                            ShareableKind.Watchlist -> R.string.bt_social_hint_all_friends_watchlist
-                            ShareableKind.Conglomerate -> R.string.bt_social_hint_all_friends_conglomerate
-                            ShareableKind.Idea -> R.string.bt_share_hint_all_friends_idea
-                        },
-                    ),
-                )
+                // One sentence, not four. The `when (kind)` used to pick between
+                // strings that differed only by the noun — and the option's own
+                // title sits directly above this card, so the noun was restating
+                // context the user already had.
+                HintCard(stringResource(R.string.bt_social_hint_all_friends))
             }
             Spacer(Modifier.height(8.dp))
             AudienceOption(
@@ -269,16 +264,7 @@ fun AudiencePickerSheet(
             if (selected == ShareAudience.PublicLink) {
                 Spacer(Modifier.height(10.dp))
                 if (linkActive && currentAudience == ShareAudience.PublicLink) {
-                    HintCard(
-                        stringResource(
-                            when (kind) {
-                                ShareableKind.Portfolio -> R.string.bt_social_hint_public_active_portfolio
-                                ShareableKind.Watchlist -> R.string.bt_social_hint_public_active_watchlist
-                                ShareableKind.Conglomerate -> R.string.bt_social_hint_public_active_conglomerate
-                                ShareableKind.Idea -> R.string.bt_share_hint_public_active_idea
-                            },
-                        ),
-                    )
+                    HintCard(stringResource(R.string.bt_social_hint_public_active))
                 } else {
                     PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
                 }
@@ -505,7 +491,7 @@ private fun FriendCheckRow(friend: Friend, checked: Boolean, onToggle: () -> Uni
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BtAvatar(name = friend.username, size = 32.dp)
+        BtAvatar(name = friend.username, iconId = friend.profileIcon, size = 32.dp)
         Spacer(Modifier.width(10.dp))
         Text(
             "@${friend.username}",

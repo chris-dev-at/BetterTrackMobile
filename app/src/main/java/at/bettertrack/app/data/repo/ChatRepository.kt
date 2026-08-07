@@ -113,6 +113,13 @@ data class Conversation(
     val lastPreview: String,
     val lastAtMs: Long,
     val unread: Int,
+    /**
+     * The other participant's curated-avatar id (`SocialUserDto.profileIcon` on
+     * `ChatConversationDto.user`). Null when they never picked one — and also
+     * when the account is gone, which is the same absence the blank
+     * [friendUsername] reports.
+     */
+    val friendProfileIcon: String? = null,
 )
 
 /** Whether the caller may still post to a thread (drives the composer). */
@@ -137,6 +144,8 @@ data class ThreadState(
     val friendUserId: String? = null,
     /** Blank ⇒ deleted participant; see [Conversation.friendUsername]. */
     val friendUsername: String = "",
+    /** The peer's curated-avatar id; see [Conversation.friendProfileIcon]. */
+    val friendProfileIcon: String? = null,
     val error: BtMessage? = null,
 )
 
@@ -221,6 +230,7 @@ internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
         lastPreview = preview,
         lastAtMs = at,
         unread = unreadCount,
+        friendProfileIcon = user?.profileIcon,
     )
 }
 
@@ -378,6 +388,7 @@ class DefaultChatRepository(
                     availability = if (readOnly) ThreadAvailability.ReadOnly else ThreadAvailability.Available,
                     friendUserId = friendId,
                     friendUsername = dto.conversation.user?.username.orEmpty(),
+                    friendProfileIcon = dto.conversation.user?.profileIcon,
                     error = null,
                 )
                 upsertConversation(dto.conversation)

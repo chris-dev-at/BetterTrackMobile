@@ -707,7 +707,7 @@
     <string name="bt_settings_applock_biometric_none">Set up a fingerprint in Android settings to enable</string>
     <string name="bt_settings_applock_biometric_unavailable">Biometric unlock isn\'t available on this device</string>
     <string name="bt_settings_applock_threshold">Require unlock</string>
-    <string name="bt_settings_applock_footnote">The app lock is stored only on this device and is separate from your BetterTrack account password. Forgetting the PIN signs you out.</string>
+    <string name="bt_settings_applock_footnote">Separate from your account password. Forgetting the PIN signs you out.</string>
     <string name="bt_settings_applock_disable_title">Turn off app lock?</string>
     <string name="bt_settings_applock_disable_message">Your PIN will be removed and the app will no longer ask to unlock.</string>
     <string name="bt_settings_applock_disable_confirm">Turn off</string>
@@ -745,7 +745,7 @@
     <string name="bt_applock_setup_choice_bt_title">Use my BetterTrack PIN</string>
     <string name="bt_applock_setup_choice_bt_sub">The same 4-digit PIN as your BetterTrack account</string>
     <string name="bt_applock_setup_bt_enter">Enter your BetterTrack PIN</string>
-    <string name="bt_applock_setup_bt_hint">Use the same 4-digit PIN as your BetterTrack account. We check it once, then keep only a locked copy of it on this device.</string>
+    <string name="bt_applock_setup_bt_hint">Use your BetterTrack account PIN. We check it once, then keep only a locked copy here.</string>
     <string name="bt_applock_mismatch">PINs didn\'t match, try again</string>
     <string name="bt_applock_continue">Continue</string>
     <!-- BetterTrack-PIN verify path (server round-trip; gated off until the mobile OAuth bearer can reach /auth/pin/verify) -->
@@ -831,7 +831,7 @@
 
     <!-- Two-factor authentication -->
     <string name="bt_dest_two_factor">Two-factor authentication</string>
-    <string name="bt_2fa_intro">Add a second step at login for extra security. Use an authenticator app, email codes, or both.</string>
+    <string name="bt_2fa_intro">Use an authenticator app, email codes, or both.</string>
     <string name="bt_2fa_status_on">Two-factor authentication is on</string>
     <string name="bt_2fa_status_off">Two-factor authentication is off</string>
     <string name="bt_2fa_set_up">Set up</string>
@@ -848,7 +848,7 @@
     <string name="bt_2fa_email_sub_on">On</string>
     <string name="bt_2fa_email_sub_off">Get a code by email at login</string>
     <string name="bt_2fa_email_sent">We sent a code to your email. Enter it below to turn on email codes.</string>
-    <string name="bt_2fa_enroll_scan">Scan this QR code with your authenticator app, then enter the 6-digit code it shows.</string>
+    <string name="bt_2fa_enroll_scan">Scan with your authenticator app, then enter the 6-digit code.</string>
     <string name="bt_2fa_enroll_secret">Or enter this key manually:</string>
     <string name="bt_2fa_enroll_code">6-digit code</string>
     <string name="bt_2fa_enroll_verify">Verify &amp; turn on</string>
@@ -869,7 +869,7 @@
 
     <!-- Active sessions -->
     <string name="bt_dest_active_sessions">Active sessions</string>
-    <string name="bt_sessions_intro">These are the places you\'re signed in to BetterTrack — on the web and other devices. Sign out any you don\'t recognise.</string>
+    <string name="bt_sessions_intro">Sign out anything you don\'t recognise.</string>
     <string name="bt_sessions_current">Current</string>
     <string name="bt_sessions_revoke">Sign out</string>
     <string name="bt_sessions_revoke_title">Sign out this session?</string>
@@ -990,7 +990,7 @@
     <string name="bt_chat_unavailable_title">Conversation not available</string>
     <string name="bt_chat_unavailable_body">This chat isn\'t available. You may no longer be able to message this person.</string>
     <string name="bt_chat_say_hi">Start a chat with @%1$s</string>
-    <string name="bt_chat_empty_hint">Start the conversation — you can share an asset or portfolio right here with the paperclip.</string>
+    <string name="bt_chat_empty_hint">Say hi — the paperclip shares an asset or portfolio.</string>
     <string name="bt_chat_chip_view">View</string>
     <string name="bt_chat_chip_not_shared">Not shared with you</string>
     <string name="bt_chat_share_item_cd">Share an item</string>
@@ -1033,7 +1033,7 @@
 
     <!-- Shared-with-me section -->
     <string name="bt_social_swm_empty_title">Nothing shared with you yet</string>
-    <string name="bt_social_swm_empty_body">When a friend shares a portfolio, watchlist, conglomerate or idea with you, they\'ll show up here — grouped by friend.</string>
+    <string name="bt_social_swm_empty_body">What friends share with you shows up here, grouped by friend.</string>
     <string name="bt_social_people_sharing">People sharing with you</string>
     <plurals name="bt_social_count_portfolios">
         <item quantity="one">%1$d portfolio</item>
@@ -1118,7 +1118,7 @@
          owner-only — so the row's action is an honest copy, not an "open". -->
     <string name="bt_shared_idea_has_thesis">Idea · thesis attached</string>
     <string name="bt_shared_idea_no_thesis">Idea · no thesis attached</string>
-    <string name="bt_shared_idea_copy_hint">You can\'t open someone else\'s idea. Copying puts your own private copy — thesis, assets and backtest setup — in your ideas.</string>
+    <string name="bt_shared_idea_copy_hint">Copying puts a private copy — thesis, assets and backtest setup — in your ideas.</string>
     <string name="bt_shared_idea_copy">Copy to my ideas</string>
     <string name="bt_shared_idea_copying">Copying…</string>
     <string name="bt_shared_idea_copied_toast">“%1$s” is now in your ideas</string>
@@ -1158,15 +1158,11 @@
     <string name="bt_social_audience_specific_sub">Pick exactly who can see it</string>
     <string name="bt_social_hint_add_friends_first">Add friends first — then you can pick exactly who sees this.</string>
     <string name="bt_social_audience_all_friends_sub">Everyone you\'re friends with can view it</string>
-    <string name="bt_social_hint_all_friends_portfolio">Your friends will see this portfolio in “Shared with me”. You can revoke access any time.</string>
-    <string name="bt_social_hint_all_friends_watchlist">Your friends will see this watchlist in “Shared with me”. You can revoke access any time.</string>
-    <string name="bt_social_hint_all_friends_conglomerate">Your friends will see this conglomerate in “Shared with me”. You can revoke access any time.</string>
+    <string name="bt_social_hint_all_friends">Your friends will see this under “Shared with me”. You can revoke access any time.</string>
+    <string name="bt_social_hint_public_active">A public link is already active. Choose another audience to switch it off.</string>
     <string name="bt_social_audience_public_link_title">Public link</string>
     <string name="bt_social_audience_public_link_sub_active">A public link is active</string>
     <string name="bt_social_audience_public_link_sub_inactive">Anyone with the link can view it</string>
-    <string name="bt_social_hint_public_active_portfolio">A public link is already active for this portfolio. To revoke it, choose a different audience — the link stops working immediately.</string>
-    <string name="bt_social_hint_public_active_watchlist">A public link is already active for this watchlist. To revoke it, choose a different audience — the link stops working immediately.</string>
-    <string name="bt_social_hint_public_active_conglomerate">A public link is already active for this conglomerate. To revoke it, choose a different audience — the link stops working immediately.</string>
     <string name="bt_social_public_ack_title">This becomes public</string>
     <string name="bt_social_public_ack_body">Anyone with the link can see your holdings and net worth — even people who aren\'t your friends. You can revoke the link any time.</string>
     <string name="bt_social_public_ack_checkbox">I understand and want a public link</string>
@@ -1175,7 +1171,7 @@
 
     <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
     <string name="bt_paranoid_title">This account is in paranoid mode</string>
-    <string name="bt_paranoid_body">Your portfolio, tax and import data is encrypted in a private vault that the BetterTrack servers cannot read. Nothing is lost — the app simply cannot show numbers it is not allowed to see.</string>
+    <string name="bt_paranoid_body">Your data is in a private vault the BetterTrack servers cannot read. Nothing is lost — the app just cannot show numbers it may not see.</string>
     <string name="bt_paranoid_works_title">Still working here</string>
     <string name="bt_paranoid_works_social">Friends, sharing and chat</string>
     <string name="bt_paranoid_works_watchlists">Watchlists and asset search</string>
@@ -1289,7 +1285,7 @@
     <!-- Auto-tag rules -->
     <string name="bt_rules_title">Auto-tag rules</string>
     <string name="bt_rules_empty_title">No rules yet</string>
-    <string name="bt_rules_empty_message">A rule reads a movement\'s note and applies tags automatically — “REWE” could mean Groceries every time.</string>
+    <string name="bt_rules_empty_message">A rule tags movements by their note — “REWE” could mean Groceries every time.</string>
     <string name="bt_rules_error_title">Couldn\'t load rules</string>
     <string name="bt_rules_new">New rule</string>
     <string name="bt_rules_new_title">New rule</string>
@@ -1336,7 +1332,7 @@
     <string name="bt_so_title">Standing orders</string>
     <string name="bt_so_subtitle">Recurring buys and cash movements the server books for you.</string>
     <string name="bt_so_empty_title">No standing orders</string>
-    <string name="bt_so_empty_message">Set up a recurring buy, or a regular deposit like your salary, and BetterTrack records it on schedule.</string>
+    <string name="bt_so_empty_message">A recurring buy, or a regular deposit like your salary, recorded on schedule.</string>
     <string name="bt_so_error_title">Couldn\'t load standing orders</string>
     <string name="bt_so_new">New standing order</string>
     <string name="bt_so_new_title">New standing order</string>
@@ -1387,7 +1383,7 @@
 
     <!-- V5 W5 — storage wizard, vault gate, "Where your data lives" (S3/S4 plan §4) -->
     <string name="bt_storage_wizard_title">Where should your data live?</string>
-    <string name="bt_storage_wizard_intro">This decides where your portfolios are kept. Nothing is created until you finish, and you can change it later in Settings.</string>
+    <string name="bt_storage_wizard_intro">Nothing is created until you finish. You can change this later in Settings.</string>
     <string name="bt_storage_not_available">Not available</string>
     <string name="bt_storage_continue">Continue</string>
     <string name="bt_storage_choose_server_title">BetterTrack account</string>
@@ -1436,7 +1432,7 @@
     <string name="bt_storage_create">Create my vault</string>
 
     <string name="bt_storage_working_title">Creating your vault</string>
-    <string name="bt_storage_working_body">Encrypting it, writing it and reading it back — so we only tell you it is safe once it really is.</string>
+    <string name="bt_storage_working_body">Encrypting, writing, and reading it back.</string>
     <string name="bt_storage_fail_round_trip_title">The vault could not be verified</string>
     <string name="bt_storage_fail_round_trip_body">It was written but could not be read back, so we will not tell you it is safe. Check that this device has free storage, then try again.</string>
     <string name="bt_storage_fail_crypto_title">Your vault key could not be created</string>
@@ -1641,8 +1637,6 @@
     <!-- The `idea` share kind — a saved workboard analysis (name + thesis + backtest) -->
     <string name="bt_share_idea_subtitle">Thesis and backtest</string>
     <string name="bt_share_choose_idea">Choose who can read this idea — the thesis you wrote and the backtest behind it.</string>
-    <string name="bt_share_hint_all_friends_idea">Every friend will be able to read the thesis and see how the backtest turned out.</string>
-    <string name="bt_share_hint_public_active_idea">Anyone with the link can read this idea. Pick another audience to switch the link off.</string>
 
     <!-- Friend groups -->
     <string name="bt_groups_title">Friend groups</string>
@@ -1743,7 +1737,7 @@
     <!-- Workboard ideas: a saved backtest analysis (name + thesis + setup). -->
     <string name="bt_ideas_segment">Ideas</string>
     <string name="bt_ideas_empty_title">No saved ideas yet</string>
-    <string name="bt_ideas_empty_message">An idea is a backtest you decided to keep: the assets or conglomerate you tested, the range and rebalancing you used, and a note on why it convinced you.</string>
+    <string name="bt_ideas_empty_message">A backtest you decided to keep, with a note on why it convinced you.</string>
     <string name="bt_ideas_create">New idea</string>
     <string name="bt_ideas_create_title">Save an idea</string>
     <string name="bt_ideas_name_label">Title</string>
@@ -1818,13 +1812,13 @@
     <string name="bt_price_err_currency">Use a three-letter currency code, for example EUR.</string>
     <string name="bt_price_err_rate">This device has no %1$s → %2$s exchange rate, so a price in %1$s cannot be used here. Enter it in %2$s.</string>
     <string name="bt_price_unpriced_title">No prices yet</string>
-    <string name="bt_price_unpriced_body">Your transactions and cash are safe on this device. Add a price per asset and BetterTrack values the portfolio — it will not show a zero it cannot stand behind.</string>
+    <string name="bt_price_unpriced_body">Add a price per asset and BetterTrack values the portfolio — it will not show a zero it cannot stand behind.</string>
     <plurals name="bt_price_unpriced_note">
         <item quantity="one">Excludes %1$d holding with no price</item>
         <item quantity="other">Excludes %1$d holdings with no price</item>
     </plurals>
     <string name="bt_price_search_title">Search needs price lookups</string>
-    <string name="bt_price_search_body">In this mode BetterTrack holds no asset catalogue on the device, so there is nothing to search. You can still add any asset by hand, and price it yourself.</string>
+    <string name="bt_price_search_body">No asset catalogue on this device. You can still add any asset by hand and price it yourself.</string>
     <string name="bt_price_asset_unavailable">This asset page needs live prices, which this mode does not have. The prices you entered yourself are on the holding.</string>
 
     <!-- ── V5 W6 — the "prices only" opt-in ──────────────────────────────── -->
@@ -1833,7 +1827,7 @@
     <string name="bt_prices_toggle_subtitle">BetterTrack would see which assets you look up, never what you own.</string>
     <string name="bt_prices_toggle_on_note">On. Searches and quotes go to BetterTrack; your portfolio, transactions and cash stay on this device.</string>
     <string name="bt_prices_toggle_off_note">Off. Nothing leaves this device, and prices are the ones you enter yourself.</string>
-    <string name="bt_prices_toggle_needs_account">Price lookups are signed-in requests, so this needs a BetterTrack account. Add one under “Change where it lives” — your portfolio still stays in Drive.</string>
+    <string name="bt_prices_toggle_needs_account">Price lookups need a BetterTrack account. Add one under “Change where it lives” — your portfolio stays in Drive.</string>
 
     <!-- ══ R-arc R1 ══ APPEND-ONLY BLOCK. Keep new R-arc keys here, at the very
          end of the file, and never edit or delete inside the region above while
@@ -2348,7 +2342,7 @@
     <string name="bt_chainadmin_transfer">Transfer ownership</string>
     <string name="bt_chainadmin_dissolve">Dissolve group</string>
     <string name="bt_chainadmin_web_title">Manage on the web</string>
-    <string name="bt_chainadmin_web_body">Group administration isn\'t open to the app yet. Sign in on the web to rename this group, invite people, change roles or transfer ownership. This screen switches on by itself once the app is allowed to do it.</string>
+    <string name="bt_chainadmin_web_body">Sign in on the web to rename this group, invite people, change roles or transfer ownership. This screen switches on by itself once the app is allowed to.</string>
     <string name="bt_chainadmin_web_open">Open BetterTrack on the web</string>
     <string name="bt_chainadmin_member_role">Role</string>
     <string name="bt_chainadmin_role_owner">Owner</string>
@@ -2368,5 +2362,38 @@
     <string name="bt_settings_profile_icon_sub">Shown next to your name to friends and in groups.</string>
     <string name="bt_settings_profile_icon_title">Pick an icon</string>
     <string name="bt_settings_profile_icon_none">No icon</string>
+    <!--
+      One label per curated avatar. The picker used to ship none of these and
+      documented the gap: the ids are wire tokens, so TalkBack had nothing to
+      announce for any of the 16 cells. Names describe the artwork, not the id.
+    -->
+    <string name="bt_profile_icon_astronaut">Astronaut</string>
+    <string name="bt_profile_icon_fox">Fox</string>
+    <string name="bt_profile_icon_panda">Panda</string>
+    <string name="bt_profile_icon_robot">Robot</string>
+    <string name="bt_profile_icon_star">Star</string>
+    <string name="bt_profile_icon_wave">Wave</string>
+    <string name="bt_profile_icon_mountain">Mountain</string>
+    <string name="bt_profile_icon_leaf">Leaf</string>
+    <string name="bt_profile_icon_flame">Flame</string>
+    <string name="bt_profile_icon_bolt">Lightning bolt</string>
+    <string name="bt_profile_icon_moon">Moon</string>
+    <string name="bt_profile_icon_planet">Planet</string>
+    <string name="bt_profile_icon_ghost">Ghost</string>
+    <string name="bt_profile_icon_crown">Crown</string>
+    <string name="bt_profile_icon_compass">Compass</string>
+    <string name="bt_profile_icon_anchor">Anchor</string>
+    <!--
+      Portfolio icon ("kind" internally — never that word in the UI, per the
+      platform's own naming rule).
+    -->
+    <string name="bt_pf_icon_section">Icon</string>
+    <string name="bt_pf_icon_sub">Colour and glyph shown in the switcher and the header.</string>
+    <string name="bt_pf_icon_local_note">Saved on this device only — the web keeps its own.</string>
+    <string name="bt_pf_kind_private">Private</string>
+    <string name="bt_pf_kind_family">Family</string>
+    <string name="bt_pf_kind_business">Business</string>
+    <string name="bt_pf_kind_savings">Savings</string>
+    <string name="bt_pf_kind_property">Property</string>
     <string name="bt_settings_profile_saved">Profile updated</string>
 </resources>

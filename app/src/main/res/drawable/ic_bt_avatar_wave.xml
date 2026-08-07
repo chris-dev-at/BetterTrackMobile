@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `wave` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF0D2A3A"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:strokeColor="#FF5CC9FF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M8 40c6-8 12-8 18 0s12 8 18 0 12-8 18 0" />
+
+    <path
+        android:strokeColor="#FFC9F0FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.85"
+        android:pathData="M8 30c6-8 12-8 18 0s12 8 18 0 12-8 18 0" />
+
+</vector>

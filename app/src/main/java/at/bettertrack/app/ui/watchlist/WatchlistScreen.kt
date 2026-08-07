@@ -76,6 +76,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import at.bettertrack.app.ui.components.BtRailedRow
+import at.bettertrack.app.ui.portfolio.rangeRail
+import at.bettertrack.app.ui.portfolio.deltaColor
 
 /** A watchlist row's quote (§6.6 — price + day change). */
 data class WatchQuote(val eurPrice: Double?, val dayChangePct: Double?)
@@ -453,8 +456,9 @@ private fun WatchRow(
 ) {
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
+        BtRailedRow(rail = rangeRail(quote?.dayChangePct)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            modifier = Modifier.weight(1f).padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -482,13 +486,17 @@ private fun WatchRow(
                     Text(
                         text = formatPercent(pct, locale),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (pct >= 0) bt.gain else bt.loss,
+                        // Was a hand-rolled `pct >= 0`, which painted a flat 0.00%
+                        // green while every other surface in the app calls zero
+                        // neutral. One helper, one verdict.
+                        color = deltaColor(pct),
                     )
                 }
             }
             IconButton(onClick = onRemove) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = stringResource(R.string.bt_watchlist_remove_item), tint = bt.textMuted, modifier = Modifier.size(20.dp))
             }
+        }
         }
     }
 }

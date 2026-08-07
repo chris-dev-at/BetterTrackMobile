@@ -113,5 +113,23 @@ data class MetaEntity(
          * `defaultPayFromCash`. Account-scoped like everything in this table.
          */
         fun keyCashCouplingDefault(portfolioId: String) = "cash_coupling_default_$portfolioId"
+
+        /**
+         * The portfolio → icon-kind map, as a JSON object of
+         * `{"<portfolioId>": "<kind wire name>"}`.
+         *
+         * ⚠️ CLIENT-ONLY, and the web has the same problem. There is no `kind`
+         * field on the portfolio row and no PATCH body field for it, so the web
+         * keeps this in `localStorage` under `bt.portfolio.kinds`
+         * (`portfolioKinds.ts:78`, which documents the gap itself). The app
+         * therefore stores it here — account-keyed and wiped on logout, which is
+         * the closest thing to the web's per-browser scope.
+         *
+         * **Consequence the user will meet:** a kind chosen on the web does not
+         * appear on the phone, and vice versa. That is a platform gap, not an app
+         * bug; the graduation path is a `kind` field on the portfolio row, after
+         * which this key and its accessors are deleted and nothing else changes.
+         */
+        const val KEY_PORTFOLIO_KINDS = "portfolio_kinds"
     }
 }

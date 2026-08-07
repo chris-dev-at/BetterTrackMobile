@@ -52,9 +52,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.data.api.dto.BT_PROFILE_ICONS
+import at.bettertrack.app.data.repo.BtPortfolioKind
 import at.bettertrack.app.debug.DebugPreviewState
+import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtChip
@@ -78,9 +83,14 @@ import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.portfolio.BtPortfolioChip
+import at.bettertrack.app.ui.portfolio.BtPortfolioChipSize
+import at.bettertrack.app.ui.portfolio.BtPortfolioChipSizeLarge
+import at.bettertrack.app.ui.portfolio.portfolioKindLabel
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.ui.theme.BetterTrackTheme
+import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -178,6 +188,13 @@ private fun GalleryContent(
             item { ListCardSection() }
             item { ButtonSection() }
             item { ChipBadgeSection() }
+            // The three identity sheets, together and in this order: a person, a
+            // glyph, a portfolio. They are the app's only multi-hue surfaces, so
+            // this is the one screen where the whole colour vocabulary can be
+            // judged at once — and, with the toggle above, in both substrates.
+            item { ProfileAvatarSection() }
+            item { OriginIconSection() }
+            item { PortfolioChipSection() }
             item { SkeletonSection() }
             item { EmptyStateSection() }
             item { OfflineStateSection() }
@@ -704,6 +721,231 @@ private fun GalleryTabIcon(icon: ImageVector, badged: Boolean) {
             show = badged,
             modifier = Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-3).dp),
         )
+    }
+}
+
+/** Four columns: the widest grid that keeps a 48dp avatar and its id legible. */
+private const val GALLERY_GRID_COLUMNS = 4
+
+/**
+ * One captioned specimen. The caption is the **identifier a builder would type**
+ * — a wire id, a `BtIcons` property name, a kind label — because that is the
+ * question this screen is asked ("which one is the fox?"), and a gallery that
+ * shows artwork without naming it answers only half of it.
+ */
+@Composable
+private fun GallerySpecimen(
+    caption: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        content()
+        Text(
+            text = caption,
+            style = MaterialTheme.typography.labelSmall,
+            color = BtTheme.colors.textMuted,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * A fixed-column grid of specimens.
+ *
+ * Deliberately `Row`s of weighted cells rather than a `LazyVerticalGrid`: this
+ * whole screen is one `LazyColumn`, and nesting a lazy grid inside a lazy column
+ * needs a hard-coded height — which for a 28-glyph sheet is exactly the number
+ * that goes stale the next time a glyph is added.
+ */
+@Composable
+private fun GallerySpecimenGrid(
+    count: Int,
+    cell: @Composable (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        (0 until count).chunked(GALLERY_GRID_COLUMNS).forEach { indices ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                indices.forEach { i ->
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { cell(i) }
+                }
+                // A short last row must not stretch its cells wider than the
+                // rows above it, or the grid stops reading as a grid.
+                repeat(GALLERY_GRID_COLUMNS - indices.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * The 16 curated avatars, plus the name-derived fallback.
+ *
+ * The fallback row is the half that actually needs checking. `BtAvatar` picks it
+ * with a literal port of the web's hash, so the same seed must produce the same
+ * face in both clients — and the three seeds shown ("chris", "Christian", "cw")
+ * are three different strings for one person, which is precisely the case where
+ * a drifted hash would show three different faces and look like a bug in the
+ * data rather than in the hash.
+ */
+@Composable
+private fun ProfileAvatarSection() {
+    val bt = BtTheme.colors
+    GallerySection("Profile avatars — 16 curated ids (B2-C)") {
+        GallerySpecimenGrid(count = BT_PROFILE_ICONS.size) { i ->
+            val id = BT_PROFILE_ICONS[i]
+            GallerySpecimen(caption = id) {
+                BtAvatar(name = id, iconId = id, size = 48.dp)
+            }
+        }
+        Text(
+            text = "No iconId — the deterministic name-derived fallback, plus the gold self ring",
+            style = MaterialTheme.typography.labelSmall,
+            color = bt.textMuted,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("chris", "Christian", "cw").forEach { seed ->
+                GallerySpecimen(caption = "\"$seed\"", modifier = Modifier.weight(1f)) {
+                    BtAvatar(name = seed, size = 48.dp)
+                }
+            }
+            GallerySpecimen(caption = "gold = true", modifier = Modifier.weight(1f)) {
+                BtAvatar(name = "Christian", iconId = "fox", size = 48.dp, gold = true)
+            }
+        }
+    }
+}
+
+/**
+ * Every glyph in [BtIcons], at the 24dp the chrome draws them.
+ *
+ * Shown as one sheet because the set's whole claim is *uniformity* — one 1.6
+ * stroke, one cap style, one optical weight — and a stroke that is off by a
+ * tenth is invisible next to Material but obvious next to its own siblings.
+ * This is also the sheet that says which glyphs EXIST, so a builder reaching for
+ * an Origin icon can see whether the one they want is in the set or whether they
+ * are about to invent it (which is out of scope — see the [BtIcons] KDoc).
+ */
+@Composable
+private fun OriginIconSection() {
+    val bt = BtTheme.colors
+    val glyphs = remember {
+        listOf(
+            "UserLock" to BtIcons.UserLock,
+            "Family" to BtIcons.Family,
+            "Briefcase" to BtIcons.Briefcase,
+            "PiggyBank" to BtIcons.PiggyBank,
+            "Building" to BtIcons.Building,
+            "Users" to BtIcons.Users,
+            "Pie" to BtIcons.Pie,
+            "Workbench" to BtIcons.Workbench,
+            "Assets" to BtIcons.Assets,
+            "People" to BtIcons.People,
+            "Search" to BtIcons.Search,
+            "Settings" to BtIcons.Settings,
+            "Bell" to BtIcons.Bell,
+            "Inbox" to BtIcons.Inbox,
+            "Plus" to BtIcons.Plus,
+            "X" to BtIcons.X,
+            "Check" to BtIcons.Check,
+            "ChevronRight" to BtIcons.ChevronRight,
+            "ChevronLeft" to BtIcons.ChevronLeft,
+            "ChevronUp" to BtIcons.ChevronUp,
+            "ChevronDown" to BtIcons.ChevronDown,
+            "More" to BtIcons.More,
+            "TrendingUp" to BtIcons.TrendingUp,
+            "TrendingDown" to BtIcons.TrendingDown,
+            "Sun" to BtIcons.Sun,
+            "Moon" to BtIcons.Moon,
+            "Home" to BtIcons.Home,
+            "Wallet" to BtIcons.Wallet,
+        )
+    }
+    GallerySection("Origin icons — ${glyphs.size} glyphs, 1.6 stroke, 24dp") {
+        GallerySpecimenGrid(count = glyphs.size) { i ->
+            val (name, glyph) = glyphs[i]
+            GallerySpecimen(caption = name) {
+                Icon(
+                    imageVector = glyph,
+                    contentDescription = null,
+                    tint = bt.textSecondary,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Text(
+            text = "Origin owns chrome + identity; Material Outlined owns the utility long tail. A single row group never mixes the two.",
+            style = MaterialTheme.typography.labelSmall,
+            color = bt.textMuted,
+        )
+    }
+}
+
+/**
+ * The portfolio identity chip, in every hue it can take.
+ *
+ * All six at once is the point: the set has to survive being read as a COLUMN in
+ * the switcher, where adjacent hues sit 60dp apart, and the check that matters
+ * is whether any two are confusable *once the glyph is covered* — because if
+ * they are, the glyph is doing all the work and the hue is decoration. Both
+ * sizes are stacked per kind so the 26dp row chip and the 30dp trigger can be
+ * compared without scrolling between them.
+ */
+@Composable
+private fun PortfolioChipSection() {
+    val bt = BtTheme.colors
+    GallerySection("Portfolio icon chips — 26dp row · 30dp trigger") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            BtPortfolioKind.entries.forEach { kind ->
+                GallerySpecimen(
+                    caption = portfolioKindLabel(kind),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        BtPortfolioChip(kind = kind, size = BtPortfolioChipSize)
+                        BtPortfolioChip(kind = kind, size = BtPortfolioChipSizeLarge)
+                    }
+                }
+            }
+        }
+        Text(
+            text = "group = true — a mirrorchain copy takes the trio glyph on the sixth hue, whichever Icon it is filed under",
+            style = MaterialTheme.typography.labelSmall,
+            color = bt.textMuted,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GallerySpecimen(caption = "group · 26dp", modifier = Modifier.weight(1f)) {
+                BtPortfolioChip(kind = BtPortfolioKind.Private, group = true)
+            }
+            GallerySpecimen(caption = "group · 30dp", modifier = Modifier.weight(1f)) {
+                BtPortfolioChip(
+                    kind = BtPortfolioKind.Private,
+                    group = true,
+                    size = BtPortfolioChipSizeLarge,
+                )
+            }
+            Spacer(Modifier.weight(2f))
+        }
     }
 }
 

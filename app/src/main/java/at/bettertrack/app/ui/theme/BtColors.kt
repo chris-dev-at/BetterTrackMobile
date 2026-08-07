@@ -150,21 +150,48 @@ data class BtColors(
     /** Alpha where a baseline (gain/loss split) gradient meets zero. */
     val chartAreaZeroAlpha: Float,
     /**
-     * Categorical ramp for allocation slices / identity tints. Assign slots IN
-     * ORDER by descending weight; never cycle past the last slot — fold the tail
-     * into [chartRest].
+     * Categorical ramp for allocation slices / identity tints — the platform's
+     * `CATEGORICAL_SERIES` (`apps/web/src/ui/charts/palette.ts:20-31`). Assign
+     * slots IN ORDER by descending weight; never cycle past the last slot — fold
+     * the tail into [chartRest].
      *
-     * Validated with the dataviz six-checks against the dark card surface
-     * (dark band, chroma floor, contrast ≥3:1 all pass; worst CVD pair 8.6 sits
-     * in the 8–12 floor band, legal because slices always ship secondary
-     * encoding: 2dp gaps + a labeled legend with percentages). Gold is the brand
-     * accent and NEVER a series color; gain/loss stay reserved for money deltas.
+     * The app's own five hues had **drifted**: only slot 1 still matched the
+     * platform. Adopting the web's ten verbatim in dark ends that drift and
+     * doubles the slot count, so a ten-category portfolio no longer collapses
+     * into "Other" at slice six.
+     *
+     * Validated with the dataviz six-checks in BOTH modes (see [BtLightColors]
+     * for the light corrections). Gold is the brand accent and NEVER a series
+     * colour; gain/loss stay reserved for money deltas.
      */
     val chartSeries: List<Color>,
     /** The fold bucket ("Other") — reads as neutral, not identity. */
     val chartRest: Color,
     /** Cash slice — semantically "uninvested", quiet silver, distinct from [chartRest]. */
     val chartCash: Color,
+
+    // ── Portfolio identity ───────────────────────────────────────────────────
+    /**
+     * The six portfolio-icon chip hues, in [at.bettertrack.app.data.repo.BtPortfolioKind]
+     * declaration order (private, family, business, savings, property) plus the
+     * `group` marker last. Taken verbatim off the web's own chip block
+     * (`origin.css` `.bt-pf-chip--<tint>`), both modes.
+     *
+     * These are drawn from `CATEGORICAL_SERIES` with green/teal/red-brown/yellow
+     * **deliberately excluded** — green and teal read as the positive semantic
+     * pair, red-brown as the negative one, and yellow as the gold reserved for
+     * brand/action/focus. What is left is six well-separated hues.
+     *
+     * ⚠️ These do NOT pass the dataviz adjacent-pair CVD check, and that is
+     * correct rather than a defect: the check models a *chart series*, where hue
+     * is the identity channel. A kind chip's identity is its **glyph** — a
+     * deuteranope cannot separate the property orange from the savings lime, but
+     * `building` and `piggy-bank` are not confusable shapes at any size. Hue here
+     * is reinforcement on top of a full independent channel, which is the same
+     * rule ("colour is never the only carrier") applied honestly. Changing these
+     * to satisfy the check would break cross-client parity to fix nothing.
+     */
+    val kindTints: List<Color>,
 
     // ── Wire data ────────────────────────────────────────────────────────────
     /** Fallback tint for a malformed or absent server-supplied colour. */
@@ -281,15 +308,32 @@ val BtDarkColors = BtColors(
     chartAxis = Color(0xFF77818D),
     chartAreaTopAlpha = 0.24f,
     chartAreaZeroAlpha = 0.02f,
+    // `CATEGORICAL_SERIES` verbatim. Re-validated against THIS ramp's card
+    // (#161B22, lighter than the #10151b the web checked): all six checks pass,
+    // worst adjacent CVD pair yellow↔green ΔE 8.4 (protan).
     chartSeries = listOf(
         Color(0xFF3987E5), // blue
-        Color(0xFF1D9DBF), // cyan
-        Color(0xFF6D5BD0), // violet
-        Color(0xFFC25B8E), // magenta
-        Color(0xFFB58840), // bronze
+        Color(0xFFD95926), // orange
+        Color(0xFF199E70), // green
+        Color(0xFFC98500), // yellow
+        Color(0xFFD55181), // magenta
+        Color(0xFF9085E9), // violet
+        Color(0xFF0D9488), // teal
+        Color(0xFFC0453F), // red-brown
+        Color(0xFF7A9E2B), // lime
+        Color(0xFFB06FC9), // purple
     ),
     chartRest = Color(0xFF525252),
     chartCash = Color(0xFF8A8A8A),
+
+    kindTints = listOf(
+        Color(0xFF3987E5), // private  — palette blue
+        Color(0xFFD55181), // family   — palette magenta
+        Color(0xFFB06FC9), // business — palette purple
+        Color(0xFF7A9E2B), // savings  — palette lime
+        Color(0xFFD95926), // property — palette orange
+        Color(0xFF9085E9), // group    — palette violet
+    ),
 
     tagFallback = Color(0xFF94A3B8),
 )
@@ -351,18 +395,52 @@ val BtLightColors = BtColors(
     chartAxis = Color(0xFF5D6773),
     chartAreaTopAlpha = 0.18f,
     chartAreaZeroAlpha = 0.015f,
-    // The dark hues darkened for a white substrate. The green/teal/red-brown/
-    // yellow exclusion of the dark ramp is preserved so the categorical palette
-    // never collides with the gain/loss pair.
+    // Same-hue darkened counterparts of the dark ramp, because the platform
+    // validated `CATEGORICAL_SERIES` against a dark canvas ONLY — the dark inks
+    // sit at ~2.5:1 on white. Six of the ten already had web light counterparts
+    // (the `.bt-pf-chip` block); the other four were derived here.
+    //
+    // NOBODY HAD EVER VALIDATED THE LIGHT SET. Running the dataviz six-checks on
+    // it turned up two REAL defects in the values §1.5 B3 proposed, both fixed
+    // below and both worth relaying to the platform before its white mode ships:
+    //
+    //   • teal  #0B7A70 → #00887A — chroma 0.09 was under the 0.10 floor, i.e. it
+    //     read as grey rather than as an identity hue on white.
+    //   • lime  #5C7A13 → #6B8A1A — vs the red-brown in the ADJACENT slot it sat
+    //     at ΔE 4.9 (deutan): a deuteranope could not separate two neighbouring
+    //     slices.
+    //   • yellow #9A6600 → #96600A — knock-on: once lime moved, yellow↔green
+    //     became the binding pair at ΔE 7.9, just under the target.
+    //
+    // Final: all six checks PASS on `surface` (#FFFFFF) and on `bg` (#EEF0F2),
+    // worst adjacent CVD pair yellow↔green ΔE 8.6 (deutan).
     chartSeries = listOf(
-        Color(0xFF1F6FCC), // blue
-        Color(0xFF0E7690), // cyan
-        Color(0xFF5A45BE), // violet
-        Color(0xFFA83E73), // magenta
-        Color(0xFF8A6520), // bronze
+        Color(0xFF1F6AC4), // blue      — web light counterpart
+        Color(0xFFB8431A), // orange    — web light counterpart
+        Color(0xFF12805B), // green     — derived
+        Color(0xFF96600A), // yellow    — derived, re-stepped for CVD
+        Color(0xFFB93A68), // magenta   — web light counterpart
+        Color(0xFF6154C6), // violet    — web light counterpart
+        Color(0xFF00887A), // teal      — derived, re-stepped for chroma
+        Color(0xFFA03832), // red-brown — derived
+        Color(0xFF6B8A1A), // lime      — re-stepped for CVD (web chip uses #5C7A13)
+        Color(0xFF8E46AD), // purple    — web light counterpart
     ),
     chartRest = Color(0xFF6E7276),
     chartCash = Color(0xFF7A828B),
+
+    // The web's own light chip block, verbatim. Slot 4 stays at the web's
+    // #5C7A13 rather than the re-stepped lime above: chips are never adjacent
+    // slices, they are glyph-carrying identity marks, so the pair check that
+    // forced the donut's lime does not apply here — and parity is worth more.
+    kindTints = listOf(
+        Color(0xFF1F6AC4), // private
+        Color(0xFFB93A68), // family
+        Color(0xFF8E46AD), // business
+        Color(0xFF5C7A13), // savings
+        Color(0xFFB8431A), // property
+        Color(0xFF6154C6), // group
+    ),
 
     tagFallback = Color(0xFF64748B),
 )

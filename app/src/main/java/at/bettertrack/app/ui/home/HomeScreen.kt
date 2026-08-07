@@ -75,6 +75,8 @@ import at.bettertrack.app.ui.prices.priceCoverage
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import at.bettertrack.app.ui.workboard.WorkboardEntry
+import at.bettertrack.app.ui.components.BtRailedRow
+import at.bettertrack.app.ui.portfolio.rangeRail
 
 /**
  * The rhythm between Home's sections (mandate §4: more whitespace, fewer
@@ -598,23 +600,27 @@ private fun MoverCard(holding: HoldingEntity, onClick: () -> Unit) {
     val locale = rememberBtLocale()
     val pct = holding.dayChangePct ?: 0.0
     BtCard(modifier = Modifier.width(132.dp), onClick = onClick) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-            Text(
-                text = holding.assetSymbol,
-                style = MaterialTheme.typography.titleSmall,
-                color = bt.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = formatPercent(pct, locale),
-                style = BtTheme.type.moneyMedium,
-                color = deltaColor(pct),
-            )
-            Spacer(Modifier.height(2.dp))
-            holding.marketValueEur?.let {
-                MoneyText(value = it, style = BtTheme.type.numberCaption)
+        // Rail basis is DAY change, not the selected range — the section header
+        // says "today's movers", so a range-based accent would make the label lie.
+        BtRailedRow(rail = rangeRail(holding.dayChangePct)) {
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 12.dp)) {
+                Text(
+                    text = holding.assetSymbol,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = bt.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = formatPercent(pct, locale),
+                    style = BtTheme.type.moneyMedium,
+                    color = deltaColor(pct),
+                )
+                Spacer(Modifier.height(2.dp))
+                holding.marketValueEur?.let {
+                    MoneyText(value = it, style = BtTheme.type.numberCaption)
+                }
             }
         }
     }

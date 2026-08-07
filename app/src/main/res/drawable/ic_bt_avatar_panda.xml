@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `panda` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFF4F4F4"
+        android:pathData="M14,34 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 Z" />
+
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M14,22 a6,7 0 1,0 12,0 a6,7 0 1,0 -12,0 Z" />
+
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M38,22 a6,7 0 1,0 12,0 a6,7 0 1,0 -12,0 Z" />
+
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M22,34 a4,5 0 1,0 8,0 a4,5 0 1,0 -8,0 Z" />
+
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M34,34 a4,5 0 1,0 8,0 a4,5 0 1,0 -8,0 Z" />
+
+    <path
+        android:fillColor="#FF3A3A3A"
+        android:pathData="M24.5,34 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 Z" />
+
+    <path
+        android:fillColor="#FF3A3A3A"
+        android:pathData="M36.5,34 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 Z" />
+
+    <path
+        android:fillColor="#FF1A1A1A"
+        android:pathData="M29,42 a3,2 0 1,0 6,0 a3,2 0 1,0 -6,0 Z" />
+
+</vector>

@@ -69,7 +69,7 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name)) }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name), d.owner.profileIcon) }
                 item {
                     val bt = BtTheme.colors
                     BtCard(modifier = Modifier.fillMaxWidth()) {
@@ -166,7 +166,7 @@ fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: ()
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_watchlist)) }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_watchlist), d.owner.profileIcon) }
                 items(d.items, key = { it.id }) { it2 ->
                     val bt = BtTheme.colors
                     BtCard(modifier = Modifier.fillMaxWidth()) {
@@ -209,7 +209,7 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name)) }
+                item { OwnerHeader(d.owner.username, stringResource(R.string.bt_social_read_only_named, d.name), d.owner.profileIcon) }
                 d.description?.takeIf { it.isNotBlank() }?.let { desc ->
                     item {
                         Text(desc, style = MaterialTheme.typography.bodyMedium, color = BtTheme.colors.textSecondary)
@@ -319,10 +319,10 @@ private fun <T> Loaded(
 }
 
 @Composable
-private fun OwnerHeader(username: String, subtitle: String) {
+private fun OwnerHeader(username: String, subtitle: String, iconId: String? = null) {
     val bt = BtTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        BtAvatar(name = username, size = 44.dp)
+        BtAvatar(name = username, iconId = iconId, size = 44.dp)
         Spacer(Modifier.size(12.dp))
         Column(Modifier.weight(1f)) {
             Text("@$username", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)

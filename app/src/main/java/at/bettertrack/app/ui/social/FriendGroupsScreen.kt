@@ -540,6 +540,7 @@ private fun GroupCard(
                             actionIcon = Icons.Outlined.Close,
                             actionCd = stringResource(R.string.bt_groups_remove_member_cd, m.username),
                             onAction = { onRemove(m) },
+                            iconId = m.profileIcon,
                         )
                     }
                 }
@@ -586,6 +587,7 @@ private fun GroupCard(
                                     actionIcon = Icons.Outlined.Add,
                                     actionCd = stringResource(R.string.bt_groups_add_member_cd, f.username),
                                     onAction = { onAdd(f) },
+                                    iconId = f.profileIcon,
                                 )
                             }
                         }
@@ -611,14 +613,14 @@ private fun GroupCard(
     }
 }
 
-/** Up to four overlapping initials avatars, then a "+n" for the rest. */
+/** Up to four overlapping member avatars, then a "+n" for the rest. */
 @Composable
 private fun MemberStack(members: List<FriendGroupMember>) {
     val bt = BtTheme.colors
     val shown = members.take(4)
     val rest = members.size - shown.size
     Row(horizontalArrangement = Arrangement.spacedBy((-8).dp), verticalAlignment = Alignment.CenterVertically) {
-        shown.forEach { BtAvatar(name = it.username, size = 24.dp) }
+        shown.forEach { BtAvatar(name = it.username, iconId = it.profileIcon, size = 24.dp) }
         if (rest > 0) {
             Surface(shape = CircleShape, color = bt.surface, border = BorderStroke(1.dp, bt.border), modifier = Modifier.size(24.dp)) {
                 Box(contentAlignment = Alignment.Center) {
@@ -636,13 +638,14 @@ private fun PersonRow(
     actionIcon: ImageVector,
     actionCd: String,
     onAction: () -> Unit,
+    iconId: String? = null,
 ) {
     val bt = BtTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BtAvatar(name = name, size = 30.dp)
+        BtAvatar(name = name, iconId = iconId, size = 30.dp)
         Spacer(Modifier.width(10.dp))
         Text(
             "@$name",

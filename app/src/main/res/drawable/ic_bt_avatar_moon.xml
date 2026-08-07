@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `moon` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF161A2E"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFC3C8FF"
+        android:pathData="M42 40a18 18 0 11-18-28 14 14 0 0018 28z" />
+
+    <path
+        android:fillColor="#FFEEF0FF"
+        android:pathData="M32,26 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z" />
+
+    <path
+        android:fillColor="#FFEEF0FF"
+        android:pathData="M40.5,34 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 Z" />
+
+    <path
+        android:fillColor="#FFEEF0FF"
+        android:pathData="M29,34 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0 Z" />
+
+</vector>

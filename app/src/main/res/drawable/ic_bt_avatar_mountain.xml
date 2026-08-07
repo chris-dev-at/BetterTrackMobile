@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated profile avatar `mountain` — a literal port of the web's
+  apps/web/src/user/components/profileIcons.tsx renderer (same monorepo,
+  drawn in-house, no icon dependency). Multicolour ARTWORK: never tinted.
+  The 64x64 rx=12 tile is the web's own <rect> and is clipped to a circle
+  by BtAvatar, matching origin.css `border-radius: 50%`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- tile -->
+    <path
+        android:fillColor="#FF2B2033"
+        android:pathData="M12,0 H52 A12,12 0 0,1 64,12 V52 A12,12 0 0,1 52,64 H12 A12,12 0 0,1 0,52 V12 A12,12 0 0,1 12,0 Z" />
+
+    <path
+        android:fillColor="#FFB399FF"
+        android:pathData="M8 48l14-20 8 12 6-8 20 16z" />
+
+    <path
+        android:fillColor="#FFF0E6FF"
+        android:fillAlpha="0.85"
+        android:pathData="M20 34l4-6 6 8-4 4z" />
+
+    <path
+        android:fillColor="#FFF0E6FF"
+        android:pathData="M42,18 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+
+</vector>

@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import java.time.Instant
 import java.time.OffsetDateTime
 
@@ -107,6 +109,44 @@ class PortfolioRepository(
 
     /** One-shot snapshot of every cached portfolio (initial-load resolution). */
     suspend fun portfoliosNow(): List<PortfolioEntity> = db.portfolioDao().getAll()
+
+    // ── Portfolio icon ("kind") — client-only, see KEY_PORTFOLIO_KINDS ───────
+    //
+    // The API has no field for this on either client, so the web keeps it in
+    // localStorage and the app keeps it here. Same meta table, same account-scoped
+    // wipe as the selection above — one storage layer, not two.
+
+    /** Every stored portfolio → kind mapping. Ids with no entry are absent. */
+    val portfolioKinds: Flow<Map<String, BtPortfolioKind>> =
+        db.metaDao().observe(MetaEntity.KEY_PORTFOLIO_KINDS).map { decodeKinds(it) }
+
+    /** One-shot read of the whole map. */
+    suspend fun portfolioKindsNow(): Map<String, BtPortfolioKind> =
+        decodeKinds(db.metaDao().get(MetaEntity.KEY_PORTFOLIO_KINDS))
+
+    /** Persist one portfolio's icon. */
+    suspend fun setPortfolioKind(portfolioId: String, kind: BtPortfolioKind) {
+        val next = portfolioKindsNow() + (portfolioId to kind)
+        val encoded = JsonObject(next.mapValues { JsonPrimitive(it.value.wire) })
+        db.metaDao().put(MetaEntity(MetaEntity.KEY_PORTFOLIO_KINDS, json.encodeToString(JsonObject.serializer(), encoded)))
+    }
+
+    /**
+     * Parse the stored map, dropping anything that is not a `{id: kind}` pair.
+     *
+     * Icons are pure garnish, so every failure mode — absent key, corrupt JSON, a
+     * kind written by a newer build — degrades to "everything is Private" rather
+     * than breaking the switcher. Same call the web's own reader makes.
+     */
+    private fun decodeKinds(raw: String?): Map<String, BtPortfolioKind> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            json.parseToJsonElement(raw).jsonObject.mapNotNull { (id, value) ->
+                val wire = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+                BtPortfolioKind.entries.firstOrNull { it.wire == wire }?.let { id to it }
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
 
     /**
      * The portfolio that should govern right now, resolved from a ONE-SHOT read

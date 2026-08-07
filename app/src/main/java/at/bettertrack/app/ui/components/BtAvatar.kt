@@ -1,75 +1,59 @@
 package at.bettertrack.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
- * A calm initials avatar (spec §5 — social/chat surfaces are emotional; give
- * them personal identity without breaking the palette). The tint is a gentle,
- * deterministic pick from the CVD-validated donut ramp (already checked against
- * `#171717`), so people are distinguishable at a glance while gold stays the sole
- * brand accent. Pass [gold] = true for the signed-in user / self chip.
+ * A person, drawn as the platform's curated avatar artwork.
+ *
+ * This used to render **initials on a hashed tint**. The web never did — its
+ * `Avatar.tsx` always paints one of 16 curated SVGs, falling back to a
+ * deterministic name-derived one — so the same account showed a grey "CW" on the
+ * phone and a fox in the browser. Worse, the icon was already on the wire
+ * (`SocialUserDto.profileIcon`) and the domain models threw it away.
+ *
+ * Now: [iconId] is the person's stored choice, and an absent or
+ * not-yet-known-to-this-build id falls back to [defaultProfileIconIdFor], the
+ * literal port of the web's hash. See [resolvedProfileIconId].
+ *
+ * The artwork is multicolour and carries its own tile colour, so it is **never
+ * tinted** and needs no light/dark variant — the palettes were drawn to pass AA
+ * on both substrates. The 64×64 rounded tile is clipped to a circle, matching the
+ * web's `border-radius: 50%` on the same asset.
+ *
+ * Pass [gold] = true for the signed-in user / self chip: it adds a gold ring
+ * *around* the artwork rather than recolouring it, because the identity of the
+ * avatar and the fact that it is you are two different facts.
  */
 @Composable
 fun BtAvatar(
     name: String,
     modifier: Modifier = Modifier,
+    iconId: String? = null,
     size: Dp = 40.dp,
     gold: Boolean = false,
 ) {
     val bt = BtTheme.colors
-    val initials = initialsOf(name)
-    val tint = if (gold) bt.gold else avatarTint(name, bt.chartSeries)
-    Surface(
-        modifier = modifier.size(size),
-        shape = CircleShape,
-        color = bt.wash(tint, 0.16f),
-        border = BorderStroke(1.dp, bt.edge(tint, 0.40f)),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = initials,
-                color = if (gold) bt.goldEmphasis else tint,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                fontSize = (size.value * 0.36f).sp,
-            )
-        }
-    }
-}
-
-private fun initialsOf(name: String): String {
-    val cleaned = name.trim().trimStart('@')
-    if (cleaned.isEmpty()) return "?"
-    // Split on separators common in usernames/handles.
-    val parts = cleaned.split(' ', '.', '_', '-').filter { it.isNotBlank() }
-    return when {
-        parts.size >= 2 -> "${parts[0].first()}${parts[1].first()}".uppercase()
-        else -> cleaned.take(2).uppercase()
-    }
-}
-
-/**
- * Deterministic muted tint from the theme's validated categorical [ramp]
- * (blue/teal/violet/rose/gold-brown). The ramp is passed in rather than
- * hardcoded so it flips with the colour table — the same five hues that were
- * validated against the dark card are too light to identify anyone on white.
- */
-private fun avatarTint(name: String, ramp: List<Color>): Color {
-    val idx = (name.trim().lowercase().hashCode().let { if (it == Int.MIN_VALUE) 0 else it } and 0x7fffffff) % ramp.size
-    return ramp[idx]
+    val resolved = resolvedProfileIconId(iconId, name)
+    Image(
+        painter = painterResource(profileIconRes(resolved)!!),
+        // Decorative: every call site pairs the avatar with the person's name as
+        // adjacent text, so announcing it again would just double up.
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .then(if (gold) Modifier.border(1.5.dp, bt.gold, CircleShape) else Modifier),
+    )
 }
