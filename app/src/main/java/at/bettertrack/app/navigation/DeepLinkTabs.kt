@@ -5,9 +5,19 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
 /**
  * The four bottom-navigation destinations, each paired with its typed route.
  *
- * Declaration order IS bar order: Portfolio · Workbench · Markets · People. The
+ * Declaration order IS bar order: Portfolio · Markets · Workbench · People. The
  * shell filters this set per storage mode but never reorders it, so a Drive-only
  * bar is a subsequence of the full one rather than a different bar.
+ *
+ * ## Why Workbench sits third (owner order, 2026-08-07)
+ *
+ * The bar used to read Portfolio · Workbench · Markets · People. The owner moved
+ * Workbench behind Markets: the two tabs you reach for constantly are your own
+ * holdings and the market you are buying into, so they belong side by side under
+ * the thumb, and the Workbench — alerts and conglomerates, both of which you set
+ * up once and then let run — does not earn the second slot. It also makes the
+ * horizontal swipe (see [tabNeighbour]) read as a sensible progression: your
+ * money, then the market, then the tools you point at it, then the people.
  *
  * ## Why Home is not here (owner IA change, 2026-08-05)
  *
@@ -25,9 +35,63 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
  */
 enum class BtTab(val route: Any) {
     Portfolio(PortfolioTabRoute),
-    Workbench(WorkbenchTabRoute),
     Markets(MarketsTabRoute),
+    Workbench(WorkbenchTabRoute),
     People(PeopleTabRoute),
+}
+
+/**
+ * What a bottom-bar tap means.
+ *
+ * [Switch] is the normal case. [OpenPortfolioSwitcher] is the owner's 2026-08-07
+ * directive: tapping **Portfolio** while the Portfolio tab is already the screen
+ * you are looking at opens the portfolio selector sheet — the same sheet the
+ * header pill opens — instead of re-navigating to a tab you are already on.
+ *
+ * That is a Portfolio-only rule. Every other tab keeps re-tap doing nothing new,
+ * because no other tab has a "which one of these am I looking at" question to
+ * answer, and inventing per-tab re-tap behaviours would make the bar's one
+ * gesture mean four things.
+ */
+enum class TabTap { Switch, OpenPortfolioSwitcher }
+
+/**
+ * Decide what a tap on [tapped] does.
+ *
+ * @param exactTab the tab whose route the current destination IS — **not** the
+ *   tab it merely lives under. `null` while a pushed screen is showing, which is
+ *   deliberate: re-tapping Portfolio from a holding detail should get you back to
+ *   the tab, which is what an ordinary [TabTap.Switch] already does. Opening a
+ *   sheet on top of a screen the user is trying to leave would be the opposite of
+ *   what the tap asked for.
+ */
+fun tabTapAction(tapped: BtTab, exactTab: BtTab?): TabTap =
+    if (tapped == BtTab.Portfolio && exactTab == BtTab.Portfolio) {
+        TabTap.OpenPortfolioSwitcher
+    } else {
+        TabTap.Switch
+    }
+
+/**
+ * The tab a horizontal swipe lands on, or `null` at the ends of the bar.
+ *
+ * [forward] means "the finger travelled LEFT", which in every pager idiom reveals
+ * the page to the RIGHT — the owner's phrasing was *"portfolio swipe left goes to
+ * assets and reverse"*, and Markets is Portfolio's right-hand neighbour.
+ *
+ * [visible] is the bar as the current storage mode actually renders it (a
+ * Drive-only bar is Portfolio · Markets), so the swipe walks the tabs the user
+ * can see rather than the full enum — swiping past the end of a filtered bar must
+ * not land on a tab that has no button. It is a list rather than a set because
+ * neighbours are an ORDER question; the shell builds it from this enum's order,
+ * which is what keeps bar order and swipe order the same fact.
+ *
+ * Pure (no NavController, no Compose) so the unit tests can pin every hop.
+ */
+fun tabNeighbour(current: BtTab, forward: Boolean, visible: List<BtTab> = BtTab.entries): BtTab? {
+    val i = visible.indexOf(current)
+    if (i < 0) return null
+    return visible.getOrNull(if (forward) i + 1 else i - 1)
 }
 
 /**

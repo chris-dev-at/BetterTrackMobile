@@ -254,14 +254,12 @@ fun WorkbenchTabScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
-    onOpenIdea: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
         onOpenAsset = onOpenAsset,
-        onOpenIdea = onOpenIdea,
         onOpenSettings = onOpenSettings,
     )
 }

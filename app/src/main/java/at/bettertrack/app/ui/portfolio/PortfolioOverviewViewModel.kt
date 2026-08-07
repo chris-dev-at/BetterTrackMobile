@@ -12,6 +12,7 @@ import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.prefs.BtChartMode
 import at.bettertrack.app.data.prefs.DevicePrefs
 import at.bettertrack.app.data.repo.prefetchPortfolioTotals
 import at.bettertrack.app.sync.ConnectivityMonitor
@@ -86,6 +87,16 @@ class PortfolioOverviewViewModel(
 
     private val _range = MutableStateFlow(HistoryRange.DEFAULT)
     val range: StateFlow<HistoryRange> = _range.asStateFlow()
+
+    /**
+     * Which curve the hero chart draws (owner ask 2026-08-07). Persisted per
+     * device in [DevicePrefs], so the choice survives both a process death and a
+     * sign-out — it is a view preference, not account data. Switching mode never
+     * refetches: both series arrive together in one `/history` payload.
+     */
+    val chartMode: StateFlow<BtChartMode> = devicePrefs.chartMode
+
+    fun setChartMode(mode: BtChartMode) = devicePrefs.setChartMode(mode)
 
     val holdings: StateFlow<List<HoldingEntity>> = selected
         .flatMapLatest { p -> if (p == null) flowOf(emptyList()) else repo.holdings(p.id) }

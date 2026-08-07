@@ -133,6 +133,13 @@ import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
 import at.bettertrack.app.ui.shell.OfflineBanner
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Surface
+import at.bettertrack.app.ui.components.rememberBtHaptics
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
@@ -1031,25 +1038,21 @@ fun CashScreen(
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                BtSecondaryButton(
-                                    text = stringResource(R.string.bt_cash_kind_fee),
-                                    onClick = {
-                                        editPrefill = null
-                                        sheet = CashSheet.Entry(CashKind.FEE)
-                                    },
-                                    modifier = Modifier.weight(1f).height(44.dp),
-                                )
-                                BtSecondaryButton(
-                                    text = stringResource(R.string.bt_cash_transfer),
-                                    onClick = {
-                                        editPrefill = null
-                                        sheet = CashSheet.Transfer()
-                                    },
-                                    enabled = active.size >= 2,
-                                    modifier = Modifier.weight(1f).height(44.dp),
-                                )
-                            }
+                            // No Fee button any more (web parity, owner
+                            // 2026-08-07). A fee is not a third destination, it
+                            // is a PROPERTY of an outflow — "was this spent on
+                            // investing?" — so it is now the Holding-cost tick
+                            // inside the withdraw sheet, exactly as on the web.
+                            // See [cashEntryKind].
+                            BtSecondaryButton(
+                                text = stringResource(R.string.bt_cash_transfer),
+                                onClick = {
+                                    editPrefill = null
+                                    sheet = CashSheet.Transfer()
+                                },
+                                enabled = active.size >= 2,
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                            )
                         }
                     }
 
@@ -2332,10 +2335,20 @@ private fun CashEntrySheet(
     val pickedDate = LocalDate.ofEpochDay(pickedEpochDay)
     var datePickerOpen by rememberSaveable { mutableStateOf(false) }
 
+    // Web parity (owner 2026-08-07): an outflow asks ONE more question — is this
+    // a holding cost, i.e. does it belong against performance? Seeded from the
+    // kind the sheet opened with, which is how a queued FEE op re-opens with the
+    // tick already set. The web seeds the identical way:
+    // `useState(editing?.kind === 'fee')`.
+    var holdingCost by rememberSaveable { mutableStateOf(kind == CashKind.FEE) }
+
     val amount = parseLocalizedDecimal(amountText)
     val selectedSource = sources.firstOrNull { it.id == sourceId }
     // A fee is an outflow like a withdrawal — same overdraw gate, same preview.
     val inflow = kind == CashKind.DEPOSIT
+    // What will actually be booked. The `kind` parameter is only the sheet's
+    // STARTING point now; the tick is what decides between the two outflows.
+    val effectiveKind = cashEntryKind(inflow = inflow, holdingCost = holdingCost)
     val validation = validateCashEntry(amount, inflow, selectedSource?.balanceEur)
     val after = if (amount != null && selectedSource != null) {
         balanceAfterEntry(selectedSource.balanceEur, amount, inflow)
@@ -2361,7 +2374,7 @@ private fun CashEntrySheet(
         ) {
             Text(
                 text = stringResource(
-                    when (kind) {
+                    when (effectiveKind) {
                         CashKind.DEPOSIT -> R.string.bt_cash_deposit_title
                         CashKind.FEE -> R.string.bt_cash_fee_title
                         else -> R.string.bt_cash_withdraw_title
@@ -2370,15 +2383,6 @@ private fun CashEntrySheet(
                 style = MaterialTheme.typography.titleMedium,
                 color = bt.textPrimary,
             )
-            // The one thing a user cannot infer: a fee is a COST and drags
-            // performance, whereas a withdrawal is just money leaving.
-            if (kind == CashKind.FEE) {
-                Text(
-                    text = stringResource(R.string.bt_cash_fee_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                )
-            }
             sheetError?.let { RejectionText(it) }
 
             SheetNumberField(
@@ -2441,6 +2445,18 @@ private fun CashEntrySheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // The holding-cost tick — outflows only, exactly as on the web
+            // (`direction === 'out' ? <label><input type="checkbox" …`). It sits
+            // right after the date for the same reason it does there: it is the
+            // last thing you decide about a movement you have already described.
+            if (!inflow) {
+                HoldingCostToggle(
+                    checked = holdingCost,
+                    enabled = !submitting,
+                    onCheckedChange = { holdingCost = it },
+                )
+            }
+
             OutlinedTextField(
                 value = noteText,
                 onValueChange = { noteText = it.take(900); vm.previewNote(it) },
@@ -2470,14 +2486,14 @@ private fun CashEntrySheet(
                 text = stringResource(
                     when {
                         editOpId != null -> R.string.bt_txform_save
-                        kind == CashKind.DEPOSIT -> R.string.bt_cash_deposit_action
-                        kind == CashKind.FEE -> R.string.bt_cash_fee_action
+                        effectiveKind == CashKind.DEPOSIT -> R.string.bt_cash_deposit_action
+                        effectiveKind == CashKind.FEE -> R.string.bt_cash_fee_action
                         else -> R.string.bt_cash_withdraw_action
                     },
                 ),
                 onClick = {
                     val a = amount ?: return@BtPrimaryButton
-                    vm.submitEntry(kind, a, sourceId, noteText, pickedDate, editOpId) { ok ->
+                    vm.submitEntry(effectiveKind, a, sourceId, noteText, pickedDate, editOpId) { ok ->
                         if (ok) onDismiss()
                     }
                 },
@@ -2497,6 +2513,68 @@ private fun CashEntrySheet(
             },
             onDismiss = { datePickerOpen = false },
         )
+    }
+}
+
+/**
+ * The "Holding cost" tick — the app's half of the web's fee/withdrawal parity
+ * (owner 2026-08-07; see [cashEntryKind] for the rule it feeds).
+ *
+ * A bordered row rather than a bare checkbox, because the sentence underneath it
+ * is the point: the difference between a fee and a withdrawal is invisible on the
+ * cash ledger and only shows up in the return, so a user who is not told will
+ * pick wrong. The web pairs its checkbox with the same explanation behind an info
+ * dot; this app has the room to just say it, and does.
+ *
+ * The whole row is the target (48dp+), so the sentence is tappable and not merely
+ * a label the checkbox happens to sit beside.
+ */
+@Composable
+private fun HoldingCostToggle(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val bt = BtTheme.colors
+    val haptics = rememberBtHaptics()
+    val commit: (Boolean) -> Unit = { on -> haptics.toggle(on); onCheckedChange(on) }
+    Surface(
+        shape = BtShapes.card,
+        color = if (checked) bt.gold.copy(alpha = 0.10f) else bt.bg,
+        border = BorderStroke(1.dp, if (checked) bt.gold.copy(alpha = 0.45f) else bt.border),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { commit(!checked) }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = { if (enabled) commit(it) },
+                enabled = enabled,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = bt.gold,
+                    checkmarkColor = bt.onGold,
+                    uncheckedColor = bt.borderStrong,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.bt_cash_holding_cost),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = bt.textPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.bt_cash_holding_cost_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+        }
     }
 }
 

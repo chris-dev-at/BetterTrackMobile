@@ -103,6 +103,18 @@
     <string name="bt_overview_create_portfolio">Create portfolio</string>
     <string name="bt_overview_chart_empty">Not enough history to draw yet</string>
     <string name="bt_overview_chart_cd">Net worth over time chart</string>
+    <!-- Hero-chart display mode (owner ask 2026-08-07). The two symbol labels are
+         deliberately not translated: € and % read the same in every locale the app
+         ships, and a word here would crowd a control that sits beside six range
+         chips. The content descriptions carry the meaning for TalkBack. -->
+    <string name="bt_chart_mode_cd">Chart display mode</string>
+    <string name="bt_chart_mode_balance">€</string>
+    <string name="bt_chart_mode_balance_cd">Balance in euro</string>
+    <string name="bt_chart_mode_performance">%</string>
+    <string name="bt_chart_mode_performance_cd">Performance in percent</string>
+    <string name="bt_chart_mode_hybrid">% + €</string>
+    <string name="bt_chart_mode_hybrid_cd">Performance curve, balance readout</string>
+    <string name="bt_chart_perf_hint">Deposits and withdrawals are neutralized — the curve only moves when your holdings move.</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
@@ -321,6 +333,11 @@
     <string name="bt_cash_kind_tax_refund">Tax refund</string>
     <string name="bt_cash_fee_title">Record a fee</string>
     <string name="bt_cash_fee_action">Record fee</string>
+    <!-- Web parity 2026-08-07: the wording is the web's `cashflow.record.countsToPerformanceShort`
+         and `...Hint` (apps/web/src/i18n/messages/en.json), so the same tick means the
+         same thing and reads the same on both platforms. -->
+    <string name="bt_cash_holding_cost">Holding cost</string>
+    <string name="bt_cash_holding_cost_hint">For costs of holding — an account or custody charge is part of investing, so it should lower your reported return. Everyday spending should not.</string>
     <string name="bt_cash_fee_hint">A fee is a cost, so it lowers your return. A withdrawal just moves money out and doesn\'t.</string>
 
     <!-- v5 cash corrections (edit / delete a synced movement) -->
@@ -2262,6 +2279,10 @@
     <string name="bt_ptax_source_system">BetterTrack\'s default</string>
     <string name="bt_ptax_override_on">Use different rules here</string>
     <string name="bt_ptax_override_on_sub">Off means this portfolio follows your account default.</string>
+    <!-- Portfolio tax-defaults page, rebuilt 2026-08-07 (owner: "needs a better page"). -->
+    <string name="bt_ptax_account_default">Your account default</string>
+    <string name="bt_ptax_explain">Every portfolio follows your account default until you pin its own rules here. Changing the default moves every portfolio that is still following it.</string>
+    <string name="bt_ptax_source_badge_own">This portfolio\'s own rules</string>
     <string name="bt_ptax_reset">Use my default again</string>
     <string name="bt_ptax_reset_title">Use your default?</string>
     <string name="bt_ptax_reset_message">This portfolio will follow your account setting (%1$s). Open tax years are recalculated straight away.</string>

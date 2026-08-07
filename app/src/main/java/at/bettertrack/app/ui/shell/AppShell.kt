@@ -90,6 +90,10 @@ import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
 import at.bettertrack.app.navigation.owningTab
+import at.bettertrack.app.navigation.tabNeighbour
+import at.bettertrack.app.navigation.TabTap
+import at.bettertrack.app.navigation.tabTapAction
+import at.bettertrack.app.ui.portfolio.PortfolioTabEntry
 import at.bettertrack.app.navigation.PendingSyncRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
 import at.bettertrack.app.navigation.SearchRoute
@@ -196,8 +200,8 @@ private enum class TabBadge {
 }
 
 /**
- * Bottom-navigation tab metadata — Home · Portfolio · Workbench · Markets ·
- * People (R-arc mandate §2).
+ * Bottom-navigation tab metadata — Portfolio · Markets · Workbench · People
+ * (R-arc mandate §2; order per the owner's 2026-08-07 reshuffle, see [BtTab]).
  *
  * @param surface the §4.5 surface this tab is the entry point for — drives mode
  *   gating. Note the deliberate name mismatch on Workbench: its surface constant
@@ -223,10 +227,20 @@ private data class TabSpec(
     val badge: TabBadge = TabBadge.None,
 )
 
+/**
+ * The bar, in bar order — Portfolio · Markets · Workbench · People.
+ *
+ * This list's order MUST equal [BtTab]'s declaration order, and
+ * `TopBarNavigationTest.the shell's tab list is in BtTab declaration order` reads
+ * both files and fails if they drift. The enum is the contract (it is what the
+ * pure deep-link and swipe helpers reason about); this list is the same order
+ * wearing its labels and icons. Before 2026-08-07 the two were kept in sync only
+ * by a comment that claimed the shell read the enum — it never did.
+ */
 private val Tabs = listOf(
     TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
-    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
     TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
+    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
     TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
 )
 
@@ -291,6 +305,13 @@ fun BtApp() {
         currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
     }
     val isTopLevel = currentTab != null
+    // The tab whose route the current destination IS, as opposed to the tab it
+    // merely lives UNDER (`currentTab`, which matches through the hierarchy so a
+    // pushed detail keeps its tab lit). Only an exact match counts as a re-tap —
+    // see [tabTapAction].
+    val exactTab = Tabs.firstOrNull { tab ->
+        currentDestination?.hasRoute(tab.routeClass) == true
+    }?.tab
     // V5 W5: per-mode surface gating (plan §4.5). Read once here so the bars and
     // the routes below cannot disagree about what this install can do.
     val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
@@ -317,6 +338,21 @@ fun BtApp() {
                 launchSingleTop = true
                 restoreState = true
             }
+        }
+    }
+    // Swipe → tab hop. Returns whether a hop happened so the gesture layer can
+    // spring back at the ends of the bar instead of leaving the page displaced.
+    // It routes through the SAME [switchToTab] the bottom bar uses, which is what
+    // keeps saved state, restored back stacks and bar selection identical whether
+    // you tapped or swiped.
+    val onSwipeTab: (Boolean) -> Boolean = { forward ->
+        val here = currentTab?.tab
+        val next = here?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
+        if (next != null) {
+            switchToTab(next)
+            true
+        } else {
+            false
         }
     }
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
@@ -498,7 +534,18 @@ fun BtApp() {
                             TabBadge.Inbox -> showNotificationSurfaces && notifUnread > 0
                         }
                     },
-                    onSelect = { tab -> switchToTab(tab.tab) },
+                    // Owner directive 2026-08-07: tapping Portfolio while the
+                    // Portfolio tab IS the current screen opens the switcher
+                    // sheet instead of re-navigating to where you already are.
+                    // A swipe never reaches this path (it calls switchToTab
+                    // directly, and only when the neighbour differs), so a page
+                    // change can never be mistaken for a re-tap.
+                    onSelect = { tab ->
+                        when (tabTapAction(tab.tab, exactTab)) {
+                            TabTap.OpenPortfolioSwitcher -> PortfolioTabEntry.requestSwitcher()
+                            TabTap.Switch -> switchToTab(tab.tab)
+                        }
+                    },
                 )
             }
         },
@@ -529,6 +576,14 @@ fun BtApp() {
                 onToggleDiscreet = toggleDiscreet,
                 notifUnread = notifUnread,
                 showNotifications = showNotificationSurfaces,
+                // Owner ask 2026-08-07: swipe left/right between the four tabs.
+                // Only on a top-level page — a pushed screen keeps its whole
+                // horizontal axis for its own content. The neighbour is resolved
+                // against the VISIBLE bar, so a Drive-only install swipes
+                // Portfolio ↔ Markets and stops there rather than landing on a
+                // tab it does not render.
+                swipeEnabled = isTopLevel,
+                onSwipeTab = onSwipeTab,
             )
         }
         }
@@ -667,6 +722,9 @@ private fun BtNavHost(
     /** Inbox unread count, rendered on Overview's overflow entry. */
     notifUnread: Int,
     showNotifications: Boolean,
+    /** Top-level pages only — see [btTabSwipe]. */
+    swipeEnabled: Boolean,
+    onSwipeTab: (forward: Boolean) -> Boolean,
 ) {
     val back: () -> Unit = { navController.popBackStack() }
     // R3 §1 — the app's one screen-transition idiom. Read once, here, and
@@ -687,7 +745,12 @@ private fun BtNavHost(
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
-                ) -> BtNavMotion.lateralEnter()
+                ) -> BtNavMotion.lateralEnter(
+                    BtNavMotion.lateralForward(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                    ),
+                )
 
                 else -> BtNavMotion.forwardEnter()
             }
@@ -698,7 +761,12 @@ private fun BtNavHost(
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
-                ) -> BtNavMotion.lateralExit()
+                ) -> BtNavMotion.lateralExit(
+                    BtNavMotion.lateralForward(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                    ),
+                )
 
                 else -> BtNavMotion.forwardExit()
             }
@@ -709,7 +777,12 @@ private fun BtNavHost(
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
-                ) -> BtNavMotion.lateralEnter()
+                ) -> BtNavMotion.lateralEnter(
+                    BtNavMotion.lateralForward(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                    ),
+                )
 
                 else -> BtNavMotion.backEnter()
             }
@@ -720,7 +793,12 @@ private fun BtNavHost(
                 BtNavMotion.isLateral(
                     initialState.destination.route,
                     targetState.destination.route,
-                ) -> BtNavMotion.lateralExit()
+                ) -> BtNavMotion.lateralExit(
+                    BtNavMotion.lateralForward(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                    ),
+                )
 
                 else -> BtNavMotion.backExit()
             }
@@ -733,7 +811,9 @@ private fun BtNavHost(
         // the two `popUpTo(findStartDestination())` call sites — the deep-link
         // tab switch and the bottom-bar tap — can never pop to a hidden tab.
         startDestination = PortfolioTabRoute,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .btTabSwipe(enabled = swipeEnabled, onSwipe = onSwipeTab),
     ) {
         // Tabs
         composable<PortfolioTabRoute> {
@@ -840,7 +920,6 @@ private fun BtNavHost(
                 onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
                 onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
                 onOpenSettings = { navController.navigate(SettingsRoute) },
             )
         }

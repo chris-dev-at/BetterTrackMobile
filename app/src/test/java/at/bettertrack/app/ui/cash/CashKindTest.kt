@@ -74,4 +74,52 @@ class CashKindTest {
     fun `entry chooser offers exactly the hand-typed kinds`() {
         assertEquals(CashKind.entries.filter { it.handTyped }, CASH_ENTRY_KINDS)
     }
+
+    // ── Web parity: direction + holding-cost tick → kind (owner 2026-08-07) ────
+
+    @Test
+    fun `money in is always a deposit`() {
+        // The tick is not even shown for an inflow on either platform, but the
+        // rule must not depend on that: a stale `true` from a flipped direction
+        // may not turn a deposit into a fee.
+        assertEquals(CashKind.DEPOSIT, cashEntryKind(inflow = true, holdingCost = false))
+        assertEquals(CashKind.DEPOSIT, cashEntryKind(inflow = true, holdingCost = true))
+    }
+
+    @Test
+    fun `money out is a withdrawal until the holding-cost tick says otherwise`() {
+        assertEquals(CashKind.WITHDRAWAL, cashEntryKind(inflow = false, holdingCost = false))
+        assertEquals(CashKind.FEE, cashEntryKind(inflow = false, holdingCost = true))
+    }
+
+    @Test
+    fun `the rule matches the web's expression exactly`() {
+        // apps/web/src/user/portfolio/cashflow/RecordCashDialog.tsx:243
+        //   const kind = direction === 'in' ? 'deposit'
+        //     : countsToPerformance ? 'fee' : 'withdrawal';
+        // Same truth table, same wire tokens — that is the parity claim, so it is
+        // asserted against the tokens rather than against the enum names.
+        val table = listOf(
+            Triple(true, false, "deposit"),
+            Triple(true, true, "deposit"),
+            Triple(false, false, "withdrawal"),
+            Triple(false, true, "fee"),
+        )
+        table.forEach { (inflow, holdingCost, wire) ->
+            assertEquals(
+                "inflow=$inflow holdingCost=$holdingCost",
+                wire,
+                cashEntryKind(inflow, holdingCost).wire,
+            )
+        }
+    }
+
+    @Test
+    fun `every kind the rule can produce is one the entry chooser knows`() {
+        listOf(true, false).forEach { inflow ->
+            listOf(true, false).forEach { holdingCost ->
+                assertTrue(cashEntryKind(inflow, holdingCost) in CASH_ENTRY_KINDS)
+            }
+        }
+    }
 }

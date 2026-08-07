@@ -112,14 +112,96 @@ class DeepLinkTabsTest {
     }
 
     @Test
-    fun `the bar is four destinations, Portfolio first`() {
-        // Declaration order IS bar order, and the shell reads it rather than
-        // keeping a second list — so this is the only place the order lives.
+    fun `the bar is four destinations, Portfolio first, Workbench third`() {
+        // Declaration order IS bar order. The shell keeps a parallel list of UI
+        // specs (AppShell.Tabs) whose ORDER is pinned against this one by
+        // `TopBarNavigationTest.the shell's tab list is in BtTab declaration
+        // order` — before 2026-08-07 the two were held together only by a comment
+        // here that claimed the shell read the enum, which it never did.
+        //
         // Four, not five: the owner's verdict was that the bar had too many items.
+        // Workbench third, not second: owner order 2026-08-07 — holdings and the
+        // market are the two tabs reached for constantly, so they sit together.
         assertEquals(
-            listOf(BtTab.Portfolio, BtTab.Workbench, BtTab.Markets, BtTab.People),
+            listOf(BtTab.Portfolio, BtTab.Markets, BtTab.Workbench, BtTab.People),
             BtTab.entries.toList(),
         )
+    }
+
+    // ── Bottom-bar re-tap (owner directive 2026-08-07) ─────────────────────────
+
+    @Test
+    fun `re-tapping Portfolio while on Portfolio opens the switcher`() {
+        assertEquals(
+            TabTap.OpenPortfolioSwitcher,
+            tabTapAction(BtTab.Portfolio, exactTab = BtTab.Portfolio),
+        )
+    }
+
+    @Test
+    fun `tapping Portfolio from another tab just switches`() {
+        listOf(BtTab.Markets, BtTab.Workbench, BtTab.People).forEach { from ->
+            assertEquals(
+                "coming from $from",
+                TabTap.Switch,
+                tabTapAction(BtTab.Portfolio, exactTab = from),
+            )
+        }
+    }
+
+    @Test
+    fun `re-tapping Portfolio from a PUSHED screen switches rather than opening a sheet`() {
+        // `exactTab` is null while a holding detail (or any pushed screen) is
+        // showing. The tap means "take me back to the tab" — putting a sheet on
+        // top of the screen the user is leaving would be the opposite.
+        assertEquals(TabTap.Switch, tabTapAction(BtTab.Portfolio, exactTab = null))
+    }
+
+    @Test
+    fun `no other tab gains a re-tap behaviour`() {
+        // One gesture, one meaning, everywhere except the one place the owner
+        // asked for an exception.
+        listOf(BtTab.Markets, BtTab.Workbench, BtTab.People).forEach { tab ->
+            assertEquals("re-tap on $tab", TabTap.Switch, tabTapAction(tab, exactTab = tab))
+        }
+    }
+
+    // ── Swipe neighbours (owner ask 2026-08-07) ────────────────────────────────
+
+    @Test
+    fun `swiping forward walks the bar left to right`() {
+        // "forward" is the finger travelling LEFT, which reveals the tab to the
+        // right — the owner's "portfolio swipe left goes to assets".
+        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Portfolio, forward = true))
+        assertEquals(BtTab.Workbench, tabNeighbour(BtTab.Markets, forward = true))
+        assertEquals(BtTab.People, tabNeighbour(BtTab.Workbench, forward = true))
+    }
+
+    @Test
+    fun `swiping back walks the bar right to left`() {
+        assertEquals(BtTab.Workbench, tabNeighbour(BtTab.People, forward = false))
+        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Workbench, forward = false))
+        assertEquals(BtTab.Portfolio, tabNeighbour(BtTab.Markets, forward = false))
+    }
+
+    @Test
+    fun `the bar does not wrap around at either end`() {
+        // Wrapping would make the bar a carousel, which contradicts a bottom bar
+        // whose selection is a position rather than a cycle.
+        assertNull(tabNeighbour(BtTab.Portfolio, forward = false))
+        assertNull(tabNeighbour(BtTab.People, forward = true))
+    }
+
+    @Test
+    fun `neighbours are resolved against the VISIBLE bar, not the full enum`() {
+        // A Drive-only install renders Portfolio + Markets only. Swiping off the
+        // end of THAT bar must stop, not land on a tab with no button.
+        val driveBar = listOf(BtTab.Portfolio, BtTab.Markets)
+        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Portfolio, forward = true, visible = driveBar))
+        assertNull(tabNeighbour(BtTab.Markets, forward = true, visible = driveBar))
+        // A tab that is not in the visible bar has no neighbours at all.
+        assertNull(tabNeighbour(BtTab.Workbench, forward = true, visible = driveBar))
+        assertNull(tabNeighbour(BtTab.Workbench, forward = false, visible = driveBar))
     }
 
     @Test

@@ -65,3 +65,36 @@ fun isEditableCashKind(wire: String): Boolean = CashKind.fromWire(wire)?.handTyp
  * Transfers are a separate two-sided flow and are deliberately not in this list.
  */
 val CASH_ENTRY_KINDS: List<CashKind> = listOf(CashKind.DEPOSIT, CashKind.WITHDRAWAL, CashKind.FEE)
+
+/**
+ * Which kind a cash entry is, from the two things the form actually asks.
+ *
+ * ## Web parity (owner, 2026-08-07)
+ *
+ * The owner's report: *"I specifically made the fee different in the web app —
+ * there's a tick to subtract from performance or not; changing things up on the
+ * phone is weird."* He is right about the drift. The web's current cash form
+ * (`apps/web/src/user/portfolio/cashflow/RecordCashDialog.tsx`) asks TWO
+ * questions — a Money-in/Money-out direction, and, only when the answer is out, a
+ * "Holding cost" checkbox — and derives the kind from them:
+ *
+ * ```ts
+ * const kind = direction === 'in' ? 'deposit' : countsToPerformance ? 'fee' : 'withdrawal';
+ * ```
+ *
+ * This function is that line. The app used to ask instead by offering three
+ * buttons — Deposit, Withdraw and a separate Fee — which made fee-ness a
+ * different KIND of choice on each platform: a destination on the phone, a
+ * property of an outflow on the web. The property is the truer model, because
+ * "was that money spent on investing, or just spent?" is a question you answer
+ * *about* a withdrawal you are already recording.
+ *
+ * The wire is unchanged and identical on both platforms: the create call carries
+ * no kind at all, it is chosen by ENDPOINT (`/cash/deposit`, `/cash/withdraw`,
+ * `/cash/fee`), and only a later PATCH names `kind` explicitly.
+ */
+fun cashEntryKind(inflow: Boolean, holdingCost: Boolean): CashKind = when {
+    inflow -> CashKind.DEPOSIT
+    holdingCost -> CashKind.FEE
+    else -> CashKind.WITHDRAWAL
+}

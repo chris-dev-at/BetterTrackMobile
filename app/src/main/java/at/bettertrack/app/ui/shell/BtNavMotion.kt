@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.PeopleTabRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
@@ -35,13 +36,23 @@ import at.bettertrack.app.navigation.WorkbenchTabRoute
  *
  * ## The two idioms, and the rule that picks between them
  *
- * **Lateral — fade-through** ([lateralEnter] / [lateralExit]). The five tabs are
- * peers: there is no "right" or "left" between Home and People, so a directional
- * slide would assert an order the bottom bar does not have and the user would
- * see it contradict itself the moment they hop backwards. MD3's fade-through is
- * the canonical answer: the outgoing screen leaves on its own (90ms), the
- * incoming one arrives into the emptied space (210ms) with a slight scale-up so
- * the arrival has a direction *in depth* instead of in space.
+ * **Lateral — a directional slide** ([lateralEnter] / [lateralExit]).
+ *
+ * This used to be MD3's fade-through, on the reasoning that peer tabs have no
+ * "left" or "right" so a slide would assert an order the bar does not have. The
+ * owner's 2026-08-07 swipe ask retired that premise: the bar DOES have an order
+ * now, the user's own finger states which way they are travelling, and a
+ * fade-through in answer to a swipe reads as the gesture not having registered.
+ * So a tab hop now travels — incoming from the side you swiped from, outgoing
+ * leaving the other way at [SLIDE_PARALLAX_DIVISOR] speed, in the same 90/210
+ * rhythm as everything else.
+ *
+ * It stays a *shallower* slide than the hierarchical idiom (a fraction of the
+ * width, not the full width) so the two remain distinguishable: a tab hop is a
+ * neighbour sliding over, a push is a new screen arriving from off-stage. A
+ * bottom-bar tap that skips a tab (Portfolio → People) gets the same motion as
+ * the swipe would; the direction is read from the tab ORDER, not from the
+ * gesture, so tapping and swiping are never inconsistent with each other.
  *
  * **Hierarchical — shared-axis X** ([forwardEnter] / [forwardExit] and their
  * [backEnter] / [backExit] mirrors). Pushing Portfolio → Holding detail *does*
@@ -140,6 +151,29 @@ object BtNavMotion {
     ).mapNotNull { it.qualifiedName }.toSet()
 
     /**
+     * The same four keys IN BAR ORDER, derived from [BtTab] so the motion's idea
+     * of "which way is forward" is the bar's own order by construction — reorder
+     * the enum and the slide direction follows, with nothing here to update.
+     */
+    val TAB_ROUTE_ORDER: List<String> =
+        BtTab.entries.mapNotNull { it.route::class.qualifiedName }
+
+    /**
+     * Which way a tab hop travels: `true` when the target sits to the RIGHT of the
+     * origin in the bar, `false` to the left, `null` when this is not a tab hop.
+     *
+     * Matches the swipe's sense — swiping the finger left ([TabSwipe.Forward])
+     * moves to the right-hand neighbour, and the incoming page therefore enters
+     * from the right.
+     */
+    fun lateralForward(fromRoute: String?, toRoute: String?): Boolean? {
+        val from = TAB_ROUTE_ORDER.indexOf(routeKey(fromRoute) ?: return null)
+        val to = TAB_ROUTE_ORDER.indexOf(routeKey(toRoute) ?: return null)
+        if (from < 0 || to < 0 || from == to) return null
+        return to > from
+    }
+
+    /**
      * The stable identity of a destination's route, with its arguments stripped.
      *
      * `NavDestination.route` for a typed route is the destination class's
@@ -165,26 +199,59 @@ object BtNavMotion {
         return from in TAB_ROUTE_KEYS && to in TAB_ROUTE_KEYS
     }
 
-    // ── Lateral (tab ↔ tab): MD3 fade-through ───────────────────────────────
+    // ── Lateral (tab ↔ tab): a shallow directional slide ────────────────────
 
-    fun lateralEnter(): EnterTransition =
-        fadeIn(
+    /**
+     * How much of the width a laterally-arriving tab travels. A quarter reads as
+     * "the neighbour slid over" where the hierarchical idiom's full width reads
+     * as "a new screen arrived" — the distinction the two idioms exist to make.
+     */
+    private const val LATERAL_TRAVEL_FRACTION = 4
+
+    /**
+     * @param forward the target sits to the right of the origin in the bar (see
+     *   [lateralForward]); `null` when the direction is unknown, which falls back
+     *   to the old fade-through rather than guessing a side.
+     */
+    fun lateralEnter(forward: Boolean? = null): EnterTransition {
+        val fade = fadeIn(
             animationSpec = tween(
                 durationMillis = DURATION_ENTER_MS,
-                delayMillis = DURATION_EXIT_MS,
-                easing = LinearOutSlowInEasing,
-            ),
-        ) + scaleIn(
-            initialScale = LATERAL_INITIAL_SCALE,
-            animationSpec = tween(
-                durationMillis = DURATION_ENTER_MS,
-                delayMillis = DURATION_EXIT_MS,
                 easing = LinearOutSlowInEasing,
             ),
         )
+        if (forward == null) {
+            return fade + scaleIn(
+                initialScale = LATERAL_INITIAL_SCALE,
+                animationSpec = tween(
+                    durationMillis = DURATION_ENTER_MS,
+                    delayMillis = DURATION_EXIT_MS,
+                    easing = LinearOutSlowInEasing,
+                ),
+            )
+        }
+        return fade + slideInHorizontally(
+            animationSpec = tween(DURATION_TOTAL_MS, easing = FastOutSlowInEasing),
+            initialOffsetX = { width ->
+                val travel = width / LATERAL_TRAVEL_FRACTION
+                if (forward) travel else -travel
+            },
+        )
+    }
 
-    fun lateralExit(): ExitTransition =
-        fadeOut(animationSpec = tween(DURATION_EXIT_MS, easing = FastOutLinearInEasing))
+    fun lateralExit(forward: Boolean? = null): ExitTransition {
+        val fade = fadeOut(animationSpec = tween(DURATION_EXIT_MS, easing = FastOutLinearInEasing))
+        if (forward == null) return fade
+        return fade + slideOutHorizontally(
+            animationSpec = tween(DURATION_TOTAL_MS, easing = FastOutSlowInEasing),
+            targetOffsetX = { width ->
+                // The outgoing tab travels the SHORTER distance, same parallax
+                // rule the hierarchical idiom uses.
+                val travel = width / (LATERAL_TRAVEL_FRACTION * 2)
+                if (forward) -travel else travel
+            },
+        )
+    }
 
     // ── Hierarchical (push / pop): MD3 shared-axis X ────────────────────────
 

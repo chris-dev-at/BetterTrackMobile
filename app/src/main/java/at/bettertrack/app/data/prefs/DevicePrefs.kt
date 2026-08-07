@@ -2,12 +2,46 @@ package at.bettertrack.app.data.prefs
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Pure orientation decision (Android-free, unit-tested); mapped to an ActivityInfo constant in the Activity. */
 enum class ScreenOrientationMode { LOCKED_PORTRAIT, FOLLOW_SENSOR }
+
+/**
+ * What the portfolio hero chart draws, and what its scrub reports.
+ *
+ * The server ships both series aligned in one `/history` payload (`points` in €,
+ * `performance` in %), so all three modes are a client-side choice over data the
+ * app already has — switching never refetches.
+ *
+ * - [BALANCE] — the € curve with a € readout. The original chart.
+ * - [PERFORMANCE] — the % curve with a % readout. What the web calls
+ *   "Performance %": deposits and withdrawals are neutralised server-side, so the
+ *   curve only moves when the holdings move.
+ * - [HYBRID] — the owner's ask (2026-08-07): the % curve's SHAPE, because that is
+ *   the shape that says how the investments actually did, with the € balance as
+ *   the readout, because that is the number you want when you point at a day.
+ */
+enum class BtChartMode {
+    BALANCE,
+    PERFORMANCE,
+    HYBRID,
+    ;
+
+    /** True when this mode plots the performance-% series rather than the € one. */
+    val plotsPerformance: Boolean get() = this != BALANCE
+}
+
+/**
+ * Decode a stored [BtChartMode] name, falling back to [BtChartMode.BALANCE] for
+ * anything unrecognised (absent, or written by a build that knew a mode this one
+ * does not). Pure, so the fallback is unit-tested rather than assumed.
+ */
+fun chartModeFromName(raw: String?): BtChartMode =
+    BtChartMode.entries.firstOrNull { it.name == raw } ?: BtChartMode.BALANCE
 
 fun orientationModeFor(locked: Boolean): ScreenOrientationMode =
     if (locked) ScreenOrientationMode.LOCKED_PORTRAIT else ScreenOrientationMode.FOLLOW_SENSOR
@@ -38,7 +72,7 @@ class DevicePrefs(context: Context) {
     fun orientationLockedNow(): Boolean = _orientationLocked.value
 
     fun setOrientationLocked(locked: Boolean) {
-        prefs.edit().putBoolean(KEY_ORIENTATION_LOCKED, locked).apply()
+        prefs.edit { putBoolean(KEY_ORIENTATION_LOCKED, locked) }
         _orientationLocked.value = locked
     }
 
@@ -78,8 +112,29 @@ class DevicePrefs(context: Context) {
 
     fun setOverviewSelected(selected: Boolean) {
         if (_overviewSelected.value == selected) return
-        prefs.edit().putBoolean(KEY_OVERVIEW_SELECTED, selected).apply()
+        prefs.edit { putBoolean(KEY_OVERVIEW_SELECTED, selected) }
         _overviewSelected.value = selected
+    }
+
+    // ── What the portfolio hero chart plots (owner ask 2026-08-07) ───────────
+
+    private val _chartMode = MutableStateFlow(chartModeFromName(prefs.getString(KEY_CHART_MODE, null)))
+
+    /**
+     * Which curve/readout pairing the hero chart uses — see [BtChartMode].
+     *
+     * Device-scoped for the same reason the two flags above are: it is a view
+     * preference, it says nothing about the account, and the friendlier behaviour
+     * is for the phone to reopen on the view it was left on. Stored by enum NAME
+     * rather than ordinal so reordering the enum can never silently reinterpret a
+     * saved preference as a different mode.
+     */
+    val chartMode: StateFlow<BtChartMode> = _chartMode.asStateFlow()
+
+    fun setChartMode(mode: BtChartMode) {
+        if (_chartMode.value == mode) return
+        prefs.edit { putString(KEY_CHART_MODE, mode.name) }
+        _chartMode.value = mode
     }
 
     private companion object {
@@ -88,5 +143,6 @@ class DevicePrefs(context: Context) {
         const val DEFAULT_ORIENTATION_LOCKED = true
         const val KEY_OVERVIEW_SELECTED = "overview_selected"
         const val DEFAULT_OVERVIEW_SELECTED = true
+        const val KEY_CHART_MODE = "chart_mode"
     }
 }

@@ -49,6 +49,17 @@ import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSnackbarEffect
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import at.bettertrack.app.ui.components.BtBadge
+import at.bettertrack.app.ui.components.BtBadgeKind
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -217,6 +228,62 @@ internal class PortfolioTaxViewModel(
  * bar action is two hundred pixels and a scroll away from anything the content
  * can say about it.
  */
+/**
+ * "What is in force on this portfolio", as one confident statement.
+ *
+ * The mode is the answer to the page's question, so it is the type hero; the
+ * country is the qualifier that makes the mode mean something; and the source is
+ * a badge because it describes the STATE of the answer (inherited vs pinned)
+ * rather than adding another value to read. Gold-tinted only when the portfolio
+ * pins its own rules, which is the case worth noticing — an inherited default is
+ * the normal state and should look calm.
+ */
+@Composable
+private fun EffectiveTaxCard(
+    modeLabel: String,
+    countryLabel: String?,
+    sourceLabel: String,
+    pinnedHere: Boolean,
+) {
+    val bt = BtTheme.colors
+    Surface(
+        shape = BtShapes.card,
+        color = if (pinnedHere) bt.gold.copy(alpha = 0.08f) else bt.surface,
+        border = BorderStroke(1.dp, if (pinnedHere) bt.gold.copy(alpha = 0.35f) else bt.border),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Percent,
+                    contentDescription = null,
+                    tint = if (pinnedHere) bt.goldEmphasis else bt.textSecondary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = modeLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = bt.textPrimary,
+                    )
+                    if (countryLabel != null) {
+                        Text(
+                            text = countryLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = bt.textSecondary,
+                        )
+                    }
+                }
+            }
+            BtBadge(
+                text = sourceLabel,
+                kind = if (pinnedHere) BtBadgeKind.Gold else BtBadgeKind.Neutral,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
@@ -286,29 +353,37 @@ fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     // ── What applies here, and whose it is ────────────────────
+                    //
+                    // A statement card rather than the settings-row it used to
+                    // be (owner 2026-08-07: this page "needs a better page").
+                    // The mode is the answer, so it is the biggest thing on the
+                    // screen; the country qualifies it; the source is a badge
+                    // because "whose rules are these" is a STATE, not a value.
                     BtSectionHeader(stringResource(R.string.bt_ptax_effective))
-                    BtGroup {
-                        BtGroupRow(
-                            icon = Icons.Outlined.Percent,
-                            title = stringResource(taxModeLabelRes(s.settings.effective.mode)),
-                            subtitle = stringResource(taxSourceLabelRes(s.settings.source)),
-                        )
-                        taxCountryLabelRes(s.settings.effective.country)?.let { country ->
-                            BtGroupRow(
-                                title = stringResource(R.string.bt_tax_country),
-                                trailing = {
-                                    Text(
-                                        text = stringResource(country),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = bt.textSecondary,
-                                    )
-                                },
-                            )
-                        }
-                    }
+                    EffectiveTaxCard(
+                        modeLabel = stringResource(taxModeLabelRes(s.settings.effective.mode)),
+                        countryLabel = taxCountryLabelRes(s.settings.effective.country)
+                            ?.let { stringResource(it) },
+                        sourceLabel = if (s.settings.isOverridden) {
+                            stringResource(R.string.bt_ptax_source_badge_own)
+                        } else {
+                            stringResource(taxSourceLabelRes(s.settings.source))
+                        },
+                        pinnedHere = s.settings.isOverridden,
+                    )
 
                     // ── Inherit, or pin your own ──────────────────────────────
+                    BtSectionHeader(stringResource(R.string.bt_ptax_account_default))
                     BtGroup {
+                        // The account default, stated whether or not it is in
+                        // force. It used to appear ONLY once you had already
+                        // overridden — i.e. the page hid the very thing it is a
+                        // page about until you had stopped using it.
+                        BtGroupRow(
+                            icon = Icons.Outlined.AccountTree,
+                            title = stringResource(taxModeLabelRes(s.settings.userDefault.mode)),
+                            subtitle = stringResource(R.string.bt_ptax_account_default),
+                        )
                         TaxSwitchRow(
                             title = stringResource(R.string.bt_ptax_override_on),
                             subtitle = stringResource(R.string.bt_ptax_override_on_sub),
@@ -325,6 +400,13 @@ fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
                                 }
                             },
                         )
+                    }
+                    // How the cascade works, said once, where the switch that
+                    // uses it is. This page had a screen and a half of empty
+                    // space under a lone toggle; the space is better spent
+                    // explaining the one model the page exists to expose.
+                    if (!s.overrideOn) {
+                        TaxFootnote(stringResource(R.string.bt_ptax_explain))
                     }
 
                     if (s.overrideOn) {
@@ -371,6 +453,9 @@ fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
                                 ),
                                 onClick = onReset,
                             )
+                            // Losing an override reconciles open years on the
+                            // spot, exactly as pinning one does — so the warning
+                            // belongs on both, not only on Save.
                         }
                         // A reset that failed has no other place to be reported:
                         // the editor above may not even be on screen.

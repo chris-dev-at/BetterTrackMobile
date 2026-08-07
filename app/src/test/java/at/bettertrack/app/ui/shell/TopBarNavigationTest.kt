@@ -277,6 +277,50 @@ class TopBarNavigationTest {
      * the other lacks, the gear's address stops being universal — which is the
      * exact failure the whole navigation restoration was undoing.
      */
+    /**
+     * The shell's bottom-bar list is in [at.bettertrack.app.navigation.BtTab]
+     * declaration order.
+     *
+     * `AppShell.Tabs` is a SECOND list of the same four tabs, carrying their
+     * labels and icons. Its order is what the user sees; the enum's order is what
+     * every pure helper reasons about (deep-link owning tabs, swipe neighbours,
+     * lateral slide direction). Until 2026-08-07 nothing checked that the two
+     * agreed — `DeepLinkTabsTest` even carried a comment asserting the shell read
+     * the enum, which it never did, so reordering the enum alone would have left
+     * the bar unchanged with every test green.
+     *
+     * Read from source rather than by importing `Tabs`, which is private: making
+     * it internal purely to be testable would widen the shell's API for the sake
+     * of the test, and the file is the unit a regression actually arrives in.
+     */
+    @Test
+    fun `the shell's tab list is in BtTab declaration order`() {
+        val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
+        val tabsBlock = shell.substringAfter("private val Tabs = listOf(").substringBefore("\n)")
+        val shellOrder = Regex("""TabSpec\(BtTab\.(\w+)""").findAll(tabsBlock).map { it.groupValues[1] }.toList()
+
+        val navRoots = listOf(
+            File("src/main/java/at/bettertrack/app/navigation/DeepLinkTabs.kt"),
+            File("app/src/main/java/at/bettertrack/app/navigation/DeepLinkTabs.kt"),
+        )
+        val enumFile = navRoots.firstOrNull { it.isFile }
+            ?: error("DeepLinkTabs.kt not found; tried ${navRoots.map { it.absolutePath }}")
+        val enumBlock = enumFile.readText()
+            .substringAfter("enum class BtTab(val route: Any) {")
+            .substringBefore("}")
+        val enumOrder = Regex("""^\s*(\w+)\(""", RegexOption.MULTILINE)
+            .findAll(enumBlock).map { it.groupValues[1] }.toList()
+
+        assertEquals(
+            "AppShell.Tabs is not in BtTab declaration order. Both lists are the " +
+                "bar; the enum is the contract every pure nav helper reads. " +
+                "Reorder BOTH or neither.",
+            enumOrder,
+            shellOrder,
+        )
+        assertEquals("expected exactly four tabs in the shell list", 4, shellOrder.size)
+    }
+
     @Test
     fun `both header variants render the same slots`() {
         val header = uiSources().first { it.name == "BtCollapsingHeader.kt" }.readText()

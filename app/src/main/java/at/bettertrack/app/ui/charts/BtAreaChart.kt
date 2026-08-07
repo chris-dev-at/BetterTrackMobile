@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,9 +18,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextMeasurer
@@ -46,6 +47,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * The BetterTrack area chart (spec §3.6) — hand-rolled Compose Canvas in the
@@ -53,13 +55,49 @@ import kotlin.math.min
  * fading to transparent, three recessive gridlines, muted axis labels.
  *
  * The values plotted are ALWAYS server output (§7.1) — this file only maps
- * them to pixels. Range switches morph smoothly between the old and the new
- * series (both resampled onto a common x-grid and lerped in normalized-y
- * space); under reduced motion the new series just appears (§3.7).
+ * them to pixels.
  *
- * Touch: a horizontal drag scrubs the series — a thin guide + dot mark the
- * nearest point and [onScrub] reports it so the parent can show value + date
- * (horizontal-only gesture detection keeps the page's vertical scroll alive).
+ * ## x is laid out by INDEX, not by time (2026-08-07, owner "it feels choppy")
+ *
+ * Points used to be placed proportionally to `epochMillis`. That is the honest
+ * mapping for a time axis, and it is why scrubbing felt broken: the server's
+ * series is not evenly sampled — recent ranges come back dense and sub-daily,
+ * older stretches daily, and a market close is a hole — so adjacent points could
+ * be 2px apart in one stretch and 300px apart in the next. Dragging a finger at
+ * constant speed therefore moved the crosshair in wildly uneven lurches, which
+ * is exactly the owner's *"if I select stuff it jumps big time"*.
+ *
+ * The web app does not have this problem, and reading why settled the fix: its
+ * chart is TradingView `lightweight-charts`, whose time scale is **ordinal** —
+ * `barSpacing = width / n` and point *i* sits at index *i*, so every point owns
+ * an equal-width slice of the canvas and the crosshair advances in uniform
+ * steps. That is the "properly displays and feels great" the owner compared us
+ * against, so the app now lays out the same way. The visible consequence is the
+ * one TradingView users already expect: a weekend or an overnight close is one
+ * step wide like any other, not a wide diagonal ramp.
+ *
+ * ## The readout SNAPS to a real point, and that is deliberate
+ *
+ * The crosshair, the dot and the reported value are all a genuine
+ * [HistoryPoint] — never a value interpolated between two of them. Web does the
+ * same (lightweight-charts' default `CrosshairMode.Magnet` locks the readout onto
+ * the series value at the snapped index), and for this app it is also a §7.1
+ * requirement: an interpolated balance is a number the server never computed, and
+ * this app does not invent money. Uniform spacing is what makes snapping feel
+ * smooth; interpolation would have made it feel smooth by lying.
+ *
+ * ## Scrubbing does not recompose per frame any more
+ *
+ * The scrub callback used to fire from inside the `DrawScope`, on every frame of
+ * every drag. It now fires from the gesture handler, and only when the snapped
+ * INDEX actually changes — so a drag across one point's cell costs zero
+ * recompositions instead of one per frame.
+ *
+ * Touch: a horizontal drag scrubs the series (horizontal-only detection keeps the
+ * page's vertical scroll alive, and consuming the drag is what makes scrubbing
+ * beat the shell's tab swipe on the chart area — see `btTabSwipe`). Web enters
+ * scrub on a 240ms long-press instead, because a browser cannot let a child claim
+ * a drag from the page; Compose can, so the app keeps the cheaper gesture.
  */
 @Composable
 fun BtAreaChart(
@@ -72,6 +110,14 @@ fun BtAreaChart(
      * The scrub readout + the surrounding UI carry the exact numbers instead.
      */
     minimal: Boolean = false,
+    /**
+     * Zero-baseline mode for a performance-% series: the curve is emerald where
+     * it is above zero and red where it is below, with the fill mirrored about
+     * the zero line. Matches the web's `BaselineSeries` treatment of the same
+     * series, and stays inside the brand rule that emerald/red mean money
+     * direction — which is precisely what the sign of a return is.
+     */
+    baseline: Boolean = false,
     onScrub: ((HistoryPoint?) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
@@ -96,8 +142,12 @@ fun BtAreaChart(
     }
 
     // ── Scrub state ─────────────────────────────────────────────────────────
-    var scrubX by remember { mutableStateOf<Float?>(null) }
+    // The INDEX, not the point: it is what the gesture computes, what the draw
+    // needs, and comparing it is how a drag inside one point's cell avoids
+    // recomposing at all.
+    var scrubIndex by remember { mutableStateOf<Int?>(null) }
     val onScrubState = rememberUpdatedState(onScrub)
+    LaunchedEffect(currentPoints) { scrubIndex = null }
 
     val labelStyle = TextStyle(
         fontSize = 10.sp,
@@ -106,26 +156,44 @@ fun BtAreaChart(
         fontFeatureSettings = FONT_FEATURE_TABULAR,
     )
 
-    Canvas(
+    // The y-scale is an O(n) pass over the series, so it is computed ONCE per
+    // series rather than per frame — the crosshair layer needs it too.
+    val scale = remember(currentPoints, baseline) { yScale(currentPoints, zeroAnchored = baseline) }
+
+    Box(
         modifier = modifier.pointerInput(currentPoints) {
             if (onScrub == null || currentPoints.size < 2) return@pointerInput
+            val report: (Float) -> Unit = { x ->
+                val i = scrubIndexAt(x, size.width.toFloat(), currentPoints.size)
+                if (i != scrubIndex) {
+                    scrubIndex = i
+                    onScrubState.value?.invoke(currentPoints[i])
+                }
+            }
+            val clear: () -> Unit = {
+                scrubIndex = null
+                onScrubState.value?.invoke(null)
+            }
             detectHorizontalDragGestures(
-                onDragStart = { offset -> scrubX = offset.x },
-                onDragEnd = {
-                    scrubX = null
-                    onScrubState.value?.invoke(null)
-                },
-                onDragCancel = {
-                    scrubX = null
-                    onScrubState.value?.invoke(null)
-                },
+                onDragStart = { offset -> report(offset.x) },
+                onDragEnd = clear,
+                onDragCancel = clear,
                 onHorizontalDrag = { change, _ ->
+                    // Consuming is load-bearing twice over: it keeps the parent
+                    // LazyColumn from stealing the drag, and it makes the shell's
+                    // tab swipe stand down over the chart.
                     change.consume()
-                    scrubX = change.position.x
+                    report(change.position.x)
                 },
             )
         },
     ) {
+    // ── Layer 1: the series. Reads NO scrub state, so moving the crosshair
+    // never re-rasterises the path, the gradients or the axis text. This is the
+    // single biggest reason scrubbing used to feel heavy, and it is what the web
+    // gets for free — lightweight-charts paints its crosshair on a separate top
+    // canvas for exactly this reason.
+    Canvas(modifier = Modifier.matchParentSize()) {
         val series = currentPoints
         if (series.size < 2) return@Canvas
 
@@ -136,7 +204,6 @@ fun BtAreaChart(
         val plotH = size.height - xLabelStrip
         val plotW = size.width
 
-        val scale = yScale(series)
         val morphing = progress.value < 1f && previousPoints.size >= 2
 
         // ── Gridlines + y labels (min / mid / max of the padded scale) ──────
@@ -155,7 +222,7 @@ fun BtAreaChart(
                     strokeWidth = 1.dp.toPx(),
                 )
                 val value = scale.min + (scale.max - scale.min) * f
-                val text = axisMoney(value, locale, compactAxis)
+                val text = if (baseline) axisPercent(value, locale) else axisMoney(value, locale, compactAxis)
                 val measured = textMeasurer.measure(text, labelStyle)
                 // Right-aligned, floated just above its gridline, inset 4dp.
                 drawText(
@@ -171,41 +238,87 @@ fun BtAreaChart(
         }
 
         // ── The series: line + gradient fill (morphed while transitioning) ──
-        val fillBrush = Brush.verticalGradient(
-            colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
-            startY = 0f,
-            endY = plotH,
-        )
+        val upColor = if (baseline) bt.gain else lineColor
+        val downColor = if (baseline) bt.loss else lineColor
+        val zeroY = if (baseline) plotH * (1f - scale.normalize(0.0)) else plotH
+
         val lineStroke = Stroke(
             width = 2.dp.toPx(),
             cap = StrokeCap.Round,
             join = StrokeJoin.Round,
         )
-        val drawSegment: (Path) -> Unit = { linePath ->
+
+        // Baseline mode splits its colours at the zero line using a gradient with
+        // a DOUBLED colour stop at the zero ratio, which is exactly how the web's
+        // BaselineSeries does it:
+        //
+        //   gradient.addColorStop(baselineRatio, topColor2);
+        //   gradient.addColorStop(baselineRatio, bottomColor1);
+        //
+        // Two stops at the same offset make the transition a hard edge rather
+        // than a blend. Doing it this way instead of drawing the geometry twice
+        // under complementary clips is also what makes the mode affordable to
+        // scrub: it halves the path rasterisations per frame, and on the device
+        // the clipped version measured 19ms/88% janky against 14ms/27% for the
+        // single-pass € chart.
+        val zeroRatio = (zeroY / plotH).coerceIn(0f, 1f)
+        val lineBrush: Brush = if (!baseline) {
+            SolidColor(lineColor)
+        } else {
+            Brush.verticalGradient(
+                0f to upColor,
+                zeroRatio to upColor,
+                zeroRatio to downColor,
+                1f to downColor,
+                startY = 0f,
+                endY = plotH,
+            )
+        }
+        val fillBrush: Brush = if (!baseline) {
+            Brush.verticalGradient(
+                colors = listOf(lineColor.copy(alpha = 0.24f), lineColor.copy(alpha = 0f)),
+                startY = 0f,
+                endY = plotH,
+            )
+        } else {
+            // Mirrored about zero: strongest at the top for gains, strongest at
+            // the bottom for losses, faint where they meet.
+            Brush.verticalGradient(
+                0f to upColor.copy(alpha = 0.24f),
+                zeroRatio to upColor.copy(alpha = 0.02f),
+                zeroRatio to downColor.copy(alpha = 0.02f),
+                1f to downColor.copy(alpha = 0.24f),
+                startY = 0f,
+                endY = plotH,
+            )
+        }
+
+        /** Paint one connected run: its fill, then its stroke. */
+        fun drawSegment(linePath: Path) {
             val bounds = linePath.getBounds()
             val fillPath = Path()
             fillPath.addPath(linePath)
             // Close each segment against the baseline UNDER ITSELF — a shared
             // full-width close would paint the gradient straight across a gap.
-            fillPath.lineTo(bounds.right, plotH)
-            fillPath.lineTo(bounds.left, plotH)
+            fillPath.lineTo(bounds.right, zeroY)
+            fillPath.lineTo(bounds.left, zeroY)
             fillPath.close()
             drawPath(path = fillPath, brush = fillBrush)
-            drawPath(path = linePath, color = lineColor, style = lineStroke)
+            drawPath(path = linePath, brush = lineBrush, style = lineStroke)
         }
 
         if (morphing) {
             // Range transition (≤320 ms): both series are resampled onto one
-            // x-grid and lerped, so the morph is deliberately drawn as a single
-            // continuous stroke — it is an animation BETWEEN two truths, not a
-            // claim about the data. The settled frame below is segmented.
+            // index grid and lerped, so the morph is deliberately drawn as a
+            // single continuous stroke — it is an animation BETWEEN two truths,
+            // not a claim about the data. The settled frame below is segmented.
             val linePath = Path()
-            val oldScale = yScale(previousPoints)
+            val oldScale = yScale(previousPoints, zeroAnchored = baseline)
             val samples = 120
             for (i in 0..samples) {
                 val frac = i / samples.toFloat()
-                val oldY = normalizedValueAt(previousPoints, frac, oldScale)
-                val newY = normalizedValueAt(series, frac, scale)
+                val oldY = normalizedAtFraction(previousPoints, frac, oldScale)
+                val newY = normalizedAtFraction(series, frac, scale)
                 val yNorm = oldY + (newY - oldY) * progress.value
                 val x = plotW * frac
                 val y = plotH * (1f - yNorm)
@@ -213,34 +326,32 @@ fun BtAreaChart(
             }
             drawSegment(linePath)
         } else {
-            // V5: x is keyed on epoch MILLIS, not epoch days — 1D/1W/1M come back
-            // as dense sub-daily curves and a day-key would collapse every point
-            // of a day onto one coordinate (a vertical picket fence). Span math
-            // stays in Double: a MAX range is ~7e11 ms, well past Float precision.
-            val tMin = series.first().epochMillis
-            val tMax = series.last().epochMillis
-            val tSpan = max(1L, tMax - tMin).toDouble()
-            fun px(p: HistoryPoint) = (plotW * ((p.epochMillis - tMin) / tSpan)).toFloat()
+            fun px(i: Int) = seriesX(i, plotW, series.size)
             fun py(p: HistoryPoint) = plotH * (1f - scale.normalize(p.valueEur))
 
             // The chart draws every connected run [chartSegments] hands it.
             //
             // OWNER OVERRIDE 2026-08-06: that is now always exactly ONE run over
-            // the whole series. S6 P0-3 used to break the line wherever the gap
-            // between observations exceeded a derived threshold, so that a market
-            // close read as a gap rather than as a diagonal ramp; the owner
-            // reviewed it on the device and asked for a continuous line instead,
-            // accepting the ramp. The decision and its reasoning live on
-            // [chartSegments], which is where the tests pin it — this loop simply
-            // draws what it is given, and would still draw several runs correctly
-            // if the call were ever reversed.
+            // the whole series. The loop simply draws what it is given, and would
+            // still draw several runs correctly if the call were ever reversed.
             chartSegments(series.map { it.epochMillis }).forEach { range ->
                 val linePath = Path()
                 for (i in range) {
                     val p = series[i]
-                    if (i == range.first) linePath.moveTo(px(p), py(p)) else linePath.lineTo(px(p), py(p))
+                    if (i == range.first) linePath.moveTo(px(i), py(p)) else linePath.lineTo(px(i), py(p))
                 }
                 drawSegment(linePath)
+            }
+
+            // The zero line itself, so "am I up or down" has a mark to read
+            // against rather than only a colour change.
+            if (baseline && zeroY in 0f..plotH) {
+                drawLine(
+                    color = bt.border,
+                    start = Offset(0f, zeroY),
+                    end = Offset(plotW, zeroY),
+                    strokeWidth = 1.dp.toPx(),
+                )
             }
         }
 
@@ -260,43 +371,85 @@ fun BtAreaChart(
                 topLeft = Offset(plotW - endMeasured.size.width, labelY),
             )
         }
+    }
 
-        // ── Scrub guide + dot ───────────────────────────────────────────────
-        val sx = scrubX
-        if (sx != null && !morphing) {
-            val nearest = nearestPoint(series, sx / plotW)
-            onScrubState.value?.invoke(nearest)
-            val tMin = series.first().epochMillis
-            val tSpan = max(1L, series.last().epochMillis - tMin).toDouble()
-            val px = (plotW * ((nearest.epochMillis - tMin) / tSpan)).toFloat()
-            val py = plotH * (1f - scale.normalize(nearest.valueEur))
-            drawLine(
-                color = bt.borderStrong,
-                start = Offset(px, 0f),
-                end = Offset(px, plotH),
-                strokeWidth = 1.dp.toPx(),
-            )
-            // Dot with a surface ring so it reads on top of the line.
-            drawCircle(color = bt.surface, radius = 6.dp.toPx(), center = Offset(px, py))
-            drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(px, py))
+    // ── Layer 2: the crosshair. The ONLY reader of `scrubIndex`, so a scrub
+    // invalidates a canvas that draws one line and two circles.
+    Canvas(modifier = Modifier.matchParentSize()) {
+        val series = currentPoints
+        val i = scrubIndex ?: return@Canvas
+        if (series.size < 2 || i !in series.indices) return@Canvas
+        if (progress.value < 1f && previousPoints.size >= 2) return@Canvas
+
+        val xLabelStrip = if (minimal) 0f else 18.dp.toPx()
+        val plotH = size.height - xLabelStrip
+        val p = series[i]
+        val x = seriesX(i, size.width, series.size)
+        val y = plotH * (1f - scale.normalize(p.valueEur))
+        val dotColor = when {
+            !baseline -> lineColor
+            p.valueEur >= 0.0 -> bt.gain
+            else -> bt.loss
         }
+        drawLine(
+            color = bt.borderStrong,
+            start = Offset(x, 0f),
+            end = Offset(x, plotH),
+            strokeWidth = 1.dp.toPx(),
+        )
+        // Dot with a surface ring so it reads on top of the line.
+        drawCircle(color = bt.surface, radius = 6.dp.toPx(), center = Offset(x, y))
+        drawCircle(color = dotColor, radius = 4.dp.toPx(), center = Offset(x, y))
+    }
     }
 }
 
 // ── Series math (pixel mapping only — never value computation) ──────────────
 
-private class YScale(val min: Double, val max: Double) {
+/**
+ * Where point [index] of an [count]-point series sits horizontally.
+ *
+ * Edge-to-edge rather than the half-bar inset a TradingView `fitContent()`
+ * leaves, because this chart's hero mode is full-bleed and a margin would read
+ * as the data stopping short of the screen.
+ */
+internal fun seriesX(index: Int, plotWidth: Float, count: Int): Float =
+    if (count <= 1) 0f else plotWidth * index / (count - 1).toFloat()
+
+/**
+ * The index whose cell contains [x] — plain nearest-neighbour over a uniform
+ * grid, which is what makes the crosshair advance at a constant rate no matter
+ * how unevenly the series is sampled in time.
+ */
+internal fun scrubIndexAt(x: Float, plotWidth: Float, count: Int): Int {
+    if (count <= 1 || plotWidth <= 0f) return 0
+    val frac = (x / plotWidth).coerceIn(0f, 1f)
+    return (frac * (count - 1)).roundToInt().coerceIn(0, count - 1)
+}
+
+internal class YScale(val min: Double, val max: Double) {
     fun normalize(v: Double): Float =
         if (max == min) 0.5f else ((v - min) / (max - min)).toFloat()
 }
 
-/** Padded y-scale: 8% headroom above/below so the line never kisses the edge. */
-private fun yScale(points: List<HistoryPoint>): YScale {
+/**
+ * Padded y-scale: 8% headroom above/below so the line never kisses the edge.
+ *
+ * [zeroAnchored] keeps 0 inside the window even for an all-positive or
+ * all-negative performance series — without it a curve that never went negative
+ * would have its zero line pushed off-canvas and the up/down colouring would
+ * lose the thing it is coloured against.
+ */
+internal fun yScale(points: List<HistoryPoint>, zeroAnchored: Boolean = false): YScale {
     var lo = Double.MAX_VALUE
     var hi = -Double.MAX_VALUE
     points.forEach {
         lo = min(lo, it.valueEur)
         hi = max(hi, it.valueEur)
+    }
+    if (zeroAnchored) {
+        lo = min(lo, 0.0)
+        hi = max(hi, 0.0)
     }
     if (lo == hi) {
         // Flat series: pad around the value so it renders mid-plot.
@@ -304,41 +457,31 @@ private fun yScale(points: List<HistoryPoint>): YScale {
         return YScale(lo - pad, hi + pad)
     }
     val pad = (hi - lo) * 0.08
-    // An all-positive series never shows a negative axis label — the padding
-    // clamps at zero instead of inventing values the data doesn't have.
-    val paddedLo = if (lo >= 0.0) max(0.0, lo - pad) else lo - pad
+    // An all-positive MONEY series never shows a negative axis label — the
+    // padding clamps at zero instead of inventing values the data doesn't have.
+    // A zero-anchored (performance) scale is allowed to pad past zero, because
+    // there the sign is the point.
+    val paddedLo = if (!zeroAnchored && lo >= 0.0) max(0.0, lo - pad) else lo - pad
     return YScale(paddedLo, hi + pad)
 }
 
-/** Normalized (0..1) series value at x-fraction [frac], time-interpolated. */
-private fun normalizedValueAt(points: List<HistoryPoint>, frac: Float, scale: YScale): Float {
-    val tMin = points.first().epochMillis
-    val tMax = points.last().epochMillis
-    if (tMax == tMin) return scale.normalize(points.last().valueEur)
-    val t = tMin + (tMax - tMin) * frac.toDouble()
-    var loIdx = 0
-    var hiIdx = points.size - 1
-    while (hiIdx - loIdx > 1) {
-        val mid = (loIdx + hiIdx) / 2
-        if (points[mid].epochMillis <= t) loIdx = mid else hiIdx = mid
-    }
-    val a = points[loIdx]
-    val b = points[hiIdx]
-    val segSpan = (b.epochMillis - a.epochMillis).toDouble()
-    val v = if (segSpan <= 0.0) {
-        b.valueEur
-    } else {
-        a.valueEur + (b.valueEur - a.valueEur) * ((t - a.epochMillis) / segSpan)
-    }
+/**
+ * Normalized (0..1) series value at x-fraction [frac] of the INDEX axis, linearly
+ * interpolated between the two neighbouring points.
+ *
+ * Only the range-morph animation uses this. Interpolation is legitimate there
+ * precisely because those frames are not a readout: nothing reports a number off
+ * this curve, it is 320ms of motion between two server truths.
+ */
+internal fun normalizedAtFraction(points: List<HistoryPoint>, frac: Float, scale: YScale): Float {
+    if (points.isEmpty()) return 0.5f
+    if (points.size == 1) return scale.normalize(points[0].valueEur)
+    val pos = frac.coerceIn(0f, 1f) * (points.size - 1)
+    val lo = pos.toInt().coerceIn(0, points.size - 1)
+    val hi = (lo + 1).coerceAtMost(points.size - 1)
+    val t = pos - lo
+    val v = points[lo].valueEur + (points[hi].valueEur - points[lo].valueEur) * t
     return scale.normalize(v)
-}
-
-/** The series point whose time is nearest to x-fraction [frac]. */
-private fun nearestPoint(points: List<HistoryPoint>, frac: Float): HistoryPoint {
-    val tMin = points.first().epochMillis
-    val tMax = points.last().epochMillis
-    val t = tMin + (tMax - tMin) * frac.coerceIn(0f, 1f).toDouble()
-    return points.minByOrNull { abs(it.epochMillis - t) } ?: points.last()
 }
 
 // ── Label formatting (display-only) ─────────────────────────────────────────
@@ -372,6 +515,17 @@ internal fun axisMoney(value: Double, locale: Locale, compact: Boolean): String 
             nf.format(value)
         }
     }
+}
+
+/**
+ * Axis percent label. Unlike [axisMoney] this is NOT masked in discreet mode: a
+ * return says how well the money did, not how much of it there is, which is the
+ * whole distinction discreet mode draws.
+ */
+internal fun axisPercent(value: Double, locale: Locale): String {
+    val nf = NumberFormat.getNumberInstance(locale)
+    nf.maximumFractionDigits = if (abs(value) < 10) 1 else 0
+    return nf.format(value) + " %"
 }
 
 /**

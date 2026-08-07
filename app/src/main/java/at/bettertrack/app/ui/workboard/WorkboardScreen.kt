@@ -112,9 +112,31 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
-// ── Workboard host: Conglomerates · Alerts ───────────────────────────────────
+// ── Workboard host: Alerts · Conglomerates ──────────────────────────────────
 
-private enum class WorkboardSection { Conglomerates, Ideas, Alerts }
+/**
+ * The Workbench's segments, in segment order — Alerts first (owner order,
+ * 2026-08-07).
+ *
+ * ## Why Alerts leads, and is the default
+ *
+ * A price alert is the only thing on this tab that can be *waiting* for you. A
+ * conglomerate is something you built and can look at whenever; a fired alert is
+ * news. Opening on Conglomerates meant the tab's own badge could be lit while the
+ * thing it was lit about sat one tap away behind a pill.
+ *
+ * ## Why Ideas is not here any more (owner: "scrim the useless part")
+ *
+ * Ideas left the SURFACE, not the codebase. `IdeasSection`, `IdeasViewModel` and
+ * the whole `ui/ideas` package are untouched and still compile, and
+ * [at.bettertrack.app.navigation.IdeaDetailRoute] still resolves — a shared idea
+ * arriving from a friend, or a notification deep link, opens exactly as before.
+ * What is gone is the third pill: a list the owner does not use, spending a third
+ * of the segment row and a third of this tab's first impression. Deleting the
+ * feature would have broken the social side that hands ideas to it; hiding the
+ * entry point costs nothing and is reversible in one line.
+ */
+private enum class WorkboardSection { Alerts, Conglomerates }
 
 /**
  * The **Workbench** tab — R2's §3 rebuild of the Workboard host.
@@ -154,10 +176,9 @@ fun WorkboardScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
-    onOpenIdea: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    var section by rememberSaveable { mutableStateOf(WorkboardSection.Conglomerates) }
+    var section by rememberSaveable { mutableStateOf(WorkboardSection.Alerts) }
 
     val alertsVm: AlertsViewModel = viewModel {
         AlertsViewModel(
@@ -166,24 +187,10 @@ fun WorkboardScreen(
             AppGraph.connectivityMonitor,
         )
     }
-    // Hoisted for the same reason the alerts VM already was: the lead block reads
-    // ideas, and a second instance created inside the segment would mean the
-    // block and the list can disagree about what exists.
-    val ideasVm: IdeasViewModel = viewModel {
-        IdeasViewModel(
-            AppGraph.ideasRepository,
-            AppGraph.conglomerateRepository,
-            AppGraph.marketRepository,
-        )
-    }
     val alertsState by alertsVm.state.collectAsStateWithLifecycle()
-    val ideasState by ideasVm.state.collectAsStateWithLifecycle()
     val triggeredAlerts = (alertsState as? AlertsState.Loaded)
         ?.items.orEmpty()
         .filter { it.status == AlertStatus.Triggered }
-    val unfinishedIdeas = (ideasState as? IdeasUiState.Loaded)
-        ?.ideas.orEmpty()
-        .filter { it.thesis.isNullOrBlank() }
 
     // Deep-link entry from the notifications inbox ("Manage alerts" on an alert
     // row): open on the Alerts segment, once.
@@ -217,10 +224,15 @@ fun WorkboardScreen(
             settings = { BtSettingsGear(onOpenSettings) },
         )
         WorkbenchNeedsYou(
+            // No ideas rows any more (owner de-bloat, 2026-08-07). The block is
+            // about what is WAITING on you, and with the Ideas segment gone from
+            // this tab an "unfinished idea" row would be the only thing left
+            // pointing at a list the user can no longer browse. [needsYouPlan]
+            // keeps its ideas arithmetic and its tests, so restoring the rows is
+            // this one argument.
             triggered = triggeredAlerts,
-            unfinished = unfinishedIdeas,
+            unfinished = emptyList(),
             onOpenAsset = onOpenAsset,
-            onOpenIdea = onOpenIdea,
         )
         SegmentedTabs(
             selected = section,
@@ -228,12 +240,11 @@ fun WorkboardScreen(
             onSelect = { section = it },
         )
         when (section) {
+            WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
             WorkboardSection.Conglomerates -> ConglomerateListScreen(
                 onOpen = onOpenConglomerate,
                 onCreate = onCreateConglomerate,
             )
-            WorkboardSection.Ideas -> IdeasSection(vm = ideasVm, onOpenIdea = onOpenIdea)
-            WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
         }
     }
 }
@@ -252,7 +263,6 @@ private fun WorkbenchNeedsYou(
     triggered: List<PriceAlert>,
     unfinished: List<Idea>,
     onOpenAsset: (String) -> Unit,
-    onOpenIdea: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     // The ordering and cap arithmetic live in `needsYouPlan`, where they are unit
@@ -260,7 +270,6 @@ private fun WorkbenchNeedsYou(
     val plan = needsYouPlan(triggered, unfinished, NEEDS_YOU_MAX)
     if (plan.isEmpty) return
     val shownAlerts = plan.alerts
-    val shownIdeas = plan.ideas
     val hidden = plan.hidden
 
     BtNeedsYouGroup(
@@ -280,15 +289,6 @@ private fun WorkbenchNeedsYou(
                         kind = BtBadgeKind.Gold,
                     )
                 },
-            )
-        }
-        shownIdeas.forEach { idea ->
-            BtGroupRow(
-                title = idea.name,
-                subtitle = stringResource(R.string.bt_ideas_no_thesis),
-                icon = Icons.Outlined.Lightbulb,
-                iconTint = bt.textSecondary,
-                onClick = { onOpenIdea(idea.id) },
             )
         }
         if (hidden > 0) {
@@ -317,25 +317,16 @@ private fun SegmentedTabs(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Segment(
-            label = stringResource(R.string.bt_workboard_seg_conglomerates),
-            selected = selected == WorkboardSection.Conglomerates,
-            modifier = Modifier.weight(1f),
-        ) { onSelect(WorkboardSection.Conglomerates) }
-        // V5 S2c: ideas were completely unreachable in the app until now — the
-        // workboard has been storing them all along. A third segment (rather
-        // than a fourth bottom-nav home) keeps them where the rest of the
-        // "thinking about investments" surface already lives.
-        Segment(
-            label = stringResource(R.string.bt_ideas_segment),
-            selected = selected == WorkboardSection.Ideas,
-            modifier = Modifier.weight(1f),
-        ) { onSelect(WorkboardSection.Ideas) }
-        Segment(
             label = stringResource(R.string.bt_workboard_seg_alerts),
             selected = selected == WorkboardSection.Alerts,
             badge = triggeredAlerts,
             modifier = Modifier.weight(1f),
         ) { onSelect(WorkboardSection.Alerts) }
+        Segment(
+            label = stringResource(R.string.bt_workboard_seg_conglomerates),
+            selected = selected == WorkboardSection.Conglomerates,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(WorkboardSection.Conglomerates) }
     }
 }
 

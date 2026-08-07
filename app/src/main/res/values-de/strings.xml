@@ -74,6 +74,14 @@
     <string name="bt_overview_create_portfolio">Portfolio anlegen</string>
     <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
     <string name="bt_overview_chart_cd">Diagramm des Vermögens über die Zeit</string>
+    <string name="bt_chart_mode_cd">Anzeigemodus des Diagramms</string>
+    <string name="bt_chart_mode_balance">€</string>
+    <string name="bt_chart_mode_balance_cd">Kontostand in Euro</string>
+    <string name="bt_chart_mode_performance">%</string>
+    <string name="bt_chart_mode_performance_cd">Performance in Prozent</string>
+    <string name="bt_chart_mode_hybrid">% + €</string>
+    <string name="bt_chart_mode_hybrid_cd">Performance-Kurve, Kontostand als Anzeige</string>
+    <string name="bt_chart_perf_hint">Ein- und Auszahlungen werden neutralisiert — die Kurve bewegt sich nur, wenn sich deine Bestände bewegen.</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
@@ -288,6 +296,8 @@
     <string name="bt_cash_kind_tax_refund">Steuererstattung</string>
     <string name="bt_cash_fee_title">Gebühr erfassen</string>
     <string name="bt_cash_fee_action">Gebühr erfassen</string>
+    <string name="bt_cash_holding_cost">Haltekosten</string>
+    <string name="bt_cash_holding_cost_hint">Für Haltekosten — eine Konto- oder Depotgebühr gehört zum Investieren und soll die ausgewiesene Rendite senken. Alltägliche Ausgaben nicht.</string>
     <string name="bt_cash_fee_hint">Eine Gebühr ist ein Kostenposten und senkt damit deine Rendite. Eine Auszahlung verschiebt nur Geld und tut das nicht.</string>
 
     <!-- v5-Cash-Korrekturen (synchronisierte Bewegung bearbeiten / löschen) -->
@@ -2188,6 +2198,9 @@
     <string name="bt_ptax_source_system">Standard von BetterTrack</string>
     <string name="bt_ptax_override_on">Hier andere Regeln verwenden</string>
     <string name="bt_ptax_override_on_sub">Aus bedeutet, dieses Portfolio folgt deinem Kontostandard.</string>
+    <string name="bt_ptax_account_default">Dein Kontostandard</string>
+    <string name="bt_ptax_explain">Jedes Portfolio folgt deinem Kontostandard, bis du hier eigene Regeln festlegst. Änderst du den Standard, ändert sich jedes Portfolio, das ihm noch folgt.</string>
+    <string name="bt_ptax_source_badge_own">Eigene Regeln dieses Portfolios</string>
     <string name="bt_ptax_reset">Wieder meinen Standard verwenden</string>
     <string name="bt_ptax_reset_title">Deinen Standard verwenden?</string>
     <string name="bt_ptax_reset_message">Dieses Portfolio folgt dann deiner Kontoeinstellung (%1$s). Offene Steuerjahre werden sofort neu berechnet.</string>

@@ -85,6 +85,12 @@ import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import at.bettertrack.app.data.prefs.BtChartMode
+import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -97,13 +103,25 @@ import androidx.compose.ui.unit.Dp
 import java.util.Locale
 
 /**
- * The hero chart's canvas height (decision O-5).
+ * The hero chart's canvas height.
  *
  * Named rather than inlined because it is a hierarchy decision, not a layout
- * detail: this number is what buys the allocation summary and the first holdings
- * their place on the first screen, and anyone raising it is undoing §3's reorder.
+ * detail.
+ *
+ * **240dp as of 2026-08-07, on the owner's direct order** — *"make the graphs
+ * bigger and more main of the page"*. R1's decision O-5 had cut the praised
+ * 200dp hero to 150dp to buy the allocation summary and the first holding rows a
+ * place on the first screen; living with it, the owner's verdict was that the
+ * trade went the wrong way. The chart is what this screen is looked at FOR
+ * between the number at the top and the list below, and at 150dp it had stopped
+ * being the page's subject and become a strip above the real content.
+ *
+ * So it is now larger than the shape O-5 shrank — the allocation summary and the
+ * holdings keep their ORDER, they simply start below the fold, which is the
+ * correct cost for the correct hierarchy. Anyone lowering this is re-making a
+ * decision the owner has now made twice.
  */
-private val HERO_CHART_HEIGHT: Dp = 150.dp
+private val HERO_CHART_HEIGHT: Dp = 240.dp
 
 /**
  * Initializer for [PortfolioOverviewViewModel], scoped to the Portfolio nav-graph
@@ -225,6 +243,7 @@ fun PortfolioOverviewScreen(
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val range by vm.range.collectAsStateWithLifecycle()
+    val chartMode by vm.chartMode.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val hasEverSynced by vm.hasEverSynced.collectAsStateWithLifecycle()
     val loadError by vm.loadError.collectAsStateWithLifecycle()
@@ -236,6 +255,19 @@ fun PortfolioOverviewScreen(
 
     // Sheet visibility lives in the VM so the shell top-bar selector can open it.
     val switcherOpen by vm.switcherVisible.collectAsStateWithLifecycle()
+
+    // Bottom-bar re-tap on Portfolio opens the switcher (owner directive
+    // 2026-08-07), routed through the SAME vm.openSwitcher() the header pill
+    // calls — so the sheet, its state and its side effects have exactly one
+    // implementation no matter which affordance asked for it. The shell cannot
+    // reach this view model, hence the one-shot flag; see [PortfolioTabEntry].
+    val pendingSwitcher by PortfolioTabEntry.pendingSwitcher.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingSwitcher) {
+        if (pendingSwitcher) {
+            vm.openSwitcher()
+            PortfolioTabEntry.consume()
+        }
+    }
 
     LifecycleResumeEffect(Unit) {
         vm.onScreenResumed()
@@ -412,8 +444,10 @@ fun PortfolioOverviewScreen(
                             holdings = holdings,
                             history = history,
                             range = range,
+                            chartMode = chartMode,
                             pendingTx = pendingTx,
                             onRange = vm::setRange,
+                            onChartMode = vm::setChartMode,
                             onOpenHolding = onOpenHolding,
                             onOpenTransactions = onOpenTransactions,
                             onOpenPendingSync = onOpenPendingSync,
@@ -503,8 +537,10 @@ private fun OverviewContent(
     holdings: List<HoldingEntity>,
     history: PortfolioHistory?,
     range: HistoryRange,
+    chartMode: BtChartMode,
     pendingTx: List<PendingTxRow>,
     onRange: (HistoryRange) -> Unit,
+    onChartMode: (BtChartMode) -> Unit,
     onOpenHolding: (String) -> Unit,
     onOpenTransactions: (String) -> Unit,
     onOpenPendingSync: () -> Unit,
@@ -618,10 +654,33 @@ private fun OverviewContent(
                 if (s == null && worth is at.bettertrack.app.ui.prices.NetWorthState.Unpriceable) {
                     at.bettertrack.app.ui.prices.NoPricesHero()
                 } else if (totals != null || s != null) {
-                    MoneyText(
-                        value = s?.valueEur ?: totals!!.totalValueEur,
-                        style = BtTheme.type.moneyLarge,
-                    )
+                    // What the scrub puts in the headline slot depends on the
+                    // chart's mode (owner ask 2026-08-07):
+                    //  · BALANCE  — the touched point IS the balance.
+                    //  · HYBRID   — the curve is %, but the headline is the €
+                    //    balance at that moment, looked up from the € series the
+                    //    same payload shipped. That is the whole point of the mode.
+                    //  · PERFORMANCE — the touched point is the return, and the
+                    //    headline says so rather than pretending to be money.
+                    val scrubEur = when {
+                        s == null -> null
+                        chartMode == BtChartMode.PERFORMANCE -> null
+                        chartMode == BtChartMode.HYBRID ->
+                            history?.points?.let { balanceAt(it, s.epochMillis) }
+                        else -> s.valueEur
+                    }
+                    if (s != null && chartMode == BtChartMode.PERFORMANCE) {
+                        Text(
+                            text = formatPercent(s.valueEur, locale),
+                            style = BtTheme.type.moneyLarge,
+                            color = deltaColor(s.valueEur),
+                        )
+                    } else {
+                        MoneyText(
+                            value = scrubEur ?: totals!!.totalValueEur,
+                            style = BtTheme.type.moneyLarge,
+                        )
+                    }
                     if (s == null) {
                         at.bettertrack.app.ui.prices.UnpricedNote(
                             coverage = coverage,
@@ -631,6 +690,17 @@ private fun OverviewContent(
                     Spacer(Modifier.height(4.dp))
                     // Reserve the sub-line height so scrubbing never shifts layout.
                     Box(Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                        // Hybrid scrub: the headline is the € balance, so the
+                        // return the curve is actually drawing goes here — the
+                        // mode exists to show both at once, and hiding one of
+                        // them would make it just a re-labelled % mode.
+                        if (s != null && chartMode == BtChartMode.HYBRID) {
+                            Text(
+                                text = formatPercent(s.valueEur, locale),
+                                style = BtTheme.type.numberCaption,
+                                color = deltaColor(s.valueEur),
+                            )
+                        }
                         // W6: with nothing priced, `dayChangeEur` is a sum of
                         // zeroes and would render "+0,00 € · today" — which reads
                         // as "no movement" when the truth is "not known". Same
@@ -666,6 +736,34 @@ private fun OverviewContent(
             }
         }
 
+        // Cash + Transactions, back at the top (owner ask 2026-08-07: "I liked
+        // the fast access"). They used to be the last rows of the screen, below
+        // every holding — which on any real portfolio means off-screen. A pair of
+        // stat chips directly under the value gives Cash its number back AND
+        // one-tap reach, in ~56dp, without re-inflating them to the 50/50 cards
+        // the R-arc deleted for spending half a screen on two links.
+        item(key = "quick-access", contentType = "quick-access") {
+            Row(
+                modifier = inset,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                QuickStatChip(
+                    label = stringResource(R.string.bt_overview_cash),
+                    value = totals?.cashEur,
+                    icon = Icons.Outlined.AccountBalanceWallet,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onOpenCash(portfolio.id) },
+                )
+                QuickStatChip(
+                    label = stringResource(R.string.bt_tx_title),
+                    value = null,
+                    icon = Icons.AutoMirrored.Outlined.ReceiptLong,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onOpenTransactions(portfolio.id) },
+                )
+            }
+        }
+
         // The pending strip's ONE promotion (mandate §3 vs §7.4): a queued change
         // the server refused is not status, it is work, and work belongs next to
         // the number it is about to change. Everything merely waiting to upload
@@ -683,8 +781,10 @@ private fun OverviewContent(
             HeroChart(
                 history = history,
                 range = range,
+                mode = chartMode,
                 scrubbing = scrubbing,
                 onRange = onRange,
+                onMode = onChartMode,
                 onScrub = { scrub = it },
                 locale = locale,
             )
@@ -780,16 +880,10 @@ private fun OverviewContent(
         // the header's ⋮ carries — overflow is a shortcut, never the only way.
         item(key = "secondary-rows", contentType = "secondary") {
             Column(inset.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SecondaryRow(
-                    label = stringResource(R.string.bt_overview_cash),
-                    value = totals?.cashEur,
-                    onClick = { onOpenCash(portfolio.id) },
-                )
-                SecondaryRow(
-                    label = stringResource(R.string.bt_tx_title),
-                    value = null,
-                    onClick = { onOpenTransactions(portfolio.id) },
-                )
+                // Cash and Transactions are NOT repeated here: they moved to the
+                // quick-access chips under the hero (owner ask 2026-08-07). Two
+                // paths to one screen on one page is how a page starts feeling
+                // padded, and the top one is the one he asked for.
                 // Per-portfolio settings — name, sharing, taxes, group,
                 // archive/delete. It belongs in this group and NOT behind the
                 // header gear: the gear is the app's one fixed landmark and
@@ -883,59 +977,85 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
 
 /**
  * The blended hero history graph (§3.6, owner redesign 2026-07-09): the area
- * chart sits directly on the page (no card), the gold gradient fades into the
- * background, and the canvas bleeds edge-to-edge. Only the range-performance
- * header line and the range chips stay inset; the chart itself is full-width
- * with minimal scaffolding. Scrubbing is reported up so the Net-Worth hero
- * shows the touched point.
+ * chart sits directly on the page (no card), the gradient fades into the
+ * background, and the canvas bleeds edge-to-edge. Only the control rows stay
+ * inset; the chart itself is full-width with minimal scaffolding. Scrubbing is
+ * reported up so the Net-Worth hero shows the touched point.
  *
- * R-arc R1 (decision O-5): the canvas is [HERO_CHART_HEIGHT] rather than 200dp.
- * The chart is the owner's, it is praised, and it stays directly under the hero —
- * but at 200dp it plus its performance line and range chips were, on their own,
- * the reason the first holding row sat below the fold. 50dp is what the shape
- * costs, not what it says; nothing about reading the curve is worse at 150dp,
- * and the allocation summary and the first two positions now fit the first screen.
+ * ## The three display modes (owner ask 2026-08-07)
+ *
+ * The chips above the chart pick what the curve is, out of the two series the
+ * `/history` payload already carries together — so switching is instant and never
+ * refetches. See [BtChartMode] for what each one means. The hybrid mode is the
+ * owner's: *the % shape, because that is the shape that says how the investments
+ * did, with the € balance as the readout, because that is the number you want
+ * when you point at a day.*
+ *
+ * The mode chips sit ABOVE the canvas and the range chips BELOW it, deliberately
+ * split rather than crowded onto one row: they answer different questions ("what
+ * am I looking at" vs "over what window"), the range row already carries six
+ * chips and had no room, and the split matches the web, which puts its display
+ * toggle in the section header and its range toggle inside the chart.
  */
 @Composable
 private fun HeroChart(
     history: PortfolioHistory?,
     range: HistoryRange,
+    mode: BtChartMode,
     scrubbing: Boolean,
     onRange: (HistoryRange) -> Unit,
+    onMode: (BtChartMode) -> Unit,
     onScrub: (HistoryPoint?) -> Unit,
     locale: Locale,
 ) {
     val bt = BtTheme.colors
     val chartCd = stringResource(R.string.bt_overview_chart_cd)
+    val modeCd = stringResource(R.string.bt_chart_mode_cd)
     Column(Modifier.fillMaxWidth()) {
-        // Range performance (inset), reserved height, hidden while scrubbing so
-        // the hero's scrub readout is the single focus.
-        Box(
+        // Mode chips (left) + range performance (right). One row, because they
+        // are both statements about the curve directly beneath them.
+        Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .height(18.dp),
-            contentAlignment = Alignment.CenterStart,
+                .semantics { contentDescription = modeCd },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            ChartModeChip(BtChartMode.BALANCE, mode, R.string.bt_chart_mode_balance, R.string.bt_chart_mode_balance_cd, onMode)
+            ChartModeChip(BtChartMode.PERFORMANCE, mode, R.string.bt_chart_mode_performance, R.string.bt_chart_mode_performance_cd, onMode)
+            ChartModeChip(BtChartMode.HYBRID, mode, R.string.bt_chart_mode_hybrid, R.string.bt_chart_mode_hybrid_cd, onMode)
+            Spacer(Modifier.weight(1f))
+            // Hidden while scrubbing so the hero's scrub readout is the single
+            // focus — the same rule this line has always followed.
             val pct = history?.rangePerformancePct
             if (!scrubbing && pct != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formatPercent(pct, locale),
-                        style = BtTheme.type.numberCaption,
-                        color = deltaColor(pct),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = rangeLabel(range),
-                        style = BtTheme.type.numberCaption,
-                        color = bt.textMuted,
-                    )
-                }
+                Text(
+                    text = formatPercent(pct, locale),
+                    style = BtTheme.type.numberCaption,
+                    color = deltaColor(pct),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = rangeLabel(range),
+                    style = BtTheme.type.numberCaption,
+                    color = bt.textMuted,
+                )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
 
-        val points = history?.points.orEmpty()
+        // Which series the curve draws. The performance modes plot `pct` through
+        // the same [HistoryPoint] shape the chart already speaks — the chart maps
+        // numbers to pixels and has no opinion about their unit; the readout
+        // below, and [BtChartMode], own the meaning.
+        val points = remember(history, mode) {
+            if (mode.plotsPerformance) {
+                history?.performance.orEmpty().map { HistoryPoint(it.epochMillis, it.pct) }
+            } else {
+                history?.points.orEmpty()
+            }
+        }
         if (points.size >= 2) {
             BtAreaChart(
                 points = points,
@@ -945,6 +1065,7 @@ private fun HeroChart(
                     .semantics { contentDescription = chartCd },
                 lineColor = bt.gold,
                 minimal = true,
+                baseline = mode.plotsPerformance,
                 onScrub = onScrub,
             )
         } else {
@@ -953,18 +1074,29 @@ private fun HeroChart(
                 contentAlignment = Alignment.Center,
             ) {
                 if (history == null) {
-                    BtSkeleton(Modifier.fillMaxWidth().height(126.dp).padding(horizontal = 16.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 16.dp))
                 } else {
-                    // BtInlineEmpty, not BtEmptyState: a 64dp glyph badge plus
-                    // 32dp of padding does not fit a 150dp chart slot, and an
-                    // absent chart is an answer rather than a failure — so it
-                    // gets the calm one-line form, inset to the page gutter.
+                    // BtInlineEmpty, not BtEmptyState: an absent chart is an
+                    // answer rather than a failure, so it gets the calm one-line
+                    // form, inset to the page gutter.
                     BtInlineEmpty(
                         text = stringResource(R.string.bt_overview_chart_empty),
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
             }
+        }
+
+        // What a neutralized curve means, said once, only where it applies —
+        // same placement and same sentence as the web's perf-mode hint.
+        if (mode.plotsPerformance) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.bt_chart_perf_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
         }
         Spacer(Modifier.height(12.dp))
 
@@ -981,6 +1113,102 @@ private fun HeroChart(
                     onClick = { onRange(r) },
                 )
             }
+        }
+    }
+}
+
+/**
+ * The € balance the server reported closest to [epochMillis].
+ *
+ * Used by the hybrid chart mode, where the curve is the performance series and
+ * the readout has to come from the balance series beside it. The two arrive in
+ * one `/history` payload and are aligned by construction, but they are parsed
+ * independently and nothing guarantees equal lengths — so this matches on TIME
+ * rather than trusting a shared index.
+ *
+ * It returns a point the server actually sent; it never interpolates between two
+ * of them (§7.1 — the app does not invent money). Pure, so the nearest-match rule
+ * is unit-tested rather than eyeballed on a device.
+ */
+internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
+    points.minByOrNull { kotlin.math.abs(it.epochMillis - epochMillis) }?.valueEur
+
+/** One display-mode chip. Reuses [BtChip] so the control needs no new vocabulary. */
+@Composable
+private fun ChartModeChip(
+    value: BtChartMode,
+    selected: BtChartMode,
+    labelRes: Int,
+    contentDescriptionRes: Int,
+    onSelect: (BtChartMode) -> Unit,
+) {
+    val cd = stringResource(contentDescriptionRes)
+    BtChip(
+        text = stringResource(labelRes),
+        selected = value == selected,
+        onClick = { onSelect(value) },
+        modifier = Modifier.semantics { contentDescription = cd },
+    )
+}
+
+/**
+ * A quick-access stat chip: icon, label, and the number if there is one.
+ *
+ * The owner's *"I liked the fast access"* about Cash, answered without going back
+ * to the 50/50 hero cards the R-arc removed. A chip states its value the way a
+ * card does but costs a row rather than a block, so two of them fit side by side
+ * directly under the net-worth hero and still leave the chart the page.
+ *
+ * A chip with no number (Transactions) is still a chip rather than a plain link:
+ * the pair reads as one control group, and making them different shapes would
+ * say they lead somewhere different in kind, which they do not.
+ */
+@Composable
+private fun QuickStatChip(
+    label: String,
+    value: Double?,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        shape = BtShapes.card,
+        color = bt.surface,
+        contentColor = bt.textSecondary,
+        border = BorderStroke(1.dp, bt.border),
+        interactionSource = interaction,
+        modifier = modifier.btPressScale(interaction),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = bt.textMuted,
+                )
+                if (value != null) {
+                    MoneyText(value = value, style = BtTheme.type.moneySmall)
+                }
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
@@ -1468,9 +1696,30 @@ internal fun deltaColor(value: Double) = when {
  * time-of-day, otherwise the day-granular wording is kept verbatim — scrubbing a
  * 1Y curve should not suddenly claim a meaningless "00:00".
  */
-private fun formatChartScrubDate(epochMillis: Long, subDaily: Boolean, locale: Locale): String {
-    val pattern = if (subDaily) "d MMM yyyy, HH:mm" else "d MMM yyyy"
-    return java.time.Instant.ofEpochMilli(epochMillis)
+private fun formatChartScrubDate(epochMillis: Long, subDaily: Boolean, locale: Locale): String =
+    java.time.Instant.ofEpochMilli(epochMillis)
         .atZone(java.time.ZoneId.systemDefault())
-        .format(java.time.format.DateTimeFormatter.ofPattern(pattern, locale))
-}
+        .format(scrubDateFormatter(locale, subDaily))
+
+/**
+ * Cached scrub-date formatters — same idiom, and the same reason, as
+ * `btNumberFormat` in `BtNumberFormat.kt` (2026-08-06 perf pass).
+ *
+ * `DateTimeFormatter.ofPattern` parses its pattern and builds a formatter on
+ * every call, and this one is on the hottest path in the app: the scrub readout
+ * re-renders each time the crosshair moves to a new point, which during a drag
+ * across a dense 1M series is faster than the display refreshes. There are
+ * exactly two patterns and one locale in practice, so they are built once.
+ *
+ * `ThreadLocal` for symmetry with the number formatters: `DateTimeFormatter` is
+ * in fact immutable and thread-safe, but keeping both caches shaped the same way
+ * means there is one rule about formatter reuse in this codebase rather than two.
+ */
+private val scrubDateFormatters: ThreadLocal<MutableMap<Pair<Locale, Boolean>, java.time.format.DateTimeFormatter>> =
+    ThreadLocal.withInitial { HashMap() }
+
+private fun scrubDateFormatter(locale: Locale, subDaily: Boolean): java.time.format.DateTimeFormatter =
+    scrubDateFormatters.get()!!.getOrPut(locale to subDaily) {
+        val pattern = if (subDaily) "d MMM yyyy, HH:mm" else "d MMM yyyy"
+        java.time.format.DateTimeFormatter.ofPattern(pattern, locale)
+    }
