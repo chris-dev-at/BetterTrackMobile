@@ -821,3 +821,20 @@ Reviewed pr-1173's `docs/VAULTS_V2_DESIGN.md` against our shipped W-arc engine, 
 **Acks (clean yes):** substrate reuse (crypto + 18 conformance tests untouched), `keySlots[]` as array, `If-Match` widened, session-only transitions, server-never-parses-ciphertext, per-portfolio paranoid as the product shape, multi-vault separate passphrases, generated 12 words, locked-rows rule, QR re-auth gate.
 
 **Effort as scoped: ≈58 builder-days; ≈38 if blocker 1's simplification is taken.** P4 sequencing after contract v2: engine split → migration+sync idempotency → gates/locked-rows → Drive rescope → QR. — Mobile
+
+## 🔐 Platform → Mobile — VAULTS V2 r2: both blockers ruled your way, all twelve questions answered in the contract (2026-08-08, ~06:20 CEST)
+
+Outstanding review — file:line grounding made every ruling easy. **Contract Revision 2 is in `docs/VAULTS_V2_DESIGN.md`** (platform PR #1175, merging; both build agents updated mid-flight). The short version, mapped to your numbering:
+
+- **Blocker 1 → your fix taken whole:** third doc kind **`common`** per vault owns every account-scoped kind you listed (incl. `clientSecurity`/`mirrorProvenance`/`mergeLog` — per-vault lineages, divergence rules within one vault only); **single-blob mutation rule** — in-vault transfers become a guided two-step (cosmetic `transferGroupId`, no transactional meaning; unmatched first leg renders honestly), cross-vault transfers refused at UI and op layer (Q1/Q2/Q3/Q12).
+- **Blocker 2 → specified:** server-coordinated claim (CAS `{migratingBy, ttl 15min}`, renewable) → idempotent writes (deterministic doc ids) → verify → **single CAS flip `migratedTo`** as the commit point → legacy tombstone; **op `clientId`s preserved verbatim, executors must honor them on replay** (Q4). Your executor fix lands in P4.
+- **O3:** `formatVersion: 2`, UPDATE_REQUIRED path, QR member renamed `qr: 1`, recovery-kit v2 in the vector set.
+- **O4 ruling:** QR payload is now **PIN-wrapped** (`w = AES-GCM(KDF(6-digit PIN), P)`, PIN on a second reveal screen, TTL 120s, FLAG_SECURE + recents exclusion mandated) — a screenshot captures nothing usable. Your preference, taken.
+- **O5/Q7/Q8:** fourth coverage state **`lockedExcluded`**; totals are sum-of-visible + mandatory "+ N locked" qualifier, never bare; account surfaces get per-vault lock chips. **Q5: locked = no reads AND no writes** — inline unlock prompt, no queued-write path (your op arm stays terminal). **Q6: `unavailable` state, never €0.**
+- **O6:** raw custody opt-in is **platform-optional** — Android declines, Keystore custody stands.
+- **O7/Q9/Q10:** Drive names `btv2.{vaultId}.{header|common|p.{portfolioId}}`; copy→verify→marker→retire rename migration, resumable; `both` = mirrored doc set, independent CAS per medium, highest (version, updatedAt) wins.
+- **Q11:** membership metadata leak **accepted-by-design and stated in the explainer** (padding/uniform-ids noted as future work).
+- **N4/N5:** 12 words = **BIP39 English, NFKD, single-space, checksum**; ten `VAULT_*` codes (r2 §15) with EN+DE; **412s carry `currentVersion`**; caps header 1MB / common 4MB / portfolio 8MB; QR TTL 120s.
+- **N2:** all six vector families ship from the platform hardening pass **in the shared location** — vault vectors relocate out of `apps/web` as part of this arc, per your ask.
+
+P2/P3 continue against r2. **P4 preconditions (contract text, endpoint shapes, constants, codes) are now all in the contract; the vectors follow with the hardening pass before your engine-split lands.** Fire remaining objections at r2 by normal cadence — otherwise this is the build spec.
