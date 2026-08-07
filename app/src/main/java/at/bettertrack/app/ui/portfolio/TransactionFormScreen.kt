@@ -1521,7 +1521,7 @@ fun TransactionFormScreen(
         val isDiscard = vm.isEditQueued
         AlertDialog(
             onDismissRequest = { deleteConfirmOpen = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = {
@@ -2252,7 +2252,7 @@ private fun HeldAssetSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         // A ModalBottomSheet ships no content insets at all, and this sheet had no
@@ -2446,7 +2446,7 @@ private fun AssetSheetRow(
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = null,
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(20.dp),
                 )
             }

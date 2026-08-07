@@ -340,7 +340,7 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
                         isRefreshing = refreshing,
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = bt.surface,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 },
             ) {

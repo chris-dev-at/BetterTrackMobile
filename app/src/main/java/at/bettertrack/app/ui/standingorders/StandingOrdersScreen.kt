@@ -586,7 +586,7 @@ fun StandingOrdersScreen(
                                 isRefreshing = refreshing,
                                 modifier = Modifier.align(Alignment.TopCenter),
                                 containerColor = bt.surface,
-                                color = bt.gold,
+                                color = bt.goldInk,
                             )
                         },
                     ) {
@@ -728,7 +728,7 @@ fun StandingOrdersScreen(
         val busy = rowBusyId == target.id
         AlertDialog(
             onDismissRequest = { if (!busy) deleteTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_so_delete_title)) },
@@ -847,7 +847,7 @@ private fun StandingOrderRow(
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surface,
+                    containerColor = bt.surfaceHigh,
                 ) {
                     DropdownMenuItem(
                         text = {
@@ -1011,7 +1011,7 @@ private fun CreateStandingOrderSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         if (picking) {
@@ -1272,7 +1272,7 @@ private fun EditStandingOrderSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -1652,7 +1652,7 @@ private fun ScheduleDatePickerDialog(
                     val ms = state.selectedDateMillis ?: return@TextButton
                     onPick(Instant.ofEpochMilli(ms).atZone(ZoneId.of("UTC")).toLocalDate())
                 },
-            ) { Text(stringResource(R.string.bt_txform_date_ok), color = bt.gold) }
+            ) { Text(stringResource(R.string.bt_txform_date_ok), color = bt.goldInk) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

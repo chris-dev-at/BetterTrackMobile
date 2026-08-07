@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,7 +74,13 @@ private fun BtStateScaffold(
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .background(badgeColor, CircleShape),
+                    .background(badgeColor, CircleShape)
+                    // Tone-vs-hairline (§1.4): the badge is a raised disc on the
+                    // page and the default [badgeColor] is exactly `surface`, so
+                    // on the light ramp it would sit ~5 L* off its background and
+                    // read as a smudge. Transparent in dark, where the tonal step
+                    // already states it.
+                    .border(1.dp, bt.groupBorder, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

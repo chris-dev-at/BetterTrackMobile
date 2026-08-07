@@ -425,7 +425,7 @@ private fun CleanupConfirmDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.loss,
         textContentColor = bt.textSecondary,
         title = { Text("Delete all data in \"${target.name}\"?") },
@@ -482,7 +482,7 @@ private fun ApiCheckDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text("Live API — $portfolioName") },
@@ -519,7 +519,7 @@ private fun ApiCheckDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close", color = bt.gold) }
+            TextButton(onClick = onDismiss) { Text("Close", color = bt.goldInk) }
         },
     )
 }
@@ -627,7 +627,7 @@ private fun OpCard(
                     color = bt.loss,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = onRetry) { Text("Retry", color = bt.gold) }
+                    TextButton(onClick = onRetry) { Text("Retry", color = bt.goldInk) }
                     TextButton(onClick = onDiscard) { Text("Discard", color = bt.loss) }
                 }
             }
@@ -701,7 +701,7 @@ private fun EnqueueTestOpDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text("Enqueue test op") },

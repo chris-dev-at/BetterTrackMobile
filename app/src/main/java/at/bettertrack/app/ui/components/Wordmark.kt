@@ -17,10 +17,24 @@ import at.bettertrack.app.ui.theme.BtTheme
 
 /**
  * The BetterTrack wordmark (spec §3.2): always one word, two colors —
- * "Better" in white + "Track" in gold, bold, tight letter-spacing. Optional
- * edition suffix ("App") after a normal space at ~0.78em, medium weight, muted.
- * All sizing is em-relative so the same construction scales from top bar to
- * login screen. Never recolor or restyle.
+ * "Better" in the primary ink + "Track" in gold, bold, tight letter-spacing.
+ * Optional edition suffix ("App") after a normal space at ~0.78em, medium
+ * weight, muted. All sizing is em-relative so the same construction scales from
+ * top bar to login screen. Never recolor or restyle.
+ *
+ * ## "Track" is drawn in [at.bettertrack.app.ui.theme.BtColors.goldInk], not `gold`
+ *
+ * The two are the same value in dark, so this is byte-identical there and the
+ * mark is unchanged. They diverge in light, and they have to: `#F6B82E` is
+ * **1.78:1 against white**, so the brand gold as *text* on the light page is
+ * not merely low-contrast, it is barely present — half the wordmark would fade
+ * out. `goldInk` (`#8F5F00`, 5.52:1 on white) is the same hue read as ink.
+ *
+ * This is not a recolour of the brand. §1.4 splits `gold` (fills, the mark, the
+ * brand object) from `goldInk` (gold *as text on a surface*) precisely so that
+ * the identity survives a white background; the wordmark is text, so it takes
+ * the ink form. The web has the same defect today and has not fixed it — the
+ * split is written up as platform ask §8 item 3.
  */
 @Composable
 fun Wordmark(
@@ -36,7 +50,7 @@ fun Wordmark(
     val text = remember(bt, fontSize, edition) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = bt.textPrimary)) { append("Better") }
-            withStyle(SpanStyle(color = bt.gold)) { append("Track") }
+            withStyle(SpanStyle(color = bt.goldInk)) { append("Track") }
             if (edition != null) {
                 append(" ")
                 withStyle(

@@ -2,54 +2,57 @@ package at.bettertrack.app.ui.shell
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.Alignment
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import at.bettertrack.app.data.api.BtResult
-import at.bettertrack.app.data.api.asMessage
-import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -58,8 +61,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.StorageMode
@@ -67,112 +73,112 @@ import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.data.storage.visibleTabSurfaces
 import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.navigation.StandingOrdersRoute
+import at.bettertrack.app.navigation.ActiveSessionsRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
-import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.BtTab
+import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.CashRulesRoute
 import at.bettertrack.app.navigation.CashTagsRoute
+import at.bettertrack.app.navigation.ChainManageRoute
+import at.bettertrack.app.navigation.ChangePasswordRoute
 import at.bettertrack.app.navigation.ChangelogRoute
-import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.ChatListRoute
 import at.bettertrack.app.navigation.ChatThreadRoute
 import at.bettertrack.app.navigation.ConglomerateBuilderRoute
 import at.bettertrack.app.navigation.ConglomerateDetailRoute
 import at.bettertrack.app.navigation.CustomAssetDetailRoute
 import at.bettertrack.app.navigation.CustomAssetsRoute
+import at.bettertrack.app.navigation.DeleteAccountRoute
+import at.bettertrack.app.navigation.FriendGroupsRoute
 import at.bettertrack.app.navigation.FriendOverviewRoute
 import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
-import at.bettertrack.app.navigation.FriendGroupsRoute
 import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
+import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
-import at.bettertrack.app.navigation.owningTab
-import at.bettertrack.app.navigation.tabNeighbour
-import at.bettertrack.app.navigation.TabTap
-import at.bettertrack.app.navigation.tabTapAction
-import at.bettertrack.app.ui.portfolio.PortfolioTabEntry
 import at.bettertrack.app.navigation.PendingSyncRoute
+import at.bettertrack.app.navigation.PeopleTabRoute
+import at.bettertrack.app.navigation.PortfolioSettingsRoute
 import at.bettertrack.app.navigation.PortfolioTabRoute
+import at.bettertrack.app.navigation.PortfolioTaxRoute
 import at.bettertrack.app.navigation.SearchRoute
+import at.bettertrack.app.navigation.ServerRoute
 import at.bettertrack.app.navigation.SettingsAboutRoute
-import at.bettertrack.app.navigation.ChangePasswordRoute
-import at.bettertrack.app.navigation.TwoFactorRoute
-import at.bettertrack.app.navigation.ActiveSessionsRoute
-import at.bettertrack.app.navigation.DeleteAccountRoute
 import at.bettertrack.app.navigation.SettingsLanguageRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
-import at.bettertrack.app.navigation.ChainManageRoute
-import at.bettertrack.app.navigation.PortfolioSettingsRoute
-import at.bettertrack.app.navigation.PortfolioTaxRoute
 import at.bettertrack.app.navigation.SettingsRoute
-import at.bettertrack.app.navigation.TaxSettingsRoute
-import at.bettertrack.app.navigation.TaxYearRoute
-import at.bettertrack.app.navigation.TaxYearsRoute
-import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SettingsSecurityRoute
 import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
-import at.bettertrack.app.navigation.PeopleTabRoute
-import at.bettertrack.app.navigation.ServerRoute
+import at.bettertrack.app.navigation.StandingOrdersRoute
+import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
+import at.bettertrack.app.navigation.TabTap
+import at.bettertrack.app.navigation.TaxSettingsRoute
+import at.bettertrack.app.navigation.TaxYearRoute
+import at.bettertrack.app.navigation.TaxYearsRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
+import at.bettertrack.app.navigation.TwoFactorRoute
 import at.bettertrack.app.navigation.WorkbenchTabRoute
-import at.bettertrack.app.ui.components.BtTabBadgeDot
+import at.bettertrack.app.navigation.owningTab
+import at.bettertrack.app.navigation.tabNeighbour
+import at.bettertrack.app.navigation.tabTapAction
+import at.bettertrack.app.ui.applock.AppLockSetupScreen
+import at.bettertrack.app.ui.cash.CashScreen
+import at.bettertrack.app.ui.chat.ChatListScreen
+import at.bettertrack.app.ui.chat.ChatThreadScreen
 import at.bettertrack.app.ui.components.BtSnackbarHost
+import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtSnackbarState
 import at.bettertrack.app.ui.components.rememberReducedMotion
-import at.bettertrack.app.ui.components.Wordmark
-import at.bettertrack.app.ui.home.HomeScreen
-import at.bettertrack.app.ui.cash.CashScreen
-import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
 import at.bettertrack.app.ui.conglomerate.ConglomerateBuilderScreen
 import at.bettertrack.app.ui.conglomerate.ConglomerateDetailScreen
+import at.bettertrack.app.ui.customassets.CustomAssetDetailScreen
 import at.bettertrack.app.ui.customassets.CustomAssetsScreen
+import at.bettertrack.app.ui.debug.SyncDebugScreen
+import at.bettertrack.app.ui.gallery.GalleryScreen
+import at.bettertrack.app.ui.home.HomeScreen
+import at.bettertrack.app.ui.ideas.IdeaDetailScreen
 import at.bettertrack.app.ui.market.AssetPageScreen
+import at.bettertrack.app.ui.market.MarketIntelScreen
 import at.bettertrack.app.ui.market.SearchScreen
 import at.bettertrack.app.ui.notifications.NotificationSettingsScreen
 import at.bettertrack.app.ui.notifications.NotificationsInboxScreen
 import at.bettertrack.app.ui.paranoid.ParanoidGate
-import at.bettertrack.app.ui.settings.ServerScreen
-import at.bettertrack.app.ui.debug.SyncDebugScreen
-import androidx.navigation.toRoute
-import at.bettertrack.app.ui.gallery.GalleryScreen
 import at.bettertrack.app.ui.portfolio.HoldingDetailScreen
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewScreen
+import at.bettertrack.app.ui.portfolio.PortfolioTabEntry
 import at.bettertrack.app.ui.portfolio.TransactionFormScreen
 import at.bettertrack.app.ui.portfolio.TransactionsScreen
-import at.bettertrack.app.ui.sync.PendingSyncScreen
 import at.bettertrack.app.ui.screens.MarketsTabScreen
 import at.bettertrack.app.ui.screens.WorkbenchTabScreen
-import at.bettertrack.app.ui.workboard.WorkboardEntry
-import at.bettertrack.app.ui.chat.ChatListScreen
-import at.bettertrack.app.ui.chat.ChatThreadScreen
-import at.bettertrack.app.ui.ideas.IdeaDetailScreen
-import at.bettertrack.app.ui.market.MarketIntelScreen
+import at.bettertrack.app.ui.settings.AboutScreen
+import at.bettertrack.app.ui.settings.ActiveSessionsScreen
+import at.bettertrack.app.ui.settings.ChangePasswordScreen
+import at.bettertrack.app.ui.settings.ChangelogScreen
+import at.bettertrack.app.ui.settings.DeleteAccountScreen
+import at.bettertrack.app.ui.settings.LanguageScreen
+import at.bettertrack.app.ui.settings.SecurityScreen
+import at.bettertrack.app.ui.settings.ServerScreen
+import at.bettertrack.app.ui.settings.SettingsScreen
+import at.bettertrack.app.ui.settings.TwoFactorScreen
 import at.bettertrack.app.ui.social.FriendGroupsScreen
 import at.bettertrack.app.ui.social.FriendOverviewScreen
 import at.bettertrack.app.ui.social.SharedConglomerateViewScreen
 import at.bettertrack.app.ui.social.SharedPortfolioViewScreen
 import at.bettertrack.app.ui.social.SharedWatchlistViewScreen
 import at.bettertrack.app.ui.social.SocialScreen
-import at.bettertrack.app.ui.settings.ChangelogScreen
-import at.bettertrack.app.ui.settings.SecurityScreen
-import at.bettertrack.app.ui.settings.SettingsScreen
-import at.bettertrack.app.ui.settings.AboutScreen
-import at.bettertrack.app.ui.settings.ActiveSessionsScreen
-import at.bettertrack.app.ui.settings.ChangePasswordScreen
-import at.bettertrack.app.ui.settings.DeleteAccountScreen
-import at.bettertrack.app.ui.settings.LanguageScreen
-import at.bettertrack.app.ui.settings.TwoFactorScreen
-import at.bettertrack.app.ui.applock.AppLockSetupScreen
+import at.bettertrack.app.ui.sync.PendingSyncScreen
+import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.workboard.WorkboardEntry
 import kotlin.reflect.KClass
+import kotlinx.coroutines.launch
 
 /** Which shell-level signal lights this tab's badge dot (R-arc mandate §1). */
 private enum class TabBadge {
@@ -238,10 +244,10 @@ private data class TabSpec(
  * by a comment that claimed the shell read the enum — it never did.
  */
 private val Tabs = listOf(
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, Icons.Outlined.PieChart, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
-    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, Icons.AutoMirrored.Outlined.ShowChart, BtSurface.MARKET),
-    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, Icons.Outlined.Dashboard, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
-    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, Icons.Outlined.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
+    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, BtIcons.Pie, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
+    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, BtIcons.Assets, BtSurface.MARKET),
+    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, BtIcons.Workbench, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
+    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, BtIcons.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
 )
 
 /**
@@ -345,6 +351,9 @@ fun BtApp() {
     // It routes through the SAME [switchToTab] the bottom bar uses, which is what
     // keeps saved state, restored back stacks and bar selection identical whether
     // you tapped or swiped.
+    // ONE displacement, read by the page (via btTabSwipe) and by the bottom
+    // bar's indicator. See [BtTabSwipeState].
+    val swipeState = rememberBtTabSwipeState()
     val onSwipeTab: (Boolean) -> Boolean = { forward ->
         val here = currentTab?.tab
         val next = here?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
@@ -521,9 +530,20 @@ fun BtApp() {
             if (isTopLevel) {
                 BtBottomBar(
                     tabs = visibleTabs,
-                    isSelected = { tab ->
-                        currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
+                    // §6.3's arbiter, stated at the call site: the NAV GRAPH owns
+                    // the settled selection, so this is 0f/1f. The gesture layer
+                    // owns only the in-flight lead, and only inside the bar's own
+                    // draw phase. Two writers, and neither can be mistaken for
+                    // the other. A future pager returns intermediate values here
+                    // and nothing else changes.
+                    selectionFraction = { tab ->
+                        if (currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true) {
+                            1f
+                        } else {
+                            0f
+                        }
                     },
+                    swipe = swipeState,
                     // The badges the top bar used to carry, on the tabs that own
                     // them. Both are dots, not counts — see [BtTabBadgeDot].
                     hasBadge = { tab ->
@@ -582,6 +602,7 @@ fun BtApp() {
                 // against the VISIBLE bar, so a Drive-only install swipes
                 // Portfolio ↔ Markets and stops there rather than landing on a
                 // tab it does not render.
+                swipeState = swipeState,
                 swipeEnabled = isTopLevel,
                 onSwipeTab = onSwipeTab,
             )
@@ -656,9 +677,78 @@ private fun BtOverviewSearchAction(onSearch: () -> Unit) {
  * bar is on screen from every tab while the ⋮ was only ever visible on Overview.
  */
 
+/** §6.2 metrics: the selection pill, unchanged from M3's own indicator tokens. */
+private val NAV_INDICATOR_WIDTH: Dp = 56.dp
+private val NAV_INDICATOR_HEIGHT: Dp = 32.dp
+
 /**
- * The bottom bar — the backbone the mandate keeps (§2), now five wide and
- * carrying the two signals the top bar gave up.
+ * The bottom bar — the backbone the mandate keeps (§2), rebuilt to B2 §6.
+ *
+ * ## What was rough, and what each change answers
+ *
+ * 1. **`containerColor` was `bt.surface` — exactly the card colour.** The bar had
+ *    no identity: cards floated on the bar's own tone and it read as a stuck card
+ *    rather than as the app's frame. It now takes the dedicated
+ *    [at.bettertrack.app.ui.theme.BtColors.navBar] tone, ΔL\* 9.4 above the page
+ *    in dark, mirroring the web's own `--bt-nav` token.
+ * 2. **It drew a 1px divider — the app's own retired idiom.** `BtGroup` states
+ *    the rule ("tonal elevation instead of divider lines"), and the old hairline
+ *    could not work anyway: `#262626` on `#171717` is a **1.28:1** step, a smudge
+ *    rather than a rule. The top edge is now `groupBorder`: nothing in dark,
+ *    where the bar's own tone separates it, and a real hairline in light, where
+ *    ~5 L\* of ramp cannot.
+ * 3. **80dp + divider + gesture inset ≈ 104dp of permanent chrome**, 13% of a
+ *    360×800 viewport for four destinations. `ShortNavigationBar` is 64dp — 16dp
+ *    reclaimed for free, and it is stable API in material3 1.4.0, not
+ *    experimental. The label survives the cut by moving to
+ *    [at.bettertrack.app.ui.theme.BtTypography.labelNav] (11sp): dropping labels
+ *    is the exact Trade-Republic failure mode the owner named.
+ * 4. **`PieChart` and `Dashboard` mushed** — both multi-part Material glyphs at a
+ *    2.0dp stroke, sharing a silhouette, sitting next to each other. The four
+ *    Origin glyphs ([BtIcons]) are the web's own nav set at a 1.6 stroke, and
+ *    `pie` (two arcs) against `workbench` (three dots on rules) tell apart at a
+ *    glance.
+ *
+ * ## The indicator is ONE layer, not four (§6.3)
+ *
+ * `ShortNavigationBarItem`'s per-item indicator is switched off
+ * (`selectedIndicatorColor = Color.Transparent`) and the pill is drawn once, in
+ * this composable's own `drawBehind`, positioned by [selectionFraction]. Four
+ * independent indicators can only ever cross-fade; one layer **translates**, so
+ * a tab change reads as the selection travelling to where you sent it.
+ *
+ * ## Two writers, one arbiter — and the honest version of it
+ *
+ * §6.3 was written against a `HorizontalPager` that Batch 1 was expected to
+ * introduce. Batch 1 shipped something else: a **gesture layer** ([btTabSwipe]),
+ * because a pager would have had to take the four tab routes out of the nav
+ * graph and rebuild per-tab back stacks by hand. So there is no
+ * `currentPageOffsetFraction` to read, and the adaptation is:
+ *
+ *  - **Rest is nav-graph truth.** [selectionFraction] is fed by
+ *    `currentDestination.hierarchy`, so it is 0f/1f — the exact fallback §6.3
+ *    prescribes. It also drives the per-item icon/label `lerp`, in composition,
+ *    where it is cheap because it only changes when the destination does.
+ *  - **In flight, the pill leads by exactly what the page moved.** The gesture
+ *    layer displaces the outgoing page by at most 40dp, damped; the pill travels
+ *    the same *fraction of one item step* that the page travelled *of one page
+ *    width* — `-pageOffsetPx / barWidthPx`, read in the draw phase so a drag
+ *    frame costs a redraw and not a recomposition. The sign is inverted because
+ *    content and indicator move opposite ways, which is the pager idiom.
+ *
+ * That proportion is the point. Letting the pill run the full step while the
+ * page nudges 11% would have the bar arrive somewhere the content never went —
+ * a bar that lies about the gesture, which is worse than a bar that does not
+ * move. When a real pager lands, [selectionFraction] starts returning true
+ * intermediate values and this composable needs no edit.
+ *
+ * ## Geometry is measured, never assumed
+ *
+ * The pill's position comes from each icon slot reporting its own centre via
+ * `onGloballyPositioned`, not from re-deriving M3's internal item metrics. That
+ * survives a two-tab Drive-only bar, RTL, font scaling and any future change to
+ * `ShortNavigationBar`'s padding tokens — all of which a hardcoded 6dp-from-top
+ * would get silently wrong.
  *
  * [hasBadge] is a predicate rather than a count map on purpose: the bar renders
  * dots, so a count here would be information the component cannot use and the
@@ -668,20 +758,145 @@ private fun BtOverviewSearchAction(onSearch: () -> Unit) {
 @Composable
 private fun BtBottomBar(
     tabs: List<TabSpec>,
-    isSelected: (TabSpec) -> Boolean,
+    selectionFraction: (TabSpec) -> Float,
     hasBadge: (TabSpec) -> Boolean,
     onSelect: (TabSpec) -> Unit,
+    swipe: BtTabSwipeState,
 ) {
     val bt = BtTheme.colors
+    val density = LocalDensity.current
+    val reducedMotion = rememberReducedMotion()
+
+    // Measured geometry, kept in ROOT coordinates on purpose: onGloballyPositioned
+    // fires children-first, so an icon cannot ask the bar where it is yet. Root
+    // coordinates make both callbacks order-independent and the subtraction
+    // happens at draw time, when both are known.
+    var barOriginX by remember { mutableFloatStateOf(Float.NaN) }
+    var barOriginY by remember { mutableFloatStateOf(Float.NaN) }
+    var barWidthPx by remember { mutableFloatStateOf(0f) }
+    val iconCentres = remember { mutableStateMapOf<Int, Offset>() }
+
+    val indicatorW = with(density) { NAV_INDICATOR_WIDTH.toPx() }
+    val indicatorH = with(density) { NAV_INDICATOR_HEIGHT.toPx() }
+    val ringPx = with(density) { 1.dp.toPx() }
+
+    // Where the pill belongs at rest: the fraction-weighted centroid of the icon
+    // centres. With 0f/1f fractions that is simply the selected tab's centre.
+    val restCentre: Offset? = run {
+        var weight = 0f
+        var x = 0f
+        var y = 0f
+        tabs.forEachIndexed { index, tab ->
+            val f = selectionFraction(tab)
+            if (f <= 0f) return@forEachIndexed
+            val centre = iconCentres[index] ?: return@forEachIndexed
+            weight += f
+            x += f * centre.x
+            y += f * centre.y
+        }
+        if (weight > 0f) Offset(x / weight, y / weight) else null
+    }
+
+    // The travel. Snapped on the first placement (nothing to animate towards yet)
+    // and under reduced motion; sprung otherwise, which is what makes a TAP slide
+    // rather than jump — the same win the swipe gets, for free.
+    val travelX = remember { Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(restCentre, reducedMotion) {
+        val target = restCentre ?: return@LaunchedEffect
+        if (!placed || reducedMotion) {
+            travelX.snapTo(target.x)
+            placed = true
+        } else {
+            travelX.animateTo(
+                target.x,
+                spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow),
+            )
+        }
+    }
+
     Column {
-        HorizontalDivider(thickness = 1.dp, color = bt.border)
-        NavigationBar(containerColor = bt.surface) {
-            tabs.forEach { tab ->
-                NavigationBarItem(
-                    selected = isSelected(tab),
+        // Nothing in dark (the bar's own tone separates it), a real hairline in
+        // light. One token, the same rule BtGroup and BtCard follow.
+        HorizontalDivider(thickness = 1.dp, color = bt.groupBorder)
+        ShortNavigationBar(
+            modifier = Modifier
+                .onGloballyPositioned {
+                    val p = it.positionInRoot()
+                    barOriginX = p.x
+                    barOriginY = p.y
+                    barWidthPx = it.size.width.toFloat()
+                }
+                .drawBehind {
+                    // The bar's own container, painted here rather than by
+                    // ShortNavigationBar, so the single indicator layer can sit
+                    // between the container and the items. It must cover the
+                    // gesture inset too, hence the full node rect.
+                    drawRect(bt.navBar)
+
+                    val centre = restCentre
+                    if (!placed || centre == null || barOriginX.isNaN()) return@drawBehind
+
+                    // One item step, measured. Zero on a one-tab bar, which
+                    // correctly disables the lead rather than dividing by it.
+                    val first = if (tabs.size >= 2) iconCentres[0] else null
+                    val second = if (tabs.size >= 2) iconCentres[1] else null
+                    val step = if (first != null && second != null) second.x - first.x else 0f
+
+                    // The in-flight lead: the same fraction of a step that the
+                    // page moved of a page. Pure, and unit-tested — see
+                    // [tabIndicatorLead], which is also where the sign inversion
+                    // is argued.
+                    val lead = tabIndicatorLead(swipe.pageOffsetPx, barWidthPx)
+
+                    // Clamping to the outermost icon centres is what stops the
+                    // pill drifting off the end of the bar when the user swipes
+                    // past the last tab and the gesture layer springs back.
+                    //
+                    // Read over `tabs.indices` and not over the map's values: the
+                    // map is keyed by index and survives a change in how many
+                    // tabs the bar shows. A storage-mode change (FULL → Drive,
+                    // which drops People and the Workbench) would otherwise leave
+                    // two stale entries behind and clamp the pill to a bar that
+                    // is no longer there.
+                    val live = tabs.indices.mapNotNull { iconCentres[it]?.x }
+                    val minX = live.minOrNull() ?: return@drawBehind
+                    val maxX = live.maxOrNull() ?: return@drawBehind
+                    val x = (travelX.value + lead * step).coerceIn(minX, maxX) - barOriginX
+                    val y = centre.y - barOriginY
+
+                    val topLeft = Offset(x - indicatorW / 2f, y - indicatorH / 2f)
+                    val size = Size(indicatorW, indicatorH)
+                    val radius = CornerRadius(indicatorH / 2f)
+                    drawRoundRect(bt.goldWashStrong, topLeft, size, radius)
+                    // Light only: on white a 26% gold fill alone is a faint
+                    // smudge, so the pill gets the edge the rule gives every
+                    // other light container. `goldEdge` is already the ink hue
+                    // in light — a pale gold hairline on white is invisible.
+                    if (bt.isLight) {
+                        drawRoundRect(bt.goldEdge, topLeft, size, radius, style = Stroke(ringPx))
+                    }
+                },
+            // Painted in drawBehind above; M3 must not lay its own opaque
+            // container over the indicator layer.
+            containerColor = Color.Transparent,
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                val fraction = selectionFraction(tab)
+                val ink = lerp(bt.textMuted, bt.goldInk, fraction)
+                ShortNavigationBarItem(
+                    selected = fraction >= 0.5f,
                     onClick = { onSelect(tab) },
                     icon = {
-                        Box {
+                        Box(
+                            Modifier.onGloballyPositioned {
+                                val p = it.positionInRoot()
+                                iconCentres[index] = Offset(
+                                    p.x + it.size.width / 2f,
+                                    p.y + it.size.height / 2f,
+                                )
+                            },
+                        ) {
                             Icon(tab.icon, contentDescription = null)
                             // Nudged onto the glyph's top-right corner rather
                             // than the item's, so the dot reads as belonging to
@@ -695,15 +910,19 @@ private fun BtBottomBar(
                             )
                         }
                     },
-                    label = { Text(stringResource(tab.labelRes)) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = bt.gold,
-                        selectedTextColor = bt.gold,
-                        // Clean translucent-gold selection pill (matches the chip
-                        // + badge tint language) instead of a muddy amber fill.
-                        indicatorColor = bt.wash(bt.gold, 0.16f),
-                        unselectedIconColor = bt.textMuted,
-                        unselectedTextColor = bt.textMuted,
+                    label = {
+                        Text(stringResource(tab.labelRes), style = BtTheme.type.labelNav)
+                    },
+                    colors = ShortNavigationBarItemDefaults.colors(
+                        // Both states carry the SAME lerped ink, because the
+                        // ranking is already in `fraction`. Letting M3 pick by
+                        // its boolean would re-introduce the cross-fade the
+                        // single indicator layer exists to remove.
+                        selectedIconColor = ink,
+                        selectedTextColor = ink,
+                        selectedIndicatorColor = Color.Transparent,
+                        unselectedIconColor = ink,
+                        unselectedTextColor = ink,
                     ),
                 )
             }
@@ -722,6 +941,8 @@ private fun BtNavHost(
     /** Inbox unread count, rendered on Overview's overflow entry. */
     notifUnread: Int,
     showNotifications: Boolean,
+    /** Shared with the bottom bar so page and indicator move together. */
+    swipeState: BtTabSwipeState,
     /** Top-level pages only — see [btTabSwipe]. */
     swipeEnabled: Boolean,
     onSwipeTab: (forward: Boolean) -> Boolean,
@@ -813,7 +1034,7 @@ private fun BtNavHost(
         startDestination = PortfolioTabRoute,
         modifier = Modifier
             .fillMaxSize()
-            .btTabSwipe(enabled = swipeEnabled, onSwipe = onSwipeTab),
+            .btTabSwipe(state = swipeState, enabled = swipeEnabled, onSwipe = onSwipeTab),
     ) {
         // Tabs
         composable<PortfolioTabRoute> {

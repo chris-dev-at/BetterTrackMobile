@@ -982,7 +982,7 @@ fun CashScreen(
                         isRefreshing = refreshing,
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = bt.surface,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 },
             ) {
@@ -1495,7 +1495,7 @@ fun CashScreen(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { if (!correctionBusy) deleteTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             title = { Text(stringResource(R.string.bt_cash_delete_title), color = bt.textPrimary) },
             text = {
                 Text(stringResource(R.string.bt_cash_delete_message), color = bt.textSecondary)
@@ -1523,7 +1523,7 @@ fun CashScreen(
     correctionNotice?.let { notice ->
         AlertDialog(
             onDismissRequest = { vm.clearCorrectionNotice() },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             title = {
                 Text(
                     text = stringResource(
@@ -1549,7 +1549,7 @@ fun CashScreen(
             },
             confirmButton = {
                 TextButton(onClick = { vm.clearCorrectionNotice() }) {
-                    Text(stringResource(R.string.bt_action_done), color = bt.gold)
+                    Text(stringResource(R.string.bt_action_done), color = bt.goldInk)
                 }
             },
         )
@@ -1592,7 +1592,7 @@ fun CashScreen(
     archiveTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { archiveTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_cash_archive_title)) },
@@ -1668,7 +1668,7 @@ private fun SourceRow(
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surface,
+                    containerColor = bt.surfaceHigh,
                 ) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.bt_switcher_rename), color = bt.textPrimary) },
@@ -1726,7 +1726,7 @@ private fun CashBudgetSheet(
     ModalBottomSheet(
         onDismissRequest = { if (!busy) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
     ) {
         Column(
             Modifier
@@ -1885,7 +1885,7 @@ private fun CashMovementTagsSheet(
     ModalBottomSheet(
         onDismissRequest = { if (!busy) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
     ) {
         Column(
             Modifier
@@ -2050,7 +2050,7 @@ private fun MovementRow(
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surface,
+                    containerColor = bt.surfaceHigh,
                 ) {
                     onEditTags?.let { editTags ->
                         DropdownMenuItem(
@@ -2195,7 +2195,7 @@ private fun CashCorrectionSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -2359,7 +2359,7 @@ private fun CashEntrySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -2615,7 +2615,7 @@ private fun TransferSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -2813,7 +2813,7 @@ private fun SourceDialog(
     var type by rememberSaveable { mutableStateOf(initialType) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         title = { Text(title) },
         text = {

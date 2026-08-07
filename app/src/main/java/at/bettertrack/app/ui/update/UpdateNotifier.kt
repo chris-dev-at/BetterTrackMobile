@@ -162,7 +162,7 @@ private fun OfferBody(
     onIgnore: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    Icon(Icons.Outlined.CloudDownload, contentDescription = null, tint = bt.gold, modifier = Modifier.size(36.dp))
+    Icon(Icons.Outlined.CloudDownload, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(36.dp))
     Text(
         text = stringResource(R.string.bt_update_dialog_title),
         style = MaterialTheme.typography.titleLarge,
@@ -226,7 +226,7 @@ private fun DownloadingBody(state: UpdateInstallState.Downloading, onCancel: () 
     val context = LocalContext.current
     val canInstall = rememberCanInstallPackages()
 
-    Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null, tint = bt.gold, modifier = Modifier.size(36.dp))
+    Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(36.dp))
     Text(
         text = if (state.percent == null) {
             stringResource(R.string.bt_update_preparing)
@@ -242,7 +242,7 @@ private fun DownloadingBody(state: UpdateInstallState.Downloading, onCancel: () 
         LinearProgressIndicator(
             progress = { fraction },
             modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-            color = bt.gold,
+            color = bt.goldInk,
             trackColor = bt.border,
         )
         Text(
@@ -253,7 +253,7 @@ private fun DownloadingBody(state: UpdateInstallState.Downloading, onCancel: () 
     } else {
         LinearProgressIndicator(
             modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-            color = bt.gold,
+            color = bt.goldInk,
             trackColor = bt.border,
         )
     }
@@ -274,7 +274,7 @@ private fun InstallingBody(onCancel: () -> Unit) {
     val context = LocalContext.current
     val canInstall = rememberCanInstallPackages()
 
-    Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null, tint = bt.gold, modifier = Modifier.size(36.dp))
+    Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(36.dp))
     Text(
         text = stringResource(R.string.bt_update_installing),
         style = MaterialTheme.typography.titleMedium,
@@ -283,7 +283,7 @@ private fun InstallingBody(onCancel: () -> Unit) {
     )
     LinearProgressIndicator(
         modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-        color = bt.gold,
+        color = bt.goldInk,
         trackColor = bt.border,
     )
     InstallPermissionHint(canInstall = canInstall, onOpenSettings = { openInstallUnknownAppsSettings(context) })
@@ -414,7 +414,7 @@ fun UpdateAvailableRow(update: AvailableUpdate) {
             Icon(
                 Icons.Outlined.SystemUpdateAlt,
                 contentDescription = null,
-                tint = bt.gold,
+                tint = bt.goldInk,
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(12.dp))

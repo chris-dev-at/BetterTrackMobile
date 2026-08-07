@@ -331,7 +331,7 @@ fun AppLockSetupScreen(
                 modifier = Modifier.fillMaxSize().padding(pad),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = bt.gold)
+                CircularProgressIndicator(color = bt.goldInk)
             }
             return@Scaffold
         }
@@ -415,7 +415,7 @@ fun AppLockSetupScreen(
     if (showBiometricOffer) {
         AlertDialog(
             onDismissRequest = { showBiometricOffer = false; onDone() },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_applock_biometric_offer_title)) },
@@ -425,7 +425,7 @@ fun AppLockSetupScreen(
                     controller.setBiometricEnabled(true)
                     showBiometricOffer = false
                     onDone()
-                }) { Text(stringResource(R.string.bt_applock_biometric_offer_enable), color = bt.gold) }
+                }) { Text(stringResource(R.string.bt_applock_biometric_offer_enable), color = bt.goldInk) }
             },
             dismissButton = {
                 TextButton(onClick = { showBiometricOffer = false; onDone() }) {
@@ -439,7 +439,7 @@ fun AppLockSetupScreen(
     if (showNoPinDialog) {
         AlertDialog(
             onDismissRequest = { showNoPinDialog = false; phase = SetupPhase.Choose; entered = "" },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_applock_bt_nopin_title)) },
@@ -451,7 +451,7 @@ fun AppLockSetupScreen(
                     phase = SetupPhase.Enter
                     entered = ""
                     errorRes = null
-                }) { Text(stringResource(R.string.bt_applock_bt_nopin_device), color = bt.gold) }
+                }) { Text(stringResource(R.string.bt_applock_bt_nopin_device), color = bt.goldInk) }
             },
             dismissButton = {
                 TextButton(onClick = { showNoPinDialog = false; phase = SetupPhase.Choose; entered = "" }) {
@@ -531,7 +531,7 @@ private fun SetupChoiceCard(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, tint = bt.gold, modifier = Modifier.size(26.dp))
+            Icon(icon, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)

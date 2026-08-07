@@ -147,7 +147,7 @@ private fun LanguageOption(
             }
             if (selected) {
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Outlined.Check, contentDescription = null, tint = bt.gold, modifier = Modifier.size(22.dp))
+                Icon(Icons.Outlined.Check, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(22.dp))
             }
         }
     }

@@ -331,7 +331,7 @@ private fun ModeCard(mode: StorageMode) {
             Text(
                 text = stringResource(mode.labelRes()),
                 style = MaterialTheme.typography.titleMedium,
-                color = bt.gold,
+                color = bt.goldInk,
             )
             Spacer(Modifier.height(8.dp))
             Text(
@@ -406,7 +406,7 @@ private fun VaultSyncCard() {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 }
             }

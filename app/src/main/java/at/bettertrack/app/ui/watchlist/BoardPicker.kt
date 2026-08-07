@@ -147,7 +147,7 @@ fun BoardPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 20.dp).navigationBarsPadding()) {

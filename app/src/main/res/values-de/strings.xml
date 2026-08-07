@@ -329,6 +329,15 @@
     <string name="bt_mirror_syncing">Synchronisiert %1$d%%</string>
 
     <!-- v5 discreet mode -->
+    <!-- Appearance (B2 §1.3): device-scoped theme choice. -->
+    <string name="bt_settings_appearance_section">Darstellung</string>
+    <string name="bt_settings_theme">Design</string>
+    <string name="bt_settings_theme_sub">Hell, dunkel oder wie am Telefon</string>
+    <string name="bt_settings_theme_system">Systemstandard</string>
+    <string name="bt_settings_theme_light">Hell</string>
+    <string name="bt_settings_theme_dark">Dunkel</string>
+    <string name="bt_settings_true_black">Reines Schwarz</string>
+    <string name="bt_settings_true_black_sub">Komplett schwarzer Hintergrund im dunklen Design. Spart Strom auf OLED-Displays.</string>
     <string name="bt_settings_privacy_section">Privatsphäre</string>
     <string name="bt_settings_discreet">Diskreter Modus</string>
     <string name="bt_settings_discreet_sub">Blendet alle Beträge aus. Prozentwerte bleiben sichtbar. Halte deine Gesamtsumme gedrückt, um kurz hineinzusehen.</string>

@@ -151,7 +151,7 @@ fun CashBudgetRow(
                     DropdownMenu(
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
-                        containerColor = bt.surface,
+                        containerColor = bt.surfaceHigh,
                     ) {
                         onEdit?.let { edit ->
                             DropdownMenuItem(

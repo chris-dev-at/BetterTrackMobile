@@ -269,7 +269,7 @@ private fun PermissionStatusCard(granted: Boolean, needsPermission: Boolean, onE
                 )
             }
             if (!on) {
-                Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.gold)
+                Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.goldInk)
             }
         }
     }

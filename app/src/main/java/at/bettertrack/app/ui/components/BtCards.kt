@@ -24,9 +24,30 @@ import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
- * Base BetterTrack card (spec §3.5): dark surface with a 1px border and 6–8dp
- * radius — flat, borders instead of elevation shadows. `selected` switches to
- * the amber-tinted highlighted-card surface (gold is the selection accent).
+ * Base BetterTrack card (spec §3.5): a raised surface at `BtShapes.card` radius
+ * — flat, tone instead of elevation shadows. `selected` switches to the
+ * amber-tinted highlighted-card surface (gold is the selection accent).
+ *
+ * ## The border, and why it left dark (§2 A3)
+ *
+ * This card drew a 1px `border` hairline in every mode until B2-B, and it was
+ * the app's single most-repeated visual device — 88 sites, and the reason the
+ * whole UI read as "old". The diagnosis is arithmetic, not taste: the old
+ * `#262626` hairline on the old `#171717` card is a **1.28:1** luminance step,
+ * which the eye resolves as a smudge rather than as a rule. The app was paying
+ * for a border everywhere and getting a slight blur.
+ *
+ * With the five-step ramp the dark card is already ΔL\* 6.0 above the page, so
+ * tone states the raise cleanly and the hairline is pure noise — exactly the
+ * case `BtGroup` made in R2 and only half-finished. Light cannot lean on tone
+ * (~5 L\* across the entire ramp), so it keeps the hairline. That is the one
+ * app-wide rule, carried by one token:
+ * [at.bettertrack.app.ui.theme.BtColors.groupBorder].
+ *
+ * **Selection is not covered by the rule.** A selected card keeps its
+ * `goldSurfaceStrong` edge in BOTH modes, because that stroke is not separating
+ * the card from the page — it is saying *this one is chosen*, which tone alone
+ * has never said here and which must survive in dark.
  */
 @Composable
 fun BtCard(
@@ -38,7 +59,7 @@ fun BtCard(
 ) {
     val bt = BtTheme.colors
     val container = if (selected) bt.goldSurface else bt.surface
-    val border = BorderStroke(1.dp, if (selected) bt.goldSurfaceStrong else bt.border)
+    val border = BorderStroke(1.dp, if (selected) bt.goldSurfaceStrong else bt.groupBorder)
     if (onClick != null) {
         val interaction = remember { MutableInteractionSource() }
         Surface(

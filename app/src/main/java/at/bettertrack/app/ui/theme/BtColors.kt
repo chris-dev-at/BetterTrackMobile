@@ -60,6 +60,33 @@ data class BtColors(
     val border: Color,
     /** Emphasised hairline. */
     val borderStrong: Color,
+    /**
+     * The **tone-vs-hairline rule as a token** (§1.4).
+     *
+     * `Color.Transparent` in dark, [border] in light. Draw it wherever a
+     * container today separates itself from the page by TONE ALONE and needs the
+     * hairline back on a five-L\*-wide light ramp: [BtGroup]'s edge, the bottom
+     * bar's top edge, `BtStates`' icon badge, sheet edges.
+     *
+     * It exists so those components read one token instead of writing
+     * `if (isLight)` six times — and so a seventh component cannot invent a
+     * seventh answer. Drawing it unconditionally is correct and free: a
+     * transparent 1dp stroke costs nothing in dark.
+     */
+    val groupBorder: Color,
+    /**
+     * The bottom navigation bar's own container tone (§6.2).
+     *
+     * A separate token from [surfaceHigh] even though the two share a value in
+     * both tables today, because the bar and a sheet are answering different
+     * questions and only one of them is allowed to move: the bar is the app's
+     * FRAME, and everything that must sit flush against it — most importantly
+     * the tab badge's ring (`BtTabBadgeDot`) — reads this name rather than
+     * guessing. Before B2-B the bar used [surface], i.e. exactly the card
+     * colour, which is why cards floated on it and it read as a stuck card
+     * rather than a frame.
+     */
+    val navBar: Color,
 
     val textPrimary: Color,
     val textSecondary: Color,
@@ -216,6 +243,9 @@ val BtDarkColors = BtColors(
 
     border = DarkHairlineInk.copy(alpha = 0.085f),
     borderStrong = DarkHairlineInk.copy(alpha = 0.15f),
+    // Tone separates in dark — there is nothing to draw.
+    groupBorder = Color.Transparent,
+    navBar = Color(0xFF1C222B), // == surfaceHigh; ΔL* 9.4 above the page
 
     textPrimary = Color(0xFFF4F6F8),
     textSecondary = Color(0xFFC7CDD5),
@@ -287,6 +317,9 @@ val BtLightColors = BtColors(
 
     border = LightHairlineInk.copy(alpha = 0.10f),
     borderStrong = LightHairlineInk.copy(alpha = 0.16f),
+    // Light spans ~5 L* from page to card, so tone alone cannot separate.
+    groupBorder = LightHairlineInk.copy(alpha = 0.10f),
+    navBar = Color(0xFFFFFFFF), // ΔL* 5.3 above the page — hence the hairline
 
     textPrimary = Color(0xFF131820),
     textSecondary = Color(0xFF3E4650),

@@ -281,7 +281,7 @@ fun HoldingDetailScreen(
                         isRefreshing = refreshing,
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = bt.surface,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 },
             ) {
@@ -495,7 +495,7 @@ private fun HoldingContent(
                                 if (latest == null) R.string.bt_price_add else R.string.bt_price_update,
                             ),
                             style = MaterialTheme.typography.labelLarge,
-                            color = bt.gold,
+                            color = bt.goldInk,
                         )
                     }
                 }
@@ -599,7 +599,7 @@ private fun HoldingContent(
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ShowChart,
                             contentDescription = null,
-                            tint = bt.gold,
+                            tint = bt.goldInk,
                             modifier = Modifier.width(20.dp),
                         )
                         Spacer(Modifier.width(10.dp))
@@ -626,7 +626,7 @@ private fun HoldingContent(
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                             contentDescription = null,
-                            tint = bt.gold,
+                            tint = bt.goldInk,
                             modifier = Modifier.width(20.dp),
                         )
                         Spacer(Modifier.width(10.dp))

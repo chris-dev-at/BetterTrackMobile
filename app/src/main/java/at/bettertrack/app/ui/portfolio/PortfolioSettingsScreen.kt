@@ -309,7 +309,7 @@ fun PortfolioSettingsScreen(
                     Text(stringResource(R.string.bt_action_cancel))
                 }
             },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
         )
     }
 

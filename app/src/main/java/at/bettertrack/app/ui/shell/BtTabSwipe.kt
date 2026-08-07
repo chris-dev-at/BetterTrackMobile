@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -79,6 +80,64 @@ internal fun swipeFollowOffset(totalDx: Float, maxPx: Float): Float =
     if (maxPx <= 0f) 0f else maxPx * tanh(totalDx / maxPx)
 
 /**
+ * How far the bottom bar's selection indicator leads a drag, **in item steps**.
+ *
+ * This is the whole of B2 §6.3's adaptation to a gesture layer, and it is one
+ * division on purpose. §6.3 was written for a `HorizontalPager`, whose
+ * `currentPageOffsetFraction` hands you the answer; there is no pager here (see
+ * [btTabSwipe]), so the fraction has to be derived from the only thing that
+ * actually moved — the page.
+ *
+ * The rule: **the indicator travels the same fraction of one item step that the
+ * page travelled of one page width.** [pageOffsetPx] is capped and damped at
+ * `SWIPE_FOLLOW_MAX`, so on a 411dp-wide screen a fully committed drag leads by
+ * 40/411 ≈ 0.097 of a step — a nudge, matching the page's own nudge.
+ *
+ * That proportion is the point, and it is why this is not simply `±1f`. Letting
+ * the pill run a whole step while the page moves a tenth of one would put the
+ * bar somewhere the content never went: a bar that lies about the gesture, which
+ * is worse than a bar that does not move at all. When a real pager lands, the
+ * shell starts returning true intermediate values from `selectionFraction` and
+ * this helper stops being needed.
+ *
+ * The sign inverts because content and indicator travel opposite ways — dragging
+ * the finger LEFT moves the page left and reveals the tab to the RIGHT, so the
+ * indicator must go right. That is the pager idiom, and getting it backwards is
+ * the single most likely way to break this.
+ *
+ * @param barWidthPx the bar's measured width; `0` (not yet laid out) disables
+ *   the lead rather than dividing by zero.
+ */
+internal fun tabIndicatorLead(pageOffsetPx: Float, barWidthPx: Float): Float =
+    if (barWidthPx <= 0f) 0f else -pageOffsetPx / barWidthPx
+
+/**
+ * The tab drag, hoisted so that **the page and the bottom bar move together**.
+ *
+ * The displacement used to be a private `Animatable` inside [btTabSwipe], which
+ * was right while the page was the only thing that moved. §6.3 asks the bar's
+ * selection indicator to travel with the gesture rather than snap after it, and
+ * a bar that reads a different number than the page is exactly the "bar snaps
+ * while content slides" failure the spec set out to prevent. One `Animatable`,
+ * two readers.
+ *
+ * [pageOffsetPx] is a **snapshot state read**: consume it inside a draw or
+ * layout lambda (as `BtBottomBar` does) and a drag frame costs a redraw, not a
+ * recomposition of the bar.
+ */
+@Stable
+internal class BtTabSwipeState {
+    /** Signed damped displacement of the current page, in px. Negative = page moved left. */
+    internal val offset = Animatable(0f)
+
+    /** What the page is drawn at right now. */
+    val pageOffsetPx: Float get() = offset.value
+}
+
+@Composable
+internal fun rememberBtTabSwipeState(): BtTabSwipeState = remember { BtTabSwipeState() }
+
+/**
  * Horizontal swipe between the four top-level tabs (owner ask, 2026-08-07).
  *
  * ## Why this is a gesture layer and not a `HorizontalPager`
@@ -109,19 +168,23 @@ internal fun swipeFollowOffset(totalDx: Float, maxPx: Float): Float =
  * before it starts. Scrubbing therefore wins on the chart area, which is the
  * behaviour the owner asked to preserve.
  *
+ * @param state the shared displacement — see [BtTabSwipeState]. The bottom bar
+ *   reads the same object, which is what keeps the indicator and the page from
+ *   telling the user two different stories about one gesture.
  * @param enabled top-level pages only — never on a pushed screen.
  * @param onSwipe returns `true` when the hop actually happened; `false` (an end
  *   of the bar) springs the page back instead of leaving it displaced.
  */
 @Composable
 internal fun Modifier.btTabSwipe(
+    state: BtTabSwipeState,
     enabled: Boolean,
     onSwipe: (forward: Boolean) -> Boolean,
 ): Modifier = composed {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val reducedMotion = rememberReducedMotion()
-    val offset = remember { Animatable(0f) }
+    val offset = state.offset
     val onSwipeState = rememberUpdatedState(onSwipe)
     val distancePx = with(density) { SWIPE_DISTANCE.toPx() }
     val velocityPx = with(density) { SWIPE_VELOCITY.toPx() }

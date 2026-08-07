@@ -346,7 +346,7 @@ private fun AssetSearchSheet(
     val query by vm.query.collectAsStateWithLifecycle()
     val results by vm.results.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surface, contentColor = bt.textPrimary) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = bt.surfaceHigh, contentColor = bt.textPrimary) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).imePadding().navigationBarsPadding()) {
             Text(stringResource(R.string.bt_conglo_add_asset), style = MaterialTheme.typography.titleMedium, color = bt.textPrimary, modifier = Modifier.padding(bottom = 8.dp))
             OutlinedTextField(
@@ -373,7 +373,7 @@ private fun AssetSearchSheet(
                                 Text(a.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                                 Text(listOfNotNull(a.name, a.exchange).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Icon(Icons.Outlined.Add, contentDescription = null, tint = bt.gold, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Outlined.Add, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(20.dp))
                         }
                     }
                 }

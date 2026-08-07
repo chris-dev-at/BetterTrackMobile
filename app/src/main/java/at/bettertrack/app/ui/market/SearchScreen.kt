@@ -402,7 +402,7 @@ private fun EnrichingRow() {
         horizontalArrangement = Arrangement.Center,
     ) {
         CircularProgressIndicator(
-            color = bt.gold,
+            color = bt.goldInk,
             strokeWidth = 2.dp,
             modifier = Modifier.size(14.dp),
         )

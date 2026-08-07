@@ -219,9 +219,13 @@ fun BtSnackbarHost(hostState: SnackbarHostState, modifier: Modifier = Modifier) 
         Snackbar(
             snackbarData = data,
             shape = MaterialTheme.shapes.medium,
-            containerColor = bt.surface,
+            // §2 A1: an overlay floats above the content, so it takes the sheet/
+            // dialog level rather than the card level it used to share. In dark
+            // that is a real ΔL* 3.4 lift off the cards it covers; in light the
+            // two levels are both white and the shadow does the separating.
+            containerColor = bt.surfaceHigh,
             contentColor = bt.textPrimary,
-            actionContentColor = bt.gold,
+            actionContentColor = bt.goldInk,
             dismissActionContentColor = bt.textSecondary,
         )
     }

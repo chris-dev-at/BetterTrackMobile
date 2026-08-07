@@ -76,6 +76,28 @@ data class BtTypography(
         lineHeight = 17.sp,
         fontFeatureSettings = FONT_FEATURE_TABULAR,
     ),
+    /**
+     * The bottom bar's label, and the ONE type addition B2 makes (§2 A9).
+     *
+     * 11sp Medium, tracking 0. The bar moved from an 80dp `NavigationBar` to a
+     * 64dp `ShortNavigationBar`, and the 16dp that buys has to come from
+     * somewhere: at `labelMedium`'s 12sp the label and the 24dp glyph do not both
+     * fit the shorter item with the 6dp gap intact. 11sp does, and it keeps the
+     * WORD — dropping labels is the exact Trade-Republic failure mode the owner
+     * named ("too simplified… annoying"), so the height is bought from the type
+     * ramp rather than from the information.
+     *
+     * Tracking is 0 rather than the brand's usual negative: at 11sp the tight
+     * tracking that gives the hero numbers their presence just closes up the
+     * counters and costs legibility at the smallest size the app ships.
+     */
+    val labelNav: TextStyle = TextStyle(
+        fontFamily = System,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        letterSpacing = 0.sp,
+    ),
 )
 
 val LocalBtTypography = staticCompositionLocalOf { BtTypography() }

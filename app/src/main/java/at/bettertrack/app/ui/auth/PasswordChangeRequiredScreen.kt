@@ -49,7 +49,7 @@ fun PasswordChangeRequiredScreen(
         Icon(
             imageVector = Icons.Outlined.Lock,
             contentDescription = null,
-            tint = bt.gold,
+            tint = bt.goldInk,
             modifier = Modifier.size(44.dp),
         )
         Spacer(Modifier.height(16.dp))

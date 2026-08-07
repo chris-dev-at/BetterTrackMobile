@@ -284,7 +284,7 @@ fun WatchlistPanel(
             }
             if (true) { // named watchlists are LIVE (V3-P5)
                 IconButton(onClick = { createOpen = true }) {
-                    Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.bt_watchlist_new), tint = bt.gold)
+                    Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.bt_watchlist_new), tint = bt.goldInk)
                 }
             }
         }
@@ -408,7 +408,7 @@ fun WatchlistPanel(
     deleteBoardConfirm?.let { board ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteBoardConfirm = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_watchlist_delete)) },
@@ -504,7 +504,7 @@ private fun WatchlistNameDialog(
     var name by remember { mutableStateOf(initial) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         title = { Text(title) },
         text = {

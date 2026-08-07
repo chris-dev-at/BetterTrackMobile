@@ -534,7 +534,7 @@ fun TransactionsScreen(
                         isRefreshing = refreshing,
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = bt.surface,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 },
             ) {
@@ -651,7 +651,7 @@ fun TransactionsScreen(
                                             CircularProgressIndicator(
                                                 modifier = Modifier.size(22.dp),
                                                 strokeWidth = 2.dp,
-                                                color = bt.gold,
+                                                color = bt.goldInk,
                                             )
                                         } else if (isOnline) {
                                             BtSecondaryButton(
@@ -783,7 +783,7 @@ private fun AssetFilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         LazyColumn(
@@ -858,7 +858,7 @@ private fun AssetFilterRow(
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = null,
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(20.dp),
                 )
             }

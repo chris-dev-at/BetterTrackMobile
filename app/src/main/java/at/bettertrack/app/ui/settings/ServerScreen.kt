@@ -224,7 +224,7 @@ fun ServerScreen(onBack: () -> Unit) {
             )
 
             status?.let {
-                Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, color = bt.gold)
+                Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, color = bt.goldInk)
             }
 
             Text(
@@ -396,7 +396,7 @@ private fun OriginField(
             warning == OriginWarning.INSECURE -> Text(
                 stringResource(R.string.bt_server_warn_insecure),
                 style = MaterialTheme.typography.bodySmall,
-                color = bt.gold,
+                color = bt.goldInk,
             )
             hint != null -> Text(
                 hint,

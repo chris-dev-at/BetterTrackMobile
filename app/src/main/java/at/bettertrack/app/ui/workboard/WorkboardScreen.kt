@@ -610,7 +610,7 @@ private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_alert_delete_title)) },
@@ -695,7 +695,7 @@ private fun AlertRow(
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                containerColor = bt.surface,
+                containerColor = bt.surfaceHigh,
             ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_alert_edit), color = bt.textPrimary) },
@@ -818,7 +818,7 @@ private fun AlertCreateSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -902,7 +902,7 @@ private fun AlertCreateSheet(
                                 Icon(
                                     Icons.Outlined.Add,
                                     contentDescription = null,
-                                    tint = bt.gold,
+                                    tint = bt.goldInk,
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -1076,7 +1076,7 @@ private fun AlertEditSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(

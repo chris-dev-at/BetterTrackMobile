@@ -442,7 +442,7 @@ private fun IdeaCreateSheet(vm: IdeasViewModel, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -599,7 +599,7 @@ private fun IdeaCreateSheet(vm: IdeasViewModel, onDismiss: () -> Unit) {
                                     Icon(
                                         Icons.Outlined.Add,
                                         contentDescription = null,
-                                        tint = bt.gold,
+                                        tint = bt.goldInk,
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }

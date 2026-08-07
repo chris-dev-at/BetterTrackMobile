@@ -366,7 +366,7 @@ fun IdeaDetailScreen(ideaId: String, onBack: () -> Unit, onOpenAsset: (String) -
     if (deleteConfirm) {
         AlertDialog(
             onDismissRequest = { if (!busy) deleteConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_ideas_delete_title)) },
@@ -548,7 +548,7 @@ private fun IdeaEditSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(

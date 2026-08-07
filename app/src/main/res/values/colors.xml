@@ -17,19 +17,28 @@
     <color name="bt_gold">#FFF6B82E</color>
 
     <!--
-      Window + splash background.
+      The splash canvas — and the one colour here that does NOT flip.
 
-      Deliberately pinned to the DARK page colour in BOTH configurations while
-      `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false. The app resolves every theme
-      mode to dark until the shared components have been swept for light (B2-B),
-      so on a light-system phone an unpinned `bt_bg` would flash a white window
-      and a white splash before Compose draws the dark app.
+      B2-A's `bt_window_bg` pinned BOTH the window and the splash to the dark
+      page colour, because until `BtThemeFeatures.LIGHT_MODE_PUBLIC` opened, the
+      app rendered dark on every system and a light-system phone would have
+      flashed white before Compose drew. B2-B opened that gate, so the WINDOW
+      background now follows the real `bt_bg` token per configuration and that
+      pin is gone.
 
-      B2-B deletes this override from the day config, at which point the splash
-      follows the SYSTEM theme while the app follows the user's — the one-frame
-      mismatch documented in §1.5 B7.
+      The SPLASH keeps a dark canvas on purpose, in both configurations. The
+      brand mark it carries (@drawable/splash_bt_glyph) is a WHITE "B" beside a
+      gold "T" — artwork drawn for a dark ground. On the light page colour the
+      B disappears entirely and the gold T sits at 1.78:1, so following the
+      configuration here would ship an invisible logo. A fixed dark brand
+      moment before a light app is a normal, deliberate pattern; an invisible
+      wordmark is a bug.
+
+      The honest fix is a light-ground variant of the artwork, which lives in
+      res/drawable* — package B2-C's territory this batch. Until it exists this
+      name states the constraint instead of hiding it.
     -->
-    <color name="bt_window_bg">#FF0A0D12</color>
+    <color name="bt_splash_bg">#FF0A0D12</color>
 
     <!-- Launcher-icon tile color, sampled exactly from BT_AppIcon.png so the
          foreground's full-bleed tile blends invisibly into the background layer. -->

@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Color as AndroidColor
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import at.bettertrack.app.data.i18n.LocaleManager
 import android.util.Log
@@ -150,6 +151,28 @@ class MainActivity : FragmentActivity() {
                 detectDark,
             ),
         )
+        // Turn OFF the platform's enforced navigation-bar contrast scrim.
+        //
+        // Found on device during the B2-B light matrix: in dark, the bottom 48dp
+        // measured #11141A while the bar above it measured #1C222B — a visibly
+        // darker band under the bottom bar, reading as an unintended second bar
+        // directly beneath the one §6.2 just gave its own tone.
+        //
+        // The cause is `SystemBarStyle.auto`: androidx enables
+        // `isNavigationBarContrastEnforced` for the auto style, and the platform
+        // then paints a translucent scrim behind a transparent nav bar. The old
+        // pre-B2 code used `SystemBarStyle.dark(...)`, which does not, so this
+        // arrived with the B6 theme-aware bar styles and not with the bar itself.
+        //
+        // Disabling it is safe HERE specifically: the scrim exists to keep system
+        // nav buttons legible over unknown app content, and the buttons are not
+        // over unknown content — [BtBottomBar] paints an opaque `navBar` beneath
+        // them and this very method has already pointed the button polarity at
+        // the same resolved theme. Full-screen destinations run their own
+        // Scaffold on an opaque page colour, so the guarantee holds there too.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
     }
 
     /**

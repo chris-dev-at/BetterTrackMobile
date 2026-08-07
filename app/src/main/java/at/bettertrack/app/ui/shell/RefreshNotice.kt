@@ -103,7 +103,7 @@ fun RefreshFailedBanner(
                         Text(
                             text = stringResource(R.string.bt_action_retry),
                             style = MaterialTheme.typography.labelLarge,
-                            color = bt.gold,
+                            color = bt.goldInk,
                         )
                     }
                 }

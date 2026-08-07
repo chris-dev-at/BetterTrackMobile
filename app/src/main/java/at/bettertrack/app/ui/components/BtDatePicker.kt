@@ -104,7 +104,7 @@ fun BtDatePickerDialog(
                     val ms = state.selectedDateMillis ?: return@TextButton
                     onPick(Instant.ofEpochMilli(ms).atZone(ZoneId.of("UTC")).toLocalDate())
                 },
-            ) { Text(stringResource(R.string.bt_txform_date_ok), color = bt.gold) }
+            ) { Text(stringResource(R.string.bt_txform_date_ok), color = bt.goldInk) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
@@ -72,6 +73,8 @@ import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
+import at.bettertrack.app.data.prefs.BtThemeMode
+import at.bettertrack.app.data.prefs.themeModeFromName
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originLabel
 import at.bettertrack.app.ui.components.BtCollapsingHeader
@@ -465,6 +468,37 @@ fun SettingsScreen(
                 }
             }
 
+            // ── APPEARANCE ───────────────────────────────────────────────────
+            // Device-scoped, not account-scoped: the theme belongs to the phone
+            // you are holding, survives logout, and is shown in EVERY storage
+            // mode — a Drive-only install has no account but still has eyes.
+            BtSectionHeader(stringResource(R.string.bt_settings_appearance_section))
+            val themeMode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
+            val trueBlack by AppGraph.devicePrefs.trueBlack.collectAsStateWithLifecycle()
+            BtGroup {
+                BtGroupRow(
+                    icon = Icons.Outlined.Contrast,
+                    title = stringResource(R.string.bt_settings_theme),
+                    subtitle = stringResource(R.string.bt_settings_theme_sub),
+                    onClick = { picker = SettingsPicker.Theme },
+                    trailing = { SettingsValue(stringResource(themeModeLabelRes(themeMode))) },
+                )
+                // Shown for System and Dark, hidden for Light — gated on the
+                // CHOICE rather than on what is on screen right now. Gating on
+                // the live table would make the row appear and disappear at
+                // sunset for a System user, which reads as a bug; gating on the
+                // choice says the honest thing, that this tunes your dark theme.
+                if (themeMode != BtThemeMode.Light) {
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.DarkMode,
+                        title = stringResource(R.string.bt_settings_true_black),
+                        subtitle = stringResource(R.string.bt_settings_true_black_sub),
+                        checked = trueBlack,
+                        onCheckedChange = { AppGraph.devicePrefs.setTrueBlack(it) },
+                    )
+                }
+            }
+
             // ── PRIVACY ──────────────────────────────────────────────────────
             // Discreet mode round-trips through the account, so it belongs to the
             // modes that have one.
@@ -604,10 +638,10 @@ fun SettingsScreen(
     if (showLogoutConfirm) {
         AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
-            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, tint = bt.gold) },
+            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, tint = bt.goldInk) },
             title = { Text(stringResource(R.string.bt_settings_logout_confirm_title)) },
             text = { Text(stringResource(R.string.bt_settings_logout_confirm_message)) },
             confirmButton = {
@@ -659,6 +693,28 @@ fun SettingsScreen(
             },
         )
 
+        SettingsPicker.Theme -> {
+            // Collected, not read off `.value`: the dialog does not dismiss on
+            // pick (it is its own preview), so the tick has to MOVE when the
+            // choice changes underneath it.
+            val mode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
+            SettingsChoiceDialog(
+            title = stringResource(R.string.bt_settings_theme),
+            options = BtThemeMode.entries.map { it.name to stringResource(themeModeLabelRes(it)) },
+            selected = mode.name,
+            // Device-local and synchronous: there is nothing to wait for and
+            // nothing that can fail, so the two round-trip slots stay empty.
+            busy = false,
+            message = null,
+            // Deliberately does NOT dismiss. The whole app is repainting behind
+            // this dialog, which makes the picker its own preview — the one
+            // place in Settings where staying open is more useful than closing.
+            onPick = { AppGraph.devicePrefs.setThemeMode(themeModeFromName(it)) },
+            closeLabelRes = R.string.bt_action_done,
+            onDismiss = { picker = null },
+            )
+        }
+
         SettingsPicker.ProfileIcon -> ProfileIconDialog(
             current = profile?.profileIcon,
             ready = profile != null,
@@ -675,8 +731,19 @@ fun SettingsScreen(
     }
 }
 
-/** Which of the three account pickers is open. */
-private enum class SettingsPicker { Currency, Visibility, ProfileIcon }
+/** Which of the settings pickers is open. */
+private enum class SettingsPicker { Currency, Visibility, ProfileIcon, Theme }
+
+/**
+ * Theme choice → its label. Exhaustive over [BtThemeMode] on purpose: the
+ * enum stays three-valued (true black is a boolean UNDER Dark, not a fourth
+ * mode) precisely so this `when` cannot grow a silent `else`.
+ */
+private fun themeModeLabelRes(mode: BtThemeMode): Int = when (mode) {
+    BtThemeMode.System -> R.string.bt_settings_theme_system
+    BtThemeMode.Light -> R.string.bt_settings_theme_light
+    BtThemeMode.Dark -> R.string.bt_settings_theme_dark
+}
 
 /** `defaultPortfolioVisibility` wire values — the platform's closed pair. */
 private const val VISIBILITY_PRIVATE = "private"
@@ -739,11 +806,18 @@ private fun SettingsChoiceDialog(
     message: BtMessage?,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * The closing button's label. "Cancel" is right for the account pickers,
+     * whose choice is still in flight when the button is reachable; a picker
+     * that has already applied its choice must not offer to cancel it.
+     */
+    closeLabelRes: Int = R.string.bt_action_cancel,
 ) {
     val bt = BtTheme.colors
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        // §2 A1: a dialog is the top of the ramp, not the card level.
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(title) },
@@ -767,14 +841,14 @@ private fun SettingsChoiceDialog(
                         Text(
                             text = label,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) bt.gold else bt.textPrimary,
+                            color = if (isSelected) bt.goldInk else bt.textPrimary,
                             modifier = Modifier.weight(1f),
                         )
                         if (isSelected) {
                             Icon(
                                 imageVector = Icons.Outlined.Check,
                                 contentDescription = null,
-                                tint = bt.gold,
+                                tint = bt.goldInk,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -788,7 +862,7 @@ private fun SettingsChoiceDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss, enabled = !busy) {
-                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+                Text(stringResource(closeLabelRes), color = bt.textSecondary)
             }
         },
     )
@@ -821,7 +895,7 @@ private fun ProfileIconDialog(
     val bt = BtTheme.colors
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_settings_profile_icon_title)) },

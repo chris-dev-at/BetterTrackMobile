@@ -226,7 +226,7 @@ fun ChainDetailSheet(chainId: String, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -306,7 +306,7 @@ fun ChainDetailSheet(chainId: String, onDismiss: () -> Unit) {
         val name = (roster as? ChainRosterState.Loaded)?.roster?.name.orEmpty()
         AlertDialog(
             onDismissRequest = { if (!leaving) leaveConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_chain_leave_title, name)) },
@@ -477,7 +477,7 @@ private fun ActivityFeed(
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp,
-                            color = bt.gold,
+                            color = bt.goldInk,
                         )
                     }
                 } else {

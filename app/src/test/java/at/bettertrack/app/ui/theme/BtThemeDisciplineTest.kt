@@ -199,11 +199,14 @@ class BtThemeDisciplineTest {
     // ── The rollout gate ────────────────────────────────────────────────────
 
     @Test
-    fun `light mode is not user-reachable yet`() {
-        // Tripwire, in the tradition of the OAuth scope flags. Light mode goes
-        // public in package B2-B, together with the component sweep and the
-        // Settings → Appearance picker — never as a side effect of another edit.
-        assertEquals(false, BtThemeFeatures.LIGHT_MODE_PUBLIC)
+    fun `light mode is public`() {
+        // The tripwire, kept and inverted rather than deleted. It was `false`
+        // through B2-A so that the flip could not drift in as a side effect of
+        // another edit; B2-B made it deliberately, together with the component
+        // sweep and the Settings → Appearance picker, and this line moved in the
+        // same commit. It still earns its keep in the new position: it is what
+        // fails if someone quietly turns the feature back off.
+        assertEquals(true, BtThemeFeatures.LIGHT_MODE_PUBLIC)
     }
 
     @Test

@@ -113,7 +113,7 @@ fun ManualPriceSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -233,7 +233,7 @@ fun ManualPriceSheet(
         val point = points.firstOrNull { it.dateIso == dateIso }
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             title = { Text(stringResource(R.string.bt_price_delete_title), color = bt.textPrimary) },
             text = {
                 Text(

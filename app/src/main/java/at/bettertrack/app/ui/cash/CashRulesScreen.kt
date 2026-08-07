@@ -394,7 +394,7 @@ fun CashRulesScreen(onBack: () -> Unit) {
                         Icon(
                             Icons.Outlined.Add,
                             contentDescription = stringResource(R.string.bt_rules_new),
-                            tint = bt.gold,
+                            tint = bt.goldInk,
                         )
                     }
                 },
@@ -528,7 +528,7 @@ fun CashRulesScreen(onBack: () -> Unit) {
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { if (!busy) deleteTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_rules_delete_title)) },
@@ -631,7 +631,7 @@ private fun CashRuleRow(
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surface,
+                    containerColor = bt.surfaceHigh,
                 ) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary) },
@@ -706,7 +706,7 @@ private fun CashRuleSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(

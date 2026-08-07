@@ -528,7 +528,7 @@ fun ConglomerateDetailScreen(
     if (deleteConfirm) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_conglo_delete)) },

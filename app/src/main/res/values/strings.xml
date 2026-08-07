@@ -369,6 +369,15 @@
     <string name="bt_mirror_syncing">Syncing %1$d%%</string>
 
     <!-- v5 discreet mode -->
+    <!-- Appearance (B2 §1.3): device-scoped theme choice. -->
+    <string name="bt_settings_appearance_section">Appearance</string>
+    <string name="bt_settings_theme">Theme</string>
+    <string name="bt_settings_theme_sub">Light, dark, or follow your phone</string>
+    <string name="bt_settings_theme_system">System default</string>
+    <string name="bt_settings_theme_light">Light</string>
+    <string name="bt_settings_theme_dark">Dark</string>
+    <string name="bt_settings_true_black">True black</string>
+    <string name="bt_settings_true_black_sub">Pure black background in dark mode. Saves power on OLED screens.</string>
     <string name="bt_settings_privacy_section">Privacy</string>
     <string name="bt_settings_discreet">Discreet mode</string>
     <string name="bt_settings_discreet_sub">Hide all amounts. Percentages stay visible. Press and hold your total to peek.</string>

@@ -121,7 +121,7 @@ fun ServerVaultSection() {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 }
             }
@@ -477,7 +477,7 @@ fun ServerVaultSetupCard(onAdopted: () -> Unit = {}) {
                 Icon(
                     Icons.Outlined.Shield,
                     contentDescription = null,
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(22.dp),
                 )
                 Spacer(Modifier.width(12.dp))

@@ -7,25 +7,40 @@
       icon polarity is driven there from the user's theme choice (§1.5 B6) — the
       values below only matter for the frames before Compose draws.
 
-      The window background is @color/bt_window_bg, not @color/bt_bg: while
-      `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false the app renders dark on every
-      system, so a light-system phone must not flash a white window. See
-      res/values/colors.xml. res/values-night/themes.xml is the dark twin.
+      B2-A pinned the window and splash to a dark @color/bt_window_bg in BOTH
+      configurations, because while `BtThemeFeatures.LIGHT_MODE_PUBLIC` was false
+      the app rendered dark on every system and a light-system phone would
+      otherwise have flashed white. B2-B opened that gate, so the window pin is
+      gone and windowBackground follows the real @color/bt_bg token again —
+      light here, dark in res/values-night/themes.xml. The SPLASH keeps a dark
+      canvas in both configs; see @color/bt_splash_bg for why.
+
+      Known and accepted (§1.5 B7): the XML theme follows the SYSTEM, while the
+      app follows the USER's choice. A user who forces Light on a dark phone (or
+      the reverse) gets one splash frame in the other polarity before Compose
+      takes over. The alternative is SplashScreen.setSplashScreenTheme against
+      the persisted pref, which costs a second theme pair and a synchronous
+      preference read on the startup path to fix a single frame.
     -->
     <style name="Theme.BetterTrack" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/bt_window_bg</item>
+        <item name="android:windowBackground">@color/bt_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <!--
+          Day config ⇒ a light window ⇒ the pre-Compose frames need DARK bar
+          icons. Compose then re-applies polarity from the user's own choice via
+          MainActivity.applySystemBars.
+        -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
     <!--
-      Android 12+ SplashScreen (compat back to minSdk 28): BT glyph on the
-      near-black page background (§3.1 — the BT glyph as splash brand mark).
+      Android 12+ SplashScreen (compat back to minSdk 28): BT glyph on the page
+      background (§3.1 — the BT glyph as splash brand mark).
     -->
     <style name="Theme.BetterTrack.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/bt_window_bg</item>
+        <item name="windowSplashScreenBackground">@color/bt_splash_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bt_glyph</item>
         <item name="postSplashScreenTheme">@style/Theme.BetterTrack</item>
     </style>

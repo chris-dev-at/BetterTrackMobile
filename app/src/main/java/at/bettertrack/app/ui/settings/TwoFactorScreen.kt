@@ -159,7 +159,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
 
             if (loading) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = bt.gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = bt.goldInk, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
                 return@Column
             }
@@ -350,7 +350,7 @@ fun TwoFactorScreen(onBack: () -> Unit) {
     if (showDisable) {
         AlertDialog(
             onDismissRequest = { showDisable = false; disableCode = "" },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_2fa_disable_title)) },
@@ -471,10 +471,10 @@ private fun RecoveryCodesDialog(codes: List<String>, onDismiss: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
-        icon = { Icon(Icons.Outlined.Key, contentDescription = null, tint = bt.gold) },
+        icon = { Icon(Icons.Outlined.Key, contentDescription = null, tint = bt.goldInk) },
         title = { Text(stringResource(R.string.bt_2fa_recovery_shown_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -488,14 +488,14 @@ private fun RecoveryCodesDialog(codes: List<String>, onDismiss: () -> Unit) {
                     }
                 }
                 TextButton(onClick = { clipboard.setText(AnnotatedString(codes.joinToString("\n"))) }) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = bt.gold, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.bt_2fa_recovery_copy), color = bt.gold)
+                    Text(stringResource(R.string.bt_2fa_recovery_copy), color = bt.goldInk)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_2fa_recovery_done), color = bt.gold, fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_2fa_recovery_done), color = bt.goldInk, fontWeight = FontWeight.SemiBold) }
         },
     )
 }

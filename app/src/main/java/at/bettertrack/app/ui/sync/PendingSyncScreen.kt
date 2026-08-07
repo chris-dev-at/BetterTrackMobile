@@ -316,7 +316,7 @@ fun PendingSyncScreen(
     discardTarget?.let { opId ->
         AlertDialog(
             onDismissRequest = { discardTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_txform_discard_title)) },

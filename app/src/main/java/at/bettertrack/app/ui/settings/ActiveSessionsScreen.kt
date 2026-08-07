@@ -119,7 +119,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
 
             when {
                 loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = bt.gold, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = bt.goldInk, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
                 error != null -> Text(error!!.resolveWithDiagnostic(), style = MaterialTheme.typography.bodyMedium, color = bt.loss)
                 sessions.isEmpty() -> Text(stringResource(R.string.bt_sessions_none), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
@@ -160,7 +160,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
     revokeTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { revokeTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_sessions_revoke_title)) },
@@ -187,7 +187,7 @@ fun ActiveSessionsScreen(onBack: () -> Unit) {
     if (showRevokeAll) {
         AlertDialog(
             onDismissRequest = { showRevokeAll = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.loss,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_sessions_revoke_all_title)) },

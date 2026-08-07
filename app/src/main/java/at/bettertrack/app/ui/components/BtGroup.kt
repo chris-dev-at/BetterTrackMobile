@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -55,17 +56,33 @@ import at.bettertrack.app.ui.theme.BtTheme
  * A group therefore contains [BtGroupRow]s, which have no chrome of their own —
  * they are shaped by the group around them. That is the "fewer boxes-in-boxes"
  * line made structural rather than a thing each screen has to remember.
+ *
+ * ## What B2-B changed, and why it is not a reversal
+ *
+ * The group is still border-LESS *in dark*, and for the original reason. But the
+ * light table's page-to-card step is ~5 L\* against dark's ~13, so on white the
+ * tonal step alone stops being legible and the group dissolves into the page.
+ * The fix is the app-wide rule, not a per-component exception:
+ *
+ * > **Tone separates in dark; tone + hairline separates in light.**
+ *
+ * [at.bettertrack.app.ui.theme.BtColors.groupBorder] IS that rule — transparent
+ * in dark, a hairline in light — so this component draws one unconditional
+ * stroke and never asks which mode it is in. R2's mandate is intact: the border
+ * is back only where tone cannot do the job.
  */
 @Composable
 fun BtGroup(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val bt = BtTheme.colors
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = BtShapes.group,
-        color = BtTheme.colors.surface,
-        contentColor = BtTheme.colors.textPrimary,
+        color = bt.surface,
+        contentColor = bt.textPrimary,
+        border = BorderStroke(1.dp, bt.groupBorder),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) { Column(content = content) }
@@ -231,6 +248,12 @@ fun BtNeedsYouGroup(
         shape = BtShapes.group,
         color = bt.wash(bt.gold, 0.07f),
         contentColor = bt.textPrimary,
+        // Same rule as [BtGroup], and it matters more here: this block's
+        // separation is a 7% wash, which on the light page is fainter still than
+        // a full tonal step. Neutral rather than gold-tinted on purpose — the
+        // hairline's job is to bound the block, and a gold edge around a
+        // gold-washed block spends the accent twice on the same idea.
+        border = BorderStroke(1.dp, bt.groupBorder),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {

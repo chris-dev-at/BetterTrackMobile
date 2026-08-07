@@ -253,7 +253,7 @@ private fun WhatsNewCard(entry: WhatsNewEntry) {
                     // Small gold bullet — a check-style dot without an extra icon dep.
                     Surface(
                         shape = CircleShape,
-                        color = bt.gold,
+                        color = bt.goldInk,
                         modifier = Modifier
                             .padding(top = 7.dp)
                             .size(5.dp),

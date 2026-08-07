@@ -71,7 +71,7 @@ fun ParanoidModeScreen(
             Icon(
                 Icons.Outlined.Shield,
                 contentDescription = null,
-                tint = bt.gold,
+                tint = bt.goldInk,
                 modifier = Modifier.padding(18.dp).size(32.dp),
             )
         }

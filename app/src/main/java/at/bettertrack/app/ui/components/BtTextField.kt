@@ -27,18 +27,18 @@ import at.bettertrack.app.ui.theme.BtTheme
 /** Brand colors for an [OutlinedTextField] (gold focus, red error) — the app-wide field look. */
 @Composable
 fun btFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = BtTheme.colors.gold,
+    focusedBorderColor = BtTheme.colors.goldInk,
     unfocusedBorderColor = BtTheme.colors.borderStrong,
     disabledBorderColor = BtTheme.colors.border,
     errorBorderColor = BtTheme.colors.loss,
-    focusedLabelColor = BtTheme.colors.gold,
+    focusedLabelColor = BtTheme.colors.goldInk,
     unfocusedLabelColor = BtTheme.colors.textMuted,
     disabledLabelColor = BtTheme.colors.textMuted,
     errorLabelColor = BtTheme.colors.loss,
     focusedTextColor = BtTheme.colors.textPrimary,
     unfocusedTextColor = BtTheme.colors.textPrimary,
     disabledTextColor = BtTheme.colors.textMuted,
-    cursorColor = BtTheme.colors.gold,
+    cursorColor = BtTheme.colors.goldInk,
 )
 
 /**

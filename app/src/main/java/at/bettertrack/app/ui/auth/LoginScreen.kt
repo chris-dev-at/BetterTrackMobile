@@ -215,7 +215,7 @@ fun LoginScreen(
                 Text(
                     text = stringResource(R.string.bt_login_use_without_account),
                     style = MaterialTheme.typography.labelLarge,
-                    color = bt.gold,
+                    color = bt.goldInk,
                 )
             }
         }

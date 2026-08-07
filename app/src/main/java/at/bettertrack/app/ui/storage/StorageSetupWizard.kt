@@ -592,7 +592,7 @@ private fun WorkingStep(
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = bt.gold,
+                    color = bt.goldInk,
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(

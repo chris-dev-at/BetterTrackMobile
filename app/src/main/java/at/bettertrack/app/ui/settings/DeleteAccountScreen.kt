@@ -197,7 +197,7 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
     if (showFinalConfirm) {
         AlertDialog(
             onDismissRequest = { showFinalConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.loss,
             textContentColor = bt.textSecondary,
             icon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = bt.loss) },

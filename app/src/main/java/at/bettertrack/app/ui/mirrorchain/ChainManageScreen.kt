@@ -820,7 +820,7 @@ private fun RenameChainDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_chainadmin_rename)) },
@@ -882,7 +882,7 @@ private fun InviteFriendDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_chainadmin_invite)) },
@@ -1012,7 +1012,7 @@ private fun MemberPickerDialog(
     val bt = BtTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(title) },
@@ -1055,7 +1055,7 @@ private fun RolePickerDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_chainadmin_roles)) },
@@ -1082,7 +1082,7 @@ private fun RolePickerDialog(
                             Icon(
                                 imageVector = Icons.Outlined.Check,
                                 contentDescription = null,
-                                tint = bt.gold,
+                                tint = bt.goldInk,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -1114,7 +1114,7 @@ private fun ConfirmRemoveDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_chainadmin_remove)) },
@@ -1174,7 +1174,7 @@ private fun TypeToConfirmDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(title) },

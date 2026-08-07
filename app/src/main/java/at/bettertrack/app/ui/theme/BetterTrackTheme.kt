@@ -30,18 +30,31 @@ object BtTheme {
  *
  * The migration order (§1.6) is deliberate: light mode becomes user-reachable
  * only **after** every shared component has been verified in it, so that no
- * intermediate build can ship a broken light screen. Package B2-A lands the
- * token tables, the plumbing and the guard tests; package B2-B does the
- * component sweep and flips this flag together with the Settings → Appearance
- * picker that exposes the choice.
+ * intermediate build can ship a broken light screen. Package B2-A landed the
+ * token tables, the plumbing and the guard tests behind this gate; package
+ * B2-B did the component sweep and **opened it** (§1.6 step 6) together with
+ * the Settings → Appearance picker that exposes the choice.
  *
- * While it is `false`, [BetterTrackTheme] resolves **every** mode to dark for
- * the real app, and only the debug component gallery may opt in. A tripwire
- * test asserts the value so the flip is a deliberate, reviewed edit rather than
- * something that drifts in.
+ * ## What opening it turned on
+ *
+ * `true` since B2-B. Every mode now resolves honestly — `System` follows the
+ * device, `Light` and `Dark` override it — in the real app, not just in the
+ * debug gallery. Three things had to be true first, and all three are:
+ *
+ *  - the shared components carry the tone-vs-hairline rule through one
+ *    `groupBorder` token rather than per-screen `isLight` branches;
+ *  - `gold` no longer reaches the screen as TEXT anywhere (it is 1.78:1 on
+ *    white) — `goldInk` does, including in the wordmark;
+ *  - the window/splash background is no longer pinned to the dark page colour,
+ *    so a light-system phone no longer flashes near-black before Compose draws.
+ *
+ * The flag survives the flip rather than being deleted: it is the one switch
+ * that turns the whole feature off if the light table ever needs pulling, and
+ * `resolveDarkTheme` takes it as a parameter so the behaviour stays unit-
+ * testable in both positions.
  */
 object BtThemeFeatures {
-    const val LIGHT_MODE_PUBLIC = false
+    const val LIGHT_MODE_PUBLIC = true
 }
 
 /**

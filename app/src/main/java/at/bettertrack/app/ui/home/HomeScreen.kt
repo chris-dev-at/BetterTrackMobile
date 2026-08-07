@@ -224,7 +224,7 @@ fun HomeScreen(
                 isRefreshing = refreshing,
                 modifier = Modifier.align(Alignment.TopCenter),
                 containerColor = bt.surface,
-                color = bt.gold,
+                color = bt.goldInk,
             )
         },
     ) {
@@ -754,7 +754,7 @@ private fun HomeUnpricedBlock(
                     Text(
                         text = stringResource(R.string.bt_price_add),
                         style = MaterialTheme.typography.labelLarge,
-                        color = bt.gold,
+                        color = bt.goldInk,
                     )
                 }
             }

@@ -386,12 +386,12 @@ private fun QuietTimeDialog(
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         title = { Text(title, color = bt.textPrimary) },
         text = { TimeInput(state = state) },
         confirmButton = {
             TextButton(onClick = { onPick(minuteOfDayOf(state.hour, state.minute)) }) {
-                Text(stringResource(R.string.bt_notif_quiet_set), color = bt.gold)
+                Text(stringResource(R.string.bt_notif_quiet_set), color = bt.goldInk)
             }
         },
         dismissButton = {
@@ -430,7 +430,7 @@ private fun TimezonePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         title = { Text(stringResource(R.string.bt_notif_quiet_timezone_title), color = bt.textPrimary) },
         text = {
             Column {

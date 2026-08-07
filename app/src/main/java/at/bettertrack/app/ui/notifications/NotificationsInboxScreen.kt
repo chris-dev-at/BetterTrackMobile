@@ -382,7 +382,7 @@ fun NotificationsInboxScreen(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_notif_delete_title)) },
@@ -409,7 +409,7 @@ fun NotificationsInboxScreen(
         val count = if (which == BulkConfirm.DeleteArchived) archivedCount else totalCount
         AlertDialog(
             onDismissRequest = { bulkConfirm = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = {
@@ -543,13 +543,13 @@ private fun EnablePushPrompt(onEnable: () -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = bt.gold, modifier = Modifier.size(22.dp))
+            Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.bt_notif_enable_push_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                 Text(stringResource(R.string.bt_notif_enable_push_message), style = MaterialTheme.typography.bodySmall, color = bt.textSecondary)
             }
-            Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.gold)
+            Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.goldInk)
         }
     }
 }
@@ -582,7 +582,7 @@ private fun NotificationRow(
                     .background(bt.wash(bt.gold, 0.12f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(notifIcon(notification.kind), contentDescription = null, tint = bt.gold, modifier = Modifier.size(20.dp))
+                Icon(notifIcon(notification.kind), contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

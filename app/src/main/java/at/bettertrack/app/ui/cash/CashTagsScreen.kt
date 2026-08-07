@@ -253,7 +253,7 @@ fun CashTagsScreen(onBack: () -> Unit) {
                         Icon(
                             Icons.Outlined.Add,
                             contentDescription = stringResource(R.string.bt_tags_new),
-                            tint = bt.gold,
+                            tint = bt.goldInk,
                         )
                     }
                 },
@@ -400,7 +400,7 @@ fun CashTagsScreen(onBack: () -> Unit) {
                     vm.clearWriteError()
                 }
             },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_tags_delete_title)) },
@@ -509,7 +509,7 @@ private fun CashTagRow(
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surface,
+                    containerColor = bt.surfaceHigh,
                 ) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary) },
@@ -560,7 +560,7 @@ private fun CashTagSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(

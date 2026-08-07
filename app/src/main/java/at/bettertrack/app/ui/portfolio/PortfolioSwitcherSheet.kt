@@ -137,7 +137,7 @@ fun PortfolioSwitcherSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(
@@ -284,7 +284,7 @@ fun PortfolioSwitcherSheet(
     archiveTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { archiveTarget = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_switcher_archive_title)) },
@@ -386,7 +386,7 @@ private fun OverviewSwitcherRow(
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = stringResource(R.string.bt_overview_selected_cd),
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -530,7 +530,7 @@ private fun SwitcherRow(
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = stringResource(R.string.bt_switcher_selected_cd),
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -544,7 +544,7 @@ private fun SwitcherRow(
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                containerColor = bt.surface,
+                containerColor = bt.surfaceHigh,
             ) {
                 // Full-size twin of the gold badge's tap target (see above).
                 portfolio.mirror?.mirrorChainId?.let { chainId ->
@@ -684,7 +684,7 @@ private fun ArchivedRow(
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                containerColor = bt.surface,
+                containerColor = bt.surfaceHigh,
             ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bt_switcher_restore), color = bt.textPrimary) },
@@ -739,7 +739,7 @@ internal fun DeletePortfolioDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         textContentColor = bt.textSecondary,
         title = { Text(stringResource(R.string.bt_switcher_delete_title)) },
@@ -820,7 +820,7 @@ internal fun PortfolioNameDialog(
     var name by rememberSaveable { mutableStateOf(initialName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         title = { Text(title) },
         text = {

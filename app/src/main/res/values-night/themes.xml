@@ -2,9 +2,10 @@
 <resources>
     <!--
       NIGHT configuration (B2 design spec §1.5 B7). Same host role as the day
-      twin in res/values/themes.xml; the only difference is that the window and
-      splash backgrounds follow the real @color/bt_bg token here, because in this
-      configuration the token is already the dark page colour and needs no pin.
+      twin in res/values/themes.xml. The only differences are the two the
+      configuration is FOR: @color/bt_bg is the dark page colour here, and the
+      system bars want light icons over it. The splash background is the same
+      @color/bt_splash_bg in both configs by design.
     -->
     <style name="Theme.BetterTrack" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bt_bg</item>
@@ -15,7 +16,7 @@
     </style>
 
     <style name="Theme.BetterTrack.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/bt_bg</item>
+        <item name="windowSplashScreenBackground">@color/bt_splash_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_bt_glyph</item>
         <item name="postSplashScreenTheme">@style/Theme.BetterTrack</item>
     </style>

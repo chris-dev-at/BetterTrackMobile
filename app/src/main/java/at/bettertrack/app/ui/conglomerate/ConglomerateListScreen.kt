@@ -110,7 +110,7 @@ fun ConglomerateListScreen(
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
             ConglomerateListState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = bt.gold)
+                CircularProgressIndicator(color = bt.goldInk)
             }
 
             ConglomerateListState.OfflineState -> BtOfflineState(

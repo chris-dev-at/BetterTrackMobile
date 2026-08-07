@@ -615,7 +615,7 @@ fun CustomAssetDetailScreen(
     deletePointDate?.let { date ->
         AlertDialog(
             onDismissRequest = { deletePointDate = null },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_custom_delete_point_title)) },
@@ -637,7 +637,7 @@ fun CustomAssetDetailScreen(
     if (deleteAssetOpen) {
         AlertDialog(
             onDismissRequest = { deleteAssetOpen = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_custom_delete_title)) },
@@ -676,7 +676,7 @@ private fun UpdateValueSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         contentColor = bt.textPrimary,
     ) {
         Column(

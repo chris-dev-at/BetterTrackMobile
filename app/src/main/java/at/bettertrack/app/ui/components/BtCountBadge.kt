@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,11 +66,12 @@ fun BtBadgeOverlay(
     max: Int = 9,
     showDot: Boolean = false,
 ) {
+    val bt = BtTheme.colors
     if (count <= 0) {
-        if (showDot) BtBorderedDot(modifier)
+        // Rings in the page, matching the counted variant's own `bg` ring below.
+        if (showDot) BtBorderedDot(modifier, ring = bt.bg)
         return
     }
-    val bt = BtTheme.colors
     Box(
         modifier = modifier
             .background(bt.gold, CircleShape)
@@ -112,21 +114,28 @@ fun BtUnreadDot(modifier: Modifier = Modifier, size: Int = 8) {
 @Composable
 fun BtTabBadgeDot(show: Boolean, modifier: Modifier = Modifier) {
     if (!show) return
-    BtBorderedDot(modifier)
+    // The ring must match WHAT THE DOT SITS ON, and this one sits on the bottom
+    // bar. Until B2-B the bar's container was `surface` — the card colour — so a
+    // ring in `surface` happened to be right by coincidence. §6.2 gives the bar
+    // its own `navBar` tone (that is the whole point: a bar that is not just a
+    // stuck card), and the moment it did, a `surface` ring became a visible
+    // halo around every badge. Naming the bar's colour keeps the two locked.
+    BtBorderedDot(modifier, ring = BtTheme.colors.navBar)
 }
 
 /**
- * A gold dot ringed in the bar background, so it stays legible wherever it
- * overlaps a glyph. Shared by [BtBadgeOverlay]'s dot mode and [BtTabBadgeDot]
- * precisely so the two can never drift into two different dots.
+ * A gold dot ringed in whatever it overlaps, so it stays legible where it
+ * crosses a glyph. Shared by [BtBadgeOverlay]'s dot mode and [BtTabBadgeDot]
+ * precisely so the two can never drift into two different dots — but the RING
+ * is the caller's, because only the caller knows the substrate.
  */
 @Composable
-private fun BtBorderedDot(modifier: Modifier = Modifier) {
+private fun BtBorderedDot(modifier: Modifier = Modifier, ring: Color) {
     val bt = BtTheme.colors
     Box(
         modifier = modifier
             .size(10.dp)
             .background(bt.gold, CircleShape)
-            .border(1.5.dp, bt.surface, CircleShape),
+            .border(1.5.dp, ring, CircleShape),
     )
 }

@@ -363,7 +363,7 @@ fun CustomAssetDialog(
     var smoothing by rememberSaveable { mutableStateOf(initialSmoothing) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         title = { Text(title) },
         text = {

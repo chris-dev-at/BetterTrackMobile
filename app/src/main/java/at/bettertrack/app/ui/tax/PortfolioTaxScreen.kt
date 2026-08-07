@@ -470,7 +470,7 @@ fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
         val defaultLabel = stringResource(taxModeLabelRes(loaded.settings.userDefault.mode))
         AlertDialog(
             onDismissRequest = { if (!busy) confirmReset = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_ptax_reset_title)) },

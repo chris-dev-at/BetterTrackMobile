@@ -163,7 +163,7 @@ private fun KeyButton(
             .btPressScale(interaction)
             .clickable(
                 interactionSource = interaction,
-                indication = ripple(bounded = true, color = bt.gold),
+                indication = ripple(bounded = true, color = bt.goldInk),
                 enabled = enabled,
                 onClick = {
                     // Light per-keypress tick so entry feels organic. R3 §4 moved

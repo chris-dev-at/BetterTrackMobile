@@ -235,7 +235,7 @@ fun AppLockScreen(onForgotPin: () -> Unit) {
     if (showForgot) {
         AlertDialog(
             onDismissRequest = { showForgot = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_applock_forgot_title)) },
@@ -265,7 +265,7 @@ private fun BiometricKey(onClick: () -> Unit) {
             .clip(CircleShape)
             .clickable(
                 interactionSource = interaction,
-                indication = ripple(bounded = true, color = bt.gold),
+                indication = ripple(bounded = true, color = bt.goldInk),
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
@@ -273,7 +273,7 @@ private fun BiometricKey(onClick: () -> Unit) {
         Icon(
             Icons.Outlined.Fingerprint,
             contentDescription = stringResource(R.string.bt_applock_biometric_cd),
-            tint = bt.gold,
+            tint = bt.goldInk,
             modifier = Modifier.size(30.dp),
         )
     }

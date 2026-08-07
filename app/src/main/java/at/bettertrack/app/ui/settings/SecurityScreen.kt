@@ -225,7 +225,7 @@ fun SecurityScreen(
     if (showDisableConfirm) {
         AlertDialog(
             onDismissRequest = { showDisableConfirm = false },
-            containerColor = bt.surface,
+            containerColor = bt.surfaceHigh,
             titleContentColor = bt.textPrimary,
             textContentColor = bt.textSecondary,
             title = { Text(stringResource(R.string.bt_settings_applock_disable_title)) },
@@ -272,7 +272,7 @@ private fun ThresholdPickerDialog(
     val bt = BtTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = bt.surface,
+        containerColor = bt.surfaceHigh,
         titleContentColor = bt.textPrimary,
         title = { Text(stringResource(R.string.bt_settings_applock_threshold)) },
         text = {
@@ -297,7 +297,7 @@ private fun ThresholdPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_action_done), color = bt.gold) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.bt_action_done), color = bt.goldInk) }
         },
     )
 }

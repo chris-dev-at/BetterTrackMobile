@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.shell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -91,5 +92,52 @@ class BtTabSwipeTest {
         assertEquals(true, swipeFollowOffset(-30f, 40f) < 0f)
         assertEquals(true, swipeFollowOffset(30f, 40f) > 0f)
         assertEquals(0f, swipeFollowOffset(0f, 40f), 0.001f)
+    }
+
+    // ── The bottom bar's share of the same gesture (B2 §6.3) ────────────────
+
+    @Test
+    fun `the indicator leads by the same fraction the page moved`() {
+        // The contract in one line: page moves a tenth of a page, indicator
+        // moves a tenth of an item step. Not a whole step — a bar that arrives
+        // where the content never went is worse than a bar that does not move.
+        assertEquals(0.1f, tabIndicatorLead(-108f, 1080f), 1e-6f)
+        assertEquals(0.25f, tabIndicatorLead(-270f, 1080f), 1e-6f)
+    }
+
+    @Test
+    fun `the indicator travels opposite to the page`() {
+        // Finger LEFT ⇒ page offset negative ⇒ the tab to the RIGHT is coming ⇒
+        // the indicator must move right (positive). Getting this backwards is
+        // the single most likely way to break the bar, so it is pinned.
+        assertEquals(true, tabIndicatorLead(-40f, 1080f) > 0f)
+        assertEquals(true, tabIndicatorLead(40f, 1080f) < 0f)
+    }
+
+    @Test
+    fun `a settled gesture leaves the indicator exactly where the graph put it`() {
+        // At rest the nav graph is the only writer (§6.3's arbiter).
+        assertEquals(0f, tabIndicatorLead(0f, 1080f), 0f)
+    }
+
+    @Test
+    fun `an unmeasured bar leads by nothing rather than dividing by zero`() {
+        assertEquals(0f, tabIndicatorLead(-40f, 0f), 0f)
+        assertEquals(0f, tabIndicatorLead(-40f, -1f), 0f)
+    }
+
+    @Test
+    fun `the real follow cap produces a nudge, not a jump`() {
+        // End to end with the actual constants: 40dp of damped follow on a
+        // 411dp-wide bar at density 2.625 (the verification phone). A drag far
+        // past the cap saturates the page at -40dp, and the indicator answers
+        // with roughly a tenth of a step — the same order as the page's own
+        // movement, which is the whole design rule.
+        val followMaxPx = 40f * 2.625f
+        val barWidthPx = 411.43f * 2.625f
+        val pageOffsetPx = swipeFollowOffset(-1000f, followMaxPx)
+        assertTrue("page should saturate leftwards, was $pageOffsetPx", pageOffsetPx < -100f)
+        val lead = tabIndicatorLead(pageOffsetPx, barWidthPx)
+        assertTrue("lead was $lead", lead in 0.05f..0.15f)
     }
 }

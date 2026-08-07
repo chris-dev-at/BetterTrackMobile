@@ -616,7 +616,7 @@ private fun BtHeaderSelector(
                     // description on a garnish glyph would make a screen reader
                     // read the same control twice.
                     contentDescription = null,
-                    tint = bt.gold,
+                    tint = bt.goldInk,
                     modifier = Modifier.size(glyph),
                 )
             }
