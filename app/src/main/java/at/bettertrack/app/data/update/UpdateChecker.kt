@@ -2,6 +2,9 @@ package at.bettertrack.app.data.update
 
 import android.util.Log
 import at.bettertrack.app.BuildConfig
+import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +53,10 @@ class UpdateChecker(
     /** "Automatic update checks" toggle (About) — observed by the settings UI. */
     val autoCheckEnabled: StateFlow<Boolean> = prefs.autoCheckEnabled
 
+    private val _manualCheck = MutableStateFlow<ManualUpdateCheck>(ManualUpdateCheck.Idle)
+    /** State of the About screen's "Check for updates" button. See [checkNow]. */
+    val manualCheck: StateFlow<ManualUpdateCheck> = _manualCheck.asStateFlow()
+
     /** Called from the process foreground observer (also fires the cold-start check). */
     fun onForeground() {
         // Play builds (Task B1) have self-update compiled off — never check.
@@ -75,12 +82,58 @@ class UpdateChecker(
         }
     }
 
-    private suspend fun runCheck() {
-        val manifest = fetchManifest() ?: return // offline / error → silent skip
+    /**
+     * "Check for updates" (About → this build). Runs the fetch RIGHT NOW,
+     * bypassing every rate limit the automatic path honours — the cold-start
+     * once-per-process flag and the 6h interval both exist to keep the app a
+     * polite client on its OWN schedule, and neither applies to a check the user
+     * asked for. The "automatic update checks" opt-out is likewise not consulted:
+     * it turns off checks the app makes by itself, not the button that exists to
+     * replace them.
+     *
+     * An ignored version IS re-offered here — see [UpdateCheckLogic.shouldShowDialog]
+     * for why, and for the guarantee that this never clears the stored ignore, so
+     * automatic checks stay as quiet after a manual look as they were before it.
+     *
+     * The one gate kept: [BuildConfig.SELF_UPDATE_ENABLED]. A Play build has no
+     * self-update at all, and the button that calls this is compiled out there.
+     */
+    fun checkNow() {
+        if (!BuildConfig.SELF_UPDATE_ENABLED) return
+        if (_manualCheck.value is ManualUpdateCheck.Checking) return // already in flight
+        _manualCheck.value = ManualUpdateCheck.Checking
+        // A manual check satisfies the cold-start obligation too: the process has
+        // now asked GitHub, so a later foreground must fall through to the interval.
+        checkedThisProcess = true
+        scope.launch { runCheck(manual = true) }
+    }
+
+    /**
+     * Drop a finished manual result. Called when About leaves composition: the
+     * up-to-date / failed line answers ONE tap and should not be waiting on the
+     * screen the next time it is opened, hours later, still claiming to describe
+     * the current state of the world.
+     */
+    fun clearManualCheck() {
+        _manualCheck.value = ManualUpdateCheck.Idle
+    }
+
+    private suspend fun runCheck(manual: Boolean = false) {
+        val manifest = when (val fetched = fetchManifest()) {
+            is ManifestFetch.Ok -> fetched.manifest
+            is ManifestFetch.Failed -> {
+                // Automatic: silent skip, exactly as before — a background check
+                // must never produce a visible error. Manual: the user is looking
+                // at a spinner and is owed an answer.
+                if (manual) _manualCheck.value = ManualUpdateCheck.Failed(fetched.message)
+                return
+            }
+        }
         prefs.lastCheckMs = nowMs()
         if (!UpdateCheckLogic.isNewer(currentVersionCode, manifest.versionCode)) {
             // Up to date (or we just updated past the cached one): clear stale state.
             _available.value = null
+            if (manual) _manualCheck.value = ManualUpdateCheck.UpToDate
             return
         }
         val update = AvailableUpdate(manifest.versionCode, manifest.versionName, manifest.apk)
@@ -88,12 +141,16 @@ class UpdateChecker(
         prefs.cachedLatestName = manifest.versionName
         prefs.cachedLatestApk = manifest.apk
         _available.value = update
+        // A newer build is answered by the dialog, so the inline manual state
+        // stands down rather than competing with it.
+        if (manual) _manualCheck.value = ManualUpdateCheck.Idle
         if (
             UpdateCheckLogic.shouldShowDialog(
                 currentVersionCode = currentVersionCode,
                 latestVersionCode = manifest.versionCode,
                 ignoredVersionCode = prefs.ignoredVersionCode,
                 remindedThisSession = remindedThisSession || nowMs() < prefs.remindAfterMs,
+                manual = manual,
             )
         ) {
             _pendingDialog.value = update
@@ -132,7 +189,17 @@ class UpdateChecker(
         }
     }
 
-    private suspend fun fetchManifest(): ReleaseManifestDto? = withContext(Dispatchers.IO) {
+    /**
+     * The outcome of one manifest fetch. It used to be `ReleaseManifestDto?`,
+     * which was enough while every failure was a silent skip; the manual check
+     * has to TELL the user why nothing happened, and "null" cannot be translated.
+     */
+    private sealed interface ManifestFetch {
+        data class Ok(val manifest: ReleaseManifestDto) : ManifestFetch
+        data class Failed(val message: BtMessage) : ManifestFetch
+    }
+
+    private suspend fun fetchManifest(): ManifestFetch = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(VERSION_JSON_URL)
@@ -140,13 +207,22 @@ class UpdateChecker(
                 .header("User-Agent", "BetterTrackApp")
                 .build()
             client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                val body = resp.body?.string() ?: return@withContext null
-                json.decodeFromString(ReleaseManifestDto.serializer(), body)
+                if (!resp.isSuccessful) {
+                    Log.d(TAG, "Update check declined: HTTP ${resp.code}")
+                    return@withContext UNREACHABLE
+                }
+                val body = resp.body?.string() ?: return@withContext UNREACHABLE
+                ManifestFetch.Ok(json.decodeFromString(ReleaseManifestDto.serializer(), body))
             }
+        } catch (e: IOException) {
+            // No route to GitHub: airplane mode, no WiFi, DNS, timeout. The one
+            // failure the user can actually fix, so it gets its own sentence.
+            Log.d(TAG, "Update check skipped (offline): ${e.message}")
+            ManifestFetch.Failed(BtMessage(R.string.bt_err_network_error))
         } catch (e: Exception) {
+            // Reached the network but the answer was unusable (malformed manifest).
             Log.d(TAG, "Update check skipped: ${e.message}")
-            null
+            UNREACHABLE
         }
     }
 
@@ -157,6 +233,14 @@ class UpdateChecker(
         private const val TAG = "BtUpdateChecker"
         const val REPO = "chris-dev-at/BetterTrackMobile"
 
+        /**
+         * GitHub answered but not with a usable manifest — rate limit, 5xx, or a
+         * manifest this build cannot parse. One sentence covers all three because
+         * the user's next move is identical for each: wait, then tap again.
+         */
+        private val UNREACHABLE: ManifestFetch =
+            ManifestFetch.Failed(BtMessage(R.string.bt_update_check_failed))
+
         /** Stable asset download URL for the rolling prerelease manifest. */
         const val VERSION_JSON_URL =
             "https://github.com/$REPO/releases/download/latest-debug/version.json"
@@ -164,6 +248,18 @@ class UpdateChecker(
         /** The human release page, opened by "Go to GitHub" + the settings badge. */
         const val RELEASE_PAGE_URL =
             "https://github.com/$REPO/releases/tag/latest-debug"
+
+        /**
+         * The repo's full releases INDEX — every tagged release, not just the
+         * rolling `latest-debug` prerelease that [RELEASE_PAGE_URL] pins. This is
+         * the About screen's "GitHub releases" link, and unlike the rest of this
+         * companion it is not self-update machinery: it is a public web page, so
+         * it is linked from BOTH flavors (see AboutScreen).
+         */
+        const val RELEASES_PAGE_URL = "https://github.com/$REPO/releases"
+
+        /** Host + path shown as the link row's subtitle (no scheme — it is furniture). */
+        const val RELEASES_PAGE_LABEL = "github.com/$REPO"
 
         /** Stable base for the release APK asset; GitHub 302s to a CDN (followed). */
         const val RELEASE_DOWNLOAD_BASE =

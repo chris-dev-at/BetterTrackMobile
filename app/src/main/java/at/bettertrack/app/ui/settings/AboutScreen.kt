@@ -8,17 +8,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.PrivacyTip
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -44,10 +51,13 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.VersionResponse
 import at.bettertrack.app.data.api.dto.formatApiBuiltAtDate
+import at.bettertrack.app.data.update.ManualUpdateCheck
+import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
@@ -153,10 +163,11 @@ fun AboutScreen(
             // build the server is running: three answers to one question, so one
             // group. Both build lines are read-only key/value rows and stay that
             // way — the group's tonal step is all the containment they need.
+            val installedVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
             BtGroup {
                 BuildInfoRow(
                     label = stringResource(R.string.bt_settings_version),
-                    value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    value = installedVersion,
                 )
 
                 // Automatic update checks (owner ask 2026-07-12): the About-level opt-out
@@ -172,6 +183,22 @@ fun AboutScreen(
                         subtitle = stringResource(R.string.bt_settings_auto_update_sub),
                         checked = autoUpdate,
                         onCheckedChange = { AppGraph.updateChecker.setAutoCheckEnabled(it) },
+                    )
+
+                    // "Check for updates" (owner ask 2026-08-07). Directly under the
+                    // automatic-check toggle because it is the same subject read the
+                    // other way round: the toggle governs the checks the app makes on
+                    // its own, this is the one the user makes deliberately — and it
+                    // keeps working while the toggle is OFF, which is exactly when a
+                    // manual check is worth having.
+                    val manual by AppGraph.updateChecker.manualCheck.collectAsStateWithLifecycle()
+                    DisposableEffect(Unit) {
+                        onDispose { AppGraph.updateChecker.clearManualCheck() }
+                    }
+                    ManualUpdateCheckRow(
+                        state = manual,
+                        installedVersion = installedVersion,
+                        onCheck = { AppGraph.updateChecker.checkNow() },
                     )
                 }
 
@@ -231,6 +258,20 @@ fun AboutScreen(
                         onClick = onOpenChangelog,
                     )
                 }
+                // GitHub releases (owner ask 2026-08-07). BOTH flavors, and it lives
+                // here rather than beside the update controls above for two reasons:
+                // this group IS the app's external-link pattern (every other row in it
+                // hands off to the browser the same way), and the group above is a
+                // read-only key/value block that would have to grow a chevron row to
+                // hold it. Unlike everything else under SELF_UPDATE_ENABLED this is not
+                // self-update machinery — it is a public web page, and a Play user who
+                // wants to read the release notes has the same right to reach them.
+                BtGroupRow(
+                    icon = Icons.Outlined.Code,
+                    title = stringResource(R.string.bt_about_github_releases),
+                    subtitle = UpdateChecker.RELEASES_PAGE_LABEL,
+                    onClick = { onOpenUrl(UpdateChecker.RELEASES_PAGE_URL) },
+                )
             }
 
             Spacer(Modifier.height(4.dp))
@@ -247,6 +288,99 @@ fun AboutScreen(
 
 // R2: `AboutNavRow` is gone — it was a private clone of the app-wide row, and
 // `BtGroupRow` inside a `BtGroup` renders the six link rows instead.
+
+/**
+ * "Check for updates" and whatever the last tap answered.
+ *
+ * ## Why the answer is inline and not a snackbar
+ *
+ * Only one of the three outcomes already has somewhere to go: a newer build
+ * raises the app-wide update dialog, and that is the whole point of the button.
+ * The other two — "you are current" and "the check didn't happen" — are *about
+ * this row*, and a snackbar would float them at the other end of the screen,
+ * away from the control that produced them, then take them away again on a
+ * timer. The up-to-date line in particular is worth keeping on screen: it is the
+ * only evidence the button did anything at all.
+ *
+ * The up-to-date line repeats the installed version deliberately. "You're on the
+ * latest version" alone is a claim the user has to take on faith; naming the
+ * build makes it checkable against the release page one row below.
+ */
+@Composable
+private fun ManualUpdateCheckRow(
+    state: ManualUpdateCheck,
+    installedVersion: String,
+    onCheck: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val checking = state is ManualUpdateCheck.Checking
+    BtGroupRow(
+        icon = Icons.Outlined.Refresh,
+        // Gold, unlike its neighbours: the icons in this group are scanning aids
+        // for rows that state a fact, and this is the one row that DOES something.
+        iconTint = bt.goldInk,
+        title = stringResource(R.string.bt_settings_check_updates),
+        subtitle = if (checking) {
+            stringResource(R.string.bt_update_checking)
+        } else {
+            stringResource(R.string.bt_settings_check_updates_sub)
+        },
+        // Taps are refused while one is in flight — the checker ignores them
+        // anyway, and a row that ripples without effect reads as a stuck button.
+        onClick = if (checking) null else onCheck,
+        // The trailing slot is claimed unconditionally, even when it draws
+        // nothing, because that is what suppresses BtGroupRow's chevron. Its
+        // rule is that a chevron marks a row that NAVIGATES; this row acts in
+        // place, and a chevron here promises a screen that never opens.
+        trailing = {
+            if (checking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = bt.goldInk,
+                    strokeWidth = 2.dp,
+                )
+            }
+        },
+    )
+    when (state) {
+        is ManualUpdateCheck.UpToDate -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = bt.gain,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.bt_update_uptodate),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = bt.textPrimary,
+                )
+                Text(
+                    installedVersion,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+        }
+
+        // The retry IS the recovery: the usual cause is a network the user can
+        // turn back on without leaving this screen.
+        is ManualUpdateCheck.Failed -> BtInlineError(
+            message = state.message,
+            onRetry = onCheck,
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp, bottom = 6.dp),
+        )
+
+        ManualUpdateCheck.Idle, ManualUpdateCheck.Checking -> Unit
+    }
+}
 
 /**
  * The auto-update toggle as a [BtGroup] row.

@@ -437,6 +437,11 @@
     <string name="bt_update_install_hint_ok">BetterTrack darf Updates installieren.</string>
     <string name="bt_settings_auto_update">Automatische Update-Prüfung</string>
     <string name="bt_settings_auto_update_sub">Beim Start nach neuen BetterTrack-Builds suchen</string>
+    <string name="bt_settings_check_updates">Nach Updates suchen</string>
+    <string name="bt_settings_check_updates_sub">Jetzt sofort bei GitHub nach einem neueren Build fragen</string>
+    <string name="bt_update_checking">Wird geprüft…</string>
+    <string name="bt_update_uptodate">Du hast die neueste Version</string>
+    <string name="bt_update_check_failed">GitHub ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.</string>
 
     <!-- Watchlists (§6.6) -->
     <string name="bt_watchlist_title">Watchlists</string>
@@ -854,6 +859,7 @@
     <string name="bt_about_terms">Nutzungsbedingungen</string>
     <string name="bt_about_impressum">Impressum</string>
     <string name="bt_about_cookies">Cookie-Hinweis</string>
+    <string name="bt_about_github_releases">GitHub-Releases</string>
     <string name="bt_about_api_build">API-Build</string>
     <string name="bt_about_copyright">© BetterTrack</string>
 

@@ -61,6 +61,43 @@ class UpdateCheckLogicTest {
     }
 
     @Test
+    fun `a manual check re-offers a version the user ignored or snoozed`() {
+        // Ignored forever by the automatic path…
+        assertFalse(UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 5, remindedThisSession = false))
+        // …but the user just tapped "Check for updates", so it is offered again.
+        assertTrue(
+            UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 5, remindedThisSession = false, manual = true),
+        )
+        // Same for a "remind me later" snooze, and for both suppressions at once.
+        assertTrue(
+            UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 0, remindedThisSession = true, manual = true),
+        )
+        assertTrue(
+            UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 5, remindedThisSession = true, manual = true),
+        )
+    }
+
+    @Test
+    fun `a manual check still refuses to invent a newer build`() {
+        // "Manual" overrides the SUPPRESSIONS, never the version comparison: with
+        // nothing newer there is no dialog to show, and the About screen answers
+        // the tap with its up-to-date line instead.
+        assertFalse(UpdateCheckLogic.shouldShowDialog(5, 5, ignoredVersionCode = 0, remindedThisSession = false, manual = true))
+        assertFalse(UpdateCheckLogic.shouldShowDialog(6, 5, ignoredVersionCode = 0, remindedThisSession = false, manual = true))
+    }
+
+    @Test
+    fun `manual defaults to false so automatic callers keep both suppressions`() {
+        // Regression guard for the added parameter: the ignore/remind rules must
+        // survive at every existing call site that does not name `manual`.
+        assertFalse(UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 5, remindedThisSession = false))
+        assertFalse(UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 0, remindedThisSession = true))
+        assertFalse(
+            UpdateCheckLogic.shouldShowDialog(1, 5, ignoredVersionCode = 5, remindedThisSession = false, manual = false),
+        )
+    }
+
+    @Test
     fun `badge shows whenever a newer build exists regardless of ignore`() {
         assertTrue(UpdateCheckLogic.shouldShowBadge(1, 5))
         assertFalse(UpdateCheckLogic.shouldShowBadge(5, 5))

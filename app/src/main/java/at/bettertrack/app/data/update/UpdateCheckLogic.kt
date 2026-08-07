@@ -33,16 +33,25 @@ object UpdateCheckLogic {
      * permanently ignored for that exact version, and the user hasn't already
      * said "remind me later" this process (that suppression resets next cold
      * start).
+     *
+     * [manual] is the About screen's "Check for updates" button. Both
+     * suppressions — ignore and remind-later — exist to stop the app nagging on
+     * its own schedule, and neither has anything to say about a check the user
+     * just asked for by name: answering "nothing to see here" to a deliberate
+     * tap would look like the button is broken. So a manual check re-offers the
+     * newest build whatever the stored suppressions say. It does not CLEAR them
+     * (that is [UpdateChecker.ignorePending]'s job alone) — declining the
+     * re-offer leaves automatic checks exactly as quiet as they were.
      */
     fun shouldShowDialog(
         currentVersionCode: Int,
         latestVersionCode: Int,
         ignoredVersionCode: Int,
         remindedThisSession: Boolean,
+        manual: Boolean = false,
     ): Boolean =
         isNewer(currentVersionCode, latestVersionCode) &&
-            latestVersionCode != ignoredVersionCode &&
-            !remindedThisSession
+            (manual || (latestVersionCode != ignoredVersionCode && !remindedThisSession))
 
     /**
      * The settings badge is shown whenever a newer build exists — even if the
