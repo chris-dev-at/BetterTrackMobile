@@ -253,7 +253,10 @@ private val LightHairlineInk = Color(0xFF141B23)
 private val BtGold = Color(0xFFF6B82E)
 private val BtGoldInkLight = Color(0xFF8F5F00)
 private val BtGainDark = Color(0xFF34D399)
-private val BtGainLight = Color(0xFF0F7A55)
+// #0F7A55 → #0F7853: byte-converged with web (board 94b5145) — the platform
+// darkened our value along its own RGB ray to clear 4.5:1 on the web's two
+// darkest gain-bearing surfaces; visually identical, strictly higher contrast.
+private val BtGainLight = Color(0xFF0F7853)
 private val BtLossDark = Color(0xFFFB7185)
 private val BtLossLight = Color(0xFFB23A4E)
 
