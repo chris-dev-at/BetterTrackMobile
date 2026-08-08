@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.shell
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Search
@@ -38,7 +39,6 @@ import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.btBarScrolledHairline
 import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
-import kotlin.math.abs
 
 /**
  * The ONE shared top bar of the four top-level tabs, hoisted out of the pages
@@ -67,19 +67,19 @@ import kotlin.math.abs
  * ## Why the variable part is DATA and not a composable slot
  *
  * The obvious hoist is for each tab to hand the shell a `@Composable` lambda for
- * its own bar content. That cannot work here, and the reason is the swipe: at the
- * moment the bar must show the *incoming* tab's content, the incoming tab is not
- * composed. It is a frozen bitmap ([BtTabPeekLayers]) precisely because composing
- * it a second time would double its view models and its network load. A slot
- * belonging to a page that does not exist yet cannot be invoked.
+ * its own bar content. It was impossible when this bar was written — mid-swipe
+ * the incoming tab was a frozen bitmap, not a composition, so there was no slot
+ * to invoke — and it stays wrong now that the pages are live, for a plainer
+ * reason: a slot is a *page's* opinion about the chrome, and the whole point of
+ * hoisting the bar was that four pages should not each own a version of it.
  *
- * A face is therefore a small immutable **description** ([BtTabHeaderFace]) that
- * the shell can hold for every tab at once, including tabs that are not on
- * screen, and render itself. Three of the four faces are constants the shell
- * simply knows; only Portfolio's changes with app state, and it publishes that
- * state through [BtTabChrome] the same way its face is published through the peek
- * layers — as the last thing that tab was, which is exactly what the swipe is
- * showing underneath.
+ * A face is therefore a small immutable **description** ([BtTabHeaderFace]) the
+ * shell holds for every tab at once and renders itself. Three of the four are
+ * constants the shell simply knows; only Portfolio's changes with app state, and
+ * it publishes that through [BtTabChrome]. The shell holding all four is also
+ * what lets the bar cross-fade continuously across a drag — see
+ * [BtHeaderSwapZone], which composes every tab's version of a slot and picks
+ * between them with an alpha rather than with a swap.
  *
  * ## Why the wordmark and the gear cannot move
  *
@@ -92,13 +92,10 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BtTabHeader(
-    /** The face of the tab the nav graph is showing. */
-    face: BtTabHeaderFace,
-    /** The face the swipe is revealing, or null when nothing is in flight. */
-    incoming: BtTabHeaderFace?,
-    /** True when the revealed tab is the one to the RIGHT — the pager idiom. */
-    forward: Boolean,
-    swipe: BtTabSwipeState,
+    /** Every tab's face, in bar order. */
+    faces: List<BtTabHeaderFace>,
+    /** The pager, read in the LAYER phase so a drag frame never recomposes. */
+    pager: PagerState,
     scrollBehavior: TopAppBarScrollBehavior,
     onLongPressWordmark: () -> Unit,
     onOpenSwitcher: () -> Unit,
@@ -113,10 +110,8 @@ internal fun BtTabHeader(
         modifier = Modifier.btBarScrolledHairline(scrollBehavior, bt.groupBorder),
         title = {
             BtHeaderSwapZone(
-                outgoing = face.selector,
-                incoming = incoming?.selector,
-                forward = forward,
-                swipe = swipe,
+                items = faces.map { it.selector },
+                pager = pager,
             ) { selector ->
                 BtHeaderSelector(
                     label = selector.label,
@@ -135,10 +130,8 @@ internal fun BtTabHeader(
         navigationIcon = { BtHeaderWordmark(onLongPress = onLongPressWordmark) },
         actions = {
             BtHeaderSwapZone(
-                outgoing = face.action.takeIf { it != BtTabHeaderAction.None },
-                incoming = incoming?.action?.takeIf { it != BtTabHeaderAction.None },
-                forward = forward,
-                swipe = swipe,
+                items = faces.map { face -> face.action.takeIf { it != BtTabHeaderAction.None } },
+                pager = pager,
             ) { action ->
                 IconButton(onClick = { onAction(action) }) {
                     Icon(
@@ -197,18 +190,30 @@ internal fun rememberBtTabHeaderBehavior(tab: BtTab?): TopAppBarScrollBehavior {
 }
 
 /**
- * One slot of the shared bar, crossfading its outgoing content for its incoming
- * one **in step with the finger**.
+ * One slot of the shared bar, holding **every tab's version of it at once** and
+ * cross-fading between them in step with the pager.
  *
- * Both copies are drawn in the same [Box], so neither is laid out relative to the
- * other and the zone's width is simply the wider of the two — it never reflows
- * mid-gesture, which is what would make the neighbouring slots twitch.
+ * ## Why all of them, rather than an outgoing and an incoming
  *
- * The fraction is read inside [graphicsLayer]'s block form, i.e. in the LAYER
- * phase. That is the whole performance story of this component: a drag frame
- * re-runs two `alpha`/`translationX` assignments and nothing else — no
- * recomposition, no re-measure — which is the same contract the two page layers
- * hold themselves to ([BtTabSwipeState]).
+ * The retired version took two faces and a `forward` flag, and faded on
+ * `abs(pageOffset) / pageWidth`. That was the shape the frozen-bitmap era forced:
+ * only two tabs could be *known* at a time, because the incoming one was a
+ * picture rather than a page and the shell had to be told which picture.
+ *
+ * With four live pages the shell knows all four faces always, so the slot simply
+ * composes each non-null one — at most two per zone in practice, since only
+ * Portfolio has a selector and only People has an action — and gives each an
+ * alpha that is a function of its distance from the pager. Nothing is added or
+ * removed from composition during a gesture, which is what makes the whole drag
+ * free: a frame re-runs two `alpha`/`translationX` assignments in the LAYER
+ * phase and nothing else.
+ *
+ * It also fixes a real artefact rather than only being tidier. The old fraction
+ * was anchored on `currentPage`, which flips at the halfway mark, so a drag
+ * carried past the middle and then pulled back faded the incoming face in, out
+ * and in again while the finger moved steadily one way. Anchoring each item on
+ * its OWN index cannot do that: item `i` is at full alpha when the pager is at
+ * `i` and gone by `i ± 1`, whichever way the finger is going.
  *
  * The slide is deliberately small and *against* the page's travel: the page
  * carries a whole screen width, so a bar element that matched it would be a
@@ -217,66 +222,31 @@ internal fun rememberBtTabHeaderBehavior(tab: BtTab?): TopAppBarScrollBehavior {
  */
 @Composable
 private fun <T : Any> BtHeaderSwapZone(
-    outgoing: T?,
-    incoming: T?,
-    forward: Boolean,
-    swipe: BtTabSwipeState,
+    items: List<T?>,
+    pager: PagerState,
     content: @Composable (T) -> Unit,
 ) {
     val slidePx = with(LocalDensity.current) { HEADER_SWAP_SLIDE.toPx() }
     Box(contentAlignment = Alignment.CenterStart) {
-        if (outgoing != null) {
-            Box(
-                Modifier.graphicsLayer {
-                    val f = tabHeaderSwapFraction(
-                        pageOffsetPx = swipe.pageOffsetPx,
-                        pageWidthPx = swipe.pageWidthPx,
-                        handedOff = swipe.handoff != null,
-                    )
-                    alpha = 1f - f
-                    translationX = if (forward) -f * slidePx else f * slidePx
-                },
-            ) { content(outgoing) }
-        }
-        if (incoming != null) {
-            Box(
-                Modifier.graphicsLayer {
-                    val f = tabHeaderSwapFraction(
-                        pageOffsetPx = swipe.pageOffsetPx,
-                        pageWidthPx = swipe.pageWidthPx,
-                        handedOff = swipe.handoff != null,
-                    )
-                    alpha = f
-                    translationX = if (forward) (1f - f) * slidePx else -(1f - f) * slidePx
-                },
-            ) { content(incoming) }
+        items.forEachIndexed { index, item ->
+            if (item != null) {
+                Box(
+                    Modifier.graphicsLayer {
+                        val pos = tabPagerPosition(
+                            pager.currentPage,
+                            pager.currentPageOffsetFraction,
+                            items.size,
+                        )
+                        alpha = tabSelectionRamp(pos, index)
+                        // Against the page: the pager moving RIGHT (pos rising)
+                        // slides this element LEFT, by the same rule for every
+                        // item, so there is no direction to get backwards.
+                        translationX = -(pos - index).coerceIn(-1f, 1f) * slidePx
+                    },
+                ) { content(item) }
+            }
         }
     }
-}
-
-/**
- * How far through the hand-over the bar's variable content is, 0..1.
- *
- * The same displacement the pages ride, as a fraction of one page — so the
- * content has completed its crossfade exactly when the incoming page has arrived,
- * and a drag the user changes their mind about fades back with it.
- *
- * [handedOff] pins it at 1, and that pin is not decoration: a committed swipe
- * snaps the page offset back to zero the instant it tells the NavHost to swap
- * (see `btTabSwipe`), so a raw reading of the offset would say "no swipe in
- * progress" while the shell is still showing the OLD tab's face over the NEW
- * tab's page. That is the same handoff race the bottom bar's indicator latch
- * exists for, arriving in the top bar — and it is fixed the same way, by
- * believing the commit rather than the coordinate.
- */
-internal fun tabHeaderSwapFraction(
-    pageOffsetPx: Float,
-    pageWidthPx: Float,
-    handedOff: Boolean,
-): Float = when {
-    handedOff -> 1f
-    pageWidthPx <= 0f -> 0f
-    else -> (abs(pageOffsetPx) / pageWidthPx).coerceIn(0f, 1f)
 }
 
 /**
@@ -382,10 +352,12 @@ class BtTabChrome internal constructor() {
     /**
      * The Portfolio tab's pill, or null before that tab has ever composed.
      *
-     * Deliberately NOT cleared when the tab leaves composition. A swipe onto
-     * Portfolio shows that tab's frozen last frame, so the bar showing its last
-     * known pill is the same picture from the same instant — clearing it would
-     * make the one moment the value is needed the one moment it is absent.
+     * Deliberately NOT cleared when the tab leaves composition. The Portfolio
+     * page no longer leaves composition at all (it is one of four permanently
+     * live pages), so in practice this is now only about the window before that
+     * page has first woken up — see [BtTabLiveSet]. Keeping the last known pill
+     * through it means the bar has something true to show while a swipe is
+     * arriving on a page that is still being built.
      */
     var portfolioSelector: BtTabSelector? by mutableStateOf(null)
         private set

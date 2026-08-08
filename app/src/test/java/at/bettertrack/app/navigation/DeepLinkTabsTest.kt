@@ -102,13 +102,21 @@ class DeepLinkTabsTest {
     // ── Structural guards ──────────────────────────────────────────────────────
 
     @Test
-    fun `each tab carries its own distinct typed route`() {
-        val routes = BtTab.entries.map { it.route }
-        assertEquals(routes.size, routes.toSet().size)
-        assertEquals(PortfolioTabRoute, BtTab.Portfolio.route)
-        assertEquals(WorkbenchTabRoute, BtTab.Workbench.route)
-        assertEquals(MarketsTabRoute, BtTab.Markets.route)
-        assertEquals(PeopleTabRoute, BtTab.People.route)
+    fun `a tab's identity is its position in the bar, and nothing else`() {
+        // This used to assert that each tab carried its own distinct typed
+        // `...TabRoute`. The four route objects are deleted (architecture change
+        // 2026-08-08): the tabs are pages in [at.bettertrack.app.ui.shell.BtTabPager],
+        // not destinations, and a route object nothing registers is exactly the
+        // drift BtRoutes' own header warns about.
+        //
+        // What replaces the guarantee is stricter, not weaker: a tab IS its index,
+        // so the enum being distinct and ordered is the whole contract that the
+        // pager, the bottom bar and the shared header all index against.
+        assertEquals(BtTab.entries.size, BtTab.entries.toSet().size)
+        assertEquals(0, BtTab.entries.indexOf(BtTab.Portfolio))
+        assertEquals(1, BtTab.entries.indexOf(BtTab.Markets))
+        assertEquals(2, BtTab.entries.indexOf(BtTab.Workbench))
+        assertEquals(3, BtTab.entries.indexOf(BtTab.People))
     }
 
     @Test
@@ -166,52 +174,36 @@ class DeepLinkTabsTest {
         }
     }
 
-    // ── Swipe neighbours (owner ask 2026-08-07) ────────────────────────────────
+    // ── Bar order (owner ask 2026-08-07, re-pinned 2026-08-08) ───────────────
+    //
+    // `tabNeighbour` used to live here and answered "which tab does a swipe in
+    // this direction land on", including the no-wrap rule and the
+    // resolve-against-the-VISIBLE-bar rule. It is gone: the four tabs are pages
+    // in a `HorizontalPager` built from the visible bar, so a swipe cannot leave
+    // the page range and cannot reach a tab the bar does not render — both rules
+    // are enforced by construction now rather than by a lookup. See
+    // `BtTabPagerTest` for the geometry that replaced it.
+    //
+    // What still has to be pinned HERE is the thing the pager takes on trust: the
+    // ORDER, because a page index is only a tab because this enum says so.
 
     @Test
-    fun `swiping forward walks the bar left to right`() {
-        // "forward" is the finger travelling LEFT, which reveals the tab to the
-        // right — the owner's "portfolio swipe left goes to assets".
-        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Portfolio, forward = true))
-        assertEquals(BtTab.Workbench, tabNeighbour(BtTab.Markets, forward = true))
-        assertEquals(BtTab.People, tabNeighbour(BtTab.Workbench, forward = true))
+    fun `the bar reads Portfolio, Markets, Workbench, People`() {
+        // Declaration order IS bar order IS page order. The pager indexes into
+        // this list, so reordering the enum reorders the swipe, the bottom bar and
+        // the shared header's crossfade together — which is the point of there
+        // being one list.
+        assertEquals(
+            listOf(BtTab.Portfolio, BtTab.Markets, BtTab.Workbench, BtTab.People),
+            BtTab.entries.toList(),
+        )
     }
 
     @Test
-    fun `swiping back walks the bar right to left`() {
-        assertEquals(BtTab.Workbench, tabNeighbour(BtTab.People, forward = false))
-        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Workbench, forward = false))
-        assertEquals(BtTab.Portfolio, tabNeighbour(BtTab.Markets, forward = false))
-    }
-
-    @Test
-    fun `the bar does not wrap around at either end`() {
-        // Wrapping would make the bar a carousel, which contradicts a bottom bar
-        // whose selection is a position rather than a cycle.
-        assertNull(tabNeighbour(BtTab.Portfolio, forward = false))
-        assertNull(tabNeighbour(BtTab.People, forward = true))
-    }
-
-    @Test
-    fun `neighbours are resolved against the VISIBLE bar, not the full enum`() {
-        // A Drive-only install renders Portfolio + Markets only. Swiping off the
-        // end of THAT bar must stop, not land on a tab with no button.
-        val driveBar = listOf(BtTab.Portfolio, BtTab.Markets)
-        assertEquals(BtTab.Markets, tabNeighbour(BtTab.Portfolio, forward = true, visible = driveBar))
-        assertNull(tabNeighbour(BtTab.Markets, forward = true, visible = driveBar))
-        // A tab that is not in the visible bar has no neighbours at all.
-        assertNull(tabNeighbour(BtTab.Workbench, forward = true, visible = driveBar))
-        assertNull(tabNeighbour(BtTab.Workbench, forward = false, visible = driveBar))
-    }
-
-    @Test
-    fun `the start destination is the first tab in the bar`() {
-        // Portfolio is the NavHost's start destination (see BtNavHost) and the tab
-        // that hosts Overview. Both `popUpTo(findStartDestination())` call sites —
-        // the bottom-bar tap and the deep-link tab switch — land there, so it must
-        // be a tab the user can actually see: first in the bar, and `FULL` in
-        // every storage mode.
+    fun `Portfolio is the page a cold start lands on`() {
+        // It hosts Overview, the app's front door, and it is `FULL` in every
+        // storage mode — so it is the one page that is guaranteed to exist for the
+        // pager's initial page and for system back to fall back to.
         assertEquals(BtTab.Portfolio, BtTab.entries.first())
-        assertEquals(PortfolioTabRoute, BtTab.entries.first().route)
     }
 }

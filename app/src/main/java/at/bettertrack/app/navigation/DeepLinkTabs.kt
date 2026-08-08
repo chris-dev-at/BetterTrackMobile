@@ -3,7 +3,7 @@ package at.bettertrack.app.navigation
 import at.bettertrack.app.data.notifications.NotifDeepLink
 
 /**
- * The four bottom-navigation destinations, each paired with its typed route.
+ * The four bottom-navigation destinations.
  *
  * Declaration order IS bar order: Portfolio · Markets · Workbench · People. The
  * shell filters this set per storage mode but never reorders it, so a Drive-only
@@ -32,12 +32,21 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
  * Having the tab set as an enum (rather than only as a list of UI specs inside
  * the shell) is what makes the deep-link routing rule below a PURE function the
  * unit tests can pin down — no NavController, no Compose.
+ *
+ * ## Why there is no `route` any more (architecture change 2026-08-08)
+ *
+ * Each entry used to carry its typed `...TabRoute`, because a tab was a NavHost
+ * destination and switching to one meant navigating to it. The four tabs are now
+ * four live pages in [at.bettertrack.app.ui.shell.BtTabPager] — they are not in
+ * the graph at all, and their route objects were deleted rather than left
+ * pointing at nothing. A tab's identity is its position in this enum, which is
+ * also its page index, which is the only address the pager needs.
  */
-enum class BtTab(val route: Any) {
-    Portfolio(PortfolioTabRoute),
-    Markets(MarketsTabRoute),
-    Workbench(WorkbenchTabRoute),
-    People(PeopleTabRoute),
+enum class BtTab {
+    Portfolio,
+    Markets,
+    Workbench,
+    People,
 }
 
 /**
@@ -72,27 +81,17 @@ fun tabTapAction(tapped: BtTab, exactTab: BtTab?): TabTap =
         TabTap.Switch
     }
 
-/**
- * The tab a horizontal swipe lands on, or `null` at the ends of the bar.
+/*
+ * `tabNeighbour` is deleted (architecture change 2026-08-08).
  *
- * [forward] means "the finger travelled LEFT", which in every pager idiom reveals
- * the page to the RIGHT — the owner's phrasing was *"portfolio swipe left goes to
- * assets and reverse"*, and Markets is Portfolio's right-hand neighbour.
- *
- * [visible] is the bar as the current storage mode actually renders it (a
- * Drive-only bar is Portfolio · Markets), so the swipe walks the tabs the user
- * can see rather than the full enum — swiping past the end of a filtered bar must
- * not land on a tab that has no button. It is a list rather than a set because
- * neighbours are an ORDER question; the shell builds it from this enum's order,
- * which is what keeps bar order and swipe order the same fact.
- *
- * Pure (no NavController, no Compose) so the unit tests can pin every hop.
+ * It answered "which tab does a swipe in this direction land on", against the
+ * VISIBLE bar so a filtered Drive-only bar could not swipe onto a tab it does not
+ * render. [at.bettertrack.app.ui.shell.BtTabPager] is built from that same
+ * visible list and a pager cannot leave its own page range, so the rule is now
+ * enforced by construction instead of by a lookup — and the shell has nothing
+ * left to ask it. The guarantee it protected is pinned in `BtTabPagerTest`
+ * instead, at the level where it now lives.
  */
-fun tabNeighbour(current: BtTab, forward: Boolean, visible: List<BtTab> = BtTab.entries): BtTab? {
-    val i = visible.indexOf(current)
-    if (i < 0) return null
-    return visible.getOrNull(if (forward) i + 1 else i - 1)
-}
 
 /**
  * Which tab OWNS a deep-link target (S6 P1-8), or `null` for the targets that no

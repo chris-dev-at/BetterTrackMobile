@@ -3,9 +3,13 @@ package at.bettertrack.app.ui.shell
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +30,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,8 +57,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -93,12 +97,9 @@ import at.bettertrack.app.navigation.GalleryRoute
 import at.bettertrack.app.navigation.HoldingDetailRoute
 import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
-import at.bettertrack.app.navigation.MarketsTabRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
 import at.bettertrack.app.navigation.PendingSyncRoute
-import at.bettertrack.app.navigation.PeopleTabRoute
 import at.bettertrack.app.navigation.PortfolioSettingsRoute
-import at.bettertrack.app.navigation.PortfolioTabRoute
 import at.bettertrack.app.navigation.PortfolioTaxRoute
 import at.bettertrack.app.navigation.SearchRoute
 import at.bettertrack.app.navigation.ServerRoute
@@ -113,6 +114,7 @@ import at.bettertrack.app.navigation.SharedWatchlistViewRoute
 import at.bettertrack.app.navigation.StandingOrdersRoute
 import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
+import at.bettertrack.app.navigation.SheetRootRoute
 import at.bettertrack.app.navigation.TabTap
 import at.bettertrack.app.navigation.TaxSettingsRoute
 import at.bettertrack.app.navigation.TaxYearRoute
@@ -120,9 +122,7 @@ import at.bettertrack.app.navigation.TaxYearsRoute
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.navigation.TransactionsRoute
 import at.bettertrack.app.navigation.TwoFactorRoute
-import at.bettertrack.app.navigation.WorkbenchTabRoute
 import at.bettertrack.app.navigation.owningTab
-import at.bettertrack.app.navigation.tabNeighbour
 import at.bettertrack.app.navigation.tabTapAction
 import at.bettertrack.app.ui.applock.AppLockSetupScreen
 import at.bettertrack.app.ui.cash.CashScreen
@@ -174,7 +174,6 @@ import at.bettertrack.app.ui.sync.PendingSyncScreen
 import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.workboard.WorkboardEntry
-import kotlin.reflect.KClass
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -224,7 +223,6 @@ private enum class TabBadge {
  */
 private data class TabSpec(
     val tab: BtTab,
-    val routeClass: KClass<*>,
     val labelRes: Int,
     val icon: ImageVector,
     val surface: BtSurface,
@@ -242,10 +240,10 @@ private data class TabSpec(
  * by a comment that claimed the shell read the enum — it never did.
  */
 private val Tabs = listOf(
-    TabSpec(BtTab.Portfolio, PortfolioTabRoute::class, R.string.bt_tab_portfolio, BtIcons.Pie, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
-    TabSpec(BtTab.Markets, MarketsTabRoute::class, R.string.bt_tab_markets, BtIcons.Assets, BtSurface.MARKET),
-    TabSpec(BtTab.Workbench, WorkbenchTabRoute::class, R.string.bt_tab_workbench, BtIcons.Workbench, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
-    TabSpec(BtTab.People, PeopleTabRoute::class, R.string.bt_tab_people, BtIcons.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
+    TabSpec(BtTab.Portfolio, R.string.bt_tab_portfolio, BtIcons.Pie, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
+    TabSpec(BtTab.Markets, R.string.bt_tab_markets, BtIcons.Assets, BtSurface.MARKET),
+    TabSpec(BtTab.Workbench, R.string.bt_tab_workbench, BtIcons.Workbench, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
+    TabSpec(BtTab.People, R.string.bt_tab_people, BtIcons.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
 )
 
 /**
@@ -341,25 +339,18 @@ private fun headerFaceOf(tab: BtTab?, chrome: BtTabChrome): BtTabHeaderFace = wh
 @Composable
 fun BtApp() {
     val bt = BtTheme.colors
+    val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    // Which top-level tab is showing, if any. Resolved once: the top bar needs
-    // the SPEC (its title, its one action), not just the yes/no the bars used to
-    // share, and two independent lookups would be free to disagree.
-    val currentTab = Tabs.firstOrNull { tab ->
-        currentDestination?.hierarchy?.any { it.hasRoute(tab.routeClass) } == true
-    }
-    val isTopLevel = currentTab != null
-    // The tab whose route the current destination IS, as opposed to the tab it
-    // merely lives UNDER (`currentTab`, which matches through the hierarchy so a
-    // pushed detail keeps its tab lit). Only an exact match counts as a re-tap —
-    // see [tabTapAction].
-    val exactTab = Tabs.firstOrNull { tab ->
-        currentDestination?.hasRoute(tab.routeClass) == true
-    }?.tab
+    // True when nothing is stacked over the tabs. It is the ONE question the shell
+    // still asks the nav graph, and it replaces `isTopLevel`: the graph's floor is
+    // an empty destination, so "the graph is at its floor" and "the user is looking
+    // at a tab" are now the same fact.
+    val sheetsClosed = currentDestination?.hasRoute(SheetRootRoute::class) != false
+
     // V5 W5: per-mode surface gating (plan §4.5). Read once here so the bars and
-    // the routes below cannot disagree about what this install can do.
+    // the pages below cannot disagree about what this install can do.
     val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
     // The GATED mode, not the raw one: a release build resolves a stale stored
     // DRIVE/BOTH down to SERVER, and the bars must agree with the backend the app
@@ -367,203 +358,177 @@ fun BtApp() {
     // hide Social while still talking to the server.
     val storageMode = remember(storedMode) { AppGraph.gatedStorageMode(storedMode) }
     val visibleTabs = remember(storageMode) { tabsFor(storageMode) }
+    val tabOrder = remember(visibleTabs) { visibleTabs.map { it.tab } }
     val showSocialSurfaces = storageMode.shows(BtSurface.SOCIAL)
     val showNotificationSurfaces = storageMode.shows(BtSurface.ALERTS_NOTIFICATIONS)
 
-    // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
-    // system-push intents (surfaced via AppGraph.pendingDeepLink).
-    val scope = rememberCoroutineScope()
-    // Switch to a top-level TAB with bottom-bar semantics. Hoisted out of the
-    // deep-link handler because Home needs it too: Home is an index whose rows
-    // are owned by other tabs, so "go to Workbench's alerts" must land exactly
-    // the way the bottom bar and a notification tap do, not as a bare push.
-    val switchToTab: (BtTab) -> Unit = remember(navController) {
-        { tab ->
-            navController.navigate(tab.route) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
-        }
-    }
-    // ONE displacement, read by the outgoing page, the incoming page and the
-    // bottom bar's indicator. See [BtTabSwipeState].
-    val swipeState = rememberBtTabSwipeState()
-    // The optimistic TAP latch: the tab a bar tap asked for, believed by the bar
-    // from the tap's own frame until the nav graph agrees. Deliberately NOT
-    // `swipeState.handoff` — that field also pins the peek layer and suppresses
-    // the NavHost's transitions, neither of which a tap has any business doing.
-    // See [tapLatchHolds] for why it exists and when it must let go.
+    // ── The pager, and everything that keeps four pages alive ────────────────
     //
-    // `origin` is captured at tap time so the latch can tell "nav has not caught
-    // up yet" from "nav went somewhere else entirely", which is the difference
-    // between a correct optimism and a tab lit under a screen nobody is on.
-    var tapCommit by remember { mutableStateOf<BtTab?>(null) }
-    var tapOrigin by remember { mutableStateOf<BtTab?>(null) }
-    // The last frame each tab drew, so the neighbour can be ON SCREEN during the
-    // drag without being composed a second time. See [BtTabPeekLayers] for why a
-    // second composition is not an option in this app.
-    val peekLayers = rememberBtTabPeekLayers()
-    // The channel between the four tabs and the ONE bar they now share — see
-    // [BtTabChrome]. Portfolio publishes its pill up it; every tab hangs the
-    // bar's nested-scroll connection off it.
+    // These four objects are the whole of part A. The pager state is the single
+    // coordinate every piece of chrome reads; the scopes give each page the view
+    // model lifetime its nav entry used to give it; the live set is the lazy-init
+    // gate that keeps a cold start paying for one page instead of four; and the
+    // sheet stack is how a subpage tells the shell it is on top.
+    val pagerState = rememberBtTabPagerState(tabOrder, BtTab.Portfolio)
+    val tabScopes = rememberBtTabScopes()
+    val live = remember { BtTabLiveSet(tabOrder.getOrNull(pagerState.currentPage)) }
+    val sheets = remember(navController) { BtSheetHostState { navController.popBackStack() } }
+
+    // The tab the pager has SETTLED on. Deliberately `settledPage` and not
+    // `currentPage`: this drives the header's per-tab scroll state and the badge
+    // gating, and `currentPage` flips at the halfway mark of a drag, so reading it
+    // here would swap the bar's tonal state under a page still visibly in motion.
+    val currentTab = visibleTabs.getOrNull(pagerState.settledPage)
+    // The tab a bar tap would be a RE-tap of. A sheet covers the bar, so a tap can
+    // only ever arrive with the stack closed; the check keeps that explicit rather
+    // than implied.
+    val exactTab = if (sheetsClosed) currentTab?.tab else null
+
+    // The optimistic TAP latch, as a page index (owner ask 2026-08-08).
+    //
+    // The swipe latches are gone with the peek layer: a gesture and the bar read
+    // the same `pagerState` in the same frame now, so there is nothing left for
+    // them to disagree about and nothing to be optimistic about. A tap still needs
+    // one, because `animateScrollToPage` is a journey and the ask was that the tap
+    // be acknowledged on its own frame rather than when the journey ends. See
+    // [tapLatchHolds] for when it must let go.
+    var tapCommit by remember { mutableStateOf<Int?>(null) }
+    var tapOrigin by remember { mutableIntStateOf(0) }
+
+    // The channel between the four tabs and the ONE bar they share — see
+    // [BtTabChrome]. Portfolio publishes its pill up it; every tab hangs the bar's
+    // nested-scroll connection off it.
     val chrome = remember { BtTabChrome() }
     val headerBehavior = rememberBtTabHeaderBehavior(currentTab?.tab)
     SideEffect { chrome.headerScroll = headerBehavior.nestedScrollConnection }
-    // Where a hop in this direction would land, or null at the ends of the bar.
-    // Consulted DURING the drag too: it is what decides between a 1:1 follow and
-    // the damped overscroll hint.
+
+    // Hop to a tab. ONE implementation for the bottom bar, the deep-link router
+    // and Overview's cross-tab rows, so tapping, linking and swiping can never
+    // mean three different things.
     //
-    // The origin is the newest DECISION, not the nav graph — see [swipeOriginTab].
-    // Read at call time rather than at composition time, so a flick that lands
-    // before the shell has recomposed still chains off the hop before it instead
-    // of aiming at the tab the user has already left.
-    val neighbourOf: (Boolean) -> BtTab? = { forward ->
-        swipeOriginTab(
-            pendingCommit = swipeState.pendingCommit,
-            handoff = swipeState.handoff,
-            tapCommit = tapCommit,
-            navCurrent = currentTab?.tab,
-        )?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
-    }
-    // A committed swipe routes through the SAME [switchToTab] the bottom bar
-    // uses, which is what keeps saved state, restored back stacks and bar
-    // selection identical whether you tapped or swiped.
-    // A swipe supersedes any tap the nav graph has not caught up to yet: the
-    // gesture layer is about to run its own, richer handoff (peek pin included),
-    // and leaving a stale tap latch behind would give the bar two opinions to
-    // choose between for as long as the nav graph stayed behind.
-    val onSwipeCommit: (BtTab) -> Unit = { tab ->
-        tapCommit = null
-        switchToTab(tab)
-    }
-    // The second page, or null for "draw one page". Pure — see [swipePeekTab].
-    val peekTab = swipePeekTab(
-        handoff = swipeState.handoff,
-        peekSide = swipeState.peekSide,
-        current = currentTab?.tab,
-        visible = visibleTabs.map { spec -> spec.tab },
-    )
-    // Freeze the face of the tab the user is LEAVING.
-    //
-    // This instant is the only one that works. Later, the tab root is gone and
-    // its recorded drawing commands resolve against render nodes that have been
-    // handed to something else (see [BtTabPeekLayers] — the layer would replay
-    // as a copy of whatever is on screen now). Earlier would freeze a page the
-    // user then carried on scrolling. Here the tab is complete AND still on its
-    // way out, so the picture is both correct and current.
-    //
-    // It fires for pushed screens too (`exactTab` goes null): opening a holding
-    // and coming back leaves Portfolio's face as it was before the push, which
-    // is what the next swipe should show.
-    var lastTabRoot by remember { mutableStateOf<BtTab?>(null) }
-    LaunchedEffect(exactTab) {
-        val leaving = lastTabRoot
-        lastTabRoot = exactTab
-        if (leaving != null && leaving != exactTab) peekLayers.freeze(leaving)
-    }
-    // Drop the handoff pin once the NavHost is actually showing the tab the
-    // swipe committed to. Until then the peek covers the swap, which is what
-    // makes the swap invisible: the pixels under it are already identical.
-    //
-    // The timeout is not decoration. If the hop is ever refused (a mode change
-    // that hides the target tab mid-gesture, say) `currentTab` never becomes
-    // `handoff`, and without this the peek would cover the app forever.
-    LaunchedEffect(swipeState.handoff, currentTab?.tab) {
-        val target = swipeState.handoff ?: return@LaunchedEffect
-        if (currentTab?.tab == target) {
-            // Two frames, so the NavHost has certainly DRAWN the new page — not
-            // merely composed it — before the cover comes off.
-            withFrameNanos {}
-            withFrameNanos {}
-        } else {
-            delay(600)
-        }
-        swipeState.handoff = null
-        // Unless a finger is still down — a fast chain drops the pin mid-drag,
-        // and blanking the neighbour then would punch a one-frame hole in the
-        // page being dragged. See [peekSurvivesHandoffEnd].
-        if (!peekSurvivesHandoffEnd(swipeState.dragging, swipeState.pendingCommit != null)) {
-            swipeState.peekSide = null
+    // REMEMBERED, and that is not tidiness (perf pass 2026-08-06, restated): this
+    // lambda is handed to `BtSheetHost`, and a fresh instance on every
+    // composition makes that composable unskippable — which also re-evaluates its
+    // `NavGraphBuilder` lambda, invalidating `NavHost`'s internal
+    // `remember(builder) { createGraph(...) }` and rebuilding all 46 typed
+    // destinations, kotlinx-serialization route reflection and all. The pager
+    // recomposes this shell once per hop, so an unremembered lambda here would
+    // rebuild the whole graph on every swipe.
+    val switchToTab: (BtTab) -> Unit = remember(tabOrder, pagerState, scope) {
+        { tab ->
+            val index = tabOrder.indexOf(tab)
+            if (index >= 0 && index != pagerState.currentPage) {
+                tapOrigin = pagerState.settledPage
+                tapCommit = index
+                scope.launch { pagerState.animateScrollToPage(index, animationSpec = TabHopSpec) }
+            }
         }
     }
-    // Release the optimistic tap latch the moment it stops being believable.
-    //
-    // Re-keyed on the nav graph, so agreement drops it on the very next
-    // recomposition — the latch is load-bearing for about three frames and then
-    // it is simply in the way. The timeout is the same insurance the handoff pin
-    // carries: if a hop is refused outright (a storage-mode change hides the
-    // target tab mid-tap, say) `currentTab` never becomes the target and never
-    // returns to the origin either, and without this the bar would light a tab
-    // nobody is on until the next navigation.
-    LaunchedEffect(tapCommit, currentTab?.tab) {
+
+    // Wake the sleeping pages once the app is idle — see [TAB_WARMUP_DELAY_MS].
+    // Nearest first, so the two the user is one swipe away from are ready before
+    // the far one.
+    LaunchedEffect(tabOrder) {
+        val here = pagerState.settledPage
+        tabOrder.getOrNull(here)?.let(live::wake)
+        withFrameNanos {}
+        delay(TAB_WARMUP_DELAY_MS)
+        tabWarmOrder(tabOrder, here).forEach { tab ->
+            if (!live.isLive(tab)) {
+                live.wake(tab)
+                delay(TAB_WARMUP_STAGGER_MS)
+            }
+        }
+    }
+    // ...and wake a page the instant a gesture aims at it, which is what makes the
+    // warm-up schedule invisible: a swipe inside the startup window does not wait
+    // for it. `targetPage` is the pager's own answer to "where is this going to
+    // land", and it is written when the drag starts, not when it ends.
+    LaunchedEffect(pagerState, tabOrder) {
+        snapshotFlow { pagerState.targetPage }.collect { index ->
+            tabOrder.getOrNull(index)?.let(live::wake)
+        }
+    }
+    // Release the tap latch the moment it stops being believable. The timeout is
+    // the same insurance it always carried: if a hop is refused outright (a
+    // storage-mode change hides the target mid-tap) the pager never settles on the
+    // target and never returns to the origin either.
+    LaunchedEffect(tapCommit, pagerState.settledPage) {
         val target = tapCommit ?: return@LaunchedEffect
-        if (!tapLatchHolds(target, tapOrigin, currentTab?.tab)) {
+        if (!tapLatchHolds(target, tapOrigin, pagerState.settledPage)) {
             tapCommit = null
             return@LaunchedEffect
         }
         delay(600)
         tapCommit = null
     }
+    // System back on a tab that is not the first one returns to the first tab, and
+    // back from THERE exits — the semantic the nav graph used to give for free via
+    // `popUpTo(startDestination)`, restated now that the tabs are not destinations.
+    // Disabled while a sheet is up, where the sheet's own handler owns back.
+    BackHandler(enabled = sheetsClosed && pagerState.currentPage != 0) {
+        scope.launch { pagerState.animateScrollToPage(0, animationSpec = TabHopSpec) }
+    }
+
+    // Notification deep-link routing (Step 16): shared by inbox taps AND tapped
+    // system-push intents (surfaced via AppGraph.pendingDeepLink).
+    // Remembered for the same reason as `switchToTab` above — it is the shell's
+    // other lambda that crosses into the graph builder.
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
+        { link ->
         // EVERY deep link lands the same way (S6 P1-8):
-        //   1. drop the notifications inbox (inclusive) if the tap came from it, so
-        //      it is never saved under a tab's restored state — a no-op on a
-        //      cold-start push tap, where the inbox isn't on the stack;
-        //   2. switch to the tab that OWNS the target (see `owningTab`) with
-        //      bottom-bar semantics — a plain push would stack the detail on
-        //      whatever tab happened to be selected, and the next bottom-bar tap
-        //      would pop+restore it and bounce the user straight back;
-        //   3. push the detail route on top of that tab, if the link has one.
-        fun open(link: NotifDeepLink, push: (() -> Unit)? = null) {
-            navController.popBackStack(NotificationsInboxRoute, inclusive = true)
+        //   1. clear the sheet stack, so the target does not open on top of
+        //      whatever the user happened to have open — including the
+        //      notifications inbox the tap may have come from;
+        //   2. switch to the tab that OWNS the target (see `owningTab`);
+        //   3. open the target's sheet over it, if the link has one.
+        fun open(l: NotifDeepLink, push: (() -> Unit)? = null) {
+            navController.popBackStack(SheetRootRoute, inclusive = false)
             // `null` = an account-level target that no tab owns (settings,
-            // security, notification settings). Those push over whatever tab the
+            // security, notification settings). Those open over whatever tab the
             // user is standing on rather than yanking them somewhere first —
             // owner's rule, and see `owningTab`'s KDoc for why it is safe here.
-            owningTab(link)?.let(switchToTab)
+            owningTab(l)?.let(switchToTab)
             push?.invoke()
         }
-        val handler: (NotifDeepLink) -> Unit = { link ->
-            when (link) {
-                NotifDeepLink.Social -> open(link)
-                is NotifDeepLink.SharedPortfolio ->
-                    open(link) { navController.navigate(SharedPortfolioViewRoute(link.portfolioId)) }
-                is NotifDeepLink.FriendOverview ->
-                    open(link) { navController.navigate(FriendOverviewRoute(link.userId, link.username)) }
-                is NotifDeepLink.PublicProfile -> {
-                    // No userId on the wire (FCM friend.activity / follow.published).
-                    // Resolve the username against the friends list at tap time: a
-                    // friend opens their overview; anyone else (e.g. a non-friend
-                    // followee, which the app has no profile screen for) lands on the
-                    // Social tab — never a dead tap (mobile-push.md §4). The tab
-                    // switch happens NOW so the user is never left staring at the
-                    // wrong tab while the lookup is in flight.
-                    open(link)
-                    scope.launch {
-                        val friend = (AppGraph.socialRepository.friends() as? BtResult.Ok)
-                            ?.value?.firstOrNull { it.username.equals(link.username, ignoreCase = true) }
-                        if (friend != null) navController.navigate(FriendOverviewRoute(friend.userId, friend.username))
-                    }
+        when (link) {
+            NotifDeepLink.Social -> open(link)
+            is NotifDeepLink.SharedPortfolio ->
+                open(link) { navController.navigate(SharedPortfolioViewRoute(link.portfolioId)) }
+            is NotifDeepLink.FriendOverview ->
+                open(link) { navController.navigate(FriendOverviewRoute(link.userId, link.username)) }
+            is NotifDeepLink.PublicProfile -> {
+                // No userId on the wire (FCM friend.activity / follow.published).
+                // Resolve the username against the friends list at tap time: a
+                // friend opens their overview; anyone else (e.g. a non-friend
+                // followee, which the app has no profile screen for) lands on the
+                // Social tab — never a dead tap (mobile-push.md §4). The tab
+                // switch happens NOW so the user is never left staring at the
+                // wrong tab while the lookup is in flight.
+                open(link)
+                scope.launch {
+                    val friend = (AppGraph.socialRepository.friends() as? BtResult.Ok)
+                        ?.value?.firstOrNull { it.username.equals(link.username, ignoreCase = true) }
+                    if (friend != null) navController.navigate(FriendOverviewRoute(friend.userId, friend.username))
                 }
-                is NotifDeepLink.SharedConglomerate ->
-                    open(link) { navController.navigate(SharedConglomerateViewRoute(link.conglomerateId)) }
-                is NotifDeepLink.Chat -> open(link) { navController.navigate(ChatListRoute) }
-                is NotifDeepLink.Asset -> open(link) { navController.navigate(AssetPageRoute(link.assetId)) }
-                is NotifDeepLink.Holding -> open(link) { navController.navigate(HoldingDetailRoute(link.assetId)) }
-                // The alerts manager is a SEGMENT of the Workbench tab, not a route
-                // of its own: switch to the tab and ask it to open that segment.
-                NotifDeepLink.Alerts -> {
-                    WorkboardEntry.requestAlerts()
-                    open(link)
-                }
-                NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
-                NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
-                NotifDeepLink.NotificationSettings ->
-                    open(link) { navController.navigate(SettingsNotificationsRoute) }
             }
+            is NotifDeepLink.SharedConglomerate ->
+                open(link) { navController.navigate(SharedConglomerateViewRoute(link.conglomerateId)) }
+            is NotifDeepLink.Chat -> open(link) { navController.navigate(ChatListRoute) }
+            is NotifDeepLink.Asset -> open(link) { navController.navigate(AssetPageRoute(link.assetId)) }
+            is NotifDeepLink.Holding -> open(link) { navController.navigate(HoldingDetailRoute(link.assetId)) }
+            // The alerts manager is a SEGMENT of the Workbench tab, not a route
+            // of its own: switch to the tab and ask it to open that segment.
+            NotifDeepLink.Alerts -> {
+                WorkboardEntry.requestAlerts()
+                open(link)
+            }
+            NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
+            NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
+            NotifDeepLink.NotificationSettings ->
+                open(link) { navController.navigate(SettingsNotificationsRoute) }
         }
-        handler
+        }
     }
     // A push tapped while the app was closed/backgrounded: MainActivity parked the
     // target; consume it once here (StateFlow so a cold tap is never lost).
@@ -575,11 +540,9 @@ fun BtApp() {
         }
     }
 
-    // Inbox unread count: refresh once on entry so the number next to Home's
-    // overflow inbox entry is live. The bell that used to carry this is gone
-    // (mandate §1) but the count is not — it moved, it did not die.
-    // Drive-only has no server to hold an inbox; asking would be a guaranteed
-    // failed call on every launch, not a feature.
+    // Inbox unread count: refresh once on entry so the number next to Overview's
+    // inbox row is live. Drive-only has no server to hold an inbox; asking would
+    // be a guaranteed failed call on every launch, not a feature.
     val notifUnread by AppGraph.notificationRepository.unreadCount.collectAsStateWithLifecycle()
     LaunchedEffect(showNotificationSurfaces) {
         if (showNotificationSurfaces) AppGraph.notificationRepository.refresh()
@@ -594,7 +557,7 @@ fun BtApp() {
         if (showSocialSurfaces) AppGraph.chatRepository.refreshConversations()
     }
 
-    // Triggered alerts: the Workbench tab's dot AND Home's actionable row read
+    // Triggered alerts: the Workbench tab's dot AND Overview's actionable row read
     // this one cached count, primed here so it is live from whichever tab the
     // user happens to open the app on. The repository does its own mode gating.
     val triggeredAlerts by AppGraph.alertsRepository.triggered.collectAsStateWithLifecycle()
@@ -603,35 +566,23 @@ fun BtApp() {
     }
 
     // One feedback idiom for the whole app (S6 P1-9). Hoisted here so every
-    // screen — top-level or pushed, inside a sheet or not — answers the same
-    // way, in the app's own dark/gold styling, with room for a Retry action.
-    // Declared ahead of the shell's own action lambdas below: they report
-    // through it, so it has to exist before they capture it.
+    // screen — a tab page or inside a sheet — answers the same way, in the app's
+    // own dark/gold styling, with room for a Retry action.
     val snackbar = rememberBtSnackbarState()
 
-    // Discreet mode as a first-class quick toggle (mandate §5: "give it a sane
-    // home, e.g. overflow or profile, not bar chrome"). Home's overflow is that
-    // home; the Settings row stays the canonical control.
+    // Discreet mode as a first-class quick toggle (mandate §5). Overview's quiet
+    // tail is that home; the Settings row stays the canonical control.
     val discreetMode by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
-    // ONE implementation with THREE call sites — Home's overflow item, Home's
-    // in-content quick-links row (Fable's rule: an overflow entry may never be
-    // the only path to its act), and its own Retry below — so they can never
-    // diverge on what "flip discreet mode" means.
+    // ONE implementation with THREE call sites — Overview's quick-links row, the
+    // tail's discreet row, and its own Retry below — so they can never diverge on
+    // what "flip discreet mode" means.
     //
-    // Written as a REMEMBERED anonymous function object rather than the local
-    // `fun` it used to be (perf pass 2026-08-06). `::localFun` compiles to a
-    // fresh `Lambda` instance on every composition, with no `equals`, so
-    // `onToggleDiscreet` was a different value each time and `BtNavHost` could
-    // never skip. That is not a cheap miss: an unskippable `BtNavHost` also
-    // re-evaluates its `NavGraphBuilder` lambda, which invalidates `NavHost`'s
-    // internal `remember(builder) { createGraph(...) }` and rebuilds the whole
-    // 43-destination typed graph — kotlinx-serialization route reflection and
-    // all — on every navigation and every badge tick. Remembering it makes the
-    // instance stable and the whole subtree skippable again.
-    //
-    // An `object : (Boolean) -> Unit` rather than a lambda because the retry
-    // needs to name the act as the way out of its own failure, and a lambda
-    // cannot refer to itself; `invoke` can.
+    // A REMEMBERED anonymous function object rather than a local `fun` (perf pass
+    // 2026-08-06): `::localFun` compiles to a fresh `Lambda` on every composition,
+    // with no `equals`, which made the whole sheet graph unskippable and rebuilt
+    // its typed destinations on every badge tick. `object : (Boolean) -> Unit`
+    // rather than a lambda because the retry needs to name the act as the way out
+    // of its own failure, and a lambda cannot refer to itself; `invoke` can.
     val toggleDiscreet: (Boolean) -> Unit = remember(scope, snackbar) {
         object : (Boolean) -> Unit {
             override fun invoke(wanted: Boolean) {
@@ -644,11 +595,7 @@ fun BtApp() {
                         // Roll back AND say why. Settings stays the canonical
                         // control and renders this same `asMessage()` line inline
                         // beside its row; the shell has no inline place for it, so
-                        // it goes to the one feedback idiom instead. Letting the
-                        // revert speak for itself — as this call site did before
-                        // the app-wide snackbar existed — leaves the user watching
-                        // the switch flick back with no reason given, which is the
-                        // exact silence S6 P1-9 set out to remove.
+                        // it goes to the one feedback idiom instead.
                         AppGraph.discreetModeStore.set(!wanted)
                         snackbar.controller.showError(r.error.asMessage()) { invoke(wanted) }
                     }
@@ -657,75 +604,48 @@ fun BtApp() {
         }
     }
 
-    Scaffold(
-        containerColor = bt.bg,
-        // The bars below consume their own system-bar insets; full-screen
-        // destinations (gallery, settings, placeholders) run their own Scaffold.
-        // Zeroing here prevents double status-bar padding on those routes.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { BtSnackbarHost(snackbar.hostState) },
-        // No shell top bar: every tab drives its own collapsing header, and
-        // Overview's — the last one the shell used to draw — now travels with the
-        // Portfolio tab that hosts it. See [BtOverviewOverflow].
-        bottomBar = {
-            if (isTopLevel) {
+    // The shell is a Box, not just a Scaffold, because the sheet layer has to be
+    // able to cover the bottom bar as well as the pages. A full-screen sheet that
+    // stopped at the Scaffold's content slot would be a full-screen sheet with a
+    // navigation bar sitting on top of it.
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = bt.bg,
+            // The bars below consume their own system-bar insets, and the sheet
+            // layer consumes its own. Zeroing here keeps the two from being paid
+            // for twice.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            snackbarHost = { BtSnackbarHost(snackbar.hostState) },
+            // No shell top bar: every tab drives its own collapsing header, and
+            // Overview's — the last one the shell used to draw — now travels with
+            // the Portfolio tab that hosts it.
+            bottomBar = {
+                // Drawn UNCONDITIONALLY now, where it used to be gated on
+                // `isTopLevel`. A sheet covers it, so hiding it would buy nothing
+                // and cost the thing that gating always costs: the page area
+                // changing height the moment a sheet opens, which reflows all four
+                // live pages and is visible in the strip above the sheet and again
+                // on the way out. The bar is simply always there, and sometimes
+                // something is in front of it.
                 BtBottomBar(
                     tabs = visibleTabs,
-                    // §6.3's arbiter, stated at the call site: the NAV GRAPH owns
-                    // the settled selection, so this is 0f/1f. The gesture layer
-                    // owns only the in-flight lead, and only inside the bar's own
-                    // draw phase. Two writers, and neither can be mistaken for
-                    // the other. A future pager returns intermediate values here
-                    // and nothing else changes.
+                    // The ink and the selected weight, as 0f/1f. A tap latches this
+                    // to its target on the tap's own frame; otherwise it follows
+                    // the pager's `currentPage`, which flips at the halfway mark of
+                    // a drag — the point at which the incoming page is the one you
+                    // are mostly looking at.
                     //
-                    // ── The latch (owner report 2026-08-07) ──────────────────
-                    //
-                    // *"You swipe, it shows the swap correctly on the bottom,
-                    // then it jumps back for a brief second where you used to be,
-                    // then goes back to where it should be."*
-                    //
-                    // A committed swipe writes `handoff` and calls `switchToTab`
-                    // in the same breath, then snaps the page offset to zero so
-                    // the NavHost can compose the new page where it belongs. The
-                    // nav graph, though, reports its new destination through a
-                    // back-stack `StateFlow` — it lands a frame or more later. In
-                    // that window `currentDestination` still names the tab the
-                    // user just LEFT, so this lambda used to answer 1f for it and
-                    // the whole selection (pill, icon tint, label tint) snapped
-                    // backwards and then sprang forwards again. Exactly the
-                    // report.
-                    //
-                    // So while a hop is in flight the bar believes the COMMIT,
-                    // not the coordinate. `handoff` is only cleared once
-                    // `currentTab` has actually become the target (see the effect
-                    // that drops the pin), which is what makes this a latch and
-                    // not a second source of truth: it can never contradict the
-                    // nav graph for longer than the nav graph takes to agree.
-                    //
-                    // ── The tap latch (owner report 2026-08-08) ──────────────
-                    //
-                    // A TAP had the same shape of problem and none of the cure:
-                    // selection came from the nav graph alone, so the pill could
-                    // not move until `navigate()` had propagated AND the
-                    // destination had composed — measured at a 48ms median, with
-                    // no intermediate frame at all, so the tap read as dead for
-                    // three or four frames and then everything changed at once.
-                    //
-                    // `tapCommit` is that fix, and the precedence here is the
-                    // whole of the arbitration: a swipe handoff OUTRANKS a tap
-                    // latch, because if both are somehow set the gesture is the
-                    // more recent and the more expensive truth (it has a peek
-                    // layer pinned over the swap). Below them, unchanged, the
-                    // coordinate.
-                    selectionFraction = { tab ->
-                        tabSelectionFraction(
-                            committed = swipeState.handoff ?: tapCommit,
-                            tab = tab.tab,
-                            isCurrentDestination = currentDestination?.hierarchy
-                                ?.any { it.hasRoute(tab.routeClass) } == true,
-                        )
-                    },
-                    swipe = swipeState,
+                    // The PILL does not read this. It reads the pager's continuous
+                    // position in the draw phase, so it travels with the pages
+                    // instead of stepping between them — see [tabPillX]. Splitting
+                    // the two is what lets the ink be cheap (a couple of
+                    // recompositions per hop) while the travel stays frame-exact.
+                    selectedIndex = tapCommit ?: pagerState.currentPage,
+                    pager = pagerState,
+                    // Pinned while a tap is travelling: the tap's whole promise is
+                    // that the bar answers immediately, and a pill that set off on
+                    // its own journey would arrive after the page did.
+                    pinnedIndex = tapCommit,
                     // The badges the top bar used to carry, on the tabs that own
                     // them. Both are dots, not counts — see [BtTabBadgeDot].
                     hasBadge = { tab ->
@@ -739,155 +659,231 @@ fun BtApp() {
                     // Owner directive 2026-08-07: tapping Portfolio while the
                     // Portfolio tab IS the current screen opens the switcher
                     // sheet instead of re-navigating to where you already are.
-                    // A swipe never reaches this path (it calls switchToTab
-                    // directly, and only when the neighbour differs), so a page
-                    // change can never be mistaken for a re-tap.
+                    // A swipe never reaches this path, so a page change can never
+                    // be mistaken for a re-tap.
                     onSelect = { tab ->
                         when (tabTapAction(tab.tab, exactTab)) {
                             TabTap.OpenPortfolioSwitcher -> PortfolioTabEntry.requestSwitcher()
-                            TabTap.Switch -> {
-                                // Latch, then navigate — in that order, but
-                                // in the same breath.
-                                //
-                                // Deferring the navigation by a frame or two to
-                                // "let the bar paint first" was tried and
-                                // MEASURED as a regression: it moved the
-                                // highlight not at all and pushed the content
-                                // ~100ms later. It is not repeated here. The
-                                // bar never waited for the destination in the
-                                // first place — see [tapLatchHolds] for what the
-                                // measurement actually found.
-                                //
-                                // A re-tap never reaches here, so the switcher
-                                // path cannot leave a latch behind pointing at
-                                // a tab we never left.
-                                tapOrigin = currentTab?.tab
-                                tapCommit = tab.tab
-                                switchToTab(tab.tab)
-                            }
+                            TabTap.Switch -> switchToTab(tab.tab)
                         }
                     },
                 )
+            },
+        ) { innerPadding ->
+            CompositionLocalProvider(
+                LocalBtSnackbar provides snackbar.controller,
+                LocalBtTabChrome provides chrome,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    // ── The ONE tab bar (owner report 2026-08-07) ─────────────
+                    //
+                    // *"Since the header is consistent in all the main pages it
+                    // shouldn't scroll [with the swipe]."*
+                    //
+                    // It sits HERE — above the paged area, outside everything that
+                    // moves — which is the whole fix: the bar is static during a
+                    // gesture because it is not in the thing being dragged. It is
+                    // also above the offline banner, which it has to be: this bar
+                    // consumes the status-bar inset (the shell's Scaffold zeroes
+                    // its own), so anything drawn before it lands under the clock.
+                    //
+                    // Drawn unconditionally, for the same reason as the bottom bar.
+                    BtTabHeader(
+                        // Every tab's face at once, in bar order. The bar can now
+                        // show a face for a page it is only partway onto — which is
+                        // what the frozen-bitmap era could not do at all, and is
+                        // why the faces were data rather than slots in the first
+                        // place. See [BtTabHeader].
+                        faces = remember(
+                            tabOrder,
+                            chrome.portfolioSelector,
+                            chrome.portfolioIsOverview,
+                        ) { tabOrder.map { headerFaceOf(it, chrome) } },
+                        pager = pagerState,
+                        scrollBehavior = headerBehavior,
+                        onLongPressWordmark = {
+                            if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
+                        },
+                        // The shell cannot reach the Portfolio view model, and does
+                        // not need to: the switcher already has a shell-visible
+                        // door, opened for the bottom bar's re-tap. One signal, two
+                        // affordances, one implementation.
+                        onOpenSwitcher = { PortfolioTabEntry.requestSwitcher() },
+                        onAction = { action ->
+                            when (action) {
+                                BtTabHeaderAction.Search -> navController.navigate(SearchRoute)
+                                BtTabHeaderAction.Messages -> navController.navigate(ChatListRoute)
+                                BtTabHeaderAction.None -> Unit
+                            }
+                        },
+                        onOpenSettings = { navController.navigate(SettingsRoute) },
+                    )
+                    // Global offline banner (§7.4): real connectivity + cached-data
+                    // age. The gallery's debug toggle can still force it.
+                    val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
+                    val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
+                        .collectAsStateWithLifecycle(initialValue = null)
+                    if (!online || DebugPreviewState.showOfflineBanner) {
+                        // §7.4: the indicator opens the Pending-sync sheet.
+                        OfflineBanner(
+                            asOfMs = dataAgeMs,
+                            onClick = { navController.navigate(PendingSyncRoute) },
+                        )
+                    }
+                    // The four pages. All of them, all the time.
+                    BtTabPager(
+                        tabs = tabOrder,
+                        state = pagerState,
+                        scopes = tabScopes,
+                        live = live,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { tab ->
+                        BtTabContent(
+                            tab = tab,
+                            navController = navController,
+                            onDeepLink = navigateDeepLink,
+                            onSwitchTab = switchToTab,
+                            discreetMode = discreetMode,
+                            onToggleDiscreet = toggleDiscreet,
+                        )
+                    }
+                }
             }
-        },
-    ) { innerPadding ->
+        }
+        // The sheet layer, over everything the Scaffold drew. At the graph's floor
+        // this composes one empty destination: it lays out nothing and registers no
+        // pointer input, so touches fall straight through to the pager beneath it.
         CompositionLocalProvider(
             LocalBtSnackbar provides snackbar.controller,
             LocalBtTabChrome provides chrome,
         ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            // ── The ONE tab bar (owner report 2026-08-07) ────────────────────
-            //
-            // *"Since the header is consistent in all the main pages it shouldn't
-            // scroll [with the swipe]."*
-            //
-            // It sits HERE — above the swiped area, outside everything that
-            // moves — which is the whole fix: the bar is static during a gesture
-            // because it is not in the thing being dragged, not because anything
-            // holds it still. See [BtTabHeader] for why its variable content is
-            // data rather than a slot, and how it hands over mid-swipe.
-            //
-            // It is also above the offline banner now, which it has to be: this
-            // bar consumes the status-bar inset (the shell's Scaffold zeroes its
-            // own), so anything drawn before it lands under the system clock.
-            // The banner used to be that anything.
-            if (isTopLevel) {
-                BtTabHeader(
-                    face = headerFaceOf(currentTab?.tab, chrome),
-                    // No `!=` filter against the current tab: during the last
-                    // frames of a hand-off the peek and the nav graph name the
-                    // SAME tab, and dropping the incoming face there would leave
-                    // the outgoing copy — pinned at alpha 0 by the latch — as the
-                    // only thing in the slot, i.e. an empty bar.
-                    incoming = peekTab?.let { headerFaceOf(it, chrome) },
-                    forward = swipeState.peekSide ?: true,
-                    swipe = swipeState,
-                    scrollBehavior = headerBehavior,
-                    onLongPressWordmark = {
-                        if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
-                    },
-                    // The shell cannot reach the Portfolio view model, and does
-                    // not need to: the switcher already has a shell-visible door,
-                    // opened for the bottom bar's re-tap. One signal, two
-                    // affordances, one implementation of what opening it means.
-                    onOpenSwitcher = { PortfolioTabEntry.requestSwitcher() },
-                    onAction = { action ->
-                        when (action) {
-                            BtTabHeaderAction.Search -> navController.navigate(SearchRoute)
-                            BtTabHeaderAction.Messages -> navController.navigate(ChatListRoute)
-                            BtTabHeaderAction.None -> Unit
-                        }
-                    },
-                    onOpenSettings = { navController.navigate(SettingsRoute) },
-                )
-            }
-            // Global offline banner (§7.4): real connectivity + cached-data age.
-            // The gallery's debug toggle can still force it for visual checks.
-            val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
-            val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
-                .collectAsStateWithLifecycle(initialValue = null)
-            if (isTopLevel && (!online || DebugPreviewState.showOfflineBanner)) {
-                // §7.4: the indicator opens the Pending-sync screen.
-                OfflineBanner(
-                    asOfMs = dataAgeMs,
-                    onClick = { navController.navigate(PendingSyncRoute) },
-                )
-            }
-            // The page area, and the surface the tab drag is detected on.
-            //
-            // The gesture lives on this Box rather than on the NavHost because
-            // the two page layers are SIBLINGS inside it: the outgoing page (the
-            // NavHost) and the incoming one (the peek). Detecting on the common
-            // parent also keeps chart-scrub precedence exactly as it was —
-            // children still see every pointer first, in the Main pass, and a
-            // change they consume aborts this layer's slop detection.
-            //
-            // Owner ask 2026-08-07: swipe left/right between the four tabs. Only
-            // on a top-level page — a pushed screen keeps its whole horizontal
-            // axis for its own content. The neighbour is resolved against the
-            // VISIBLE bar, so a Drive-only install swipes Portfolio ↔ Markets
-            // and stops there rather than landing on a tab it does not render.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .btTabSwipe(
-                        state = swipeState,
-                        enabled = isTopLevel,
-                        neighbourOf = neighbourOf,
-                        onCommit = onSwipeCommit,
-                    ),
-            ) {
-                BtNavHost(
-                    navController = navController,
-                    onDeepLink = navigateDeepLink,
-                    onSwitchTab = switchToTab,
-                    discreetMode = discreetMode,
-                    onToggleDiscreet = toggleDiscreet,
-                    notifUnread = notifUnread,
-                    showNotifications = showNotificationSurfaces,
-                    swipeState = swipeState,
-                    peekLayers = peekLayers,
-                )
-                // The incoming page. Composed ONLY while a drag or its settle is
-                // in flight (`peekTab` is null at rest, by construction), so an
-                // app sitting still draws exactly one page.
-                if (peekTab != null) {
-                    BtTabPeek(
-                        tab = peekTab,
-                        // `handoff` pins the peek at rest, where the side no
-                        // longer matters; `peekSide` is the live drag's.
-                        forward = swipeState.peekSide ?: true,
-                        layers = peekLayers,
-                        state = swipeState,
-                    )
-                }
-            }
+            BtSheetHost(
+                navController = navController,
+                sheets = sheets,
+                onDeepLink = navigateDeepLink,
+                onSwitchTab = switchToTab,
+                discreetMode = discreetMode,
+                onToggleDiscreet = toggleDiscreet,
+                notifUnread = notifUnread,
+                showNotifications = showNotificationSurfaces,
+            )
         }
-        }
+    }
+}
+
+/**
+ * How a TAP travels between tabs.
+ *
+ * A tap is not a drag, so it has no finger to follow and has to choose its own
+ * pace. Faster than a page turn used to be, because the destination is already
+ * composed — the old 267ms the pill took to arrive was mostly the incoming tab
+ * being BUILT on the same thread the animation was clocked by, and there is
+ * nothing left to build.
+ */
+private val TabHopSpec = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
+
+/**
+ * One live tab page.
+ *
+ * This is the four `composable<...TabRoute>` bodies, unchanged, as one `when`.
+ * They moved out of the graph rather than changing: the tabs are the same
+ * screens, wired to the same lambdas, and every difference in this file is about
+ * *where they live*, not what they do.
+ */
+@Composable
+private fun BtTabContent(
+    tab: BtTab,
+    navController: NavHostController,
+    onDeepLink: (NotifDeepLink) -> Unit,
+    onSwitchTab: (BtTab) -> Unit,
+    discreetMode: Boolean,
+    onToggleDiscreet: (Boolean) -> Unit,
+) {
+    when (tab) {
+        BtTab.Portfolio ->
+            // V5 S2a: a paranoid account's portfolio family is server-blind. Route
+            // ONLY these killed surfaces to the explainer — Markets/People/
+            // Workbench and everything under them keep working, because they do.
+            // A tab page, so no onBack — the shell's own bars are showing.
+            ParanoidGate {
+                PortfolioOverviewScreen(
+                    onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
+                    onOpenTransactions = { portfolioId ->
+                        navController.navigate(TransactionsRoute(portfolioId))
+                    },
+                    onNewTransaction = { portfolioId ->
+                        navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
+                    },
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                    onOpenCash = { portfolioId ->
+                        navController.navigate(CashRoute(portfolioId = portfolioId))
+                    },
+                    // ── Overview: the former Home tab, as a switcher selection ──
+                    // Composed here rather than inside the portfolio screen so that
+                    // screen stays ignorant of Home, and so Home's whole callback
+                    // surface — which is all navigation — stays in the one file
+                    // that owns it.
+                    overviewContent = { openSwitcher, leaveOverview ->
+                        // Overview crosses tabs ONLY through onOpen/onSwitchTab —
+                        // see HomeScreen's KDoc. No `navController` is handed to
+                        // it, deliberately.
+                        HomeScreen(
+                            onOpen = onDeepLink,
+                            onSwitchTab = onSwitchTab,
+                            // "See all holdings" / "open this portfolio": leave
+                            // Overview for the portfolio page.
+                            onOpenPortfolioView = leaveOverview,
+                            // "Create a portfolio": open the switcher, which is
+                            // where creation lives.
+                            onCreatePortfolio = openSwitcher,
+                            onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
+                            onOpenDataHome = { navController.navigate(StorageHomeRoute) },
+                            discreetMode = discreetMode,
+                            onToggleDiscreet = onToggleDiscreet,
+                        )
+                    },
+                    // The in-content door to one portfolio's own settings. The gear
+                    // in the corner is the APP's settings and must keep meaning only
+                    // that — so per-portfolio management gets a row in the page's
+                    // management area instead. The switcher's overflow carries the
+                    // second path.
+                    onOpenPortfolioSettings = { portfolioId ->
+                        navController.navigate(PortfolioSettingsRoute(portfolioId))
+                    },
+                )
+            }
+
+        BtTab.Markets ->
+            MarketsTabScreen(
+                onOpenSearch = { navController.navigate(SearchRoute) },
+                onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                onAddToWatchlist = { navController.navigate(SearchRoute) },
+                onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
+            )
+
+        BtTab.Workbench ->
+            WorkbenchTabScreen(
+                onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
+                onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+            )
+
+        BtTab.People ->
+            SocialScreen(
+                onOpenFriend = { userId, username ->
+                    navController.navigate(FriendOverviewRoute(userId, username))
+                },
+                onOpenChats = { navController.navigate(ChatListRoute) },
+                onOpenChatWith = { friendUserId, username ->
+                    navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
+                },
+                onOpenGroups = { navController.navigate(FriendGroupsRoute) },
+            )
     }
 }
 
@@ -1008,34 +1004,37 @@ private val NAV_INDICATOR_HEIGHT: Dp = 32.dp
  *
  * `ShortNavigationBarItem`'s per-item indicator is switched off
  * (`selectedIndicatorColor = Color.Transparent`) and the pill is drawn once, in
- * this composable's own `drawBehind`, positioned by [selectionFraction]. Four
- * independent indicators can only ever cross-fade; one layer **translates**, so
- * a tab change reads as the selection travelling to where you sent it.
+ * this composable's own `drawBehind`. Four independent indicators can only ever
+ * cross-fade; one layer **translates**, so a tab change reads as the selection
+ * travelling to where you sent it.
  *
- * ## Two writers, one arbiter — and the honest version of it
+ * ## §6.3's real pager, three architectures later
  *
- * §6.3 was written against a `HorizontalPager` that Batch 1 was expected to
- * introduce. Batch 1 shipped something else: a **gesture layer** ([btTabSwipe]),
- * because a pager would have had to take the four tab routes out of the nav
- * graph and rebuild per-tab back stacks by hand. So there is no
- * `currentPageOffsetFraction` to read, and the adaptation is:
+ * §6.3 was written against a `HorizontalPager` the first swipe batch was expected
+ * to introduce. It shipped a gesture layer instead — a pager would have had to
+ * take the four tabs out of the nav graph, which at the time meant rebuilding
+ * per-tab back stacks by hand — and the bar spent two batches approximating a
+ * `currentPageOffsetFraction` it did not have: a lead derived from the outgoing
+ * page's damped displacement, a spring for taps, and two latches to stop the nav
+ * graph's one-frame lag from dragging the pill backwards mid-hop.
  *
- *  - **Rest is nav-graph truth.** [selectionFraction] is fed by
- *    `currentDestination.hierarchy`, so it is 0f/1f — the exact fallback §6.3
- *    prescribes. It also drives the per-item icon/label `lerp`, in composition,
- *    where it is cheap because it only changes when the destination does.
- *  - **In flight, the pill leads by exactly what the page moved.** The gesture
- *    layer displaces the outgoing page by at most 40dp, damped; the pill travels
- *    the same *fraction of one item step* that the page travelled *of one page
- *    width* — `-pageOffsetPx / barWidthPx`, read in the draw phase so a drag
- *    frame costs a redraw and not a recomposition. The sign is inverted because
- *    content and indicator move opposite ways, which is the pager idiom.
+ * All three are deleted. The pager is real ([BtTabPager]), so:
  *
- * That proportion is the point. Letting the pill run the full step while the
- * page nudges 11% would have the bar arrive somewhere the content never went —
- * a bar that lies about the gesture, which is worse than a bar that does not
- * move. When a real pager lands, [selectionFraction] starts returning true
- * intermediate values and this composable needs no edit.
+ *  - **The pill reads the pager's position directly**, in the DRAW phase, and
+ *    lands between two icon centres exactly where the pages are between two
+ *    pages ([tabPillX]). No spring: there is nothing to catch up to, because the
+ *    number it reads is the same number the pages are drawn from, in the same
+ *    frame. No lead, no sign inversion, no `barWidthPx` standing in for a page
+ *    width — the position *is* the answer.
+ *  - **The handoff latch is gone.** It existed because a committed swipe told the
+ *    nav graph and snapped the page offset to zero in one breath, and the graph
+ *    answered a frame later; between those two the bar believed the tab the user
+ *    had just left, and the pill fell back a whole step. There is no graph in
+ *    this path at all now, so there is no window to be caught in.
+ *  - **The tap latch stays**, and only that. `animateScrollToPage` is a real
+ *    journey and the owner's ask was that a tap be acknowledged on its own frame;
+ *    so [selectedIndex] carries the tap immediately for the ink and the weight,
+ *    [pinnedIndex] holds the pill at the destination, and the pages travel.
  *
  * ## Geometry is measured, never assumed
  *
@@ -1053,14 +1052,17 @@ private val NAV_INDICATOR_HEIGHT: Dp = 32.dp
 @Composable
 private fun BtBottomBar(
     tabs: List<TabSpec>,
-    selectionFraction: (TabSpec) -> Float,
+    /** Which tab wears the ink and the selected weight, right now. */
+    selectedIndex: Int,
+    /** The pager, read in the draw phase so a drag frame never recomposes the bar. */
+    pager: PagerState,
+    /** Hold the pill here instead of interpolating — a tap in flight. */
+    pinnedIndex: Int?,
     hasBadge: (TabSpec) -> Boolean,
     onSelect: (TabSpec) -> Unit,
-    swipe: BtTabSwipeState,
 ) {
     val bt = BtTheme.colors
     val density = LocalDensity.current
-    val reducedMotion = rememberReducedMotion()
 
     // Measured geometry, kept in ROOT coordinates on purpose: onGloballyPositioned
     // fires children-first, so an icon cannot ask the bar where it is yet. Root
@@ -1068,77 +1070,16 @@ private fun BtBottomBar(
     // happens at draw time, when both are known.
     var barOriginX by remember { mutableFloatStateOf(Float.NaN) }
     var barOriginY by remember { mutableFloatStateOf(Float.NaN) }
-    var barWidthPx by remember { mutableFloatStateOf(0f) }
     val iconCentres = remember { mutableStateMapOf<Int, Offset>() }
 
     val indicatorW = with(density) { NAV_INDICATOR_WIDTH.toPx() }
     val indicatorH = with(density) { NAV_INDICATOR_HEIGHT.toPx() }
     val ringPx = with(density) { 1.dp.toPx() }
 
-    // Where the pill belongs at rest: the fraction-weighted centroid of the icon
-    // centres. With 0f/1f fractions that is simply the selected tab's centre.
-    val restCentre: Offset? = run {
-        var weight = 0f
-        var x = 0f
-        var y = 0f
-        tabs.forEachIndexed { index, tab ->
-            val f = selectionFraction(tab)
-            if (f <= 0f) return@forEachIndexed
-            val centre = iconCentres[index] ?: return@forEachIndexed
-            weight += f
-            x += f * centre.x
-            y += f * centre.y
-        }
-        if (weight > 0f) Offset(x / weight, y / weight) else null
-    }
-
-    // The travel. Snapped on the first placement (nothing to animate towards yet)
-    // and under reduced motion; sprung otherwise, which is what makes a TAP slide
-    // rather than jump — the same win the swipe gets, for free.
-    //
-    // Snapped during a hand-off too, and that is the second half of the flicker
-    // fix. A committed swipe has ALREADY carried the pill to the target under the
-    // finger (the in-flight lead reaches exactly one item step when the page
-    // reaches one page width), so animating to that same point afterwards is a
-    // journey the user has already watched. Left as a spring it did the visible
-    // damage: the offset snapped to zero, the lead collapsed with it, and the
-    // pill fell back a whole step before springing forward again.
-    val travelX = remember { Animatable(0f) }
-    var placed by remember { mutableStateOf(false) }
-    LaunchedEffect(restCentre, reducedMotion) {
-        val target = restCentre ?: return@LaunchedEffect
-        if (!placed || reducedMotion || swipe.handoff != null) {
-            travelX.snapTo(target.x)
-            placed = true
-        } else {
-            travelX.animateTo(
-                target.x,
-                // The pill's travel is NOT where the tap "lag" lives, and it
-                // is worth recording why, because the obvious tune is wrong.
-                //
-                // Measured on device at 120Hz (2026-08-08): after touch-UP the
-                // label ink flips at ~47ms — the input-to-present floor — but
-                // the pill only arrives at ~267ms, so the pill is what the tap
-                // FEELS like. That looks exactly like a spring that is too soft,
-                // and it is not: raising the stiffness from `MediumLow` (400,
-                // nominal settle ~220ms) to `Medium` (1500, ~115ms) moved the
-                // measured arrival to 278ms — i.e. not at all.
-                //
-                // The limiter is the main thread. A tab switch composes the
-                // incoming destination on the same thread this animation is
-                // clocked by, so the pill is frame-starved for as long as that
-                // composition runs (content lands 150-360ms after the tap in the
-                // same recordings). Deferring the navigation to let the bar
-                // paint first was tried too and made it worse still (358ms).
-                //
-                // So this constant stays as B2 tuned it. Making the pill arrive
-                // sooner is a destination-composition cost problem, not a motion
-                // problem, and tightening the spring here would only spend
-                // motion design on a bottleneck it cannot reach.
-                spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow),
-            )
-        }
-    }
+    // Where the pill sits vertically. One row, so any laid-out icon answers it;
+    // taking the selected one keeps it correct while the bar's item count changes
+    // under a storage-mode switch.
+    val centreY: Float? = tabs.indices.firstNotNullOfOrNull { iconCentres[it]?.y }
 
     Column {
         // Nothing in dark (the bar's own tone separates it), a real hairline in
@@ -1150,7 +1091,6 @@ private fun BtBottomBar(
                     val p = it.positionInRoot()
                     barOriginX = p.x
                     barOriginY = p.y
-                    barWidthPx = it.size.width.toFloat()
                 }
                 .drawBehind {
                     // The bar's own container, painted here rather than by
@@ -1159,53 +1099,37 @@ private fun BtBottomBar(
                     // gesture inset too, hence the full node rect.
                     drawRect(bt.navBar)
 
-                    val centre = restCentre
-                    if (!placed || centre == null || barOriginX.isNaN()) return@drawBehind
+                    val y0 = centreY ?: return@drawBehind
+                    if (barOriginX.isNaN()) return@drawBehind
 
-                    // One item step, measured. Zero on a one-tab bar, which
-                    // correctly disables the lead rather than dividing by it.
-                    val first = if (tabs.size >= 2) iconCentres[0] else null
-                    val second = if (tabs.size >= 2) iconCentres[1] else null
-                    val step = if (first != null && second != null) second.x - first.x else 0f
+                    // THE state read that makes the pill travel, and the only one
+                    // in this component. It happens HERE — inside the draw lambda
+                    // — so a drag frame costs a redraw of this one node and never
+                    // a recomposition of the bar or of its four items.
+                    val pos = tabPagerPosition(
+                        pager.currentPage,
+                        pager.currentPageOffsetFraction,
+                        tabs.size,
+                    )
 
-                    // The in-flight lead: the same fraction of a step that the
-                    // page moved of a page. Pure, and unit-tested — see
-                    // [tabIndicatorLead], which is also where the sign inversion
-                    // is argued.
-                    val lead = tabIndicatorLead(swipe.pageOffsetPx, barWidthPx)
+                    // A tap is pinned at its destination; a drag interpolates.
+                    // Both go through the same measured icon centres, so a bar
+                    // with two items (Drive-only), a bar under RTL and a bar at a
+                    // large font scale are all correct without a special case.
+                    val x0 = pinnedIndex?.let { iconCentres[it]?.x }
+                        ?: tabPillX(pos, tabs.size) { iconCentres[it]?.x }
+                        ?: return@drawBehind
 
-                    // Clamping to the outermost icon centres is what stops the
-                    // pill drifting off the end of the bar when the user swipes
-                    // past the last tab and the gesture layer springs back.
-                    //
-                    // Read over `tabs.indices` and not over the map's values: the
-                    // map is keyed by index and survives a change in how many
-                    // tabs the bar shows. A storage-mode change (FULL → Drive,
-                    // which drops People and the Workbench) would otherwise leave
-                    // two stale entries behind and clamp the pill to a bar that
-                    // is no longer there.
-                    val live = tabs.indices.mapNotNull { iconCentres[it]?.x }
-                    val minX = live.minOrNull() ?: return@drawBehind
-                    val maxX = live.maxOrNull() ?: return@drawBehind
-
-                    // While a hop is in flight the pill is simply AT its target,
-                    // derived here rather than assembled from `travelX` and the
-                    // lead. That is what makes the fix frame-exact instead of
-                    // merely fast: `handoff` is written and the offset is snapped
-                    // to zero by the same coroutine but not necessarily in the
-                    // same frame, so any formula that mixes the two can be caught
-                    // one frame with the latch applied and the lead not yet
-                    // dropped (a step too far) or the reverse (a step short).
-                    // Reading the destination straight from the commit cannot be
-                    // caught in between, because there is no in-between to catch.
-                    val committed = swipe.handoff
-                    val pinnedX = committed
-                        ?.let { target -> tabs.indexOfFirst { it.tab == target } }
-                        ?.takeIf { it >= 0 }
-                        ?.let { iconCentres[it]?.x }
-                    val x = (pinnedX ?: (travelX.value + lead * step))
-                        .coerceIn(minX, maxX) - barOriginX
-                    val y = centre.y - barOriginY
+                    // Clamped to the outermost icon centres: `currentPageOffsetFraction`
+                    // reports overscroll at the ends of the bar, and the pill has
+                    // nowhere to put it. Read over `tabs.indices` rather than over
+                    // the map's values, so a storage-mode change that shortens the
+                    // bar cannot clamp against two stale entries.
+                    val laid = tabs.indices.mapNotNull { iconCentres[it]?.x }
+                    val minX = laid.minOrNull() ?: return@drawBehind
+                    val maxX = laid.maxOrNull() ?: return@drawBehind
+                    val x = x0.coerceIn(minX, maxX) - barOriginX
+                    val y = y0 - barOriginY
 
                     val topLeft = Offset(x - indicatorW / 2f, y - indicatorH / 2f)
                     val size = Size(indicatorW, indicatorH)
@@ -1224,10 +1148,18 @@ private fun BtBottomBar(
             containerColor = Color.Transparent,
         ) {
             tabs.forEachIndexed { index, tab ->
-                val fraction = selectionFraction(tab)
+                // 0f/1f, deliberately, where the pill is continuous. The ink and
+                // the weight are COMPOSITION values, so a continuous fraction
+                // would recompose four items on every frame of a drag for a
+                // difference nobody can read; the pill carries the travel, in the
+                // draw phase, for free. The flip point is the pager's own
+                // `currentPage`, i.e. the moment the incoming page is the one you
+                // are mostly looking at.
+                val selected = index == selectedIndex
+                val fraction = if (selected) 1f else 0f
                 val ink = lerp(bt.textMuted, bt.goldInk, fraction)
                 ShortNavigationBarItem(
-                    selected = fraction >= 0.5f,
+                    selected = selected,
                     onClick = { onSelect(tab) },
                     icon = {
                         Box(
@@ -1266,7 +1198,7 @@ private fun BtBottomBar(
                             // fill on the selected tab; see [BtTabBadgeDot].
                             BtTabBadgeDot(
                                 show = hasBadge(tab),
-                                onIndicator = fraction >= 0.5f,
+                                onIndicator = selected,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .offset(x = 6.dp, y = 0.dp),
@@ -1289,7 +1221,7 @@ private fun BtBottomBar(
                         Text(
                             text = stringResource(tab.labelRes),
                             style = BtTheme.type.labelNav,
-                            fontWeight = if (fraction >= 0.5f) FontWeight.SemiBold else null,
+                            fontWeight = if (selected) FontWeight.SemiBold else null,
                         )
                     },
                     colors = ShortNavigationBarItemDefaults.colors(
@@ -1310,243 +1242,80 @@ private fun BtBottomBar(
 }
 
 /**
- * One top-level tab's page, recording its own face for the swipe peek.
+ * The sheet stack — every subpage in the app, over the four live tabs.
  *
- * Wrapping the four tab roots individually — rather than the NavHost once — is
- * what keeps a frozen face clean: around the NavHost the recording would also
- * capture `AnimatedContent` mid-transition, so a tab frozen as it left would be
- * frozen half-replaced by the tab arriving. Here each tab records only itself.
+ * ## What this graph still is, and what it stopped being
  *
- * Pushed screens are deliberately NOT wrapped. A holding detail lives under the
- * Portfolio tab and would otherwise become Portfolio's face, so a swipe onto
- * Portfolio would show a detail screen that is not even where the swipe lands.
+ * It stopped being the app's page host. The four top-level pages left it for
+ * [BtTabPager], where they stay composed forever; what is left here is the 45
+ * subpages, and every one of them is now a full-screen sheet ([BtSheet]) drawn
+ * OVER the tabs rather than instead of them.
+ *
+ * It is still a `NavHost`, and deliberately so. Everything the graph was actually
+ * good at is untouched and is worth keeping: 49 typed `kotlinx.serialization`
+ * routes with their arguments, a `ViewModelStore` and a `SavedStateRegistry` per
+ * entry (so `viewModel(key = "friend-$id")` still dies with the screen that asked
+ * for it), the system-back dispatcher, and process-death restore. The things it
+ * was carrying that no longer fit — `popUpTo(start){saveState}` + `restoreState`,
+ * the per-tab back stacks, the lateral tab-hop motion — are gone because the
+ * thing they served is gone. A subpage is not *under* a tab any more.
+ *
+ * @param sheets the live sheet stack, so `onBack` can reach the top sheet.
  */
 @Composable
-private fun BtTabPage(
-    peekLayers: BtTabPeekLayers,
-    tab: BtTab,
-    content: @Composable () -> Unit,
-) {
-    Box(Modifier.fillMaxSize().btTabPeekCapture(peekLayers, tab)) { content() }
-}
-
-@Composable
-private fun BtNavHost(
+private fun BtSheetHost(
     navController: NavHostController,
+    sheets: BtSheetHostState,
     onDeepLink: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
-    /** Discreet-mode state + its one implementation, shared with Overview's ⋮. */
+    /** Discreet-mode state + its one implementation, shared with Overview's tail. */
     discreetMode: Boolean,
     onToggleDiscreet: (Boolean) -> Unit,
-    /** Inbox unread count, rendered on Overview's overflow entry. */
+    /** Inbox unread count, rendered on Overview's inbox row. */
     notifUnread: Int,
     showNotifications: Boolean,
-    /** Shared with the bottom bar so page and indicator move together. */
-    swipeState: BtTabSwipeState,
-    /** Where each tab records the face a swipe shows — see [BtTabPeekLayers]. */
-    peekLayers: BtTabPeekLayers,
 ) {
-    val back: () -> Unit = { navController.popBackStack() }
-    // A swipe that committed has already MOVED the pages into their final
-    // position before the NavHost is told anything, so the swap must not animate
-    // on top of that — a lateral slide here would be a second page turn over a
-    // picture that is already correct, which is exactly the double-draw the
-    // handoff exists to remove. Tap-driven hops are untouched and still slide.
-    val handingOff = swipeState.handoff != null
-    // R3 §1 — the app's one screen-transition idiom. Read once, here, and
-    // captured by the four lambdas below: they are plain (non-composable)
-    // lambdas, so the reduced-motion preference cannot be sampled inside them.
-    val reducedMotion = rememberReducedMotion()
+    // What all 45 screens' `onBack` runs.
+    //
+    // It asks the TOP SHEET to leave rather than popping the graph, and the
+    // difference is the whole dismissal: a bare `popBackStack()` deletes the
+    // destination from composition on the spot, so the sheet would vanish instead
+    // of travelling off the bottom. The pop belongs at the END of that travel, and
+    // only the sheet knows when it has finished — so the sheet owns it, and this
+    // is how a screen asks for it. Unchanged in shape: still `() -> Unit`, so no
+    // screen signature moved.
+    val back: () -> Unit = { sheets.dismissTop() }
+    CompositionLocalProvider(LocalBtSheetHost provides sheets) {
     NavHost(
         navController = navController,
-        // Which of BtNavMotion's two shapes a navigation gets is decided by the
-        // PAIR of routes, never by the destination entry — see BtNavMotion's
-        // KDoc. All four lambdas ask the same question because a tab hop can
-        // arrive as a pop: the bottom bar navigates with
-        // `popUpTo(startDestination) { saveState = true }`, so hopping back to
-        // Home runs popEnter/popExit, not enter/exit.
-        enterTransition = {
-            when {
-                reducedMotion || handingOff -> EnterTransition.None
-                BtNavMotion.isLateral(
-                    initialState.destination.route,
-                    targetState.destination.route,
-                ) -> BtNavMotion.lateralEnter(
-                    BtNavMotion.lateralForward(
-                        initialState.destination.route,
-                        targetState.destination.route,
-                    ),
-                )
-
-                else -> BtNavMotion.forwardEnter()
-            }
-        },
-        exitTransition = {
-            when {
-                reducedMotion || handingOff -> ExitTransition.None
-                BtNavMotion.isLateral(
-                    initialState.destination.route,
-                    targetState.destination.route,
-                ) -> BtNavMotion.lateralExit(
-                    BtNavMotion.lateralForward(
-                        initialState.destination.route,
-                        targetState.destination.route,
-                    ),
-                )
-
-                else -> BtNavMotion.forwardExit()
-            }
-        },
-        popEnterTransition = {
-            when {
-                reducedMotion || handingOff -> EnterTransition.None
-                BtNavMotion.isLateral(
-                    initialState.destination.route,
-                    targetState.destination.route,
-                ) -> BtNavMotion.lateralEnter(
-                    BtNavMotion.lateralForward(
-                        initialState.destination.route,
-                        targetState.destination.route,
-                    ),
-                )
-
-                else -> BtNavMotion.backEnter()
-            }
-        },
-        popExitTransition = {
-            when {
-                reducedMotion || handingOff -> ExitTransition.None
-                BtNavMotion.isLateral(
-                    initialState.destination.route,
-                    targetState.destination.route,
-                ) -> BtNavMotion.lateralExit(
-                    BtNavMotion.lateralForward(
-                        initialState.destination.route,
-                        targetState.destination.route,
-                    ),
-                )
-
-                else -> BtNavMotion.backExit()
-            }
-        },
-        // Owner IA change: Portfolio is the start destination again — but for a
-        // reason it did not have the first time round. It is not "first by
-        // accident of declaration order" now; it is the tab that hosts Overview,
-        // the app's front door, so system-back from any tab lands on the index
-        // and back from there exits. It is also `FULL` in every storage mode, so
-        // the two `popUpTo(findStartDestination())` call sites — the deep-link
-        // tab switch and the bottom-bar tap — can never pop to a hidden tab.
-        startDestination = PortfolioTabRoute,
-        // The outgoing page. The gesture itself is detected on the parent Box
-        // (see BtApp) because the incoming page is this one's sibling; all this
-        // layer does is follow the shared displacement. Each TAB ROOT records
-        // its own pixels separately — see [BtTabPage].
-        modifier = Modifier
-            .fillMaxSize()
-            .btTabPageOffset { swipeState.pageOffsetPx },
+        // A sheet animates ITSELF in and out — see [BtSheet] for why a drag and a
+        // transition cannot share the job. So the graph adds no motion on the way
+        // in, and none on the way back out.
+        //
+        // What the graph does own is the one case a sheet cannot see: a sheet
+        // opening OVER another sheet. Left to `None`, the lower sheet would be
+        // dropped from composition the instant the upper one was pushed, so the
+        // live tab would flash through the gap for a frame. `stackRecede` keeps it
+        // composed — and therefore still ticking — and lets it sink back a little
+        // while the new sheet rises over it, which is the stack idiom the owner's
+        // reference app uses and the honest picture of what is happening.
+        enterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
+        exitTransition = { BtNavMotion.stackRecede() },
+        popEnterTransition = { BtNavMotion.stackReturn() },
+        // An empty floor. The tabs are not in this graph any more, so its start
+        // destination has no page to show — its whole job is to be something for
+        // the last sheet to pop back TO. It draws nothing and takes no pointer
+        // input, so the live pager underneath is fully interactive through it
+        // whenever the sheet stack is empty.
+        startDestination = SheetRootRoute,
+        modifier = Modifier.fillMaxSize(),
     ) {
+        composable<SheetRootRoute> { }
+
         // Tabs
-        composable<PortfolioTabRoute> {
-            BtTabPage(peekLayers, BtTab.Portfolio) {
-                // V5 S2a: a paranoid account's portfolio family is server-blind. Route
-                // ONLY these killed surfaces to the explainer — Markets/People/
-                // Workbench and everything under them keep working, because they do.
-                // Top-level tab: no onBack — the shell's own bars are showing.
-                ParanoidGate {
-                    PortfolioOverviewScreen(
-                        onOpenHolding = { assetId -> navController.navigate(HoldingDetailRoute(assetId)) },
-                        onOpenTransactions = { portfolioId ->
-                            navController.navigate(TransactionsRoute(portfolioId))
-                        },
-                        onNewTransaction = { portfolioId ->
-                            navController.navigate(TransactionFormRoute(portfolioId = portfolioId))
-                        },
-                        onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
-                        onOpenCash = { portfolioId ->
-                            navController.navigate(CashRoute(portfolioId = portfolioId))
-                        },
-                        // ── Overview: the former Home tab, as a switcher selection ──
-                        // Composed here rather than inside the portfolio screen so
-                        // that screen stays ignorant of Home, and so Home's whole
-                        // callback surface — which is all navigation — stays in the
-                        // one file that owns the graph.
-                        overviewContent = { openSwitcher, leaveOverview ->
-                            // Overview crosses tabs ONLY through onOpen/onSwitchTab —
-                            // see HomeScreen's KDoc. No `navController` is handed to
-                            // it, deliberately: a bare push from an index screen
-                            // stacks another tab's detail on it and the next
-                            // bottom-bar tap saves it under the wrong tab (S6 P1-8).
-                            HomeScreen(
-                                onOpen = onDeepLink,
-                                onSwitchTab = onSwitchTab,
-                                // "See all holdings" / "open this portfolio": leave
-                                // Overview for the portfolio page. This used to be
-                                // `onSwitchTab(BtTab.Portfolio)`, which after the IA
-                                // change would be a hop to the tab we are already on
-                                // — i.e. a no-op the user would read as a dead tap.
-                                onOpenPortfolioView = leaveOverview,
-                                // "Create a portfolio": open the switcher, which is
-                                // where creation lives. Sending the user to an empty
-                                // portfolio page and hoping they find the sheet was
-                                // the old behaviour and it was never good; it is
-                                // simply impossible now, since the page they would
-                                // land on is the one they are already looking at.
-                                onCreatePortfolio = openSwitcher,
-                                onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
-                                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
-                                discreetMode = discreetMode,
-                                onToggleDiscreet = onToggleDiscreet,
-                            )
-                        },
-                        // The in-content door to one portfolio's own settings. The
-                        // gear in the corner is the APP's settings and must keep
-                        // meaning only that — so per-portfolio management gets a row
-                        // in the page's management area instead, where it sits next
-                        // to Cash and Transactions as another thing about THIS
-                        // portfolio. The switcher's ⋮ carries the second path.
-                        onOpenPortfolioSettings = { portfolioId ->
-                            navController.navigate(PortfolioSettingsRoute(portfolioId))
-                        },
-                    )
-                }
-            }
-        }
-        composable<MarketsTabRoute> {
-            BtTabPage(peekLayers, BtTab.Markets) {
-                MarketsTabScreen(
-                    onOpenSearch = { navController.navigate(SearchRoute) },
-                    onOpenCustomAssets = { navController.navigate(CustomAssetsRoute) },
-                    onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                    onAddToWatchlist = { navController.navigate(SearchRoute) },
-                    onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
-                )
-            }
-        }
-        composable<PeopleTabRoute> {
-            BtTabPage(peekLayers, BtTab.People) {
-                SocialScreen(
-                    onOpenFriend = { userId, username ->
-                        navController.navigate(FriendOverviewRoute(userId, username))
-                    },
-                    onOpenChats = { navController.navigate(ChatListRoute) },
-                    onOpenChatWith = { friendUserId, username ->
-                        navController.navigate(ChatThreadRoute(friendUserId = friendUserId, friendUsername = username))
-                    },
-                    onOpenGroups = { navController.navigate(FriendGroupsRoute) },
-                )
-            }
-        }
-        composable<FriendGroupsRoute> {
+        btSheet<FriendGroupsRoute> {
             FriendGroupsScreen(onBack = back)
-        }
-        composable<WorkbenchTabRoute> {
-            BtTabPage(peekLayers, BtTab.Workbench) {
-                WorkbenchTabScreen(
-                    onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
-                    onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
-                    onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
-                )
-            }
         }
 
         // S6 P2-19: LoginRoute / AppLockRoute were registered here as "Under
@@ -1554,7 +1323,7 @@ private fun BtNavHost(
         // app lock are BtRoot gates that run OUTSIDE this graph — so they are gone.
 
         // Portfolio
-        composable<HoldingDetailRoute> { entry ->
+        btSheet<HoldingDetailRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<HoldingDetailRoute>()
@@ -1582,7 +1351,7 @@ private fun BtNavHost(
                 )
             }
         }
-        composable<TransactionsRoute> { entry ->
+        btSheet<TransactionsRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<TransactionsRoute>()
@@ -1599,11 +1368,11 @@ private fun BtNavHost(
                 )
             }
         }
-        composable<TransactionFormRoute> { entry ->
+        btSheet<TransactionFormRoute> { entry ->
             val route = entry.toRoute<TransactionFormRoute>()
             TransactionFormScreen(route = route, onBack = back)
         }
-        composable<CashRoute> { entry ->
+        btSheet<CashRoute> { entry ->
             // V5 S2a: portfolio-scoped detail is part of the server-blind family.
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<CashRoute>()
@@ -1624,17 +1393,17 @@ private fun BtNavHost(
         // server-only surfaces over portfolio data, so they ride the same
         // paranoid guard as the rest of that family: a paranoid account has no
         // server-side ledger to classify or schedule against.
-        composable<CashTagsRoute> {
+        btSheet<CashTagsRoute> {
             ParanoidGate(onBack = back) {
                 at.bettertrack.app.ui.cash.CashTagsScreen(onBack = back)
             }
         }
-        composable<CashRulesRoute> {
+        btSheet<CashRulesRoute> {
             ParanoidGate(onBack = back) {
                 at.bettertrack.app.ui.cash.CashRulesScreen(onBack = back)
             }
         }
-        composable<StandingOrdersRoute> { entry ->
+        btSheet<StandingOrdersRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val soRoute = entry.toRoute<StandingOrdersRoute>()
                 at.bettertrack.app.ui.standingorders.StandingOrdersScreen(
@@ -1643,19 +1412,19 @@ private fun BtNavHost(
                 )
             }
         }
-        composable<CustomAssetsRoute> {
+        btSheet<CustomAssetsRoute> {
             CustomAssetsScreen(
                 onBack = back,
                 onOpenAsset = { assetId -> navController.navigate(CustomAssetDetailRoute(assetId)) },
             )
         }
-        composable<CustomAssetDetailRoute> { entry ->
+        btSheet<CustomAssetDetailRoute> { entry ->
             val route = entry.toRoute<CustomAssetDetailRoute>()
             CustomAssetDetailScreen(assetId = route.assetId, onBack = back)
         }
 
         // Market
-        composable<AssetPageRoute> { entry ->
+        btSheet<AssetPageRoute> { entry ->
             val route = entry.toRoute<AssetPageRoute>()
             AssetPageScreen(
                 assetId = route.assetId,
@@ -1674,7 +1443,7 @@ private fun BtNavHost(
                 },
             )
         }
-        composable<SearchRoute> {
+        btSheet<SearchRoute> {
             SearchScreen(
                 onBack = back,
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
@@ -1693,7 +1462,7 @@ private fun BtNavHost(
         }
         // V5 S2c: portfolio-wide market intel (earnings + dividend calendars,
         // projected income, news digest) — reached from the Assets tab.
-        composable<MarketIntelRoute> {
+        btSheet<MarketIntelRoute> {
             MarketIntelScreen(
                 onBack = back,
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
@@ -1704,7 +1473,7 @@ private fun BtNavHost(
         // Workboard tab (WorkboardScreen composes ConglomerateListScreen directly),
         // never a route of its own. V5 S2c added an Ideas segment the same way;
         // only the idea DETAIL is a destination.
-        composable<IdeaDetailRoute> { entry ->
+        btSheet<IdeaDetailRoute> { entry ->
             val route = entry.toRoute<IdeaDetailRoute>()
             IdeaDetailScreen(
                 ideaId = route.ideaId,
@@ -1712,29 +1481,33 @@ private fun BtNavHost(
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
             )
         }
-        composable<ConglomerateBuilderRoute> { entry ->
+        btSheet<ConglomerateBuilderRoute> { entry ->
             val route = entry.toRoute<ConglomerateBuilderRoute>()
             ConglomerateBuilderScreen(
                 conglomerateId = route.conglomerateId,
                 onBack = back,
+                // Replace this sheet with the detail sheet, rather than stacking
+                // the result on top of the form that produced it: a back press
+                // from the new conglomerate should land on the Workbench, not
+                // back inside the builder that just saved.
                 onSaved = { id ->
                     navController.popBackStack()
                     navController.navigate(ConglomerateDetailRoute(id))
                 },
             )
         }
-        composable<ConglomerateDetailRoute> { entry ->
+        btSheet<ConglomerateDetailRoute> { entry ->
             val route = entry.toRoute<ConglomerateDetailRoute>()
             ConglomerateDetailScreen(
                 conglomerateId = route.conglomerateId,
                 onBack = back,
                 onEdit = { id -> navController.navigate(ConglomerateBuilderRoute(id)) },
-                onDelete = { navController.popBackStack() },
+                onDelete = back,
             )
         }
 
         // Social — per-friend overview (Social v2) + read-only friend-shared views (§6.9)
-        composable<FriendOverviewRoute> { entry ->
+        btSheet<FriendOverviewRoute> { entry ->
             val route = entry.toRoute<FriendOverviewRoute>()
             FriendOverviewScreen(
                 friendUserId = route.userId,
@@ -1755,19 +1528,19 @@ private fun BtNavHost(
                 onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
             )
         }
-        composable<SharedPortfolioViewRoute> { entry ->
+        btSheet<SharedPortfolioViewRoute> { entry ->
             val route = entry.toRoute<SharedPortfolioViewRoute>()
             SharedPortfolioViewScreen(portfolioId = route.portfolioId, onBack = back)
         }
-        composable<SharedWatchlistViewRoute> { entry ->
+        btSheet<SharedWatchlistViewRoute> { entry ->
             val route = entry.toRoute<SharedWatchlistViewRoute>()
             SharedWatchlistViewScreen(watchlistId = route.watchlistId, ownerName = route.ownerName, onBack = back)
         }
-        composable<SharedConglomerateViewRoute> { entry ->
+        btSheet<SharedConglomerateViewRoute> { entry ->
             val route = entry.toRoute<SharedConglomerateViewRoute>()
             SharedConglomerateViewScreen(conglomerateId = route.conglomerateId, onBack = back)
         }
-        composable<ChatListRoute> {
+        btSheet<ChatListRoute> {
             ChatListScreen(
                 onBack = back,
                 onOpenConversation = { id, username ->
@@ -1778,7 +1551,7 @@ private fun BtNavHost(
                 },
             )
         }
-        composable<ChatThreadRoute> { entry ->
+        btSheet<ChatThreadRoute> { entry ->
             val route = entry.toRoute<ChatThreadRoute>()
             ChatThreadScreen(
                 conversationId = route.conversationId,
@@ -1795,13 +1568,13 @@ private fun BtNavHost(
                 onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
             )
         }
-        composable<NotificationsInboxRoute> {
+        btSheet<NotificationsInboxRoute> {
             NotificationsInboxScreen(onBack = back, onDeepLink = onDeepLink)
         }
 
         // Settings — account + logout surface; Security section is Step 17, the
         // rest grows in Step 18.
-        composable<SettingsRoute> {
+        btSheet<SettingsRoute> {
             SettingsScreen(
                 onBack = back,
                 onOpenSecurity = { navController.navigate(SettingsSecurityRoute) },
@@ -1818,8 +1591,8 @@ private fun BtNavHost(
                 onOpenServer = { navController.navigate(ServerRoute) },
             )
         }
-        composable<ChangelogRoute> { ChangelogScreen(onBack = back) }
-        composable<StorageHomeRoute> {
+        btSheet<ChangelogRoute> { ChangelogScreen(onBack = back) }
+        btSheet<StorageHomeRoute> {
             at.bettertrack.app.ui.storage.WhereYourDataLivesScreen(onBack = back)
         }
 
@@ -1835,7 +1608,7 @@ private fun BtNavHost(
         // routes are 403 by a platform route guard, so these screens have
         // nothing to show and must not pretend otherwise.
 
-        composable<PortfolioSettingsRoute> { entry ->
+        btSheet<PortfolioSettingsRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<PortfolioSettingsRoute>()
                 at.bettertrack.app.ui.portfolio.PortfolioSettingsScreen(
@@ -1851,13 +1624,13 @@ private fun BtNavHost(
             }
         }
 
-        composable<TaxSettingsRoute> {
+        btSheet<TaxSettingsRoute> {
             ParanoidGate(onBack = back) {
                 at.bettertrack.app.ui.tax.TaxSettingsScreen(onBack = back)
             }
         }
 
-        composable<PortfolioTaxRoute> { entry ->
+        btSheet<PortfolioTaxRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<PortfolioTaxRoute>()
                 at.bettertrack.app.ui.tax.PortfolioTaxScreen(
@@ -1867,7 +1640,7 @@ private fun BtNavHost(
             }
         }
 
-        composable<TaxYearsRoute> { entry ->
+        btSheet<TaxYearsRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<TaxYearsRoute>()
                 at.bettertrack.app.ui.tax.TaxYearsScreen(
@@ -1880,7 +1653,7 @@ private fun BtNavHost(
             }
         }
 
-        composable<TaxYearRoute> { entry ->
+        btSheet<TaxYearRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<TaxYearRoute>()
                 at.bettertrack.app.ui.tax.TaxYearDetailScreen(
@@ -1891,7 +1664,7 @@ private fun BtNavHost(
             }
         }
 
-        composable<ChainManageRoute> { entry ->
+        btSheet<ChainManageRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<ChainManageRoute>()
                 at.bettertrack.app.ui.mirrorchain.ChainManageScreen(
@@ -1900,7 +1673,7 @@ private fun BtNavHost(
                 )
             }
         }
-        composable<SettingsSecurityRoute> {
+        btSheet<SettingsSecurityRoute> {
             SecurityScreen(
                 onBack = back,
                 onSetupPin = { navController.navigate(AppLockSetupRoute(change = false)) },
@@ -1909,22 +1682,22 @@ private fun BtNavHost(
                 onOpenSessions = { navController.navigate(ActiveSessionsRoute) },
             )
         }
-        composable<AppLockSetupRoute> { entry ->
+        btSheet<AppLockSetupRoute> { entry ->
             val route = entry.toRoute<AppLockSetupRoute>()
             AppLockSetupScreen(change = route.change, onDone = back, onBack = back)
         }
-        composable<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
-        composable<SettingsLanguageRoute> { LanguageScreen(onBack = back) }
-        composable<SettingsAboutRoute> {
+        btSheet<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
+        btSheet<SettingsLanguageRoute> { LanguageScreen(onBack = back) }
+        btSheet<SettingsAboutRoute> {
             AboutScreen(onBack = back, onOpenChangelog = { navController.navigate(ChangelogRoute) })
         }
-        composable<ChangePasswordRoute> { ChangePasswordScreen(onBack = back) }
-        composable<TwoFactorRoute> { TwoFactorScreen(onBack = back) }
-        composable<ActiveSessionsRoute> { ActiveSessionsScreen(onBack = back) }
-        composable<DeleteAccountRoute> { DeleteAccountScreen(onBack = back) }
+        btSheet<ChangePasswordRoute> { ChangePasswordScreen(onBack = back) }
+        btSheet<TwoFactorRoute> { TwoFactorScreen(onBack = back) }
+        btSheet<ActiveSessionsRoute> { ActiveSessionsScreen(onBack = back) }
+        btSheet<DeleteAccountRoute> { DeleteAccountScreen(onBack = back) }
 
         // Sync & debug
-        composable<PendingSyncRoute> {
+        btSheet<PendingSyncRoute> {
             PendingSyncScreen(
                 onBack = back,
                 onEditTxOp = { opId ->
@@ -1935,20 +1708,21 @@ private fun BtNavHost(
                 },
             )
         }
-        composable<GalleryRoute> {
+        btSheet<GalleryRoute> {
             GalleryScreen(
                 onClose = back,
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
             )
         }
-        composable<ServerRoute> {
-            ServerScreen(onBack = { navController.popBackStack() })
+        btSheet<ServerRoute> {
+            ServerScreen(onBack = back)
         }
-        composable<SyncDebugRoute> {
+        btSheet<SyncDebugRoute> {
             SyncDebugScreen(
                 onClose = back,
                 onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
             )
         }
+    }
     }
 }

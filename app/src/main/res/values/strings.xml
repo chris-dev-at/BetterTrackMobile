@@ -2447,4 +2447,5 @@
          Label verbatim from the web's settings.security.twoFactor.recoveryCodes.download. -->
     <string name="bt_2fa_recovery_download">Download codes</string>
     <!-- ==== /STREAM-TAX (EN) ==== -->
+    <string name="bt_sheet_grabber_cd">Drag down to close</string>
 </resources>

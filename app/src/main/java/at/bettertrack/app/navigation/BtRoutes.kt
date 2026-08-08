@@ -16,6 +16,23 @@ import kotlinx.serialization.Serializable
 /** Step 17 (§5): set-up / change-PIN flow. [change] gates verify-current-first. */
 @Serializable data class AppLockSetupRoute(val change: Boolean = false)
 
+// ── The sheet stack's floor ────────────────────────────────────────────────
+/**
+ * The graph's start destination, and the only one that draws nothing.
+ *
+ * Architecture change 2026-08-08: the four tabs left this graph for the live
+ * pager ([at.bettertrack.app.ui.shell.BtTabPager]) and every remaining route
+ * became a full-screen sheet over them ([at.bettertrack.app.ui.shell.BtSheet]).
+ * A `NavHost` still needs somewhere to start and something for the last sheet to
+ * pop back to, and "the tabs" is no longer an answer it can give — so the floor
+ * is this: an empty destination whose whole meaning is *no sheet is open*.
+ *
+ * It is a real route rather than, say, a null check on the back-stack size
+ * because the shell asks the question constantly (`sheetsClosed`) and a typed
+ * `hasRoute` is the one form of that question that cannot go stale.
+ */
+@Serializable data object SheetRootRoute
+
 // ── Tabs (top-level) ───────────────────────────────────────────────────────
 //
 // R-arc R1 (mandate §2) declared FIVE destinations, in bar order —
@@ -30,17 +47,17 @@ import kotlinx.serialization.Serializable
 // pinned first entry of the portfolio switcher, rendered by the Portfolio tab.
 // A route object with no destination is exactly the kind of drift the comment
 // above warns about, so it was deleted rather than deprecated.
-/**
- * The app's front door. Renders the portfolio the switcher selects — or, when
- * the switcher's pinned **Overview** entry is selected, the account-wide index
- * (hero · movers · needs-you · quiet tail) that used to be the Home tab.
+/*
+ * The four `...TabRoute` objects are DELETED (architecture change 2026-08-08).
  *
- * The NavHost's start destination, and the tab a cold start lands on.
+ * Portfolio · Markets · Workbench · People are not destinations any more. They
+ * are four permanently-composed pages in a pager under this whole graph — see
+ * [at.bettertrack.app.ui.shell.BtTabPager] for why, and [SheetRootRoute] for what
+ * the graph starts on instead. Route objects nothing registers and nothing
+ * navigates to are exactly the drift the note at the top of this section warns
+ * about, so they went with the destinations rather than being left behind as
+ * names. The tab set itself lives on as [BtTab].
  */
-@Serializable data object PortfolioTabRoute     // portfolio overview + Overview
-@Serializable data object WorkbenchTabRoute     // conglomerates · ideas · alerts
-@Serializable data object MarketsTabRoute       // search + watchlists + market intel
-@Serializable data object PeopleTabRoute        // friends, sharing, chat
 
 // ── Portfolio ──────────────────────────────────────────────────────────────
 @Serializable data class HoldingDetailRoute(val holdingId: String)

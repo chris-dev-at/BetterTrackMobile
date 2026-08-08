@@ -258,28 +258,116 @@ class TopBarNavigationTest {
     }
 
     /**
-     * The bar is drawn OUTSIDE the area the tab swipe displaces.
+     * The bar is drawn OUTSIDE the area the pager scrolls.
      *
      * The structural fact the whole hoist rests on, and the one a refactor is
      * most likely to undo by accident: [at.bettertrack.app.ui.shell.BtTabHeader]
-     * must be a sibling *before* the `Box` that carries `btTabSwipe`, not a child
-     * of it. Inside that Box it would ride `pageOffsetPx` like the pages do and
-     * the owner's report would be back, with every other test still green —
-     * because nothing else in this suite can see a layout order.
+     * must be a sibling *before* [at.bettertrack.app.ui.shell.BtTabPager], not a
+     * page inside it. Inside the pager it would scroll with the pages and the
+     * owner's report would be back, with every other test still green — because
+     * nothing else in this suite can see a layout order.
+     *
+     * Restated for the pager architecture (2026-08-08): the anchor used to be the
+     * `btTabSwipe` modifier on the page Box, which is gone with the gesture layer.
+     * The rule it protected is unchanged.
      */
     @Test
-    fun `the shared tab bar sits outside the swiped page area`() {
+    fun `the shared tab bar sits outside the paged area`() {
         val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
         val bar = shell.indexOf("BtTabHeader(")
-        val swipe = shell.indexOf(".btTabSwipe(")
+        val pager = shell.indexOf("BtTabPager(")
         assertTrue("AppShell no longer draws BtTabHeader.", bar >= 0)
-        assertTrue("AppShell no longer applies btTabSwipe.", swipe >= 0)
+        assertTrue("AppShell no longer draws BtTabPager.", pager >= 0)
         assertTrue(
-            "AppShell draws BtTabHeader after (i.e. inside) the swiped page area. The one " +
-                "tab bar must be a sibling ABOVE the Box that carries btTabSwipe, or it " +
-                "will slide with the pages again — owner report 2026-08-07.",
-            bar < swipe,
+            "AppShell draws BtTabHeader after (i.e. inside) the paged area. The one tab " +
+                "bar must be a sibling ABOVE BtTabPager, or it will slide with the pages " +
+                "again — owner report 2026-08-07.",
+            bar < pager,
         )
+    }
+
+    /**
+     * The four tab pages are NOT in the nav graph.
+     *
+     * The load-bearing fact of the 2026-08-08 architecture, and the one that is
+     * invisible everywhere else: the moment a tab becomes a `btSheet<>` or a
+     * `composable<>` entry again, it is composed on arrival and disposed on
+     * departure, and the owner's *"I have to wait between each swipe"* is back in
+     * full. Measured before the change on this device: 3 swipes at a ~100ms
+     * cadence advanced 0 pages, 20 bursts out of 20.
+     *
+     * `SheetRootRoute` is the only `composable<>` left in the graph, and it draws
+     * nothing — see its KDoc.
+     */
+    @Test
+    fun `the tab pages live in the pager, not in the nav graph`() {
+        val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
+        val graph = shell.substringAfter("startDestination = SheetRootRoute,")
+        listOf("PortfolioTabRoute", "MarketsTabRoute", "WorkbenchTabRoute", "PeopleTabRoute")
+            .forEach { route ->
+                assertTrue(
+                    "$route is registered in the nav graph again. The four tabs must be " +
+                        "pages in BtTabPager, or they are composed on arrival and the " +
+                        "instant-swipe architecture is undone.",
+                    !graph.contains(route),
+                )
+            }
+        assertTrue(
+            "The graph gained a plain composable<> entry. Every subpage is a btSheet<>; " +
+                "the only composable<> is the empty SheetRootRoute floor.",
+            Regex("""composable<(\w+)>""").findAll(graph)
+                .map { it.groupValues[1] }.toList() == listOf("SheetRootRoute"),
+        )
+    }
+
+    /**
+     * The paranoid gate renders INSIDE the sheet, with its own way out.
+     *
+     * V5 S2a routes the server-blind portfolio family to an explainer. Under the
+     * pushed-route idiom the gate replaced a full screen and drew its own top bar
+     * with a back arrow; inside a sheet it must still be *inside* — a gate drawn
+     * around a sheet would be an explainer with no grabber, no pull-down and no
+     * scrim, i.e. the one trap the sheet directive rules out.
+     *
+     * Structural, because the alternative is a device check that needs the demo
+     * account's server-side privacy mode flipped and flipped back.
+     */
+    @Test
+    fun `every gated route renders its gate inside the sheet`() {
+        val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
+        val graph = shell.substringAfter("startDestination = SheetRootRoute,")
+        // In the graph every ParanoidGate is preceded by its own btSheet<> opener,
+        // never the other way round: a `ParanoidGate { btSheet<` ordering would
+        // mean the gate wrapped the registration.
+        assertTrue(
+            "A ParanoidGate wraps a btSheet registration instead of sitting inside it.",
+            !Regex("""ParanoidGate\([^)]*\)\s*\{[^}]*btSheet<""").containsMatchIn(graph),
+        )
+        val gated = Regex("""btSheet<(\w+)>\s*\{[^\n]*\n\s*(?://[^\n]*\n\s*)*ParanoidGate\(onBack = back\)""")
+            .findAll(graph).map { it.groupValues[1] }.toList()
+        assertTrue(
+            "expected the portfolio family to stay gated inside sheets, found $gated",
+            gated.size >= 10,
+        )
+        assertTrue("HoldingDetailRoute must stay gated", gated.contains("HoldingDetailRoute"))
+        assertTrue("CashRoute must stay gated", gated.contains("CashRoute"))
+    }
+
+    /**
+     * Every subpage is a sheet — no route may keep the old pushed idiom.
+     *
+     * The owner's standing directive is *every* subpage, and a half-migrated graph
+     * is the one outcome explicitly ruled out: a route still registered with
+     * `composable<>` would push over the tabs, replace them, and read as a
+     * different app on that one screen.
+     */
+    @Test
+    fun `every subpage route is registered as a sheet`() {
+        val shell = uiSources().first { it.name == "AppShell.kt" }.readText()
+        val graph = shell.substringAfter("startDestination = SheetRootRoute,")
+        val sheets = Regex("""btSheet<(\w+)>""").findAll(graph).map { it.groupValues[1] }.toList()
+        assertEquals("every sheet route is registered exactly once", sheets.size, sheets.toSet().size)
+        assertTrue("expected the whole subpage set as sheets, found ${sheets.size}", sheets.size >= 45)
     }
 
     /**
@@ -363,9 +451,9 @@ class TopBarNavigationTest {
         val enumFile = navRoots.firstOrNull { it.isFile }
             ?: error("DeepLinkTabs.kt not found; tried ${navRoots.map { it.absolutePath }}")
         val enumBlock = enumFile.readText()
-            .substringAfter("enum class BtTab(val route: Any) {")
+            .substringAfter("enum class BtTab {")
             .substringBefore("}")
-        val enumOrder = Regex("""^\s*(\w+)\(""", RegexOption.MULTILINE)
+        val enumOrder = Regex("""^\s*(\w+),""", RegexOption.MULTILINE)
             .findAll(enumBlock).map { it.groupValues[1] }.toList()
 
         assertEquals(

@@ -2341,4 +2341,5 @@
     <string name="bt_tax_settings_disclaimer">Schätzwerte nur für deine persönliche Übersicht — keine Steuerberatung, keine Gewähr für Richtigkeit, kein Dokument für die Steuererklärung.</string>
     <string name="bt_2fa_recovery_download">Codes herunterladen</string>
     <!-- ==== /STREAM-TAX (DE) ==== -->
+    <string name="bt_sheet_grabber_cd">Zum Schließen nach unten ziehen</string>
 </resources>
