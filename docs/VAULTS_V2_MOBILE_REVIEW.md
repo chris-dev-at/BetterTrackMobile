@@ -353,3 +353,129 @@ Call it **11–13 weeks single-threaded**, of which the engine split (12 d) and 
 ## 5. One-paragraph summary for the board
 
 Mobile approves the product shape of Vaults v2 and endorses the substrate reuse — our BTVAULT1 crypto, conformance discipline and CAS model all survive intact. We raise two blocking objections. First, per-portfolio CAS blobs have no transactional story, and our engine holds cross-portfolio state (the shared asset catalogue, retirement-proof material, mirror provenance) that has no portfolio to live in; a two-blob transfer or a mid-sync death is currently a path to half-moved money, and a mishandled `mirrorProvenance` split permanently traps an account in paranoid mode. Second, the client-side v1→v2 split is unspecified on client-race, resumability, and idempotency — and our vault-side op executor is not replay-safe, so a non-terminal vault write would duplicate transactions. We also object, with a stated position and a proposed alternative, to shipping the raw passphrase in the QR payload behind only a 60-second on-screen timer, and we ask that "raw opt-in" device storage be platform-optional so Android can decline it. Everything else we need is a precondition list: `formatVersion: 2` in the contract text, six named vector families relocated out of `apps/web`, `{vaultId}` endpoint shapes with `currentVersion` on the 412, the QR TTL and the 12-word wordlist as shared constants, ten new error codes, and answers to twelve written questions. As scoped, P4 is ≈58 builder-days and cannot start until those land.
+
+---
+
+# Appendix — r2 verification (2026-08-08)
+
+**Reviewed:** `docs/VAULTS_V2_DESIGN.md` revision 2 (253 lines) @ `d3f601c7` on branch `pr-1175`, **plus** the merged server code at `3e31fb6c` "[VAULT2-P2] Multi-vault server surface".
+
+**Appendix verdict: r2 is a large and genuine win on the contract, but it is NOT yet a build spec.** Both my blockers are answered in text, objections O5–O7 are resolved (two of them better than I asked), and 11 of 12 questions get real rulings. But verification against the tree finds **six residuals, two of which are data-loss paths**, and it contradicts the board summary in one material way: the six vector families of §16 do not exist, and the v2 header format is not in code.
+
+## A0. Delivery reality check — contract vs. tree
+
+| r2 claim | Verified state |
+|---|---|
+| Server surface (routes, join/leave, CAS, caps, codes, migration claim) | **BUILT**, and well — 2017-line `apps/api/src/__tests__/vaultsV2.test.ts` |
+| §9 `formatVersion: 2`, `kdfSalt`, `keySlots[]`, portfolio index, AAD composition | **NOT IN CODE.** `packages/contracts/src/vaults.ts` models every doc as opaque base64 (`ciphertextBase64Schema`, `:177-183`); `keySlots`/`kdfSalt` appear only in prose comments (`vaults.ts:45`, `:57`; `apps/api/src/data/schema.ts:3861`). `packages/contracts/src/vault.test.ts:251` still pins `formatVersion: 2` as **invalid** under the v1 schema |
+| §10 QR (`qr:1`, `w`, PIN wrap, 120 s TTL) | **NOT IN CODE.** No `btvault1:` payload, no `w`, no PIN wrap, no TTL constant |
+| §9 BIP39 wordlist | **NOT IN REPO.** `grep -i "bip39\|wordlist\|mnemonic"` over `pr-1175` hits **only** the design doc. No dependency |
+| §16 six vector families in the shared location | **0 OF 6 EXIST.** `git diff --stat main...pr-1175 -- packages/domain` is **empty** — the package is untouched. `git diff main...pr-1175 -- apps/web/src/user/vault/vectors.ts vectors.fixture.json` is **empty** — the v1 vectors are byte-identical to main and have **not** relocated. Recovery kit still emits the v1 3-line layout (`apps/web/src/user/vault/recovery.ts:26`) |
+
+So the crypto half of P4 — the half that must be byte-identical across clients — has neither a specification in code nor a single vector to pin. Treat §9/§10/§16 as unstarted.
+
+## A1. Blocker 1 (per-portfolio CAS) — **RESOLVED in contract; 3 residual defects**
+
+§8 delivers everything I asked: a per-vault `common` doc owning the account-scoped kinds; the **single-blob mutation rule** ("every mutation touches exactly one doc"); in-vault cross-portfolio transfers refused as one op in favour of a guided two-step; cross-vault transfers refused outright; an `unavailable` state that is never €0; and size caps (1/4/8 MB — real constants at `packages/contracts/src/vaults.ts:62-70`, enforced at the body parser, the repo, **and** a DB CHECK in `apps/api/drizzle/0087_vaults_v2.sql:66-71`). This is the right shape and it removes the distributed-transaction problem by construction. Ack.
+
+Residual defects:
+
+**A1.1 — `common` conflates document members with entity kinds.** §8 lists `clientSecurity`, `mirrorProvenance` and `mergeLog` alongside `customAsset` as things `common` "owns". In our contract those three are **document members**, not entity kinds — `app/src/main/java/at/bettertrack/app/vault/VaultContracts.kt:593-599`. An unknown key inside `entities` is fatal (`VaultContracts.kt:659-661`), so a `common` doc carrying them as kinds is rejected outright by our parser. Worse, the split forks our document schema rather than extending it: a schemaVersion-2 document **requires** `clientSecurity` (`VaultContracts.kt:685-690`, mirrored in the constructor at `:600-607`) while a schemaVersion-1 document **must not** carry it (`:604-606`). If `clientSecurity` lives only in `common`, per-portfolio docs can satisfy neither branch. **Need:** vector family (3) must pin the exact required-member set for each of the three doc kinds.
+
+**A1.2 — FRESH HOLE: putting `mergeLog` in `common` breaks per-document merge and can make `common` unparseable.** A merge record is `{mergedAt, parents: List<Int>, into: Int, deviceId}` (`VaultContracts.kt:399-404`) whose `parents`/`into` are bare `vaultVersion` integers (`:424-434`) with **no document identifier**. Sharing one log across N independently-versioned docs mixes N unrelated lineages with no way to tell them apart. And the cap of 20 is a **parse-time rejection, not a trim** (`VaultContracts.kt:674-676`): N portfolios merging concurrently overflow it and render `common` **unparseable — taking `clientSecurity` and `mirrorProvenance` down with it**, i.e. the whole vault. **Fix: `mergeLog` must stay per-document.** One-line change to §8.
+
+**A1.3 — the two-step transfer must name its movement kinds.** §8 words the legs as "withdrawal" and "deposit", which is correct — those are exactly our two external kinds (`app/src/main/java/at/bettertrack/app/domain/CashLedger.kt:120-139`, `EXTERNAL_CASH_MOVEMENT_KINDS = listOf("deposit", "withdrawal")`). But the feature is *called* a transfer, and our own in-portfolio transfer uses `transfer_out`/`transfer_in`, which the audited engine defines as **never** external flows (enforced at `CashLedger.kt:947-948`, `:964-971`). If an implementer reaches for the transfer kinds, portfolio A's series drops with no external flow recorded, so `timeWeightedReturn` (`app/src/main/java/at/bettertrack/app/data/storage/VaultProjection.kt:195-196`) reads it as a **market loss**, and B's orphan leg reads as a **phantom gain** — silently, permanently, with nothing throwing (`CashLedger.kt:863-868` deliberately refuses to fail on a reshaped ledger). **Need: the contract states normatively that the legs are `withdrawal` and `deposit`.**
+
+**A1.4 — `transferGroupId` is write-only in our codebase (cost note).** Nothing today groups by `transferId`; the only consumer reads `counterpartSourceId` (`app/src/main/java/at/bettertrack/app/ui/cash/CashScreen.kt:2905`, `:2910`) against a name map built from the **current portfolio's** sources (`:883`), so a cross-portfolio counterpart renders as a literal ellipsis forever. "Renders honestly as an unmatched withdrawal" is new UI work with no existing scaffolding.
+
+## A2. Blocker 2 (v1→v2 split) — **RESOLVED in contract; 3 fresh holes, 2 of them data-loss**
+
+§11's claim → write → verify → flip is the right protocol and it is genuinely built server-side: `apps/api/drizzle/0087_vaults_v2.sql:110-114` adds `migrating_by`, `migration_expires_at`, `migrated_to`; TTL is a real constant (`packages/contracts/src/vaults.ts:314`, 15 min); the claim is a single-statement CAS with **server clock authority** (`apps/api/src/data/repositories/vaultMigrationRepository.ts:99-119`), renew requires same-nonce-and-still-live (`:136-151`), and the flip is transactional and idempotent (`:158-196`). **Clock skew is a non-issue — ack**, the client never supplies a timestamp. §8's "locked = no writes" also removes the non-terminal-vault-write hazard I raised in O2c.
+
+**A2.1 — DATA LOSS: deterministic doc ids do not make the write step idempotent, because the content key is random per client.** §11.2 rests on "deterministic doc identities … make every write idempotent on resume". That gives idempotent *addressing*, not idempotent *bytes*. Our content key is 32 CSPRNG bytes minted on device (`app/src/main/java/at/bettertrack/app/vault/VaultCrypto.kt:101-110`, `generateVaultKey`; called at `app/src/main/java/at/bettertrack/app/vault/VaultKeyCustody.kt:106`), and `keyId` is a random uuidv7 (`app/src/main/java/at/bettertrack/app/vault/VaultRekey.kt:163-167`). Two claim holders therefore write the *same* doc id under *different* K_c — mutually undecryptable ciphertext that CAS cannot distinguish from a legitimate retry. The loser's blob is opaque garbage under the winner's header, and there is no recovery path (`VaultKeyCustody.kt:48-54`). **Fix: the contract must fix K_c for the migration — derive it from the legacy vault key, which every claim holder already possesses — or bind every migration write to the claim nonce.**
+
+**A2.2 — DATA LOSS: there is no claim-nonce precondition on v2 doc writes. Verified in the shipped code.** `writeDoc` (`apps/api/src/data/repositories/vaultRepository.ts:398-472`) checks ownership, backend, portfolio membership and CAS version — it never consults `migrating_by` (grep for `migratingBy`/`migratedTo` in that file returns nothing). Only the **flip** is serialized. So §11's "losers see the claim and wait" is an honour system, and a stale or returning claim holder can overwrite the committed vault's documents *after* another client flipped. Combined with A2.1 that is a concrete path to an unopenable vault. **Fix: reject doc writes while `migrating_by` is live and not yours (an `If-Claim: <nonce>` precondition).**
+
+**A2.3 — UNADDRESSED: Drive-only vaults cannot migrate at all.** The claim is a CAS on the server-side legacy vault row, but `StorageMode.DRIVE` means there is **no account and never will be** — `app/src/main/java/at/bettertrack/app/data/storage/StorageMode.kt:47-52`; root gate `app/src/main/java/at/bettertrack/app/data/storage/StorageSurfaces.kt:213-218` and `app/src/main/java/at/bettertrack/app/ui/shell/BtRoot.kt:33-37` (*"A Drive-only user has no session and never will"*); session predicate `app/src/main/java/at/bettertrack/app/di/AppGraph.kt:645`; no server medium is ever constructed (`app/src/main/java/at/bettertrack/app/vault/server/ServerVaultConnection.kt:65-69`). Our vault identity is a locally-minted UUID the server has never seen (`app/src/main/java/at/bettertrack/app/vault/VaultStore.kt:69-76`, `:171-176`). §11 as written **excludes the entire Drive-only population — the mode the storage wizard exists to offer.** Need a client-local migration for Drive-only, which §13 already has the pattern for (copy → verify → marker → retire).
+
+**A2.4 — the migration 409 envelope has no schema.** Claim/renew/flip conflicts return a top-level `{state: …}` beside `error` (`apps/api/src/services/vault/vaultService.ts:432-439`, `:452-457`, `:473-478`), but only `vaultVersionConflictResponseSchema` exists in contracts. Mobile would parse it blind. Add a zod schema beside the 412 one.
+
+## A3. Objection 3 (keySlots / formatVersion) — **RESOLVED in text, UNBUILT in code**
+
+§9 answers all four of my sub-asks: `formatVersion: 2` with a clean UPDATE_REQUIRED path; AAD input widened to include `formatVersion`, `vaultId` and slot index; the QR version member renamed to **`qr: 1`** (kills the `VAULT_DOCUMENT_VERSION` collision); a v2 recovery-kit layout. Good — that converts an installed-base "vault corrupt" scare into a correct update prompt. But per A0 there is no v2 header schema in code, so nothing is implementable or testable yet.
+
+## A4. Objection 4 (QR) — **SUBSTANTIALLY RESOLVED; one residual security objection**
+
+§10 adopts my option 2 *and* option 3 together: the payload is now `w = AES-GCM(KDF(pin), P)` with a 6-digit one-time PIN on a second screen, total TTL 120 s, FLAG_SECURE and recents exclusion mandated for native clients, screenshot warning on web. A screenshot alone no longer captures the secret. Real improvement — ack.
+
+**A4.1 — RESIDUAL: the KDF is unspecified, and a 6-digit PIN alone is not enough against an offline attack.** §10 says literally `KDF(pin)` — no algorithm, no parameters — and there is nothing in code either. With a 6-digit PIN the search space is 10⁶, so **the KDF cost is the entire security margin of the scheme**. A photograph of the screen defeats FLAG_SECURE and yields `w` plus its GCM tag, i.e. an offline verification oracle. At Argon2id 64 MiB / t=3 (~0.35 s/guess) a full 10⁶ sweep is ≈97 CPU-hours — about an hour on a 100-core cloud box. The 120 s TTL provides **zero** protection here, because the attack runs offline against captured bytes; the TTL bounds the display, not the ciphertext's life. Ask, in preference order: (a) bind `w` to a receiver-supplied ephemeral public key so a captured QR is useless without the receiver's private key; (b) raise entropy — 10+ digits, or 6 words from the same BIP39 list — **and** state Argon2id parameters normatively; (c) make the unwrap single-use and server-mediated. In every case the KDF and its parameters must be in the contract.
+
+## A5. Objection 5 (locked rows / aggregates / gates) — **RESOLVED, two better than asked; one scope clarification needed**
+
+§12 gives the fourth coverage state `lockedExcluded`; nets render as **sum-of-visible plus a mandatory "+ N locked portfolios" qualifier**, never a bare total, with identical arithmetic on both clients (answers Q7); and account-scoped list surfaces get a **per-vault lock chip** rather than all-or-nothing (answers Q8 better than my either/or). §8's `unavailable` answers Q6 exactly as asked. This closes the `PriceCoverage`-certifies-a-short-total hole (`app/src/main/java/at/bettertrack/app/ui/prices/PriceStates.kt:43-58`).
+
+**A5.1 — "locked = no reads" needs a scope ruling.** We accept **no writes while locked** — it simplifies idempotency and we will gate at `VaultStore.mutate` (`app/src/main/java/at/bettertrack/app/vault/VaultStore.kt:93-107`). But "no reads" collides with our architecture: reads come from a **plaintext Room working store** (`app/src/main/java/at/bettertrack/app/data/db/VaultEntities.kt:22-33`, *"Room is the working store … Reads never wait on Drive"*; rows are verbatim JSON at `:68-69`). Enforcing no-reads-at-rest means encrypting the working store — a data-at-rest redesign, not a policy flag, and not in P4's scope. Note also that no-writes-while-locked contradicts our shipped local-first guarantee (`docs/S3S4_STORAGE_PLAN.md:222`, *"local writes always succeed … Airplane-mode Drive-only must be fully functional"*) and the coordinator's contract (`app/src/main/java/at/bettertrack/app/vault/VaultSyncCoordinator.kt:54-58`); in BOTH mode today the app is fully usable with the vault locked. **Ask: read §8's "no reads" as "no plaintext rendering while locked" (UI-level).**
+
+## A6. Objection 6 (raw custody) — **RESOLVED**
+
+§10: *"the raw-storage opt-in is platform-optional — a platform with stronger native custody (Android Keystore) MAY decline to offer raw storage."* Exactly the ask; Android declines. Two notes, neither blocking: §2 lines 49-50 still carry the old "raw opt-in behind an explicit warning" text (superseded by the r2-wins clause at line 127, but it will mislead a vector author); and my secondary ask — that devices wrap `K_c` rather than `P` — is unaddressed, with §2's diagram still showing D wrapping P. Moot for us since we keep wrapping the VK (`app/src/main/java/at/bettertrack/app/vault/VaultKeyCustody.kt:112-116`).
+
+## A7. Objection 7 (Drive rescope) — **RESOLVED**
+
+§13 gives per-vault naming `btv2.{vaultId}.{header|common|p.{portfolioId}}` and a **copy → verify → marker → retire** rename migration, resumable by re-listing — precisely the shape I asked for, and it protects the orphaning risk in `app/src/main/java/at/bettertrack/app/vault/drive/DriveVaultFileName.kt:40-48`. Note §8's single-blob mutation rule is what makes an N-document layout tolerable on Drive at all, given our CAS there is an approximation (`app/src/main/java/at/bettertrack/app/vault/drive/DriveDataHome.kt:132-169`, `:378-384`). Residual: the new names and the marker need a `vaultId`, which Drive-only installs do not have server-side (ties to A2.3); and discovery becomes N name-queries against a 100-file scan cap (`DriveDataHome.kt:234-241`, `:498`). Cost, not objection.
+
+## A8. FRESH HOLE — §13's `both` reconcile rule is data loss
+
+§13: *"reconcile = highest (version, then updatedAt) wins."* That is **last-writer-wins on a whole document**, and it is not what our engine does. Ours is a merge: `app/src/main/java/at/bettertrack/app/vault/VaultSyncCoordinator.kt:62-67` — *"**Conflict = merge, never overwrite**"* — with a per-entity union (`app/src/main/java/at/bettertrack/app/vault/VaultMerge.kt:98-106`, `:254-255`) and a five-level tie-break in which document version never appears: `rev → live-vs-tombstone → editedAt → editedBy → canonical content` (`VaultMerge.kt:172-198`).
+
+Our plan's "highest readable version wins" is explicitly **rule 4, the fallback for unreadable/corrupt bytes only** (`docs/S3S4_STORAGE_PLAN.md:211-220`, *"corrupt bytes kept locally for a restore picker, never silently discarded"*). §13 promotes our degenerate fallback to the primary path.
+
+Concrete loss, grounded in the code: both devices hold a doc at version 5. The phone books a trade offline → local version 6 (`VaultStore.kt:104`). The web books a cash movement → its own version 6, pushed to the server medium first. The phone pushes with `ifVersion = 5`, gets a conflict, and today reconciles by merge (`VaultSyncCoordinator.kt:229`, `:360-374`) with `forceDivergent` true (`:369`) — the union carries **both** entities at version 7. Under §13, the two sides are both at version 6, so `updatedAt` decides and **the entire loser document is discarded**: a trade or a cash movement that never existed on any replica, the winner chosen by clock skew between a phone and a browser. The same rule inverts our rule 2 (edit beats tombstone — `VaultMerge.kt:186-188`, rationale at `:168-170`: *"an edit that vanished is data loss the user cannot even see"*) and would silently drop the loser's `mirrorProvenance` (`VaultMerge.kt:124-126`: *"a merge must never be the step that loses an identity map"*).
+
+**Fix — one sentence:** §13 must say that `both` reconciles by the §4 per-entity merge rules, with `(version, updatedAt)` used **only** as the whole-blob fallback for undecryptable candidates.
+
+## A9. Needs (a)–(f)
+
+| Need | Verdict |
+|---|---|
+| (a) N1 format version + naming | **RESOLVED in text** (§9); **unbuilt in code** (A0) |
+| (b) N2 vectors | **UNADDRESSED IN FACT.** §16 promises six families "produced by the platform hardening pass and published"; `packages/domain` is untouched and the v1 vectors have not moved. 0/6. We cannot self-generate (`tools/domain-vectors/README.md:155-158`) — this gates P4's crypto track entirely |
+| (c) N3 endpoints | **RESOLVED AND BUILT, beyond the ask.** Routes at `apps/api/src/http/routes/vaultsRoutes.ts` (`:181` list, `:257` create, `:273` patch, `:290` delete, `:339`–`:373` the six doc surfaces, `:200`–`:231` migration); join/leave at `apps/api/src/http/routes/portfolioRoutes.ts:734`/`:773`, join genuinely one transaction with a zero-cleartext purge probe that aborts (`apps/api/src/data/repositories/vaultRepository.ts:513-534`); bearer allowlist extended as a second default-closed list covering all six doc surfaces plus list (`apps/api/src/http/middleware/bearerAuth.ts:58-66`). **412 carries `currentVersion` as a TOP-LEVEL SIBLING of `error`**, not inside `error.details` — `apps/api/src/http/errorHandler.ts:25-32` spreads the envelope first; constructed at `apps/api/src/services/vault/vaultService.ts:128-134`. Three residuals: A2.4; the bearer `GET /vaults` returns a narrower body than a session GET (`vaultsRoutes.ts:183-192`) so we must branch on auth mode; **and the v1 412 regression below** |
+| (d) N4 constants | **PARTIAL.** Real constants: migration TTL 15 min (`vaults.ts:314`), size caps (`:62-70`). Doc-only: QR TTL 120 s. Doc-only and **absent from the repo**: the BIP39 wordlist. **Unaddressed:** the `keySlots` slot format and its wrap AAD |
+| (e) N5 error codes | **RESOLVED AND EXCEEDED**, with a caveat. Ten canonical codes exist with real EN+DE strings (`apps/web/src/i18n/messages/en.json:3774-3792` and `de.json` same range). But **three of the ten are never thrown by the server** — `VAULT_LOCKED_WRITE_REFUSED`, `VAULT_CROSS_BLOB_REFUSED`, `VAULT_FORMAT_UPDATE_REQUIRED` are client-enforced, while §15 presents all ten as wire codes. And **seven codes beyond the ten are real and thrown**: `VAULT_PRECONDITION_REQUIRED` (428 on every PUT without a precondition — matches our discipline, ack), `VAULT_NAME_TAKEN`, `VAULT_PORTFOLIO_ALREADY_VAULTED`, `VAULT_JOIN_BLOCKED`, `VAULT_RESTORE_INVALID`, `VAULT_ID_TAKEN`, `VAULT_PORTFOLIO_NOT_VAULTED`. We must catalogue all 17, not 10 (`app/src/main/java/at/bettertrack/app/data/api/BtErrorCopy.kt:66-317` + both `strings.xml`) |
+| (f) N6 twelve questions | 11 resolved, 1 answered wrongly — see A10 |
+
+**New finding — v1 412 regression, and it hurts us today.** The same commit that built `EnvelopeApiError` for v2 **deleted** the v1 route's only conflict-version hint:
+
+```diff
+apps/api/src/http/routes/vaultRoutes.ts  @@ -485,8 +509,6 @@
+         case 'precondition_failed':
+-          if (result.currentVersion !== null)
+-            res.setHeader('ETag', vaultEtag(result.currentVersion));
+           throw preconditionFailed();
+```
+
+Our shipped app is on the v1 route and will be for all of P4. Every v1 CAS loss now costs an extra `GET /vault` that was previously free. `EnvelopeApiError` exists two files away — please apply it to the v1 route too.
+
+## A10. The twelve questions
+
+| Q | Verdict |
+|---|---|
+| Q1 kind ownership | **PARTIAL.** §8 names 12 for `common`; the other 14 of our 26 (`VaultContracts.kt:66-93`) fall to `portfolio` only by implication, and the server's leave-restore schema restricts to **9** portfolio-scoped kinds (`packages/contracts/src/vaults.ts:379-389`). Three different partitions (26/12/9), none normative. Vector family (3) was to pin it and does not exist. Also three of §8's twelve are document members, not kinds (A1.1) |
+| Q2 in-vault cross-portfolio transfer | **RESOLVED** (refused as one op; guided two-step). Residual A1.3 |
+| Q3 cross-vault transfer | **RESOLVED** — refused at UI and op layer in v2 |
+| Q4 split race / resume | **RESOLVED in text**; fresh holes A2.1, A2.2, A2.3 |
+| Q5 writes while locked | **RESOLVED** — no writes, inline unlock, no queued writes. Clarification A5.1 |
+| Q6 missing/undecryptable blob | **RESOLVED** — `unavailable`, never €0, banner names doc + version, rest of vault usable. Exactly as asked |
+| Q7 net worth with a locked vault | **RESOLVED** — §12 sum-of-visible + mandatory qualifier, identical on both clients |
+| Q8 account-scoped surfaces | **RESOLVED, better than asked** — per-vault lock chip, not all-or-nothing |
+| Q9 Drive naming + rename migration | **RESOLVED** (§13). Residual: Drive-only `vaultId` (A2.3) |
+| Q10 `both` semantics | **ANSWERED, AND THE ANSWER IS WRONG** — see A8 |
+| Q11 metadata leak | **RESOLVED** — §14 accepted by design, stated in the explainer, padding noted as future work |
+| Q12 clientSecurity / mirrorProvenance scope | **RESOLVED in principle** — per-vault, divergence within one vault only, leave/disable consults only the owning vault's provenance. Residual: modelled as kinds not members (A1.1), and under §13's LWW the divergence rules would never run at all (A8) |
+
+## A11. Effort, revised
+
+Net movement is small. §8's single-blob rule and "locked = no writes" **remove** the cross-blob transaction design and the vault-op idempotency project (−4 d); §11 still requires honouring `op.clientId` on replay (+1 d); new work appears for the two-step transfer UI with honest unmatched-leg rendering (+2 d), the `unavailable` state and banner (+1 d), BIP39 generation/checksum/NFKD (+1 d), and the two-screen PIN QR flow with FLAG_SECURE (+1 d). Drive and Room are as scoped.
+
+**≈60 builder-days (12–13 weeks single-threaded).** But roughly **12 of those days cannot start**: the v2 header format is not in code and 0 of 6 vector families exist, so the crypto track is schedule-blocked regardless of the estimate. The server track (routes, join/leave, CAS client, migration client) is unblocked today and is where P4 should begin.
