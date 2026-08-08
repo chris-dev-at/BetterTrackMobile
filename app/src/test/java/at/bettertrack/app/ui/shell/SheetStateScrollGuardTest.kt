@@ -152,34 +152,79 @@ class SheetStateScrollGuardTest {
         )
     }
 
+    private fun sheetStackSource(): String {
+        val file = listOf(
+            File("src/main/java/at/bettertrack/app/ui/shell/BtSheetStack.kt"),
+            File("app/src/main/java/at/bettertrack/app/ui/shell/BtSheetStack.kt"),
+        ).firstOrNull { it.isFile } ?: error("BtSheetStack.kt not found")
+        return code(file.readText())
+    }
+
     @Test
     fun `the sheet chrome does not ride the depth axis`() {
-        // Owner's rule for depth->=2: only the CONTENT plane slides in from the
-        // right; the grabber strip stays put, the way the four main pages' top bar
-        // stays put while the pages move under it. Structurally that means the
-        // horizontal translation must be applied BELOW the grabber, never around
-        // it — a single misplaced brace would slide the chrome with the content
-        // and nothing else in the suite would notice.
-        val sheet = listOf(
-            File("src/main/java/at/bettertrack/app/ui/shell/BtSheet.kt"),
-            File("app/src/main/java/at/bettertrack/app/ui/shell/BtSheet.kt"),
-        ).firstOrNull { it.isFile } ?: error("BtSheet.kt not found")
-        val source = code(sheet.readText())
-
+        // Owner's rule for depth->=2: only the PAGES slide; the grabber strip
+        // stays put, the way the four main pages' top bar stays put while the
+        // pages move under it. Structurally: the grabber is composed before the
+        // planes in the sheet's Column, and the horizontal translation lives
+        // inside BtSheetPlanes — never around the chrome. A single misplaced
+        // brace would slide the grabber with the content, and nothing else in the
+        // suite would notice.
+        val source = sheetStackSource()
         val grabber = source.indexOf("BtSheetGrabber(")
-        val slideAt = source.indexOf("translationX = slide.value")
+        val planes = source.indexOf("BtSheetPlanes(")
+        val planesFun = source.indexOf("private fun BtSheetPlanes(")
+        val slideAt = source.indexOf("translationX =")
+
         assertTrue("the grabber must be composed", grabber > 0)
-        assertTrue("the content plane must carry the depth axis", slideAt > 0)
+        assertTrue("the planes must be composed", planes > 0)
+        assertTrue("the grabber must come first in the sheet's Column", grabber < planes)
         assertTrue(
-            "the horizontal slide must be applied AFTER (inside) the grabber, " +
-                "so the chrome stays static",
-            slideAt > grabber,
+            "the depth axis must live inside BtSheetPlanes, below the chrome",
+            slideAt > planesFun,
         )
         assertEquals(
             "exactly one thing may move on the depth axis",
             1,
-            Regex("translationX = slide\\.value").findAll(source).count(),
+            Regex("translationX =").findAll(source).count(),
         )
+    }
+
+    @Test
+    fun `both live pages are composed, always`() {
+        // The fix for "goes blank": the container renders the top TWO entries, at
+        // ONE call site, keyed by page identity so a push or pop MOVES a page's
+        // composition between the planes instead of tearing it down. Any of the
+        // three going missing is the old bug back.
+        val source = sheetStackSource()
+        assertTrue("the top two entries must be rendered", source.contains("pages.takeLast(2)"))
+        assertTrue("pages must be keyed by identity", source.contains("key(page.key)"))
+        assertTrue(
+            "the parent plane must be drawn, not left blank",
+            source.contains("page.content()"),
+        )
+    }
+
+    @Test
+    fun `the graph contributes no motion of its own`() {
+        // Depth transitions used to ride the NavHost, which is what made a
+        // back-swipe reveal nothing and the returning page arrive with a vertical
+        // scale. Every transition slot must stay None: the sheet layer owns the
+        // whole travel, because a drag and a transition cannot share the job.
+        val shell = listOf(
+            File("src/main/java/at/bettertrack/app/ui/shell/AppShell.kt"),
+            File("app/src/main/java/at/bettertrack/app/ui/shell/AppShell.kt"),
+        ).firstOrNull { it.isFile } ?: error("AppShell not found")
+        val source = code(shell.readText())
+        listOf("enterTransition", "exitTransition", "popEnterTransition", "popExitTransition")
+            .forEach { slot ->
+                val at = source.indexOf("$slot = {")
+                assertTrue("$slot must be declared on the NavHost", at > 0)
+                val value = source.substring(at, source.indexOf("}", at))
+                assertTrue(
+                    "$slot must contribute no motion, was: ${value.trim()}",
+                    value.contains("Transition.None"),
+                )
+            }
     }
 
     @Test

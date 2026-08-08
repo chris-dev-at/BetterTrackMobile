@@ -10,6 +10,9 @@ import at.bettertrack.app.data.api.dto.ConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.CreateConglomerateRequest
 import at.bettertrack.app.data.api.dto.PositionWeightDto
 import at.bettertrack.app.data.api.dto.ReplacePositionsRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 
 // ── Domain models ────────────────────────────────────────────────────────────
@@ -74,8 +77,12 @@ data class Backtest(
     val notice: String?,
 )
 
-enum class BacktestRange(val wire: String, val label: String) {
-    Y1("1Y", "1Y"), Y3("3Y", "3Y"), Y5("5Y", "5Y"), MAX("MAX", "Max");
+/**
+ * Backtest windows. Labels are resources, not a field here — see [AssetRange] for
+ * why (same bug, same fix: `3Y` has to be able to say `3J` in German).
+ */
+enum class BacktestRange(val wire: String) {
+    Y1("1Y"), Y3("3Y"), Y5("5Y"), MAX("MAX");
 
     companion object {
         val DEFAULT = Y1
@@ -128,31 +135,74 @@ class ConglomerateRepository(
     private val api: BtApi,
     private val json: Json,
 ) {
+    /**
+     * The last known basket list, as a flow — the channel a mutation uses to
+     * reach a list screen it cannot see (bug fix 2026-08-08).
+     *
+     * ## The report this answers
+     *
+     * Deleting a basket left it on screen until the app was restarted, even
+     * though the `DELETE` had succeeded. Nothing was wrong with the delete; the
+     * problem was that nothing existed to tell anyone about it. [list] was a pure
+     * passthrough, so `ConglomerateListViewModel` loaded once into a
+     * `MutableStateFlow` and the delete happened in a *different* view model, in
+     * a sheet, whose `onDelete` does nothing but pop.
+     *
+     * Ordinarily a screen re-reads on resume, and that is exactly what the list
+     * screen's `LaunchedEffect(Unit) { vm.load() }` was written for. Two
+     * properties of this shell make it a once-per-process event instead: sheet
+     * destinations are `FloatingWindow`, so the page underneath stays composed
+     * while a sheet is over it, and the tab pager keeps every tab inside its
+     * composition window. The list is never disposed, so the effect never runs
+     * again.
+     *
+     * ## Why it lives here and not in the view model
+     *
+     * The repository is the one object both view models share — it is a process
+     * singleton in `AppGraph` — so it is the only place a delete performed by one
+     * screen can be observed by another. That is also the shape the rest of this
+     * package already uses: `PortfolioRepository` and `DefaultWatchlistRepository`
+     * prune their Room table inside the delete and let the observing query
+     * re-emit, and `ChatRepository`, which has no table, keeps exactly this — a
+     * repo-owned `StateFlow` written by every path that changes the collection.
+     * Conglomerates are online-only with no table, so they take the latter.
+     *
+     * `null` means "never loaded", which is not the same as "loaded and empty":
+     * an observer must not paint an empty state over a list that has not been
+     * fetched yet.
+     */
+    private val _conglomerates = MutableStateFlow<List<Conglomerate>?>(null)
+    val conglomerates: StateFlow<List<Conglomerate>?> = _conglomerates.asStateFlow()
+
     suspend fun list(): BtResult<List<Conglomerate>> =
         when (val r = apiCall(json) { api.conglomerates() }) {
-            is BtResult.Ok -> BtResult.Ok(
-                r.value.conglomerates.map {
+            is BtResult.Ok -> {
+                val items = r.value.conglomerates.map {
                     Conglomerate(it.id, it.name, it.description, it.status, it.positionCount)
-                },
-            )
+                }
+                _conglomerates.value = items
+                BtResult.Ok(items)
+            }
 
             is BtResult.Err -> r
         }
 
     suspend fun create(name: String, description: String?): BtResult<ConglomerateDetail> =
-        map(apiCall(json) { api.createConglomerate(CreateConglomerateRequest(name.trim(), description?.trim())) })
+        publish(map(apiCall(json) { api.createConglomerate(CreateConglomerateRequest(name.trim(), description?.trim())) }))
 
     suspend fun detail(id: String): BtResult<ConglomerateDetail> =
         map(apiCall(json) { api.conglomerateDetail(id) })
 
     suspend fun replacePositions(id: String, weights: List<Pair<String, Double>>): BtResult<ConglomerateDetail> =
-        map(
-            apiCall(json) {
-                api.replaceConglomeratePositions(
-                    id,
-                    ReplacePositionsRequest(weights.map { PositionWeightDto(it.first, it.second) }),
-                )
-            },
+        publish(
+            map(
+                apiCall(json) {
+                    api.replaceConglomeratePositions(
+                        id,
+                        ReplacePositionsRequest(weights.map { PositionWeightDto(it.first, it.second) }),
+                    )
+                },
+            ),
         )
 
     /**
@@ -220,8 +270,64 @@ class ConglomerateRepository(
             is BtResult.Err -> r
         }
 
+    /**
+     * Delete a basket, and drop it from [conglomerates] — the invalidation is
+     * part of the delete, not something a caller has to remember.
+     *
+     * Pruned locally rather than by re-fetching the list: the server has already
+     * confirmed the row is gone, so a second round trip would only re-derive a
+     * fact this call just established, and it would do it *after* the sheet has
+     * popped — a visible flicker of the deleted row on a slow link. The same
+     * reasoning `PortfolioRepository.deletePortfolio` applies to its cache purge.
+     *
+     * A failed delete changes nothing, which is the point of doing this on the
+     * `Ok` branch only: the basket is still there, and the list should still
+     * say so.
+     */
     suspend fun delete(id: String): BtResult<Unit> =
-        at.bettertrack.app.data.api.unitApiCall(json) { api.deleteConglomerate(id) }
+        when (val r = at.bettertrack.app.data.api.unitApiCall(json) { api.deleteConglomerate(id) }) {
+            is BtResult.Ok -> {
+                _conglomerates.value = _conglomerates.value?.filterNot { it.id == id }
+                r
+            }
+
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Fold a successful detail write back into [conglomerates], and pass the
+     * result through untouched.
+     *
+     * The same hole the delete had, on the other two mutations — verified on the
+     * device 2026-08-08: a basket created in the builder did not appear in the
+     * list either, for exactly the reason a deleted one did not disappear. A flow
+     * that were accurate for one of three mutations would be worse than no flow
+     * at all, because a caller could reasonably trust it.
+     *
+     * A [ConglomerateDetail] carries everything a list row needs — the row's
+     * `positionCount` is `positions.size`, which is also why `replacePositions`
+     * has to come through here: it is the call that turns a freshly created empty
+     * draft into a two-position basket.
+     *
+     * Upsert rather than append, so `replacePositions` updates the existing row
+     * instead of adding a second one. A `null` list stays null: "never loaded" is
+     * not something one write can turn into a complete list, and inventing a
+     * one-item list would make an observer paint a list that is missing every
+     * basket the user already had.
+     */
+    private fun publish(r: BtResult<ConglomerateDetail>): BtResult<ConglomerateDetail> {
+        if (r !is BtResult.Ok) return r
+        val d = r.value
+        val row = Conglomerate(d.id, d.name, d.description, d.status, d.positions.size)
+        _conglomerates.value = _conglomerates.value?.let { current ->
+            if (current.any { it.id == row.id }) {
+                current.map { if (it.id == row.id) row else it }
+            } else {
+                current + row
+            }
+        }
+        return r
+    }
 
     private fun map(r: BtResult<ConglomerateDetailResponse>): BtResult<ConglomerateDetail> = when (r) {
         is BtResult.Ok -> BtResult.Ok(

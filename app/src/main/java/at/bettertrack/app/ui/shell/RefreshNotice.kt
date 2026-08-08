@@ -73,25 +73,16 @@ import kotlinx.coroutines.withTimeoutOrNull
  *   cancellation — can leave it up.
  * @param timeoutMs the ceiling. `null` is returned when it is reached; callers
  *   treat that exactly as a transport failure, because that is what it is.
- * @param minVisibleMs the floor, so a failure the network refuses in 3 ms still
- *   *looks* like an attempt. Runs concurrently with [attempt], so it costs a
- *   refresh that takes longer than the floor nothing at all.
  * @return the attempt's own value, or `null` if [timeoutMs] was reached first.
  */
 suspend fun <T> btRefreshAttempt(
     refreshing: MutableStateFlow<Boolean>,
     timeoutMs: Long = BT_REFRESH_TIMEOUT_MS,
-    minVisibleMs: Long = BT_REFRESH_MIN_VISIBLE_MS,
     attempt: suspend () -> T,
 ): T? {
     refreshing.value = true
     return try {
-        coroutineScope {
-            val floor = launch { delay(minVisibleMs) }
-            val outcome = withTimeoutOrNull(timeoutMs) { attempt() }
-            floor.join()
-            outcome
-        }
+        withTimeoutOrNull(timeoutMs) { attempt() }
     } finally {
         refreshing.value = false
     }
@@ -124,15 +115,12 @@ fun btRefreshTimedOutMessage(): BtMessage =
  */
 const val BT_REFRESH_TIMEOUT_MS: Long = 25_000L
 
-/**
- * The floor on one pull-to-refresh indicator.
- *
- * Short enough to be invisible on a healthy refresh (which takes longer than
- * this anyway, so the floor never fires) and long enough that a refusal the
- * radio produces in 3 ms still renders as a spinner that came and went. Without
- * it the offline gesture's entire feedback is that nothing happened.
- */
-const val BT_REFRESH_MIN_VISIBLE_MS: Long = 320L
+// The 320 ms minimum-visible FLOOR that used to live here is gone (owner,
+// 2026-08-08). It made a fast refresh look slower than it was, and — worse — it
+// was quietly what decided where a second pull went, because Material3 consumes
+// nothing while `isRefreshing` is true. The indicator now shows the attempt's
+// own duration and nothing else; the two gestures are routed explicitly in
+// [BtSheetRefreshBox] instead.
 
 /**
  * State of the inline "couldn't refresh" notice (S6 P0-5).

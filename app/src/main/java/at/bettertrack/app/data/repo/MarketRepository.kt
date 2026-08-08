@@ -63,16 +63,23 @@ data class AssetPriceSeries(
 /**
  * Asset-chart ranges the platform serves (`GET /assets/{id}/history` — the FULL
  * spec set, unlike portfolio history). The server chooses the interval.
+ *
+ * The [wire] value is the ONLY string here. Display labels used to sit on this
+ * enum as a second constructor field, which is how a German reader ended up
+ * looking at `1Y` and `5Y` on an asset page while the portfolio hero beside it
+ * said `1J` — the hero's `HistoryRange` resolved its labels from resources and
+ * these did not. They now live in `ui/charts/ChartRangeLabels.kt` with every
+ * other window label, so translating one window translates it everywhere.
  */
-enum class AssetRange(val wire: String, val label: String) {
-    D1("1D", "1D"),
-    W1("1W", "1W"),
-    M1("1M", "1M"),
-    M3("3M", "3M"),
-    M6("6M", "6M"),
-    Y1("1Y", "1Y"),
-    Y5("5Y", "5Y"),
-    MAX("MAX", "Max"),
+enum class AssetRange(val wire: String) {
+    D1("1D"),
+    W1("1W"),
+    M1("1M"),
+    M3("3M"),
+    M6("6M"),
+    Y1("1Y"),
+    Y5("5Y"),
+    MAX("MAX"),
     ;
 
     companion object {

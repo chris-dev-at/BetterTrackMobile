@@ -45,9 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -110,7 +107,7 @@ import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
-import at.bettertrack.app.ui.shell.BT_REFRESH_MIN_VISIBLE_MS
+import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.btRefreshAttempt
 import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtTheme
@@ -375,13 +372,7 @@ class StandingOrdersViewModel(
             // goes through the bounded attempt. The skeleton branch keeps its own
             // flag, retired in the same `finally` either way.
             val flag = if (initial) _loading else _refreshing
-            val attempt = btRefreshAttempt(
-                refreshing = flag,
-                // The floor exists to make a PULL legible. A first load already
-                // has a skeleton saying the same thing, so holding it open for a
-                // minimum would only slow a path the offline bug never touched.
-                minVisibleMs = if (initial) 0L else BT_REFRESH_MIN_VISIBLE_MS,
-            ) { repo.list(pid) }
+            val attempt = btRefreshAttempt(refreshing = flag) { repo.list(pid) }
             when (val r = attempt) {
                 is BtResult.Ok -> {
                     _orders.value = sortStandingOrders(r.value)
@@ -587,7 +578,7 @@ fun StandingOrdersScreen(
             when {
                 loading && orders.isEmpty() -> LoadingList()
 
-                // BtStateFill: this branch replaces the PullToRefreshBox entirely,
+                // BtStateFill: this branch replaces the BtSheetRefreshBox entirely,
                 // so without a scroll container of its own the sheet would have no
                 // nested-scroll chain at all here — the state a user reaches by
                 // opening this page offline would be the one they cannot pull
@@ -601,21 +592,10 @@ fun StandingOrdersScreen(
                 }
 
                 else -> {
-                    val pullState = rememberPullToRefreshState()
-                    PullToRefreshBox(
+                    BtSheetRefreshBox(
                         isRefreshing = refreshing,
                         onRefresh = { vm.refresh() },
-                        state = pullState,
                         modifier = Modifier.fillMaxSize(),
-                        indicator = {
-                            PullToRefreshDefaults.Indicator(
-                                state = pullState,
-                                isRefreshing = refreshing,
-                                modifier = Modifier.align(Alignment.TopCenter),
-                                containerColor = bt.surface,
-                                color = bt.goldInk,
-                            )
-                        },
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),

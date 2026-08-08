@@ -1,9 +1,14 @@
 package at.bettertrack.app.ui.portfolio
 
+import at.bettertrack.app.R
 import at.bettertrack.app.data.prefs.BtChartMode
 import at.bettertrack.app.data.prefs.DEFAULT_CHART_MODE
 import at.bettertrack.app.data.prefs.chartModeFromName
+import at.bettertrack.app.data.repo.AssetRange
+import at.bettertrack.app.data.repo.BacktestRange
 import at.bettertrack.app.data.repo.HistoryPoint
+import at.bettertrack.app.data.repo.HistoryRange
+import at.bettertrack.app.ui.charts.rangeLabelRes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -211,5 +216,146 @@ class ChartModeTest {
     fun `an empty balance series reports nothing rather than zero`() {
         // A €0 readout would be the same lie the W6 hero states exist to avoid.
         assertNull(balanceAt(emptyList(), 1_000L))
+    }
+
+    // ── The range picker, once it became the same control (owner 2026-08-08) ──
+    //
+    // *"Make the timespan selection for the graph the same design as the €% € %
+    // thingy."* The range row stopped being six loose `BtChip`s and became a
+    // `BtRangeSegmented`, i.e. the same `BtSegmented` the modes use. What that
+    // migration must not disturb is pinned here; the WIDTH half of the same ask
+    // lives in `BtSegmentedGeometryTest`.
+
+    @Test
+    fun `the range picker offers the windows in reading order`() {
+        // The picker iterates `HistoryRange.entries` directly, so the enum's
+        // declaration order IS the display order — shortest window first through
+        // to Max. Unlike the mode picker there is no separate display list, and
+        // this is the assertion that stops one appearing by accident.
+        assertEquals(
+            listOf(
+                HistoryRange.D1,
+                HistoryRange.W1,
+                HistoryRange.M1,
+                HistoryRange.M6,
+                HistoryRange.Y1,
+                HistoryRange.MAX,
+            ),
+            HistoryRange.entries.toList(),
+        )
+        // Six windows, and the one that opens is the month.
+        assertEquals(6, HistoryRange.entries.size)
+        assertEquals(HistoryRange.M1, HistoryRange.DEFAULT)
+    }
+
+    @Test
+    fun `every window has its own label`() {
+        val labels = HistoryRange.entries.map { rangeLabelRes(it) }
+        assertEquals(labels.size, labels.toSet().size)
+        // The exact resources, because these are the strings the owner reads:
+        // German prints 1J for Y1 and the rest are language-neutral, so a
+        // mis-wired id is invisible in English and wrong in German.
+        assertEquals(R.string.bt_range_1d, rangeLabelRes(HistoryRange.D1))
+        assertEquals(R.string.bt_range_1w, rangeLabelRes(HistoryRange.W1))
+        assertEquals(R.string.bt_range_1m, rangeLabelRes(HistoryRange.M1))
+        assertEquals(R.string.bt_range_6m, rangeLabelRes(HistoryRange.M6))
+        assertEquals(R.string.bt_range_1y, rangeLabelRes(HistoryRange.Y1))
+        assertEquals(R.string.bt_range_max, rangeLabelRes(HistoryRange.MAX))
+    }
+
+    @Test
+    fun `selecting a window round-trips as the window itself`() {
+        // `BtSegmented` hands `onSelect` the option object it was given, and the
+        // range travels to the server as its wire string. Neither step may go
+        // through a position — the same rule the mode picker has, now that the
+        // two controls are the same control.
+        HistoryRange.entries.forEach { range ->
+            assertEquals(range, HistoryRange.fromWire(range.wire))
+        }
+        // What a positional mapping would have produced. None of these is a wire
+        // value, so every one is a miss rather than a silent window swap.
+        listOf("0", "1", "2", "3", "4", "5").forEach { ordinalish ->
+            assertNull(HistoryRange.fromWire(ordinalish))
+        }
+    }
+
+    @Test
+    fun `adopting the range picker left the mode labels alone`() {
+        // The regression the migration could plausibly cause: one shared
+        // component, two callers, and a "tidy-up" that gives the modes the range
+        // treatment would silently retitle the picker the owner just specified.
+        assertEquals(R.string.bt_chart_mode_hybrid, chartModeLabel(BtChartMode.HYBRID))
+        assertEquals(R.string.bt_chart_mode_balance, chartModeLabel(BtChartMode.BALANCE))
+        assertEquals(R.string.bt_chart_mode_performance, chartModeLabel(BtChartMode.PERFORMANCE))
+        // And the two label sets stay disjoint — no mode ever wears a window's
+        // string, no window ever wears `€%`.
+        val modeLabels = BtChartMode.entries.map { chartModeLabel(it) }.toSet()
+        val rangeLabels = HistoryRange.entries.map { rangeLabelRes(it) }.toSet()
+        assertTrue(modeLabels.intersect(rangeLabels).isEmpty())
+    }
+
+    // ── The other two charts' windows (coordinator ruling 2026-08-08) ─────────
+    //
+    // `AssetRange` and `BacktestRange` carried hardcoded English `label` fields
+    // on the enums themselves, so a German reader saw `1Y` and `5Y` on an asset
+    // page and `1J` on the hero — invisible until the pickers became the same
+    // control, then obviously broken. The labels moved to resources; these are
+    // the assertions that they stay there and stay shared.
+
+    @Test
+    fun `every asset window has its own label`() {
+        val labels = AssetRange.entries.map { rangeLabelRes(it) }
+        assertEquals(labels.size, labels.toSet().size)
+        assertEquals(R.string.bt_range_1d, rangeLabelRes(AssetRange.D1))
+        assertEquals(R.string.bt_range_1w, rangeLabelRes(AssetRange.W1))
+        assertEquals(R.string.bt_range_1m, rangeLabelRes(AssetRange.M1))
+        assertEquals(R.string.bt_range_3m, rangeLabelRes(AssetRange.M3))
+        assertEquals(R.string.bt_range_6m, rangeLabelRes(AssetRange.M6))
+        assertEquals(R.string.bt_range_1y, rangeLabelRes(AssetRange.Y1))
+        assertEquals(R.string.bt_range_5y, rangeLabelRes(AssetRange.Y5))
+        assertEquals(R.string.bt_range_max, rangeLabelRes(AssetRange.MAX))
+    }
+
+    @Test
+    fun `every backtest window has its own label`() {
+        val labels = BacktestRange.entries.map { rangeLabelRes(it) }
+        assertEquals(labels.size, labels.toSet().size)
+        assertEquals(R.string.bt_range_1y, rangeLabelRes(BacktestRange.Y1))
+        assertEquals(R.string.bt_range_3y, rangeLabelRes(BacktestRange.Y3))
+        assertEquals(R.string.bt_range_5y, rangeLabelRes(BacktestRange.Y5))
+        assertEquals(R.string.bt_range_max, rangeLabelRes(BacktestRange.MAX))
+    }
+
+    @Test
+    fun `a window that means the same thing reads from the same string`() {
+        // The point of one vocabulary rather than three. `1Y` is the same year on
+        // all three charts, so it is one resource — two copies is how the German
+        // asset page drifted from the German hero in the first place.
+        assertEquals(rangeLabelRes(HistoryRange.Y1), rangeLabelRes(AssetRange.Y1))
+        assertEquals(rangeLabelRes(HistoryRange.Y1), rangeLabelRes(BacktestRange.Y1))
+        assertEquals(rangeLabelRes(HistoryRange.MAX), rangeLabelRes(AssetRange.MAX))
+        assertEquals(rangeLabelRes(HistoryRange.MAX), rangeLabelRes(BacktestRange.MAX))
+        assertEquals(rangeLabelRes(AssetRange.Y5), rangeLabelRes(BacktestRange.Y5))
+        assertEquals(rangeLabelRes(HistoryRange.D1), rangeLabelRes(AssetRange.D1))
+        assertEquals(rangeLabelRes(HistoryRange.W1), rangeLabelRes(AssetRange.W1))
+        assertEquals(rangeLabelRes(HistoryRange.M1), rangeLabelRes(AssetRange.M1))
+        assertEquals(rangeLabelRes(HistoryRange.M6), rangeLabelRes(AssetRange.M6))
+    }
+
+    @Test
+    fun `a window's wire value is never its label`() {
+        // The labels moved; the platform vocabulary did not. `MAX` still goes to
+        // the server as `MAX` in every locale, and no translator can reach it.
+        assertEquals(listOf("1D", "1W", "1M", "6M", "1Y", "MAX"), HistoryRange.entries.map { it.wire })
+        assertEquals(
+            listOf("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX"),
+            AssetRange.entries.map { it.wire },
+        )
+        assertEquals(listOf("1Y", "3Y", "5Y", "MAX"), BacktestRange.entries.map { it.wire })
+        // And the enum names are untouched too — they are what stored state and
+        // the repositories key on.
+        assertEquals(AssetRange.M1, AssetRange.fromWire("1M"))
+        assertEquals(AssetRange.M1, AssetRange.DEFAULT)
+        assertEquals(BacktestRange.Y1, BacktestRange.DEFAULT)
     }
 }

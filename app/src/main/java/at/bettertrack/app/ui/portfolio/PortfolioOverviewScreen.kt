@@ -83,6 +83,8 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtRangeSegmented
+import at.bettertrack.app.ui.charts.rangeLabel
 import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
@@ -696,12 +698,52 @@ private fun OverviewContent(
             }
         }
 
-        // Cash + Transactions, back at the top (owner ask 2026-08-07: "I liked
-        // the fast access"). They used to be the last rows of the screen, below
-        // every holding — which on any real portfolio means off-screen. A pair of
-        // stat chips directly under the value gives Cash its number back AND
-        // one-tap reach, in ~56dp, without re-inflating them to the 50/50 cards
-        // the R-arc deleted for spending half a screen on two links.
+        // The pending strip's ONE promotion (mandate §3 vs §7.4): a queued change
+        // the server refused is not status, it is work, and work belongs next to
+        // the number it is about to change. Everything merely waiting to upload
+        // is status and lives at the bottom of the screen.
+        if (attention > 0) {
+            item(key = "pending-attention", contentType = "pending") {
+                Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
+            }
+        }
+
+        // History graph (§3.6) — blended full-bleed hero: no card, gold gradient
+        // fading into the page, edge-to-edge, minimal axis. Header + range chips
+        // stay inset; only the canvas bleeds.
+        item(key = "chart", contentType = "chart") {
+            HeroChart(
+                history = history,
+                range = range,
+                mode = chartMode,
+                scrubbing = scrubbing,
+                onRange = onRange,
+                onMode = onChartMode,
+                onScrub = { scrub = it },
+                locale = locale,
+            )
+        }
+
+        // Cash + Transactions — BELOW the graph (owner order 2026-08-08).
+        //
+        // They arrived above it a day earlier for the fast access ("I liked the
+        // fast access"), which they keep: this is still the top of the screen,
+        // still one scroll-free tap, still far above where they used to live —
+        // under every holding, i.e. off-screen on any real portfolio.
+        //
+        // What moving them fixes is what they were standing between. The
+        // net-worth number and the curve that explains it are one statement, and
+        // a pair of navigation chips wedged between them made the reader step
+        // over a nav control to get from the figure to its history. Now the
+        // hero reads value → curve → the window that curve covers, and the two
+        // links sit after it as what they are: where you go NEXT, not part of
+        // what you are looking at.
+        //
+        // They also stay clear of the range picker's vocabulary. Directly under
+        // a segmented track, two chips would have re-run the same "are these one
+        // control or two?" collision the range row was just rescued from — but
+        // these are full-width halves carrying an icon and a value, not pills in
+        // a groove, and the list's 12dp gap separates the groups.
         item(key = "quick-access", contentType = "quick-access") {
             // ONE geometry for both chips (owner report 2026-08-08: "they render
             // unequal"). They already shared a width — `weight(1f)` each — but
@@ -733,32 +775,6 @@ private fun OverviewContent(
                     onClick = { onOpenTransactions(portfolio.id) },
                 )
             }
-        }
-
-        // The pending strip's ONE promotion (mandate §3 vs §7.4): a queued change
-        // the server refused is not status, it is work, and work belongs next to
-        // the number it is about to change. Everything merely waiting to upload
-        // is status and lives at the bottom of the screen.
-        if (attention > 0) {
-            item(key = "pending-attention", contentType = "pending") {
-                Box(inset) { PendingStrip(pendingTx = pendingTx, onClick = onOpenPendingSync) }
-            }
-        }
-
-        // History graph (§3.6) — blended full-bleed hero: no card, gold gradient
-        // fading into the page, edge-to-edge, minimal axis. Header + range chips
-        // stay inset; only the canvas bleeds.
-        item(key = "chart", contentType = "chart") {
-            HeroChart(
-                history = history,
-                range = range,
-                mode = chartMode,
-                scrubbing = scrubbing,
-                onRange = onRange,
-                onMode = onChartMode,
-                onScrub = { scrub = it },
-                locale = locale,
-            )
         }
 
         // Allocation, PROMOTED above the holdings and reduced to a summary
@@ -955,18 +971,38 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
  *
  * ## The three display modes (owner ask 2026-08-07)
  *
- * The chips above the chart pick what the curve is, out of the two series the
+ * The picker above the chart chooses what the curve is, out of the two series the
  * `/history` payload already carries together — so switching is instant and never
  * refetches. See [BtChartMode] for what each one means. The hybrid mode is the
  * owner's: *the % shape, because that is the shape that says how the investments
  * did, with the € balance as the readout, because that is the number you want
  * when you point at a day.*
  *
- * The mode chips sit ABOVE the canvas and the range chips BELOW it, deliberately
- * split rather than crowded onto one row: they answer different questions ("what
- * am I looking at" vs "over what window"), the range row already carries six
- * chips and had no room, and the split matches the web, which puts its display
- * toggle in the section header and its range toggle inside the chart.
+ * ## Why the two pickers are not side by side (owner ask 2026-08-08)
+ *
+ * *"Maybe put them side by side but you figure out what looks better."* They do
+ * not fit, and not by a little. Nine segments' fixed geometry alone — 14dp of
+ * side padding twice per segment, plus two 3dp tracks and the 2dp gaps — is
+ * ~282dp before a single glyph is drawn, against the 328dp of content width a
+ * 360dp-class phone has between the gutters. Adding the labels puts the pair at
+ * ~407dp at `fontScale` 1.0 and ~443dp at 1.3: 24% and 35% over. Every way of
+ * closing that gap costs something the owner already fought for — shrinking the
+ * padding takes the range targets under the display picker's, and scrolling the
+ * pair hides windows behind a swipe on the one control whose value is that you
+ * can see all of it at once. The arithmetic is pinned in
+ * `BtSegmentedGeometryTest` so this stays a measured answer.
+ *
+ * So the two pickers keep their split and now BRACKET the canvas — mode above,
+ * range below — which is the better reading of the same constraint anyway. They
+ * answer different questions ("what am I looking at" vs "over what window"), the
+ * split matches the web's, and identical segmented tracks above and below one
+ * chart frame it as a pair rather than lining up as a nine-segment wall. What
+ * changed is that they are now visibly the same control, which is the ask.
+ *
+ * The range-% readout keeps its home on the mode row, right-aligned. It belongs
+ * to the top: it is tinted by the MODE ([deltaTint]), and its `1M` suffix names
+ * the window without the eye having to travel to the picker below the chart to
+ * find it.
  */
 @Composable
 private fun HeroChart(
@@ -1115,20 +1151,20 @@ private fun HeroChart(
         }
         Spacer(Modifier.height(12.dp))
 
-        // Range chips (inset) — the set the platform serves (1D/1W/3M need a
+        // The range picker (inset) — the set the platform serves (3M needs a
         // server-side window that doesn't exist yet; platform gap).
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            HistoryRange.entries.forEach { r ->
-                BtChip(
-                    text = rangeLabel(r),
-                    selected = r == range,
-                    onClick = { onRange(r) },
-                )
-            }
-        }
+        //
+        // It spans the gutter width on purpose: the canvas above bleeds
+        // edge-to-edge, and a full-width track under it reads as that canvas's
+        // x-axis rather than as a stray row of buttons. See [BtRangeSegmented].
+        BtRangeSegmented(
+            options = HistoryRange.entries,
+            selected = range,
+            label = { rangeLabel(it) },
+            onSelect = onRange,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            contentDescription = stringResource(R.string.bt_chart_range_cd),
+        )
     }
 }
 
@@ -1781,16 +1817,6 @@ private fun allocationSegments(
         if (rest > 0.0) add(DonutSegment(otherLabel, rest, palette.chartRest))
         if (cashEur > 0.0) add(DonutSegment(cashLabel, cashEur, palette.chartCash))
     }
-}
-
-@Composable
-internal fun rangeLabel(range: HistoryRange): String = when (range) {
-    HistoryRange.D1 -> stringResource(R.string.bt_range_1d)
-    HistoryRange.W1 -> stringResource(R.string.bt_range_1w)
-    HistoryRange.M1 -> stringResource(R.string.bt_range_1m)
-    HistoryRange.M6 -> stringResource(R.string.bt_range_6m)
-    HistoryRange.Y1 -> stringResource(R.string.bt_range_1y)
-    HistoryRange.MAX -> stringResource(R.string.bt_range_max)
 }
 
 @Composable

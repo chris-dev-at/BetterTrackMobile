@@ -28,9 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -79,6 +76,7 @@ import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
+import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.shell.RefreshFailedBanner
 import at.bettertrack.app.ui.shell.RefreshNoticeState
@@ -451,7 +449,7 @@ fun TransactionsScreen(
     val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
         // The scrollable that drives the collapse is several composables down
-        // (inside the PullToRefreshBox's `else` branch), so the connection goes on
+        // (inside the BtSheetRefreshBox's `else` branch), so the connection goes on
         // the Scaffold — the nearest thing that is an ancestor of BOTH the header
         // and every branch's content.
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -532,21 +530,10 @@ fun TransactionsScreen(
                 )
             }
 
-            val pullState = rememberPullToRefreshState()
-            PullToRefreshBox(
+            BtSheetRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { vm.refresh() },
-                state = pullState,
                 modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    PullToRefreshDefaults.Indicator(
-                        state = pullState,
-                        isRefreshing = refreshing,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        containerColor = bt.surface,
-                        color = bt.goldInk,
-                    )
-                },
             ) {
                 when (surface) {
                     // Nothing cached yet and the first fetch is still out.

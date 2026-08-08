@@ -84,6 +84,18 @@ import at.bettertrack.app.ui.theme.BtTheme
  * draws a mark of its own height can never leave one pill taller than its
  * neighbours.
  *
+ * [equalWidths] is the third sizing policy, for a control that spans a width it
+ * was GIVEN rather than one it asks for — the chart range row under a chart,
+ * which is a scale for the canvas above it and reads right only when it is as
+ * wide as the thing it scales. Every segment then takes an equal share of the
+ * row instead of its own content width, which is the only policy that cannot
+ * overflow: the share is arithmetic on the available width, so six or eight
+ * windows fit any screen at any font scale by construction. Because the width
+ * arrives from outside, the side padding drops to [SEGMENT_PADDING_H_EQUAL] —
+ * with a 14dp inset a 52dp share would leave a three-letter label 24dp and wrap
+ * it. Callers are expected to have checked the share is generous enough for the
+ * longest label first; see `BtRangeSegmented`, which does exactly that.
+ *
  * @param options every choice, in display order. Small sets only — this is a
  *   control you take in at a glance, not a list.
  * @param selected the current winner. Exactly one, always: there is no unset
@@ -102,6 +114,10 @@ import at.bettertrack.app.ui.theme.BtTheme
  *   inside it inherits selected/unselected state without restating it.
  * @param minSegmentWidth a floor on every segment's width, for glyph labels whose
  *   natural widths differ. Unspecified (default) means each segment keeps its own.
+ * @param equalWidths divide the row's width equally between the segments instead
+ *   of letting each size to its content. Only meaningful when the control is given
+ *   a width (`fillMaxWidth`), and mutually exclusive with [minSegmentWidth] —
+ *   an equal share is already a shared width.
  */
 @Composable
 fun <T> BtSegmented(
@@ -113,6 +129,7 @@ fun <T> BtSegmented(
     contentDescription: (@Composable (T) -> String)? = null,
     labelContent: (@Composable (T) -> Unit)? = null,
     minSegmentWidth: Dp = Dp.Unspecified,
+    equalWidths: Boolean = false,
 ) {
     val bt = BtTheme.colors
     Surface(
@@ -130,8 +147,8 @@ fun <T> BtSegmented(
             // overview's quick-stat chips use: it makes the row as tall as its
             // tallest segment and every segment that tall, so the pills are one
             // object rather than several.
-            modifier = Modifier.padding(3.dp).height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(SEGMENTED_TRACK_INSET).height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(SEGMENTED_SEGMENT_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             options.forEach { option ->
@@ -142,7 +159,12 @@ fun <T> BtSegmented(
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .widthIn(min = minSegmentWidth)
+                        // One of the two width policies, never both: an equal
+                        // share IS a shared width, so a floor on top of it could
+                        // only push the row past the width it was handed.
+                        .then(
+                            if (equalWidths) Modifier.weight(1f) else Modifier.widthIn(min = minSegmentWidth),
+                        )
                         .clip(BtShapes.pill)
                         .background(if (isSelected) bt.goldWashStrong else Color.Transparent)
                         .clickable(
@@ -150,7 +172,10 @@ fun <T> BtSegmented(
                             indication = ripple(bounded = true, color = bt.gold),
                             onClick = { onSelect(option) },
                         )
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                        .padding(
+                            horizontal = if (equalWidths) SEGMENT_PADDING_H_EQUAL else SEGMENT_PADDING_H,
+                            vertical = SEGMENT_PADDING_V,
+                        )
                         .then(if (cd != null) Modifier.semantics { this.contentDescription = cd } else Modifier),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -178,3 +203,38 @@ fun <T> BtSegmented(
         }
     }
 }
+
+/**
+ * The track showing around the inset pills, per side.
+ *
+ * Named rather than inlined because it is no longer only a paint decision: the
+ * equal-width policy has to subtract it from the width it was given before it can
+ * divide, so the number is now part of an arithmetic that is unit-tested
+ * (`equalSegmentShareDp`). A literal here and a different literal in that
+ * arithmetic is exactly the drift the constant prevents.
+ */
+internal val SEGMENTED_TRACK_INSET = 3.dp
+
+/** The gap between two segments — same reason as [SEGMENTED_TRACK_INSET]. */
+internal val SEGMENTED_SEGMENT_GAP = 2.dp
+
+/**
+ * A segment's side padding when it sizes to its own content.
+ *
+ * This is what makes a one-word segment a comfortable target rather than a box
+ * drawn tight around a label.
+ */
+private val SEGMENT_PADDING_H = 14.dp
+
+/**
+ * A segment's side padding under `equalWidths`.
+ *
+ * Deliberately small: the width already came from the row's division, so this
+ * padding is not producing the target — it is only a floor on how close a long
+ * label may come to the pill's edge before the caller's fit check should have
+ * sent the control down its scrolling path instead.
+ */
+private val SEGMENT_PADDING_H_EQUAL = 4.dp
+
+/** Shared by both policies — the vertical rhythm never depends on the width. */
+private val SEGMENT_PADDING_V = 7.dp

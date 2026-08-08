@@ -73,7 +73,9 @@ import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtRangeSegmented
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtTabBadgeDot
 import at.bettertrack.app.ui.components.ListCard
@@ -82,7 +84,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.formatPercent
-import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.portfolio.BtPortfolioChip
 import at.bettertrack.app.ui.portfolio.BtPortfolioChipSize
 import at.bettertrack.app.ui.portfolio.BtPortfolioChipSizeLarge
@@ -188,6 +190,7 @@ private fun GalleryContent(
             item { ListCardSection() }
             item { ButtonSection() }
             item { ChipBadgeSection() }
+            item { SegmentedSection() }
             // The three identity sheets, together and in this order: a person, a
             // glyph, a portfolio. They are the app's only multi-hue surfaces, so
             // this is the one screen where the whole colour vocabulary can be
@@ -270,6 +273,25 @@ private fun MoneySection() {
  * at `titleMedium`, and a reviewer needs to see the two type sizes and the gold
  * chevron's two sizes together to judge the ramp. A live one would only ever show
  * whichever state the gallery's own scroll happened to leave it in.
+ *
+ * ## Why every specimen here takes a PINNED behaviour (bug fix 2026-08-08)
+ *
+ * These four are the only [BtCollapsingHeader]s in the app that are rendered as
+ * scrollable **content** rather than as a screen's `topBar`, and that is what made
+ * the gallery unscrollable: M3's `TwoRowsTopAppBar` hangs a vertical
+ * `Modifier.draggable` on the whole bar whenever it is handed a behaviour whose
+ * `isPinned` is false, so the user can resize the bar by dragging the bar itself.
+ * That draggable does not participate in nested scroll — it simply eats the
+ * gesture. Four specimens at 112–132dp each cover very nearly a full sheet
+ * viewport, so once this section was on screen every mid-screen swipe was
+ * swallowed and the list looked frozen.
+ *
+ * `isPinned` gates **only** that drag modifier — the two-row layout reads
+ * `state.heightOffset` either way — so a pinned behaviour renders these
+ * pixel-identically while leaving the gesture to the `LazyColumn` that owns it.
+ * It is also what the paragraph above always claimed was happening ("rendered at
+ * two pinned scroll positions"), and it makes the forced-collapse assignment below
+ * stable: a pinned behaviour never writes `heightOffset` back.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -280,7 +302,7 @@ private fun CollapsingHeaderSection() {
         Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
             BtCollapsingHeader(
                 title = "Main portfolio",
-                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                scrollBehavior = rememberBtPinnedHeaderBehavior(),
                 // The gallery's Scaffold already consumed the status bar.
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 onTitleClick = {},
@@ -294,7 +316,7 @@ private fun CollapsingHeaderSection() {
         }
         Text("Collapsed — scrolled state (tonal lift, no divider)", style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
         Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
-            val collapsed = rememberBtCollapsingHeaderBehavior()
+            val collapsed = rememberBtPinnedHeaderBehavior()
             // Drive the state straight to fully-collapsed: heightOffsetLimit is
             // negative (the distance the bar may travel up), so pinning the offset
             // to it is exactly "the user has scrolled past the title".
@@ -318,7 +340,7 @@ private fun CollapsingHeaderSection() {
         Surface(color = bt.bg, shape = BtShapes.card, modifier = Modifier.fillMaxWidth()) {
             BtCollapsingHeader(
                 title = "Workbench",
-                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                scrollBehavior = rememberBtPinnedHeaderBehavior(),
                 // The gallery's Scaffold already consumed the status bar.
                 windowInsets = WindowInsets(0, 0, 0, 0),
             )
@@ -332,7 +354,7 @@ private fun CollapsingHeaderSection() {
             BtCollapsingHeader(
                 title = "Transactions",
                 subtitle = "Main portfolio",
-                scrollBehavior = rememberBtCollapsingHeaderBehavior(),
+                scrollBehavior = rememberBtPinnedHeaderBehavior(),
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 navigationIcon = {
                     IconButton(onClick = {}) {
@@ -669,8 +691,13 @@ private fun ButtonSection() {
 private fun ChipBadgeSection() {
     GallerySection("Chips & badges") {
         var selectedChip by remember { mutableStateOf(0) }
+        // Deliberately NOT range labels any more. This row used to demo the chip
+        // with `1D 1W 1M 1Y Max`, which is exactly the use the range picker was
+        // taken away from on 2026-08-08 — leaving it here would keep advertising
+        // the retired pattern as the way to build one. A chip is for independent
+        // filters; an exclusive choice is a segmented control, below.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("1D", "1W", "1M", "1Y", "Max").forEachIndexed { i, label ->
+            listOf("All", "Stocks", "ETFs", "Crypto").forEachIndexed { i, label ->
                 BtChip(text = label, selected = selectedChip == i, onClick = { selectedChip = i })
             }
         }
@@ -681,6 +708,49 @@ private fun ChipBadgeSection() {
             BtBadge("−1.1%", kind = BtBadgeKind.Loss)
         }
         TabBadgeRow()
+    }
+}
+
+/**
+ * The two segmented controls that frame the hero chart, side by side on one page.
+ *
+ * They ship stacked around a canvas and can never be compared there, which is the
+ * whole reason this section exists: the owner's ask on 2026-08-08 was that the
+ * range picker be *"the same design as the €% € % thingy"*, and sameness is a
+ * thing you check by putting two of them a few dp apart. Both width policies are
+ * shown — the display picker sizing to its glyphs, the range picker dividing the
+ * width it is given — because that difference is intentional and has to survive
+ * looking right rather than only measuring right.
+ */
+@Composable
+private fun SegmentedSection() {
+    GallerySection("Segmented controls — chart mode + chart range") {
+        var mode by remember { mutableStateOf("€%") }
+        BtSegmented(
+            options = listOf("€%", "€", "%"),
+            selected = mode,
+            label = { it },
+            onSelect = { mode = it },
+            minSegmentWidth = 46.dp,
+        )
+        var range by remember { mutableStateOf("1M") }
+        // The portfolio hero's six, which divide the width.
+        BtRangeSegmented(
+            options = listOf("1D", "1W", "1M", "6M", "1Y", "Max"),
+            selected = range,
+            label = { it },
+            onSelect = { range = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        var assetRange by remember { mutableStateOf("1M") }
+        // The asset page's eight, which do not — this is the scrolling fallback.
+        BtRangeSegmented(
+            options = listOf("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "Max"),
+            selected = assetRange,
+            label = { it },
+            onSelect = { assetRange = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

@@ -196,6 +196,42 @@ class StringParityTest {
         assertTrue("error codes only in DE: ${(de - en).sorted()}", (de - en).isEmpty())
     }
 
+    /**
+     * The chart-window family (`bt_range_*`), which the generic tests above
+     * cannot police on their own.
+     *
+     * Every value here is two or three characters, so the "actually translated"
+     * test below — which only fires above 12 characters — waves them all through,
+     * including a German `5Y` pasted straight from English. That is exactly the
+     * bug this family had: `AssetRange` and `BacktestRange` carried hardcoded
+     * English labels on the enums until 2026-08-08, so the asset page said `1Y`
+     * one tap away from the hero saying `1J`. The labels are resources now, and
+     * this is the assertion that the German ones are actually German.
+     */
+    @Test
+    fun `every chart window says its year in the reader's language`() {
+        val en = strings("")
+        val de = strings("-de")
+        val enWindows = en.keys.filter { it.startsWith("bt_range_") }.toSet()
+        val deWindows = de.keys.filter { it.startsWith("bt_range_") }.toSet()
+        assertEquals(enWindows, deWindows)
+        // 1D 1W 1M 3M 6M 1Y 3Y 5Y Max — every window any of the three charts
+        // serves. A new one arriving without a translation fails here.
+        assertEquals(9, enWindows.size)
+
+        // English abbreviates the year Y(ear); German J(ahr).
+        mapOf("bt_range_1y" to "1Y", "bt_range_3y" to "3Y", "bt_range_5y" to "5Y").forEach { (k, v) ->
+            assertEquals(v, en.getValue(k).trim())
+        }
+        mapOf("bt_range_1y" to "1J", "bt_range_3y" to "3J", "bt_range_5y" to "5J").forEach { (k, v) ->
+            assertEquals(v, de.getValue(k).trim())
+        }
+        // The general form of the same rule, so a tenth window cannot slip in
+        // with an English Y on the German side.
+        val anglicised = deWindows.filter { de.getValue(it).trim().endsWith("Y") }.sorted()
+        assertTrue("German windows still printing an English year: $anglicised", anglicised.isEmpty())
+    }
+
     @Test
     fun `german strings are actually translated`() {
         val en = strings("")

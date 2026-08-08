@@ -52,9 +52,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -138,6 +135,7 @@ import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
 import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
+import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.shell.btRefreshAttempt
 import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
@@ -980,21 +978,10 @@ fun CashScreen(
             // is what drives the collapse.
             if (!isOnline) OfflineBanner(asOfMs = dataAgeMs, onClick = onOpenPendingSync)
 
-            val pullState = rememberPullToRefreshState()
-            PullToRefreshBox(
+            BtSheetRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { vm.refresh() },
-                state = pullState,
                 modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    PullToRefreshDefaults.Indicator(
-                        state = pullState,
-                        isRefreshing = refreshing,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        containerColor = bt.surface,
-                        color = bt.goldInk,
-                    )
-                },
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

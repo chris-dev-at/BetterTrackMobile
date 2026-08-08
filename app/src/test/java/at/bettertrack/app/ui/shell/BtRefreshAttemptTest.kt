@@ -41,57 +41,41 @@ import java.io.IOException
  */
 class BtRefreshAttemptTest {
 
-    // ── The floor: a failure the radio refuses instantly is still SEEN ────────
+    // ── No floor: the indicator shows the attempt, and only the attempt ───────
 
     @Test
-    fun `a refresh that fails in no time still shows the indicator`() = runTest {
-        // The offline fail-fast case: with no route to the host the call comes
-        // back in single-digit milliseconds. Without a floor, `true` and `false`
-        // land in the same StateFlow before the collector is resumed, the value
-        // is conflated, and the user's pull produces no spinner whatsoever.
+    fun `the indicator is up for exactly as long as the work takes`() = runTest {
+        // The 320 ms minimum-visible floor is retired (owner, 2026-08-08). It made
+        // a fast refresh look slower than it was, and it was quietly what decided
+        // how long a second pull belonged to the sheet — a routing question, now
+        // answered explicitly and on its own clock (see [BtRefreshRoutingTest]).
         val refreshing = MutableStateFlow(false)
-        val seen = mutableListOf<Boolean>()
-        val watcher = launch { refreshing.collect { seen += it } }
-
-        val run = async { btRefreshAttempt(refreshing) { "instant failure" } }
-        advanceTimeBy(1)
-        assertTrue("the indicator must be up while the floor runs", refreshing.value)
-
-        advanceUntilIdle()
-        assertEquals("instant failure", run.await())
-        assertFalse(refreshing.value)
-        assertEquals(listOf(false, true, false), seen)
-        watcher.cancel()
-    }
-
-    @Test
-    fun `the floor is exactly the minimum visible time`() = runTest {
-        val refreshing = MutableStateFlow(false)
-        val run = async { btRefreshAttempt(refreshing) { Unit } }
-
-        advanceTimeBy(BT_REFRESH_MIN_VISIBLE_MS - 1)
-        assertTrue("still inside the floor", refreshing.value)
-        advanceTimeBy(2)
-        assertFalse("the floor has expired, the indicator retires", refreshing.value)
-        run.await()
-    }
-
-    @Test
-    fun `the floor costs a slow refresh nothing`() = runTest {
-        // The floor runs CONCURRENTLY with the attempt, so a refresh that takes
-        // longer than the floor must finish on its own schedule — a floor that
-        // added its time to every refresh would be a tax on the healthy path.
-        val refreshing = MutableStateFlow(false)
-        val work = BT_REFRESH_MIN_VISIBLE_MS * 4
+        val work = 40L
         val run = async {
             btRefreshAttempt(refreshing) {
                 delay(work)
                 "landed"
             }
         }
+        advanceTimeBy(work - 1)
+        assertTrue("the indicator is up while the work runs", refreshing.value)
         advanceUntilIdle()
         assertEquals("landed", run.await())
+        assertFalse(refreshing.value)
         assertEquals("no time beyond the attempt's own", work, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a refresh that fails in no time costs no time at all`() = runTest {
+        // The offline fail-fast case. The flag still rises and falls — a collector
+        // may conflate the pair, which is exactly why the pull's feedback is no
+        // longer this flag's job — but nothing is held open to fake an attempt.
+        val refreshing = MutableStateFlow(false)
+        val run = async { btRefreshAttempt(refreshing) { "instant failure" } }
+        advanceUntilIdle()
+        assertEquals("instant failure", run.await())
+        assertFalse(refreshing.value)
+        assertEquals("an instant failure must be instant", 0L, testScheduler.currentTime)
     }
 
     // ── The ceiling: a wedged request cannot hold the gesture ────────────────
@@ -152,7 +136,7 @@ class BtRefreshAttemptTest {
         // come back with an indicator nobody can retire.
         val refreshing = MutableStateFlow(false)
         val run = launch { btRefreshAttempt(refreshing) { awaitCancellation() } }
-        advanceTimeBy(BT_REFRESH_MIN_VISIBLE_MS + 1)
+        advanceTimeBy(321)
         assertTrue(refreshing.value)
 
         run.cancel(CancellationException("scope cleared"))
@@ -182,9 +166,5 @@ class BtRefreshAttemptTest {
         // under two seconds and is nowhere near it.
         assertTrue("must outlast any healthy refresh", BT_REFRESH_TIMEOUT_MS > 5_000L)
         assertTrue("must cut off the offline worst case", BT_REFRESH_TIMEOUT_MS < 40_000L)
-        assertTrue(
-            "the floor must be invisible on a healthy refresh",
-            BT_REFRESH_MIN_VISIBLE_MS < 1_000L,
-        )
     }
 }

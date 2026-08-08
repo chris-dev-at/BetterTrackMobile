@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.market
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.QueryStats
@@ -55,7 +53,6 @@ import at.bettertrack.app.ui.charts.BtPriceChart
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -64,6 +61,8 @@ import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.charts.rangeLabel
+import at.bettertrack.app.ui.components.BtRangeSegmented
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
@@ -459,18 +458,21 @@ private fun AssetLoadedContent(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AssetRange.entries.forEach { r ->
-                            BtChip(
-                                text = r.label,
-                                selected = r == range,
-                                onClick = { onRange(r) },
-                            )
-                        }
-                    }
+                    // The same control the portfolio hero uses (owner order
+                    // 2026-08-08). Eight windows do not divide a phone's width
+                    // into comfortable segments, so this one takes
+                    // [BtRangeSegmented]'s scrolling path — uniform segments,
+                    // wider than the card — instead of the hero's full-width
+                    // division. The component decides that from a measurement of
+                    // these labels; the caller does not choose.
+                    BtRangeSegmented(
+                        options = AssetRange.entries,
+                        selected = range,
+                        label = { rangeLabel(it) },
+                        onSelect = onRange,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentDescription = stringResource(R.string.bt_chart_range_cd),
+                    )
                 }
             }
         }

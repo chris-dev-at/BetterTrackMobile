@@ -26,9 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +66,7 @@ import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.portfolio.formatQuantity
+import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.BT_REFRESH_TIMEOUT_MS
 import at.bettertrack.app.ui.shell.btRefreshAttempt
 import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
@@ -342,7 +340,7 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
                 // Retry (IntelInlineError); the whole-screen one did not, so the
                 // only cure for "all four probes came back unavailable" was to
                 // leave the screen and come back.
-                // BtStateFill: this branch returns before the PullToRefreshBox is
+                // BtStateFill: this branch returns before the BtSheetRefreshBox is
                 // ever composed, so it is the one surface on this screen with no
                 // scroll container of its own — and therefore the one the sheet
                 // could not be pulled closed from.
@@ -362,21 +360,10 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
                 return@Box
             }
 
-            val pullState = rememberPullToRefreshState()
-            PullToRefreshBox(
+            BtSheetRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = { vm.refresh() },
-                state = pullState,
                 modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    PullToRefreshDefaults.Indicator(
-                        state = pullState,
-                        isRefreshing = refreshing,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        containerColor = bt.surface,
-                        color = bt.goldInk,
-                    )
-                },
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

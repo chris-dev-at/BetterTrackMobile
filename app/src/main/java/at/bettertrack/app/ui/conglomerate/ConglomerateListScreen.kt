@@ -78,7 +78,29 @@ class ConglomerateListViewModel(
     private val _state = MutableStateFlow<ConglomerateListState>(ConglomerateListState.Loading)
     val state: StateFlow<ConglomerateListState> = _state.asStateFlow()
 
-    init { load() }
+    init {
+        load()
+        // Mutations elsewhere reach the list through here (bug fix 2026-08-08).
+        //
+        // This screen is never disposed — it is a segment of a tab the pager
+        // keeps composed, under sheets that are `FloatingWindow` — so the
+        // `LaunchedEffect(Unit) { load() }` below is a once-per-process event and
+        // a basket deleted in the detail sheet stayed on screen until restart.
+        // The repository is the singleton both view models share, so its list
+        // flow is the only thing the delete can be observed through. See
+        // [ConglomerateRepository.conglomerates].
+        //
+        // Content only: `Loading`, `OfflineState` and `Error` are this view
+        // model's own reading of a fetch it performed, and a cached list must not
+        // overwrite them. `null` is "never loaded" and is likewise ignored.
+        viewModelScope.launch {
+            repo.conglomerates.collect { items ->
+                if (items != null && _state.value is ConglomerateListState.Loaded) {
+                    _state.value = ConglomerateListState.Loaded(items)
+                }
+            }
+        }
+    }
 
     fun load() {
         viewModelScope.launch {

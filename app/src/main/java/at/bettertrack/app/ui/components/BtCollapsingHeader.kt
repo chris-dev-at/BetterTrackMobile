@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
-import at.bettertrack.app.ui.shell.BtNavMotion
+import at.bettertrack.app.ui.shell.BT_MOTION_RHYTHM_MS
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlin.math.roundToInt
 
@@ -157,6 +157,16 @@ import kotlin.math.roundToInt
  * @param scrollBehavior from [rememberBtCollapsingHeaderBehavior]; its
  *   `nestedScrollConnection` must be hung on an ancestor of the screen's
  *   scrollable or the header will never collapse.
+ *
+ *   **This bar must be a screen's `topBar`, never a child of a scrollable.** M3
+ *   hangs a vertical `Modifier.draggable` on the whole bar whenever the behaviour
+ *   it is given is not pinned, so the user can resize it by dragging it — and that
+ *   draggable does NOT participate in nested scroll, it just consumes the gesture.
+ *   Above a list that is the intended affordance; *inside* one it is a dead zone
+ *   the size of the bar, which is exactly how the component gallery lost its
+ *   scroll on 2026-08-08 (see `CollapsingHeaderSection`). A caller that genuinely
+ *   wants a static specimen passes [rememberBtPinnedHeaderBehavior], whose
+ *   `isPinned` suppresses the drag modifier and changes nothing else.
  * @param titleIcon the glyph for the selector pill's leading chip. Only read when
  *   [onTitleClick] is set; a pill with no icon simply omits the chip.
  * @param titleIconTint the hue for that chip, or null for the brand gold. A
@@ -754,8 +764,8 @@ fun rememberBtPinnedHeaderBehavior(
  * The height change is legitimate; doing it instantly is the jank.
  *
  * `TopAppBarState` exposes no animator of its own, so this drives `heightOffset`
- * with the same duration and easing as the app's screen transitions
- * ([at.bettertrack.app.ui.shell.BtNavMotion]) — the branch swap and the bar
+ * with the same duration and easing as the app's motion rhythm
+ * ([at.bettertrack.app.ui.shell.BT_MOTION_RHYTHM_MS]) — the branch swap and the bar
  * settle together instead of one arriving after the other.
  *
  * `contentOffset` is reset up-front rather than animated: it is not a rendered
@@ -778,7 +788,7 @@ suspend fun TopAppBarScrollBehavior.btExpandHeader(reducedMotion: Boolean = fals
         initialValue = from,
         targetValue = 0f,
         animationSpec = tween(
-            durationMillis = BtNavMotion.DURATION_TOTAL_MS,
+            durationMillis = BT_MOTION_RHYTHM_MS,
             easing = FastOutSlowInEasing,
         ),
     ) { value, _ -> state.heightOffset = value }

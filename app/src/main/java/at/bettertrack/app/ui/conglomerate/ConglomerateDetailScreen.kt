@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.conglomerate
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -72,6 +70,8 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.charts.rangeLabel
+import at.bettertrack.app.ui.components.BtRangeSegmented
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
@@ -379,11 +379,17 @@ fun ConglomerateDetailScreen(
                             }
                         }
                         Spacer(Modifier.height(10.dp))
-                        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BacktestRange.entries.forEach { r ->
-                                BtChip(text = r.label, selected = r == range, onClick = { vm.setRange(r) })
-                            }
-                        }
+                        // Same control as every other chart range row in the app
+                        // (owner order 2026-08-08). Four windows divide the card
+                        // comfortably, so this one spans it.
+                        BtRangeSegmented(
+                            options = BacktestRange.entries,
+                            selected = range,
+                            label = { rangeLabel(it) },
+                            onSelect = { vm.setRange(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentDescription = stringResource(R.string.bt_chart_range_cd),
+                        )
                     }
                 }
             }

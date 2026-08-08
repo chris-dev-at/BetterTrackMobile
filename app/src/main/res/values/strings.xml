@@ -108,6 +108,7 @@
          ships, and a word here would crowd a control that sits beside six range
          chips. The content descriptions carry the meaning for TalkBack. -->
     <string name="bt_chart_mode_cd">Chart display mode</string>
+    <string name="bt_chart_range_cd">Chart time range</string>
     <string name="bt_chart_mode_balance">€</string>
     <string name="bt_chart_mode_balance_cd">Balance in euro</string>
     <string name="bt_chart_mode_performance">%</string>
@@ -120,8 +121,11 @@
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
+    <string name="bt_range_3m">3M</string>
     <string name="bt_range_6m">6M</string>
     <string name="bt_range_1y">1Y</string>
+    <string name="bt_range_3y">3Y</string>
+    <string name="bt_range_5y">5Y</string>
     <string name="bt_range_max">Max</string>
 
     <!-- Step 6 — Portfolio switcher (spec §6.1) -->
@@ -2525,4 +2529,7 @@
     <!-- ==== PRE-LOGIN SETTINGS (EN) ==== -->
     <string name="bt_prelogin_intro">What you can set up before signing in.</string>
     <string name="bt_login_server_label">Server: %s</string>
+    <!-- ==== SHEET GESTURE HINTS (EN) ==== -->
+    <string name="bt_sheet_pull_again_close">Pull again to close</string>
+    <string name="bt_sheet_pull_again_back">Pull again to go back</string>
 </resources>

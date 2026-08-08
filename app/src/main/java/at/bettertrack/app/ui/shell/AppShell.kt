@@ -342,7 +342,12 @@ private fun headerFaceOf(tab: BtTab?, chrome: BtTabChrome): BtTabHeaderFace = wh
 fun BtApp() {
     val bt = BtTheme.colors
     val scope = rememberCoroutineScope()
-    val navController = rememberNavController()
+    // The subpages' own navigator. Registered BEFORE the graph is built, because
+    // that is when its destinations are instantiated. See [BtSheetNavigator] for
+    // why the sheets left ComposeNavigator: a NavHost composes one destination at
+    // a time, and a connected depth transition needs two.
+    val sheetNavigator = remember { BtSheetNavigator() }
+    val navController = rememberNavController(sheetNavigator)
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     // True when nothing is stacked over the tabs. It is the ONE question the shell
@@ -380,19 +385,6 @@ fun BtApp() {
             // Stage two of the two-stage dismiss: everything goes, in one move,
             // back to the empty floor the pager shows through.
             popAll = { navController.popBackStack(SheetRootRoute, inclusive = false) },
-            // Is the entry UNDER the open sheet another sheet, or the empty
-            // floor? That is the whole question — it decides whether swiping down
-            // CLOSES a subpage or goes back one level — and it has to be the
-            // graph's answer rather than composition's so it survives a rotation.
-            //
-            // `previousBackStackEntry` and not `currentBackStack`: the latter is
-            // `@RestrictTo` library-group API, which lint rejects outright. The
-            // public one happens to ask the narrower question, which is the only
-            // one this needs.
-            sheetBelow = {
-                val below = navController.previousBackStackEntry?.destination
-                below != null && !below.hasRoute(SheetRootRoute::class)
-            },
         )
     }
 
@@ -785,6 +777,7 @@ fun BtApp() {
         ) {
             BtSheetHost(
                 navController = navController,
+                sheetNavigator = sheetNavigator,
                 sheets = sheets,
                 onDeepLink = navigateDeepLink,
                 onSwitchTab = switchToTab,
@@ -1287,6 +1280,7 @@ private fun BtBottomBar(
 @Composable
 private fun BtSheetHost(
     navController: NavHostController,
+    sheetNavigator: BtSheetNavigator,
     sheets: BtSheetHostState,
     onDeepLink: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
@@ -1310,21 +1304,15 @@ private fun BtSheetHost(
     CompositionLocalProvider(LocalBtSheetHost provides sheets) {
     NavHost(
         navController = navController,
-        // A sheet animates ITSELF in and out — see [BtSheet] for why a drag and a
-        // transition cannot share the job. So the graph adds no motion on the way
-        // in, and none on the way back out.
-        //
-        // What the graph does own is the one case a sheet cannot see: a sheet
-        // opening OVER another sheet. Left to `None`, the lower sheet would be
-        // dropped from composition the instant the upper one was pushed, so the
-        // live tab would flash through the gap for a frame. `stackRecede` keeps it
-        // composed — and therefore still ticking — and lets it sink back a little
-        // while the new sheet rises over it, which is the stack idiom the owner's
-        // reference app uses and the honest picture of what is happening.
+        // The graph has no motion left to contribute. Its sheets are not its own
+        // any more — they belong to [BtSheetNavigator] and are drawn by
+        // [BtSheetStack], which owns every frame of their travel because a drag
+        // and a transition cannot share the job. What is left in here is one
+        // empty floor that never animates into or out of anything.
         enterTransition = { EnterTransition.None },
         popExitTransition = { ExitTransition.None },
-        exitTransition = { BtNavMotion.stackRecede() },
-        popEnterTransition = { BtNavMotion.stackReturn() },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
         // An empty floor. The tabs are not in this graph any more, so its start
         // destination has no page to show — its whole job is to be something for
         // the last sheet to pop back TO. It draws nothing and takes no pointer
@@ -1760,5 +1748,11 @@ private fun BtSheetHost(
             )
         }
     }
+    // THE sheet layer. One container, composed once, for every subpage in the
+    // app — it renders the top TWO entries of the sheet back stack so a depth
+    // change is a slide between two live planes rather than a hand-over between
+    // two destinations. At the floor it draws nothing and takes no pointer
+    // input, so the pager underneath is fully interactive through it.
+    BtSheetStack(host = sheets, pages = rememberBtSheetPages(sheetNavigator))
     }
 }

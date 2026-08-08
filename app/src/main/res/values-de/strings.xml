@@ -75,6 +75,7 @@
     <string name="bt_overview_chart_empty">Noch nicht genug Verlauf für ein Diagramm</string>
     <string name="bt_overview_chart_cd">Diagramm des Vermögens über die Zeit</string>
     <string name="bt_chart_mode_cd">Anzeigemodus des Diagramms</string>
+    <string name="bt_chart_range_cd">Zeitraum des Diagramms</string>
     <string name="bt_chart_mode_balance">€</string>
     <string name="bt_chart_mode_balance_cd">Kontostand in Euro</string>
     <string name="bt_chart_mode_performance">%</string>
@@ -85,8 +86,11 @@
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
+    <string name="bt_range_3m">3M</string>
     <string name="bt_range_6m">6M</string>
     <string name="bt_range_1y">1J</string>
+    <string name="bt_range_3y">3J</string>
+    <string name="bt_range_5y">5J</string>
     <string name="bt_range_max">Max</string>
 
     <!-- Portfolio-Wechsler (§6.1) -->
@@ -2418,4 +2422,7 @@
     <!-- ==== EINSTELLUNGEN VOR DER ANMELDUNG (DE) ==== -->
     <string name="bt_prelogin_intro">Was du vor der Anmeldung einstellen kannst.</string>
     <string name="bt_login_server_label">Server: %s</string>
+    <!-- ==== HINWEISE ZUR WISCHGESTE (DE) ==== -->
+    <string name="bt_sheet_pull_again_close">Nochmal ziehen zum Schließen</string>
+    <string name="bt_sheet_pull_again_back">Nochmal ziehen für zurück</string>
 </resources>
