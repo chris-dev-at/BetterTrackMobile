@@ -6,13 +6,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -57,27 +65,54 @@ import at.bettertrack.app.ui.theme.BtTheme
  * as two nested objects, and the wash already carries the state — this is also
  * why the track, not the segment, owns the edge.
  *
- * Segments size to their own content rather than sharing equal widths. Equal
- * widths are right for word labels of similar length; they are wrong for a set
- * like `€` / `%` / `€ / %`, where forcing the two one-character options to the
- * width of the third leaves two mostly-empty pills.
+ * ## Sizing
+ *
+ * Segments size to their own content by default. That is right for word labels
+ * of similar length, and it was right for the chart picker's old `€` / `%` /
+ * `€ / %` set, where forcing the two one-character options to the width of the
+ * third left two mostly-empty pills.
+ *
+ * Once every label is about **one glyph wide** the argument inverts: three pills
+ * of 7dp, 10dp and 17dp content read as a ragged row rather than one control, and
+ * the tap targets differ by more than half. [minSegmentWidth] is the opt-in for
+ * that case — a floor, never a cap, so a label that outgrows it still gets its
+ * space instead of being clipped. Pass it scaled by `fontScale` if the labels are
+ * text, so the row stays equal at every system font size.
+ *
+ * Heights are always shared: the row measures to its tallest segment
+ * ([IntrinsicSize.Min]) and every segment fills it, so a [labelContent] that
+ * draws a mark of its own height can never leave one pill taller than its
+ * neighbours.
  *
  * @param options every choice, in display order. Small sets only — this is a
  *   control you take in at a glance, not a list.
  * @param selected the current winner. Exactly one, always: there is no unset
  *   state, by construction.
- * @param label the visible text for an option. Keep it short.
+ * @param label the visible text for an option. Keep it short. Required rather
+ *   than defaulted so it stays ahead of `modifier` in the signature (lint's
+ *   `ModifierParameter`, and the convention it enforces: `modifier` is the first
+ *   optional parameter). Pass `null` when the segments carry [labelContent]
+ *   marks instead of words — exactly one of the two draws.
  * @param contentDescription optional per-option accessibility text, for when the
  *   label is a glyph (`€`) that does not read aloud usefully.
+ * @param labelContent draws an option's label instead of [label], for a segment
+ *   whose label is a composed MARK rather than a word — the chart picker's
+ *   combined `€%`. The segment still owns the ink and the weight: the slot runs
+ *   under the resolved [LocalContentColor] and text style, so a plain `Text()`
+ *   inside it inherits selected/unselected state without restating it.
+ * @param minSegmentWidth a floor on every segment's width, for glyph labels whose
+ *   natural widths differ. Unspecified (default) means each segment keeps its own.
  */
 @Composable
 fun <T> BtSegmented(
     options: List<T>,
     selected: T,
-    label: @Composable (T) -> String,
+    label: (@Composable (T) -> String)?,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     contentDescription: (@Composable (T) -> String)? = null,
+    labelContent: (@Composable (T) -> Unit)? = null,
+    minSegmentWidth: Dp = Dp.Unspecified,
 ) {
     val bt = BtTheme.colors
     Surface(
@@ -90,7 +125,12 @@ fun <T> BtSegmented(
             // 3dp of track showing around the inset pills. Less reads as a
             // rendering artifact; more and the track stops looking like a groove
             // and starts looking like a second card.
-            modifier = Modifier.padding(3.dp),
+            //
+            // `IntrinsicSize.Min` + `fillMaxHeight` below is the same pairing the
+            // overview's quick-stat chips use: it makes the row as tall as its
+            // tallest segment and every segment that tall, so the pills are one
+            // object rather than several.
+            modifier = Modifier.padding(3.dp).height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -98,8 +138,11 @@ fun <T> BtSegmented(
                 val isSelected = option == selected
                 val interaction = remember(option) { MutableInteractionSource() }
                 val cd = contentDescription?.invoke(option)
+                val ink = if (isSelected) bt.goldInk else bt.textMuted
                 Box(
                     modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(min = minSegmentWidth)
                         .clip(BtShapes.pill)
                         .background(if (isSelected) bt.goldWashStrong else Color.Transparent)
                         .clickable(
@@ -111,15 +154,25 @@ fun <T> BtSegmented(
                         .then(if (cd != null) Modifier.semantics { this.contentDescription = cd } else Modifier),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = label(option),
-                        style = MaterialTheme.typography.labelMedium,
+                    val style = MaterialTheme.typography.labelMedium.copy(
                         // The winner is heavier as well as tinted, so the state
                         // survives being looked at in a hurry — and so it is not
                         // carried by colour alone.
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (isSelected) bt.goldInk else bt.textMuted,
+                        color = ink,
                     )
+                    if (labelContent != null) {
+                        // The slot inherits the resolved state instead of being
+                        // handed it: a `Text()` inside picks the ink up from
+                        // `LocalContentColor` and the size/weight from the
+                        // ambient style, so a custom mark cannot drift out of
+                        // sync with the selection it is drawn inside.
+                        CompositionLocalProvider(LocalContentColor provides ink) {
+                            ProvideTextStyle(style) { labelContent(option) }
+                        }
+                    } else if (label != null) {
+                        Text(text = label(option), style = style)
+                    }
                 }
             }
         }

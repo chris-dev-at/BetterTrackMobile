@@ -44,6 +44,21 @@ data class SessionUser(
      * Null-defaulted so an existing stored session deserializes unchanged.
      */
     val privacyMode: String? = null,
+    /**
+     * The account's `createdAt` as last seen on `/auth/me` — an ISO-8601 instant,
+     * rendered by Settings as the "Member since" row (web parity, 2026-08-08).
+     *
+     * Named for what it MEANS rather than for the wire field it comes from: the
+     * app has exactly one use for the account's creation timestamp, and calling
+     * the session field `createdAt` would invite the reading "when this session
+     * was created", which is a different and much shorter-lived thing.
+     *
+     * Null-defaulted for the same two reasons `privacyMode` is: a pre-v5 server
+     * omits the key entirely, and an existing stored session — written by a build
+     * that had no such field — must keep deserializing. Absent means absent; the
+     * row is simply not rendered (see `formatMemberSince`).
+     */
+    val memberSince: String? = null,
 ) {
     companion object {
         /** Placeholder used when a valid token exists but /auth/me hasn't resolved yet. */
@@ -56,6 +71,7 @@ data class SessionUser(
             mustChangePassword = false,
             baseCurrency = "EUR",
             privacyMode = null,
+            memberSince = null,
         )
     }
 }
@@ -69,6 +85,7 @@ fun MeResponse.toSessionUser(): SessionUser = SessionUser(
     mustChangePassword = mustChangePassword,
     baseCurrency = baseCurrency,
     privacyMode = privacyMode,
+    memberSince = createdAt,
 )
 
 /**

@@ -53,6 +53,7 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtSectionHeader
+import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.theme.BtTheme
@@ -116,7 +117,7 @@ fun SecurityScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // ── Account security (2FA + sessions) — bearer + account:security ──
+            // ── Account security (2FA + passkeys + sessions) — bearer + account:security ──
             BtSectionHeader(stringResource(R.string.bt_settings_account_security_section))
             BtGroup {
                 BtGroupRow(
@@ -124,6 +125,26 @@ fun SecurityScreen(
                     title = stringResource(R.string.bt_dest_two_factor),
                     subtitle = stringResource(R.string.bt_settings_2fa_sub),
                     onClick = onOpenTwoFactor,
+                )
+                // Passkeys — deferred to the web (parity ruling 2026-08-08), and
+                // placed HERE rather than anywhere else in Settings because this
+                // group is where "how you prove you are you" lives: it sits
+                // directly under two-factor, which is the same question answered
+                // with a different credential, and above active sessions, which is
+                // the *result* of having proved it. The app-lock section below is
+                // a different subject entirely — that PIN guards this phone, not
+                // the account.
+                //
+                // Not reimplemented natively on purpose: registering a passkey is
+                // a WebAuthn ceremony bound to an origin, and doing it in a Custom
+                // Tab on the real web origin is the ONLY way the credential ends
+                // up scoped to the same origin the browser will later be asked to
+                // authenticate against.
+                BtWebLinkRow(
+                    icon = Icons.Outlined.Fingerprint,
+                    title = stringResource(R.string.bt_settings_passkeys),
+                    subtitle = stringResource(R.string.bt_settings_managed_on_web),
+                    path = "/control/sign-in",
                 )
                 BtGroupRow(
                     icon = Icons.Outlined.Devices,

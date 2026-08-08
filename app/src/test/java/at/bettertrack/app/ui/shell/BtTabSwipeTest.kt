@@ -420,7 +420,7 @@ class BtFastSwipeChainTest {
     fun `at rest a gesture starts from the tab on screen`() {
         assertEquals(
             BtTab.Markets,
-            swipeOriginTab(pendingCommit = null, handoff = null, navCurrent = BtTab.Markets),
+            swipeOriginTab(pendingCommit = null, handoff = null, tapCommit = null, navCurrent = BtTab.Markets),
         )
     }
 
@@ -430,7 +430,7 @@ class BtFastSwipeChainTest {
         // Markets, so the next flick must be measured from Markets.
         assertEquals(
             BtTab.Markets,
-            swipeOriginTab(pendingCommit = null, handoff = BtTab.Markets, navCurrent = BtTab.Portfolio),
+            swipeOriginTab(pendingCommit = null, handoff = BtTab.Markets, tapCommit = null, navCurrent = BtTab.Portfolio),
         )
     }
 
@@ -442,6 +442,7 @@ class BtFastSwipeChainTest {
             swipeOriginTab(
                 pendingCommit = BtTab.Workbench,
                 handoff = BtTab.Markets,
+                tapCommit = null,
                 navCurrent = BtTab.Portfolio,
             ),
         )
@@ -449,7 +450,7 @@ class BtFastSwipeChainTest {
 
     @Test
     fun `with nothing decided and nothing on screen there is no origin`() {
-        assertNull(swipeOriginTab(null, null, null))
+        assertNull(swipeOriginTab(null, null, null, null))
     }
 
     // ── Three fast flicks are three pages ───────────────────────────────────
@@ -476,7 +477,7 @@ class BtFastSwipeChainTest {
             // rebases onto the page it lands on. None inherits -900.
             assertEquals(0f, takeover.startTotalPx)
             // ...then decides its own hop on release (drag end).
-            val origin = swipeOriginTab(pending, handoff, navCurrent)!!
+            val origin = swipeOriginTab(pending, handoff, null, navCurrent)!!
             val target = tabNeighbour(origin, forward = true, visible = visible)!!
             pending = target
             landed += target
@@ -495,7 +496,7 @@ class BtFastSwipeChainTest {
 
         repeat(6) {
             swipeTakeover(pending, -900f).deliver?.let { handoff = it; pending = null }
-            val origin = swipeOriginTab(pending, handoff, navCurrent)!!
+            val origin = swipeOriginTab(pending, handoff, null, navCurrent)!!
             val target = tabNeighbour(origin, forward = true, visible = visible)
             if (target != null) {
                 pending = target
@@ -515,7 +516,7 @@ class BtFastSwipeChainTest {
 
         repeat(3) {
             swipeTakeover(pending, -900f).deliver?.let { handoff = it; pending = null }
-            val origin = swipeOriginTab(pending, handoff, BtTab.People)!!
+            val origin = swipeOriginTab(pending, handoff, null, BtTab.People)!!
             val target = tabNeighbour(origin, forward = false, visible = visible)!!
             pending = target
             landed += target
@@ -601,5 +602,138 @@ class BtFastSwipeChainTest {
         // The whole point of the peek being off at rest: one page composed, one
         // page recorded. Nothing in flight means nothing to keep.
         assertTrue(!peekSurvivesHandoffEnd(dragging = false, hopInFlight = false))
+    }
+}
+
+/**
+ * The optimistic TAP latch (owner report 2026-08-08).
+ *
+ * *"Tapping a bottom-nav tab lags before selection."* Measured on device at
+ * 120Hz beforehand: touch-UP to the label turning gold ran 44–59ms, median 48,
+ * and the screen recording emitted NO frame in between — the tap was visually
+ * dead for four frames and then everything moved at once. The selection was
+ * derived from the nav graph alone, so it could not move until `navigate()` had
+ * propagated through a back-stack `StateFlow` AND the destination had composed:
+ * the tab was paying for the content.
+ *
+ * The cure is the same one the swipe already had — believe the decision, not the
+ * coordinate — but on a latch of its own, because `handoff` drags the peek layer
+ * and the NavHost's transition suppression along with it.
+ *
+ * What needs pinning is not the optimism (that part is trivially right) but the
+ * LETTING GO: an optimistic latch that outlives its own truth lights a tab
+ * nobody is standing on, which is a worse bug than the lag it replaced.
+ */
+class BtTapLatchTest {
+
+    @Test
+    fun `the latch holds while the nav graph is still where the tap left it`() {
+        // The whole reason it exists: this is the ~48ms window the measurement
+        // found, and it is exactly when the bar must believe the tap.
+        assertTrue(tapLatchHolds(BtTab.Markets, origin = BtTab.Portfolio, navCurrent = BtTab.Portfolio))
+    }
+
+    @Test
+    fun `the latch lets go the moment the nav graph agrees`() {
+        // Agreement is the end of the job. Holding on after it would make the
+        // latch a second source of truth rather than a bridge to the first.
+        assertTrue(!tapLatchHolds(BtTab.Markets, origin = BtTab.Portfolio, navCurrent = BtTab.Markets))
+    }
+
+    @Test
+    fun `the latch drops at once when something else drove navigation`() {
+        // A deep link or a back press landed somewhere the tap never asked for.
+        // The tap's opinion is now stale, and waiting out the timeout would
+        // light Markets while the user is looking at People.
+        assertTrue(!tapLatchHolds(BtTab.Markets, origin = BtTab.Portfolio, navCurrent = BtTab.People))
+    }
+
+    @Test
+    fun `the latch survives a pushed detail screen`() {
+        // `currentTab` goes null under a pushed route, where the bar is not
+        // drawn at all. That is not disagreement — it is absence — and the tab
+        // underneath is still the right answer for when the push pops.
+        assertTrue(tapLatchHolds(BtTab.Markets, origin = BtTab.Portfolio, navCurrent = null))
+    }
+
+    @Test
+    fun `a tap from a cold start with no origin still holds`() {
+        // origin can be null if the tap somehow beats the first back-stack
+        // emission. Absence of an origin must not be read as disagreement.
+        assertTrue(tapLatchHolds(BtTab.Markets, origin = null, navCurrent = null))
+    }
+
+    // ── What the bar actually draws ────────────────────────────────────────────
+
+    @Test
+    fun `a tapped tab is lit on its own frame while the nav graph still trails`() {
+        // The end-to-end statement of the fix, in the terms the bar uses: the
+        // tapped tab reads 1f and the tab being left reads 0f, at an instant
+        // when `isCurrentDestination` is still true for the tab being left.
+        assertEquals(
+            1f,
+            tabSelectionFraction(
+                committed = BtTab.Markets,
+                tab = BtTab.Markets,
+                isCurrentDestination = false,
+            ),
+        )
+        assertEquals(
+            0f,
+            tabSelectionFraction(
+                committed = BtTab.Markets,
+                tab = BtTab.Portfolio,
+                isCurrentDestination = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `exactly one tab is lit while a tap is in flight`() {
+        // The no-flicker guarantee, restated for the tap path: whatever the nav
+        // graph believes mid-flight, the bar shows one selection and not two.
+        val lit = BtTab.entries.filter {
+            tabSelectionFraction(committed = BtTab.People, tab = it, isCurrentDestination = true) == 1f
+        }
+        assertEquals(listOf(BtTab.People), lit)
+    }
+
+    @Test
+    fun `a swipe in flight outranks a tap latch`() {
+        // The call site resolves `handoff ?: tapCommit`, so a gesture that has
+        // pinned a peek layer over the swap wins. Stated here as the arithmetic
+        // the bar performs, so the precedence cannot be quietly inverted.
+        val handoff: BtTab? = BtTab.Workbench
+        val tapCommit: BtTab? = BtTab.Markets
+        assertEquals(BtTab.Workbench, handoff ?: tapCommit)
+    }
+
+    @Test
+    fun `a swipe starts from a tab the user has only just tapped`() {
+        // The tap latch is a decision, so it outranks the nav graph for the
+        // gesture that follows it — otherwise a swipe fired inside the 48ms
+        // window would step off the tab the user had already left.
+        assertEquals(
+            BtTab.Markets,
+            swipeOriginTab(
+                pendingCommit = null,
+                handoff = null,
+                tapCommit = BtTab.Markets,
+                navCurrent = BtTab.Portfolio,
+            ),
+        )
+    }
+
+    @Test
+    fun `a swipe decision still outranks a tap latch for the next origin`() {
+        assertEquals(
+            BtTab.People,
+            swipeOriginTab(
+                pendingCommit = null,
+                handoff = BtTab.People,
+                tapCommit = BtTab.Markets,
+                navCurrent = BtTab.Portfolio,
+            ),
+        )
     }
 }

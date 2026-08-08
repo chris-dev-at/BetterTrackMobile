@@ -10,8 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,42 +53,73 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
-import at.bettertrack.app.data.notifications.NotifChannel
-import at.bettertrack.app.data.notifications.NotifKind
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
 
 /**
- * Notification settings matrix (Step 16, §6.11): per-type × per-channel (in-app /
- * email / push / mute) preferences + the system permission status. In-app + email
- * mirror the web and sync to `PATCH /settings/notifications` when the scope is
- * granted; Push + Mute are saved on-device (no server push channel yet). Muting a
- * type suppresses it locally — proven on device.
+ * Notification settings.
  *
- * Design note: the type × channel matrix is rendered as per-type cards with
- * channel toggle-chips (not a dense checkbox grid) so every target stays a 48dp
- * tap on a phone while reading as one coherent grid.
+ * ## What this screen is, after the web-parity ruling (2026-08-08)
  *
- * ## R2 visual pass
+ * It used to be a per-type × per-channel matrix: seven type cards, five channel
+ * chips each, a per-type mute switch, and a digest-cadence chooser above them.
+ * Under the owner's rule for anything the web already owns — *match it exactly or
+ * link to the web* — most of that had to go, and the honest reason is not
+ * "duplication" but that the app's version was never the same control:
  *
- * Each type card is a [BtGroup] — border dropped for a tonal step (mandate §4)
- * — but the cards are NOT collapsed into a single group, which is the one place
- * this screen departs from the settings pattern. A type card is not a row: it is
- * a heading, a mute switch and a wrap of channel chips. Stacked inside one
- * border-less group with no divider available, the chips of one type would sit
- * directly under the heading of the next and there would be nothing to say which
- * they belong to. The gap between groups is the separator, and it has to stay.
+ *  - the **per-type mute** had no web analogue at all. It was a device-only
+ *    invention that never left SharedPreferences, so a type muted on the phone
+ *    still emailed you and still showed up on the web with every channel green.
+ *  - the **cadence** chooser set one value for a whole group of types because a
+ *    25-row grid does not fit a phone. The web sets it per type, so the app could
+ *    not even display the state it was editing — it rendered "mixed" and gave up.
+ *  - the **matrix** itself is 7 × 5 toggles the web renders as a table. Five
+ *    channel chips wrapped under a heading is the same data in a shape that is
+ *    slower to read and easy to mis-tap.
+ *
+ * So the matrix and cadence became ONE [BtWebLinkRow] to `/control/notifications`,
+ * and what remains is deliberately not a stub of the old screen. It is the set of
+ * things that are either **device-only** or **genuinely identical on both sides**:
+ *
+ *  1. the **system permission** card — Android's, nothing to do with the web;
+ *  2. the **account-wide mute** — the web's single "silence everything" switch,
+ *     the same `muted` flag on the same PATCH;
+ *  3. **quiet hours** — one window, one zone, account-wide on both sides.
+ *
+ * The matrix is still fetched and still HONOURED (it gates whether an arriving
+ * push is shown; see `decideDelivery`). "The app does not edit it" and "the app
+ * ignores it" are very different statements and only the first one is true.
+ *
+ * ## What the mute greys out
+ *
+ * The web dims the routing grid to `0.6` and disables it while `settings.muted`
+ * (`NotificationsPanel.tsx`, `gridDisabled = busy || settings.muted`). The app
+ * has no routing grid left to dim, so that treatment lands on the nearest thing
+ * the mute actually overrides: **quiet hours**, a window that decides WHEN things
+ * are held back and says nothing when nothing is sent at all. The permission card
+ * does NOT dim (an OS grant is not an account flag's business) and neither does
+ * the web row (a hand-off is not a setting a mute can silence).
+ *
+ * One deliberate deviation, stated plainly: the web leaves ITS quiet-hours fold
+ * live under a mute. Copying that literally would leave the app's mute switch as
+ * the only control on the screen with no visible consequence at all, since the
+ * one thing the web dims is the one thing the app no longer has.
+ *
+ * Nothing is cleared, and the mute row's own subtitle is the web's sentence for
+ * saying so — the difference between "muted" and "wiped".
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationSettingsScreen(onBack: () -> Unit) {
     val bt = BtTheme.colors
@@ -98,26 +128,24 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val repo = AppGraph.notificationRepository
     val scope = rememberCoroutineScope()
 
-    val matrix by store.matrix.collectAsStateWithLifecycle()
-    val availability by store.availability.collectAsStateWithLifecycle()
     val delivery by store.delivery.collectAsStateWithLifecycle()
+    val accountMuted by store.accountMuted.collectAsStateWithLifecycle()
 
-    // Pull the server matrix + channel availability on open so the
-    // in-app/email/telegram/discord columns reflect the web (v4 gates the extra
-    // columns).
-    //
-    // This used to be a bare `LaunchedEffect { repo.loadServerSettings() }` whose
-    // result went unread, which made the grid quietly dishonest in both
-    // directions: while the call was in flight the chips showed on-device
-    // DEFAULTS as though they were the account's settings, and if it failed they
-    // kept showing them forever. Toggling one then pushed those invented defaults
-    // back to the server. So the outcome is now state.
+    // Pull the account settings on open. The result is STATE, not a fire-and-forget
+    // call: while it is in flight the cached values are placeholders, not settings,
+    // and if it fails the screen has to say so rather than present the last known
+    // copy as though it were confirmed.
     var loadFailure by remember { mutableStateOf<BtMessage?>(null) }
-    var matrixLoaded by remember { mutableStateOf(false) }
+    var loaded by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
-        matrixLoaded = true
+        loaded = true
     }
+    // Write failures get their own slot next to the control that failed. Both writes
+    // roll the store back on refusal, so without a message the control would simply
+    // spring back to its old position and look broken.
+    var muteFailure by remember { mutableStateOf<BtMessage?>(null) }
+    var quietFailure by remember { mutableStateOf<BtMessage?>(null) }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     var permissionGranted by remember {
@@ -130,6 +158,12 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> permissionGranted = granted }
+
+    val quietHours = delivery.quietHours
+    // Whether the account block has anything in it at all. Gated so the section
+    // header can never stand over nothing — a pre-v5 server models neither, and an
+    // empty "Delivery" heading would read as a section that failed to load.
+    val hasAccountSettings = accountMuted != null || quietHours != null
 
     val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
@@ -155,7 +189,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // System permission status (Android 13+) with an in-context enable.
+            // ── THIS DEVICE ──────────────────────────────────────────────────
+            // First because it is the only gate that can silence everything else
+            // without the account knowing: no OS permission, no push, whatever the
+            // server thinks.
+            BtSectionHeader(stringResource(R.string.bt_notif_device_section))
             PermissionStatusCard(
                 granted = permissionGranted,
                 needsPermission = needsPermission,
@@ -172,67 +210,153 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 },
             )
 
-            // v5 delivery: one compact cadence + quiet-hours block above the per-type
-            // grid (it is account-wide). Renders nothing at all on a pre-v5 server.
-            NotificationDeliverySection(
-                delivery = delivery,
-                onCadence = { cadence -> scope.launch { repo.setDigestCadence(cadence) } },
-                onQuietHours = { quietHours -> scope.launch { repo.setQuietHours(quietHours) } },
-            )
-
-            // Was a hand-rolled uppercase label; `BtSectionHeader` is the same
-            // thing app-wide and brings its own breathing room, so the ad-hoc
-            // top padding goes with it.
-            BtSectionHeader(stringResource(R.string.bt_notif_matrix_section))
-
-            val matrixFailure = loadFailure
+            // ── THIS ACCOUNT ─────────────────────────────────────────────────
             when {
-                // Placeholders rather than defaults-dressed-as-settings.
-                !matrixLoaded -> repeat(store.configurableKinds.size.coerceAtMost(4)) {
-                    BtSkeleton(
-                        Modifier.fillMaxWidth().height(112.dp),
-                        shape = BtShapes.card,
-                    )
+                // Placeholders rather than a cached copy dressed as confirmed state.
+                !loaded -> {
+                    BtSectionHeader(stringResource(R.string.bt_notif_delivery_section))
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp), shape = BtShapes.group)
+                    BtSkeleton(Modifier.fillMaxWidth().height(96.dp), shape = BtShapes.card)
                 }
 
-                // The grid below is the on-device copy, which is real — it is
-                // just not confirmed against the account. One line and a retry,
-                // above the rows it qualifies.
-                else -> {
-                    if (matrixFailure != null) {
+                hasAccountSettings || loadFailure != null -> {
+                    BtSectionHeader(stringResource(R.string.bt_notif_delivery_section))
+
+                    // The GET failed. Anything shown below it is the ON-DEVICE copy,
+                    // which is real — it is the last thing the server actually said —
+                    // it is just not confirmed right now. So it stays, with the error
+                    // above the controls it qualifies, exactly as this screen has
+                    // always handled it. Note there is no fabricated fallback to fear:
+                    // with no cached GET the flags are `null` and nothing renders at
+                    // all, which is the branch the sentence below covers.
+                    loadFailure?.let { failure ->
                         BtInlineError(
-                            message = matrixFailure,
+                            message = failure,
                             onRetry = {
                                 scope.launch {
-                                    loadFailure =
-                                        (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
+                                    loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
                                 }
                             },
                         )
+                        if (!hasAccountSettings) {
+                            Text(
+                                stringResource(R.string.bt_notif_account_unavailable),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = bt.textMuted,
+                            )
+                        }
                     }
-                    store.configurableKinds.forEach { kind ->
-                        TypePrefCard(
-                            kind = kind,
-                            prefs = matrix.prefs(kind),
-                            availability = availability,
-                            onToggleChannel = { channel, on ->
-                                store.setChannel(kind, channel, on)
-                                scope.launch { repo.pushServerSettings() }
-                            },
-                            onToggleMute = { muted -> store.setMuted(kind, muted) },
+
+                    accountMuted?.let { muted ->
+                        BtGroup {
+                            BtGroupRow(
+                                icon = if (muted) Icons.Outlined.NotificationsOff else Icons.Outlined.NotificationsActive,
+                                iconTint = if (muted) bt.goldEmphasis else null,
+                                title = stringResource(R.string.bt_notif_mute_all_title),
+                                subtitle = stringResource(R.string.bt_notif_mute_all_sub),
+                                onClick = { toggleMute(scope, repo, !muted) { muteFailure = it } },
+                                trailing = {
+                                    Switch(
+                                        checked = muted,
+                                        onCheckedChange = { on -> toggleMute(scope, repo, on) { muteFailure = it } },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = bt.onGold,
+                                            checkedTrackColor = bt.gold,
+                                            checkedBorderColor = bt.gold,
+                                            uncheckedThumbColor = bt.textMuted,
+                                            uncheckedTrackColor = bt.surface,
+                                            uncheckedBorderColor = bt.borderStrong,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                        muteFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
+                    }
+
+                    // Quiet hours stays LIVE and editable under a full mute
+                    // (coordinator ruling 2026-08-08). That is the web's
+                    // semantics: mute stops DELIVERY, it does not take the
+                    // schedule away from you — `gridDisabled` there covers the
+                    // routing grid only and the quiet-hours fold is untouched.
+                    // With the grid gone from this screen there is nothing left
+                    // that the mute should grey, and dimming quiet hours instead
+                    // would invent a third behaviour neither surface has.
+                    NotificationDeliverySection(
+                        quietHours = quietHours,
+                        enabled = true,
+                        onQuietHours = { next ->
+                            quietFailure = null
+                            scope.launch {
+                                val r = repo.setQuietHours(next)
+                                if (r is BtResult.Err) quietFailure = r.error.asMessage()
+                            }
+                        },
+                    )
+                    quietFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
+
+                    // The web's quiet-hours description, second sentence — the one
+                    // thing a user must not have to guess. Shown whenever quiet
+                    // hours exists: it describes what the schedule does, which is
+                    // true whether or not a mute is also in force.
+                    if (quietHours != null) {
+                        Text(
+                            stringResource(R.string.bt_notif_quiet_inbox_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = bt.textMuted,
                         )
                     }
                 }
+
+                // Loaded fine, but this deployment models neither a mute nor quiet
+                // hours (pre-v5). Nothing is drawn — not even a heading. The web row
+                // below is then the whole truth of the section, which is honest.
+                else -> Unit
             }
 
+            // ── ON THE WEB ───────────────────────────────────────────────────
+            BtSectionHeader(stringResource(R.string.bt_notif_web_section))
+            BtGroup {
+                BtWebLinkRow(
+                    title = stringResource(R.string.bt_notif_web_link_title),
+                    subtitle = stringResource(R.string.bt_notif_web_link_sub),
+                    icon = Icons.Outlined.Tune,
+                    path = WEB_NOTIFICATION_SETTINGS_PATH,
+                )
+            }
             Text(
-                stringResource(R.string.bt_notif_matrix_footer),
+                stringResource(R.string.bt_notif_web_explainer),
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/**
+ * Where the per-type matrix and the digest cadence live. Joined to the EFFECTIVE
+ * origin by `BtWebLinkRow` — never hardcode a host here, or a self-hosted user is
+ * sent to somebody else's server to change their settings.
+ */
+private const val WEB_NOTIFICATION_SETTINGS_PATH = "/control/notifications"
+
+/**
+ * Flip the account mute. The switch reads its position from the store, so a
+ * server refusal (which rolls the store back) visibly returns it — and the error
+ * says why, because a control that springs back in silence looks broken.
+ */
+private fun toggleMute(
+    scope: kotlinx.coroutines.CoroutineScope,
+    repo: at.bettertrack.app.data.notifications.NotificationRepository,
+    on: Boolean,
+    onFailure: (BtMessage?) -> Unit,
+) {
+    onFailure(null)
+    scope.launch {
+        val r = repo.setAccountMuted(on)
+        if (r is BtResult.Err) onFailure(r.error.asMessage())
     }
 }
 
@@ -269,128 +393,23 @@ private fun PermissionStatusCard(granted: Boolean, needsPermission: Boolean, onE
                 )
             }
             if (!on) {
-                Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.goldInk)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TypePrefCard(
-    kind: NotifKind,
-    prefs: at.bettertrack.app.data.notifications.TypePrefs,
-    availability: at.bettertrack.app.data.notifications.ChannelAvailability,
-    onToggleChannel: (NotifChannel, Boolean) -> Unit,
-    onToggleMute: (Boolean) -> Unit,
-) {
-    val bt = BtTheme.colors
-    BtGroup {
-        // Padding matches `BtGroupRow`'s so a type card lines up with every other
-        // grouped row in the app rather than sitting 2dp off from all of them.
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(notifKindTitle(kind), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                    Text(notifKindSubtitle(kind), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
-                }
+                // The gap is not optional. The column above is `weight(1f)`, so
+                // its body text wraps to the FULL remaining width and its last
+                // line ends flush against whatever comes next — which read as
+                // "…auf diesemAktivieren", one word, in German. 12dp is the same
+                // gutter the icon already uses on the other side of the column.
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    stringResource(R.string.bt_notif_mute),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (prefs.muted) bt.gold else bt.textMuted,
+                    stringResource(R.string.bt_notif_enable_push_action),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = bt.goldInk,
+                    // The action is an affordance, not prose: it keeps its one
+                    // line and the wrapping column absorbs the width instead.
+                    maxLines = 1,
+                    softWrap = false,
                 )
-                Spacer(Modifier.width(6.dp))
-                Switch(
-                    checked = prefs.muted,
-                    onCheckedChange = onToggleMute,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = bt.onGold,
-                        checkedTrackColor = bt.gold,
-                        checkedBorderColor = bt.gold,
-                        uncheckedThumbColor = bt.textMuted,
-                        uncheckedTrackColor = bt.surface,
-                        uncheckedBorderColor = bt.borderStrong,
-                    ),
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChannelChip(R.string.bt_notif_channel_inapp, prefs.inApp, prefs.muted) { onToggleChannel(NotifChannel.InApp, it) }
-                ChannelChip(R.string.bt_notif_channel_email, prefs.email, prefs.muted) { onToggleChannel(NotifChannel.Email, it) }
-                ChannelChip(R.string.bt_notif_channel_push, prefs.push, prefs.muted) { onToggleChannel(NotifChannel.Push, it) }
-                // v4 additive columns: shown only when the server reports the channel
-                // configured (SMTP pattern — an unlinked Telegram/Discord never surfaces).
-                if (availability.telegram) {
-                    ChannelChip(R.string.bt_notif_channel_telegram, prefs.get(NotifChannel.Telegram), prefs.muted) { onToggleChannel(NotifChannel.Telegram, it) }
-                }
-                if (availability.discord) {
-                    ChannelChip(R.string.bt_notif_channel_discord, prefs.get(NotifChannel.Discord), prefs.muted) { onToggleChannel(NotifChannel.Discord, it) }
-                }
             }
         }
     }
 }
-
-@Composable
-private fun ChannelChip(labelRes: Int, selected: Boolean, muted: Boolean, onToggle: (Boolean) -> Unit) {
-    BtChip(
-        text = stringResource(labelRes),
-        selected = selected && !muted,
-        enabled = !muted,
-        onClick = { onToggle(!selected) },
-    )
-}
-
-@Composable
-private fun notifKindTitle(kind: NotifKind): String = stringResource(
-    when (kind) {
-        NotifKind.FriendRequest -> R.string.bt_notif_type_friend_request
-        NotifKind.FriendAccepted -> R.string.bt_notif_type_friend_accepted
-        NotifKind.PortfolioShared -> R.string.bt_notif_type_portfolio_shared
-        NotifKind.AlertTriggered -> R.string.bt_notif_type_alert
-        NotifKind.ChatMessage -> R.string.bt_notif_type_chat
-        NotifKind.AccountInvite -> R.string.bt_notif_type_account_invite
-        NotifKind.AccountTempPassword -> R.string.bt_notif_type_security
-        // Not shown in the settings grid (not in configurableKinds), but the when
-        // must stay exhaustive over NotifKind.
-        NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity
-        NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared
-        NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared
-        NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published
-        NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created
-        NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired
-        NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice
-        NotifKind.DividendEvent -> R.string.bt_notif_type_dividend
-        NotifKind.BudgetExceeded -> R.string.bt_notif_type_budget
-        NotifKind.MirrorInvite -> R.string.bt_notif_type_mirror_invite
-        NotifKind.MirrorEvent -> R.string.bt_notif_type_mirror_event
-        NotifKind.NotificationsDigest -> R.string.bt_notif_type_digest
-        NotifKind.System -> R.string.bt_notif_type_system
-    },
-)
-
-@Composable
-private fun notifKindSubtitle(kind: NotifKind): String = stringResource(
-    when (kind) {
-        NotifKind.FriendRequest -> R.string.bt_notif_type_friend_request_sub
-        NotifKind.FriendAccepted -> R.string.bt_notif_type_friend_accepted_sub
-        NotifKind.PortfolioShared -> R.string.bt_notif_type_portfolio_shared_sub
-        NotifKind.AlertTriggered -> R.string.bt_notif_type_alert_sub
-        NotifKind.ChatMessage -> R.string.bt_notif_type_chat_sub
-        NotifKind.AccountInvite -> R.string.bt_notif_type_account_invite_sub
-        NotifKind.AccountTempPassword -> R.string.bt_notif_type_security_sub
-        NotifKind.FriendActivity -> R.string.bt_notif_type_friend_activity_sub
-        NotifKind.WatchlistShared -> R.string.bt_notif_type_watchlist_shared_sub
-        NotifKind.ConglomerateShared -> R.string.bt_notif_type_conglomerate_shared_sub
-        NotifKind.FollowPublished -> R.string.bt_notif_type_follow_published_sub
-        NotifKind.FollowAlertCreated -> R.string.bt_notif_type_follow_alert_created_sub
-        NotifKind.FollowAlertFired -> R.string.bt_notif_type_follow_alert_fired_sub
-        NotifKind.AccountNotice -> R.string.bt_notif_type_account_notice_sub
-        NotifKind.DividendEvent -> R.string.bt_notif_type_dividend_sub
-        NotifKind.BudgetExceeded -> R.string.bt_notif_type_budget_sub
-        NotifKind.MirrorInvite -> R.string.bt_notif_type_mirror_invite_sub
-        NotifKind.MirrorEvent -> R.string.bt_notif_type_mirror_event_sub
-        NotifKind.NotificationsDigest -> R.string.bt_notif_type_digest_sub
-        NotifKind.System -> R.string.bt_notif_type_system_sub
-    },
-)

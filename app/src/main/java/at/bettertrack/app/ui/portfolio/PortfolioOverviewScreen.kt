@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -48,11 +49,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -84,7 +87,6 @@ import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
-import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -611,7 +613,11 @@ private fun OverviewContent(
                         Text(
                             text = formatPercent(s.valueEur, locale),
                             style = BtTheme.type.moneyLarge,
-                            color = deltaColor(s.valueEur),
+                            // Reachable only in PERFORMANCE, so this is the one
+                            // headline that keeps its verdict colour — routed
+                            // through the gate anyway so every tint on this
+                            // surface has exactly one owner.
+                            color = deltaTint(chartMode, s.valueEur),
                         )
                     } else {
                         MoneyText(
@@ -651,17 +657,26 @@ private fun OverviewContent(
                         // €0 lie, one line lower down.
                         if (s == null && totals != null && !coverage.nothingPriced) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                // The day-change pair was the loudest of the two
+                                // hue bleeds: a green/red line sitting directly
+                                // under the headline of a chart the mode had
+                                // already neutralised. `deltaTint` resolves
+                                // exactly as `MoneyColorMode.GainLoss` did
+                                // wherever a verdict is still allowed (gain /
+                                // loss / textSecondary at zero), so % mode is
+                                // untouched — and the explicit `+`/`−` means
+                                // neutralising costs no information.
                                 MoneyText(
                                     value = totals.dayChangeEur,
                                     style = BtTheme.type.numberCaption,
-                                    colorMode = MoneyColorMode.GainLoss,
+                                    color = deltaTint(chartMode, totals.dayChangeEur),
                                     showSign = true,
                                 )
                                 totals.dayChangePct?.let { pct ->
                                     Text(
                                         text = " (${formatPercent(pct, locale)})",
                                         style = BtTheme.type.numberCaption,
-                                        color = deltaColor(pct),
+                                        color = deltaTint(chartMode, pct),
                                     )
                                 }
                                 Text(
@@ -687,22 +702,33 @@ private fun OverviewContent(
         // one-tap reach, in ~56dp, without re-inflating them to the 50/50 cards
         // the R-arc deleted for spending half a screen on two links.
         item(key = "quick-access", contentType = "quick-access") {
+            // ONE geometry for both chips (owner report 2026-08-08: "they render
+            // unequal"). They already shared a width — `weight(1f)` each — but
+            // not a height: Cash carries a value and is a two-line stack, while
+            // Transactions is a label alone, so each took its own intrinsic
+            // height and the pair sat in the row like two different components.
+            //
+            // `IntrinsicSize.Min` on the row makes the row as tall as the
+            // TALLER chip wants to be, and `fillMaxHeight` makes the other one
+            // match. Measured, not hard-coded, so the pair stays square at every
+            // system font scale — a fixed dp height would equalise them today
+            // and clip the money at 1.3x tomorrow.
             Row(
-                modifier = inset,
+                modifier = inset.height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 QuickStatChip(
                     label = stringResource(R.string.bt_overview_cash),
                     value = totals?.cashEur,
                     icon = Icons.Outlined.AccountBalanceWallet,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = { onOpenCash(portfolio.id) },
                 )
                 QuickStatChip(
                     label = stringResource(R.string.bt_tx_title),
                     value = null,
                     icon = Icons.AutoMirrored.Outlined.ReceiptLong,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = { onOpenTransactions(portfolio.id) },
                 )
             }
@@ -973,9 +999,20 @@ private fun HeroChart(
             BtSegmented(
                 options = CHART_MODES,
                 selected = mode,
-                label = { stringResource(chartModeLabel(it)) },
+                // No string labels: all three segments are drawn marks.
+                label = null,
                 onSelect = onMode,
                 contentDescription = { stringResource(chartModeContentDescription(it)) },
+                // A slot rather than a plain string, because the combined mode's
+                // label is a composed MARK (`€%`, tightened) and not a word —
+                // see [ChartModeLabel].
+                labelContent = { ChartModeLabel(it) },
+                // Three one-glyph labels of three different widths read as a
+                // ragged row and give three different tap targets. The floor
+                // follows the system font scale within a band, so they stay
+                // equal at other font sizes too — see the constants.
+                minSegmentWidth = CHART_MODE_SEGMENT_MIN_WIDTH *
+                    LocalDensity.current.fontScale.coerceIn(CHART_MODE_SEGMENT_SCALE_RANGE),
             )
             Spacer(Modifier.weight(1f))
             // Hidden while scrubbing so the hero's scrub readout is the single
@@ -985,7 +1022,10 @@ private fun HeroChart(
                 Text(
                     text = formatPercent(pct, locale),
                     style = BtTheme.type.numberCaption,
-                    color = deltaColor(pct),
+                    // The other hue bleed, and the one closest to the picker: a
+                    // tinted range return sat on the SAME ROW as the segment
+                    // that had just promised a neutral chart.
+                    color = deltaTint(mode, pct),
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
@@ -1108,26 +1148,110 @@ internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
     points.minByOrNull { kotlin.math.abs(it.epochMillis - epochMillis) }?.valueEur
 
 /**
- * The display modes in picker order: € → % → both.
+ * The display modes in picker order: **combined → € → %** (owner order
+ * 2026-08-08, moving the combined mode from last to first).
  *
- * Ordered by what each one shows rather than by which is default. The hybrid
- * sits last because its label literally contains the other two, so the row reads
- * as "money, return, or both" left to right.
+ * The previous order sorted by what each mode shows ("money, return, or both"),
+ * which put the DEFAULT — the mode almost every session actually opens in — at
+ * the far end of the control. Leading with it means the selected pill is where
+ * the eye lands, and the two single-unit modes read as the ways to narrow it
+ * down. The two of them keep their relative order, so the only thing that moved
+ * is the combined mode.
+ *
+ * ## Why reordering this list is safe
+ *
+ * It is a DISPLAY order and nothing else. The preference is stored by enum NAME
+ * (`chartModeFromName` / `setChartMode`), the enum's own declaration order is
+ * untouched, and no code maps a segment INDEX to a mode — [BtSegmented] hands
+ * back the option object it was given. Pinned by `ChartModeTest`.
+ *
+ * `internal` so that order is a tested fact rather than a thing the picker
+ * happens to do, the same reason [balanceAt] is.
  */
-private val CHART_MODES = listOf(BtChartMode.BALANCE, BtChartMode.PERFORMANCE, BtChartMode.HYBRID)
+internal val CHART_MODES = listOf(BtChartMode.HYBRID, BtChartMode.BALANCE, BtChartMode.PERFORMANCE)
 
-/** The segment label for a mode. */
-private fun chartModeLabel(mode: BtChartMode): Int = when (mode) {
+/**
+ * Every segment is one glyph wide, so the row is pinned to a common floor rather
+ * than left to three different content widths (`€` ≈ 7dp, `%` ≈ 10dp, `€%` ≈
+ * 17dp at `labelMedium`, each inside the segment's 14dp side padding).
+ *
+ * 46dp clears the widest of the three by a hair at `fontScale` 1.0, so all three
+ * pills land on the floor and are exactly equal. See
+ * [CHART_MODE_SEGMENT_SCALE_RANGE] for what happens either side of 1.0.
+ */
+private val CHART_MODE_SEGMENT_MIN_WIDTH = 46.dp
+
+/**
+ * How far the floor above is allowed to follow the system font scale.
+ *
+ * It has to follow it UP, or large text outgrows the floor and the widest label
+ * pushes its own pill out of line. It must not follow it DOWN — the labels shrink
+ * but the segment's fixed 14dp padding does not, so a floor scaled to 0.85 would
+ * drop below the `€%` segment's actual content and re-ragged the row it exists to
+ * even out. And it stops following at 1.3, because three pills scaled to a 2.0
+ * accessibility font would be ~92dp each and crowd the range readout off the row
+ * they share; past that the combined pill may run a dp or two wide, which is
+ * invisible next to the alternative.
+ */
+private val CHART_MODE_SEGMENT_SCALE_RANGE = 1f..1.3f
+
+/**
+ * The combined mode's mark, tightened by this much.
+ *
+ * `sp`, deliberately: the tracking has to scale with the label it tightens, and
+ * an `em` value inside a style whose size comes from the theme is exactly the
+ * unit mix that has crashed this app before.
+ */
+private val CHART_MODE_HYBRID_TRACKING = (-0.6).sp
+
+/** The segment label for a mode. `internal` so the mapping is testable. */
+internal fun chartModeLabel(mode: BtChartMode): Int = when (mode) {
     BtChartMode.BALANCE -> R.string.bt_chart_mode_balance
     BtChartMode.PERFORMANCE -> R.string.bt_chart_mode_performance
     BtChartMode.HYBRID -> R.string.bt_chart_mode_hybrid
 }
 
 /** The spoken form — the labels are currency/percent glyphs and do not read aloud. */
-private fun chartModeContentDescription(mode: BtChartMode): Int = when (mode) {
+internal fun chartModeContentDescription(mode: BtChartMode): Int = when (mode) {
     BtChartMode.BALANCE -> R.string.bt_chart_mode_balance_cd
     BtChartMode.PERFORMANCE -> R.string.bt_chart_mode_performance_cd
     BtChartMode.HYBRID -> R.string.bt_chart_mode_hybrid_cd
+}
+
+/**
+ * A mode's label as the picker draws it.
+ *
+ * The combined mode's label used to be `€ / %` — three glyphs and two spaces,
+ * five times the width of the `€` beside it, in a control where the other two
+ * options are one character each (owner, 2026-08-08: *"give it a single char not
+ * three"*).
+ *
+ * What ships is `€%`: the two units it combines, set tight enough
+ * ([CHART_MODE_HYBRID_TRACKING]) to read as one mark rather than two labels. It
+ * is language-neutral, it needs no new icon vocabulary, and it says what the mode
+ * is out of the vocabulary the other two segments already established.
+ *
+ * ## Why not the stacked fraction
+ *
+ * The first design was a `½`-style composed glyph — `€` over `%` about a fraction
+ * slash, one character cell. It does not survive this size. A real fraction keeps
+ * its total ink inside ONE line box, which at `labelMedium`'s 12sp puts each part
+ * at ~0.58× ≈ 7sp: the `€`'s two crossbars and the `%`'s two counters both close
+ * up at that size on a phone. The alternatives were parts at a legible ~9.5sp in
+ * a cell ~1.4 line-heights tall, which makes this one segment visibly bigger than
+ * its neighbours and grows the whole control, or a fraction whose parts are
+ * mush. Neither is better than two crisp full-size glyphs, so the owner's stated
+ * fallback is what shipped.
+ *
+ * The style and the ink come from [BtSegmented] itself — this only says WHAT to
+ * draw, never in which state.
+ */
+@Composable
+private fun ChartModeLabel(mode: BtChartMode) {
+    Text(
+        text = stringResource(chartModeLabel(mode)),
+        letterSpacing = if (mode == BtChartMode.HYBRID) CHART_MODE_HYBRID_TRACKING else TextUnit.Unspecified,
+    )
 }
 
 /**
@@ -1162,7 +1286,14 @@ private fun QuickStatChip(
         modifier = modifier.btPressScale(interaction),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            // Fills whatever height the row hands down (see the call site's
+            // `IntrinsicSize.Min`), so the one-line chip CENTRES its label
+            // against the two-line one instead of hanging from the top edge.
+            // Equal boxes with unequal content alignment would have swapped one
+            // visible mismatch for a subtler one.
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -1675,6 +1806,49 @@ internal fun deltaColor(value: Double) = when {
     value < 0.0 -> BtTheme.colors.loss
     else -> BtTheme.colors.textSecondary
 }
+
+/**
+ * Whether the hero surface — chart AND readouts — may state a gain/loss verdict
+ * in COLOUR at all, in the mode it is currently in.
+ *
+ * ## The bug this exists to close (owner report 2026-08-08)
+ *
+ * `BtChartMode.colorsBySign` was split out of `plotsPerformance` on 2026-08-07
+ * so the combined mode could plot the % series and stay neutral. It was then
+ * wired into exactly ONE consumer: `BtAreaChart`'s `colorBySign`, which governs
+ * the line brush, the mirrored area wash and the crosshair dot. The canvas has
+ * been correctly neutral in combined mode ever since.
+ *
+ * The TEXT around the canvas never learned the rule. The range-performance
+ * readout beside the picker and the day-change line under the headline call
+ * `deltaColor()` / `MoneyColorMode.GainLoss` directly, keyed off the sign of
+ * their own number with no reference to the mode — so red/green kept bleeding
+ * into the combined mode from the two readouts that frame the chart. The mode
+ * flag simply never reached the text layer; nothing was "still coloured by
+ * accident", it was never gated in the first place.
+ *
+ * This is that gate, in one place, so a fourth readout added later has an
+ * obvious thing to consult. Only [BtChartMode.PERFORMANCE] passes: in that mode
+ * the number IS the return, so the verdict and the quantity are the same thing.
+ * The € mode was found tinted too — same two readouts — and is neutralised by
+ * the same rule, which is what §4.1 said all along: gold is the portfolio, and a
+ * red/green verdict belongs to an asset.
+ */
+internal fun signColorAllowed(mode: BtChartMode): Boolean = mode.colorsBySign
+
+/**
+ * [deltaColor] for a hero readout: the verdict colour where the mode allows one,
+ * the neutral secondary ink everywhere else.
+ *
+ * The neutral is `textSecondary` rather than the ambient content colour so a
+ * neutralised number stays a number — the same token the combined mode's scrub
+ * sub-line already uses, and the same one [deltaColor] itself resolves an exact
+ * zero to. Sign is never lost by neutralising: every call site that uses this
+ * prints an explicit `+`/`−`.
+ */
+@Composable
+internal fun deltaTint(mode: BtChartMode, value: Double): Color =
+    if (signColorAllowed(mode)) deltaColor(value) else BtTheme.colors.textSecondary
 
 /**
  * The accent an **asset-level** surface wears: gain or loss by the performance of

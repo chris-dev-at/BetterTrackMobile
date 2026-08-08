@@ -23,18 +23,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Webhook
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -77,29 +83,31 @@ import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.data.prefs.themeModeFromName
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originLabel
+import at.bettertrack.app.ui.components.BtChoiceSheet
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtPickerOption
+import at.bettertrack.app.ui.components.BtPickerRow
+import at.bettertrack.app.ui.components.BtPickerSheet
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
-import at.bettertrack.app.ui.theme.BtIcons
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.update.UpdateAvailableRow
+import at.bettertrack.app.ui.util.rememberBtLocale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Percent
-import androidx.compose.material.icons.outlined.Visibility
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
 import at.bettertrack.app.data.api.dto.BT_BASE_CURRENCIES
@@ -118,6 +126,12 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.profileIconLabelRes
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 /**
  * Settings & account management (spec §6.12). Sections: **Account** (username /
@@ -340,12 +354,30 @@ fun SettingsScreen(
                     ) {
                         AccountRow(stringResource(R.string.bt_settings_username), user?.username?.ifBlank { "—" } ?: "—")
                         AccountRow(stringResource(R.string.bt_settings_email), user?.email?.ifBlank { "—" } ?: "—")
+                        // Web parity: the account page names the day the account
+                        // was opened. Absent on a pre-v5 server (`createdAt` is
+                        // null) and on a session cached before this build, and the
+                        // row simply does not render then — an em dash here would
+                        // read as "we lost it", not "your server does not say".
+                        formatMemberSince(user?.memberSince, rememberBtLocale())?.let { since ->
+                            AccountRow(stringResource(R.string.bt_settings_member_since), since)
+                        }
                     }
                     BtGroupRow(
                         icon = Icons.Outlined.Key,
                         title = stringResource(R.string.bt_dest_change_password),
                         subtitle = stringResource(R.string.bt_settings_change_password_sub),
                         onClick = onOpenChangePassword,
+                    )
+                    // Parity ruling 2026-08-08: the export is a long-running job
+                    // that mails a link and offers several formats — the web owns
+                    // it end to end, and a half-mirror in the app would be a
+                    // second place for it to go wrong.
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Download,
+                        title = stringResource(R.string.bt_settings_data_export),
+                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
+                        path = "/control/account",
                     )
                 }
             }
@@ -405,8 +437,14 @@ fun SettingsScreen(
                         onClick = onOpenTaxSettings,
                     )
                 }
-                // Both round-trip through `/settings/account`, so they belong to
-                // the modes that HAVE an account — same rule as discreet mode.
+                // Round-trips through `/settings/account`, so it belongs to the
+                // modes that HAVE an account — same rule as discreet mode.
+                //
+                // **Default visibility is deliberately absent** (parity audit
+                // 2026-08-08, web test #377): the web forbids setting a
+                // new-portfolio visibility default, so mirroring the control here
+                // would offer a promise the platform does not keep. Sharing is
+                // chosen per item, on the item, through the audience sheet.
                 if (hasAccount) {
                     BtGroupRow(
                         icon = Icons.Outlined.Payments,
@@ -414,17 +452,6 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.bt_settings_base_currency_sub),
                         onClick = { picker = SettingsPicker.Currency },
                         trailing = { SettingsValue(accountPrefs?.baseCurrency) },
-                    )
-                    BtGroupRow(
-                        icon = Icons.Outlined.Visibility,
-                        title = stringResource(R.string.bt_settings_default_visibility),
-                        subtitle = stringResource(R.string.bt_settings_default_visibility_sub),
-                        onClick = { picker = SettingsPicker.Visibility },
-                        trailing = {
-                            val wire = accountPrefs?.defaultPortfolioVisibility
-                            val labelRes = wire?.let { visibilityLabelRes(it) }
-                            SettingsValue(labelRes?.let { stringResource(it) })
-                        },
                     )
                 }
                 val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
@@ -469,6 +496,17 @@ fun SettingsScreen(
                             )
                         },
                     )
+                    // ADDITIVE, not a replacement: the icon is the one profile
+                    // field the platform lets a client write, and it keeps its
+                    // native picker directly above. Everything else on a profile
+                    // is the web's, so this row hands over rather than growing a
+                    // second, thinner profile editor here.
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Person,
+                        title = stringResource(R.string.bt_settings_profile_web),
+                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
+                        path = "/control/profile",
+                    )
                 }
             }
 
@@ -476,9 +514,31 @@ fun SettingsScreen(
             // Device-scoped, not account-scoped: the theme belongs to the phone
             // you are holding, survives logout, and is shown in EVERY storage
             // mode — a Drive-only install has no account but still has eyes.
+            //
+            // ## Two things this section deliberately does NOT contain
+            //
+            // **Interface scale — ANDROID-SYSTEM-EXEMPT** (parity audit
+            // 2026-08-08). The web ships a text/interface-scale setting because a
+            // browser tab has no other owner for it. Android does: Settings →
+            // Display → Font size and Display size already scale every `sp` and
+            // every density-aware dimension in this app, system-wide, with a
+            // preview and per-user accessibility defaults. An in-app duplicate
+            // would compose with the system's value rather than replace it, so
+            // the two controls would multiply and neither would be the truth.
+            // This is a ruling, not an oversight: do not "restore" it.
+            //
+            // **True black.** The toggle was removed for web parity (the web has
+            // no such setting) — but only the row: `devicePrefs.trueBlack` and
+            // the token machinery it drives are intact, so the pref can be
+            // exposed again the day the platform grows the setting.
+            //
+            // Removing the row did strand the ~1 day of devices that had turned
+            // it ON: a black app with no control left to undo it. `DevicePrefs`
+            // heals that on read — the stored key is dropped and the flag reads
+            // false — because a choice the user can no longer revise is not a
+            // setting. See `DevicePrefs.healStrandedTrueBlack`.
             BtSectionHeader(stringResource(R.string.bt_settings_appearance_section))
             val themeMode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
-            val trueBlack by AppGraph.devicePrefs.trueBlack.collectAsStateWithLifecycle()
             BtGroup {
                 BtGroupRow(
                     icon = Icons.Outlined.Contrast,
@@ -487,20 +547,6 @@ fun SettingsScreen(
                     onClick = { picker = SettingsPicker.Theme },
                     trailing = { SettingsValue(stringResource(themeModeLabelRes(themeMode))) },
                 )
-                // Shown for System and Dark, hidden for Light — gated on the
-                // CHOICE rather than on what is on screen right now. Gating on
-                // the live table would make the row appear and disappear at
-                // sunset for a System user, which reads as a bug; gating on the
-                // choice says the honest thing, that this tunes your dark theme.
-                if (themeMode != BtThemeMode.Light) {
-                    SettingsToggleRow(
-                        icon = BtIcons.Moon,
-                        title = stringResource(R.string.bt_settings_true_black),
-                        subtitle = stringResource(R.string.bt_settings_true_black_sub),
-                        checked = trueBlack,
-                        onCheckedChange = { AppGraph.devicePrefs.setTrueBlack(it) },
-                    )
-                }
             }
 
             // ── PRIVACY ──────────────────────────────────────────────────────
@@ -536,6 +582,60 @@ fun SettingsScreen(
             discreetError?.let {
                 BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
             }
+            }
+
+            // ── ON THE WEB ───────────────────────────────────────────────────
+            // Five surfaces the parity audit (2026-08-08) ruled the app will not
+            // reimplement: they configure how OTHER software talks to the
+            // account, they are edited rarely and read carefully, and every one
+            // of them shows a secret exactly once at creation time — which is a
+            // job for a full keyboard and a page you can copy out of, not a
+            // phone row.
+            //
+            // It sits HERE, between the app's own preferences and the About
+            // chrome, on purpose. These are secondary: nobody opens Settings to
+            // reach them, so they must not compete with the rows people do come
+            // for — but they are still account settings, so burying them under
+            // About would be hiding them. One group, one header, one line of
+            // explanation, five hand-offs.
+            //
+            // Account-gated like every other `/control/*` link: a Drive-only
+            // install has no BetterTrack account for any of these to configure.
+            if (hasAccount) {
+                BtSectionHeader(stringResource(R.string.bt_settings_web_section))
+                Text(
+                    text = stringResource(R.string.bt_settings_web_intro),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+                BtGroup {
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Link,
+                        title = stringResource(R.string.bt_settings_web_connections),
+                        path = "/control/connections",
+                    )
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Key,
+                        title = stringResource(R.string.bt_settings_web_api_keys),
+                        path = "/control/api",
+                    )
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Apps,
+                        title = stringResource(R.string.bt_settings_web_oauth_apps),
+                        path = "/control/oauth-apps",
+                    )
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.VerifiedUser,
+                        title = stringResource(R.string.bt_settings_web_authorized_apps),
+                        path = "/control/authorized-apps",
+                    )
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Webhook,
+                        title = stringResource(R.string.bt_settings_web_webhooks),
+                        path = "/control/webhooks",
+                    )
+                }
             }
 
             // ── ABOUT ────────────────────────────────────────────────────────
@@ -665,15 +765,17 @@ fun SettingsScreen(
     when (picker) {
         null -> Unit
 
-        SettingsPicker.Currency -> SettingsChoiceDialog(
+        SettingsPicker.Currency -> BtChoiceSheet(
             title = stringResource(R.string.bt_settings_base_currency),
+            subtitle = stringResource(R.string.bt_settings_base_currency_sub),
             // The codes are the labels: a currency code is not copy, and the
             // platform's list is closed (`BASE_CURRENCIES`), so this is a picker
             // rather than a text field.
-            options = BT_BASE_CURRENCIES.map { it to it },
+            options = BT_BASE_CURRENCIES.map { BtPickerOption(value = it, label = it) },
             selected = accountPrefs?.baseCurrency,
             busy = savingAccountPrefs,
             message = accountPrefsError,
+            closeLabel = stringResource(R.string.bt_action_cancel),
             onPick = { saveAccountPrefs(UpdateAccountSettingsRequest(baseCurrency = it)) },
             onDismiss = {
                 picker = null
@@ -681,45 +783,33 @@ fun SettingsScreen(
             },
         )
 
-        SettingsPicker.Visibility -> SettingsChoiceDialog(
-            title = stringResource(R.string.bt_settings_default_visibility),
-            options = listOf(
-                VISIBILITY_PRIVATE to stringResource(R.string.bt_settings_visibility_private),
-                VISIBILITY_FRIENDS to stringResource(R.string.bt_settings_visibility_friends),
-            ),
-            selected = accountPrefs?.defaultPortfolioVisibility,
-            busy = savingAccountPrefs,
-            message = accountPrefsError,
-            onPick = { saveAccountPrefs(UpdateAccountSettingsRequest(defaultPortfolioVisibility = it)) },
-            onDismiss = {
-                picker = null
-                accountPrefsError = null
-            },
-        )
-
         SettingsPicker.Theme -> {
-            // Collected, not read off `.value`: the dialog does not dismiss on
+            // Collected, not read off `.value`: the sheet does not dismiss on
             // pick (it is its own preview), so the tick has to MOVE when the
             // choice changes underneath it.
             val mode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
-            SettingsChoiceDialog(
-            title = stringResource(R.string.bt_settings_theme),
-            options = BtThemeMode.entries.map { it.name to stringResource(themeModeLabelRes(it)) },
-            selected = mode.name,
-            // Device-local and synchronous: there is nothing to wait for and
-            // nothing that can fail, so the two round-trip slots stay empty.
-            busy = false,
-            message = null,
-            // Deliberately does NOT dismiss. The whole app is repainting behind
-            // this dialog, which makes the picker its own preview — the one
-            // place in Settings where staying open is more useful than closing.
-            onPick = { AppGraph.devicePrefs.setThemeMode(themeModeFromName(it)) },
-            closeLabelRes = R.string.bt_action_done,
-            onDismiss = { picker = null },
+            BtChoiceSheet(
+                title = stringResource(R.string.bt_settings_theme),
+                options = BtThemeMode.entries.map {
+                    BtPickerOption(value = it.name, label = stringResource(themeModeLabelRes(it)))
+                },
+                selected = mode.name,
+                // Device-local and synchronous: there is nothing to wait for and
+                // nothing that can fail, so the two round-trip slots stay empty.
+                busy = false,
+                message = null,
+                // Deliberately does NOT dismiss. The whole app is repainting
+                // behind this sheet, which makes the picker its own preview —
+                // the one place in Settings where staying open is more useful
+                // than closing, and a sheet shows more of the repainting app
+                // than the centre dialog it replaced ever did.
+                onPick = { AppGraph.devicePrefs.setThemeMode(themeModeFromName(it)) },
+                closeLabel = stringResource(R.string.bt_action_done),
+                onDismiss = { picker = null },
             )
         }
 
-        SettingsPicker.ProfileIcon -> ProfileIconDialog(
+        SettingsPicker.ProfileIcon -> ProfileIconSheet(
             current = profile?.profileIcon,
             ready = profile != null,
             loading = profileLoading,
@@ -735,8 +825,14 @@ fun SettingsScreen(
     }
 }
 
-/** Which of the settings pickers is open. */
-private enum class SettingsPicker { Currency, Visibility, ProfileIcon, Theme }
+/**
+ * Which of the settings pickers is open.
+ *
+ * `Visibility` is gone with its row (parity audit 2026-08-08, web test #377) —
+ * see the PREFERENCES section for why the app does not offer a new-portfolio
+ * visibility default at all.
+ */
+private enum class SettingsPicker { Currency, ProfileIcon, Theme }
 
 /**
  * Theme choice → its label. Exhaustive over [BtThemeMode] on purpose: the
@@ -749,21 +845,41 @@ private fun themeModeLabelRes(mode: BtThemeMode): Int = when (mode) {
     BtThemeMode.Dark -> R.string.bt_settings_theme_dark
 }
 
-/** `defaultPortfolioVisibility` wire values — the platform's closed pair. */
-private const val VISIBILITY_PRIVATE = "private"
-private const val VISIBILITY_FRIENDS = "friends"
+// The `defaultPortfolioVisibility` wire constants and their label map went with
+// the row (parity audit 2026-08-08). `AccountSettingsResponse` still CARRIES the
+// field — it is the platform's wire shape and not the app's to trim — the app
+// simply never reads or writes it.
 
 /**
- * Wire visibility → label, or **null** for a value this build does not know.
+ * `/auth/me`'s `createdAt` as a "Member since" day, or **null** when there is
+ * nothing honest to render.
  *
- * Deliberately not defaulting to "Private": the row would then confidently name
- * a setting the user does not have. An em dash says "not something I can name",
- * which is the truth, and the picker still opens.
+ * Null covers all three ways this can be absent, and the row is omitted for each
+ * of them: a pre-v5 server that never sends the key, a session cached by a build
+ * that did not carry it, and a timestamp this app cannot parse. An em dash would
+ * claim the value was lost; saying nothing claims nothing.
+ *
+ * Rendered in the DEVICE's zone rather than UTC. This is a true instant (unlike
+ * an ex-date or a pay date, which are calendar days the server pins to UTC
+ * midnight and which `intelDate` therefore keeps in UTC), and the honest answer
+ * to "when did I join" is the wall clock the user was looking at when they did.
+ *
+ * Pure, so the parsing and the fallbacks are unit-tested without a device.
  */
-private fun visibilityLabelRes(wire: String): Int? = when (wire) {
-    VISIBILITY_PRIVATE -> R.string.bt_settings_visibility_private
-    VISIBILITY_FRIENDS -> R.string.bt_settings_visibility_friends
-    else -> null
+internal fun formatMemberSince(
+    iso: String?,
+    locale: Locale,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String? {
+    val raw = iso?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    val instant = runCatching { Instant.parse(raw) }
+        .recoverCatching { OffsetDateTime.parse(raw).toInstant() }
+        .getOrNull() ?: return null
+    return runCatching {
+        instant.atZone(zone)
+            .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
+    }.getOrNull()
 }
 
 /**
@@ -793,105 +909,37 @@ private fun SettingsValue(value: String?) {
     }
 }
 
-/**
- * The shared single-select dialog behind the currency and visibility rows.
- *
- * Picking IS the confirmation — the same immediate-apply model the language
- * screen uses — so there is no second "Save" to press. The dialog stays open on
- * failure with the error under the list, because the choice the user made is
- * still on screen and still the thing they want.
- */
-@Composable
-private fun SettingsChoiceDialog(
-    title: String,
-    options: List<Pair<String, String>>,
-    selected: String?,
-    busy: Boolean,
-    message: BtMessage?,
-    onPick: (String) -> Unit,
-    onDismiss: () -> Unit,
-    /**
-     * The closing button's label. "Cancel" is right for the account pickers,
-     * whose choice is still in flight when the button is reachable; a picker
-     * that has already applied its choice must not offer to cancel it.
-     */
-    closeLabelRes: Int = R.string.bt_action_cancel,
-) {
-    val bt = BtTheme.colors
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        // §2 A1: a dialog is the top of the ramp, not the card level.
-        containerColor = bt.surfaceHigh,
-        titleContentColor = bt.textPrimary,
-        textContentColor = bt.textSecondary,
-        title = { Text(title) },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                options.forEach { (wire, label) ->
-                    val isSelected = wire == selected
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (busy || isSelected) {
-                                    Modifier
-                                } else {
-                                    Modifier.clickable { onPick(wire) }
-                                },
-                            )
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) bt.goldInk else bt.textPrimary,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = bt.goldInk,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
-                message?.let {
-                    Spacer(Modifier.height(8.dp))
-                    BtFormError(it)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) {
-                Text(stringResource(closeLabelRes), color = bt.textSecondary)
-            }
-        },
-    )
-}
+// R4: `SettingsChoiceDialog` is gone. Its job — a single-select list where
+// picking is the confirm, with a busy state and an error that keeps the surface
+// open — is now `BtChoiceSheet` in `ui/components/BtPickerSheet.kt`, shared with
+// every other picker in the app. See that file's KDoc for what a centre dialog
+// was getting wrong.
 
 /**
  * The 16 curated profile icons, plus "no icon".
  *
- * This grid used to render **Material glyphs**, because the platform shipped no
- * artwork for the ids — fox and panda even shared `Pets`, since there is no fox
- * in the Material set. That is no longer true: the web's own 16 avatars are now
- * vendored as drawables (`ui/components/BtProfileIcon.kt`), so the picker shows
- * the same artwork the user will see on the web, and picking one is no longer a
- * guess about what it will look like.
- *
- * The grid is 4×4 in the contract's own order, which is part of the contract:
- * ids are appended, never inserted, so a user's icon cannot silently become a
- * different one.
+ * The grid renders the web's own avatar artwork (`ui/components/BtProfileIcon.kt`),
+ * 4×4 in the contract's own order, which is part of the contract: ids are
+ * appended, never inserted, so a user's icon cannot silently become a different
+ * one.
  *
  * [ready] is the `isPublic` precondition, not a spinner: until the current
  * profile is in hand the grid is not drawn at all, because a PUT without it
  * would flip a public profile private.
+ *
+ * ## Why it is a sheet with a grid rather than a picker of its own
+ *
+ * It keeps the grid — sixteen pieces of artwork are a thing you look AT, and a
+ * list of sixteen 56dp rows would be a scroll instead of a glance. What it no
+ * longer keeps is its own chrome: the title, the scroll cap, the error slot, the
+ * close button and the refusal to dismiss mid-write all come from
+ * [BtPickerSheet], so this picker and the currency/theme pickers are visibly one
+ * family. The "no icon" entry is a [BtPickerRow] for exactly that reason — it is
+ * a choice in a list, not a cell in the grid, and it now looks like every other
+ * choice in the app.
  */
 @Composable
-private fun ProfileIconDialog(
+private fun ProfileIconSheet(
     current: String?,
     ready: Boolean,
     loading: Boolean,
@@ -901,97 +949,75 @@ private fun ProfileIconDialog(
     onPick: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val bt = BtTheme.colors
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = bt.surfaceHigh,
-        titleContentColor = bt.textPrimary,
-        textContentColor = bt.textSecondary,
-        title = { Text(stringResource(R.string.bt_settings_profile_icon_title)) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                when {
-                    loading -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(48.dp)) }
-                    }
+    val haptics = rememberBtHaptics()
+    BtPickerSheet(
+        title = stringResource(R.string.bt_settings_profile_icon_title),
+        onDismiss = onDismiss,
+        busy = busy,
+        // While the profile read is still failing the error IS the content (a
+        // retryable [BtInlineError] below), so it must not also be repeated as
+        // the sheet's own footer line.
+        message = if (ready) message else null,
+        closeLabel = stringResource(R.string.bt_action_cancel),
+    ) {
+        when {
+            loading -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(48.dp)) }
+            }
 
-                    !ready -> BtInlineError(
-                        message = message ?: BtMessage.generic,
-                        onRetry = onRetry,
-                    )
+            !ready -> BtInlineError(
+                message = message ?: BtMessage.generic,
+                onRetry = onRetry,
+            )
 
-                    else -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (busy) Modifier else Modifier.clickable { onPick(null) })
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.AccountCircle,
-                                contentDescription = null,
-                                tint = if (current == null) bt.gold else bt.textSecondary,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = stringResource(R.string.bt_settings_profile_icon_none),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (current == null) bt.gold else bt.textPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (current == null) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Check,
-                                    contentDescription = null,
-                                    tint = bt.gold,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
+            else -> {
+                BtPickerRow(
+                    label = stringResource(R.string.bt_settings_profile_icon_none),
+                    selected = current == null,
+                    onClick = if (busy || current == null) {
+                        null
+                    } else {
+                        {
+                            haptics.confirm()
+                            onPick(null)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        BT_PROFILE_ICONS.chunked(PROFILE_ICON_COLUMNS).forEach { rowIds ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                rowIds.forEach { id ->
-                                    ProfileIconCell(
-                                        id = id,
-                                        selected = id == current,
-                                        enabled = !busy,
-                                        onClick = { onPick(id) },
-                                    )
-                                }
-                                // Keeps a short last row left-aligned with the
-                                // ones above instead of spreading across the width.
-                                repeat(PROFILE_ICON_COLUMNS - rowIds.size) {
-                                    Spacer(Modifier.size(PROFILE_ICON_CELL))
-                                }
-                            }
+                    },
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Outlined.AccountCircle,
+                            contentDescription = null,
+                            tint = if (current == null) BtTheme.colors.goldEmphasis else BtTheme.colors.textSecondary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+                BT_PROFILE_ICONS.chunked(PROFILE_ICON_COLUMNS).forEach { rowIds ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        rowIds.forEach { id ->
+                            ProfileIconCell(
+                                id = id,
+                                selected = id == current,
+                                enabled = !busy,
+                                onClick = {
+                                    haptics.confirm()
+                                    onPick(id)
+                                },
+                            )
+                        }
+                        // Keeps a short last row left-aligned with the
+                        // ones above instead of spreading across the width.
+                        repeat(PROFILE_ICON_COLUMNS - rowIds.size) {
+                            Spacer(Modifier.size(PROFILE_ICON_CELL))
                         }
                     }
                 }
-                if (ready) {
-                    message?.let {
-                        Spacer(Modifier.height(10.dp))
-                        BtFormError(it)
-                    }
-                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) {
-                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
-            }
-        },
-    )
+        }
+    }
 }
 
 private const val PROFILE_ICON_COLUMNS = 4

@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,12 +35,15 @@ import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.TaxRepository
 import at.bettertrack.app.data.repo.TaxSettings
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.domain.TaxMode
 import at.bettertrack.app.domain.TaxSettingsDraft
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
+import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtSnackbarEffect
+import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -250,10 +254,86 @@ fun TaxSettingsScreen(onBack: () -> Unit) {
                         enabled = !saving,
                     )
                 }
+
+                // Keyed off the SERVER's mode, not the on-screen draft — the web
+                // panel reads `query.data?.mode ?? 'none'` for the same gate, so
+                // a rung the user has tapped but not saved does not conjure a
+                // report row on either client.
+                if (taxReportsLinkVisible(s.settings.mode)) {
+                    BtGroup {
+                        BtWebLinkRow(
+                            title = stringResource(R.string.bt_tax_settings_reports_row),
+                            path = TAX_REPORTS_WEB_PATH,
+                            subtitle = stringResource(R.string.bt_tax_settings_reports_sub),
+                            icon = Icons.Outlined.Description,
+                        )
+                    }
+                }
+
+                // Outside the mode condition, exactly as the web places it: the
+                // liability framing is a property of the screen, not of whichever
+                // mode happens to be selected.
+                TaxFootnote(stringResource(R.string.bt_tax_settings_disclaimer))
             }
         }
     }
 }
+
+// ── The tax-report hand-off ──────────────────────────────────────────────────
+
+/**
+ * Where the tax-report row goes. **Not invented** — it is the web's own route,
+ * copied from the panel this screen is the parity twin of:
+ *
+ * ```tsx
+ * // apps/web/src/user/control/panels/DefaultsPanel.tsx:96-100
+ * {mode !== 'none' ? (
+ *   <Row>
+ *     <Link className="bt-link" to="/portfolio/tax">
+ *       {t('settings.taxes.reportLink')}
+ *     </Link>
+ *   </Row>
+ * ) : null}
+ * ```
+ *
+ * ## Why this is a web hand-off and not a native route
+ *
+ * The app HAS a native tax-report screen, `TaxYearsRoute(portfolioId)` — but it
+ * takes its subject from the route, deliberately, so that an ambient switcher
+ * selection cannot silently retarget it (see the nav graph's "Management parity"
+ * note). This screen edits the default that portfolios *inherit* and holds no
+ * portfolio at all, so there is no id to hand it that would not be a guess.
+ *
+ * The web has the same shape of problem and solved it the other way: its route
+ * `portfolio/tax` (`UserApp.tsx:333`) carries no id either and resolves the
+ * ACTIVE portfolio from `usePortfolioStore()` (`TaxReportPage.tsx:367`). Linking
+ * to it therefore lands the user on exactly the page the web's own tax-settings
+ * panel links to, resolved against the same active portfolio — which is the
+ * parity this screen is being held to. The native per-portfolio destination is
+ * untouched and still reachable where it has a subject: Portfolio settings →
+ * Tax reports.
+ *
+ * The path is joined to the EFFECTIVE origin by [BtWebLinkRow], so a dev or
+ * self-hosted stack opens its own web app rather than production.
+ */
+private const val TAX_REPORTS_WEB_PATH: String = "/portfolio/tax"
+
+/**
+ * Whether the tax-report hand-off belongs on this screen at all.
+ *
+ * Mirrors the web's `mode !== 'none'` gate (`DefaultsPanel.tsx:96`), read off the
+ * server's mode on both clients. `none` means "BetterTrack does not treat tax
+ * here", so there is nothing to report on and the row would be a promise the
+ * account cannot keep. Every other mode — including one this build does not
+ * recognise, which is a *newer* mode and therefore certainly not `none` — does
+ * produce figures.
+ *
+ * A blank mode is not a mode: it is a malformed payload, and the web resolves the
+ * same absence to `'none'` (`query.data?.mode ?? 'none'`), i.e. no row. Kept pure
+ * and named so the rule is testable without a device.
+ */
+internal fun taxReportsLinkVisible(mode: TaxMode): Boolean =
+    mode.isNotBlank() && mode != "none"
 
 /**
  * The header's one action. A text button rather than a filled one: the bar is

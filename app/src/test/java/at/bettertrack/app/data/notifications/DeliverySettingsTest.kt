@@ -213,7 +213,10 @@ class DeliverySettingsTest {
     }
 
     @Test
-    fun `enabling with no server timezone carries the device zone in the same patch`() {
+    fun `enabling and picking a zone in one go sends both keys`() {
+        // NOTE: the app no longer PRODUCES this combination on its own — enabling
+        // quiet hours used to smuggle the device zone into the same patch, and that
+        // auto-injection is gone. The diff must still handle two changed fields.
         val noZone = serverQuietHours.copy(timezone = null)
         val patch = quietHoursPatch(noZone, noZone.copy(enabled = true, timezone = "Europe/Vienna"))
             .orFail("quiet-hours patch")
@@ -226,8 +229,9 @@ class DeliverySettingsTest {
     @Test
     fun `a no-op quiet-hours change produces no patch`() {
         assertNull(quietHoursPatch(serverQuietHours, serverQuietHours))
-        // A null timezone is never diffed down — the app cannot clear one it did not set.
-        assertNull(quietHoursPatch(serverQuietHours, serverQuietHours.copy(timezone = null)))
+        // Both zones already absent ⇒ still nothing to say.
+        val noZone = serverQuietHours.copy(timezone = null)
+        assertNull(quietHoursPatch(noZone, noZone))
     }
 
     // ── SharedPreferences codec for the cadence tri-state ───────────────────────

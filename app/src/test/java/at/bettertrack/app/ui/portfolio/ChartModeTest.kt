@@ -6,6 +6,7 @@ import at.bettertrack.app.data.prefs.chartModeFromName
 import at.bettertrack.app.data.repo.HistoryPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,6 +19,12 @@ import org.junit.Test
  * € at that point"*. Both halves of that sentence are pinned here — which series
  * the curve comes from ([BtChartMode.plotsPerformance]) and where the € comes
  * from ([balanceAt]).
+ *
+ * Extended 2026-08-08 with the three things the owner's follow-up changed: that
+ * NOTHING on the hero tints by sign outside the pure % mode ([signColorAllowed],
+ * the gate the readouts were missing), that the combined mode leads the picker
+ * ([CHART_MODES]), and that reordering the picker cannot reinterpret anybody's
+ * stored preference.
  */
 class ChartModeTest {
 
@@ -42,6 +49,84 @@ class ChartModeTest {
         // The hybrid plots the % series AND stays neutral — the exact
         // combination the old single flag could not express.
         assertTrue(BtChartMode.HYBRID.plotsPerformance && !BtChartMode.HYBRID.colorsBySign)
+    }
+
+    @Test
+    fun `no readout on the hero may tint by sign outside the pure percent mode`() {
+        // The hue bleed of 2026-08-08. `colorsBySign` reached exactly one
+        // consumer — the canvas — while the two readouts framing it coloured
+        // themselves off their own sign. `signColorAllowed` is the gate they all
+        // consult now, and this is the assertion that it stays %-only.
+        assertTrue(signColorAllowed(BtChartMode.PERFORMANCE))
+        assertFalse(signColorAllowed(BtChartMode.HYBRID))
+        // The € mode was tinted too, by the same two readouts. Owner expected it
+        // neutral; it now is, under the same rule.
+        assertFalse(signColorAllowed(BtChartMode.BALANCE))
+    }
+
+    @Test
+    fun `the gate and the curve flag can never disagree`() {
+        // One rule, not two: if a later change gives the curve its own idea of
+        // when to colour, the readouts must move with it or this fails.
+        BtChartMode.entries.forEach { mode ->
+            assertEquals(mode.colorsBySign, signColorAllowed(mode))
+        }
+    }
+
+    // ── Picker order (owner order 2026-08-08) ────────────────────────────────
+
+    @Test
+    fun `the combined mode leads the picker`() {
+        assertEquals(
+            listOf(BtChartMode.HYBRID, BtChartMode.BALANCE, BtChartMode.PERFORMANCE),
+            CHART_MODES,
+        )
+        // The leading segment is the default, which is the point of moving it:
+        // the selected pill is where the eye lands.
+        assertEquals(DEFAULT_CHART_MODE, CHART_MODES.first())
+    }
+
+    @Test
+    fun `the picker offers every mode exactly once`() {
+        assertEquals(BtChartMode.entries.size, CHART_MODES.size)
+        assertEquals(BtChartMode.entries.toSet(), CHART_MODES.toSet())
+    }
+
+    @Test
+    fun `the picker order is a display order and not the stored one`() {
+        // The reorder is safe because these two lists are allowed to differ:
+        // the preference is stored by NAME, the enum's declaration order is
+        // untouched, and nothing maps a segment index to a mode. If someone ever
+        // "tidies" the enum to match the picker, the round-trip tests above are
+        // what keep stored preferences honest — but the two orders differing is
+        // itself the proof that no positional mapping exists.
+        assertNotEquals(BtChartMode.entries.toList(), CHART_MODES)
+        CHART_MODES.forEach { mode ->
+            assertEquals(mode, chartModeFromName(mode.name))
+        }
+    }
+
+    @Test
+    fun `a stored preference is never read as a segment index`() {
+        // What a positional mapping would have written. None of these is a mode
+        // name, so every one of them is garbage that falls back to the default
+        // rather than selecting the mode at that position.
+        listOf("0", "1", "2").forEach { ordinalish ->
+            assertEquals(DEFAULT_CHART_MODE, chartModeFromName(ordinalish))
+        }
+    }
+
+    @Test
+    fun `every mode has its own label and its own spoken form`() {
+        val labels = BtChartMode.entries.map { chartModeLabel(it) }
+        val spoken = BtChartMode.entries.map { chartModeContentDescription(it) }
+        assertEquals(labels.size, labels.toSet().size)
+        assertEquals(spoken.size, spoken.toSet().size)
+        // The visible label is a glyph, so a spoken form is mandatory for all
+        // three — a segment reading out "€%" is not an accessible name.
+        BtChartMode.entries.forEach { mode ->
+            assertNotEquals(chartModeLabel(mode), chartModeContentDescription(mode))
+        }
     }
 
     @Test

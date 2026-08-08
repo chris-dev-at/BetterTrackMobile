@@ -1,5 +1,7 @@
 package at.bettertrack.app.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.QrCode2
@@ -50,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -465,10 +469,75 @@ private fun EnrollCard(
     }
 }
 
+// ── Recovery-code file ───────────────────────────────────────────────────────
+
+/** Plain text, because a recovery code is text a human retypes under stress. */
+internal const val RECOVERY_CODES_MIME: String = "text/plain"
+
+/**
+ * The name offered to the document picker — the web's filename exactly
+ * (`SignInPanel.tsx:204`, `link.download = 'bettertrack-recovery-codes.txt'`), so
+ * a user who has saved codes from both clients recognises the file.
+ *
+ * Constant rather than timestamped, for the same reason the web keeps it
+ * constant: the codes are replaced wholesale on every regenerate, so two files
+ * differing only by date would be a set of near-identical files of which exactly
+ * one still works. The picker's own "already exists" prompt is where that gets
+ * resolved.
+ */
+internal const val RECOVERY_CODES_FILENAME: String = "bettertrack-recovery-codes.txt"
+
+/**
+ * The bytes of the saved file: the codes, one per line, and nothing else.
+ *
+ * Byte-identical to the web's blob — `codes.join('\n') + '\n'` at
+ * `SignInPanel.tsx:200` — so the two clients produce the same file for the same
+ * codes.
+ *
+ * No header, no localized preamble, no date: a recovery code is pasted or
+ * retyped into a login field, and every extra line is something the user has to
+ * visually skip past at the one moment they are already locked out. The trailing
+ * newline is the web's too, and a text file without one reads as truncated in
+ * half the editors that will ever open this.
+ *
+ * Verbatim: nothing is trimmed or filtered, so the file always says exactly what
+ * the dialog showed.
+ */
+internal fun recoveryCodesFileBody(codes: List<String>): String =
+    if (codes.isEmpty()) "" else codes.joinToString(separator = "\n", postfix = "\n")
+
 @Composable
 private fun RecoveryCodesDialog(codes: List<String>, onDismiss: () -> Unit) {
     val bt = BtTheme.colors
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    // SAF `CreateDocument`, the same path the vault's recovery kit takes, and
+    // for the same two reasons: the user picks the destination (so the codes
+    // land where they intend rather than in a shared Downloads folder), and it
+    // needs no FileProvider staging — nothing is written to app storage at all,
+    // the bytes go straight into the stream the picker hands back. A share sheet
+    // was deliberately NOT used: it would mean first materializing a file of
+    // one-time authentication secrets inside the app's cache and then handing a
+    // read grant to whichever app the user taps, which is a wider blast radius
+    // than the job needs. It is also the closer analogue of what the web does —
+    // an anchor `download` writes to the user's own filesystem and hands the
+    // bytes to no one.
+    val saver = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(RECOVERY_CODES_MIME),
+    ) { uri ->
+        if (uri != null) {
+            // Fail-soft: a cancelled picker or an unwritable target must not
+            // take down the one dialog that is showing codes the user cannot
+            // get back. The codes stay on screen either way.
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(recoveryCodesFileBody(codes).toByteArray())
+                }
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = bt.surfaceHigh,
@@ -487,10 +556,18 @@ private fun RecoveryCodesDialog(codes: List<String>, onDismiss: () -> Unit) {
                         Text(it, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = bt.textPrimary)
                     }
                 }
+                // Stacked, not side by side: the German labels together are
+                // wider than a dialog's text column, and a row that wraps mid
+                // button reads as a layout bug.
                 TextButton(onClick = { clipboard.setText(AnnotatedString(codes.joinToString("\n"))) }) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.bt_2fa_recovery_copy), color = bt.goldInk)
+                }
+                TextButton(onClick = { saver.launch(RECOVERY_CODES_FILENAME) }) {
+                    Icon(Icons.Outlined.Download, contentDescription = null, tint = bt.goldInk, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.bt_2fa_recovery_download), color = bt.goldInk)
                 }
             }
         },

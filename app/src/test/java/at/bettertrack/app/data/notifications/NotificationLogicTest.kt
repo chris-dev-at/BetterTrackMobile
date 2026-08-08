@@ -144,13 +144,18 @@ class NotificationLogicTest {
         assertNull(resolveDeepLink("alert.triggered", payload))
     }
 
-    // ── decideDelivery (mute/channel rule) ──────────────────────────────────
+    // ── decideDelivery (channel rule) ───────────────────────────────────────
+    //
+    // The old first test here asserted that a per-type `muted` flag suppressed a
+    // notification entirely. That flag is gone (web-parity ruling 2026-08-08 — the
+    // platform has exactly one mute and it is account-wide), so what replaces the
+    // test is the guarantee that nothing local suppresses any more: the two server
+    // channel flags are the whole rule.
 
-    @Test fun `muting a type suppresses it entirely`() {
-        val d = decideDelivery(TypePrefs(inApp = true, push = true, muted = true))
-        assertTrue(d.suppressedEntirely)
-        assertEquals(false, d.addToInbox)
-        assertEquals(false, d.showPush)
+    @Test fun `both channels off is the only way a type is suppressed entirely`() {
+        assertTrue(decideDelivery(TypePrefs(inApp = false, push = false)).suppressedEntirely)
+        assertFalse(decideDelivery(TypePrefs(inApp = true, push = false)).suppressedEntirely)
+        assertFalse(decideDelivery(TypePrefs(inApp = false, push = true)).suppressedEntirely)
     }
 
     @Test fun `in-app and push govern their own channels`() {
@@ -192,11 +197,11 @@ class NotificationLogicTest {
         assertTrue(NotifKind.ChatMessage.serverModeled)
     }
 
-    // ── Matrix merge / PATCH shape (push now syncs; mute stays local) ───────
+    // ── Matrix merge / PATCH shape (every channel is the server's) ──────────
 
-    @Test fun `mergedFrom takes all channels from the server but keeps local mute`() {
-        // Local row muted with everything on; server says every channel OFF.
-        val local = TypePrefs(inApp = true, email = true, push = true, webpush = true, muted = true)
+    @Test fun `mergedFrom takes all channels from the server, with nothing app-local left`() {
+        // Local row with everything on; server says every channel OFF.
+        val local = TypePrefs(inApp = true, email = true, push = true, webpush = true)
         val server = ChannelPrefsDto(inapp = false, email = false, push = false, webpush = false)
         val merged = local.mergedFrom(server)
 
@@ -205,12 +210,12 @@ class NotificationLogicTest {
         assertFalse(merged.email)
         assertFalse(merged.push)
         assertFalse(merged.webpush)
-        // Per-type mute is app-local — the server has no per-type mute to sync.
-        assertTrue(merged.muted)
+        // Nothing survives the merge that the server did not send.
+        assertEquals(TypePrefs(inApp = false, email = false, push = false, webpush = false), merged)
     }
 
-    @Test fun `toChannelPrefs echoes all four channels and never leaks mute`() {
-        val prefs = TypePrefs(inApp = true, email = false, push = true, webpush = false, muted = true)
+    @Test fun `toChannelPrefs echoes all four channels`() {
+        val prefs = TypePrefs(inApp = true, email = false, push = true, webpush = false)
         val dto = prefs.toChannelPrefs()
         assertEquals(ChannelPrefsDto(inapp = true, email = false, push = true, webpush = false), dto)
     }

@@ -168,6 +168,18 @@ class UpdateChecker(
         _pendingDialog.value = null
     }
 
+    /**
+     * The active "remind me later" deadline, or **null** when no snooze is in
+     * effect — a READ, nothing more. [remindLater] remains the only writer.
+     *
+     * It exists because a silenced update prompt was invisible: the user tapped
+     * "remind me later", the dialog stopped appearing for 24 hours, and About
+     * had no way to say so. A quiet line under the update controls turns that
+     * from "the checker seems broken" into "you asked for this, and it ends at
+     * half past four".
+     */
+    fun snoozedUntilMs(): Long? = updateSnoozeDeadlineMs(prefs.remindAfterMs, nowMs())
+
     /** "Ignore this version" — never prompt again for this exact build. */
     fun ignorePending() {
         _pendingDialog.value?.let { prefs.ignoredVersionCode = it.versionCode }
@@ -269,3 +281,18 @@ class UpdateChecker(
         fun apkUrl(apkName: String): String = RELEASE_DOWNLOAD_BASE + apkName
     }
 }
+
+/**
+ * The "remind me later" deadline that is still in the FUTURE, or null.
+ *
+ * A one-line predicate, extracted from [UpdateChecker.snoozedUntilMs] so About's
+ * "reminder paused until …" line and the checker's own dialog gate cannot drift
+ * apart on the boundary. Strictly `>`: a deadline that has arrived is no longer
+ * a snooze, which is exactly how the dialog gate reads it
+ * (`nowMs() < prefs.remindAfterMs`).
+ *
+ * `0L` — the stored default, meaning "never snoozed" — is in the past for every
+ * real clock and therefore returns null without needing its own case.
+ */
+fun updateSnoozeDeadlineMs(remindAfterMs: Long, nowMs: Long): Long? =
+    remindAfterMs.takeIf { it > nowMs }

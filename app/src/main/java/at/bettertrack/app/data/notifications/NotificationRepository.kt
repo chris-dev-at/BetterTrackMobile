@@ -117,6 +117,21 @@ interface NotificationRepository {
      * Rolls the local cache back if the server rejects.
      */
     suspend fun setQuietHours(next: QuietHours): BtResult<Unit>
+
+    /**
+     * Flip the ACCOUNT-WIDE mute — the web's single "silence everything" switch —
+     * as `PATCH /settings/notifications {"muted": <bool>}`.
+     *
+     * Sends nothing at all when the last GET carried no `muted` key (the switch is
+     * not rendered in that case) or when the value is already what was asked for.
+     * The local flag flips optimistically and is rolled back if the server rejects.
+     *
+     * Unlike the other writes here this one surfaces EVERY error, including the
+     * offline/forbidden classes the rest of this file softens to `Ok`. The reason
+     * is the rollback: this is a switch the user just flipped, and if it snaps back
+     * with no message the screen is showing a state nobody chose and not saying why.
+     */
+    suspend fun setAccountMuted(muted: Boolean): BtResult<Unit>
 }
 
 class DefaultNotificationRepository(
@@ -270,7 +285,11 @@ class DefaultNotificationRepository(
                 // v5 delivery: echoed verbatim. Absent (pre-v5) ⇒ null ⇒ the Delivery
                 // section stays hidden and neither key can reach a PATCH body.
                 settings.syncDeliveryFromServer(r.value.cadence, r.value.quietHours)
-                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types; tg=${ch?.telegram == true} dc=${ch?.discord == true}; cadence=${r.value.cadence != null} quietHours=${r.value.quietHours != null}).")
+                // The account-wide mute, same rule: a GET is the ONLY thing allowed to
+                // establish the tri-state, so it is echoed verbatim including `null`
+                // (⇒ this server has no account mute ⇒ no switch, ever).
+                settings.setAccountMuted(r.value.muted)
+                Log.i(TAG, "Live notification settings loaded (${r.value.matrix.size} types; tg=${ch?.telegram == true} dc=${ch?.discord == true}; cadence=${r.value.cadence != null} quietHours=${r.value.quietHours != null} muted=${r.value.muted}).")
                 BtResult.Ok(Unit)
             }
             is BtResult.Err -> {
@@ -281,9 +300,14 @@ class DefaultNotificationRepository(
 
     override suspend fun pushServerSettings(): BtResult<Unit> {
         // Local persistence already happened in the store; mirror in-app / email /
-        // push to the server (webpush echoed verbatim). Only per-type Mute stays local.
-        // `cadence`/`quietHours` are left null ⇒ dropped from the body: a matrix edit
-        // must never restate delivery settings it did not change.
+        // push to the server (webpush echoed verbatim). `cadence`/`quietHours`/`muted`
+        // are left null ⇒ dropped from the body: a matrix edit must never restate a
+        // setting it did not change.
+        //
+        // NOTE: the app no longer offers a matrix EDITOR (it moved to the web under
+        // the parity ruling), so nothing calls this today. It is kept because the
+        // seam is the only correct place a matrix write would go if one returns —
+        // the alternative is the next such feature inventing its own PATCH.
         return when (val r = apiCall(json) {
             api.updateNotificationSettings(
                 UpdateNotificationSettingsRequest(matrix = settings.serverMatrixForPatch()),
@@ -315,6 +339,44 @@ class DefaultNotificationRepository(
         return patchDelivery(before, UpdateNotificationSettingsRequest(quietHours = patch))
     }
 
+    override suspend fun setAccountMuted(muted: Boolean): BtResult<Unit> {
+        val before = settings.accountMuted.value
+        // `null` current ⇒ the server never modelled the key (sending it would be a
+        // `.strict()` 400); unchanged ⇒ an empty-ish no-op patch. Either way: silence.
+        val patch = accountMutePatch(before, muted) ?: return BtResult.Ok(Unit)
+        settings.setAccountMuted(patch)
+        return when (
+            val r = apiCall(json) {
+                api.updateNotificationSettings(UpdateNotificationSettingsRequest(muted = patch))
+            }
+        ) {
+            is BtResult.Ok -> {
+                applyServerEcho(r.value)
+                BtResult.Ok(Unit)
+            }
+            is BtResult.Err -> {
+                settings.setAccountMuted(before)
+                Log.w(TAG, "PATCH /settings/notifications (muted) failed (HTTP ${r.error.httpStatus} ${r.error.code}); reverted.")
+                // Deliberately NOT softened — see the interface KDoc: a switch that
+                // silently springs back is worse than a visible error.
+                r.map()
+            }
+        }
+    }
+
+    /**
+     * Re-seed from a PATCH response, which carries the FULL settings shape.
+     *
+     * The account mute is the one field applied only when PRESENT: a GET is the
+     * authority on whether the server models it at all, and letting a narrower
+     * write response erase that tri-state would make the switch vanish mid-use.
+     */
+    private fun applyServerEcho(resp: at.bettertrack.app.data.api.dto.NotificationSettingsResponse) {
+        settings.syncFromServer(resp.matrix)
+        settings.syncDeliveryFromServer(resp.cadence, resp.quietHours)
+        resp.muted?.let(settings::setAccountMuted)
+    }
+
     /**
      * Send a delivery PATCH. The response is the FULL settings shape, so a success
      * re-seeds from the server rather than trusting the optimistic local write; a
@@ -326,8 +388,7 @@ class DefaultNotificationRepository(
         body: UpdateNotificationSettingsRequest,
     ): BtResult<Unit> = when (val r = apiCall(json) { api.updateNotificationSettings(body) }) {
         is BtResult.Ok -> {
-            settings.syncFromServer(r.value.matrix)
-            settings.syncDeliveryFromServer(r.value.cadence, r.value.quietHours)
+            applyServerEcho(r.value)
             BtResult.Ok(Unit)
         }
         is BtResult.Err -> {

@@ -177,14 +177,25 @@ class ServerOriginsTest {
 
     private val defApi = "https://api.bettertrack.at"
     private val defWeb = "https://web.bettertrack.at"
+    private val defProduct = "https://bettertrack.at"
 
-    private fun validate(api: String?, web: String?) =
-        validateOrigins(api, web, defaultApi = defApi, defaultWeb = defWeb)
+    // The product origin defaults to "not overridden" so the existing cases keep
+    // asking exactly what they asked before: passing the default in is the same
+    // thing as leaving the field untouched.
+    private fun validate(api: String?, web: String?, product: String? = null) =
+        validateOrigins(
+            api,
+            web,
+            product ?: defProduct,
+            defaultApi = defApi,
+            defaultWeb = defWeb,
+            defaultProduct = defProduct,
+        )
 
     @Test
     fun `a valid pair normalizes both halves`() {
         assertEquals(
-            OriginValidation.Valid("http://192.168.0.114:3000", "http://192.168.0.114:6771"),
+            OriginValidation.Valid("http://192.168.0.114:3000", "http://192.168.0.114:6771", null),
             validate("192.168.0.114:3000", "  http://192.168.0.114:6771/  "),
         )
     }
@@ -196,12 +207,12 @@ class ServerOriginsTest {
      */
     @Test
     fun `the official addresses validate to no override at all`() {
-        assertEquals(OriginValidation.Valid(null, null), validate(defApi, defWeb))
+        assertEquals(OriginValidation.Valid(null, null, null), validate(defApi, defWeb))
     }
 
     @Test
     fun `blank fields clear the override`() {
-        assertEquals(OriginValidation.Valid(null, null), validate("", "   "))
+        assertEquals(OriginValidation.Valid(null, null, null), validate("", "   "))
     }
 
     /**
@@ -212,11 +223,11 @@ class ServerOriginsTest {
     @Test
     fun `one bad field fails the whole save and names only that field`() {
         assertEquals(
-            OriginValidation.Invalid(apiError = null, webError = OriginError.SCHEME),
+            OriginValidation.Invalid(apiError = null, webError = OriginError.SCHEME, productError = null),
             validate("192.168.0.114:3000", "ws://192.168.0.114:6771"),
         )
         assertEquals(
-            OriginValidation.Invalid(apiError = OriginError.PORT, webError = null),
+            OriginValidation.Invalid(apiError = OriginError.PORT, webError = null, productError = null),
             validate("http://192.168.0.114:99999", "192.168.0.114:6771"),
         )
     }
@@ -224,7 +235,7 @@ class ServerOriginsTest {
     @Test
     fun `two bad fields report both reasons`() {
         assertEquals(
-            OriginValidation.Invalid(apiError = OriginError.HOST, webError = OriginError.SPACE),
+            OriginValidation.Invalid(apiError = OriginError.HOST, webError = OriginError.SPACE, productError = null),
             validate("http://", "http://local host:6771"),
         )
     }
@@ -233,7 +244,7 @@ class ServerOriginsTest {
     @Test
     fun `mixing an official half with a custom half overrides only the custom one`() {
         assertEquals(
-            OriginValidation.Valid(null, "http://192.168.0.114:6771"),
+            OriginValidation.Valid(null, "http://192.168.0.114:6771", null),
             validate(defApi, "192.168.0.114:6771"),
         )
     }
@@ -266,5 +277,85 @@ class ServerOriginsTest {
         assertFalse(isLocalHost("172.15.0.1"))
         assertFalse(isLocalHost("172.32.0.1"))
         assertFalse(isLocalHost("8.8.8.8"))
+    }
+}
+
+/**
+ * The PRODUCT origin — the public site that serves the legal documents (owner
+ * addendum 2026-08-08: *"the legal notes and all move to the server they are
+ * running on"*).
+ *
+ * The app used to build `https://bettertrack.at/terms/` from a literal, so a
+ * user on a self-hosted stack was sent to someone else's legal pages. The fix
+ * mirrors the platform instead of inventing a rule, and these cases pin the two
+ * halves of that mirror that are easy to get wrong.
+ *
+ * Verified against the platform source (`apps/web/src/user/legal.ts` and
+ * `apps/web/src/lib/runtimeConfig.ts`): legal URLs are built from a THIRD
+ * per-deployment `productOrigin`, whose documented default is
+ * `https://bettertrack.at` — deliberately NOT the web origin, because the
+ * marketing site and the app are routinely different hosts.
+ */
+class ProductOriginTest {
+
+    private val defApi = "https://api.bettertrack.at"
+    private val defWeb = "https://web.bettertrack.at"
+    private val defProduct = "https://bettertrack.at"
+
+    private fun validate(api: String?, web: String?, product: String?) =
+        validateOrigins(
+            api,
+            web,
+            product,
+            defaultApi = defApi,
+            defaultWeb = defWeb,
+            defaultProduct = defProduct,
+        )
+
+    @Test
+    fun `the product origin is independent of the web origin`() {
+        // The whole reason it is a third field: pointing the app at a dev web
+        // stack must NOT drag the legal documents along with it. The dev stack
+        // publishes none, and the web app served from it links to the official
+        // site for exactly this reason.
+        assertEquals(
+            OriginValidation.Valid("http://192.168.0.114:3000", "http://192.168.0.114:6771", null),
+            validate("192.168.0.114:3000", "192.168.0.114:6771", defProduct),
+        )
+    }
+
+    @Test
+    fun `a deployment that serves its own legal documents is honoured`() {
+        assertEquals(
+            OriginValidation.Valid(null, null, "https://legal.example.org"),
+            validate(defApi, defWeb, "https://legal.example.org"),
+        )
+    }
+
+    @Test
+    fun `typing the official product site by hand is a reset, not an override`() {
+        // Same rule the other two origins follow: storing the default would
+        // leave the app reporting "custom server" forever while behaving
+        // exactly like a stock install.
+        assertEquals(OriginValidation.Valid(null, null, null), validate(defApi, defWeb, defProduct))
+    }
+
+    @Test
+    fun `a malformed product origin fails the whole save`() {
+        // All-or-nothing, extended to three fields: a typo in the product site
+        // must not leave the API and web origins applied on their own.
+        assertEquals(
+            OriginValidation.Invalid(
+                apiError = null,
+                webError = null,
+                productError = OriginError.SPACE,
+            ),
+            validate(defApi, defWeb, "https://bad host.example"),
+        )
+    }
+
+    @Test
+    fun `an empty product field means no override`() {
+        assertEquals(OriginValidation.Valid(null, null, null), validate(defApi, defWeb, "   "))
     }
 }

@@ -549,7 +549,18 @@ private fun EnablePushPrompt(onEnable: () -> Unit) {
                 Text(stringResource(R.string.bt_notif_enable_push_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
                 Text(stringResource(R.string.bt_notif_enable_push_message), style = MaterialTheme.typography.bodySmall, color = bt.textSecondary)
             }
-            Text(stringResource(R.string.bt_notif_enable_push_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = bt.goldInk)
+            // Same gutter, same reason as the settings screen's permission card:
+            // the weighted column's wrapped text would otherwise run straight
+            // into this action with no space at all.
+            Spacer(Modifier.width(12.dp))
+            Text(
+                stringResource(R.string.bt_notif_enable_push_action),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = bt.goldInk,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }

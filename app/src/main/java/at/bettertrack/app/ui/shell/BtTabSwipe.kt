@@ -178,17 +178,71 @@ internal fun swipePeekSide(totalDx: Float): Boolean? = when {
  * chain: each one steps off where the previous one landed, not where the screen
  * happens to have caught up to.
  *
+ * A TAP is a decision by the same argument. Since the optimistic tap latch
+ * landed (see [tapLatchHolds]) a bar tap navigates and lights its tab in the
+ * same frame, while the nav graph still trails by ~50ms; a swipe that starts
+ * inside that window must step off the tab the user just TAPPED, not the one
+ * they tapped away from. It sits below the two swipe decisions and above the
+ * nav graph, which is exactly its age: newer than the coordinate, older than
+ * anything a finger is doing right now.
+ *
  * @param pendingCommit a hop whose page turn is still animating
  *   ([BtTabSwipeState.pendingCommit]) — the newest decision there is.
  * @param handoff a hop already handed to the NavHost, which has not yet drawn it
  *   ([BtTabSwipeState.handoff]).
- * @param navCurrent the tab the nav graph reports, which trails both.
+ * @param tapCommit a bar tap the nav graph has not caught up to yet.
+ * @param navCurrent the tab the nav graph reports, which trails all three.
  */
 internal fun swipeOriginTab(
     pendingCommit: BtTab?,
     handoff: BtTab?,
+    tapCommit: BtTab?,
     navCurrent: BtTab?,
-): BtTab? = pendingCommit ?: handoff ?: navCurrent
+): BtTab? = pendingCommit ?: handoff ?: tapCommit ?: navCurrent
+
+/**
+ * Whether an optimistic TAP latch is still believable.
+ *
+ * ## Why the tap needed a latch of its own (owner report 2026-08-08)
+ *
+ * *"Tapping a bottom-nav tab lags before selection."* Measured on device at
+ * 120Hz before this fix: touch-UP to the label turning gold ran 44–59ms, median
+ * 48ms — and the recording emitted NO frame in between, so the tap had no
+ * visual acknowledgment at all until the whole selection flipped at once. The
+ * cause is structural, not slow code: the bar's selection was derived purely
+ * from the nav graph, so a tap had to complete `navigate()`, propagate a
+ * back-stack `StateFlow` AND compose the destination before the pill could
+ * move. The heavier the destination, the later the tab lit — the selection was
+ * paying for the content.
+ *
+ * So a tap now writes its target here and the bar believes it immediately, and
+ * the content follows on its own schedule. This is the same trick [handoff]
+ * plays for a committed swipe, but deliberately NOT the same field: [handoff]
+ * also pins the peek layer over the swap and tells `BtNavHost` to suppress its
+ * transitions, and a tap has no frozen peek layer to show — reusing it would
+ * uncover a second page that was never prepared.
+ *
+ * The latch may not outlive its own truth, so it holds only while the nav graph
+ * is still where the tap LEFT it:
+ *
+ *  - nav reports the target → it agreed, the latch has done its job and goes;
+ *  - nav reports [origin] → still in flight, hold;
+ *  - nav reports some THIRD tab → something else drove navigation (a deep link,
+ *    a back press), the tap's opinion is stale, drop it at once rather than
+ *    lighting a tab nobody is on;
+ *  - nav reports null → a pushed detail screen, where the bar is not drawn at
+ *    all; hold, because the tab underneath is still the right answer for when
+ *    it comes back.
+ *
+ * @param target the tab the tap asked for.
+ * @param origin the tab the nav graph was reporting when the tap happened.
+ * @param navCurrent the tab the nav graph reports now.
+ */
+internal fun tapLatchHolds(target: BtTab, origin: BtTab?, navCurrent: BtTab?): Boolean = when {
+    navCurrent == target -> false
+    navCurrent == null -> true
+    else -> navCurrent == origin
+}
 
 /**
  * What a new drag does to a page that is still moving.
@@ -316,8 +370,15 @@ internal fun peekPageOffsetPx(
  * actually become that tab — the latch can be wrong for exactly as long as the
  * nav graph takes to agree, and not one frame longer.
  *
- * @param committed the tab a swipe has committed to, or null when none is in
- *   flight ([BtTabSwipeState.handoff]).
+ * Since 2026-08-08 a TAP writes this too, for the same reason and with the same
+ * discipline — see [tapLatchHolds], which is what stops the tap's opinion
+ * outliving the nav graph's disagreement. The two sources never fight: a swipe
+ * handoff outranks a tap latch at the call site, and either way this function
+ * only ever sees the one answer the shell has already settled on.
+ *
+ * @param committed the tab the shell has committed to ahead of the nav graph —
+ *   a swipe's [BtTabSwipeState.handoff] or an optimistic tap latch — or null
+ *   when nothing is in flight and the coordinate is the whole truth.
  * @param isCurrentDestination whether the nav graph currently reports [tab].
  */
 internal fun tabSelectionFraction(

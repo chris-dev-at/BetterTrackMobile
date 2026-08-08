@@ -36,10 +36,17 @@ enum class BtChartMode {
     val plotsPerformance: Boolean get() = this != BALANCE
 
     /**
-     * True when the curve is painted green above zero and red below it.
+     * True when this mode may paint a gain/loss verdict — green above zero, red
+     * below it — anywhere on the hero surface.
      *
      * **Only [PERFORMANCE] is.** Owner order 2026-08-07: *"don't color it red or
      * green — only color in % mode."*
+     *
+     * "Anywhere" is the 2026-08-08 correction. This used to reach only the CURVE
+     * (`BtAreaChart.colorBySign`), while the readouts framing it — the range
+     * return beside the picker, the day-change line under the headline — kept
+     * tinting off their own sign with no idea what mode they were in. They are
+     * gated on this flag now, through `signColorAllowed` in the overview.
      *
      * The rule underneath it is the app's own (§4.1, `rangeAccent`): gold *is*
      * the portfolio and never means "up"; a red/green verdict belongs to an
@@ -105,10 +112,17 @@ fun themeModeFromName(raw: String?): BtThemeMode =
  * synchronously at Activity start (before the first frame) and observable as a
  * [StateFlow] for instant application when the user toggles it.
  */
-class DevicePrefs(context: Context) {
+class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
 
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /**
+     * The real one. The [SharedPreferences] primary constructor above exists so
+     * the store's own rules — currently the true-black healing — can be gated in
+     * a plain JVM test; this project has no Robolectric, and a `Context` cannot
+     * be faked without one.
+     */
+    constructor(context: Context) : this(
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),
+    )
 
     private val _orientationLocked =
         MutableStateFlow(prefs.getBoolean(KEY_ORIENTATION_LOCKED, DEFAULT_ORIENTATION_LOCKED))
@@ -230,22 +244,59 @@ class DevicePrefs(context: Context) {
         _themeMode.value = mode
     }
 
-    private val _trueBlack = MutableStateFlow(prefs.getBoolean(KEY_TRUE_BLACK, DEFAULT_TRUE_BLACK))
+    private val _trueBlack = MutableStateFlow(healStrandedTrueBlack())
 
     /**
      * AMOLED true-black, a sub-toggle **under Dark only**: it overrides the page
      * background to `#000000` and the recessed level to `#050608`, and nothing
      * else. Ignored entirely while the resolved mode is light.
+     *
+     * **Always `false` in this build**, and deliberately so — see
+     * [healStrandedTrueBlack].
      */
     val trueBlack: StateFlow<Boolean> = _trueBlack.asStateFlow()
 
     /** Synchronous read — the Activity needs the value before the first frame. */
     fun trueBlackNow(): Boolean = _trueBlack.value
 
+    /**
+     * Session-only, on purpose: this does NOT persist.
+     *
+     * The toggle that used to call it was removed for web parity, so a value
+     * written here would be a value nothing could ever unwrite — the exact
+     * stranding [healStrandedTrueBlack] exists to undo, recreated one launch
+     * later. The token machinery stays live and honours the flag for as long as
+     * the process does, which is what a debug/preview caller wants; the day the
+     * platform grows the setting, this line goes back to writing
+     * [KEY_TRUE_BLACK] and the healing below comes out in the same change.
+     */
     fun setTrueBlack(enabled: Boolean) {
-        if (_trueBlack.value == enabled) return
-        prefs.edit { putBoolean(KEY_TRUE_BLACK, enabled) }
         _trueBlack.value = enabled
+    }
+
+    /**
+     * Drop a stored true-black flag and report the value this build honours.
+     *
+     * ## Why a stored `true` has to be destroyed rather than read
+     *
+     * The Appearance section shipped a True-black row, and it was removed the
+     * next day for web parity (the web has no such setting). Removing the ROW
+     * did not remove the flag: anyone who tapped it in that window has
+     * `true_black = true` in their preference file, a black app, and no control
+     * anywhere in the UI that can turn it off. Honouring that value is not
+     * "respecting their choice" — a choice you cannot revise is not a setting,
+     * it is a state the user is trapped in, and it survives logout because these
+     * prefs deliberately do.
+     *
+     * So the value is healed at construction: the key is removed and the flag
+     * reads [DEFAULT_TRUE_BLACK]. Removing rather than overwriting keeps the
+     * distinction the rest of this class relies on — an ABSENT key means "never
+     * chose", which is exactly true again afterwards, and leaves nothing behind
+     * for a future build to reinterpret.
+     */
+    private fun healStrandedTrueBlack(): Boolean {
+        if (prefs.contains(KEY_TRUE_BLACK)) prefs.edit { remove(KEY_TRUE_BLACK) }
+        return DEFAULT_TRUE_BLACK
     }
 
     private companion object {

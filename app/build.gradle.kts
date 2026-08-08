@@ -38,6 +38,16 @@ android {
     // is a gradle property so a different dev machine needs no code edit.
     val devPresetApiOrigin = providers.gradleProperty("btDevPresetApiOrigin").getOrElse("http://192.168.0.114:3000")
     val devPresetWebOrigin = providers.gradleProperty("btDevPresetWebOrigin").getOrElse("http://192.168.0.114:6771")
+    // PRODUCT_ORIGIN: the public site serving the legal documents (terms,
+    // privacy, impressum, cookies). A THIRD origin on purpose — the platform
+    // keeps it separate from the web app's own origin (apps/web/src/lib/
+    // runtimeConfig.ts, written per-deployment into config.js by nginx), because
+    // the marketing site and the app are routinely different hosts. This default
+    // is that file's documented fallback, so an app on a deployment that names
+    // no product origin lands exactly where the web app on the same deployment
+    // lands. Same value for debug and release: the legal text does not differ by
+    // build type. Overridable with -PbtProductOrigin=… for a self-hosted site.
+    val productOrigin = providers.gradleProperty("btProductOrigin").getOrElse("https://bettertrack.at")
     // OAUTH_CLIENT_ID: the production-registered first-party PUBLIC client id (§4).
     // A public identifier (not a secret), so it is baked in as the default for
     // BOTH build types; still overridable via -PbtOauthClientId=btc_… .
@@ -155,6 +165,8 @@ android {
         buildConfigField("boolean", "SERVER_SETTING_ENABLED", "false")
         buildConfigField("String", "DEV_PRESET_API_ORIGIN", "\"$devPresetApiOrigin\"")
         buildConfigField("String", "DEV_PRESET_WEB_ORIGIN", "\"$devPresetWebOrigin\"")
+        // Not per-build-type: see the productOrigin declaration above.
+        buildConfigField("String", "PRODUCT_ORIGIN", "\"$productOrigin\"")
     }
 
     buildTypes {

@@ -4,23 +4,22 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -29,151 +28,74 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
-import at.bettertrack.app.data.notifications.DeliveryState
-import at.bettertrack.app.data.notifications.DigestCadence
 import at.bettertrack.app.data.notifications.QuietHours
-import at.bettertrack.app.data.notifications.groupCadence
 import at.bettertrack.app.data.notifications.hourOfMinuteOfDay
 import at.bettertrack.app.data.notifications.minuteOfDayOf
 import at.bettertrack.app.data.notifications.minuteOfMinuteOfDay
 import at.bettertrack.app.data.notifications.quietWindowDisplay
+import at.bettertrack.app.data.notifications.timeZonePickerOptions
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.btFieldColors
+import at.bettertrack.app.ui.components.BtLazyPickerSheet
+import at.bettertrack.app.ui.components.BtPickerRow
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.ZoneId
 
 /**
- * The v5 "Delivery" block of the notification settings screen: one digest-cadence
- * chooser for the batchable types plus the quiet-hours window.
+ * Quiet hours — the outbound delivery window, and the one scheduling control the
+ * app keeps native.
  *
- * Deliberately ONE compact section rather than a control on every type row — the
- * per-type grid below it already carries the channel matrix, and a 25-row cadence
- * grid would be unreadable on a phone. Cadence applies to the digestible group
- * ([at.bettertrack.app.data.notifications.DeliveryTypes.digestible]); urgent and
- * actionable types stay instant and the copy says so.
+ * ## Why the digest cadence is no longer here
  *
- * Visibility follows the echo-verbatim rule: the section renders only for what the
- * last GET actually carried, so a pre-v5 server shows nothing here at all.
+ * This block used to carry a cadence chooser too. Under the owner's web-parity
+ * ruling (*match the web exactly or link to the web*) the per-type matrix and its
+ * cadence moved to `/control/notifications` — the web sets cadence PER TYPE, and
+ * the app's three-segment "whole group" chooser was a lossy paraphrase of it that
+ * could not even show what the account actually held (it rendered "mixed" and gave
+ * up). A control that cannot express the state it is editing is not parity.
+ *
+ * Quiet hours stayed because it is genuinely the same control on both sides — one
+ * window, one zone, account-wide — and because a time window is a thing you reach
+ * for on a phone at night.
+ *
+ * Visibility follows the echo-verbatim rule: this renders only for what the last
+ * GET actually carried, so a pre-v5 server shows nothing here at all.
+ *
+ * @param enabled `false` dims the card to the web's muted opacity and stops it
+ *   taking input — used while the account-wide mute is on, because a window that
+ *   decides WHEN things are held back means nothing when nothing is being sent at
+ *   all. The settings are kept, not cleared, and the mute row says so.
+ *
+ *   NOTE, one deliberate deviation from the web: the web dims only the ROUTING
+ *   grid under a mute (`gridDisabled = busy || settings.muted`) and leaves its
+ *   quiet-hours fold live. The app has no routing grid left to dim — it moved to
+ *   the web — so if nothing here responded, the mute switch would be the only
+ *   control on the screen with no visible consequence. The web's dim is applied
+ *   to the nearest thing the mute actually overrides.
  */
 @Composable
 fun NotificationDeliverySection(
-    delivery: DeliveryState,
-    onCadence: (DigestCadence) -> Unit,
+    quietHours: QuietHours?,
+    enabled: Boolean,
     onQuietHours: (QuietHours) -> Unit,
 ) {
-    if (!delivery.supported) return
-    val bt = BtTheme.colors
-
-    Text(
-        stringResource(R.string.bt_notif_delivery_section).uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = bt.textMuted,
-        modifier = Modifier.padding(top = 4.dp),
-    )
-
-    delivery.cadence?.let { cadence ->
-        CadenceCard(selected = groupCadence(cadence), onSelect = onCadence)
-    }
-    delivery.quietHours?.let { quietHours ->
-        QuietHoursCard(quietHours = quietHours, onChange = onQuietHours)
-    }
-
-    // The one thing a user must not have to guess: none of this touches the bell.
-    Text(
-        stringResource(R.string.bt_notif_delivery_inbox_hint),
-        style = MaterialTheme.typography.bodySmall,
-        color = bt.textMuted,
-    )
-}
-
-// ── Cadence ──────────────────────────────────────────────────────────────────
-
-@Composable
-private fun CadenceCard(selected: DigestCadence?, onSelect: (DigestCadence) -> Unit) {
-    val bt = BtTheme.colors
-    BtCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text(
-                stringResource(R.string.bt_notif_cadence_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = bt.textPrimary,
-            )
-            Text(
-                stringResource(R.string.bt_notif_cadence_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DigestCadence.entries.forEach { cadence ->
-                    DeliverySegment(
-                        label = stringResource(cadenceLabel(cadence)),
-                        selected = selected == cadence,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSelect(cadence) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            // The web can set a cadence per type; when the group disagrees no segment
-            // is selected and we say why rather than picking one at random.
-            if (selected == null) {
-                Text(
-                    stringResource(R.string.bt_notif_cadence_mixed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.goldEmphasis,
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-            Text(
-                stringResource(R.string.bt_notif_cadence_urgent_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
-            )
-        }
-    }
-}
-
-private fun cadenceLabel(cadence: DigestCadence): Int = when (cadence) {
-    DigestCadence.Instant -> R.string.bt_notif_cadence_instant
-    DigestCadence.Daily -> R.string.bt_notif_cadence_daily
-    DigestCadence.Weekly -> R.string.bt_notif_cadence_weekly
-}
-
-/** Segmented-pill option — the same language as the inbox Active|Archived|All filter. */
-@Composable
-private fun DeliverySegment(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val bt = BtTheme.colors
-    Surface(
-        onClick = onClick,
-        shape = BtShapes.pill,
-        color = if (selected) bt.goldWash else bt.surface,
-        contentColor = if (selected) bt.goldEmphasis else bt.textSecondary,
-        border = BorderStroke(1.dp, if (selected) bt.edge(bt.gold, 0.45f) else bt.border),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 9.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-        }
-    }
+    // Echo-verbatim: a server that modelled no quiet hours gets no quiet-hours UI.
+    if (quietHours == null) return
+    QuietHoursCard(quietHours = quietHours, enabled = enabled, onChange = onQuietHours)
 }
 
 // ── Quiet hours ──────────────────────────────────────────────────────────────
@@ -182,20 +104,17 @@ private fun DeliverySegment(label: String, selected: Boolean, modifier: Modifier
 private enum class QuietEdge { Start, End }
 
 @Composable
-private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Unit) {
+private fun QuietHoursCard(quietHours: QuietHours, enabled: Boolean, onChange: (QuietHours) -> Unit) {
     val bt = BtTheme.colors
     val context = LocalContext.current
     val use24Hour = DateFormat.is24HourFormat(context)
     val locale = rememberBtLocale()
     val deviceZone = remember { ZoneId.systemDefault().id }
-    // What the window is actually evaluated in. The server stores null until a zone
-    // is set (it then falls back to UTC); the device zone is the honest fill-in.
-    val effectiveZone = quietHours.timezone ?: deviceZone
 
     var editing by remember { mutableStateOf<QuietEdge?>(null) }
     var pickingZone by remember { mutableStateOf(false) }
 
-    BtCard(modifier = Modifier.fillMaxWidth()) {
+    BtCard(modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else DISABLED_ALPHA)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -214,12 +133,14 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
                 Spacer(Modifier.width(8.dp))
                 Switch(
                     checked = quietHours.enabled,
-                    onCheckedChange = { on ->
-                        // Turning it on with no stored zone carries the device zone in the
-                        // same patch, so the window means what the user sees.
-                        val next = quietHours.copy(enabled = on)
-                        onChange(if (on && quietHours.timezone == null) next.copy(timezone = deviceZone) else next)
-                    },
+                    enabled = enabled,
+                    // Enabling used to smuggle the DEVICE time zone into the same
+                    // patch when the account had none. It read as helpful and was
+                    // not: it wrote a setting the user never chose, from a value
+                    // that changes the moment they cross a border, and it did it
+                    // silently. Enabling now enables, nothing else — a `null` zone
+                    // is a real state (UTC), and the row below says so.
+                    onCheckedChange = { on -> onChange(quietHours.copy(enabled = on)) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = bt.onGold,
                         checkedTrackColor = bt.gold,
@@ -238,12 +159,14 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
                     TimeField(
                         label = stringResource(R.string.bt_notif_quiet_start),
                         value = window.start,
+                        enabled = enabled,
                         modifier = Modifier.weight(1f),
                         onClick = { editing = QuietEdge.Start },
                     )
                     TimeField(
                         label = stringResource(R.string.bt_notif_quiet_end),
                         value = window.end,
+                        enabled = enabled,
                         modifier = Modifier.weight(1f),
                         onClick = { editing = QuietEdge.End },
                     )
@@ -260,10 +183,27 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
                 )
                 Spacer(Modifier.height(12.dp))
                 TimezoneRow(
-                    zone = effectiveZone,
-                    fromDevice = quietHours.timezone == null,
+                    zone = quietHours.timezone,
+                    enabled = enabled,
                     onClick = { pickingZone = true },
                 )
+                // The web's "Use my timezone (Europe/Vienna)" shortcut, shown on the
+                // same condition it uses: there is a detected zone and it is not the
+                // one already stored. This is the honest replacement for the silent
+                // auto-injection — the same one tap, except the user makes it.
+                if (quietHours.timezone != deviceZone) {
+                    TextButton(
+                        onClick = { onChange(quietHours.copy(timezone = deviceZone)) },
+                        enabled = enabled,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.bt_notif_quiet_timezone_use_detected, deviceZone),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = bt.goldInk,
+                        )
+                    }
+                }
             }
         }
     }
@@ -288,8 +228,8 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
     }
 
     if (pickingZone) {
-        TimezonePickerDialog(
-            selected = effectiveZone,
+        TimezonePickerSheet(
+            selected = quietHours.timezone,
             deviceZone = deviceZone,
             onDismiss = { pickingZone = false },
             onPick = { zone ->
@@ -300,12 +240,26 @@ private fun QuietHoursCard(quietHours: QuietHours, onChange: (QuietHours) -> Uni
     }
 }
 
+/**
+ * How far a muted block recedes — `0.6`, the web's own
+ * `opacity: settings.muted ? 0.6 : undefined` on the routing grid, so the two
+ * clients say "this is not in effect" at the same strength.
+ */
+internal const val DISABLED_ALPHA = 0.6f
+
 /** Read-only, tappable time cell — label above a large tabular value. */
 @Composable
-private fun TimeField(label: String, value: String, modifier: Modifier, onClick: () -> Unit) {
+private fun TimeField(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     val bt = BtTheme.colors
     Surface(
         onClick = onClick,
+        enabled = enabled,
         color = bt.bg,
         border = BorderStroke(1.dp, bt.borderStrong),
         shape = BtShapes.card,
@@ -323,11 +277,24 @@ private fun TimeField(label: String, value: String, modifier: Modifier, onClick:
     }
 }
 
+/**
+ * The zone the window is evaluated in.
+ *
+ * [zone] `null` is NOT "unknown" and is no longer dressed up as the phone's zone:
+ * it is the server's stored state and, per the platform contract
+ * (`ianaTimeZoneSchema` — *"null everywhere means no timezone set: quiet hours
+ * and digest boundaries then fall back to UTC"*), it means UTC. Rendering the
+ * phone's zone with a "from this device" caption while the server evaluated in
+ * UTC was a nine-hour lie for anyone outside that offset — the exact class of
+ * thing the honest-states rule exists to stop. It now reads what the web reads:
+ * "UTC (no timezone set)".
+ */
 @Composable
-private fun TimezoneRow(zone: String, fromDevice: Boolean, onClick: () -> Unit) {
+private fun TimezoneRow(zone: String?, enabled: Boolean, onClick: () -> Unit) {
     val bt = BtTheme.colors
     Surface(
         onClick = onClick,
+        enabled = enabled,
         color = bt.bg,
         border = BorderStroke(1.dp, bt.borderStrong),
         shape = BtShapes.card,
@@ -343,16 +310,11 @@ private fun TimezoneRow(zone: String, fromDevice: Boolean, onClick: () -> Unit) 
                     style = MaterialTheme.typography.labelSmall,
                     color = bt.textMuted,
                 )
-                Text(zone, style = MaterialTheme.typography.bodyMedium, color = bt.textPrimary)
-                // Honest label: until the user confirms it, this zone is the phone's,
-                // not something the server has stored.
-                if (fromDevice) {
-                    Text(
-                        stringResource(R.string.bt_notif_quiet_timezone_device),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = bt.textMuted,
-                    )
-                }
+                Text(
+                    zone ?: stringResource(R.string.bt_notif_quiet_timezone_none),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textPrimary,
+                )
             }
             Icon(
                 Icons.Outlined.ChevronRight,
@@ -403,79 +365,89 @@ private fun QuietTimeDialog(
 }
 
 /**
- * IANA time-zone override. The device zone is pinned to the top (the default the
- * app fills in); everything else is the region-based zone list, filtered as you
- * type. The legacy Etc and SystemV id families are hidden — they are valid but
- * nobody means them.
+ * IANA time-zone override — the app's shape of the web's `<Select>`.
+ *
+ * The option set comes from [timeZonePickerOptions], which mirrors the web's
+ * `timeZoneOptions()` including the part that is easy to miss: the currently-set
+ * and detected zones are force-added, so the picker can always show what is
+ * actually selected. The "UTC (no timezone set)" row is the web's
+ * `<option value="">` — always first, never filtered by the search, because it is
+ * the CLEAR action wearing a list row rather than a search result.
+ *
+ * The only thing the phone adds is the search field: a `<select>` on desktop is
+ * type-to-jump, and 400+ rows on a phone without one would be unusable.
+ *
+ * ## Why this is a sheet
+ *
+ * It was the last centre `AlertDialog` in the picker family — every other picker
+ * in the app moved to [BtLazyPickerSheet]'s parent, and one dialog left behind is
+ * not a smaller version of the problem, it is the same picker answered a second
+ * way. The migration is [BtLazyPickerSheet] rather than the plain sheet for the
+ * reason that made this list awkward in the dialog too: it is 400+ rows, and it
+ * is now the reason the component grew a search field of its own.
+ *
+ * The selected row is not tappable, matching `BtChoiceSheet`: re-picking the
+ * current zone would round-trip to arrive where it already is.
  */
 @Composable
-private fun TimezonePickerDialog(
-    selected: String,
+private fun TimezonePickerSheet(
+    selected: String?,
     deviceZone: String,
     onDismiss: () -> Unit,
-    onPick: (String) -> Unit,
+    onPick: (String?) -> Unit,
 ) {
-    val bt = BtTheme.colors
     var query by remember { mutableStateOf("") }
-    val zones = remember {
-        ZoneId.getAvailableZoneIds()
-            .filter { it.contains('/') && !it.startsWith("Etc/") && !it.startsWith("SystemV/") }
-            .sorted()
+    val zones = remember(selected, deviceZone) {
+        timeZonePickerOptions(ZoneId.getAvailableZoneIds(), current = selected, detected = deviceZone)
     }
     val shown = remember(query, zones) {
         val q = query.trim()
-        val matches = if (q.isEmpty()) zones else zones.filter { it.contains(q, ignoreCase = true) }
-        (listOf(deviceZone) + matches.filter { it != deviceZone })
+        if (q.isEmpty()) zones else zones.filter { it.contains(q, ignoreCase = true) }
     }
+    // Hoisted out of the lazy item: `stringResource` inside `items` would be
+    // resolved once per visible row per scroll frame for a constant string.
+    val deviceCaption = stringResource(R.string.bt_notif_quiet_timezone_device)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = bt.surfaceHigh,
-        title = { Text(stringResource(R.string.bt_notif_quiet_timezone_title), color = bt.textPrimary) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text(stringResource(R.string.bt_notif_quiet_timezone_search)) },
-                    singleLine = true,
-                    colors = btFieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
-                    items(shown, key = { it }) { zone ->
-                        Surface(
-                            onClick = { onPick(zone) },
-                            color = if (zone == selected) bt.goldWash else bt.surface,
-                            contentColor = if (zone == selected) bt.goldEmphasis else bt.textPrimary,
-                            shape = BtShapes.card,
-                            // Unselected rows are `surface` = white on the
-                            // all-white light table, inside a white dialog: with
-                            // no edge there was nothing separating one timezone
-                            // from the next except the gap between their text.
-                            border = BorderStroke(1.dp, bt.groupBorder),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                                Text(zone, style = MaterialTheme.typography.bodyMedium)
-                                if (zone == deviceZone) {
-                                    Text(
-                                        stringResource(R.string.bt_notif_quiet_timezone_device),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = bt.textMuted,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
-            }
-        },
-    )
+    // Open ON the zone the account actually has. Alphabetically, "Europe/Vienna"
+    // is ~370 rows below "Africa/Abidjan": a picker that opens at the top shows
+    // a list in which nothing appears chosen, which is the exact impression the
+    // tick exists to prevent. The `+ 1` is the "no timezone set" row, which is
+    // always index 0 and never part of [shown].
+    val listState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        val index = shown.indexOf(selected)
+        if (index >= 0) listState.scrollToItem(index + 1)
+    }
+    // A search starts a new read of the list, so it starts at the top of it —
+    // otherwise the first keystroke leaves the user parked mid-way down results
+    // they have not seen.
+    LaunchedEffect(query) { if (query.isNotEmpty()) listState.scrollToItem(0) }
+
+    BtLazyPickerSheet(
+        title = stringResource(R.string.bt_notif_quiet_timezone_title),
+        onDismiss = onDismiss,
+        searchQuery = query,
+        searchLabel = stringResource(R.string.bt_notif_quiet_timezone_search),
+        onSearchQueryChange = { query = it },
+        closeLabel = stringResource(R.string.bt_action_cancel),
+        state = listState,
+    ) {
+        // Always first, never filtered: this is the "clear it" action wearing a
+        // list row, not a search result.
+        item(key = "__none__") {
+            BtPickerRow(
+                label = stringResource(R.string.bt_notif_quiet_timezone_none),
+                selected = selected == null,
+                onClick = if (selected == null) null else ({ onPick(null) }),
+            )
+        }
+        items(shown, key = { it }) { zone ->
+            BtPickerRow(
+                label = zone,
+                supporting = if (zone == deviceZone) deviceCaption else null,
+                selected = zone == selected,
+                onClick = if (zone == selected) null else ({ onPick(zone) }),
+            )
+        }
+    }
 }

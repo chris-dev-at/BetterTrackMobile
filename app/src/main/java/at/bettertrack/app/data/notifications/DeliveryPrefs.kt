@@ -1,6 +1,9 @@
 package at.bettertrack.app.data.notifications
 
 import at.bettertrack.app.data.api.dto.QuietHoursDto
+import at.bettertrack.app.data.api.dto.QuietHoursPatchDto
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Digest cadence + quiet hours (platform v5 `GET|PATCH /settings/notifications`).
@@ -88,9 +91,14 @@ const val QUIET_HOURS_DEFAULT_START = 1320
 const val QUIET_HOURS_DEFAULT_END = 420
 
 /**
- * The quiet-hours window as the app holds it. [timezone] is `null` when the server
- * has none stored (it then falls back to UTC) — the UI offers the device zone as
- * the fill-in, but the app only ever SENDS a zone the user actually confirmed.
+ * The quiet-hours window as the app holds it.
+ *
+ * [timezone] `null` is the server's own "no zone stored" state, and it has ONE
+ * meaning: the window is evaluated in **UTC**. It is not "unknown" and it is not
+ * a slot for the app to fill in — the screen says UTC out loud and offers the
+ * device zone as one pickable option among all the others. Nothing writes a zone
+ * the user did not choose, and clearing back to `null` is a real, sendable
+ * choice (see [quietHoursPatch]).
  */
 data class QuietHours(
     val enabled: Boolean = false,
@@ -107,9 +115,29 @@ data class DeliveryState(
     val cadence: Map<String, String>? = null,
     val quietHours: QuietHours? = null,
 ) {
-    /** Whether to render the Delivery section at all. */
+    /** Whether the server modelled anything in the delivery family at all. */
     val supported: Boolean get() = cadence != null || quietHours != null
 }
+
+// ── Account-wide mute (the web's single "silence everything" switch) ───────────
+//
+// There is deliberately NO "should this look disabled" predicate here. The web
+// greys its routing GRID under a mute and leaves everything else live; this
+// screen defers the grid to the web entirely, so nothing is left for a mute to
+// grey (coordinator ruling 2026-08-08). Mute stops delivery — it does not take
+// the quiet-hours schedule away from the user.
+
+/**
+ * The `muted` value to PATCH for an account-mute change, or `null` for "send
+ * nothing at all".
+ *
+ * Two reasons to send nothing, and they are different failures if confused:
+ * the server never modelled the flag (`current == null`) — inventing the key
+ * would be a `.strict()` 400 on an unknown property — or the value is already
+ * what the user asked for, and an empty `{}` body is itself a 400.
+ */
+fun accountMutePatch(current: Boolean?, next: Boolean): Boolean? =
+    if (current == null || current == next) null else next
 
 /** Decode a server quiet-hours object; absent fields fall back to the server defaults. */
 fun QuietHoursDto.toQuietHours(): QuietHours = QuietHours(
@@ -149,18 +177,91 @@ fun cadencePatch(serverCadence: Map<String, String>?, choice: DigestCadence): Ma
 
 /**
  * The field-partial `quietHours` object for a change: ONLY the fields that differ.
- * Returns `null` when nothing differs. [timezone] is never diffed down to `null` —
- * the app can set a zone but never clears one it did not set (and an explicit null
- * would be dropped by `explicitNulls = false` anyway).
+ * Returns `null` when nothing differs (an empty `{}` body is a 400).
+ *
+ * ## The timezone is diffed in BOTH directions
+ *
+ * It used to be diffed one way only — a zone could be set but never cleared —
+ * with the stated reason that "an explicit null would be dropped by
+ * `explicitNulls = false` anyway". That reason was real but it was a property of
+ * the DTO, not of the server: clearing the zone is a legitimate choice (it means
+ * *run the window on UTC*, which is exactly what the picker's "None (UTC)" entry
+ * offers), and the app had no way to express it.
+ *
+ * [QuietHoursPatchDto.timezone] is a `JsonElement`, so all three intents survive
+ * encoding: absent ⇒ key dropped, [JsonNull] ⇒ literal `"timezone":null` on the
+ * wire, [JsonPrimitive] ⇒ the id. That is what makes the clear real rather than a
+ * silently-empty patch.
  */
-fun quietHoursPatch(current: QuietHours, next: QuietHours): QuietHoursDto? {
-    val dto = QuietHoursDto(
+fun quietHoursPatch(current: QuietHours, next: QuietHours): QuietHoursPatchDto? {
+    val dto = QuietHoursPatchDto(
         enabled = next.enabled.takeIf { it != current.enabled },
         startMinute = next.startMinute.takeIf { it != current.startMinute },
         endMinute = next.endMinute.takeIf { it != current.endMinute },
-        timezone = next.timezone?.takeIf { it != current.timezone },
+        timezone = when {
+            next.timezone == current.timezone -> null
+            next.timezone == null -> JsonNull
+            else -> JsonPrimitive(next.timezone)
+        },
     )
-    return dto.takeIf { it != QuietHoursDto() }
+    return dto.takeIf { it != QuietHoursPatchDto() }
+}
+
+// ── The time-zone picker list ────────────────────────────────────────────────
+
+/**
+ * Fixed-offset ids (`Etc/GMT+7`, `Etc/UTC`). Valid, and deliberately not offered:
+ * see [timeZonePickerOptions].
+ */
+private const val FIXED_OFFSET_ZONE_PREFIX = "Etc/"
+
+/** Obsolete System V ids carrying pre-1987 US daylight rules. See [timeZonePickerOptions]. */
+private const val LEGACY_ZONE_PREFIX = "SystemV/"
+
+/**
+ * The zones the picker offers, mirroring the web's `timeZoneOptions()`
+ * (`NotificationsPanel.tsx`) exactly: the runtime's canonical region zones, plus
+ * the DETECTED zone and the CURRENTLY-SET one, deduped and sorted.
+ *
+ * ## Why [current] and [detected] are force-added
+ *
+ * This is the half of the web's function that matters and is easy to miss. The
+ * account's stored zone may be one the runtime does not list — set from another
+ * client, or on an older tz database. The web adds it unconditionally so the
+ * dropdown can always show what is actually selected. Without that, the app's
+ * picker would open on a zone it does not contain, with nothing highlighted, and
+ * scrolling to "the current one" would be impossible.
+ *
+ * ## Why the two prefixes are still filtered
+ *
+ * The web reads `Intl.supportedValuesOf('timeZone')`, which is NOT the same list
+ * as the JVM's `ZoneId.getAvailableZoneIds()`: ECMA-402 returns only CANONICAL
+ * zone names, while the JVM returns every id including links and legacy families.
+ * Probed on the dev stack's runtime, `supportedValuesOf` returns **418 zones,
+ * zero of them `Etc/`-prefixed, zero `SystemV/`-prefixed, and every one containing
+ * a `/`** — so dropping those three groups is not a bespoke app opinion, it is
+ * what makes the JVM list EQUAL the list the web shows.
+ *
+ * That also answers the obvious objection, "but UTC?": the web does not offer a
+ * bare UTC entry in the list either. It is the `<option value="">` above it, which
+ * clears the zone — the same "UTC (no timezone set)" row this app pins on top,
+ * wired to an explicit null (see [quietHoursPatch]). Nobody loses UTC; they just
+ * reach it through the option that actually means it.
+ */
+fun timeZonePickerOptions(
+    available: Iterable<String>,
+    current: String?,
+    detected: String?,
+): List<String> {
+    val zones = sortedSetOf<String>()
+    if (detected != null) zones += detected
+    available.filterTo(zones) {
+        it.contains('/') &&
+            !it.startsWith(FIXED_OFFSET_ZONE_PREFIX) &&
+            !it.startsWith(LEGACY_ZONE_PREFIX)
+    }
+    if (current != null) zones += current
+    return zones.toList()
 }
 
 // ── SharedPreferences codec for the cadence map (pure, so it is unit-tested) ────

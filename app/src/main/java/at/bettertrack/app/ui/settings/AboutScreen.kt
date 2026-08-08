@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.NotificationsPaused
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,10 +53,12 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.VersionResponse
 import at.bettertrack.app.data.api.dto.formatApiBuiltAtDate
+import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.update.ManualUpdateCheck
 import at.bettertrack.app.data.update.UpdateChecker
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtInlineError
@@ -62,12 +66,25 @@ import at.bettertrack.app.ui.components.Wordmark
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.isGermanUi
+import at.bettertrack.app.ui.util.rememberBtLocale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 /**
  * Settings → About (spec §6.12): the two-color wordmark + "App" edition + tagline,
- * the installed version, a link to the web app, the public privacy-policy page
- * (https://bettertrack.at/privacy/ — required for Play review), and the in-app
- * "What's new" changelog.
+ * the installed version, a link to the web app, the public legal pages
+ * (`<productOrigin>/privacy/` and friends — the privacy policy is required for
+ * Play review), and the in-app "What's new" changelog.
+ *
+ * Every link on this screen except the GitHub release page is
+ * **self-referential**, i.e. it points back at this deployment, and so is built
+ * from an effective origin rather than a literal — the web app, from
+ * `ServerOrigins.webOrigin`; the four legal pages, from
+ * `ServerOrigins.productOrigin`, the same third origin `apps/web/src/user/legal.ts`
+ * uses. GitHub is genuinely somebody else's host and stays absolute.
  *
  * ## R2 visual pass
  *
@@ -88,23 +105,37 @@ fun AboutScreen(
 ) {
     val bt = BtTheme.colors
     val context = androidx.compose.ui.platform.LocalContext.current
-    val webOrigin = at.bettertrack.app.data.prefs.ServerOrigins.webOrigin.trimEnd('/')
+    val webOrigin = ServerOrigins.webOrigin.trimEnd('/')
     val webHost = webOrigin.substringAfter("://")
     // Public legal pages (board #34 — live + final; required for Play review).
-    // Fixed public URLs on the marketing domain, independent of the API/web
-    // origins. Each page ships EN + DE — follow the app's active language.
+    //
+    // ## Built from the EFFECTIVE product origin, not a literal (owner ask 2026-08-08)
+    //
+    // These used to be hardcoded `https://bettertrack.at/<page>/`, which is a
+    // self-referential link the app was answering for itself — so a self-hosted
+    // or dev deployment sent its users to somebody else's terms. The platform
+    // already solved this and the app now says it the same way: `legalUrl` in
+    // `apps/web/src/user/legal.ts` is
+    // `${getRuntimeConfig().productOrigin}/${page}/${locale === 'de' ? 'de/' : ''}`,
+    // and [ServerOrigins.productOrigin] is that third, separately overridable
+    // origin with the same `https://bettertrack.at` default. Trailing slashes are
+    // part of the web's contract and are kept verbatim.
+    //
+    // Each page ships EN + DE — follow the app's active language.
+    val productOrigin = ServerOrigins.productOrigin.trimEnd('/')
+    // Display text only, and derived from the SAME origin so an overridden
+    // deployment shows the host it will actually open instead of claiming
+    // "bettertrack.at".
+    val productHost = productOrigin.substringAfter("://")
     val isDe = isGermanUi()
-    fun legalUrl(path: String) = "https://bettertrack.at/$path/" + if (isDe) "de/" else ""
-    fun legalHost(path: String) = "bettertrack.at/$path"
+    fun legalUrl(page: String) = "$productOrigin/$page/" + if (isDe) "de/" else ""
+    fun legalHost(page: String) = "$productHost/$page"
     val privacyUrl = legalUrl("privacy")
     val privacyHost = legalHost("privacy")
-    val onOpenUrl: (String) -> Unit = { url ->
-        runCatching {
-            context.startActivity(
-                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)),
-            )
-        }
-    }
+    // The app's one way to hand a URL to the browser: brand chrome, and fail-soft
+    // down to a plain VIEW intent. This screen used to build that intent by hand,
+    // which is the third copy `BtCustomTab` was written to retire.
+    val onOpenUrl: (String) -> Unit = { url -> BtCustomTab.open(context, url) }
 
     // Cosmetic: the live server's running build (public GET /version), loaded
     // lazily + fail-soft. Null (not fetched / failed) simply hides the row — this
@@ -200,6 +231,23 @@ fun AboutScreen(
                         installedVersion = installedVersion,
                         onCheck = { AppGraph.updateChecker.checkNow() },
                     )
+
+                    // "Remind me later" silences the update prompt for 24 hours
+                    // ACROSS cold starts, and until now it did so invisibly: the
+                    // checker kept running, a newer build kept existing, and no
+                    // dialog ever appeared — which reads as a broken notifier
+                    // rather than as a choice the user made yesterday. This line
+                    // is the receipt.
+                    //
+                    // Keyed on the pending dialog so tapping "remind me later"
+                    // while About is open makes the line appear immediately; the
+                    // deadline itself is a cheap prefs read, not a flow.
+                    val pendingUpdate by AppGraph.updateChecker.pendingDialog.collectAsStateWithLifecycle()
+                    val snoozeUntilMs = remember(pendingUpdate) { AppGraph.updateChecker.snoozedUntilMs() }
+                    val locale = rememberBtLocale()
+                    snoozeUntilMs?.let { deadline ->
+                        UpdateSnoozeNote(until = formatUpdateSnoozeUntil(deadline, locale))
+                    }
                 }
 
                 // API build (cosmetic; hidden until the public /version fetch returns).
@@ -381,6 +429,63 @@ private fun ManualUpdateCheckRow(
         ManualUpdateCheck.Idle, ManualUpdateCheck.Checking -> Unit
     }
 }
+
+/**
+ * "Reminder paused until …" — the visible half of a "remind me later".
+ *
+ * Shaped like [ManualUpdateCheckRow]'s up-to-date line rather than like a row of
+ * its own, because it is the same kind of thing: a quiet statement ABOUT the
+ * controls directly above it, not a control. It carries no action — the snooze
+ * expires on its own, and offering a "cancel" would be a fourth way to reach an
+ * update the two rows above already reach.
+ */
+@Composable
+private fun UpdateSnoozeNote(until: String) {
+    val bt = BtTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Outlined.NotificationsPaused,
+            contentDescription = null,
+            tint = bt.textMuted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = stringResource(R.string.bt_update_snooze_until, until),
+            style = MaterialTheme.typography.bodySmall,
+            color = bt.textMuted,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * The snooze deadline as a phrase a person can act on.
+ *
+ * Date AND time, both localized: the window is 24 hours, so "until 16:32" alone
+ * is ambiguous about which day, and a date alone hides that it ends mid-morning.
+ * `MEDIUM` date + `SHORT` time is the pairing the rest of the app already uses
+ * for a moment (`formatChainMoment`, the chart scrub read-out), and it honours
+ * the device's 12/24-hour setting through the locale.
+ *
+ * Pure and total: an unformattable instant falls back to the raw epoch rather
+ * than throwing inside composition. Kept here rather than inlined so the
+ * boundary cases are unit-tested without a device.
+ */
+internal fun formatUpdateSnoozeUntil(
+    deadlineMs: Long,
+    locale: Locale,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String = runCatching {
+    Instant.ofEpochMilli(deadlineMs)
+        .atZone(zone)
+        .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale))
+}.getOrElse { deadlineMs.toString() }
 
 /**
  * The auto-update toggle as a [BtGroup] row.

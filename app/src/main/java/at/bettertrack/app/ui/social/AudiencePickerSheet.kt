@@ -72,11 +72,18 @@ import at.bettertrack.app.ui.theme.BtTheme
  *    someone to the group later shares the item with them too.
  *  - **All friends**: a light, non-blocking confirm line.
  *  - **Public link**: a strong, BLOCKING acknowledgment (`acknowledgePublic`) — the
- *    action can't fire until "I understand…" is ticked. The token is minted
- *    server-side and surfaced ONCE by the caller after apply.
+ *    action can't fire until "I understand…" is ticked, **every time**, including
+ *    when the item is already public. The token is minted server-side and
+ *    surfaced ONCE by the caller after apply.
  *
  * The rungs render in [ShareAudience] declaration order, which is the ladder's
  * own order of increasing exposure.
+ *
+ * The friction itself is NOT written inline here: which rung needs the tick is
+ * [audienceRequiresPublicAcknowledgment] and whether Apply may fire at all is
+ * [audienceApplyAllowed] — both pure, both unit-tested rung by rung against the
+ * web picker's own `canSubmit`, so the ladder's guarantee is reviewable without
+ * reading a Composable.
  *
  * The sheet only chooses; [onApply] hands the caller the audience + friendIds +
  * groupId + ack so the repository call and the one-time link reveal live in the
@@ -261,31 +268,39 @@ fun AudiencePickerSheet(
                 selected = selected == ShareAudience.PublicLink,
                 onClick = { selected = ShareAudience.PublicLink; ack = false },
             )
+            // Two DIFFERENT questions, and conflating them was the bug: whether
+            // the tick is owed (always, on this rung) and whether applying mints
+            // a new link (only when one is not already live). The first gates,
+            // the second only picks a word.
+            val mintsLink = audienceMintsPublicLink(
+                current = currentAudience,
+                selected = selected,
+                linkActive = linkActive,
+            )
+
             if (selected == ShareAudience.PublicLink) {
                 Spacer(Modifier.height(10.dp))
-                if (linkActive && currentAudience == ShareAudience.PublicLink) {
+                // Kept from before: a live link is worth saying out loud, and the
+                // way to switch it off is not obvious. It is now an ADDITION to
+                // the acknowledgment rather than a replacement for it.
+                if (!mintsLink) {
                     HintCard(stringResource(R.string.bt_social_hint_public_active))
-                } else {
-                    PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
+                    Spacer(Modifier.height(8.dp))
                 }
+                PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
             }
 
             Spacer(Modifier.height(20.dp))
 
-            val isPublic = selected == ShareAudience.PublicLink
-            val alreadyPublic = isPublic && linkActive && currentAudience == ShareAudience.PublicLink
-            val canApply = when {
-                busy -> false
-                isPublic && !alreadyPublic -> ack
-                selected == ShareAudience.SpecificFriends -> selectedFriends.isNotEmpty()
-                // A `group` audience without a group id is a 400 the app should
-                // never send — Apply stays off until exactly one group is chosen.
-                selected == ShareAudience.Group -> selectedGroup != null
-                else -> true
-            }
+            val canApply = audienceApplyAllowed(
+                selected = selected,
+                acknowledged = ack,
+                hasGroup = selectedGroup != null,
+                busy = busy,
+            )
             BtPrimaryButton(
                 text = when {
-                    isPublic && !alreadyPublic -> stringResource(R.string.bt_social_create_public_link)
+                    mintsLink -> stringResource(R.string.bt_social_create_public_link)
                     else -> stringResource(R.string.bt_social_apply)
                 },
                 onClick = { onApply(selected, selectedFriends, selectedGroup, ack) },
@@ -295,6 +310,104 @@ fun AudiencePickerSheet(
             )
         }
     }
+}
+
+// ── The friction ladder, as a rule rather than an expression ─────────────────
+
+/**
+ * Whether the public rung's **blocking acknowledgment** is owed.
+ *
+ * ## The contract this mirrors, and the one that does not exist
+ *
+ * A parity audit asked for this to match a platform contract named
+ * `audienceTransitionRequiresConfirmation`. **That identifier exists in neither
+ * codebase** — not in this repo (working tree, full git object database
+ * including dangling objects, and every doc) and not in the platform source
+ * (whole dev stack, `node_modules` included). The audit named something that was
+ * never written. What is real is the web's own gate, and that is what this
+ * mirrors:
+ *
+ * ```ts
+ * // apps/web/src/user/components/AudiencePicker.tsx:259-264
+ * const canSubmit =
+ *   snapshotReady &&
+ *   !mutation.isPending &&
+ *   !(audience === 'public_link' && !acknowledged) &&
+ *   // The group tier's friction: a group must actually be chosen to share.
+ *   !(audience === 'group' && !groupId);
+ * ```
+ *
+ * So the rule is a property of the **selected rung**, not of the transition:
+ * `public_link` needs the tick, nothing else does. Private → all friends,
+ * specific friends → all friends and group → all friends are all widenings that
+ * apply on one tap in both clients — the web gives `all_friends` an informational
+ * Alert (`AudiencePicker.tsx:489-491`) and no gate, which is exactly what §6.9's
+ * "light confirm" asks for.
+ *
+ * ## No already-public exemption (the divergence this fixed)
+ *
+ * This app used to skip the tick when the item was *already* public with a live
+ * link. The web has no such carve-out: it clears `acknowledged` on every
+ * authoritative snapshot load — including one whose loaded audience already IS
+ * `public_link` (`AudiencePicker.tsx:189`) — and `canSubmit` then demands the tick
+ * again. Re-saving a public share is still a save that keeps holdings and net
+ * worth world-readable, and the app was the looser of the two clients on the
+ * ladder's most dangerous rung. Friction on this rung only ever goes up.
+ */
+internal fun audienceRequiresPublicAcknowledgment(selected: ShareAudience): Boolean =
+    selected == ShareAudience.PublicLink
+
+/**
+ * Whether applying would **mint a new public link**, as opposed to re-saving one
+ * that is already live.
+ *
+ * Wording only — this decides whether the button says "Create link & share" or
+ * "Apply", and it must never be mistaken for the gate. The gate is
+ * [audienceApplyAllowed], which asks for the tick either way.
+ */
+internal fun audienceMintsPublicLink(
+    current: ShareAudience,
+    selected: ShareAudience,
+    linkActive: Boolean,
+): Boolean =
+    selected == ShareAudience.PublicLink &&
+        !(linkActive && current == ShareAudience.PublicLink)
+
+/**
+ * Whether Apply may fire at all.
+ *
+ * Every clause is the web's `canSubmit` verbatim in Kotlin: not busy, the public
+ * tick, and a group audience that actually names a group (which the server
+ * answers `GROUP_AUDIENCE_INVALID` for). The rungs are mutually exclusive, so a
+ * `when` chain and the web's conjunction decide identically.
+ *
+ * ## Why `specific_friends` has NO gate (coordinator ruling, 2026-08-08)
+ *
+ * This client briefly required that rung to name at least one friend. The web
+ * does not, and its own test asserts Save is enabled the moment the rung is
+ * picked with nobody selected (`AudiencePicker.test.tsx:253-267`). That test
+ * makes it a CONTRACT rather than an oversight, and the owner's parity law is
+ * absolute: exactly the same as the web, or not at all.
+ *
+ * It is also harmless on inspection, which is why the contract reads the way it
+ * does — "specific friends, none named" is an audience nobody is in, i.e. the
+ * same exposure as private. There is nothing to protect the user from, so the
+ * stricter client was buying no safety and costing a divergence.
+ *
+ * The web's fourth clause, `snapshotReady`, has no counterpart here and needs
+ * none: the sheet is only composed once the caller holds the audience, friends
+ * and groups it seeds from, so there is no stale-cache state to gate against.
+ */
+internal fun audienceApplyAllowed(
+    selected: ShareAudience,
+    acknowledged: Boolean,
+    hasGroup: Boolean,
+    busy: Boolean,
+): Boolean = when {
+    busy -> false
+    audienceRequiresPublicAcknowledgment(selected) -> acknowledged
+    selected == ShareAudience.Group -> hasGroup
+    else -> true
 }
 
 @Composable

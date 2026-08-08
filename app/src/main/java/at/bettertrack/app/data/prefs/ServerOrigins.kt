@@ -6,10 +6,35 @@ import android.content.SharedPreferences
 import at.bettertrack.app.BuildConfig
 
 /**
- * The two origins the app talks to — the API origin (`{API_ORIGIN}/api/v1/…`,
- * plus the realtime `/ws` socket) and the WEB origin (the OAuth Custom Tab,
- * public share links, the About screen's web rows) — and the user's optional
- * override of them.
+ * The three origins the app talks to — the API origin (`{API_ORIGIN}/api/v1/…`,
+ * plus the realtime `/ws` socket), the WEB origin (the OAuth Custom Tab, public
+ * share links, every `/control/…` hand-off) and the PRODUCT origin (the public
+ * legal documents) — and the user's optional override of them.
+ *
+ * ## Why the product site is its own origin (owner addendum, 2026-08-08)
+ *
+ * *"The legal notes and all move to the server they are running on."* The app
+ * used to build `https://bettertrack.at/terms/` from a string literal, so a user
+ * on a self-hosted or dev stack was sent to someone else's legal pages.
+ *
+ * The fix mirrors the platform rather than inventing a rule. The web resolves
+ * legal links through `getRuntimeConfig().productOrigin` (`apps/web/src/user/
+ * legal.ts`), a THIRD per-deployment value that nginx writes into `config.js`
+ * per origin — deliberately not the web origin, because the marketing site and
+ * the app are routinely different hosts. Its documented default, when a
+ * deployment does not set one, is `https://bettertrack.at`.
+ *
+ * So [productOrigin] is a separate overridable origin with that same default,
+ * and [at.bettertrack.app.ui.settings.AboutScreen] builds `/<page>/` + `de/`
+ * off it exactly as `legalUrl()` does. A deployment that serves its own legal
+ * documents sets it and the app follows; one that does not gets the official
+ * pages, which is what the web does on that same deployment.
+ *
+ * Worth recording because it is counter-intuitive: the DEV STACK does not set a
+ * product origin, so the dev web app's own legal links point at
+ * `bettertrack.at` too. Its web origin answers 200 for `/terms` only because a
+ * Vite SPA serves one shell for every path — there are no legal documents
+ * there.
  *
  * ## What this is (owner ask, 2026-08-04)
  *
@@ -53,10 +78,12 @@ object ServerOrigins {
     private const val PREFS = "bt_dev_origins"
     private const val KEY_API = "api_origin"
     private const val KEY_WEB = "web_origin"
+    private const val KEY_PRODUCT = "product_origin"
 
     @Volatile private var prefs: SharedPreferences? = null
     @Volatile private var apiOverrideValue: String? = null
     @Volatile private var webOverrideValue: String? = null
+    @Volatile private var productOverrideValue: String? = null
 
     /**
      * Whether this build lets the user choose a server at all. The single flavor
@@ -67,6 +94,13 @@ object ServerOrigins {
     /** The compiled-in origins — "Official BetterTrack", and the reset target. */
     val defaultApiOrigin: String get() = BuildConfig.API_ORIGIN
     val defaultWebOrigin: String get() = BuildConfig.WEB_ORIGIN
+
+    /**
+     * The product site that serves the legal documents when a deployment does
+     * not name its own. Matches the web's `runtimeConfig.ts` DEFAULTS entry —
+     * if that constant ever moves, this one moves with it.
+     */
+    val defaultProductOrigin: String get() = BuildConfig.PRODUCT_ORIGIN
 
     /**
      * The LAN dev-stack preset, offered by the Server screen **only in debug
@@ -90,6 +124,7 @@ object ServerOrigins {
         prefs = p
         apiOverrideValue = p.getString(KEY_API, null)
         webOverrideValue = p.getString(KEY_WEB, null)
+        productOverrideValue = p.getString(KEY_PRODUCT, null)
     }
 
     /** The stored API-origin override, or null when none is set. */
@@ -98,14 +133,21 @@ object ServerOrigins {
     /** The stored WEB-origin override, or null when none is set. */
     val webOverride: String? get() = if (settingEnabled) webOverrideValue else null
 
+    /** The stored PRODUCT-origin override, or null when none is set. */
+    val productOverride: String? get() = if (settingEnabled) productOverrideValue else null
+
     /** The origin the app actually uses for the `/api/v1/` routes and `/ws`. */
     val apiOrigin: String get() = effectiveOrigin(apiOverrideValue, defaultApiOrigin)
 
     /** The origin the app actually uses for the OAuth Custom Tab and web links. */
     val webOrigin: String get() = effectiveOrigin(webOverrideValue, defaultWebOrigin)
 
+    /** The origin the public legal documents are read from. */
+    val productOrigin: String get() = effectiveOrigin(productOverrideValue, defaultProductOrigin)
+
     /** True when at least one origin is currently overridden. */
-    val isOverridden: Boolean get() = apiOverride != null || webOverride != null
+    val isOverridden: Boolean
+        get() = apiOverride != null || webOverride != null || productOverride != null
 
     /**
      * Writes an already-validated origin pair — the output of [validateOrigins]
@@ -137,15 +179,21 @@ object ServerOrigins {
      *   setting off, the prefs were never opened, or the commit failed.
      */
     @SuppressLint("ApplySharedPref") // Deliberate: see above — apply() loses this write.
-    fun persist(api: String?, web: String?): Boolean {
+    fun persist(api: String?, web: String?, product: String? = null): Boolean {
         if (!settingEnabled) return false
         val p = prefs ?: return false
         val editor = p.edit()
         if (api == null) editor.remove(KEY_API) else editor.putString(KEY_API, api)
         if (web == null) editor.remove(KEY_WEB) else editor.putString(KEY_WEB, web)
+        if (product == null) {
+            editor.remove(KEY_PRODUCT)
+        } else {
+            editor.putString(KEY_PRODUCT, product)
+        }
         if (!editor.commit()) return false
         apiOverrideValue = api
         webOverrideValue = web
+        productOverrideValue = product
         return true
     }
 
@@ -160,9 +208,10 @@ object ServerOrigins {
     fun reset(): Boolean {
         if (!settingEnabled) return false
         val p = prefs ?: return false
-        if (!p.edit().remove(KEY_API).remove(KEY_WEB).commit()) return false
+        if (!p.edit().remove(KEY_API).remove(KEY_WEB).remove(KEY_PRODUCT).commit()) return false
         apiOverrideValue = null
         webOverrideValue = null
+        productOverrideValue = null
         return true
     }
 
@@ -185,11 +234,15 @@ internal fun effectiveOrigin(override: String?, default: String, enabled: Boolea
  * field applied on its own, pointing the app at a mismatched pair of backends.
  */
 internal sealed interface OriginValidation {
-    /** Both fields are usable. A null half means "no override" for that origin. */
-    data class Valid(val api: String?, val web: String?) : OriginValidation
+    /** Every field is usable. A null member means "no override" for that origin. */
+    data class Valid(val api: String?, val web: String?, val product: String?) : OriginValidation
 
     /** At least one field was refused; the non-null reasons are what to show. */
-    data class Invalid(val apiError: OriginError?, val webError: OriginError?) : OriginValidation
+    data class Invalid(
+        val apiError: OriginError?,
+        val webError: OriginError?,
+        val productError: OriginError?,
+    ) : OriginValidation
 }
 
 /**
@@ -206,13 +259,17 @@ internal sealed interface OriginValidation {
 internal fun validateOrigins(
     apiRaw: String?,
     webRaw: String?,
+    productRaw: String?,
     defaultApi: String,
     defaultWeb: String,
+    defaultProduct: String,
 ): OriginValidation {
     var apiError: OriginError? = null
     var webError: OriginError? = null
+    var productError: OriginError? = null
     var api: String? = null
     var web: String? = null
+    var product: String? = null
     try {
         api = normalizeOrigin(apiRaw)?.takeIf { it != defaultApi }
     } catch (e: OriginFormatException) {
@@ -223,10 +280,15 @@ internal fun validateOrigins(
     } catch (e: OriginFormatException) {
         webError = e.reason
     }
-    return if (apiError != null || webError != null) {
-        OriginValidation.Invalid(apiError, webError)
+    try {
+        product = normalizeOrigin(productRaw)?.takeIf { it != defaultProduct }
+    } catch (e: OriginFormatException) {
+        productError = e.reason
+    }
+    return if (apiError != null || webError != null || productError != null) {
+        OriginValidation.Invalid(apiError, webError, productError)
     } else {
-        OriginValidation.Valid(api, web)
+        OriginValidation.Valid(api, web, product)
     }
 }
 

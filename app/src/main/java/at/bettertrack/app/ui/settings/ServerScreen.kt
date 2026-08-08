@@ -96,8 +96,14 @@ fun ServerScreen(onBack: () -> Unit) {
 
     var apiField by remember { mutableStateOf(ServerOrigins.apiOverride ?: ServerOrigins.defaultApiOrigin) }
     var webField by remember { mutableStateOf(ServerOrigins.webOverride ?: ServerOrigins.defaultWebOrigin) }
+    // The product site (legal documents). Separate from the web origin because
+    // the platform keeps it separate — see [ServerOrigins.productOrigin].
+    var productField by remember {
+        mutableStateOf(ServerOrigins.productOverride ?: ServerOrigins.defaultProductOrigin)
+    }
     var apiError by remember { mutableStateOf<OriginError?>(null) }
     var webError by remember { mutableStateOf<OriginError?>(null) }
+    var productError by remember { mutableStateOf<OriginError?>(null) }
     var status by remember { mutableStateOf<Int?>(null) }
     // Bumped after every save/reset so the "in use" card re-reads ServerOrigins
     // (a plain object, not observable state).
@@ -105,18 +111,28 @@ fun ServerScreen(onBack: () -> Unit) {
 
     val effectiveApi = remember(revision) { ServerOrigins.apiOrigin }
     val effectiveWeb = remember(revision) { ServerOrigins.webOrigin }
+    val effectiveProduct = remember(revision) { ServerOrigins.productOrigin }
     val overridden = remember(revision) { ServerOrigins.isOverridden }
 
     // Warnings track what is TYPED, not what is saved: the point is to tell the
     // user before they commit to an origin the build cannot reach.
     val apiWarning = originWarning(apiField.trim(), ServerOrigins.cleartextPermitted)
     val webWarning = originWarning(webField.trim(), ServerOrigins.cleartextPermitted)
+    // Product origin opens in a Custom Tab (the browser), which can reach cleartext
+    // regardless of this build's network policy — so http warns, but never as "blocked".
+    val productWarning = originWarning(productField.trim(), cleartextPermitted = true)
 
+    // Every preset also restores the DEFAULT product origin. That is not a
+    // shortcut: the dev stack ships no product origin of its own, so the web app
+    // served from it points its legal links at the official site too — anything
+    // else here would put the app somewhere the web is not.
     fun applyPreset(api: String, web: String, statusRes: Int) {
         apiField = api
         webField = web
+        productField = ServerOrigins.defaultProductOrigin
         apiError = null
         webError = null
+        productError = null
         status = statusRes
     }
 
@@ -168,6 +184,7 @@ fun ServerScreen(onBack: () -> Unit) {
                     )
                     MonoRow(stringResource(R.string.bt_server_api), effectiveApi)
                     MonoRow(stringResource(R.string.bt_server_web), effectiveWeb)
+                    MonoRow(stringResource(R.string.bt_server_product), effectiveProduct)
                 }
             }
 
@@ -222,6 +239,15 @@ fun ServerScreen(onBack: () -> Unit) {
                 hint = stringResource(R.string.bt_server_web_hint),
                 onValueChange = { webField = it; webError = null; status = null },
             )
+            OriginField(
+                label = stringResource(R.string.bt_server_product),
+                placeholder = ServerOrigins.defaultProductOrigin,
+                value = productField,
+                error = productError,
+                warning = productWarning,
+                hint = stringResource(R.string.bt_server_product_hint),
+                onValueChange = { productField = it; productError = null; status = null },
+            )
 
             status?.let {
                 Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, color = bt.goldInk)
@@ -250,21 +276,25 @@ fun ServerScreen(onBack: () -> Unit) {
                         val verdict = validateOrigins(
                             apiRaw = apiField,
                             webRaw = webField,
+                            productRaw = productField,
                             defaultApi = ServerOrigins.defaultApiOrigin,
                             defaultWeb = ServerOrigins.defaultWebOrigin,
+                            defaultProduct = ServerOrigins.defaultProductOrigin,
                         )
                     ) {
                         is OriginValidation.Invalid -> {
                             apiError = verdict.apiError
                             webError = verdict.webError
+                            productError = verdict.productError
                             status = null
                         }
 
                         is OriginValidation.Valid -> {
                             apiError = null
                             webError = null
+                            productError = null
                             revision++
-                            if (!ServerOrigins.persist(verdict.api, verdict.web)) {
+                            if (!ServerOrigins.persist(verdict.api, verdict.web, verdict.product)) {
                                 // The bytes are not on disk, so a restart would
                                 // come back on the OLD server. Say so; change
                                 // nothing else.

@@ -26,17 +26,28 @@ data class ChannelAvailability(
 )
 
 /**
- * Per-type preference row: the user-facing channel toggles + a master mute, plus
- * [webpush] — a browser-only channel the app does NOT surface but carries through
- * verbatim from the server so the PATCH can echo it.
+ * Per-type preference row: the server's channel flags, plus [webpush] — a
+ * browser-only channel the app does NOT surface but carries through verbatim from
+ * the server so the PATCH can echo it.
  *
  * [telegram] + [discord] are the v4 additive channels. They are NULLABLE and echo
  * the server exactly (round-trip rule): `null` ⇒ the last GET did not model the
  * channel (pre-v4) ⇒ the PATCH cell OMITS it (shared Json `explicitNulls=false`);
  * a concrete value ⇒ the server modelled it and the PATCH echoes it. We never
- * invent a value the server didn't send. [muted] is app-local: the server has
- * only a single account-wide mute, not a per-type one, so it never leaves the
- * device.
+ * invent a value the server didn't send.
+ *
+ * ## The per-type `muted` flag is gone (web-parity ruling, 2026-08-08)
+ *
+ * There used to be a seventh field here, an app-local `muted` boolean with a
+ * switch on every type card. It was a device-only invention: the platform has
+ * exactly ONE mute, account-wide (`muted` on `GET|PATCH /settings/notifications`),
+ * and the per-type one never left the phone. Under the owner's *match the web
+ * exactly or link to the web* rule it had to go, and it could not be left behind
+ * as a dormant stored value either — with the switch removed, any type a user had
+ * already muted would have gone on being suppressed forever with no UI left to
+ * undo it. So the field, its suppression branch in [decideDelivery] and its
+ * SharedPreferences key are all removed, and [persist] actively deletes the stale
+ * key on the next write.
  */
 data class TypePrefs(
     val inApp: Boolean = true,
@@ -45,7 +56,6 @@ data class TypePrefs(
     val webpush: Boolean = true,
     val telegram: Boolean? = null,
     val discord: Boolean? = null,
-    val muted: Boolean = false,
 ) {
     fun get(channel: NotifChannel): Boolean = when (channel) {
         NotifChannel.InApp -> inApp
@@ -68,9 +78,8 @@ data class TypePrefs(
 /**
  * Merge a server prefs cell into local prefs (pure, unit-tested): the server owns
  * every channel including push + webpush + the v4 telegram/discord (echoed
- * verbatim, `null` when the server didn't model them). The app's local per-type
- * [TypePrefs.muted] is preserved untouched (the server has no per-type mute).
- * Server state wins on load.
+ * verbatim, `null` when the server didn't model them). Server state wins on load —
+ * there is nothing app-local left in a cell to preserve.
  */
 fun TypePrefs.mergedFrom(dto: ChannelPrefsDto): TypePrefs =
     copy(
@@ -108,27 +117,38 @@ data class DeliveryDecision(val addToInbox: Boolean, val showPush: Boolean) {
 }
 
 /**
- * Pure delivery rule (unit-tested): muting a type suppresses it entirely; else
- * in-app governs the inbox and push governs the system notification. Email is a
- * server-side channel with no local delivery effect.
+ * Pure delivery rule (unit-tested): in-app governs the inbox and push governs the
+ * system notification. Email is a server-side channel with no local delivery
+ * effect.
+ *
+ * Both flags come straight from the server matrix — which the app still HONOURS
+ * even though it no longer EDITS it (that moved to the web). There is no local
+ * suppression layer on top: the retired per-type mute was the only one, and the
+ * account-wide mute is enforced server-side, at the source, where it belongs.
  */
 fun decideDelivery(prefs: TypePrefs): DeliveryDecision =
-    if (prefs.muted) {
-        DeliveryDecision(addToInbox = false, showPush = false)
-    } else {
-        DeliveryDecision(addToInbox = prefs.inApp, showPush = prefs.push)
-    }
+    DeliveryDecision(addToInbox = prefs.inApp, showPush = prefs.push)
 
 /**
- * Local persistence for the per-type × per-channel notification matrix (§6.11).
+ * Local persistence for the notification settings the app holds (§6.11).
  *
- * On Notifications-v2 the server models in-app + email + **push** (+ web-push) per
- * type, so the in-app / email / push columns all round-trip with
- * `GET/PATCH /settings/notifications` via [syncFromServer] / [serverMatrixForPatch];
- * server state wins on first load. Only the per-type **Mute** stays app-local
- * (the server has a single account-wide mute, not a per-type one). Muting a type
- * suppresses it locally through [decideDelivery] — proven on device. The local
- * SharedPreferences cache mirrors the server so the grid renders instantly offline.
+ * Everything in here is now a MIRROR of the server, with nothing app-local left:
+ * the per-type × per-channel matrix ([syncFromServer]), which optional channels
+ * the deployment can deliver on ([setAvailability]), the v5 delivery state
+ * ([setDelivery]) and the account-wide mute ([setAccountMuted]). The
+ * SharedPreferences copy exists so the screen renders instantly on a cold open,
+ * before the fresh GET returns — and so the FCM path can make a delivery decision
+ * ([decisionFor]) offline.
+ *
+ * The matrix is still read on every push even though the app no longer offers a
+ * UI to change it — it moved to the web (`/control/notifications`) under the
+ * web-parity ruling, and "the app does not edit it" is a very different statement
+ * from "the app ignores it".
+ *
+ * Three values in here are deliberately TRI-STATE (`null` ≠ `false`): a channel
+ * cell's telegram/discord, the delivery members, and [accountMuted]. `null` means
+ * the last GET did not model it, which hides the control rather than inventing a
+ * default and PATCHing it back as though the user had chosen it.
  */
 class NotificationSettingsStore(context: Context) {
 
@@ -168,6 +188,15 @@ class NotificationSettingsStore(context: Context) {
     private val _delivery = MutableStateFlow(loadDelivery())
     val delivery: StateFlow<DeliveryState> = _delivery.asStateFlow()
 
+    /**
+     * The account-wide mute (`muted` on the settings GET/PATCH) — the web's one
+     * "silence everything" switch. Tri-state: `null` ⇒ the last GET carried no
+     * `muted` key ⇒ the app renders no mute switch and can never PATCH the key.
+     * Cached so the switch shows its real position on a cold open.
+     */
+    private val _accountMuted = MutableStateFlow(loadAccountMuted())
+    val accountMuted: StateFlow<Boolean?> = _accountMuted.asStateFlow()
+
     fun prefs(kind: NotifKind): TypePrefs = _matrix.value.prefs(kind)
 
     /** The live delivery decision for an incoming notification of [type]. */
@@ -175,10 +204,6 @@ class NotificationSettingsStore(context: Context) {
 
     fun setChannel(kind: NotifKind, channel: NotifChannel, on: Boolean) {
         update(kind) { it.set(channel, on) }
-    }
-
-    fun setMuted(kind: NotifKind, muted: Boolean) {
-        update(kind) { it.copy(muted = muted) }
     }
 
     private fun update(kind: NotifKind, transform: (TypePrefs) -> TypePrefs) {
@@ -190,9 +215,8 @@ class NotificationSettingsStore(context: Context) {
 
     /**
      * Seed the in-app / email / **push** (+ carried web-push) columns from the
-     * server matrix; the local per-type Mute is left untouched. Only the
-     * user-configurable grid kinds are synced — server types the app surfaces as
-     * inbox rows but does not let the user configure (watchlist.shared,
+     * server matrix. Only the user-configurable kinds are synced — server types the
+     * app surfaces as inbox rows but does not model prefs for (watchlist.shared,
      * conglomerate.shared, friend.activity) and the unknown [NotifKind.System]
      * bucket are skipped, so they never enter the grid or the PATCH.
      */
@@ -243,6 +267,18 @@ class NotificationSettingsStore(context: Context) {
         persistDelivery(state)
     }
 
+    /**
+     * Record the account-wide mute, echoed verbatim from the server (`null` in ⇒
+     * `null` held ⇒ the switch is not rendered and the key can never reach a PATCH
+     * body). Also used for the optimistic flip and its rollback.
+     */
+    fun setAccountMuted(muted: Boolean?) {
+        _accountMuted.value = muted
+        val e = prefs.edit()
+        if (muted != null) e.putBoolean(KEY_ACCOUNT_MUTED, muted) else e.remove(KEY_ACCOUNT_MUTED)
+        e.apply()
+    }
+
     private fun load(): NotifMatrix {
         val rows = configurableKinds.associateWith { kind ->
             val k = kind.name
@@ -256,7 +292,6 @@ class NotificationSettingsStore(context: Context) {
                 // echo (toChannelPrefs) can omit the key against a pre-v4 server.
                 telegram = if (prefs.contains("$k.telegram")) prefs.getBoolean("$k.telegram", false) else null,
                 discord = if (prefs.contains("$k.discord")) prefs.getBoolean("$k.discord", false) else null,
-                muted = prefs.getBoolean("$k.muted", false),
             )
         }
         return NotifMatrix(rows)
@@ -267,6 +302,9 @@ class NotificationSettingsStore(context: Context) {
         discord = prefs.getBoolean(KEY_AVAIL_DISCORD, false),
     )
 
+    private fun loadAccountMuted(): Boolean? =
+        if (prefs.contains(KEY_ACCOUNT_MUTED)) prefs.getBoolean(KEY_ACCOUNT_MUTED, false) else null
+
     private fun persist(kind: NotifKind, p: TypePrefs) {
         val k = kind.name
         val e = prefs.edit()
@@ -274,7 +312,10 @@ class NotificationSettingsStore(context: Context) {
             .putBoolean("$k.email", p.email)
             .putBoolean("$k.push", p.push)
             .putBoolean("$k.webpush", p.webpush)
-            .putBoolean("$k.muted", p.muted)
+            // The retired per-type mute. Removed rather than left to rot: a stale
+            // `true` from a build that still had the switch would otherwise sit in
+            // SharedPreferences forever with no UI able to clear it.
+            .remove("$k.muted")
         // Keep the tri-state durable: a null (never-modelled) channel stores NO key.
         if (p.telegram != null) e.putBoolean("$k.telegram", p.telegram) else e.remove("$k.telegram")
         if (p.discord != null) e.putBoolean("$k.discord", p.discord) else e.remove("$k.discord")
@@ -318,6 +359,7 @@ class NotificationSettingsStore(context: Context) {
     private companion object {
         const val KEY_AVAIL_TELEGRAM = "avail.telegram"
         const val KEY_AVAIL_DISCORD = "avail.discord"
+        const val KEY_ACCOUNT_MUTED = "account.muted"
         const val KEY_CADENCE = "delivery.cadence"
         const val KEY_QH_ENABLED = "delivery.qh.enabled"
         const val KEY_QH_START = "delivery.qh.start"

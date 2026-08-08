@@ -112,8 +112,10 @@
     <string name="bt_chart_mode_balance_cd">Balance in euro</string>
     <string name="bt_chart_mode_performance">%</string>
     <string name="bt_chart_mode_performance_cd">Performance in percent</string>
-    <string name="bt_chart_mode_hybrid">€ / %</string>
-    <string name="bt_chart_mode_hybrid_cd">Performance curve, balance readout</string>
+    <!-- One glyph wide, like the two segments beside it (owner order 2026-08-08).
+         The spoken form below carries the full wording. -->
+    <string name="bt_chart_mode_hybrid">€%</string>
+    <string name="bt_chart_mode_hybrid_cd">Euro and percent — performance curve, balance readout</string>
     <string name="bt_chart_perf_hint">Deposits and withdrawals are neutralized — the curve only moves when your holdings move.</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
@@ -620,18 +622,10 @@
     <string name="bt_notif_enable_push_action">Enable</string>
 
     <!-- Notification settings matrix -->
-    <string name="bt_notif_matrix_section">Per type</string>
-    <string name="bt_notif_matrix_footer">In-app and email preferences sync with the web when available. Push and Mute are saved on this device.</string>
     <string name="bt_notif_perm_on_title">Push notifications are on</string>
     <string name="bt_notif_perm_on_message">Tap to manage channels in system settings.</string>
     <string name="bt_notif_perm_off_title">Push notifications are off</string>
     <string name="bt_notif_perm_off_message">Allow notifications to get alerts on this device.</string>
-    <string name="bt_notif_mute">Mute</string>
-    <string name="bt_notif_channel_inapp">In-app</string>
-    <string name="bt_notif_channel_email">Email</string>
-    <string name="bt_notif_channel_push">Push</string>
-    <string name="bt_notif_channel_telegram">Telegram</string>
-    <string name="bt_notif_channel_discord">Discord</string>
 
     <!-- Notification types (mirroring the web matrix) -->
     <string name="bt_notif_type_friend_request">Friend requests</string>
@@ -1202,14 +1196,6 @@
 
     <!-- V5 delivery: digest cadence + quiet hours (outbound channels only) -->
     <string name="bt_notif_delivery_section">Delivery</string>
-    <string name="bt_notif_delivery_inbox_hint">Your in-app inbox is never delayed or paused. Digest and quiet hours only affect email, push and linked channels.</string>
-    <string name="bt_notif_cadence_title">Digest</string>
-    <string name="bt_notif_cadence_subtitle">How often non-urgent notifications are sent out</string>
-    <string name="bt_notif_cadence_instant">Instant</string>
-    <string name="bt_notif_cadence_daily">Daily</string>
-    <string name="bt_notif_cadence_weekly">Weekly</string>
-    <string name="bt_notif_cadence_mixed">Right now these types use different settings. Pick one to apply it to all of them.</string>
-    <string name="bt_notif_cadence_urgent_hint">Price alerts, security codes, chat messages and invitations always arrive instantly and are never batched.</string>
     <string name="bt_notif_quiet_title">Quiet hours</string>
     <string name="bt_notif_quiet_subtitle">Hold outgoing notifications during a window you choose</string>
     <string name="bt_notif_quiet_start">Start</string>
@@ -2402,4 +2388,63 @@
     <string name="bt_pf_kind_savings">Savings</string>
     <string name="bt_pf_kind_property">Property</string>
     <string name="bt_settings_profile_saved">Profile updated</string>
+
+    <!-- ==== COORDINATOR (origins) ==== -->
+    <string name="bt_server_product">Product site</string>
+    <string name="bt_server_product_hint">Serves the legal documents (terms, privacy, imprint, cookies). Separate from the web app — leave it on the official site unless your deployment publishes its own.</string>
+    <!-- ==== /COORDINATOR (origins) ==== -->
+
+    <!-- ==== STREAM-NOTIF (EN) ==== -->
+    <!-- Notification settings, web-parity pass: section names -->
+    <string name="bt_notif_device_section">This device</string>
+    <string name="bt_notif_web_section">More settings</string>
+    <!-- Account-wide mute. Wording is settings.notifications.mute from the web, verbatim. -->
+    <string name="bt_notif_mute_all_title">Mute all notifications</string>
+    <string name="bt_notif_mute_all_sub">While muted, nothing is delivered on any channel. Your choices are kept.</string>
+    <string name="bt_notif_account_unavailable">Your account-wide settings could not be loaded, so they are not shown here. They are unchanged, and still reachable on the web.</string>
+    <!-- Quiet hours: honest time-zone states (web settings.notifications.quietHours.*) -->
+    <string name="bt_notif_quiet_timezone_none">UTC (no timezone set)</string>
+    <string name="bt_notif_quiet_timezone_use_detected">Use my timezone (%1$s)</string>
+    <string name="bt_notif_quiet_inbox_hint">Urgent account and security alerts always get through, and the in-app bell stays instant.</string>
+    <!-- Hand-off to the web app -->
+    <string name="bt_notif_web_link_title">All settings on the web</string>
+    <string name="bt_notif_web_link_sub">Choose channels per notification type and how often they are bundled</string>
+    <string name="bt_notif_web_explainer">Which notification type reaches which channel — in-app, email, push, Telegram, Discord — and how often they are bundled is set once on the web. The app follows those settings; what is here is what only a phone can do.</string>
+    <!-- ==== /STREAM-NOTIF (EN) ==== -->
+
+    <!-- ==== STREAM-SETTINGS (EN) ==== -->
+    <!-- Account: the day the account was opened (/auth/me createdAt). -->
+    <string name="bt_settings_member_since">Member since</string>
+    <!-- Shared subtitle for every row that hands a job to the web app. -->
+    <string name="bt_settings_managed_on_web">Managed on the web</string>
+    <string name="bt_settings_data_export">Export your data</string>
+    <string name="bt_settings_profile_web">More profile settings</string>
+    <string name="bt_settings_passkeys">Passkeys</string>
+    <!-- Settings → "On the web": the five integration surfaces the app links out to. -->
+    <string name="bt_settings_web_section">On the web</string>
+    <string name="bt_settings_web_intro">Connections and developer settings are managed in the web app.</string>
+    <string name="bt_settings_web_connections">Connections</string>
+    <string name="bt_settings_web_api_keys">API keys</string>
+    <string name="bt_settings_web_oauth_apps">OAuth apps</string>
+    <string name="bt_settings_web_authorized_apps">Authorized apps</string>
+    <string name="bt_settings_web_webhooks">Webhooks</string>
+    <!-- About → this build: an active "remind me later" made visible. %1$s is a date + time. -->
+    <string name="bt_update_snooze_until">Reminder paused until %1$s</string>
+    <!-- ==== /STREAM-SETTINGS (EN) ==== -->
+
+    <!-- ==== STREAM-TAX (EN) ==== -->
+    <!-- Tax settings → the report hand-off. Title is the web's own link label
+         (settings.taxes.reportLink) minus its trailing arrow: the row already
+         carries an open-in-new glyph, and two direction cues is one too many.
+         The subtitle says which portfolio, because the web page resolves the
+         ACTIVE one and this screen is the account-level default. -->
+    <string name="bt_tax_settings_reports_row">View your per-year tax report</string>
+    <string name="bt_tax_settings_reports_sub">For your active portfolio, in the BetterTrack web app</string>
+    <!-- Verbatim from the web's settings.taxes.disclaimer — owner-mandated
+         liability framing (#635), three distinct claims, kept word for word. -->
+    <string name="bt_tax_settings_disclaimer">Estimates for your personal overview only — not tax advice, no guarantee of correctness, not a filing document.</string>
+    <!-- Recovery codes → save to a file the user picks (SAF), beside "Copy codes".
+         Label verbatim from the web's settings.security.twoFactor.recoveryCodes.download. -->
+    <string name="bt_2fa_recovery_download">Download codes</string>
+    <!-- ==== /STREAM-TAX (EN) ==== -->
 </resources>

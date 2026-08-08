@@ -79,8 +79,8 @@
     <string name="bt_chart_mode_balance_cd">Kontostand in Euro</string>
     <string name="bt_chart_mode_performance">%</string>
     <string name="bt_chart_mode_performance_cd">Performance in Prozent</string>
-    <string name="bt_chart_mode_hybrid">€ / %</string>
-    <string name="bt_chart_mode_hybrid_cd">Performance-Kurve, Kontostand als Anzeige</string>
+    <string name="bt_chart_mode_hybrid">€%</string>
+    <string name="bt_chart_mode_hybrid_cd">Euro und Prozent — Performance-Kurve, Kontostand als Anzeige</string>
     <string name="bt_chart_perf_hint">Ein- und Auszahlungen werden neutralisiert — die Kurve bewegt sich nur, wenn sich deine Bestände bewegen.</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
@@ -580,18 +580,10 @@
     <string name="bt_notif_enable_push_action">Aktivieren</string>
 
     <!-- Mitteilungs-Matrix -->
-    <string name="bt_notif_matrix_section">Nach Typ</string>
-    <string name="bt_notif_matrix_footer">In-App- und E-Mail-Einstellungen werden mit dem Web abgeglichen, sofern verfügbar. Push und Stumm werden auf diesem Gerät gespeichert.</string>
     <string name="bt_notif_perm_on_title">Push-Mitteilungen sind an</string>
     <string name="bt_notif_perm_on_message">Tippen, um Kanäle in den Systemeinstellungen zu verwalten.</string>
     <string name="bt_notif_perm_off_title">Push-Mitteilungen sind aus</string>
     <string name="bt_notif_perm_off_message">Erlaub Mitteilungen, um Hinweise auf diesem Gerät zu erhalten.</string>
-    <string name="bt_notif_mute">Stumm</string>
-    <string name="bt_notif_channel_inapp">In-App</string>
-    <string name="bt_notif_channel_email">E-Mail</string>
-    <string name="bt_notif_channel_push">Push</string>
-    <string name="bt_notif_channel_telegram">Telegram</string>
-    <string name="bt_notif_channel_discord">Discord</string>
 
     <!-- Mitteilungstypen -->
     <string name="bt_notif_type_friend_request">Freundschaftsanfragen</string>
@@ -1151,14 +1143,6 @@
 
     <!-- V5 Zustellung: Sammel-Rhythmus + Ruhezeiten (nur ausgehende Kanäle) -->
     <string name="bt_notif_delivery_section">Zustellung</string>
-    <string name="bt_notif_delivery_inbox_hint">Dein Posteingang in der App wird nie verzögert oder pausiert. Sammel-Rhythmus und Ruhezeiten gelten nur für E-Mail, Push und verknüpfte Kanäle.</string>
-    <string name="bt_notif_cadence_title">Sammel-Rhythmus</string>
-    <string name="bt_notif_cadence_subtitle">Wie oft nicht dringende Mitteilungen verschickt werden</string>
-    <string name="bt_notif_cadence_instant">Sofort</string>
-    <string name="bt_notif_cadence_daily">Täglich</string>
-    <string name="bt_notif_cadence_weekly">Wöchentlich</string>
-    <string name="bt_notif_cadence_mixed">Diese Typen sind aktuell unterschiedlich eingestellt. Wähle eine Option, um sie für alle zu übernehmen.</string>
-    <string name="bt_notif_cadence_urgent_hint">Kursalarme, Sicherheitscodes, Chat-Nachrichten und Einladungen kommen immer sofort und werden nie gesammelt.</string>
     <string name="bt_notif_quiet_title">Ruhezeiten</string>
     <string name="bt_notif_quiet_subtitle">Ausgehende Mitteilungen in einem selbst gewählten Zeitfenster zurückhalten</string>
     <string name="bt_notif_quiet_start">Beginn</string>
@@ -2311,4 +2295,50 @@
     <string name="bt_pf_kind_savings">Sparen</string>
     <string name="bt_pf_kind_property">Immobilien</string>
     <string name="bt_settings_profile_saved">Profil aktualisiert</string>
+
+    <!-- ==== COORDINATOR (origins) ==== -->
+    <string name="bt_server_product">Produktseite</string>
+    <string name="bt_server_product_hint">Liefert die Rechtstexte (AGB, Datenschutz, Impressum, Cookies). Getrennt von der Web-App — lass sie auf der offiziellen Seite, außer deine Installation veröffentlicht eigene.</string>
+    <!-- ==== /COORDINATOR (origins) ==== -->
+
+    <!-- ==== STREAM-NOTIF (DE) ==== -->
+    <!-- Mitteilungs-Einstellungen, Web-Parität: Abschnittsnamen -->
+    <string name="bt_notif_device_section">Dieses Gerät</string>
+    <string name="bt_notif_web_section">Weitere Einstellungen</string>
+    <!-- Kontoweite Stummschaltung. Wortlaut = settings.notifications.mute.* des Webs. -->
+    <string name="bt_notif_mute_all_title">Alle Mitteilungen stummschalten</string>
+    <string name="bt_notif_mute_all_sub">Solange stummgeschaltet, wird auf keinem Kanal etwas zugestellt. Deine Auswahl bleibt erhalten.</string>
+    <string name="bt_notif_account_unavailable">Deine kontoweiten Einstellungen konnten nicht geladen werden und werden daher hier nicht angezeigt. Sie sind unverändert und im Web weiterhin erreichbar.</string>
+    <!-- Ruhezeiten: ehrliche Zeitzonen-Zustände (Web settings.notifications.quietHours.*) -->
+    <string name="bt_notif_quiet_timezone_none">UTC (keine Zeitzone festgelegt)</string>
+    <string name="bt_notif_quiet_timezone_use_detected">Meine Zeitzone verwenden (%1$s)</string>
+    <string name="bt_notif_quiet_inbox_hint">Dringende Konto- und Sicherheitshinweise kommen immer durch, und die Glocke in der App bleibt sofort.</string>
+    <!-- Übergabe an die Web-App -->
+    <string name="bt_notif_web_link_title">Alle Einstellungen im Web</string>
+    <string name="bt_notif_web_link_sub">Kanäle je Mitteilungstyp wählen und wie oft gebündelt wird</string>
+    <string name="bt_notif_web_explainer">Welcher Mitteilungstyp welchen Kanal erreicht — In-App, E-Mail, Push, Telegram, Discord — und wie oft gebündelt wird, legst du einmal im Web fest. Die App richtet sich danach; hier steht, was nur ein Telefon kann.</string>
+    <!-- ==== /STREAM-NOTIF (DE) ==== -->
+
+    <!-- ==== STREAM-SETTINGS (DE) ==== -->
+    <string name="bt_settings_member_since">Mitglied seit</string>
+    <string name="bt_settings_managed_on_web">Wird im Web verwaltet</string>
+    <string name="bt_settings_data_export">Daten exportieren</string>
+    <string name="bt_settings_profile_web">Weitere Profileinstellungen</string>
+    <string name="bt_settings_passkeys">Passkeys (Anmeldeschlüssel)</string>
+    <string name="bt_settings_web_section">Im Web</string>
+    <string name="bt_settings_web_intro">Verbindungen und Entwicklereinstellungen werden in der Web-App verwaltet.</string>
+    <string name="bt_settings_web_connections">Verbindungen</string>
+    <string name="bt_settings_web_api_keys">API-Schlüssel</string>
+    <string name="bt_settings_web_oauth_apps">OAuth-Apps</string>
+    <string name="bt_settings_web_authorized_apps">Autorisierte Apps</string>
+    <string name="bt_settings_web_webhooks">Webhook-Endpunkte</string>
+    <string name="bt_update_snooze_until">Erinnerung pausiert bis %1$s</string>
+    <!-- ==== /STREAM-SETTINGS (DE) ==== -->
+
+    <!-- ==== STREAM-TAX (DE) ==== -->
+    <string name="bt_tax_settings_reports_row">Deinen Steuerbericht pro Jahr ansehen</string>
+    <string name="bt_tax_settings_reports_sub">Für dein aktives Portfolio, in der BetterTrack-Web-App</string>
+    <string name="bt_tax_settings_disclaimer">Schätzwerte nur für deine persönliche Übersicht — keine Steuerberatung, keine Gewähr für Richtigkeit, kein Dokument für die Steuererklärung.</string>
+    <string name="bt_2fa_recovery_download">Codes herunterladen</string>
+    <!-- ==== /STREAM-TAX (DE) ==== -->
 </resources>

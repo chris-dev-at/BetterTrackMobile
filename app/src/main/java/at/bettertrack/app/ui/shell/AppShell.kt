@@ -389,6 +389,17 @@ fun BtApp() {
     // ONE displacement, read by the outgoing page, the incoming page and the
     // bottom bar's indicator. See [BtTabSwipeState].
     val swipeState = rememberBtTabSwipeState()
+    // The optimistic TAP latch: the tab a bar tap asked for, believed by the bar
+    // from the tap's own frame until the nav graph agrees. Deliberately NOT
+    // `swipeState.handoff` — that field also pins the peek layer and suppresses
+    // the NavHost's transitions, neither of which a tap has any business doing.
+    // See [tapLatchHolds] for why it exists and when it must let go.
+    //
+    // `origin` is captured at tap time so the latch can tell "nav has not caught
+    // up yet" from "nav went somewhere else entirely", which is the difference
+    // between a correct optimism and a tab lit under a screen nobody is on.
+    var tapCommit by remember { mutableStateOf<BtTab?>(null) }
+    var tapOrigin by remember { mutableStateOf<BtTab?>(null) }
     // The last frame each tab drew, so the neighbour can be ON SCREEN during the
     // drag without being composed a second time. See [BtTabPeekLayers] for why a
     // second composition is not an option in this app.
@@ -411,13 +422,21 @@ fun BtApp() {
         swipeOriginTab(
             pendingCommit = swipeState.pendingCommit,
             handoff = swipeState.handoff,
+            tapCommit = tapCommit,
             navCurrent = currentTab?.tab,
         )?.let { tabNeighbour(it, forward, visibleTabs.map { spec -> spec.tab }) }
     }
     // A committed swipe routes through the SAME [switchToTab] the bottom bar
     // uses, which is what keeps saved state, restored back stacks and bar
     // selection identical whether you tapped or swiped.
-    val onSwipeCommit: (BtTab) -> Unit = { tab -> switchToTab(tab) }
+    // A swipe supersedes any tap the nav graph has not caught up to yet: the
+    // gesture layer is about to run its own, richer handoff (peek pin included),
+    // and leaving a stale tap latch behind would give the bar two opinions to
+    // choose between for as long as the nav graph stayed behind.
+    val onSwipeCommit: (BtTab) -> Unit = { tab ->
+        tapCommit = null
+        switchToTab(tab)
+    }
     // The second page, or null for "draw one page". Pure — see [swipePeekTab].
     val peekTab = swipePeekTab(
         handoff = swipeState.handoff,
@@ -467,6 +486,24 @@ fun BtApp() {
         if (!peekSurvivesHandoffEnd(swipeState.dragging, swipeState.pendingCommit != null)) {
             swipeState.peekSide = null
         }
+    }
+    // Release the optimistic tap latch the moment it stops being believable.
+    //
+    // Re-keyed on the nav graph, so agreement drops it on the very next
+    // recomposition — the latch is load-bearing for about three frames and then
+    // it is simply in the way. The timeout is the same insurance the handoff pin
+    // carries: if a hop is refused outright (a storage-mode change hides the
+    // target tab mid-tap, say) `currentTab` never becomes the target and never
+    // returns to the origin either, and without this the bar would light a tab
+    // nobody is on until the next navigation.
+    LaunchedEffect(tapCommit, currentTab?.tab) {
+        val target = tapCommit ?: return@LaunchedEffect
+        if (!tapLatchHolds(target, tapOrigin, currentTab?.tab)) {
+            tapCommit = null
+            return@LaunchedEffect
+        }
+        delay(600)
+        tapCommit = null
     }
     val navigateDeepLink: (NotifDeepLink) -> Unit = remember(navController, scope, switchToTab) {
         // EVERY deep link lands the same way (S6 P1-8):
@@ -664,9 +701,25 @@ fun BtApp() {
                     // that drops the pin), which is what makes this a latch and
                     // not a second source of truth: it can never contradict the
                     // nav graph for longer than the nav graph takes to agree.
+                    //
+                    // ── The tap latch (owner report 2026-08-08) ──────────────
+                    //
+                    // A TAP had the same shape of problem and none of the cure:
+                    // selection came from the nav graph alone, so the pill could
+                    // not move until `navigate()` had propagated AND the
+                    // destination had composed — measured at a 48ms median, with
+                    // no intermediate frame at all, so the tap read as dead for
+                    // three or four frames and then everything changed at once.
+                    //
+                    // `tapCommit` is that fix, and the precedence here is the
+                    // whole of the arbitration: a swipe handoff OUTRANKS a tap
+                    // latch, because if both are somehow set the gesture is the
+                    // more recent and the more expensive truth (it has a peek
+                    // layer pinned over the swap). Below them, unchanged, the
+                    // coordinate.
                     selectionFraction = { tab ->
                         tabSelectionFraction(
-                            committed = swipeState.handoff,
+                            committed = swipeState.handoff ?: tapCommit,
                             tab = tab.tab,
                             isCurrentDestination = currentDestination?.hierarchy
                                 ?.any { it.hasRoute(tab.routeClass) } == true,
@@ -692,7 +745,26 @@ fun BtApp() {
                     onSelect = { tab ->
                         when (tabTapAction(tab.tab, exactTab)) {
                             TabTap.OpenPortfolioSwitcher -> PortfolioTabEntry.requestSwitcher()
-                            TabTap.Switch -> switchToTab(tab.tab)
+                            TabTap.Switch -> {
+                                // Latch, then navigate — in that order, but
+                                // in the same breath.
+                                //
+                                // Deferring the navigation by a frame or two to
+                                // "let the bar paint first" was tried and
+                                // MEASURED as a regression: it moved the
+                                // highlight not at all and pushed the content
+                                // ~100ms later. It is not repeated here. The
+                                // bar never waited for the destination in the
+                                // first place — see [tapLatchHolds] for what the
+                                // measurement actually found.
+                                //
+                                // A re-tap never reaches here, so the switcher
+                                // path cannot leave a latch behind pointing at
+                                // a tab we never left.
+                                tapOrigin = currentTab?.tab
+                                tapCommit = tab.tab
+                                switchToTab(tab.tab)
+                            }
                         }
                     },
                 )
@@ -1041,6 +1113,28 @@ private fun BtBottomBar(
         } else {
             travelX.animateTo(
                 target.x,
+                // The pill's travel is NOT where the tap "lag" lives, and it
+                // is worth recording why, because the obvious tune is wrong.
+                //
+                // Measured on device at 120Hz (2026-08-08): after touch-UP the
+                // label ink flips at ~47ms — the input-to-present floor — but
+                // the pill only arrives at ~267ms, so the pill is what the tap
+                // FEELS like. That looks exactly like a spring that is too soft,
+                // and it is not: raising the stiffness from `MediumLow` (400,
+                // nominal settle ~220ms) to `Medium` (1500, ~115ms) moved the
+                // measured arrival to 278ms — i.e. not at all.
+                //
+                // The limiter is the main thread. A tab switch composes the
+                // incoming destination on the same thread this animation is
+                // clocked by, so the pill is frame-starved for as long as that
+                // composition runs (content lands 150-360ms after the tap in the
+                // same recordings). Deferring the navigation to let the bar
+                // paint first was tried too and made it worse still (358ms).
+                //
+                // So this constant stays as B2 tuned it. Making the pill arrive
+                // sooner is a destination-composition cost problem, not a motion
+                // problem, and tightening the spring here would only spend
+                // motion design on a bottleneck it cannot reach.
                 spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow),
             )
         }
