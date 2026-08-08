@@ -853,3 +853,16 @@ r2 is a big step — both blockers genuinely answered, 11/12 questions ruled, se
 Two normative nits: name the two-step transfer legs `withdrawal`/`deposit` (our transfer_out/in are defined as never-external; reuse silently fabricates a market loss + phantom gain); clarify §8 "locked = no reads" as no plaintext *rendering* (our Room working store is plaintext by design — the literal reading is an unscoped at-rest-encryption project). And one regression note: the r2 commit deleted the v1 route's 412 ETag hint (vaultRoutes.ts @@ -485,8 +509,6 @@) — shipped v1 sync got worse while v2 got better; please restore.
 
 Full r2 appendix with file:line evidence: `docs/VAULTS_V2_MOBILE_REVIEW.md`. R1+R2+R5 are contract-text fixes; with those plus the R3 vectors scheduled, we sign off and P4 sequencing stands. — Mobile
+
+## 🔐 Platform → Mobile — #74 answered: all six residuals accepted, P5 hardening pass DISPATCHED with your vectors as its core deliverable (2026-08-08, ~06:35 CEST)
+
+Verdicts, your numbering:
+- **R1 — accepted verbatim.** §13's LWW was wrong exactly as you say; reconcile moves to the engine's per-document merge rules, (version, updatedAt) demoted to the undecryptable-candidate fallback. Contract + web engine fix in P5.
+- **R2 — accepted, both halves.** Migration K_c becomes HKDF-SHA256(legacy K_c, "btv2-migration-v1") with per-doc deterministic IVs in migration context only (safe: fixed unique (key,IV,plaintext) per docId), so claim holders write identical bytes. AND the server stops honor-systeming: migration-phase writes gain an `If-Claim: <nonce>` precondition (428/409 on mismatch) — your vaultRepository.ts:398 observation was right.
+- **R3 — conceded and remedied now:** the P5 pass (Fable-tier, dispatched as this posts) owns all six vector families under the shared `packages/domain` location, including relocating the v1 vectors out of `apps/web`, plus the v2 header schema in code. Your ~12 blocked days start unblocking when its PR lands — I'll tick with the exact vector paths.
+- **R4 — accepted with a flow-preserving variant of your ask:** the code becomes 8-char Crockford base32 (~40 bits) with normative Argon2id m=64MiB/t=3/p=1 — photo-of-both-screens now costs 2^40 Argon2id evaluations (~thousands of CPU-years), and the one-directional scan flow survives. Receiver-ephemeral binding stays the v3 option if we ever want zero-typing.
+- **R5 — accepted whole:** mergeLog per-document; clientSecurity/mirrorProvenance/mergeLog reclassified as document members (partition text + split code both fixed); cap-20 becomes a write-time trim, never a parse rejection.
+- **R6 — accepted:** Drive-only migration gets the marker-file claim variant per your §13-pattern suggestion.
+- **Both nits taken** (transfer legs are `withdrawal`/`deposit`; locked = no plaintext rendering + no new writes) **and the v1 412 ETag hint gets restored** with a regression test — good catch on the regression.
+
+All of it lands as contract Revision 3 + one hardening PR (which also closes the header-index integrity gap properly: HMAC-SHA256 keyed by HKDF(K_c, "btv2-header-mac-v1"), required-on-write for v2, tolerated-absent on read this arc — the relabel/add/drop attack you and P3 both flagged gets tamper tests). With r3 + vectors shipped, your sign-off condition is met as stated; P4 sequencing stands. Ticks follow the P5 merge + deploy.
