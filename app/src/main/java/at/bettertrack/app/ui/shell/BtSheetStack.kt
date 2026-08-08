@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -122,6 +123,8 @@ internal fun BtSheetStack(
     host: BtSheetHostState,
     pages: List<BtSheetPage>,
     modifier: Modifier = Modifier,
+    /** Told what this layer covers, so the shell can stop drawing it. */
+    occlusion: BtOcclusion? = null,
 ) {
     val bt = BtTheme.colors
     val density = LocalDensity.current
@@ -145,6 +148,21 @@ internal fun BtSheetStack(
     var widthPx by remember { mutableFloatStateOf(0f) }
     var leaving by remember { mutableStateOf(false) }
     val flingVelocityPx = with(density) { SHEET_DISMISS_VELOCITY.toPx() }
+
+    // What this layer hides while it is settled — its own top edge, from the same
+    // two terms the Surface below is positioned by, plus the corner radius. A
+    // derivedStateOf so the answer changes only when coverage FLIPS: a drag frame
+    // writes `travel` a hundred times a second and must not re-record anything.
+    val topEdgePx = WindowInsets.statusBars.getTop(density) +
+        with(density) { SHEET_TOP_GAP.toPx() }
+    val cornerPx = with(density) { SHEET_CORNER.toPx() }
+    val exposed = remember(topEdgePx, cornerPx) {
+        derivedStateOf { sheetExposedTopPx(travel.value, topEdgePx, cornerPx) }
+    }
+    DisposableEffect(occlusion, exposed) {
+        occlusion?.probe = { exposed.value }
+        onDispose { occlusion?.probe = null }
+    }
 
     // What a change in the stack means, in motion. A gesture-driven pop has
     // ALREADY animated by the time it lands here, and it leaves `slide` at 1 —
@@ -327,7 +345,18 @@ internal fun BtSheetStack(
                     // swapBuffers back to the main pager's numbers.
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                 }
-                .background(bt.scrim)
+                // Same rule as the shell's, applied to the scrim itself: while the
+                // sheet is settled, the only scrim anyone can see is the strip
+                // above it. The rest was a full-screen alpha blend over pixels
+                // that an opaque sheet covers on the very next draw call.
+                .drawBehind {
+                    val top = exposed.value
+                    if (top < 0f) {
+                        drawRect(bt.scrim)
+                    } else {
+                        drawRect(bt.scrim, size = size.copy(height = top))
+                    }
+                }
                 // The strip above the sheet is the only part of this the user can
                 // reach; tapping outside a sheet to close it is the idiom.
                 .pointerInput(Unit) { detectTapGestures { backOne() } },

@@ -41,11 +41,13 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -387,6 +389,10 @@ fun BtApp() {
             popAll = { navController.popBackStack(SheetRootRoute, inclusive = false) },
         )
     }
+    // The one channel by which the sheet layer tells the pages they are hidden.
+    // See [BtOcclusion]: it is why a settled sheet no longer costs the GPU a whole
+    // tab pager, a bottom bar and a header per frame.
+    val occlusion = remember { BtOcclusion() }
 
     // The tab the pager has SETTLED on. Deliberately `settledPage` and not
     // `currentPage`: this drives the header's per-tab scroll state and the badge
@@ -624,6 +630,27 @@ fun BtApp() {
     // navigation bar sitting on top of it.
     Box(Modifier.fillMaxSize()) {
         Scaffold(
+            // OCCLUSION CULLING. While a sheet sits at its resting height it is
+            // opaque and full-bleed from its top edge down, so everything below
+            // that edge here is drawn only to be painted over. Clipping the draw
+            // to the strip the sheet leaves showing makes HWUI reject the pager's,
+            // the bottom bar's and the header's render nodes outright — real
+            // raster skipped, not `alpha = 0`, which rasterises just the same.
+            //
+            // Pixel-identical, by construction: the clip line is the sheet's own
+            // top edge plus its corner radius, so it only ever removes what the
+            // sheet already covers. And because the read is a draw-phase read of a
+            // derivedStateOf, the pages are back in the display list on the SAME
+            // FRAME the sheet first moves — there is no fade to schedule and no
+            // frame in which the wrong thing is on screen. See [BtOcclusion].
+            modifier = Modifier.drawWithContent {
+                val exposedTop = occlusion.exposedTopPx()
+                if (exposedTop < 0f) {
+                    drawContent()
+                } else {
+                    clipRect(bottom = exposedTop) { this@drawWithContent.drawContent() }
+                }
+            },
             containerColor = bt.bg,
             // The bars below consume their own system-bar insets, and the sheet
             // layer consumes its own. Zeroing here keeps the two from being paid
@@ -785,6 +812,7 @@ fun BtApp() {
                 onToggleDiscreet = toggleDiscreet,
                 notifUnread = notifUnread,
                 showNotifications = showNotificationSurfaces,
+                occlusion = occlusion,
             )
         }
     }
@@ -1290,6 +1318,8 @@ private fun BtSheetHost(
     /** Inbox unread count, rendered on Overview's inbox row. */
     notifUnread: Int,
     showNotifications: Boolean,
+    /** Passed straight to the sheet layer, which is the only thing that can fill it. */
+    occlusion: BtOcclusion,
 ) {
     // What all 45 screens' `onBack` runs.
     //
@@ -1753,6 +1783,10 @@ private fun BtSheetHost(
     // change is a slide between two live planes rather than a hand-over between
     // two destinations. At the floor it draws nothing and takes no pointer
     // input, so the pager underneath is fully interactive through it.
-    BtSheetStack(host = sheets, pages = rememberBtSheetPages(sheetNavigator))
+    BtSheetStack(
+        host = sheets,
+        pages = rememberBtSheetPages(sheetNavigator),
+        occlusion = occlusion,
+    )
     }
 }
