@@ -40,7 +40,9 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -133,35 +135,36 @@ fun TaxYearsScreen(
         },
     ) { innerPadding ->
         when (val s = state) {
-            is TaxYearsUiState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            is TaxYearsUiState.Loading -> BtScrollFill(
+                modifier = Modifier.padding(innerPadding),
             ) {
-                BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                }
             }
 
-            is TaxYearsUiState.Failed -> BtErrorState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                message = s.message,
-                onRetry = vm::load,
-            )
+            is TaxYearsUiState.Failed -> BtStateFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = vm::load,
+                )
+            }
 
             is TaxYearsUiState.Loaded -> if (s.years.isEmpty()) {
-                BtEmptyState(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    icon = Icons.Outlined.Description,
-                    title = stringResource(R.string.bt_taxyears_empty),
-                    message = stringResource(R.string.bt_taxyears_empty_sub),
-                )
+                BtStateFill(modifier = Modifier.padding(innerPadding)) {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Description,
+                        title = stringResource(R.string.bt_taxyears_empty),
+                        message = stringResource(R.string.bt_taxyears_empty_sub),
+                    )
+                }
             } else {
                 Column(
                     modifier = Modifier

@@ -67,7 +67,9 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -296,24 +298,27 @@ fun SearchScreen(
         // second nav bar underneath the keyboard.
         Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
             when (val s = state) {
-                SearchUiState.Idle -> BtEmptyState(
-                    icon = Icons.Outlined.Search,
-                    title = stringResource(R.string.bt_search_prompt_title),
-                    message = stringResource(R.string.bt_search_prompt_message),
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                SearchUiState.Idle -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Search,
+                        title = stringResource(R.string.bt_search_prompt_title),
+                        message = stringResource(R.string.bt_search_prompt_message),
+                    )
+                }
 
                 // Result-row placeholders rather than a spinner: the shape of
                 // what is coming is known, so the list can hold its own space.
-                SearchUiState.Loading -> Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    repeat(6) {
-                        BtSkeleton(
-                            modifier = Modifier.fillMaxWidth().height(64.dp),
-                            shape = BtShapes.card,
-                        )
+                SearchUiState.Loading -> BtScrollFill {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        repeat(6) {
+                            BtSkeleton(
+                                modifier = Modifier.fillMaxWidth().height(64.dp),
+                                shape = BtShapes.card,
+                            )
+                        }
                     }
                 }
 
@@ -321,34 +326,36 @@ fun SearchScreen(
                 // there is no catalogue on the device to search. Rendering that as
                 // "no results found" would blame the query for a limitation of the
                 // mode, and would send the user retyping forever.
-                SearchUiState.Empty -> if (noLivePrices) {
+                SearchUiState.Empty -> BtStateFill {
+                    if (noLivePrices) {
+                        BtEmptyState(
+                            icon = Icons.Outlined.Search,
+                            title = stringResource(R.string.bt_price_search_title),
+                            message = stringResource(R.string.bt_price_search_body),
+                        )
+                    } else {
+                        BtEmptyState(
+                            icon = Icons.Outlined.Search,
+                            title = stringResource(R.string.bt_search_no_results_title),
+                            message = stringResource(R.string.bt_search_no_results_message),
+                        )
+                    }
+                }
+
+                SearchUiState.OfflineState -> BtStateFill {
                     BtEmptyState(
                         icon = Icons.Outlined.Search,
-                        title = stringResource(R.string.bt_price_search_title),
-                        message = stringResource(R.string.bt_price_search_body),
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                } else {
-                    BtEmptyState(
-                        icon = Icons.Outlined.Search,
-                        title = stringResource(R.string.bt_search_no_results_title),
-                        message = stringResource(R.string.bt_search_no_results_message),
-                        modifier = Modifier.align(Alignment.Center),
+                        title = stringResource(R.string.bt_requires_connection_title),
+                        message = stringResource(R.string.bt_search_requires_connection_message),
                     )
                 }
 
-                SearchUiState.OfflineState -> BtEmptyState(
-                    icon = Icons.Outlined.Search,
-                    title = stringResource(R.string.bt_requires_connection_title),
-                    message = stringResource(R.string.bt_search_requires_connection_message),
-                    modifier = Modifier.align(Alignment.Center),
-                )
-
-                is SearchUiState.Error -> BtErrorState(
-                    message = s.message,
-                    onRetry = vm::retry,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                is SearchUiState.Error -> BtStateFill {
+                    BtErrorState(
+                        message = s.message,
+                        onRetry = vm::retry,
+                    )
+                }
 
                 is SearchUiState.Results -> LazyColumn(
                     // The search field takes focus as the screen opens, so the

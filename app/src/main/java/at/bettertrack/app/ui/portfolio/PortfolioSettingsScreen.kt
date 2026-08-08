@@ -69,6 +69,7 @@ import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSectionHeader
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.social.AudiencePickerSheet
 import at.bettertrack.app.ui.theme.BtShapes
@@ -168,16 +169,18 @@ fun PortfolioSettingsScreen(
             // A portfolio can vanish under this screen — a chain copy the user
             // was removed from, or a delete that succeeded on another device.
             // Saying so plainly beats a page of controls that all 404.
-            ui.gone -> BtErrorState(
-                modifier = Modifier.padding(pad).fillMaxSize(),
-                message = BtMessage(R.string.bt_psettings_gone),
-            )
+            ui.gone -> BtStateFill(modifier = Modifier.padding(pad)) {
+                BtErrorState(
+                    message = BtMessage(R.string.bt_psettings_gone),
+                )
+            }
 
-            portfolio == null -> BtErrorState(
-                modifier = Modifier.padding(pad).fillMaxSize(),
-                message = ui.error ?: BtMessage(R.string.bt_psettings_gone),
-                onRetry = vm::reload,
-            )
+            portfolio == null -> BtStateFill(modifier = Modifier.padding(pad)) {
+                BtErrorState(
+                    message = ui.error ?: BtMessage(R.string.bt_psettings_gone),
+                    onRetry = vm::reload,
+                )
+            }
 
             else -> Column(
                 modifier = Modifier

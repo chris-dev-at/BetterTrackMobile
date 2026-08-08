@@ -803,7 +803,6 @@
     <string name="bt_server_err_space">The address must not contain spaces</string>
     <string name="bt_server_err_port">That is not a valid port number</string>
     <!-- Login screen: the quiet way to the Server screen. %1$s is a host name. -->
-    <string name="bt_login_server">Server: %1$s</string>
 
     <!-- Change password -->
     <string name="bt_dest_change_password">Change password</string>
@@ -2349,7 +2348,6 @@
     <string name="bt_settings_default_visibility_sub">Applies when you create a portfolio. Existing ones keep their own setting.</string>
     <string name="bt_settings_visibility_private">Private</string>
     <string name="bt_settings_visibility_friends">Visible to friends</string>
-    <string name="bt_settings_profile_section">Profile</string>
     <string name="bt_settings_profile_icon">Profile icon</string>
     <string name="bt_settings_profile_icon_sub">Shown next to your name to friends and in groups.</string>
     <string name="bt_settings_profile_icon_title">Pick an icon</string>
@@ -2421,12 +2419,8 @@
     <string name="bt_settings_profile_web">More profile settings</string>
     <string name="bt_settings_passkeys">Passkeys</string>
     <!-- Settings → "On the web": the five integration surfaces the app links out to. -->
-    <string name="bt_settings_web_section">On the web</string>
-    <string name="bt_settings_web_intro">Connections and developer settings are managed in the web app.</string>
-    <string name="bt_settings_web_connections">Connections</string>
     <string name="bt_settings_web_api_keys">API keys</string>
     <string name="bt_settings_web_oauth_apps">OAuth apps</string>
-    <string name="bt_settings_web_authorized_apps">Authorized apps</string>
     <string name="bt_settings_web_webhooks">Webhooks</string>
     <!-- About → this build: an active "remind me later" made visible. %1$s is a date + time. -->
     <string name="bt_update_snooze_until">Reminder paused until %1$s</string>
@@ -2448,4 +2442,87 @@
     <string name="bt_2fa_recovery_download">Download codes</string>
     <!-- ==== /STREAM-TAX (EN) ==== -->
     <string name="bt_sheet_grabber_cd">Drag down to close</string>
+
+    <!-- ==== SETTINGS CONTROL-CENTER REGROUP (EN) ==== -->
+    <!-- Group headers mirroring the web control center's taxonomy. -->
+    <string name="bt_settings_signin_section">Sign-in &amp; security</string>
+    <string name="bt_settings_defaults_section">New portfolio defaults</string>
+    <string name="bt_settings_defaults_intro">What a newly created portfolio inherits. Any portfolio can override this on its own settings page.</string>
+    <string name="bt_settings_integrations_section">Connections &amp; API</string>
+    <string name="bt_settings_integrations_intro">What is plugged into your account.</string>
+    <string name="bt_settings_connections_row">Connections</string>
+    <string name="bt_settings_connections_sub">Google, Drive and future connectors</string>
+    <string name="bt_settings_authorized_apps_row">Authorized apps</string>
+    <string name="bt_settings_authorized_apps_sub">Apps that may reach your account</string>
+
+    <!-- ==== CONNECTIONS PANEL (EN) ==== -->
+    <string name="bt_dest_connections">Connections</string>
+    <string name="bt_conn_intro">Everything that links BetterTrack to the outside.</string>
+    <string name="bt_conn_google_title">Google account</string>
+    <string name="bt_conn_google_linked_as">Linked as %s</string>
+    <string name="bt_conn_google_linked_on">Linked on %s</string>
+    <string name="bt_conn_google_not_linked">Not linked</string>
+    <string name="bt_conn_google_connect">Connect Google</string>
+    <string name="bt_conn_google_connect_hint">Connecting finishes in your browser, then returns here.</string>
+    <string name="bt_conn_google_unlink">Unlink</string>
+    <string name="bt_conn_google_unlink_title">Unlink Google account</string>
+    <string name="bt_conn_google_unlink_body">Enter your account password to confirm.</string>
+    <string name="bt_conn_google_password_label">Password</string>
+    <string name="bt_conn_google_confirm_unlink">Unlink Google</string>
+    <string name="bt_conn_google_only_method">Google is currently your only way to sign in, so it cannot be unlinked. Set a password first.</string>
+    <string name="bt_conn_google_wrong_password">That password is not correct.</string>
+    <string name="bt_conn_google_unlinked">Google account unlinked.</string>
+    <string name="bt_conn_drive_title">Google Drive</string>
+    <string name="bt_conn_drive_body">Drive holds a copy of your encrypted vault. It is managed together with the rest of your storage.</string>
+    <string name="bt_conn_slots_title">More connectors</string>
+    <string name="bt_conn_slot_bank_name">Bank &amp; cash accounts</string>
+    <string name="bt_conn_slot_bank_purpose">Import balances and movements from your bank</string>
+    <string name="bt_conn_slot_parqet_name">Parqet</string>
+    <string name="bt_conn_slot_parqet_purpose">Bring an existing Parqet portfolio across</string>
+    <string name="bt_conn_sync_one_time">One-time import</string>
+    <string name="bt_conn_sync_stay">Stays connected and syncs</string>
+    <string name="bt_conn_coming_soon">Coming soon</string>
+
+    <!-- ==== AUTHORIZED APPS PANEL (EN) ==== -->
+    <string name="bt_dest_authorized_apps">Authorized apps</string>
+    <string name="bt_grants_intro">Apps you have given access to your account. Revoking takes effect immediately and the app must be authorized again.</string>
+    <string name="bt_grants_empty">No app has access to your account.</string>
+    <string name="bt_grants_can_access">%s can access</string>
+    <string name="bt_grants_authorized_since">Authorized %1$s · last used %2$s</string>
+    <string name="bt_grants_authorized_never">Authorized %s · never used</string>
+    <string name="bt_grants_revoke">Revoke access</string>
+    <string name="bt_grants_revoke_confirm">Revoke</string>
+    <string name="bt_grants_revoking">Revoking…</string>
+    <string name="bt_grants_revoke_failed">Could not revoke that app\'s access.</string>
+    <string name="bt_grants_revoked">Access revoked.</string>
+
+    <!-- OAuth scope descriptions, in the words the web's consent screen uses. -->
+    <string name="bt_scope_portfolio_read">View your portfolios, holdings, transactions and cash balances</string>
+    <string name="bt_scope_portfolio_write">Create and edit portfolios, transactions, custom assets and cash</string>
+    <string name="bt_scope_workboard_read">View your watchlist, conglomerates and backtests</string>
+    <string name="bt_scope_workboard_write">Create and edit your watchlist and conglomerates</string>
+    <string name="bt_scope_market_read">Search assets and read market data</string>
+    <string name="bt_scope_social_read">See your friends and the items shared with you</string>
+    <string name="bt_scope_social_write">Send and respond to friend requests and manage your friends</string>
+    <string name="bt_scope_notifications_read">View your notifications</string>
+    <string name="bt_scope_notifications_write">Mark your notifications as read and change your notification settings</string>
+    <string name="bt_scope_chat_read">Read your messages</string>
+    <string name="bt_scope_chat_write">Send messages on your behalf</string>
+    <string name="bt_scope_account_security">Manage your account security: sign-in sessions, two-factor, password change and app PIN</string>
+    <string name="bt_scope_alerts_read">View your price alerts</string>
+    <string name="bt_scope_alerts_write">Create, edit, re-arm and delete your price alerts</string>
+    <string name="bt_scope_cash_read">View your cash tags, budgets, rules, summaries and trends</string>
+    <string name="bt_scope_cash_write">Create and edit your cash tags, budgets and rules</string>
+    <string name="bt_scope_mirrorchain_read">View your group portfolios, members, activity and invitations</string>
+    <string name="bt_scope_mirrorchain_write">Accept or decline group invitations and leave group portfolios</string>
+    <string name="bt_scope_vault_sync">Synchronize your client-encrypted vault across your devices</string>
+
+    <!-- Shared "the server has not allowed this yet" state (bearer allowlist). -->
+    <string name="bt_cap_web_title">Not released by this server yet</string>
+    <string name="bt_cap_web_body">This server does not let the app manage this yet. It works in the web app, and this screen starts working here the moment the server allows it — no app update needed.</string>
+    <string name="bt_cap_web_open">Open in the web app</string>
+
+    <!-- ==== PRE-LOGIN SETTINGS (EN) ==== -->
+    <string name="bt_prelogin_intro">What you can set up before signing in.</string>
+    <string name="bt_login_server_label">Server: %s</string>
 </resources>

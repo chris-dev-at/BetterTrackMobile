@@ -188,6 +188,21 @@ import kotlinx.serialization.Serializable
  */
 @Serializable data object TaxSettingsRoute
 
+// ── Connections & API, native (owner order 2026-08-08) ─────────────────────
+//
+// These two were `BtWebLinkRow`s into `/control/connections` and
+// `/control/authorized-apps` until the owner ruled that connections and
+// authorized apps are handled INSIDE the app and must not redirect. They are
+// now real screens at full web parity. API keys, OAuth apps and webhooks stay
+// hand-offs — the owner named only these two, and each of those three shows a
+// secret exactly once at creation time.
+
+/** Settings → Connections: the Google identity, Drive, and the future connectors. */
+@Serializable data object ConnectionsRoute
+
+/** Settings → Authorized apps: the OAuth grants on this account, with revoke. */
+@Serializable data object AuthorizedAppsRoute
+
 // ── Management parity 2026-08-06 ───────────────────────────────────────────
 //
 // The owner's ask was full parity with the web app for portfolios and groups.

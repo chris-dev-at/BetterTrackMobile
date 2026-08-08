@@ -85,6 +85,7 @@ import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyText
@@ -1679,12 +1680,8 @@ private fun OverviewSkeleton() {
 
 @Composable
 private fun ErrorFillState(onRetry: () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                BtErrorState(onRetry = onRetry)
-            }
-        }
+    BtStateFill {
+        BtErrorState(onRetry = onRetry)
     }
 }
 
@@ -1697,39 +1694,35 @@ private fun NoPortfolioState(
 ) {
     val bt = BtTheme.colors
     var createOpen by rememberSaveable { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    BtEmptyState(
-                        icon = Icons.Outlined.PieChart,
-                        title = stringResource(R.string.bt_overview_no_portfolio_title),
-                        message = stringResource(R.string.bt_overview_no_portfolio_message),
-                        action = {
-                            BtPrimaryButton(
-                                text = stringResource(R.string.bt_overview_create_portfolio),
-                                onClick = { createOpen = true },
-                                enabled = isOnline && !busy,
-                                loading = busy,
-                            )
-                        },
+    BtStateFill {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BtEmptyState(
+                icon = Icons.Outlined.PieChart,
+                title = stringResource(R.string.bt_overview_no_portfolio_title),
+                message = stringResource(R.string.bt_overview_no_portfolio_message),
+                action = {
+                    BtPrimaryButton(
+                        text = stringResource(R.string.bt_overview_create_portfolio),
+                        onClick = { createOpen = true },
+                        enabled = isOnline && !busy,
+                        loading = busy,
                     )
-                    if (!isOnline) {
-                        Text(
-                            text = stringResource(R.string.bt_switcher_requires_connection),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textMuted,
-                        )
-                    }
-                    error?.let { shown ->
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = shown.resolveWithDiagnostic(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.loss,
-                        )
-                    }
-                }
+                },
+            )
+            if (!isOnline) {
+                Text(
+                    text = stringResource(R.string.bt_switcher_requires_connection),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+            error?.let { shown ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = shown.resolveWithDiagnostic(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.loss,
+                )
             }
         }
     }

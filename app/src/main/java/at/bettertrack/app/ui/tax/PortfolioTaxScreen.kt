@@ -46,8 +46,10 @@ import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSnackbarEffect
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
@@ -323,20 +325,20 @@ fun PortfolioTaxScreen(portfolioId: String, onBack: () -> Unit) {
         },
     ) { innerPadding ->
         when (val s = state) {
-            is PortfolioTaxUiState.Loading -> TaxFormSkeleton(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-            )
+            is PortfolioTaxUiState.Loading -> BtScrollFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                TaxFormSkeleton(modifier = Modifier.padding(16.dp))
+            }
 
-            is PortfolioTaxUiState.Failed -> BtErrorState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                message = s.message,
-                onRetry = vm::load,
-            )
+            is PortfolioTaxUiState.Failed -> BtStateFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = vm::load,
+                )
+            }
 
             is PortfolioTaxUiState.Loaded -> {
                 // The override is what the editor edits, so its known-ness is what

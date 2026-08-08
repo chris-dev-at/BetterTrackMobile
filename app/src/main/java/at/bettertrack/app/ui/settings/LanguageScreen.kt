@@ -37,6 +37,7 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.i18n.AppLanguage
 import at.bettertrack.app.data.i18n.LocaleManager
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.launch
@@ -85,13 +86,14 @@ fun LanguageScreen(onBack: () -> Unit) {
             )
         },
     ) { inner ->
-        Column(
+        // Static content still needs a scroll container: the sheet's
+        // pull-down dismiss rides the nested-scroll chain.
+        BtScrollFill(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(inner)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 stringResource(R.string.bt_lang_intro),
                 style = MaterialTheme.typography.bodyMedium,
@@ -117,6 +119,7 @@ fun LanguageScreen(onBack: () -> Unit) {
                 selected = selected == AppLanguage.German,
                 onClick = { choose(AppLanguage.German) },
             )
+          }
         }
     }
 }

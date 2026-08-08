@@ -63,7 +63,9 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtListSurface
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.resolveListSurface
@@ -210,24 +212,28 @@ fun ChatListScreen(
                 // so the resolver is called with the default isOnline = true. It
                 // shares the ERROR branch rather than being dropped, so adding a
                 // connectivity flag later cannot silently lose the case.
-                BtListSurface.ERROR, BtListSurface.OFFLINE -> BtErrorState(
-                    message = failure ?: BtMessage(R.string.bt_error_generic_message),
-                    onRetry = vm::refresh,
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                )
+                BtListSurface.ERROR, BtListSurface.OFFLINE -> BtStateFill {
+                    BtErrorState(
+                        message = failure ?: BtMessage(R.string.bt_error_generic_message),
+                        onRetry = vm::refresh,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
                 // The FAB is gone on this surface, so the CTA lives here.
-                BtListSurface.EMPTY -> BtEmptyState(
-                    icon = Icons.AutoMirrored.Outlined.Chat,
-                    title = stringResource(R.string.bt_chat_empty_title),
-                    message = stringResource(R.string.bt_chat_empty_body),
-                    action = {
-                        BtPrimaryButton(
-                            text = stringResource(R.string.bt_chat_new_title),
-                            onClick = { showPicker = true },
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                )
+                BtListSurface.EMPTY -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.AutoMirrored.Outlined.Chat,
+                        title = stringResource(R.string.bt_chat_empty_title),
+                        message = stringResource(R.string.bt_chat_empty_body),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_chat_new_title),
+                                onClick = { showPicker = true },
+                            )
+                        },
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
                 BtListSurface.CONTENT -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
@@ -353,12 +359,14 @@ private fun FriendPickerSheet(friends: List<Friend>, onPick: (Friend) -> Unit, o
  */
 @Composable
 private fun ChatListSkeleton() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeat(5) {
-            BtSkeleton(modifier = Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card)
+    BtScrollFill {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(5) {
+                BtSkeleton(modifier = Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card)
+            }
         }
     }
 }

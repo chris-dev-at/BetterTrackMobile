@@ -41,8 +41,10 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtSnackbarEffect
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
@@ -210,20 +212,20 @@ fun TaxSettingsScreen(onBack: () -> Unit) {
         },
     ) { innerPadding ->
         when (val s = state) {
-            is TaxSettingsUiState.Loading -> TaxFormSkeleton(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-            )
+            is TaxSettingsUiState.Loading -> BtScrollFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                TaxFormSkeleton(modifier = Modifier.padding(16.dp))
+            }
 
-            is TaxSettingsUiState.Failed -> BtErrorState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                message = s.message,
-                onRetry = vm::load,
-            )
+            is TaxSettingsUiState.Failed -> BtStateFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = vm::load,
+                )
+            }
 
             is TaxSettingsUiState.Loaded -> Column(
                 modifier = Modifier

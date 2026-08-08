@@ -134,18 +134,47 @@ import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
- * Settings & account management (spec §6.12). Sections: **Account** (username /
- * email display, change password, delete account), **Preferences** (security,
- * notifications, language), **About** (version, About screen, what's new), plus a
- * hidden **Developer** menu revealed by multi-tapping the version row (debug only),
- * and Log out. Each destructive/secondary surface is its own screen.
+ * Settings & account management (spec §6.12).
+ *
+ * ## The 2026-08-08 regroup — the web control center's taxonomy
+ *
+ * The owner's order was to group the settings more like the web control center.
+ * That control center (`apps/web/src/user/control/ControlCenterOverlay.tsx`)
+ * groups by **what the user is doing**, not by which file exists, and every
+ * group answers one question:
+ *
+ * | Web group           | Its question                          | Here |
+ * |---------------------|---------------------------------------|------|
+ * | Account             | who am I, and how does it render?     | **Account** (merged with Profile) |
+ * | —                   | (device-scoped half of the above)     | **Appearance** |
+ * | Security            | how do I prove it's me? where am I in?| **Sign-in & security** |
+ * | Preferences         | how does the app behave for me?       | **New portfolio defaults**, **Preferences**, **Privacy** |
+ * | Connections & API   | what is plugged into my account?      | **Connections & API** |
+ * | Danger zone         | the one irreversible action           | **Danger zone** |
+ *
+ * Three adaptations, each deliberate:
+ *
+ * 1. **Account and Profile are ONE section**, on the owner's explicit order.
+ *    The web keeps two panels; the app merges them because the avatar and the
+ *    username are the same question and were three sections apart.
+ * 2. **Appearance is split out of Account** rather than folded into it as the
+ *    web does. Theme, language and rotation are DEVICE-scoped: they survive
+ *    logout and must show in a Drive-only install that has no account at all,
+ *    which an account-gated group cannot do.
+ * 3. **New portfolio defaults is its own group**, owner-named, mirroring the
+ *    web's DefaultsPanel — the user-level layer of the settings cascade.
+ *
+ * App-only surfaces the web has no panel for are placed by the same question
+ * rule rather than parked in a leftovers bin: Server and "Where your data
+ * lives" answer *how does the app behave for me* (Preferences); About, the
+ * version row and the hidden Developer menu are chrome and stay at the bottom;
+ * app lock lives inside the Security screen, and quiet hours inside
+ * Notifications, per the prior ruling.
+ *
+ * Nothing lost capability in the move — this was regrouping and renaming, not a
+ * capability change, and every row still leads where it led.
  *
  * ## R2 visual pass — what changed, and what deliberately did not
- *
- * **No IA changes.** Every row leads where it led before, in the same section,
- * in the same order. The mandate's §5 webapp-parity items (digest cadence and
- * quiet hours, discreet mode) were already here; R2's job was to make them sit
- * naturally, not to move them.
  *
  * **The wall of boxes is gone.** Every row used to be its own bordered
  * `Surface` — eleven identical rounded rectangles stacked vertically, so the
@@ -174,6 +203,8 @@ fun SettingsScreen(
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},
     onOpenServer: () -> Unit = {},
+    onOpenConnections: () -> Unit = {},
+    onOpenAuthorizedApps: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val snackbar = LocalBtSnackbar.current
@@ -344,137 +375,32 @@ fun SettingsScreen(
                 update?.let { UpdateAvailableRow(it) }
             }
 
-            // ── ACCOUNT ──────────────────────────────────────────────────────
+            // ── ACCOUNT — identity and profile, MERGED ───────────────────────
+            //
+            // Owner order 2026-08-08: Account and Profile become ONE surface.
+            // They were two sections asking the same question from opposite ends
+            // — "who am I to the server" and "who am I to everyone else" — with
+            // the avatar stranded three sections below the username it belongs
+            // to. Identity leads (artwork, name, facts), then the things you can
+            // actually change about it, then the two hand-offs.
+            //
+            // The web control center keeps Account and Profile as two panels.
+            // This is the one deliberate divergence from its taxonomy, and it is
+            // the owner's call, not a drift.
             if (hasAccount) {
                 BtSectionHeader(stringResource(R.string.bt_settings_account_section))
                 BtGroup {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        AccountRow(stringResource(R.string.bt_settings_username), user?.username?.ifBlank { "—" } ?: "—")
-                        AccountRow(stringResource(R.string.bt_settings_email), user?.email?.ifBlank { "—" } ?: "—")
+                    AccountIdentity(
+                        username = user?.username.orEmpty(),
+                        email = user?.email?.ifBlank { null },
+                        iconId = profile?.profileIcon,
                         // Web parity: the account page names the day the account
                         // was opened. Absent on a pre-v5 server (`createdAt` is
                         // null) and on a session cached before this build, and the
-                        // row simply does not render then — an em dash here would
-                        // read as "we lost it", not "your server does not say".
-                        formatMemberSince(user?.memberSince, rememberBtLocale())?.let { since ->
-                            AccountRow(stringResource(R.string.bt_settings_member_since), since)
-                        }
-                    }
-                    BtGroupRow(
-                        icon = Icons.Outlined.Key,
-                        title = stringResource(R.string.bt_dest_change_password),
-                        subtitle = stringResource(R.string.bt_settings_change_password_sub),
-                        onClick = onOpenChangePassword,
+                        // line simply does not render then — an em dash would read
+                        // as "we lost it", not "your server does not say".
+                        memberSince = formatMemberSince(user?.memberSince, rememberBtLocale()),
                     )
-                    // Parity ruling 2026-08-08: the export is a long-running job
-                    // that mails a link and offers several formats — the web owns
-                    // it end to end, and a half-mirror in the app would be a
-                    // second place for it to go wrong.
-                    BtWebLinkRow(
-                        icon = Icons.Outlined.Download,
-                        title = stringResource(R.string.bt_settings_data_export),
-                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
-                        path = "/control/account",
-                    )
-                }
-            }
-
-            // ── PREFERENCES ──────────────────────────────────────────────────
-            BtSectionHeader(stringResource(R.string.bt_settings_preferences_section))
-            BtGroup {
-                BtGroupRow(
-                    icon = Icons.Outlined.Lock,
-                    title = stringResource(R.string.bt_dest_settings_security),
-                    subtitle = stringResource(R.string.bt_settings_security_sub),
-                    onClick = onOpenSecurity,
-                )
-                BtGroupRow(
-                    icon = Icons.Outlined.Storage,
-                    title = stringResource(R.string.bt_storage_settings_row),
-                    subtitle = stringResource(storageMode.labelRes()),
-                    onClick = onOpenDataHome,
-                )
-                // Which backend this install talks to. A `github`-flavor row —
-                // a Play install has fixed official endpoints, so the setting
-                // would be a lie there. This and the login screen's affordance
-                // are the two (and only two) paths to the Server screen.
-                if (BuildConfig.SERVER_SETTING_ENABLED) {
-                    BtGroupRow(
-                        icon = Icons.Outlined.Dns,
-                        title = stringResource(R.string.bt_dest_server),
-                        subtitle = serverRowSubtitle(),
-                        onClick = onOpenServer,
-                    )
-                }
-                if (hasNotifications) {
-                    BtGroupRow(
-                        icon = Icons.Outlined.Notifications,
-                        title = stringResource(R.string.bt_settings_notifications_row),
-                        subtitle = stringResource(R.string.bt_settings_notifications_sub),
-                        onClick = onOpenNotifications,
-                    )
-                }
-                BtGroupRow(
-                    icon = Icons.Outlined.Translate,
-                    title = stringResource(R.string.bt_dest_settings_language),
-                    subtitle = currentLanguageLabel(),
-                    onClick = onOpenLanguage,
-                )
-                // Taxes — the ACCOUNT-level default, i.e. what a newly created
-                // portfolio inherits. Any single portfolio can override it from
-                // its own settings page, which is where the effective/inherited
-                // distinction is actually rendered; this row deliberately does not
-                // try to summarise a value, because the account default is the one
-                // number on this screen that may apply to none of your portfolios.
-                if (hasAccount && storageMode.shows(BtSurface.TAX_MODES)) {
-                    BtGroupRow(
-                        icon = Icons.Outlined.Percent,
-                        title = stringResource(R.string.bt_tax_settings_row),
-                        subtitle = stringResource(R.string.bt_tax_settings_row_sub),
-                        onClick = onOpenTaxSettings,
-                    )
-                }
-                // Round-trips through `/settings/account`, so it belongs to the
-                // modes that HAVE an account — same rule as discreet mode.
-                //
-                // **Default visibility is deliberately absent** (parity audit
-                // 2026-08-08, web test #377): the web forbids setting a
-                // new-portfolio visibility default, so mirroring the control here
-                // would offer a promise the platform does not keep. Sharing is
-                // chosen per item, on the item, through the audience sheet.
-                if (hasAccount) {
-                    BtGroupRow(
-                        icon = Icons.Outlined.Payments,
-                        title = stringResource(R.string.bt_settings_base_currency),
-                        subtitle = stringResource(R.string.bt_settings_base_currency_sub),
-                        onClick = { picker = SettingsPicker.Currency },
-                        trailing = { SettingsValue(accountPrefs?.baseCurrency) },
-                    )
-                }
-                val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
-                SettingsToggleRow(
-                    icon = Icons.Outlined.ScreenRotation,
-                    title = stringResource(R.string.bt_settings_orientation_lock),
-                    subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
-                    checked = orientationLocked,
-                    onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
-                )
-            }
-
-            accountPrefsError?.let {
-                BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
-            }
-
-            // ── PROFILE ──────────────────────────────────────────────────────
-            // What friends and group members see next to the username. There is
-            // exactly one field the platform lets a client set — the icon — so
-            // this is a one-row section rather than a screen of its own.
-            if (hasAccount) {
-                BtSectionHeader(stringResource(R.string.bt_settings_profile_section))
-                BtGroup {
                     BtGroupRow(
                         title = stringResource(R.string.bt_settings_profile_icon),
                         subtitle = stringResource(R.string.bt_settings_profile_icon_sub),
@@ -483,11 +409,8 @@ fun SettingsScreen(
                             picker = SettingsPicker.ProfileIcon
                         },
                         // The row previews the choice with the REAL avatar, in the
-                        // trailing "current value" position. It used to be a
-                        // leading Material glyph tinted gold — which showed the
-                        // user a stand-in for the artwork rather than the artwork,
-                        // and showed the same `Pets` glyph whether they had picked
-                        // fox or panda.
+                        // trailing "current value" position — the artwork itself,
+                        // never a Material stand-in for it.
                         trailing = {
                             BtAvatar(
                                 name = profile?.username.orEmpty(),
@@ -495,6 +418,18 @@ fun SettingsScreen(
                                 size = 32.dp,
                             )
                         },
+                    )
+                    // Round-trips through `/settings/account`, so it belongs to
+                    // the modes that HAVE an account. The web files it under its
+                    // Account panel too — that panel's question is "who am I, and
+                    // how does the app render for me", and a display currency is
+                    // the second half of it.
+                    BtGroupRow(
+                        icon = Icons.Outlined.Payments,
+                        title = stringResource(R.string.bt_settings_base_currency),
+                        subtitle = stringResource(R.string.bt_settings_base_currency_sub),
+                        onClick = { picker = SettingsPicker.Currency },
+                        trailing = { SettingsValue(accountPrefs?.baseCurrency) },
                     )
                     // ADDITIVE, not a replacement: the icon is the one profile
                     // field the platform lets a client write, and it keeps its
@@ -507,13 +442,30 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.bt_settings_managed_on_web),
                         path = "/control/profile",
                     )
+                    // Parity ruling 2026-08-08: the export is a long-running job
+                    // that mails a link and offers several formats — the web owns
+                    // it end to end, and a half-mirror in the app would be a
+                    // second place for it to go wrong.
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Download,
+                        title = stringResource(R.string.bt_settings_data_export),
+                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
+                        path = "/control/account",
+                    )
+                }
+                accountPrefsError?.let {
+                    BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
                 }
             }
 
             // ── APPEARANCE ───────────────────────────────────────────────────
-            // Device-scoped, not account-scoped: the theme belongs to the phone
-            // you are holding, survives logout, and is shown in EVERY storage
-            // mode — a Drive-only install has no account but still has eyes.
+            // Device-scoped, not account-scoped: these belong to the phone you
+            // are holding, survive logout, and are shown in EVERY storage mode —
+            // a Drive-only install has no account but still has eyes and a
+            // language. That ungated-ness is why they are their own group rather
+            // than folded into Account, where the web's own taxonomy files the
+            // interface preferences: folding them there would hide them from the
+            // installs that have no account at all.
             //
             // ## Two things this section deliberately does NOT contain
             //
@@ -547,11 +499,122 @@ fun SettingsScreen(
                     onClick = { picker = SettingsPicker.Theme },
                     trailing = { SettingsValue(stringResource(themeModeLabelRes(themeMode))) },
                 )
+                BtGroupRow(
+                    icon = Icons.Outlined.Translate,
+                    title = stringResource(R.string.bt_dest_settings_language),
+                    subtitle = currentLanguageLabel(),
+                    onClick = onOpenLanguage,
+                )
+                val orientationLocked by AppGraph.devicePrefs.orientationLocked.collectAsStateWithLifecycle()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.ScreenRotation,
+                    title = stringResource(R.string.bt_settings_orientation_lock),
+                    subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
+                    checked = orientationLocked,
+                    onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
+                )
+            }
+
+            // ── SIGN-IN & SECURITY ───────────────────────────────────────────
+            // The web's Security group asks "how do I prove it's me, and where am
+            // I signed in?" — its Sign-in and Sessions panels. The app answers
+            // both behind one Security screen (2FA, passkeys, PIN, app lock and
+            // the session list all live there), so this group is that screen plus
+            // the password change that used to sit under Account.
+            if (hasAccount) {
+                BtSectionHeader(stringResource(R.string.bt_settings_signin_section))
+                BtGroup {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Lock,
+                        title = stringResource(R.string.bt_dest_settings_security),
+                        subtitle = stringResource(R.string.bt_settings_security_sub),
+                        onClick = onOpenSecurity,
+                    )
+                    BtGroupRow(
+                        icon = Icons.Outlined.Key,
+                        title = stringResource(R.string.bt_dest_change_password),
+                        subtitle = stringResource(R.string.bt_settings_change_password_sub),
+                        onClick = onOpenChangePassword,
+                    )
+                }
+            }
+
+            // ── NEW PORTFOLIO DEFAULTS ───────────────────────────────────────
+            // Owner-named group (2026-08-08), mirroring the web's DefaultsPanel:
+            // the user-level DEFAULT layer of the settings cascade
+            // (effective = portfolio override ?? user default ?? system default).
+            // The intro line states that inheritance, because the one thing that
+            // confuses people here is whether editing a default rewrites the
+            // portfolios that already exist. It does not.
+            //
+            // Currently one scopeable default (tax treatment), exactly like the
+            // web — the group exists so the next one drops in as a sibling row.
+            //
+            // **Default visibility is deliberately absent** (parity audit
+            // 2026-08-08, web test #377): the web forbids setting a new-portfolio
+            // visibility default, so mirroring the control here would offer a
+            // promise the platform does not keep. Sharing is chosen per item, on
+            // the item, through the audience sheet. Do not resurrect it.
+            if (hasAccount && storageMode.shows(BtSurface.TAX_MODES)) {
+                BtSectionHeader(stringResource(R.string.bt_settings_defaults_section))
+                Text(
+                    text = stringResource(R.string.bt_settings_defaults_intro),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+                BtGroup {
+                    // This row deliberately does not try to summarise a value:
+                    // the account default is the one number on this screen that
+                    // may apply to none of your portfolios.
+                    BtGroupRow(
+                        icon = Icons.Outlined.Percent,
+                        title = stringResource(R.string.bt_tax_settings_row),
+                        subtitle = stringResource(R.string.bt_tax_settings_row_sub),
+                        onClick = onOpenTaxSettings,
+                    )
+                }
+            }
+
+            // ── PREFERENCES ──────────────────────────────────────────────────
+            // The web's Preferences group asks "how does the app behave for me?".
+            // Notifications is its panel verbatim (quiet hours stays inside it,
+            // per the prior ruling). "Where your data lives" and "Server" are
+            // app-only and land here because they are exactly that question for a
+            // native client: which backend, and which copy of the data.
+            BtSectionHeader(stringResource(R.string.bt_settings_preferences_section))
+            BtGroup {
+                if (hasNotifications) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Notifications,
+                        title = stringResource(R.string.bt_settings_notifications_row),
+                        subtitle = stringResource(R.string.bt_settings_notifications_sub),
+                        onClick = onOpenNotifications,
+                    )
+                }
+                BtGroupRow(
+                    icon = Icons.Outlined.Storage,
+                    title = stringResource(R.string.bt_storage_settings_row),
+                    subtitle = stringResource(storageMode.labelRes()),
+                    onClick = onOpenDataHome,
+                )
+                // Which backend this install talks to. A `github`-flavor row — a
+                // Play install has fixed official endpoints, so the setting would
+                // be a lie there. This and the login screen's gear are the two
+                // (and only two) paths to the Server screen.
+                if (BuildConfig.SERVER_SETTING_ENABLED) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Dns,
+                        title = stringResource(R.string.bt_dest_server),
+                        subtitle = serverRowSubtitle(),
+                        onClick = onOpenServer,
+                    )
+                }
             }
 
             // ── PRIVACY ──────────────────────────────────────────────────────
-            // Discreet mode round-trips through the account, so it belongs to the
-            // modes that have one.
+            // The web's Privacy panel. Discreet mode round-trips through the
+            // account, so it belongs to the modes that have one.
             if (hasAccount) {
             BtSectionHeader(stringResource(R.string.bt_settings_privacy_section))
             val discreet by AppGraph.discreetModeStore.enabled.collectAsStateWithLifecycle()
@@ -584,36 +647,36 @@ fun SettingsScreen(
             }
             }
 
-            // ── ON THE WEB ───────────────────────────────────────────────────
-            // Five surfaces the parity audit (2026-08-08) ruled the app will not
-            // reimplement: they configure how OTHER software talks to the
-            // account, they are edited rarely and read carefully, and every one
-            // of them shows a secret exactly once at creation time — which is a
-            // job for a full keyboard and a page you can copy out of, not a
-            // phone row.
+            // ── CONNECTIONS & API ────────────────────────────────────────────
+            // The web's Integrations group — "what is plugged into my account?".
             //
-            // It sits HERE, between the app's own preferences and the About
-            // chrome, on purpose. These are secondary: nobody opens Settings to
-            // reach them, so they must not compete with the rows people do come
-            // for — but they are still account settings, so burying them under
-            // About would be hiding them. One group, one header, one line of
-            // explanation, five hand-offs.
-            //
-            // Account-gated like every other `/control/*` link: a Drive-only
-            // install has no BetterTrack account for any of these to configure.
+            // Owner order 2026-08-08: **Connections and Authorized apps are
+            // handled INSIDE the app and do not redirect.** Both are now real
+            // screens at web capability parity. The remaining three stay
+            // hand-offs: API keys, OAuth apps and webhooks each show a secret
+            // exactly once at creation time, which is a job for a full keyboard
+            // and a page you can copy out of, not a phone row — and the owner
+            // named only the two.
             if (hasAccount) {
-                BtSectionHeader(stringResource(R.string.bt_settings_web_section))
+                BtSectionHeader(stringResource(R.string.bt_settings_integrations_section))
                 Text(
-                    text = stringResource(R.string.bt_settings_web_intro),
+                    text = stringResource(R.string.bt_settings_integrations_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                 )
                 BtGroup {
-                    BtWebLinkRow(
+                    BtGroupRow(
                         icon = Icons.Outlined.Link,
-                        title = stringResource(R.string.bt_settings_web_connections),
-                        path = "/control/connections",
+                        title = stringResource(R.string.bt_settings_connections_row),
+                        subtitle = stringResource(R.string.bt_settings_connections_sub),
+                        onClick = onOpenConnections,
+                    )
+                    BtGroupRow(
+                        icon = Icons.Outlined.VerifiedUser,
+                        title = stringResource(R.string.bt_settings_authorized_apps_row),
+                        subtitle = stringResource(R.string.bt_settings_authorized_apps_sub),
+                        onClick = onOpenAuthorizedApps,
                     )
                     BtWebLinkRow(
                         icon = Icons.Outlined.Key,
@@ -624,11 +687,6 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Apps,
                         title = stringResource(R.string.bt_settings_web_oauth_apps),
                         path = "/control/oauth-apps",
-                    )
-                    BtWebLinkRow(
-                        icon = Icons.Outlined.VerifiedUser,
-                        title = stringResource(R.string.bt_settings_web_authorized_apps),
-                        path = "/control/authorized-apps",
                     )
                     BtWebLinkRow(
                         icon = Icons.Outlined.Webhook,
@@ -1142,6 +1200,48 @@ private fun serverRowSubtitle(): String =
     } else {
         stringResource(R.string.bt_settings_server_sub)
     }
+
+/**
+ * The merged Account section's head (owner order 2026-08-08): the profile
+ * artwork and the username as one identity block, then the account facts under
+ * it.
+ *
+ * This is the whole point of merging Account and Profile. The avatar used to
+ * live three sections below the username it belongs to, so the two halves of
+ * "who am I" never appeared on screen together; here the picture and the name
+ * are one object, and everything below is a fact about it.
+ *
+ * [memberSince] is already formatted (or null) — the row is OMITTED rather than
+ * em-dashed when the server does not say, because an em dash would read as "we
+ * lost it" instead of "your server does not carry it".
+ */
+@Composable
+private fun AccountIdentity(
+    username: String,
+    email: String?,
+    iconId: String?,
+    memberSince: String?,
+) {
+    val bt = BtTheme.colors
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BtAvatar(name = username, iconId = iconId, size = 56.dp)
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = username.ifBlank { "—" },
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+            )
+        }
+        AccountRow(stringResource(R.string.bt_settings_email), email ?: "—")
+        memberSince?.let {
+            AccountRow(stringResource(R.string.bt_settings_member_since), it)
+        }
+    }
+}
 
 @Composable
 private fun AccountRow(label: String, value: String, modifier: Modifier = Modifier) {

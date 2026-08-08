@@ -64,8 +64,10 @@ import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberReducedMotion
@@ -285,24 +287,27 @@ fun AssetPageScreen(
             when (val d = detail) {
                 AssetDetailUiState.Loading -> AssetPageSkeleton()
 
-                AssetDetailUiState.OfflineState -> BtOfflineState(
-                    message = stringResource(R.string.bt_asset_requires_connection_message),
-                    onRetry = { vm.load() },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                AssetDetailUiState.OfflineState -> BtStateFill {
+                    BtOfflineState(
+                        message = stringResource(R.string.bt_asset_requires_connection_message),
+                        onRetry = { vm.load() },
+                    )
+                }
 
-                is AssetDetailUiState.Error -> BtErrorState(
-                    message = d.message,
-                    onRetry = { vm.load() },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                is AssetDetailUiState.Error -> BtStateFill {
+                    BtErrorState(
+                        message = d.message,
+                        onRetry = { vm.load() },
+                    )
+                }
 
-                AssetDetailUiState.NoLivePrices -> BtEmptyState(
-                    icon = Icons.Outlined.QueryStats,
-                    title = stringResource(R.string.bt_price_none),
-                    message = stringResource(R.string.bt_price_asset_unavailable),
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                AssetDetailUiState.NoLivePrices -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.QueryStats,
+                        title = stringResource(R.string.bt_price_none),
+                        message = stringResource(R.string.bt_price_asset_unavailable),
+                    )
+                }
 
                 is AssetDetailUiState.Loaded -> AssetLoadedContent(
                     snapshot = d.snapshot,
@@ -552,14 +557,16 @@ private fun StatRow(label: String, value: String) {
 
 @Composable
 private fun AssetPageSkeleton() {
-    Column(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        BtSkeleton(Modifier.fillMaxWidth(0.55f).height(20.dp))
-        BtSkeleton(Modifier.fillMaxWidth(0.4f).height(40.dp))
-        BtSkeleton(Modifier.fillMaxWidth().height(200.dp))
-        BtSkeleton(Modifier.fillMaxWidth().height(140.dp))
+    BtScrollFill {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            BtSkeleton(Modifier.fillMaxWidth(0.55f).height(20.dp))
+            BtSkeleton(Modifier.fillMaxWidth(0.4f).height(40.dp))
+            BtSkeleton(Modifier.fillMaxWidth().height(200.dp))
+            BtSkeleton(Modifier.fillMaxWidth().height(140.dp))
+        }
     }
 }
 

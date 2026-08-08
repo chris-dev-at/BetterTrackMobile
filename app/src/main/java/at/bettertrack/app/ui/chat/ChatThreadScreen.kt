@@ -87,6 +87,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -358,47 +359,52 @@ fun ChatThreadScreen(
             when {
                 state.loading && state.messages.isEmpty() -> ThreadSkeleton()
 
-                state.availability == ThreadAvailability.NotAvailable -> BtEmptyState(
-                    icon = Icons.Outlined.Lock,
-                    title = stringResource(R.string.bt_chat_unavailable_title),
-                    message = stringResource(R.string.bt_chat_unavailable_body),
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                )
+                state.availability == ThreadAvailability.NotAvailable -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Lock,
+                        title = stringResource(R.string.bt_chat_unavailable_title),
+                        message = stringResource(R.string.bt_chat_unavailable_body),
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
 
                 // A failed load with nothing cached is an ERROR, not an empty thread —
                 // never render "Say hi" over a thread that may well have history.
-                loadFailure != null && state.messages.isEmpty() -> BtErrorState(
-                    message = loadFailure,
-                    onRetry = vm::retry,
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                )
+                loadFailure != null && state.messages.isEmpty() -> BtStateFill {
+                    BtErrorState(
+                        message = loadFailure,
+                        onRetry = vm::retry,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
 
-                state.messages.isEmpty() -> Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    BtAvatar(name = headerName, iconId = headerIcon, size = 64.dp)
-                    Spacer(Modifier.size(16.dp))
-                    Text(
-                        // "Say hi to @…" needs a name to greet; a deleted account
-                        // has none, so it gets the label on its own.
-                        if (peerDeleted) {
-                            stringResource(R.string.bt_chat_deleted_user)
-                        } else {
-                            stringResource(R.string.bt_chat_say_hi, headerName)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = bt.textPrimary,
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        stringResource(R.string.bt_chat_empty_hint),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = bt.textMuted,
-                        textAlign = TextAlign.Center,
-                    )
+                state.messages.isEmpty() -> BtStateFill {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        BtAvatar(name = headerName, iconId = headerIcon, size = 64.dp)
+                        Spacer(Modifier.size(16.dp))
+                        Text(
+                            // "Say hi to @…" needs a name to greet; a deleted account
+                            // has none, so it gets the label on its own.
+                            if (peerDeleted) {
+                                stringResource(R.string.bt_chat_deleted_user)
+                            } else {
+                                stringResource(R.string.bt_chat_say_hi, headerName)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = bt.textPrimary,
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            stringResource(R.string.bt_chat_empty_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = bt.textMuted,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
 
                 else -> LazyColumn(
@@ -716,19 +722,25 @@ private fun ShareChip.subtitle(): String {
 private fun ThreadSkeleton() {
     // Fraction of the width, and whether the bubble hangs on the right (mine).
     val bubbles = listOf(0.55f to false, 0.42f to true, 0.68f to false, 0.36f to true, 0.50f to false)
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.Bottom,
-    ) {
-        bubbles.forEach { (fraction, mine) ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
-            ) {
-                BtSkeleton(
-                    modifier = Modifier.fillMaxWidth(fraction).height(40.dp),
-                    shape = BtShapes.card,
-                )
+    // BtStateFill, not BtScrollFill: the bottom anchoring below needs a column
+    // that is exactly one viewport tall, which is what BtStateFill's
+    // `fillParentMaxSize` item gives it. BtScrollFill's item measures with an
+    // unbounded height, where `Arrangement.Bottom` has nothing to sit against.
+    BtStateFill {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.Bottom,
+        ) {
+            bubbles.forEach { (fraction, mine) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+                ) {
+                    BtSkeleton(
+                        modifier = Modifier.fillMaxWidth(fraction).height(40.dp),
+                        shape = BtShapes.card,
+                    )
+                }
             }
         }
     }

@@ -67,19 +67,23 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtOfflineState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
 import at.bettertrack.app.ui.components.formatEur
-import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.shell.RefreshFailedBanner
 import at.bettertrack.app.ui.shell.RefreshNoticeState
+import at.bettertrack.app.ui.shell.btRefreshAttempt
+import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -319,8 +323,7 @@ class TransactionsViewModel(
     fun refresh() {
         val pid = portfolioId.value ?: return
         viewModelScope.launch {
-            _refreshing.value = true
-            when (val r = repo.refreshTransactions(pid)) {
+            when (val r = btRefreshAttempt(_refreshing) { repo.refreshTransactions(pid) }) {
                 is BtResult.Ok -> {
                     _nextCursor.value = r.value
                     _refreshNotice.value = _refreshNotice.value.onSuccess()
@@ -333,8 +336,15 @@ class TransactionsViewModel(
                     _refreshNotice.value = _refreshNotice.value.onFailure()
                     _loadFailure.value = r.asMessage()
                 }
+                // The attempt hit the ceiling in [btRefreshAttempt]. Reported as
+                // the transport failure it is, so a wedged request can never
+                // hold the indicator — and with it the sheet's pull gesture —
+                // open indefinitely.
+                null -> {
+                    _refreshNotice.value = _refreshNotice.value.onFailure()
+                    _loadFailure.value = btRefreshTimedOutMessage()
+                }
             }
-            _refreshing.value = false
             _firstLoadDone.value = true
         }
     }
@@ -544,21 +554,21 @@ fun TransactionsScreen(
 
                     // The fetch failed and there is nothing cached to fall back
                     // on. This used to render as "You have no transactions yet".
-                    is TxLedgerSurface.Failed -> EmptyFill {
+                    is TxLedgerSurface.Failed -> BtStateFill {
                         BtErrorState(
                             message = surface.message,
                             onRetry = { vm.refresh() },
                         )
                     }
 
-                    TxLedgerSurface.Offline -> EmptyFill {
+                    TxLedgerSurface.Offline -> BtStateFill {
                         BtOfflineState(
                             message = stringResource(R.string.bt_tx_requires_connection),
                             onRetry = { vm.refresh() },
                         )
                     }
 
-                    TxLedgerSurface.Empty -> EmptyFill {
+                    TxLedgerSurface.Empty -> BtStateFill {
                         BtEmptyState(
                             icon = Icons.AutoMirrored.Outlined.ReceiptLong,
                             title = stringResource(R.string.bt_tx_empty_title),
@@ -566,7 +576,7 @@ fun TransactionsScreen(
                         )
                     }
 
-                    TxLedgerSurface.NoMatches -> EmptyFill {
+                    TxLedgerSurface.NoMatches -> BtStateFill {
                         BtEmptyState(
                             icon = Icons.Outlined.FilterList,
                             title = stringResource(R.string.bt_tx_no_matches_title),
@@ -867,22 +877,16 @@ private fun AssetFilterRow(
 }
 
 @Composable
-private fun EmptyFill(content: @Composable () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { content() }
-        }
-    }
-}
-
-@Composable
 private fun TransactionsSkeleton() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeat(8) { BtSkeleton(Modifier.fillMaxWidth().height(64.dp)) }
+    // BtScrollFill, not a bare Column: a skeleton is the state a reader is most
+    // likely to want to back out of, and the sheet's pull-down dismiss only
+    // exists where something dispatches nested scroll.
+    BtScrollFill {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(8) { BtSkeleton(Modifier.fillMaxWidth().height(64.dp)) }
+        }
     }
 }

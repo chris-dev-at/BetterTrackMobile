@@ -99,7 +99,9 @@ import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.BtUnreadDot
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -268,19 +270,22 @@ fun NotificationsInboxScreen(
             Box(Modifier.fillMaxSize()) {
                 when (phase) {
                     InboxPhase.Loading -> InboxSkeleton()
-                    InboxPhase.Error -> BtErrorState(
-                        modifier = Modifier.align(Alignment.Center),
-                        onRetry = {
-                            phase = InboxPhase.Loading
-                            scope.launch {
-                                val r = repo.refresh(selectedView)
-                                phase = if (r is BtResult.Err) InboxPhase.Error else InboxPhase.Loaded
-                            }
-                        },
-                    )
+                    InboxPhase.Error -> BtStateFill {
+                        BtErrorState(
+                            onRetry = {
+                                phase = InboxPhase.Loading
+                                scope.launch {
+                                    val r = repo.refresh(selectedView)
+                                    phase = if (r is BtResult.Err) InboxPhase.Error else InboxPhase.Loaded
+                                }
+                            },
+                        )
+                    }
                     InboxPhase.Loaded -> {
                         if (notifications.isEmpty()) {
-                            EmptyForView(selectedView, actionsEnabled, Modifier.align(Alignment.Center))
+                            BtStateFill {
+                                EmptyForView(selectedView, actionsEnabled, Modifier)
+                            }
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
@@ -708,12 +713,14 @@ private fun RowOverflow(
 
 @Composable
 private fun InboxSkeleton() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        repeat(5) {
-            BtSkeleton(modifier = Modifier.fillMaxWidth().height(74.dp), shape = BtShapes.card)
+    BtScrollFill {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            repeat(5) {
+                BtSkeleton(modifier = Modifier.fillMaxWidth().height(74.dp), shape = BtShapes.card)
+            }
         }
     }
 }

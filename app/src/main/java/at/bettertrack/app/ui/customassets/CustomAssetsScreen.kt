@@ -72,7 +72,9 @@ import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.shell.OfflineBanner
@@ -214,27 +216,21 @@ fun CustomAssetsScreen(
                     ) {
                         BtListSurface.SKELETON -> CustomAssetsSkeleton()
 
-                        BtListSurface.OFFLINE -> Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        BtListSurface.OFFLINE -> BtStateFill {
                             BtOfflineState(
                                 message = stringResource(R.string.bt_custom_requires_connection),
                                 onRetry = { vm.refresh() },
                             )
                         }
 
-                        BtListSurface.ERROR -> Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        BtListSurface.ERROR -> BtStateFill {
                             BtErrorState(
                                 message = listFailure ?: BtMessage.generic,
                                 onRetry = { vm.refresh() },
                             )
                         }
 
-                        else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        else -> BtStateFill {
                             BtEmptyState(
                                 icon = Icons.Outlined.Category,
                                 title = stringResource(R.string.bt_custom_empty_title),
@@ -307,13 +303,15 @@ fun CustomAssetsScreen(
 /** Placeholder rows shaped like [CustomAssetRow], for the first list load. */
 @Composable
 private fun CustomAssetsSkeleton() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeat(6) { BtSkeleton(Modifier.fillMaxWidth().height(58.dp), shape = BtShapes.card) }
+    BtScrollFill {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(6) { BtSkeleton(Modifier.fillMaxWidth().height(58.dp), shape = BtShapes.card) }
+        }
     }
 }
 

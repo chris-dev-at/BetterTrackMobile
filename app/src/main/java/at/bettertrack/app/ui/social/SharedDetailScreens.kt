@@ -45,7 +45,9 @@ import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
@@ -292,28 +294,32 @@ private fun <T> Loaded(
     when (val s = state) {
         // Card-shaped placeholders: every screen this wraps renders a stack of
         // cards, so the page holds its height while the first read lands.
-        null -> Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            repeat(4) {
-                BtSkeleton(
-                    modifier = Modifier.fillMaxWidth().height(84.dp),
-                    shape = BtShapes.card,
-                )
+        null -> BtScrollFill {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                repeat(4) {
+                    BtSkeleton(
+                        modifier = Modifier.fillMaxWidth().height(84.dp),
+                        shape = BtShapes.card,
+                    )
+                }
             }
         }
         // A 404 here is not a fault, it is news: the owner stopped sharing. That
         // stays this screen's own sentence; everything else defers to the shared
         // error-code catalog rather than to the server's English.
-        is BtResult.Err -> BtErrorState(
-            message = if (s.error.httpStatus == 404) {
-                BtMessage(R.string.bt_social_not_shared_anymore)
-            } else {
-                s.error.asMessage()
-            },
-            onRetry = onRetry,
-        )
+        is BtResult.Err -> BtStateFill {
+            BtErrorState(
+                message = if (s.error.httpStatus == 404) {
+                    BtMessage(R.string.bt_social_not_shared_anymore)
+                } else {
+                    s.error.asMessage()
+                },
+                onRetry = onRetry,
+            )
+        }
         is BtResult.Ok -> content(s.value)
     }
 }

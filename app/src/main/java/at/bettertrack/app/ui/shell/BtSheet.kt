@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.shell
 
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -59,6 +60,8 @@ import androidx.navigation.compose.composable
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -132,23 +135,73 @@ internal fun BtSheet(
     var leaving by remember { mutableStateOf(false) }
     val flingVelocityPx = with(density) { SHEET_DISMISS_VELOCITY.toPx() }
 
+    // Is there a sheet UNDER this one? Asked of the GRAPH, not of composition —
+    // see [BtSheetHostState.sheetBelow] for why the composed count is the wrong
+    // question. Remembered because a sheet's own identity does not change while
+    // it is open: what is under it may be popped, but only after this sheet has
+    // gone first.
+    //
+    // This one boolean is the whole depth axis. A depth-1 sheet is a *page*: it
+    // rises from the bottom and a pull-down puts it away. A depth->=2 sheet is a
+    // *step within* one: it comes in from the right over its parent and a
+    // rightward swipe walks back out of it. Two different things, so two
+    // different motions.
+    val stacked = remember { host.hasSheetBelow() }
+    val onPopAllState = rememberUpdatedState(host.popAll)
+
+    // 0f = the content sits over its parent, 1f = fully off to the right. Only
+    // ever moves for a stacked sheet; a depth-1 sheet leaves it at 0 forever.
+    val slide = remember { Animatable(if (stacked) 1f else 0f) }
+    var widthPx by remember { mutableFloatStateOf(0f) }
+
     LaunchedEffect(Unit) {
-        if (reducedMotion) travel.snapTo(0f) else travel.animateTo(0f, SheetEnter)
+        if (stacked) {
+            // No bottom entry at depth >=2: the sheet is already where it belongs
+            // vertically, and only the content plane travels in from the right.
+            travel.snapTo(0f)
+            if (reducedMotion) slide.snapTo(0f) else slide.animateTo(0f, SheetSlide)
+        } else {
+            if (reducedMotion) travel.snapTo(0f) else travel.animateTo(0f, SheetEnter)
+        }
     }
 
-    val dismiss: () -> Unit = remember {
-        {
+    /** Back one level, on whichever axis the gesture used. */
+    val backOne: (Boolean) -> Unit = remember {
+        { horizontally ->
             if (!leaving) {
                 leaving = true
                 scope.launch {
-                    if (!reducedMotion) travel.animateTo(1f, SheetExit)
+                    if (!reducedMotion) {
+                        if (horizontally) slide.animateTo(1f, SheetSlide)
+                        else travel.animateTo(1f, SheetExit)
+                    }
                     onPoppedState.value()
                 }
             }
         }
     }
+    /** The stage-two action: the whole stack goes, not just this sheet. */
+    val closeAll: () -> Unit = remember {
+        {
+            if (!leaving) {
+                leaving = true
+                scope.launch {
+                    if (!reducedMotion) travel.animateTo(1f, SheetExit)
+                    onPopAllState.value()
+                }
+            }
+        }
+    }
+    // What the top bar's back arrow, the scrim tap and system back all resolve to.
+    // Unchanged in meaning at every depth — back is still back one — and it simply
+    // leaves on whichever axis this sheet arrived on.
+    val dismiss: () -> Unit = remember { { backOne(stacked) } }
     val settle: () -> Unit = remember {
-        { scope.launch { travel.animateTo(0f, SheetSettle) }; Unit }
+        {
+            scope.launch { travel.animateTo(0f, SheetSettle) }
+            scope.launch { if (slide.value != 0f) slide.animateTo(0f, SheetSettle) }
+            Unit
+        }
     }
     // Join the stack. This is the whole of how 45 screens dismiss a sheet without
     // a single one of them taking a new parameter: they still call the same
@@ -220,10 +273,13 @@ internal fun BtSheet(
             }
 
             private fun release(velocityY: Float) {
-                if (sheetDismissOnRelease(travel.value, velocityY, flingVelocityPx)) {
-                    dismiss()
-                } else {
-                    settle()
+                when (sheetRelease(travel.value, velocityY, flingVelocityPx)) {
+                    SheetRelease.SETTLE -> settle()
+                    // Stage one. At depth 1 there is nothing under this sheet, so
+                    // "back one" and "close" are the same event — which is why the
+                    // rule does not need to know the depth and this does.
+                    SheetRelease.BACK_ONE -> backOne(false)
+                    SheetRelease.CLOSE_ALL -> closeAll()
                 }
             }
 
@@ -250,14 +306,24 @@ internal fun BtSheet(
                 // already paid it.
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = SHEET_TOP_GAP)
-                .onSizeChanged { heightPx = it.height.toFloat() }
+                .onSizeChanged {
+                    heightPx = it.height.toFloat()
+                    widthPx = it.width.toFloat()
+                }
                 .graphicsLayer { translationY = travel.value * heightPx }
                 .nestedScroll(pull),
             shape = RoundedCornerShape(topStart = SHEET_CORNER, topEnd = SHEET_CORNER),
             color = bt.bg,
         ) {
             Column(Modifier.fillMaxSize()) {
+                // The chrome does NOT travel horizontally. It is this stack's
+                // fixed frame — the same relationship the four main pages have
+                // with their top bar, which stays put while the pages move under
+                // it. A grabber that slid away with the content would read as the
+                // whole window leaving, which is the one thing a step *within* a
+                // page must not say.
                 BtSheetGrabber(
+                    stage = { sheetStageOf(travel.value) },
                     onDrag = { dy ->
                         val h = heightPx
                         if (h > 0f && !leaving) {
@@ -266,7 +332,42 @@ internal fun BtSheet(
                     },
                     onRelease = { v -> pull.releaseFromGrabber(v) },
                 )
-                content()
+                // The content plane — the only thing on the depth axis.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { translationX = slide.value * widthPx }
+                        .then(
+                            if (stacked) {
+                                Modifier.draggable(
+                                    state = rememberDraggableState { dx ->
+                                        val w = widthPx
+                                        if (w > 0f && !leaving) {
+                                            val next = (slide.value + dx / w).coerceIn(0f, 1f)
+                                            scope.launch { slide.snapTo(next) }
+                                        }
+                                    },
+                                    orientation = Orientation.Horizontal,
+                                    onDragStopped = { velocity ->
+                                        if (!leaving) {
+                                            if (sheetBackSwipeCommits(
+                                                    slide.value,
+                                                    velocity,
+                                                    flingVelocityPx,
+                                                )
+                                            ) {
+                                                backOne(true)
+                                            } else {
+                                                settle()
+                                            }
+                                        }
+                                    },
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
+                ) { content() }
             }
         }
     }
@@ -282,6 +383,7 @@ internal fun BtSheet(
  */
 @Composable
 private fun BtSheetGrabber(
+    stage: () -> SheetStage,
     onDrag: (Float) -> Unit,
     onRelease: (Float) -> Unit,
 ) {
@@ -299,13 +401,45 @@ private fun BtSheetGrabber(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
+        // The notch, made visible. The resistance under the thumb is the primary
+        // cue and this is its confirmation: the pill widens the moment stage one
+        // is armed, and turns gold at the boundary where letting go stops meaning
+        // "back" and starts meaning "close everything". That second step is the
+        // one worth drawing — it is the only irreversible thing this gesture does.
+        //
+        // Read through a lambda so the pill repaints without recomposing the
+        // sheet: `travel` changes every frame of a drag.
+        val current = stage()
+        val width by animateDpAsState(
+            targetValue = when (current) {
+                SheetStage.IDLE -> SHEET_GRABBER_WIDTH
+                SheetStage.BACK -> SHEET_GRABBER_WIDTH * 1.6f
+                SheetStage.CLOSE_ALL -> SHEET_GRABBER_WIDTH * 2.2f
+            },
+            label = "grabberWidth",
+        )
+        val colour = if (current == SheetStage.CLOSE_ALL) {
+            bt.goldEmphasis
+        } else {
+            bt.textMuted.copy(alpha = SHEET_GRABBER_ALPHA)
+        }
         Box(
             Modifier
-                .size(width = SHEET_GRABBER_WIDTH, height = SHEET_GRABBER_HEIGHT)
+                .size(width = width, height = SHEET_GRABBER_HEIGHT)
                 .clip(CircleShape)
-                .background(bt.textMuted.copy(alpha = SHEET_GRABBER_ALPHA)),
+                .background(colour),
         )
     }
+}
+
+/** Which band of the two-stage dismiss the sheet is currently sitting in. */
+internal enum class SheetStage { IDLE, BACK, CLOSE_ALL }
+
+/** [SheetStage] for a travel value — the visual half of [sheetRelease]. */
+internal fun sheetStageOf(travel: Float): SheetStage = when {
+    travel >= SHEET_NOTCH_END -> SheetStage.CLOSE_ALL
+    travel >= SHEET_NOTCH_START -> SheetStage.BACK
+    else -> SheetStage.IDLE
 }
 
 // ── Pure rules, so the sheet's behaviour is pinned without a device ─────────
@@ -313,36 +447,143 @@ private fun BtSheetGrabber(
 /**
  * Where a drag of [dy] px puts the sheet, as a fraction of its own height.
  *
- * Clamped at both ends: 0f because a sheet cannot be pulled up past its rest
- * position (there is nothing above it but the scrim strip), and 1f because one
- * height of travel is the whole dismissal.
+ * ## The notch
+ *
+ * Three bands rather than one straight line. Below [SHEET_NOTCH_START] the sheet
+ * tracks the finger exactly, because that is the part of the gesture the user is
+ * still deciding in. Across the notch it moves at [SHEET_NOTCH_RESISTANCE] of the
+ * finger's rate — the drag noticeably stiffens, which is the whole point: the
+ * boundary has to be *felt*, because it is the difference between going back one
+ * page and closing everything. Past it the sheet tracks the finger again, so a
+ * user who has decided to close the stack is not fighting the phone the rest of
+ * the way down.
+ *
+ * The mapping carries the FINGER's accumulated distance rather than the sheet's
+ * position (see [sheetPullFor]), which is what makes it reversible: dragging back
+ * up unwinds exactly the resistance it came down through, so the notch is a
+ * detent in both directions rather than a one-way ratchet.
  */
 internal fun sheetDragTravel(current: Float, dy: Float, heightPx: Float): Float {
     if (heightPx <= 0f) return current
-    return (current + dy / heightPx).coerceIn(0f, 1f)
+    val pulled = sheetPullFor(current) + dy / heightPx
+    return sheetTravelFor(pulled.coerceAtLeast(0f))
+}
+
+/** Finger distance (as a fraction of sheet height) -> travel. */
+internal fun sheetTravelFor(pull: Float): Float {
+    val notchPull = (SHEET_NOTCH_END - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
+    return when {
+        pull <= SHEET_NOTCH_START -> pull
+        pull <= SHEET_NOTCH_START + notchPull ->
+            SHEET_NOTCH_START + (pull - SHEET_NOTCH_START) * SHEET_NOTCH_RESISTANCE
+        else -> SHEET_NOTCH_END + (pull - SHEET_NOTCH_START - notchPull)
+    }.coerceIn(0f, 1f)
+}
+
+/** The exact inverse of [sheetTravelFor]. */
+internal fun sheetPullFor(travel: Float): Float {
+    val notchPull = (SHEET_NOTCH_END - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
+    return when {
+        travel <= SHEET_NOTCH_START -> travel
+        travel <= SHEET_NOTCH_END ->
+            SHEET_NOTCH_START + (travel - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
+        else -> SHEET_NOTCH_START + notchPull + (travel - SHEET_NOTCH_END)
+    }.coerceAtLeast(0f)
 }
 
 /**
- * Whether letting go here dismisses the sheet, or springs it back.
+ * What letting go of a sheet means.
  *
- * Distance OR velocity, and the velocity only counts when it is still travelling
- * DOWN — so a sheet dragged halfway open and flicked back up settles, which is
- * the same rule the retired tab swipe used and the one users have in their hands
- * from every other sheet on the phone.
+ * The owner's model, in his own terms: a sheet has a **notch** partway down its
+ * travel. Pull into it and let go and you go back ONE level; pull *past* it —
+ * which costs pushing through the resistance the notch adds — and the whole stack
+ * closes. Let go before it and nothing happened.
+ *
+ * His example is the clearest statement of it: *Settings -> Security, drag into
+ * the notch = back to Settings; drag fully past = the whole of Settings closes.*
  */
-internal fun sheetDismissOnRelease(
+internal enum class SheetRelease {
+    /** Short of the notch — spring back, nothing happened. */
+    SETTLE,
+
+    /** Released inside the notch: back one level, or close a depth-1 sheet. */
+    BACK_ONE,
+
+    /** Released past the notch: the whole sheet stack goes. */
+    CLOSE_ALL,
+}
+
+/**
+ * What letting go here does.
+ *
+ * A downward flick commits the *stage-one* action and nothing more. That is
+ * deliberate: closing the entire stack is the destructive end of this gesture,
+ * and the spec makes overcoming the notch's resistance the price of it. A flick
+ * pays no such price, so it must not be able to buy the whole stack — you can
+ * flick one page away, but you have to mean it to clear the lot.
+ */
+internal fun sheetRelease(
     travel: Float,
     velocityY: Float,
     velocityThresholdPx: Float,
-): Boolean {
-    if (velocityY <= -velocityThresholdPx) return false
-    return travel >= SHEET_DISMISS_FRACTION || velocityY >= velocityThresholdPx
+): SheetRelease {
+    // A flick back UP is a change of mind, from anywhere.
+    if (velocityY <= -velocityThresholdPx) return SheetRelease.SETTLE
+    if (travel >= SHEET_NOTCH_END) return SheetRelease.CLOSE_ALL
+    if (travel >= SHEET_NOTCH_START) return SheetRelease.BACK_ONE
+    if (velocityY >= velocityThresholdPx) return SheetRelease.BACK_ONE
+    return SheetRelease.SETTLE
 }
 
-/** How far down a release must have carried the sheet to commit to leaving. */
-internal const val SHEET_DISMISS_FRACTION = 0.28f
+/**
+ * Whether a rightward swipe on a depth->=2 sheet's content commits to going back.
+ *
+ * The horizontal axis carries *depth*: a sub-subpage arrives from the right over
+ * its parent and leaves the same way, which is the gesture every phone user
+ * already has in their hands. Distance OR velocity, and a flick back to the LEFT
+ * cancels — the same shape as the vertical rule, because it is the same decision
+ * on a different axis.
+ */
+internal fun sheetBackSwipeCommits(
+    progress: Float,
+    velocityX: Float,
+    velocityThresholdPx: Float,
+): Boolean {
+    if (velocityX <= -velocityThresholdPx) return false
+    return progress >= SHEET_BACK_SWIPE_FRACTION || velocityX >= velocityThresholdPx
+}
 
-/** A flick this fast dismisses whatever distance it covered. */
+/** Where the resistance starts — the top of the notch. Tunable. */
+internal const val SHEET_NOTCH_START = 0.50f
+
+/** Where the resistance ends — past here, releasing closes the whole stack. Tunable. */
+internal const val SHEET_NOTCH_END = 0.72f
+
+/**
+ * How much of the finger's movement the sheet keeps while crossing the notch.
+ *
+ * 1f would be no notch at all; 0f would be a wall.
+ *
+ * ## Why 0.7 and not the 0.5 this started at
+ *
+ * Tuned on the device, and the first value was not merely stiff — it put stage
+ * two **out of reach**. The arithmetic is unforgiving: crossing the band costs
+ * `(END - START) / RESISTANCE` of sheet height in finger travel, so at 0.5 the
+ * whole gesture needed 0.98 of a sheet height (~2180px on the test device) to
+ * reach the close-all zone, on a sheet only ~2220px tall. There is no thumb
+ * stroke that long. At 0.7 the same journey costs 0.81 (~1810px), which is a
+ * deliberate, full-screen drag — hard enough to be a decision, short enough to
+ * be possible.
+ *
+ * It is also nearer what the owner actually asked for: a *slight* resistance
+ * zone. 0.7 is a 30% stiffening, which is felt without being fought.
+ */
+internal const val SHEET_NOTCH_RESISTANCE = 0.7f
+
+/** How far across the screen a rightward back-swipe must travel to commit. */
+internal const val SHEET_BACK_SWIPE_FRACTION = 0.30f
+
+/** A flick this fast commits the stage-one action whatever distance it covered. */
 private val SHEET_DISMISS_VELOCITY: Dp = 420.dp
 
 /**
@@ -388,6 +629,16 @@ private val SheetEnter: AnimationSpec<Float> =
 /** The sheet's departure — a tween, so a dismissal always takes the same time. */
 private val SheetExit: AnimationSpec<Float> = tween(durationMillis = 220)
 
+/**
+ * A depth->=2 sheet arriving from, or leaving to, the RIGHT.
+ *
+ * The horizontal axis is the stack's axis, and this is the whole of its motion.
+ * A shade quicker than [SheetExit]: a lateral hand-over between two pages of the
+ * same stack is a smaller event than a sheet leaving the screen entirely, and
+ * reads wrong if it takes the same time. Tunable.
+ */
+private val SheetSlide: AnimationSpec<Float> = tween(durationMillis = 260)
+
 /** Springing back after an abandoned pull. */
 private val SheetSettle: AnimationSpec<Float> =
     spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
@@ -424,8 +675,45 @@ private val SheetSettle: AnimationSpec<Float> =
  *   end of its own exit animation.
  */
 @Stable
-internal class BtSheetHostState(val pop: () -> Unit) {
+internal class BtSheetHostState(
+    val pop: () -> Unit,
+    /**
+     * Clear the WHOLE sheet stack back to the floor — the stage-two half of the
+     * two-stage dismiss.
+     *
+     * Separate from [pop] because it is a different question for the graph: [pop]
+     * removes one entry and is what "back" has always meant, while this pops to
+     * the floor in one move. Defaults to [pop] so a host wired only for the old
+     * single-level behaviour degrades to it rather than doing nothing.
+     */
+    popAll: (() -> Unit)? = null,
+    /**
+     * Whether a SHEET route sits under the one currently being composed — i.e.
+     * whether this is a sub-subpage, whose swipe-down goes back one level rather
+     * than closing.
+     *
+     * ## Why this cannot be [depth]
+     *
+     * [depth] counts *composed* sheets, and a covered sheet is dropped from
+     * composition when its exit transition ends. That is fine for `dismissTop`,
+     * which only ever asks about sheets that are on screen. It is wrong for "am I
+     * a sub-subpage", which has to stay true for as long as the route below is on
+     * the back stack — and after a configuration change (this activity locks no
+     * orientation and handles no `configChanges`, so a rotation recreates it) the
+     * covered sheet is restored to the stack without ever being composed.
+     *
+     * Reading it from the graph rather than from composition is what makes the
+     * answer survive that. Defaults to "no", which reads as a root sheet — the
+     * conservative answer, since it is today's behaviour.
+     */
+    private val sheetBelow: () -> Boolean = { false },
+) {
+    val popAll: () -> Unit = popAll ?: pop
+
     private val open = mutableListOf<() -> Unit>()
+
+    /** Whether the sheet being composed has another sheet under it. */
+    fun hasSheetBelow(): Boolean = sheetBelow()
 
     fun push(dismiss: () -> Unit) {
         open += dismiss

@@ -1,7 +1,6 @@
 package at.bettertrack.app.ui.sync
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -60,6 +59,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberParkReason
@@ -204,16 +204,12 @@ fun PendingSyncScreen(
             if (!isOnline) OfflineBanner(asOfMs = dataAgeMs)
 
             if (attention.isEmpty() && open.isEmpty() && done.isEmpty()) {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item {
-                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            BtEmptyState(
-                                icon = Icons.Outlined.CloudDone,
-                                title = stringResource(R.string.bt_pending_empty_title),
-                                message = stringResource(R.string.bt_pending_empty_message),
-                            )
-                        }
-                    }
+                BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.CloudDone,
+                        title = stringResource(R.string.bt_pending_empty_title),
+                        message = stringResource(R.string.bt_pending_empty_message),
+                    )
                 }
                 return@Column
             }

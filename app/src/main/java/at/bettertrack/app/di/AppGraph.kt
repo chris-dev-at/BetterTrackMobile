@@ -465,6 +465,17 @@ object AppGraph {
     }
 
     /**
+     * Connections + Authorized apps — the Google sign-in identity and the
+     * third-party grants on this account. Both of its reads double as the
+     * bearer-allowlist capability probe for their own panel (see the class doc),
+     * which is what lets those two screens ship complete and light up on a
+     * platform config flip without an app release.
+     */
+    val connectionsRepository: at.bettertrack.app.data.repo.ConnectionsRepository by lazy {
+        at.bettertrack.app.data.repo.ConnectionsRepository(api = btApi, json = json)
+    }
+
+    /**
      * Taxes — the user-level default, one portfolio's override, and the per-year
      * reports incl. the CSV export.
      */

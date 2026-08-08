@@ -63,7 +63,9 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtOfflineState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.StatCard
@@ -72,6 +74,8 @@ import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.shell.OfflineBanner
+import at.bettertrack.app.ui.shell.btRefreshAttempt
+import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.util.Locale
@@ -165,16 +169,24 @@ class HoldingDetailViewModel(
     fun refresh() {
         val pid = portfolioId.value ?: return
         viewModelScope.launch {
-            _refreshing.value = true
             // Both calls feed this one screen, so the FIRST failure is the one
             // worth reporting: the position hero and its ledger are equally
             // missing either way, and two error surfaces for one dropped
-            // connection would say nothing the first does not.
-            val detail = repo.refreshPortfolioDetail(pid)
-            val transactions = repo.refreshTransactions(pid)
-            _loadFailure.value = (detail as? BtResult.Err)?.asMessage()
-                ?: (transactions as? BtResult.Err)?.asMessage()
-            _refreshing.value = false
+            // connection would say nothing the first does not. They also share
+            // ONE bounded attempt, so the pair cannot cost two timeouts.
+            // A LIST, not a nullable message: [btRefreshAttempt] returns null for
+            // the ceiling, so the block must never answer null itself or the two
+            // would be the same value. An empty list is "both landed".
+            val failures = btRefreshAttempt(_refreshing) {
+                val detail = repo.refreshPortfolioDetail(pid)
+                val transactions = repo.refreshTransactions(pid)
+                listOfNotNull(
+                    (detail as? BtResult.Err)?.asMessage(),
+                    (transactions as? BtResult.Err)?.asMessage(),
+                )
+            }
+            _loadFailure.value =
+                if (failures == null) btRefreshTimedOutMessage() else failures.firstOrNull()
             _firstLoadDone.value = true
         }
     }
@@ -313,14 +325,14 @@ fun HoldingDetailScreen(
 
                     surface == BtListSurface.SKELETON -> HoldingSkeleton()
 
-                    surface == BtListSurface.OFFLINE -> HoldingStateFill {
+                    surface == BtListSurface.OFFLINE -> BtStateFill {
                         BtOfflineState(
                             message = stringResource(R.string.bt_holding_requires_connection),
                             onRetry = { vm.refresh() },
                         )
                     }
 
-                    surface == BtListSurface.ERROR -> HoldingStateFill {
+                    surface == BtListSurface.ERROR -> BtStateFill {
                         BtErrorState(
                             message = failure ?: BtMessage.generic,
                             onRetry = { vm.refresh() },
@@ -329,7 +341,7 @@ fun HoldingDetailScreen(
 
                     // A fetch came back and this asset was not in it: the
                     // position really is gone. The only branch entitled to say so.
-                    else -> HoldingStateFill {
+                    else -> BtStateFill {
                         BtEmptyState(
                             icon = Icons.Outlined.PieChart,
                             title = stringResource(R.string.bt_holding_not_found_title),
@@ -680,40 +692,28 @@ private fun HoldingContent(
     }
 }
 
-/**
- * Centres a state surface over the whole content area while keeping it inside a
- * scrollable — pull-to-refresh needs something that scrolls, and an error state
- * with a Retry the user cannot pull to re-run would be the one place the gesture
- * silently stops working.
- */
-@Composable
-private fun HoldingStateFill(content: @Composable () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { content() }
-        }
-    }
-}
-
 @Composable
 private fun HoldingSkeleton() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        BtSkeleton(Modifier.width(220.dp).height(40.dp))
-        BtSkeleton(Modifier.width(120.dp).height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BtSkeleton(Modifier.weight(1f).height(72.dp))
-            BtSkeleton(Modifier.weight(1f).height(72.dp))
+    // BtScrollFill, not a bare Column: the sheet's pull-down dismiss is taken
+    // from the content's nested scroll, so a skeleton that does not scroll is a
+    // screen the reader cannot back out of by pulling.
+    BtScrollFill {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BtSkeleton(Modifier.width(220.dp).height(40.dp))
+            BtSkeleton(Modifier.width(120.dp).height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BtSkeleton(Modifier.weight(1f).height(72.dp))
+                BtSkeleton(Modifier.weight(1f).height(72.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BtSkeleton(Modifier.weight(1f).height(72.dp))
+                BtSkeleton(Modifier.weight(1f).height(72.dp))
+            }
+            BtSkeleton(Modifier.fillMaxWidth().height(56.dp))
+            BtSkeleton(Modifier.fillMaxWidth().height(56.dp))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BtSkeleton(Modifier.weight(1f).height(72.dp))
-            BtSkeleton(Modifier.weight(1f).height(72.dp))
-        }
-        BtSkeleton(Modifier.fillMaxWidth().height(56.dp))
-        BtSkeleton(Modifier.fillMaxWidth().height(56.dp))
     }
 }

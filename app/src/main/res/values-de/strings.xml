@@ -751,7 +751,6 @@
     <string name="bt_server_err_host">Gib einen Host an, zum Beispiel bt.example.com</string>
     <string name="bt_server_err_space">Die Adresse darf keine Leerzeichen enthalten</string>
     <string name="bt_server_err_port">Das ist keine gültige Portnummer</string>
-    <string name="bt_login_server">Server: %1$s</string>
 
     <!-- Passwort ändern -->
     <string name="bt_dest_change_password">Passwort ändern</string>
@@ -2265,7 +2264,6 @@
     <string name="bt_settings_default_visibility_sub">Gilt beim Anlegen eines Portfolios. Bestehende behalten ihre eigene Einstellung.</string>
     <string name="bt_settings_visibility_private">Privat</string>
     <string name="bt_settings_visibility_friends">Für Freunde sichtbar</string>
-    <string name="bt_settings_profile_section">Profil</string>
     <string name="bt_settings_profile_icon">Profilsymbol</string>
     <string name="bt_settings_profile_icon_sub">Wird Freunden und in Gruppen neben deinem Namen gezeigt.</string>
     <string name="bt_settings_profile_icon_title">Symbol wählen</string>
@@ -2325,12 +2323,8 @@
     <string name="bt_settings_data_export">Daten exportieren</string>
     <string name="bt_settings_profile_web">Weitere Profileinstellungen</string>
     <string name="bt_settings_passkeys">Passkeys (Anmeldeschlüssel)</string>
-    <string name="bt_settings_web_section">Im Web</string>
-    <string name="bt_settings_web_intro">Verbindungen und Entwicklereinstellungen werden in der Web-App verwaltet.</string>
-    <string name="bt_settings_web_connections">Verbindungen</string>
     <string name="bt_settings_web_api_keys">API-Schlüssel</string>
     <string name="bt_settings_web_oauth_apps">OAuth-Apps</string>
-    <string name="bt_settings_web_authorized_apps">Autorisierte Apps</string>
     <string name="bt_settings_web_webhooks">Webhook-Endpunkte</string>
     <string name="bt_update_snooze_until">Erinnerung pausiert bis %1$s</string>
     <!-- ==== /STREAM-SETTINGS (DE) ==== -->
@@ -2342,4 +2336,86 @@
     <string name="bt_2fa_recovery_download">Codes herunterladen</string>
     <!-- ==== /STREAM-TAX (DE) ==== -->
     <string name="bt_sheet_grabber_cd">Zum Schließen nach unten ziehen</string>
+
+    <!-- ==== SETTINGS CONTROL-CENTER REGROUP (DE) ==== -->
+    <string name="bt_settings_signin_section">Anmeldung &amp; Sicherheit</string>
+    <string name="bt_settings_defaults_section">Standards für neue Portfolios</string>
+    <string name="bt_settings_defaults_intro">Was ein neu erstelltes Portfolio übernimmt. Jedes Portfolio kann das in seinen eigenen Einstellungen überschreiben.</string>
+    <string name="bt_settings_integrations_section">Verbindungen &amp; API</string>
+    <string name="bt_settings_integrations_intro">Was mit deinem Konto verbunden ist.</string>
+    <string name="bt_settings_connections_row">Verbindungen</string>
+    <string name="bt_settings_connections_sub">Google, Drive und künftige Konnektoren</string>
+    <string name="bt_settings_authorized_apps_row">Autorisierte Apps</string>
+    <string name="bt_settings_authorized_apps_sub">Apps, die auf dein Konto zugreifen dürfen</string>
+
+    <!-- ==== CONNECTIONS PANEL (DE) ==== -->
+    <string name="bt_dest_connections">Verbindungen</string>
+    <string name="bt_conn_intro">Alles, was BetterTrack mit der Außenwelt verbindet.</string>
+    <string name="bt_conn_google_title">Google-Konto</string>
+    <string name="bt_conn_google_linked_as">Verknüpft als %s</string>
+    <string name="bt_conn_google_linked_on">Verknüpft am %s</string>
+    <string name="bt_conn_google_not_linked">Nicht verknüpft</string>
+    <string name="bt_conn_google_connect">Google verbinden</string>
+    <string name="bt_conn_google_connect_hint">Das Verbinden wird im Browser abgeschlossen und kehrt dann hierher zurück.</string>
+    <string name="bt_conn_google_unlink">Trennen</string>
+    <string name="bt_conn_google_unlink_title">Google-Konto trennen</string>
+    <string name="bt_conn_google_unlink_body">Gib zur Bestätigung dein Kontopasswort ein.</string>
+    <string name="bt_conn_google_password_label">Passwort</string>
+    <string name="bt_conn_google_confirm_unlink">Google trennen</string>
+    <string name="bt_conn_google_only_method">Google ist derzeit deine einzige Anmeldemöglichkeit und kann daher nicht getrennt werden. Lege zuerst ein Passwort fest.</string>
+    <string name="bt_conn_google_wrong_password">Dieses Passwort ist nicht korrekt.</string>
+    <string name="bt_conn_google_unlinked">Google-Konto getrennt.</string>
+    <string name="bt_conn_drive_title">Google Drive</string>
+    <string name="bt_conn_drive_body">Drive enthält eine Kopie deines verschlüsselten Tresors. Es wird gemeinsam mit deinem übrigen Speicher verwaltet.</string>
+    <string name="bt_conn_slots_title">Weitere Konnektoren</string>
+    <string name="bt_conn_slot_bank_name">Bank- und Bargeldkonten</string>
+    <string name="bt_conn_slot_bank_purpose">Kontostände und Bewegungen von deiner Bank importieren</string>
+    <string name="bt_conn_slot_parqet_name">Parqet</string>
+    <string name="bt_conn_slot_parqet_purpose">Ein bestehendes Parqet-Portfolio übernehmen</string>
+    <string name="bt_conn_sync_one_time">Einmaliger Import</string>
+    <string name="bt_conn_sync_stay">Bleibt verbunden und synchronisiert</string>
+    <string name="bt_conn_coming_soon">Demnächst</string>
+
+    <!-- ==== AUTORISIERTE APPS (DE) ==== -->
+    <string name="bt_dest_authorized_apps">Autorisierte Apps</string>
+    <string name="bt_grants_intro">Apps, denen du Zugriff auf dein Konto gegeben hast. Ein Entzug wirkt sofort; die App muss danach erneut autorisiert werden.</string>
+    <string name="bt_grants_empty">Keine App hat Zugriff auf dein Konto.</string>
+    <string name="bt_grants_can_access">%s darf zugreifen auf</string>
+    <string name="bt_grants_authorized_since">Autorisiert %1$s · zuletzt genutzt %2$s</string>
+    <string name="bt_grants_authorized_never">Autorisiert %s · nie genutzt</string>
+    <string name="bt_grants_revoke">Zugriff entziehen</string>
+    <string name="bt_grants_revoke_confirm">Entziehen</string>
+    <string name="bt_grants_revoking">Wird entzogen…</string>
+    <string name="bt_grants_revoke_failed">Der Zugriff dieser App konnte nicht entzogen werden.</string>
+    <string name="bt_grants_revoked">Zugriff entzogen.</string>
+
+    <!-- OAuth-Berechtigungen, in der Sprache der Zustimmungsseite im Web. -->
+    <string name="bt_scope_portfolio_read">Deine Portfolios, Positionen, Transaktionen und Barbestände ansehen</string>
+    <string name="bt_scope_portfolio_write">Portfolios, Transaktionen, eigene Werte und Bargeld anlegen und bearbeiten</string>
+    <string name="bt_scope_workboard_read">Deine Watchlist, Konglomerate und Backtests ansehen</string>
+    <string name="bt_scope_workboard_write">Deine Watchlist und Konglomerate anlegen und bearbeiten</string>
+    <string name="bt_scope_market_read">Werte suchen und Marktdaten lesen</string>
+    <string name="bt_scope_social_read">Deine Freunde und die mit dir geteilten Inhalte sehen</string>
+    <string name="bt_scope_social_write">Freundschaftsanfragen senden und beantworten sowie deine Freunde verwalten</string>
+    <string name="bt_scope_notifications_read">Deine Benachrichtigungen ansehen</string>
+    <string name="bt_scope_notifications_write">Deine Benachrichtigungen als gelesen markieren und deine Benachrichtigungseinstellungen ändern</string>
+    <string name="bt_scope_chat_read">Deine Nachrichten lesen</string>
+    <string name="bt_scope_chat_write">In deinem Namen Nachrichten senden</string>
+    <string name="bt_scope_account_security">Deine Kontosicherheit verwalten: Sitzungen, Zwei-Faktor, Passwortwechsel und App-PIN</string>
+    <string name="bt_scope_alerts_read">Deine Kursalarme ansehen</string>
+    <string name="bt_scope_alerts_write">Kursalarme anlegen, bearbeiten, neu scharfstellen und löschen</string>
+    <string name="bt_scope_cash_read">Deine Bargeld-Tags, Budgets, Regeln, Auswertungen und Trends ansehen</string>
+    <string name="bt_scope_cash_write">Deine Bargeld-Tags, Budgets und Regeln anlegen und bearbeiten</string>
+    <string name="bt_scope_mirrorchain_read">Deine Gruppenportfolios, Mitglieder, Aktivitäten und Einladungen ansehen</string>
+    <string name="bt_scope_mirrorchain_write">Gruppeneinladungen annehmen oder ablehnen und Gruppenportfolios verlassen</string>
+    <string name="bt_scope_vault_sync">Deinen clientseitig verschlüsselten Tresor über deine Geräte synchronisieren</string>
+
+    <!-- Gemeinsamer Zustand „vom Server noch nicht freigegeben“ (Bearer-Allowlist). -->
+    <string name="bt_cap_web_title">Von diesem Server noch nicht freigegeben</string>
+    <string name="bt_cap_web_body">Dieser Server erlaubt der App diese Verwaltung noch nicht. Im Webportal funktioniert sie, und dieser Bereich arbeitet hier, sobald der Server ihn freigibt — ganz ohne App-Update.</string>
+    <string name="bt_cap_web_open">Im Webportal öffnen</string>
+
+    <!-- ==== EINSTELLUNGEN VOR DER ANMELDUNG (DE) ==== -->
+    <string name="bt_prelogin_intro">Was du vor der Anmeldung einstellen kannst.</string>
+    <string name="bt_login_server_label">Server: %s</string>
 </resources>

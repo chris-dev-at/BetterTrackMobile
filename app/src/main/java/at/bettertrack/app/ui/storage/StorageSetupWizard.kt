@@ -98,6 +98,14 @@ fun StorageSetupWizard(
             // question they may need to answer BEFORE the sign-in they are about
             // to attempt. Leaving it out would mean a fresh install could only
             // reach the setting by first signing in to the wrong backend.
+            //
+            // Wired identically to `BtRoot`'s logged-out branch (owner order
+            // 2026-08-08): the login screen's corner gear opens the pre-login
+            // settings sheet, whose Server row calls `onOpenServer` and swaps the
+            // screen below it — so the wizard's login step and the ordinary login
+            // screen behave the same, which is the whole point of it BEING the
+            // same screen. The back affordance the wizard passes shares that top
+            // row, at the other edge.
             var showServer by remember { mutableStateOf(false) }
             val serverEnabled = ServerOrigins.settingEnabled
             if (serverEnabled && showServer) {

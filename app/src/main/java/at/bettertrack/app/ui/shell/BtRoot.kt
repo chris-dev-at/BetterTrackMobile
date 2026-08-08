@@ -99,11 +99,16 @@ private fun AuthGate(
             val phase by auth.loginPhase.collectAsStateWithLifecycle()
             // The Server screen has to be reachable while LOGGED OUT — you point
             // the app at a backend BEFORE you can sign in to one, and Settings
-            // lives behind the login. In the `github` flavor (debug AND release)
-            // the login screen carries a quiet "Server: <host>" line; the debug
-            // wordmark long-press stays as the old shortcut. The login screen is
-            // rendered outside the NavHost, so this is a plain state swap rather
-            // than a route.
+            // lives behind the login.
+            //
+            // Since the 2026-08-08 owner order the way in is the login screen's
+            // corner gear → the pre-login settings sheet → its Server row, which
+            // calls `onOpenServer` below; the bottom "Server: <host>" line is
+            // display text and no longer a control. The debug wordmark long-press
+            // stays as the old shortcut. The login screen is rendered outside the
+            // NavHost, so this is a plain state swap rather than a route — and
+            // that is also why the sheet drives `BtSheet` directly instead of
+            // being a `btSheet<>` registration.
             var showServer by remember { mutableStateOf(false) }
             val serverEnabled = ServerOrigins.settingEnabled
             if (serverEnabled && showServer) {

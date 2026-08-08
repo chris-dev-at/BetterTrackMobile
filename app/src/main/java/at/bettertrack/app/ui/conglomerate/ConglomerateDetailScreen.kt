@@ -72,6 +72,7 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
@@ -313,7 +314,7 @@ fun ConglomerateDetailScreen(
     ) { pad ->
         val d = detail
         if (d == null) {
-            ConglomerateDetailSkeleton(Modifier.fillMaxSize().padding(pad))
+            BtScrollFill(Modifier.padding(pad)) { ConglomerateDetailSkeleton() }
             return@Scaffold
         }
         LazyColumn(

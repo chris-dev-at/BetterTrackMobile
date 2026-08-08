@@ -5,9 +5,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +34,74 @@ import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.ui.theme.BtTheme
+
+/**
+ * A screen state that fills its sheet **and keeps the sheet dismissable**.
+ *
+ * ## The bug this exists to make unrepeatable
+ *
+ * Every subpage is a full-screen sheet, and a sheet's pull-down dismiss is taken
+ * from `onPostScroll` — i.e. from whatever the *content's* scroll container did
+ * not consume (`BtSheet`). That is the right way to arm the gesture at scroll
+ * top only, and it has one consequence nobody sees while things are working:
+ * **a state with no scroll container dispatches no nested scroll at all**, so
+ * the sheet's connection is never called and the pull-down does nothing.
+ *
+ * Loaded content is always a `LazyColumn`, so the gesture worked in every state
+ * anyone looked at. But [BtEmptyState], [BtErrorState] and [BtOfflineState] all
+ * render through [BtStateScaffold], which is a plain non-scrollable `Column`,
+ * and the screens' skeletons were plain `Column`s too. So *every* subpage was a
+ * gesture dead-end while loading, and again on any surface that reported a
+ * failure — reachable online for a few hundred milliseconds and permanent
+ * offline, where a screen does not pass through those states, it sits in them.
+ * The owner met it from both ends: *"in offline mode it still doesn't work"*,
+ * and *"if pages are still loading … you can't scroll while the skeleton loader
+ * is showing."*
+ *
+ * Two screens had already found this and fixed it privately, with a one-item
+ * `LazyColumn` each (`EmptyFill`, `HoldingStateFill`). This is that idiom, named
+ * and shared, so the next state does not have to rediscover it.
+ *
+ * Use this for states that are *centred and viewport-sized* — empty, error,
+ * offline, not-found. Use [BtScrollFill] for skeletons, which are top-aligned
+ * and may be taller than the screen.
+ */
+@Composable
+fun BtStateFill(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    // A LazyColumn rather than `Modifier.verticalScroll`: `fillParentMaxSize` is
+    // what keeps the state exactly one viewport tall and therefore centred, and
+    // it has no `verticalScroll` equivalent — that modifier measures its child
+    // with an unbounded height, which is precisely what centring cannot survive.
+    LazyColumn(modifier.fillMaxSize()) {
+        item {
+            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) { content() }
+        }
+    }
+}
+
+/**
+ * A top-aligned screen state that keeps the sheet dismissable — the skeleton
+ * counterpart of [BtStateFill].
+ *
+ * Skeletons are lists, not centred statements: they start at the top, they are
+ * often taller than the viewport, and clipping them to one screen (as
+ * [BtStateFill] deliberately does) would be wrong. So this scrolls properly
+ * instead of pinning to the viewport, and dispatches nested scroll either way —
+ * which is the whole point, since a skeleton is exactly the state a user is
+ * most likely to want to back out of.
+ */
+@Composable
+fun BtScrollFill(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    LazyColumn(modifier.fillMaxSize()) {
+        item { Column(content = content) }
+    }
+}
 
 /**
  * The shared "state" scaffold behind every empty/error surface (spec §6.13): a

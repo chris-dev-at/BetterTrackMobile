@@ -65,9 +65,13 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.portfolio.formatQuantity
+import at.bettertrack.app.ui.shell.BT_REFRESH_TIMEOUT_MS
+import at.bettertrack.app.ui.shell.btRefreshAttempt
+import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.util.Locale
@@ -77,6 +81,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * V5 S2c-2 — **portfolio-wide market intel**: what's about to happen across
@@ -233,21 +238,45 @@ class MarketIntelViewModel(private val repo: MarketIntelRepository) : ViewModel(
      */
     private fun loadAll(showSkeletons: Boolean) {
         viewModelScope.launch {
-            if (showSkeletons) _state.value = MarketIntelUiState() else _refreshing.value = true
-            coroutineScope {
-                val earnings = async { intelBlockOf(repo.earningsCalendar()) { it.available } }
-                val dividends = async { intelBlockOf(repo.dividendCalendar()) { it.available } }
-                val projection = async { intelBlockOf(repo.dividendProjection()) { it.available } }
-                val digest = async { intelBlockOf(repo.newsDigest()) { it.available } }
-                _state.value = MarketIntelUiState(
-                    earnings = earnings.await(),
-                    dividends = dividends.await(),
-                    projection = projection.await(),
-                    digest = digest.await(),
-                )
+            if (showSkeletons) _state.value = MarketIntelUiState()
+            val loaded = if (showSkeletons) {
+                // The FIRST load's indicator is the skeletons, which are already on
+                // screen. Routing it through the pull indicator as well would put a
+                // spinner over them — the same news twice, and a visible change to
+                // a path the offline bug never touched. It still gets the ceiling.
+                withTimeoutOrNull(BT_REFRESH_TIMEOUT_MS) { readAll() }
+            } else {
+                btRefreshAttempt(_refreshing) { readAll() }
             }
-            _refreshing.value = false
+            // The ceiling. Four sections that never answered are four failures,
+            // each with the retry it would have got from a refused connection —
+            // NOT four `Loading` blocks left spinning forever, which is what
+            // dropping the timed-out attempt on the floor would leave behind.
+            _state.value = loaded ?: MarketIntelUiState(
+                earnings = IntelBlockUi.Failed(btRefreshTimedOutMessage()),
+                dividends = IntelBlockUi.Failed(btRefreshTimedOutMessage()),
+                projection = IntelBlockUi.Failed(btRefreshTimedOutMessage()),
+                digest = IntelBlockUi.Failed(btRefreshTimedOutMessage()),
+            )
         }
+    }
+
+    /**
+     * All four reads, in parallel. Extracted so the first load and a pull share
+     * one definition of "read everything" — they differ only in which indicator
+     * they raise, and that difference belongs at the call site.
+     */
+    private suspend fun readAll(): MarketIntelUiState = coroutineScope {
+        val earnings = async { intelBlockOf(repo.earningsCalendar()) { it.available } }
+        val dividends = async { intelBlockOf(repo.dividendCalendar()) { it.available } }
+        val projection = async { intelBlockOf(repo.dividendProjection()) { it.available } }
+        val digest = async { intelBlockOf(repo.newsDigest()) { it.available } }
+        MarketIntelUiState(
+            earnings = earnings.await(),
+            dividends = dividends.await(),
+            projection = projection.await(),
+            digest = digest.await(),
+        )
     }
 
     /** Put one section back into Loading, re-read only it, and drop it back in. */
@@ -313,18 +342,23 @@ fun MarketIntelScreen(onBack: () -> Unit, onOpenAsset: (String) -> Unit) {
                 // Retry (IntelInlineError); the whole-screen one did not, so the
                 // only cure for "all four probes came back unavailable" was to
                 // leave the screen and come back.
-                BtEmptyState(
-                    modifier = Modifier.align(Alignment.Center),
-                    icon = Icons.Outlined.Summarize,
-                    title = stringResource(R.string.bt_intel_unavailable_title),
-                    message = stringResource(R.string.bt_intel_unavailable_message),
-                    action = {
-                        BtSecondaryButton(
-                            text = stringResource(R.string.bt_action_retry),
-                            onClick = { vm.retryAll() },
-                        )
-                    },
-                )
+                // BtStateFill: this branch returns before the PullToRefreshBox is
+                // ever composed, so it is the one surface on this screen with no
+                // scroll container of its own — and therefore the one the sheet
+                // could not be pulled closed from.
+                BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Summarize,
+                        title = stringResource(R.string.bt_intel_unavailable_title),
+                        message = stringResource(R.string.bt_intel_unavailable_message),
+                        action = {
+                            BtSecondaryButton(
+                                text = stringResource(R.string.bt_action_retry),
+                                onClick = { vm.retryAll() },
+                            )
+                        },
+                    )
+                }
                 return@Box
             }
 

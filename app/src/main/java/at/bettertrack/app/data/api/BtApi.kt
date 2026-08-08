@@ -132,6 +132,8 @@ import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionsResponse
 import at.bettertrack.app.data.api.dto.DeregisterDeviceRequest
 import at.bettertrack.app.data.api.dto.DeviceAckResponse
+import at.bettertrack.app.data.api.dto.GoogleLinkStatusResponse
+import at.bettertrack.app.data.api.dto.GoogleUnlinkRequest
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
 import at.bettertrack.app.data.api.dto.MarkReadIdsRequest
 import at.bettertrack.app.data.api.dto.MeResponse
@@ -231,13 +233,53 @@ interface BtApi {
     @POST("auth/pin/verify")
     suspend fun pinVerify(@Body body: PinVerifyRequest): Response<PinVerifyResponse>
 
-    /** Apps the user has authorized — used to find our grant for logout revocation. */
+    /**
+     * Apps the user has authorized — the **Authorized apps** screen's whole read,
+     * and the lookup that finds our own grant for logout revocation.
+     *
+     * Session-only on the platform's bearer allowlist today, so this answers a
+     * bearer with `403 API_KEY_FORBIDDEN`. That is not a bug to route around: it
+     * is the capability signal
+     * [at.bettertrack.app.data.repo.ConnectionsRepository.authorizedApps] probes
+     * on, which is what lets the screen render its designed "not released yet"
+     * state and light up on a platform config flip with no app release.
+     */
     @GET("settings/oauth-grants")
     suspend fun oauthGrants(): Response<OAuthGrantListResponse>
 
     /** Revoke an authorized app; kills its access + refresh tokens instantly. */
     @DELETE("settings/oauth-grants/{id}")
     suspend fun revokeOAuthGrant(@Path("id") id: String): Response<Unit>
+
+    /**
+     * The account's Google sign-in identity (§13.4 V4-P4b) — the Connections
+     * screen's Google group.
+     *
+     * Three answers matter and they are all different: a **200** carries the
+     * status; a **404** means this deployment has no Google client configured at
+     * all (the group renders nothing, exactly as the web panel does); a **403**
+     * is the bearer allowlist refusing the route, which the app renders as its
+     * "manage on the web" state rather than as an error. [account:security]
+     */
+    @GET("auth/google/link-status")
+    suspend fun googleLinkStatus(): Response<GoogleLinkStatusResponse>
+
+    /**
+     * Remove the Google link after a password re-auth. `409 GOOGLE_ONLY_SIGN_IN`
+     * while Google is the account's only usable sign-in method — pre-empted by
+     * `canUnlink`, but still handled, because the status can go stale.
+     *
+     * `X-Bt-No-Reauth` for the same reason [pinVerify] carries it: **a 401 here
+     * is a domain answer** ("that password is not correct"), not an expired
+     * access token. Without it [TokenAuthenticator] would refresh and silently
+     * re-submit the wrong password against the server's re-auth limiter, and the
+     * user would be told nothing. The access token is proactively refreshed
+     * before the call by [AuthInterceptor], so a genuine expiry landing here is
+     * not the case this trades away. [account:security]
+     */
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/google/unlink")
+    suspend fun unlinkGoogle(@Body body: GoogleUnlinkRequest): Response<Unit>
 
     // ── Step 5: portfolio-scope reads (network → Room, spec §7.1) ────────────
     // NOTE: the OpenAPI's per-route `security` metadata claims sessionCookie-

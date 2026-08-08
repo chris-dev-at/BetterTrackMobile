@@ -1,7 +1,6 @@
 package at.bettertrack.app.ui.ideas
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -38,7 +37,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -71,7 +69,9 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.social.ItemThreadSection
 import at.bettertrack.app.ui.theme.BtTheme
@@ -297,22 +297,20 @@ fun IdeaDetailScreen(ideaId: String, onBack: () -> Unit, onOpenAsset: (String) -
         },
     ) { pad ->
         when (val s = state) {
-            IdeaDetailUiState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(pad)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                BtSkeleton(Modifier.fillMaxWidth().height(96.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+            IdeaDetailUiState.Loading -> BtScrollFill(Modifier.padding(pad)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BtSkeleton(Modifier.fillMaxWidth().height(96.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp))
+                }
             }
 
-            IdeaDetailUiState.Gone -> Box(
-                Modifier.fillMaxSize().padding(pad),
-                contentAlignment = Alignment.Center,
-            ) {
+            IdeaDetailUiState.Gone -> BtStateFill(Modifier.padding(pad)) {
                 BtEmptyState(
                     icon = Icons.Outlined.Lightbulb,
                     title = stringResource(R.string.bt_ideas_gone_title),
@@ -320,10 +318,7 @@ fun IdeaDetailScreen(ideaId: String, onBack: () -> Unit, onOpenAsset: (String) -
                 )
             }
 
-            is IdeaDetailUiState.Failed -> Box(
-                Modifier.fillMaxSize().padding(pad),
-                contentAlignment = Alignment.Center,
-            ) {
+            is IdeaDetailUiState.Failed -> BtStateFill(Modifier.padding(pad)) {
                 BtErrorState(message = s.message, onRetry = { vm.load() })
             }
 

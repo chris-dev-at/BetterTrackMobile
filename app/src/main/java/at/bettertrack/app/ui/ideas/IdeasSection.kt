@@ -85,7 +85,9 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtTheme
@@ -250,34 +252,38 @@ internal fun IdeasSection(
 
     Box(modifier.fillMaxSize()) {
         when (val s = state) {
-            IdeasUiState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+            IdeasUiState.Loading -> BtScrollFill {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+                }
             }
 
-            is IdeasUiState.Failed -> BtErrorState(
-                message = s.message,
-                onRetry = { vm.load() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            is IdeasUiState.Failed -> BtStateFill {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = { vm.load() },
+                )
+            }
 
             is IdeasUiState.Loaded -> if (s.ideas.isEmpty()) {
-                BtEmptyState(
-                    icon = Icons.Outlined.Lightbulb,
-                    title = stringResource(R.string.bt_ideas_empty_title),
-                    message = stringResource(R.string.bt_ideas_empty_message),
-                    action = {
-                        BtPrimaryButton(
-                            text = stringResource(R.string.bt_ideas_create),
-                            onClick = { createOpen = true },
-                        )
-                    },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Lightbulb,
+                        title = stringResource(R.string.bt_ideas_empty_title),
+                        message = stringResource(R.string.bt_ideas_empty_message),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_ideas_create),
+                                onClick = { createOpen = true },
+                            )
+                        },
+                    )
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

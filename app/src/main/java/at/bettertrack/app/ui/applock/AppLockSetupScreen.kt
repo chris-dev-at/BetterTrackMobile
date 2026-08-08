@@ -58,6 +58,7 @@ import at.bettertrack.app.data.applock.fixedPinLengthFor
 import at.bettertrack.app.data.applock.shouldOfferBetterTrackPin
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -327,10 +328,7 @@ fun AppLockSetupScreen(
         if (phase == SetupPhase.Loading) {
             // GET /auth/pin/status in flight — a brief loading state (never a
             // chooser/option flash) until the resolved path is known.
-            Box(
-                modifier = Modifier.fillMaxSize().padding(pad),
-                contentAlignment = Alignment.Center,
-            ) {
+            BtStateFill(modifier = Modifier.padding(pad)) {
                 CircularProgressIndicator(color = bt.gold)
             }
             return@Scaffold
@@ -339,76 +337,87 @@ fun AppLockSetupScreen(
         if (phase == SetupPhase.Choose) {
             // Reached only once the status resolved to a usable web PIN, so BOTH
             // options always show and the chooser STAYS until the user picks.
-            ChooseSourceContent(
-                modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 24.dp),
-                onPick = { source ->
-                    pinSource = source
-                    entered = ""
-                    firstPin = ""
-                    phase = SetupPhase.Enter
-                },
-            )
+            BtStateFill(modifier = Modifier.padding(pad)) {
+                ChooseSourceContent(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                    onPick = { source ->
+                        pinSource = source
+                        entered = ""
+                        firstPin = ""
+                        phase = SetupPhase.Enter
+                    },
+                )
+            }
             return@Scaffold
         }
 
         // Bottom-weighted keypad layout (Step-17 refinement): prompt up top, the
         // pad anchored low in the comfortable one-handed thumb zone.
-        Column(
-            modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = stringResource(titleRes),
-                style = MaterialTheme.typography.titleMedium,
-                color = bt.textPrimary,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(hintRes),
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(28.dp))
-
-            Box(modifier = Modifier.offset { IntOffset(shakeX.value.roundToInt(), 0) }) {
-                PinDots(filled = entered.length, total = totalDots, error = errorRes != null)
-            }
-
-            Box(Modifier.height(36.dp).padding(top = 12.dp), contentAlignment = Alignment.Center) {
-                when {
-                    verifying -> Text(
-                        stringResource(R.string.bt_applock_bt_verifying),
-                        color = bt.textMuted,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    errorRes != null -> Text(
-                        stringResource(errorRes!!),
-                        color = bt.loss,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-            Spacer(Modifier.weight(0.55f))
-
-            PinKeypad(onDigit = onDigit, onBackspace = onBackspace, enabled = !inputBlocked)
-
-            Spacer(Modifier.height(20.dp))
-            // Explicit Continue only in the variable-length device "choose a PIN"
-            // phase; fixed-length phases (BetterTrack / confirm / verify) auto-submit.
-            if (phase == SetupPhase.Enter && fixedLen == null) {
-                BtPrimaryButton(
-                    text = stringResource(R.string.bt_applock_continue),
-                    onClick = { onComplete(entered) },
-                    enabled = entered.length in PIN_MIN_LENGTH..PIN_MAX_LENGTH && !inputBlocked,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+        //
+        // Wrapped in [BtStateFill] rather than [BtScrollFill]: both arm the
+        // sheet's pull-down (which needs SOME scroll container to dispatch
+        // nested scroll), but only [BtStateFill] hands its child a viewport-sized
+        // parent with a bounded height — and this layout is built out of
+        // `weight()` spacers, which collapse to nothing under the unbounded
+        // height a plain scrolling column would give them.
+        BtStateFill(modifier = Modifier.padding(pad)) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = stringResource(titleRes),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = bt.textPrimary,
+                    textAlign = TextAlign.Center,
                 )
-            } else {
-                Spacer(Modifier.height(48.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(hintRes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(28.dp))
+
+                Box(modifier = Modifier.offset { IntOffset(shakeX.value.roundToInt(), 0) }) {
+                    PinDots(filled = entered.length, total = totalDots, error = errorRes != null)
+                }
+
+                Box(Modifier.height(36.dp).padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                    when {
+                        verifying -> Text(
+                            stringResource(R.string.bt_applock_bt_verifying),
+                            color = bt.textMuted,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        errorRes != null -> Text(
+                            stringResource(errorRes!!),
+                            color = bt.loss,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(0.55f))
+
+                PinKeypad(onDigit = onDigit, onBackspace = onBackspace, enabled = !inputBlocked)
+
+                Spacer(Modifier.height(20.dp))
+                // Explicit Continue only in the variable-length device "choose a PIN"
+                // phase; fixed-length phases (BetterTrack / confirm / verify) auto-submit.
+                if (phase == SetupPhase.Enter && fixedLen == null) {
+                    BtPrimaryButton(
+                        text = stringResource(R.string.bt_applock_continue),
+                        onClick = { onComplete(entered) },
+                        enabled = entered.length in PIN_MIN_LENGTH..PIN_MAX_LENGTH && !inputBlocked,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                    )
+                } else {
+                    Spacer(Modifier.height(48.dp))
+                }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(12.dp))
         }
     }
 

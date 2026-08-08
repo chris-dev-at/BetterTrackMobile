@@ -64,6 +64,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.market.assetTypeLabel
@@ -240,7 +241,7 @@ fun ConglomerateBuilderScreen(
         },
     ) { pad ->
         if (loading) {
-            BuilderSkeleton(Modifier.fillMaxSize().padding(pad))
+            BtScrollFill(Modifier.padding(pad)) { BuilderSkeleton() }
             return@Scaffold
         }
         LazyColumn(

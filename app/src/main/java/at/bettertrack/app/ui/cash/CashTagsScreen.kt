@@ -75,7 +75,9 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -267,33 +269,37 @@ fun CashTagsScreen(onBack: () -> Unit) {
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
                 // Nothing cached yet and the first refresh is still in flight.
-                tags.isEmpty() && loading -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    repeat(5) { BtSkeleton(Modifier.fillMaxWidth().height(56.dp)) }
+                tags.isEmpty() && loading -> BtScrollFill {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        repeat(5) { BtSkeleton(Modifier.fillMaxWidth().height(56.dp)) }
+                    }
                 }
 
                 // Nothing cached and the refresh failed — the only true error state.
-                tags.isEmpty() && loadError != null -> BtErrorState(
-                    modifier = Modifier.align(Alignment.Center),
-                    title = stringResource(R.string.bt_tags_error_title),
-                    message = loadError,
-                    onRetry = { vm.refresh() },
-                )
+                tags.isEmpty() && loadError != null -> BtStateFill {
+                    BtErrorState(
+                        title = stringResource(R.string.bt_tags_error_title),
+                        message = loadError,
+                        onRetry = { vm.refresh() },
+                    )
+                }
 
-                tags.isEmpty() -> BtEmptyState(
-                    modifier = Modifier.align(Alignment.Center),
-                    icon = Icons.Outlined.Sell,
-                    title = stringResource(R.string.bt_tags_empty_title),
-                    message = stringResource(R.string.bt_tags_empty_message),
-                    action = {
-                        BtPrimaryButton(
-                            text = stringResource(R.string.bt_tags_new),
-                            onClick = { sheet = CashTagSheetTarget.New },
-                        )
-                    },
-                )
+                tags.isEmpty() -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Sell,
+                        title = stringResource(R.string.bt_tags_empty_title),
+                        message = stringResource(R.string.bt_tags_empty_message),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_tags_new),
+                                onClick = { sheet = CashTagSheetTarget.New },
+                            )
+                        },
+                    )
+                }
 
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),

@@ -105,6 +105,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.btPressScale
@@ -1311,7 +1312,7 @@ fun TransactionFormScreen(
             }
 
             if (loading) {
-                FormSkeleton()
+                BtScrollFill { FormSkeleton() }
                 return@Column
             }
 

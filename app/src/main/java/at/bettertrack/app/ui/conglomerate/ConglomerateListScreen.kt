@@ -54,6 +54,7 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,36 +110,40 @@ fun ConglomerateListScreen(
 
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
-            ConglomerateListState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            ConglomerateListState.Loading -> BtStateFill {
                 CircularProgressIndicator(color = bt.gold)
             }
 
-            ConglomerateListState.OfflineState -> BtOfflineState(
-                message = stringResource(R.string.bt_conglo_requires_connection),
-                onRetry = { vm.load() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            ConglomerateListState.OfflineState -> BtStateFill {
+                BtOfflineState(
+                    message = stringResource(R.string.bt_conglo_requires_connection),
+                    onRetry = { vm.load() },
+                )
+            }
 
-            is ConglomerateListState.Error -> BtErrorState(
-                message = s.message,
-                onRetry = { vm.load() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            is ConglomerateListState.Error -> BtStateFill {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = { vm.load() },
+                )
+            }
 
             is ConglomerateListState.Loaded -> if (s.items.isEmpty()) {
-                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    BtEmptyState(
-                        icon = Icons.Outlined.Dashboard,
-                        title = stringResource(R.string.bt_conglo_empty_title),
-                        message = stringResource(R.string.bt_conglo_empty_message),
-                        action = {
-                            BtPrimaryButton(
-                                text = stringResource(R.string.bt_conglo_create),
-                                onClick = onCreate,
-                                enabled = isOnline,
-                            )
-                        },
-                    )
+                BtStateFill {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        BtEmptyState(
+                            icon = Icons.Outlined.Dashboard,
+                            title = stringResource(R.string.bt_conglo_empty_title),
+                            message = stringResource(R.string.bt_conglo_empty_message),
+                            action = {
+                                BtPrimaryButton(
+                                    text = stringResource(R.string.bt_conglo_create),
+                                    onClick = onCreate,
+                                    enabled = isOnline,
+                                )
+                            },
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

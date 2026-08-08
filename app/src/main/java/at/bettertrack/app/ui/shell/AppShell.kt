@@ -1,24 +1,24 @@
 package at.bettertrack.app.ui.shell
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
@@ -77,6 +77,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.ActiveSessionsRoute
 import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
+import at.bettertrack.app.navigation.AuthorizedAppsRoute
 import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.CashRulesRoute
@@ -88,6 +89,7 @@ import at.bettertrack.app.navigation.ChatListRoute
 import at.bettertrack.app.navigation.ChatThreadRoute
 import at.bettertrack.app.navigation.ConglomerateBuilderRoute
 import at.bettertrack.app.navigation.ConglomerateDetailRoute
+import at.bettertrack.app.navigation.ConnectionsRoute
 import at.bettertrack.app.navigation.CustomAssetDetailRoute
 import at.bettertrack.app.navigation.CustomAssetsRoute
 import at.bettertrack.app.navigation.DeleteAccountRoute
@@ -111,10 +113,10 @@ import at.bettertrack.app.navigation.SettingsSecurityRoute
 import at.bettertrack.app.navigation.SharedConglomerateViewRoute
 import at.bettertrack.app.navigation.SharedPortfolioViewRoute
 import at.bettertrack.app.navigation.SharedWatchlistViewRoute
+import at.bettertrack.app.navigation.SheetRootRoute
 import at.bettertrack.app.navigation.StandingOrdersRoute
 import at.bettertrack.app.navigation.StorageHomeRoute
 import at.bettertrack.app.navigation.SyncDebugRoute
-import at.bettertrack.app.navigation.SheetRootRoute
 import at.bettertrack.app.navigation.TabTap
 import at.bettertrack.app.navigation.TaxSettingsRoute
 import at.bettertrack.app.navigation.TaxYearRoute
@@ -372,7 +374,27 @@ fun BtApp() {
     val pagerState = rememberBtTabPagerState(tabOrder, BtTab.Portfolio)
     val tabScopes = rememberBtTabScopes()
     val live = remember { BtTabLiveSet(tabOrder.getOrNull(pagerState.currentPage)) }
-    val sheets = remember(navController) { BtSheetHostState { navController.popBackStack() } }
+    val sheets = remember(navController) {
+        BtSheetHostState(
+            pop = { navController.popBackStack() },
+            // Stage two of the two-stage dismiss: everything goes, in one move,
+            // back to the empty floor the pager shows through.
+            popAll = { navController.popBackStack(SheetRootRoute, inclusive = false) },
+            // Is the entry UNDER the open sheet another sheet, or the empty
+            // floor? That is the whole question — it decides whether swiping down
+            // CLOSES a subpage or goes back one level — and it has to be the
+            // graph's answer rather than composition's so it survives a rotation.
+            //
+            // `previousBackStackEntry` and not `currentBackStack`: the latter is
+            // `@RestrictTo` library-group API, which lint rejects outright. The
+            // public one happens to ask the narrower question, which is the only
+            // one this needs.
+            sheetBelow = {
+                val below = navController.previousBackStackEntry?.destination
+                below != null && !below.hasRoute(SheetRootRoute::class)
+            },
+        )
+    }
 
     // The tab the pager has SETTLED on. Deliberately `settledPage` and not
     // `currentPage`: this drives the header's per-tab scroll state and the badge
@@ -1589,6 +1611,8 @@ private fun BtSheetHost(
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
                 onOpenServer = { navController.navigate(ServerRoute) },
+                onOpenConnections = { navController.navigate(ConnectionsRoute) },
+                onOpenAuthorizedApps = { navController.navigate(AuthorizedAppsRoute) },
             )
         }
         btSheet<ChangelogRoute> { ChangelogScreen(onBack = back) }
@@ -1690,6 +1714,18 @@ private fun BtSheetHost(
         btSheet<SettingsLanguageRoute> { LanguageScreen(onBack = back) }
         btSheet<SettingsAboutRoute> {
             AboutScreen(onBack = back, onOpenChangelog = { navController.navigate(ChangelogRoute) })
+        }
+        // Connections & authorized apps, native (owner order 2026-08-08). Drive
+        // is NOT reimplemented here — the Connections screen hands off in-app to
+        // "Where your data lives", which already owns the vault's media set.
+        btSheet<ConnectionsRoute> {
+            at.bettertrack.app.ui.connections.ConnectionsScreen(
+                onBack = back,
+                onOpenDataHome = { navController.navigate(StorageHomeRoute) },
+            )
+        }
+        btSheet<AuthorizedAppsRoute> {
+            at.bettertrack.app.ui.connections.AuthorizedAppsScreen(onBack = back)
         }
         btSheet<ChangePasswordRoute> { ChangePasswordScreen(onBack = back) }
         btSheet<TwoFactorRoute> { TwoFactorScreen(onBack = back) }

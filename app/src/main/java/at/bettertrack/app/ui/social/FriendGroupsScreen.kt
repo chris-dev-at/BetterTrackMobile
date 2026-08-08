@@ -76,7 +76,9 @@ import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -355,20 +357,23 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
         // BtMessage now, and BtErrorState takes it non-null.
         val loadError = ui.error
         when {
-            ui.loading -> Column(
-                modifier = Modifier.fillMaxSize().padding(pad).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                BtSkeleton(Modifier.fillMaxWidth().height(48.dp), shape = BtShapes.control)
-                repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card) }
+            ui.loading -> BtScrollFill(Modifier.padding(pad)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    BtSkeleton(Modifier.fillMaxWidth().height(48.dp), shape = BtShapes.control)
+                    repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(68.dp), shape = BtShapes.card) }
+                }
             }
 
-            loadError != null && ui.groups.isEmpty() -> BtErrorState(
-                title = stringResource(R.string.bt_groups_error_title),
-                message = loadError,
-                onRetry = { vm.load() },
-                modifier = Modifier.fillMaxSize().padding(pad),
-            )
+            loadError != null && ui.groups.isEmpty() -> BtStateFill(Modifier.padding(pad)) {
+                BtErrorState(
+                    title = stringResource(R.string.bt_groups_error_title),
+                    message = loadError,
+                    onRetry = { vm.load() },
+                )
+            }
 
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(pad),

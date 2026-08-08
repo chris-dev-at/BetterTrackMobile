@@ -98,8 +98,10 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.customassets.dialogFieldColors
@@ -108,6 +110,9 @@ import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
+import at.bettertrack.app.ui.shell.BT_REFRESH_MIN_VISIBLE_MS
+import at.bettertrack.app.ui.shell.btRefreshAttempt
+import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.math.BigDecimal
@@ -365,8 +370,19 @@ class StandingOrdersViewModel(
 
     private fun load(pid: String, initial: Boolean) {
         viewModelScope.launch {
-            if (initial) _loading.value = true else _refreshing.value = true
-            when (val r = repo.list(pid)) {
+            // The FIRST load drives the skeleton, a pull drives the indicator —
+            // and only the indicator is the sheet's gesture problem, so only it
+            // goes through the bounded attempt. The skeleton branch keeps its own
+            // flag, retired in the same `finally` either way.
+            val flag = if (initial) _loading else _refreshing
+            val attempt = btRefreshAttempt(
+                refreshing = flag,
+                // The floor exists to make a PULL legible. A first load already
+                // has a skeleton saying the same thing, so holding it open for a
+                // minimum would only slow a path the offline bug never touched.
+                minVisibleMs = if (initial) 0L else BT_REFRESH_MIN_VISIBLE_MS,
+            ) { repo.list(pid) }
+            when (val r = attempt) {
                 is BtResult.Ok -> {
                     _orders.value = sortStandingOrders(r.value)
                     _loadError.value = null
@@ -378,9 +394,14 @@ class StandingOrdersViewModel(
                 } else {
                     _rowError.value = r.error.asMessage()
                 }
+                // The ceiling — the same routing, because a request the app gave
+                // up on is a failed request.
+                null -> if (initial) {
+                    _loadError.value = btRefreshTimedOutMessage()
+                } else {
+                    _rowError.value = btRefreshTimedOutMessage()
+                }
             }
-            _loading.value = false
-            _refreshing.value = false
         }
     }
 
@@ -566,12 +587,18 @@ fun StandingOrdersScreen(
             when {
                 loading && orders.isEmpty() -> LoadingList()
 
-                listFailure != null && orders.isEmpty() -> BtErrorState(
-                    modifier = Modifier.fillMaxSize(),
-                    title = stringResource(R.string.bt_so_error_title),
-                    message = listFailure,
-                    onRetry = { vm.retry() },
-                )
+                // BtStateFill: this branch replaces the PullToRefreshBox entirely,
+                // so without a scroll container of its own the sheet would have no
+                // nested-scroll chain at all here — the state a user reaches by
+                // opening this page offline would be the one they cannot pull
+                // closed.
+                listFailure != null && orders.isEmpty() -> BtStateFill {
+                    BtErrorState(
+                        title = stringResource(R.string.bt_so_error_title),
+                        message = listFailure,
+                        onRetry = { vm.retry() },
+                    )
+                }
 
                 else -> {
                     val pullState = rememberPullToRefreshState()
@@ -754,12 +781,17 @@ fun StandingOrdersScreen(
 
 @Composable
 private fun LoadingList() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        BtSkeleton(Modifier.width(220.dp).height(14.dp))
-        repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+    // BtScrollFill: the skeleton is the whole screen while the first list is out,
+    // and offline that is where the screen STAYS. A plain Column here is a sheet
+    // with no pull-down dismiss for as long as the network stays away.
+    BtScrollFill {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            BtSkeleton(Modifier.width(220.dp).height(14.dp))
+            repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+        }
     }
 }
 

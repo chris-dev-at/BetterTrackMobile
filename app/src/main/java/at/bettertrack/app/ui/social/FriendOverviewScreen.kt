@@ -73,6 +73,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtOfflineState
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
@@ -338,18 +339,20 @@ fun FriendOverviewScreen(
             // A skeleton in the SHAPE of the screen (avatar, chat row, share
             // rows), not a spinner: the layout is known before the data is, so
             // the wait can be spent showing where things will land.
-            Column(
-                modifier = Modifier.fillMaxSize().padding(pad).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Spacer(Modifier.height(8.dp))
-                BtSkeleton(Modifier.size(72.dp), shape = CircleShape)
-                Spacer(Modifier.height(2.dp))
-                BtSkeleton(Modifier.width(140.dp).height(20.dp))
-                Spacer(Modifier.height(6.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(52.dp), shape = BtShapes.card)
-                repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(88.dp), shape = BtShapes.card) }
+            BtScrollFill(Modifier.padding(pad)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Spacer(Modifier.height(8.dp))
+                    BtSkeleton(Modifier.size(72.dp), shape = CircleShape)
+                    Spacer(Modifier.height(2.dp))
+                    BtSkeleton(Modifier.width(140.dp).height(20.dp))
+                    Spacer(Modifier.height(6.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(52.dp), shape = BtShapes.card)
+                    repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(88.dp), shape = BtShapes.card) }
+                }
             }
             return@Scaffold
         }

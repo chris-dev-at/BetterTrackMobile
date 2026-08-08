@@ -90,7 +90,9 @@ import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.conglomerate.ConglomerateListScreen
@@ -497,41 +499,46 @@ private fun AlertsSection(vm: AlertsViewModel, onOpenAsset: (String) -> Unit) {
             // skeletons, so a user scrolling this screen watched two loading
             // idioms fight each other. Row-shaped, because alert rows are what
             // is coming.
-            AlertsState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+            AlertsState.Loading -> BtScrollFill {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(76.dp)) }
+                }
             }
 
-            AlertsState.OfflineState -> BtOfflineState(
-                message = stringResource(R.string.bt_alerts_requires_connection),
-                onRetry = { vm.load() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            AlertsState.OfflineState -> BtStateFill {
+                BtOfflineState(
+                    message = stringResource(R.string.bt_alerts_requires_connection),
+                    onRetry = { vm.load() },
+                )
+            }
 
-            is AlertsState.Error -> BtErrorState(
-                message = s.message,
-                onRetry = { vm.load() },
-                modifier = Modifier.align(Alignment.Center),
-            )
+            is AlertsState.Error -> BtStateFill {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = { vm.load() },
+                )
+            }
 
             is AlertsState.Loaded -> if (s.items.isEmpty()) {
-                BtEmptyState(
-                    icon = Icons.Outlined.NotificationsActive,
-                    title = stringResource(R.string.bt_alerts_empty_title),
-                    message = stringResource(R.string.bt_alerts_empty_message),
-                    action = {
-                        BtPrimaryButton(
-                            text = stringResource(R.string.bt_alert_create_action),
-                            onClick = { createOpen = true },
-                            enabled = isOnline,
-                        )
-                    },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.NotificationsActive,
+                        title = stringResource(R.string.bt_alerts_empty_title),
+                        message = stringResource(R.string.bt_alerts_empty_message),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_alert_create_action),
+                                onClick = { createOpen = true },
+                                enabled = isOnline,
+                            )
+                        },
+                    )
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

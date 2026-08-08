@@ -108,6 +108,7 @@ import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSectionHeader
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.BtPrimaryButton
@@ -391,20 +392,23 @@ fun SocialScreen(
                 // BtMessage now, and BtErrorState takes it non-null.
                 val loadError = ui.error
                 when {
-                    ui.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ui.loading -> BtStateFill {
                         CircularProgressIndicator(color = bt.gold)
                     }
-                    !ui.online && ui.friends.isEmpty() && ui.sharedWithMe == null -> BtOfflineState(
-                        title = stringResource(R.string.bt_social_offline_title),
-                        message = stringResource(R.string.bt_social_offline_body),
-                        onRetry = { vm.load(initial = true) },
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                    )
-                    loadError != null && ui.friends.isEmpty() -> BtErrorState(
-                        message = loadError,
-                        onRetry = { vm.load(initial = true) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    !ui.online && ui.friends.isEmpty() && ui.sharedWithMe == null -> BtStateFill {
+                        BtOfflineState(
+                            title = stringResource(R.string.bt_social_offline_title),
+                            message = stringResource(R.string.bt_social_offline_body),
+                            onRetry = { vm.load(initial = true) },
+                            modifier = Modifier.padding(24.dp),
+                        )
+                    }
+                    loadError != null && ui.friends.isEmpty() -> BtStateFill {
+                        BtErrorState(
+                            message = loadError,
+                            onRetry = { vm.load(initial = true) },
+                        )
+                    }
                     else -> when (section) {
                         SocialSection.Friends -> FriendsSection(
                             ui = ui,
@@ -823,12 +827,14 @@ private fun SentRequestRow(req: FriendRequest, onCancel: () -> Unit) {
 @Composable
 private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, String) -> Unit) {
     if (shared == null || shared.isEmpty) {
-        BtEmptyState(
-            icon = Icons.Outlined.People,
-            title = stringResource(R.string.bt_social_swm_empty_title),
-            message = stringResource(R.string.bt_social_swm_empty_body),
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-        )
+        BtStateFill {
+            BtEmptyState(
+                icon = Icons.Outlined.People,
+                title = stringResource(R.string.bt_social_swm_empty_title),
+                message = stringResource(R.string.bt_social_swm_empty_body),
+                modifier = Modifier.padding(24.dp),
+            )
+        }
         return
     }
     val people = remember(shared) { shared.groupByPerson() }
@@ -899,7 +905,7 @@ private fun sharesSummary(p: PersonShares): String {
 private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
     val bt = BtTheme.colors
     if (mine == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = bt.gold) }
+        BtStateFill { CircularProgressIndicator(color = bt.gold) }
         return
     }
     LazyColumn(

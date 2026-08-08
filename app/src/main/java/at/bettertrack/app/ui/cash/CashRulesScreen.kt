@@ -77,8 +77,10 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -407,32 +409,36 @@ fun CashRulesScreen(onBack: () -> Unit) {
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
-                rules.isEmpty() && loading -> Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(96.dp)) }
+                rules.isEmpty() && loading -> BtScrollFill {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        repeat(4) { BtSkeleton(Modifier.fillMaxWidth().height(96.dp)) }
+                    }
                 }
 
-                rules.isEmpty() && loadError != null -> BtErrorState(
-                    modifier = Modifier.align(Alignment.Center),
-                    title = stringResource(R.string.bt_rules_error_title),
-                    message = loadError,
-                    onRetry = { vm.refresh() },
-                )
+                rules.isEmpty() && loadError != null -> BtStateFill {
+                    BtErrorState(
+                        title = stringResource(R.string.bt_rules_error_title),
+                        message = loadError,
+                        onRetry = { vm.refresh() },
+                    )
+                }
 
-                rules.isEmpty() -> BtEmptyState(
-                    modifier = Modifier.align(Alignment.Center),
-                    icon = Icons.Outlined.AutoAwesome,
-                    title = stringResource(R.string.bt_rules_empty_title),
-                    message = stringResource(R.string.bt_rules_empty_message),
-                    action = {
-                        BtPrimaryButton(
-                            text = stringResource(R.string.bt_rules_new),
-                            onClick = { sheet = CashRuleSheetTarget.New },
-                        )
-                    },
-                )
+                rules.isEmpty() -> BtStateFill {
+                    BtEmptyState(
+                        icon = Icons.Outlined.AutoAwesome,
+                        title = stringResource(R.string.bt_rules_empty_title),
+                        message = stringResource(R.string.bt_rules_empty_message),
+                        action = {
+                            BtPrimaryButton(
+                                text = stringResource(R.string.bt_rules_new),
+                                onClick = { sheet = CashRuleSheetTarget.New },
+                            )
+                        },
+                    )
+                }
 
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),

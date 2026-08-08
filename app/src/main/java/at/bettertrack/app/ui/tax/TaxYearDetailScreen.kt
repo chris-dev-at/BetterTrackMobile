@@ -51,8 +51,10 @@ import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtSkeleton
+import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
@@ -202,25 +204,27 @@ fun TaxYearDetailScreen(portfolioId: String, year: Int, onBack: () -> Unit) {
         },
     ) { innerPadding ->
         when (val s = state) {
-            is TaxYearDetailUiState.Loading -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            is TaxYearDetailUiState.Loading -> BtScrollFill(
+                modifier = Modifier.padding(innerPadding),
             ) {
-                BtSkeleton(Modifier.fillMaxWidth().height(268.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(14.dp))
-                BtSkeleton(Modifier.fillMaxWidth().height(160.dp))
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    BtSkeleton(Modifier.fillMaxWidth().height(268.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(14.dp))
+                    BtSkeleton(Modifier.fillMaxWidth().height(160.dp))
+                }
             }
 
-            is TaxYearDetailUiState.Failed -> BtErrorState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                message = s.message,
-                onRetry = vm::load,
-            )
+            is TaxYearDetailUiState.Failed -> BtStateFill(
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                BtErrorState(
+                    message = s.message,
+                    onRetry = vm::load,
+                )
+            }
 
             is TaxYearDetailUiState.Loaded -> {
                 val summary = s.report.summary
