@@ -7,12 +7,34 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
+ * Everything [UpdateChecker] remembers between runs, as an interface.
+ *
+ * The production implementation is [UpdatePrefs] (SharedPreferences) and there is
+ * no second one in the app. It exists so the checker's ORCHESTRATION — cold vs
+ * warm foreground, the debounce, the per-session reset, the cached-release offer
+ * — can be tested on the JVM. That orchestration is where the "no popup on
+ * reopen" bug lived: every pure rule it calls was already green in
+ * `UpdateCheckLogicTest` while the app shipped a checker that never called them.
+ */
+interface UpdateStore {
+    var remindAfterMs: Long
+    var lastCheckMs: Long
+    var ignoredVersionCode: Int
+    var cachedLatestCode: Int
+    var cachedLatestName: String?
+    var cachedLatestApk: String?
+    val autoCheckEnabled: StateFlow<Boolean>
+    fun autoCheckEnabledNow(): Boolean
+    fun setAutoCheckEnabled(enabled: Boolean)
+}
+
+/**
  * Persistence for the dev update notifier (Step V). Deliberately a plain,
  * NON-account-scoped SharedPreferences (no secrets here): "ignore this version",
  * the last-seen build, and the "automatic update checks" toggle are properties of
  * the installed APK, not of the signed-in user, and must survive logout.
  */
-class UpdatePrefs(context: Context) {
+class UpdatePrefs(context: Context) : UpdateStore {
     private val sp: SharedPreferences =
         context.getSharedPreferences("bt_update_prefs", Context.MODE_PRIVATE)
 
@@ -20,30 +42,36 @@ class UpdatePrefs(context: Context) {
      * "Remind me later" persists across cold starts (owner report 2026-08-07:
      * the dialog returned on EVERY launch): no update prompt before this time.
      */
-    var remindAfterMs: Long
+    override var remindAfterMs: Long
         get() = sp.getLong("remindAfterMs", 0L)
         set(v) { sp.edit().putLong("remindAfterMs", v).apply() }
 
-    var lastCheckMs: Long
+    override var lastCheckMs: Long
         get() = sp.getLong(KEY_LAST_CHECK, 0L)
         set(v) = sp.edit().putLong(KEY_LAST_CHECK, v).apply()
 
     /** versionCode the user chose to ignore forever (0 = none ignored). */
-    var ignoredVersionCode: Int
+    override var ignoredVersionCode: Int
         get() = sp.getInt(KEY_IGNORED, 0)
         set(v) = sp.edit().putInt(KEY_IGNORED, v).apply()
 
-    /** Last newer build seen (cached so the badge renders offline). */
-    var cachedLatestCode: Int
+    /**
+     * Last newer build seen. Cached so the badge renders offline — and, since the
+     * reopen fix, so the DIALOG can be offered on a foreground that makes no
+     * network call at all. That promotion is why [UpdateChecker] now clears these
+     * three the moment a check reports this build is current: a cache that only
+     * fed a badge could afford to go stale, one that drives an offer cannot.
+     */
+    override var cachedLatestCode: Int
         get() = sp.getInt(KEY_LATEST_CODE, 0)
         set(v) = sp.edit().putInt(KEY_LATEST_CODE, v).apply()
 
-    var cachedLatestName: String?
+    override var cachedLatestName: String?
         get() = sp.getString(KEY_LATEST_NAME, null)
         set(v) = sp.edit().putString(KEY_LATEST_NAME, v).apply()
 
     /** Last newer build's release-asset APK filename (for Download & Install). */
-    var cachedLatestApk: String?
+    override var cachedLatestApk: String?
         get() = sp.getString(KEY_LATEST_APK, null)
         set(v) = sp.edit().putString(KEY_LATEST_APK, v).apply()
 
@@ -55,12 +83,12 @@ class UpdatePrefs(context: Context) {
      * when OFF the checker never runs on launch/foreground. Observable so About
      * reflects it live and the checker can re-run the moment it is switched back on.
      */
-    val autoCheckEnabled: StateFlow<Boolean> = _autoCheckEnabled.asStateFlow()
+    override val autoCheckEnabled: StateFlow<Boolean> = _autoCheckEnabled.asStateFlow()
 
     /** Synchronous read — the foreground check gate needs the value inline. */
-    fun autoCheckEnabledNow(): Boolean = _autoCheckEnabled.value
+    override fun autoCheckEnabledNow(): Boolean = _autoCheckEnabled.value
 
-    fun setAutoCheckEnabled(enabled: Boolean) {
+    override fun setAutoCheckEnabled(enabled: Boolean) {
         sp.edit().putBoolean(KEY_AUTO_CHECK, enabled).apply()
         _autoCheckEnabled.value = enabled
     }

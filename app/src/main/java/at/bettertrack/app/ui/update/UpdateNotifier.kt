@@ -101,8 +101,10 @@ fun UpdateNotifierHost() {
     // Scrim / back behaviour: never let it dismiss mid-download or mid-install.
     val onScrimDismiss: () -> Unit = when (install) {
         is UpdateInstallState.Downloading, is UpdateInstallState.Installing -> ({})
-        is UpdateInstallState.Failed -> ({ installer.reset(); checker.remindLater() })
-        UpdateInstallState.Idle -> ({ checker.remindLater() })
+        // Scrim-tap and back are accidents, not choices: soft-dismiss only.
+        // The persisted 24h snooze belongs to the explicit "remind" button alone.
+        is UpdateInstallState.Failed -> ({ installer.reset(); checker.dismissDialog() })
+        UpdateInstallState.Idle -> ({ checker.dismissDialog() })
     }
 
     Dialog(onDismissRequest = onScrimDismiss) {
@@ -128,7 +130,8 @@ fun UpdateNotifierHost() {
                                 installer.reset()
                                 checker.dismissDialog()
                             },
-                            onDismiss = { installer.reset(); checker.remindLater() },
+                            // "Dismiss" is not "remind me later" — no persisted snooze.
+                            onDismiss = { installer.reset(); checker.dismissDialog() },
                         )
 
                     UpdateInstallState.Idle -> {

@@ -18,18 +18,35 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * The dev update notifier (Step V). On foreground (rate-limited) it fetches the
- * rolling prerelease's `version.json`, compares versionCode against the running
- * build, and drives:
- *  - [pendingDialog] — a ONE-per-version prompt (Go to GitHub / Remind me later
- *    / Ignore this version), and
+ * The dev update notifier (Step V). On foreground it offers what it already knows
+ * and (debounced) refetches the rolling prerelease's `version.json`, comparing
+ * versionCode against the running build to drive:
+ *  - [pendingDialog] — the update prompt (Download & Install / Go to GitHub /
+ *    Remind me later / Ignore this version), and
  *  - [available] — the persistent "Update available" settings badge.
  *
- * A polite client: cold-start once + at most once per 6h; any network failure is
- * a silent skip (never a visible error). Development-phase only.
+ * **The rule (owner, 2026-08-08): if a newer release exists, opening the app says
+ * so — every time, cold or warm — unless that exact version was ignored or the
+ * prompt is inside a snooze.** Two things used to break it, and both were
+ * invisible because the app looked busy and correct while doing nothing:
+ *
+ *  1. the network check ran at most once per six hours, and Android keeps the
+ *     process alive for days, so almost every reopen was a warm foreground inside
+ *     that window; and
+ *  2. the dialog was only ever a SIDE EFFECT of a successful fetch, so a skipped
+ *     or failed check meant no prompt even while the badge — fed by the same
+ *     cache — sat there insisting an update existed.
+ *
+ * Now: [onForeground] starts a new session on every entry (clearing the session
+ * suppression), offers the cached release immediately without waiting for or
+ * needing the network, and only then decides whether to refetch.
+ *
+ * Still a polite client: cold-start once + at most one attempt per
+ * [UpdateCheckLogic.FOREGROUND_DEBOUNCE_MS]; any network failure is a silent skip
+ * on the automatic path (never a visible error). Development-phase only.
  */
 class UpdateChecker(
-    private val prefs: UpdatePrefs,
+    private val prefs: UpdateStore,
     private val currentVersionCode: Int,
     private val client: OkHttpClient,
     private val json: Json,
@@ -38,16 +55,48 @@ class UpdateChecker(
         SupervisorJob() + Dispatchers.IO +
             at.bettertrack.app.btBackgroundExceptionHandler("UpdateChecker"),
     ),
+    private val versionJsonUrl: String = VERSION_JSON_URL,
 ) {
     private var checkedThisProcess = false
+
+    /**
+     * "Remind me later" was tapped in THIS foreground session. Reset by every
+     * [onForeground] — the persisted [UpdateStore.remindAfterMs] is what actually
+     * enforces the 24 hours, and this flag exists only so the choice takes effect
+     * before the clock is consulted again. As a process-lifetime flag it was a
+     * bug: it outlived the snooze it was mirroring by however many days Android
+     * kept the process around.
+     */
     private var remindedThisSession = false
+
+    /**
+     * When the last automatic fetch was STARTED (in-memory).
+     *
+     * The debounce anchors on `max(this, lastCheckMs)` because
+     * [UpdateStore.lastCheckMs] only advances on success: offline, it never moves,
+     * and without this an airplane-mode user app-switching in a loop would fire a
+     * doomed request on every single foreground.
+     */
+    private var lastAttemptMs = 0L
+
+    /**
+     * A short quiet window opened by [dismissDialog] — i.e. by the user leaving
+     * for GitHub with the offer answered.
+     *
+     * The spec wants the prompt back on the next app-open, and returning from the
+     * browser IS an app-open; without this, "Go to GitHub" would re-prompt the
+     * instant the user came back, and again after the next tab switch. In-memory
+     * on purpose: it is about one hand-off, not a preference, so a cold start
+     * clears it and the prompt returns as the spec says it should.
+     */
+    private var dialogQuietUntilMs = 0L
 
     private val _available = MutableStateFlow(seededAvailability())
     /** Non-null when a newer build exists (badge). Seeded from cache for offline. */
     val available: StateFlow<AvailableUpdate?> = _available.asStateFlow()
 
     private val _pendingDialog = MutableStateFlow<AvailableUpdate?>(null)
-    /** Non-null when the one-per-version dialog should be shown right now. */
+    /** Non-null when the update dialog should be shown right now. */
     val pendingDialog: StateFlow<AvailableUpdate?> = _pendingDialog.asStateFlow()
 
     /** "Automatic update checks" toggle (About) — observed by the settings UI. */
@@ -57,15 +106,71 @@ class UpdateChecker(
     /** State of the About screen's "Check for updates" button. See [checkNow]. */
     val manualCheck: StateFlow<ManualUpdateCheck> = _manualCheck.asStateFlow()
 
-    /** Called from the process foreground observer (also fires the cold-start check). */
+    /**
+     * A foreground session begins: the app just became visible
+     * (ProcessLifecycleOwner `ON_START` — cold launch, return from recents, back
+     * from the browser, unlock). This is the moment the owner means by "opening
+     * the app", so it is the moment the prompt is owed.
+     *
+     * Three steps, in this order and independent of each other:
+     *  1. a new session clears the in-session "remind me later" flag (the
+     *     persisted 24h deadline still applies — see [remindedThisSession]);
+     *  2. anything already KNOWN to be newer is offered right now, from cache,
+     *     with no network call and no waiting for one; then
+     *  3. the manifest is refetched if the debounce allows, which can only ever
+     *     ADD news (a still-newer build), never withhold it.
+     */
     fun onForeground() {
         // Play builds (Task B1) have self-update compiled off — never check.
         if (!BuildConfig.SELF_UPDATE_ENABLED) return
         val cold = !checkedThisProcess
         checkedThisProcess = true
-        if (!UpdateCheckLogic.shouldCheckNow(prefs.autoCheckEnabledNow(), nowMs(), prefs.lastCheckMs, cold)) return
+        remindedThisSession = false
+        offerKnownUpdate()
+        val anchor = maxOf(prefs.lastCheckMs, lastAttemptMs)
+        if (!UpdateCheckLogic.shouldCheckNow(prefs.autoCheckEnabledNow(), nowMs(), anchor, cold)) return
+        lastAttemptMs = nowMs()
         scope.launch { runCheck() }
     }
+
+    /**
+     * Offer the newest build the app already knows about, straight from cache.
+     *
+     * This is the half of the fix that does not involve the network at all. The
+     * cache is what the settings badge has always rendered from, so declining to
+     * render the DIALOG from it meant the app could show "Update available" in
+     * settings while the prompt it exists to raise stayed silent. Eligibility is
+     * the same [UpdateCheckLogic.shouldShowDialog] the fetched path uses, so
+     * ignore and snooze bind identically here.
+     *
+     * Gated on the "automatic update checks" toggle: OFF means the app makes no
+     * unprompted noise about updates, and a cached offer is exactly that noise.
+     */
+    private fun offerKnownUpdate() {
+        if (!prefs.autoCheckEnabledNow()) return
+        val known = seededAvailability() ?: return
+        _available.value = known
+        if (
+            UpdateCheckLogic.shouldShowDialog(
+                currentVersionCode = currentVersionCode,
+                latestVersionCode = known.versionCode,
+                ignoredVersionCode = prefs.ignoredVersionCode,
+                snoozed = autoDialogSuppressed(),
+            )
+        ) {
+            _pendingDialog.value = known
+        }
+    }
+
+    /**
+     * Every reason the AUTOMATIC path currently owes silence, in one place so the
+     * cached offer and the fetched one cannot drift: the choice made this session,
+     * the persisted 24h deadline behind it, and the hand-off quiet window. A
+     * manual check overrides all three by construction (see
+     * [UpdateCheckLogic.shouldShowDialog]).
+     */
+    private fun autoDialogSuppressed(): Boolean =
+        remindedThisSession || nowMs() < prefs.remindAfterMs || nowMs() < dialogQuietUntilMs
 
     /**
      * About-screen toggle. Turning OFF stops all checks and clears any pending
@@ -76,6 +181,11 @@ class UpdateChecker(
         if (!BuildConfig.SELF_UPDATE_ENABLED) return
         prefs.setAutoCheckEnabled(enabled)
         if (enabled) {
+            // Same order as a foreground entry: say what we already know first,
+            // then go ask. Switching the toggle back on is a question, and the
+            // answer should not depend on the network being up.
+            offerKnownUpdate()
+            lastAttemptMs = nowMs()
             scope.launch { runCheck() }
         } else {
             _pendingDialog.value = null
@@ -85,9 +195,9 @@ class UpdateChecker(
     /**
      * "Check for updates" (About → this build). Runs the fetch RIGHT NOW,
      * bypassing every rate limit the automatic path honours — the cold-start
-     * once-per-process flag and the 6h interval both exist to keep the app a
-     * polite client on its OWN schedule, and neither applies to a check the user
-     * asked for. The "automatic update checks" opt-out is likewise not consulted:
+     * once-per-process flag and the foreground debounce both exist to keep the
+     * app a polite client on its OWN schedule, and neither applies to a check the
+     * user asked for. The "automatic update checks" opt-out is likewise not consulted:
      * it turns off checks the app makes by itself, not the button that exists to
      * replace them.
      *
@@ -103,8 +213,9 @@ class UpdateChecker(
         if (_manualCheck.value is ManualUpdateCheck.Checking) return // already in flight
         _manualCheck.value = ManualUpdateCheck.Checking
         // A manual check satisfies the cold-start obligation too: the process has
-        // now asked GitHub, so a later foreground must fall through to the interval.
+        // now asked GitHub, so a later foreground must fall through to the debounce.
         checkedThisProcess = true
+        lastAttemptMs = nowMs()
         scope.launch { runCheck(manual = true) }
     }
 
@@ -131,8 +242,16 @@ class UpdateChecker(
         }
         prefs.lastCheckMs = nowMs()
         if (!UpdateCheckLogic.isNewer(currentVersionCode, manifest.versionCode)) {
-            // Up to date (or we just updated past the cached one): clear stale state.
+            // Up to date (or we just updated past the cached one): clear stale
+            // state — including the CACHE, which now drives the offer and not
+            // just the badge. A cached release that no longer exists (yanked,
+            // or already installed) would otherwise be re-offered on every
+            // foreground forever, pointing at an APK that 404s.
             _available.value = null
+            _pendingDialog.value = null
+            prefs.cachedLatestCode = 0
+            prefs.cachedLatestName = null
+            prefs.cachedLatestApk = null
             if (manual) _manualCheck.value = ManualUpdateCheck.UpToDate
             return
         }
@@ -149,7 +268,7 @@ class UpdateChecker(
                 currentVersionCode = currentVersionCode,
                 latestVersionCode = manifest.versionCode,
                 ignoredVersionCode = prefs.ignoredVersionCode,
-                remindedThisSession = remindedThisSession || nowMs() < prefs.remindAfterMs,
+                snoozed = autoDialogSuppressed(),
                 manual = manual,
             )
         ) {
@@ -186,8 +305,16 @@ class UpdateChecker(
         _pendingDialog.value = null
     }
 
-    /** Dialog dismissed via its action buttons / scrim without a lasting choice. */
+    /**
+     * The offer was answered by leaving for GitHub — no lasting choice recorded,
+     * but the app is about to go to the background and come straight back, and
+     * "opening the app re-offers the update" must not turn that round trip into a
+     * loop. So the prompt stays down for [HANDOFF_QUIET_MS] and no longer: not a
+     * snooze (nothing is persisted, About shows no paused line, a cold start
+     * clears it), just enough silence to let one hand-off finish.
+     */
     fun dismissDialog() {
+        dialogQuietUntilMs = nowMs() + HANDOFF_QUIET_MS
         _pendingDialog.value = null
     }
 
@@ -214,7 +341,7 @@ class UpdateChecker(
     private suspend fun fetchManifest(): ManifestFetch = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url(VERSION_JSON_URL)
+                .url(versionJsonUrl)
                 .header("Accept", "application/json")
                 .header("User-Agent", "BetterTrackApp")
                 .build()
@@ -241,6 +368,15 @@ class UpdateChecker(
     companion object {
         /** 24h quiet window after "remind me later". */
         const val REMIND_SNOOZE_MS = 24L * 60 * 60 * 1000
+
+        /**
+         * How long the prompt stays down after the user leaves for GitHub — long
+         * enough to cover the trip (open the release page, download, come back)
+         * without turning that return into a re-prompt. Deliberately the same 15
+         * minutes as the network debounce: both answer "the app just did this,
+         * give it a moment".
+         */
+        const val HANDOFF_QUIET_MS = UpdateCheckLogic.FOREGROUND_DEBOUNCE_MS
 
         private const val TAG = "BtUpdateChecker"
         const val REPO = "chris-dev-at/BetterTrackMobile"
