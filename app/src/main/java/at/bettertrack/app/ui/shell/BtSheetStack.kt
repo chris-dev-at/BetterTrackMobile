@@ -2,9 +2,7 @@ package at.bettertrack.app.ui.shell
 
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -35,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.LocalOwnersProvider
 import at.bettertrack.app.R
+import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.CancellationException
@@ -133,12 +134,13 @@ internal fun BtSheetStack(
     val stackedNow by rememberUpdatedState(stacked)
     val reducedNow by rememberUpdatedState(reducedMotion)
     val hostNow by rememberUpdatedState(host)
+    val hapticsNow by rememberUpdatedState(rememberBtHaptics())
 
     // 0f = settled at rest, 1f = below the bottom edge. Read by the scrim's alpha
     // and the surface's translation, so the two cannot drift apart.
-    val travel = remember { Animatable(1f) }
+    val travel = remember { BtSheetMotion(1f) }
     // 0f = the top page covers its parent, 1f = fully off to the right.
-    val slide = remember { Animatable(0f) }
+    val slide = remember { BtSheetMotion(0f) }
     var heightPx by remember { mutableFloatStateOf(0f) }
     var widthPx by remember { mutableFloatStateOf(0f) }
     var leaving by remember { mutableStateOf(false) }
@@ -156,21 +158,21 @@ internal fun BtSheetStack(
         leaving = false
         when {
             depth == 0 -> {
-                travel.snapTo(1f)
-                slide.snapTo(0f)
+                travel.snap(1f)
+                slide.snap(0f)
             }
             previous == 0 -> {
-                slide.snapTo(0f)
-                if (reducedMotion) travel.snapTo(0f) else travel.animateTo(0f, SheetEnter)
+                slide.snap(0f)
+                if (reducedMotion) travel.snap(0f) else travel.animateTo(0f, SheetEnter)
             }
             depth > previous -> {
-                travel.snapTo(0f)
-                slide.snapTo(1f)
-                if (reducedMotion) slide.snapTo(0f) else slide.animateTo(0f, SheetSlide)
+                travel.snap(0f)
+                slide.snap(1f)
+                if (reducedMotion) slide.snap(0f) else slide.animateTo(0f, SheetSlide)
             }
             else -> {
-                travel.snapTo(0f)
-                slide.snapTo(0f)
+                travel.snap(0f)
+                slide.snap(0f)
             }
         }
     }
@@ -228,7 +230,7 @@ internal fun BtSheetStack(
         try {
             progress.collect { event ->
                 val preview = (event.progress * SHEET_BACK_PREVIEW).coerceIn(0f, 1f)
-                if (stackedNow) slide.snapTo(preview) else travel.snapTo(preview)
+                if (stackedNow) slide.snap(preview) else travel.snap(preview)
             }
             backOne()
         } catch (cancelled: CancellationException) {
@@ -238,6 +240,26 @@ internal fun BtSheetStack(
             throw cancelled
         }
     }
+    // The ONE place a downward drag becomes travel. Both entry points (the
+    // content's nested scroll and the grabber strip) go through it, so the
+    // detent haptic cannot fire from one and stay silent on the other, and so
+    // the crossing is tested against the travel the sheet actually had.
+    val pullBy: (Float) -> Float = remember {
+        { dy ->
+            val h = heightPx
+            if (h <= 0f) {
+                0f
+            } else {
+                val from = travel.value
+                val next = sheetDragTravel(from, dy, h, stackedNow)
+                // Synchronous: the finger's value lands on the finger's frame.
+                travel.snap(next)
+                if (sheetNotchCrossed(from, next, stackedNow)) hapticsNow.detent()
+                (next - from) * h
+            }
+        }
+    }
+
     // Pull-down from the top of the content. `onPostScroll` and not `onPreScroll`
     // is the "arms at scroll top only" rule: this only ever sees what the list
     // underneath refused, and a list that is not at its top refuses nothing.
@@ -265,14 +287,7 @@ internal fun BtSheetStack(
                 return available
             }
 
-            private fun drag(dy: Float): Float {
-                val h = heightPx
-                if (h <= 0f) return 0f
-                val next = sheetDragTravel(travel.value, dy, h, stackedNow)
-                val used = (next - travel.value) * h
-                scope.launch { travel.snapTo(next) }
-                return used
-            }
+            private fun drag(dy: Float): Float = pullBy(dy)
 
             fun release(velocityY: Float) {
                 when (sheetRelease(travel.value, velocityY, flingVelocityPx, stackedNow)) {
@@ -300,7 +315,18 @@ internal fun BtSheetStack(
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = (1f - travel.value) * SHEET_SCRIM_ALPHA }
+                .graphicsLayer {
+                    alpha = (1f - travel.value) * SHEET_SCRIM_ALPHA
+                    // A RenderNode with alpha < 1 assumes its content overlaps
+                    // itself and rasterises into an offscreen buffer first — here
+                    // that is a full 1080x2316 surface allocated and composited
+                    // every frame of every drag, for one flat rectangle. Saying
+                    // outright that nothing overlaps lets the alpha fold into the
+                    // draw call instead. Measured on device: this and the
+                    // synchronous drag together take issueDrawCommands and
+                    // swapBuffers back to the main pager's numbers.
+                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                }
                 .background(bt.scrim)
                 // The strip above the sheet is the only part of this the user can
                 // reach; tapping outside a sheet to close it is the idiom.
@@ -326,15 +352,9 @@ internal fun BtSheetStack(
                 // Static chrome. It never rides the depth axis — the same
                 // relationship the four main pages have with their top bar.
                 BtSheetGrabber(
-                    stage = { sheetStageOf(travel.value, stackedNow) },
-                    onDrag = { dy ->
-                        val h = heightPx
-                        if (h > 0f && !leaving) {
-                            scope.launch {
-                                travel.snapTo(sheetDragTravel(travel.value, dy, h, stackedNow))
-                            }
-                        }
-                    },
+                    travel = travel,
+                    stacked = stacked,
+                    onDrag = { dy -> if (!leaving) pullBy(dy) },
                     onRelease = { v -> pull.release(v) },
                 )
                 Box(Modifier.fillMaxSize()) {
@@ -349,9 +369,9 @@ internal fun BtSheetStack(
                         onDragBy = { dx ->
                             val w = widthPx
                             if (w > 0f && !leaving) {
-                                scope.launch {
-                                    slide.snapTo((slide.value + dx / w).coerceIn(0f, 1f))
-                                }
+                                // Synchronous, for the same reason the vertical
+                                // drag is: see BtSheetMotion.
+                                slide.snap((slide.value + dx / w).coerceIn(0f, 1f))
                             }
                         },
                         onCommitBack = backOne,
@@ -382,7 +402,7 @@ internal fun BtSheetStack(
 private fun BtSheetPlanes(
     pages: List<BtSheetPage>,
     stacked: Boolean,
-    slide: Animatable<Float, AnimationVector1D>,
+    slide: BtSheetMotion,
     widthPx: () -> Float,
     leaving: () -> Boolean,
     flingVelocityPx: Float,
@@ -437,7 +457,8 @@ private fun BtSheetPlanes(
  */
 @Composable
 private fun BtSheetGrabber(
-    stage: () -> SheetStage,
+    travel: BtSheetMotion,
+    stacked: Boolean,
     onDrag: (Float) -> Unit,
     onRelease: (Float) -> Unit,
 ) {
@@ -455,9 +476,14 @@ private fun BtSheetGrabber(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        // Read through a lambda so the pill repaints without recomposing the
-        // layer: travel changes every frame of a drag.
-        val current = stage()
+        // `travel` changes every frame of a pull, but the STAGE takes only three
+        // values. Reading it through derivedStateOf collapses ~120 writes per
+        // second into at most two recompositions for the whole gesture. The
+        // shipped build read travel directly here and recomposed this strip —
+        // retargeting the animateDpAsState below — on every single frame.
+        val current by remember(travel, stacked) {
+            derivedStateOf { sheetStageOf(travel.value, stacked) }
+        }
         val width by animateDpAsState(
             targetValue = when (current) {
                 SheetStage.IDLE -> SHEET_GRABBER_WIDTH

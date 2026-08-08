@@ -98,10 +98,98 @@ class BtRefreshRoutingTest {
 
     @Test
     fun `the tunables are the numbers the owner asked for`() {
-        assertEquals(600L, BT_REFRESH_DISARM_MS)
+        assertEquals(1100L, BT_REFRESH_DISARM_MS)
         assertEquals(500L, BT_SHEET_HINT_MS)
         // The hint has to be gone well before the gesture re-arms, or it would
         // still be on screen saying something that had stopped being true.
         assertTrue(BT_SHEET_HINT_MS < BT_REFRESH_DISARM_MS)
+        // Raised on 2026-08-09. The window is measured from the trigger, which
+        // fires while the FIRST pull is still finishing, so a good part of it is
+        // always spent on a finger that has not let go yet. It has to be long
+        // enough that the hand can reset and start a second pull inside it.
+        assertTrue("the window must leave room to start a second pull", BT_REFRESH_DISARM_MS >= 1000L)
+    }
+
+    // ── The latch: a gesture ends the way it began ──────────────────────────
+
+    @Test
+    fun `an unlatched pull tracks the live routing`() {
+        // With no finger down there is nothing to protect, so the latch is out of
+        // the way entirely and the live rule decides.
+        assertEquals(BtPullOwner.REFRESH, btPullOwnerLatched(null, armed = true, isRefreshing = false))
+        assertEquals(BtPullOwner.SHEET, btPullOwnerLatched(null, armed = false, isRefreshing = false))
+        assertEquals(BtPullOwner.SHEET, btPullOwnerLatched(null, armed = true, isRefreshing = true))
+    }
+
+    @Test
+    fun `latching changes nothing on the frame it happens`() {
+        // The safety property the whole design rests on: because the value being
+        // frozen is the live one, freezing it can never move the routing. If this
+        // failed, the down event itself would be able to flip the gesture.
+        listOf(true, false).forEach { armed ->
+            listOf(true, false).forEach { refreshing ->
+                val live = btPullOwner(armed, refreshing)
+                assertEquals(
+                    "armed=$armed refreshing=$refreshing",
+                    live,
+                    btPullOwnerLatched(live, armed, refreshing),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a dismissal that began while disarmed stays a dismissal when the timer expires`() {
+        // The owner's bug, as a sequence. Finger down inside the window; the
+        // window ends under the finger; the pull must not become a refresh.
+        val held = btPullOwner(armed = false, isRefreshing = false)
+        assertEquals(BtPullOwner.SHEET, held)
+        assertEquals(
+            "the in-flight pull must not convert",
+            BtPullOwner.SHEET,
+            btPullOwnerLatched(held, armed = true, isRefreshing = false),
+        )
+        // ...and only once the finger lifts does refresh get the gesture back.
+        assertEquals(
+            BtPullOwner.REFRESH,
+            btPullOwnerLatched(null, armed = true, isRefreshing = false),
+        )
+    }
+
+    @Test
+    fun `a refresh pull that began after expiry stays a refresh`() {
+        // The mirror. A refresh starting mid-gesture must not yank the pull away
+        // from the refresh that its own first frame asked for.
+        val held = btPullOwner(armed = true, isRefreshing = false)
+        assertEquals(BtPullOwner.REFRESH, held)
+        assertEquals(
+            BtPullOwner.REFRESH,
+            btPullOwnerLatched(held, armed = false, isRefreshing = true),
+        )
+    }
+
+    @Test
+    fun `the timer expiring mid-gesture cannot reach the gesture, on the real clock`() {
+        runTest {
+            var armed = true
+            launch { btRefreshDisarmWindow { armed = it } }
+            advanceTimeBy(1)
+            assertFalse(armed)
+
+            // The finger goes down late in the window — the exact case the owner
+            // hit, and the one the device pass reproduces by hand.
+            advanceTimeBy(BT_REFRESH_DISARM_MS - 50)
+            val held = btPullOwner(armed, isRefreshing = false)
+            assertEquals(BtPullOwner.SHEET, held)
+
+            // It expires while the finger is still down and still dragging.
+            advanceUntilIdle()
+            assertTrue("the window really did expire", armed)
+            assertEquals(
+                "the drag in progress must still belong to the sheet",
+                BtPullOwner.SHEET,
+                btPullOwnerLatched(held, armed, isRefreshing = false),
+            )
+        }
     }
 }

@@ -1,5 +1,7 @@
 package at.bettertrack.app.ui.shell
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -11,9 +13,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -40,6 +45,17 @@ import at.bettertrack.app.ui.theme.BtTheme
  *
  * `enabled` gates only the nested-scroll callbacks — it does not touch the
  * indicator — so the spinner is unaffected by the disarm window.
+ *
+ * ## Why the decision is latched (owner, 2026-08-09)
+ *
+ * Step 2 used to be recomputed on every recomposition, which meant the window
+ * could expire *underneath a finger that was already dragging*. `enabled` flipped
+ * false to true mid-gesture, the refresh modifier started consuming a scroll that
+ * had been travelling to the sheet, and the pull froze halfway — the owner's "it
+ * cancels or gets stuck". The window is longer now, which makes the boundary
+ * rarer but not impossible, so the boundary itself is fixed rather than hidden:
+ * [btPullOwnerLatched] freezes the routing at the pointer-down and holds it until
+ * the finger leaves. A gesture always ends the way it began.
  */
 @Composable
 fun BtSheetRefreshBox(
@@ -59,17 +75,42 @@ fun BtSheetRefreshBox(
         btRefreshDisarmWindow { armed = it }
     }
 
+    // The latch. Non-null for exactly the length of one gesture; see
+    // [btPullOwnerLatched] for why the decision has to be frozen at the down.
+    var held by remember { mutableStateOf<BtPullOwner?>(null) }
+    val liveNow by rememberUpdatedState(btPullOwner(armed, isRefreshing))
+
     Box(
-        modifier.pullToRefresh(
-            state = state,
-            isRefreshing = isRefreshing,
-            enabled = btPullOwner(armed, isRefreshing) == BtPullOwner.REFRESH,
-            onRefresh = {
-                trigger++
-                hint.ping()
-                onRefresh()
-            },
-        ),
+        modifier
+            // Observes the pointer on the Initial pass and consumes nothing, so
+            // it is invisible to the content's own gestures and to the refresh
+            // modifier below it. All it does is bracket the gesture.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    held = liveNow
+                    try {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                        } while (event.changes.any { it.pressed })
+                    } finally {
+                        // A cancelled gesture must release the latch too, or the
+                        // next pull would inherit a decision made for a finger
+                        // that is no longer on the screen.
+                        held = null
+                    }
+                }
+            }
+            .pullToRefresh(
+                state = state,
+                isRefreshing = isRefreshing,
+                enabled = btPullOwnerLatched(held, armed, isRefreshing) == BtPullOwner.REFRESH,
+                onRefresh = {
+                    trigger++
+                    hint.ping()
+                    onRefresh()
+                },
+            ),
     ) {
         content()
         PullToRefreshDefaults.Indicator(

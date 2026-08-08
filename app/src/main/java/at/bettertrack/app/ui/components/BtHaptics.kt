@@ -23,6 +23,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * | [toggle]  | a two-state control settled | "which way is it now?" |
  * | [reject]  | the app refused the input | "why didn't that work?" |
  * | [keyTap]  | one character of input landed | "did that key register?" |
+ * | [detent]  | a drag crossed a decision boundary | "have I pulled far enough?" |
+ *
+ * [detent] is a fifth meaning added later, on the owner's explicit instruction,
+ * and its KDoc carries the argument for why it belongs rather than assuming it.
+ * It has exactly one call site. A sixth needs the same standard of proof.
  *
  * Everything else — navigating, opening a sheet, scrolling, pressing a
  * *secondary* button — stays silent. [BtSecondaryButton] deliberately has no
@@ -72,6 +77,29 @@ value class BtHaptics(private val haptics: HapticFeedback) {
 
     /** One character of input landed. The PIN keypad's per-digit tick. */
     fun keyTap() = haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+
+    /**
+     * A drag crossed a threshold that changes what letting go will do.
+     *
+     * **The one exception to the four-meanings rule above, added on the owner's
+     * explicit instruction (2026-08-09): "make a vibration haptic once you go
+     * past it".** It has exactly one call site — the sheet's notch, where pulling
+     * past [at.bettertrack.app.ui.shell.SHEET_NOTCH_END] changes a release from
+     * "back one page" into "close the entire stack".
+     *
+     * It earns its place by the same test the other four pass: it answers a
+     * question the user is actually asking, and one they cannot answer any other
+     * way. The notch is a *decision boundary the finger is standing on*, felt
+     * through stiffening resistance rather than seen — the grabber pill widens,
+     * but the thumb is on the screen and the eye is not necessarily on the pill.
+     * A detent is how physical controls have always reported this.
+     *
+     * [HapticFeedbackType.LongPress] is deliberately the firmest constant
+     * available rather than a tick: this is a commitment boundary, and a faint
+     * blip past it would read as noise — the exact failure the rule above exists
+     * to prevent. It is fired once per crossing, never repeated while held.
+     */
+    fun detent() = haptics.performHapticFeedback(HapticFeedbackType.LongPress)
 }
 
 /** The app's haptics, scoped to the current composition. */

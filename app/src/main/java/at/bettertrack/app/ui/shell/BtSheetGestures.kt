@@ -67,6 +67,20 @@ internal fun sheetStageOf(travel: Float, stacked: Boolean): SheetStage = when {
     else -> SheetStage.IDLE
 }
 /**
+ * Whether moving from [previous] to [next] just crossed INTO the close-all zone.
+ *
+ * The trigger for the detent haptic the owner asked for (2026-08-09): "make a
+ * vibration haptic once you go past it". Once, on the way in — so it is a
+ * *crossing* and not a *position*. Holding the finger still past the notch fires
+ * nothing more; retreating below the boundary and coming back fires again,
+ * because that is a second crossing and the user did it on purpose.
+ *
+ * Depth 1 has no second stage, so it has nothing to announce.
+ */
+internal fun sheetNotchCrossed(previous: Float, next: Float, stacked: Boolean): Boolean =
+    stacked && previous < SHEET_NOTCH_END && next >= SHEET_NOTCH_END
+
+/**
  * Where a drag of [dy] px puts the sheet, as a fraction of its own height.
  *
  * Depth 1 tracks the finger exactly — there is no two-stage decision to feel, so
@@ -126,11 +140,18 @@ internal fun sheetBackSwipeCommits(
  */
 internal const val SHEET_DEAD_ZONE = 0.12f
 
-/** Where the resistance begins, just before three quarters. Depth >= 2 only. */
-internal const val SHEET_NOTCH_START = 0.72f
+/**
+ * Where the resistance begins. Depth >= 2 only.
+ *
+ * Moved "way more up" (owner, 2026-08-09): it sat at 0.72, which meant the second
+ * stage only existed in the last quarter of a near-full-screen pull — most of the
+ * travel was a single undifferentiated band and the decision arrived too late to
+ * feel like a decision. It now begins near a third of the way down.
+ */
+internal const val SHEET_NOTCH_START = 0.36f
 
-/** Past here — beyond three quarters — releasing closes the whole stack. */
-internal const val SHEET_NOTCH_END = 0.78f
+/** Past here releasing closes the whole stack. Inside the owner's 0.35–0.45 zone. */
+internal const val SHEET_NOTCH_END = 0.44f
 
 /**
  * How much of the finger's movement the sheet keeps while crossing the notch.
@@ -138,14 +159,20 @@ internal const val SHEET_NOTCH_END = 0.78f
  * `(END - START) / RESISTANCE` of sheet height in finger travel, so this is a
  * budget as much as a feeling — see the reachability guard in BtSheetDragTest.
  *
- * Tuned on the device (2026-08-08). The sheet is 2228px tall on the test phone,
- * so the whole journey to close-all is a single thumb stroke of `pull x 2228`:
- * at 0.65/0.80 that came to 1899px on a 2316px screen, which only fits if the
- * drag starts on the grabber itself. 0.72/0.78 costs 1790px for the same shape —
- * still a deliberate, near-full-screen pull, but with 110px of slack in where it
- * may begin. A 28% stiffening is felt without being fought.
+ * Retuned with the notch move (owner, 2026-08-09): "way more up" AND "stronger".
+ * The two go together — a detent at 0.36 has most of the sheet left below it, so
+ * it can afford to be much stiffer than one at 0.72 could. The sheet now keeps
+ * 40% of the finger's movement while crossing (was 72%), which is a wall you
+ * notice rather than a bump you might miss.
+ *
+ * The budget still works out easier than before, not harder: crossing costs
+ * `(0.44 - 0.36) / 0.40 = 0.20` sheet-heights, so reaching close-all takes
+ * `0.36 + 0.20 = 0.56` of the sheet in finger travel. On the test phone's 2241px
+ * sheet that is ~1255px — a firm, deliberate stroke, but one that no longer has
+ * to start on the grabber to be completable. See the reachability guard in
+ * BtSheetDragTest.
  */
-internal const val SHEET_NOTCH_RESISTANCE = 0.72f
+internal const val SHEET_NOTCH_RESISTANCE = 0.40f
 
 /** Depth-1 pull-down-to-close commit point. Unchanged from the shipped model. */
 internal const val SHEET_CLOSE_FRACTION = 0.50f
@@ -172,8 +199,15 @@ internal const val SHEET_BACK_PREVIEW = 0.42f
  * How long the pull-to-refresh gesture stays disarmed after a trigger, so the
  * second downward pull scrolls or dismisses the sheet instead of refreshing
  * again. Independent of how long the refresh itself takes.
+ *
+ * Raised from 600ms (owner, 2026-08-09: "increase the timer of the drag down
+ * possible for refreshing sites"). 600ms was measured from the trigger, which is
+ * the instant the finger is still finishing the FIRST pull — by the time the hand
+ * has reset and started the second one, most of the window had already been spent
+ * on the tail of the first gesture. A second pull that is meant to dismiss now
+ * has a full second of room to begin in.
  */
-const val BT_REFRESH_DISARM_MS: Long = 600L
+const val BT_REFRESH_DISARM_MS: Long = 1100L
 
 /** How long the "pull again" hint chip stays up. */
 const val BT_SHEET_HINT_MS: Long = 500L
@@ -204,6 +238,33 @@ internal enum class BtPullOwner { REFRESH, SHEET }
  */
 internal fun btPullOwner(armed: Boolean, isRefreshing: Boolean): BtPullOwner =
     if (armed && !isRefreshing) BtPullOwner.REFRESH else BtPullOwner.SHEET
+
+/**
+ * The same routing, but **decided once per gesture and then held**.
+ *
+ * The bug this fixes (owner, 2026-08-09: "once the timer is up and the user is
+ * mid gesture he can still pull down and it doesn't cancel or gets stuck"): the
+ * routing was recomputed continuously, so [BT_REFRESH_DISARM_MS] expiring while a
+ * finger was already dragging flipped `pullToRefresh`'s `enabled` underneath that
+ * finger. The in-flight pull — which had started life as a sheet dismissal —
+ * suddenly found the refresh modifier consuming its scroll, and it stalled.
+ *
+ * So the decision is latched at the moment the finger goes down. [held] is that
+ * latch: non-null for exactly as long as one gesture lasts. Nothing about the
+ * world changing mid-gesture can reach the gesture already in progress, in either
+ * direction — a pull that began while disarmed stays a dismissal even after the
+ * timer expires, and one that began after expiry stays a refresh even if a
+ * refresh starts running under it.
+ *
+ * Latching at gesture start is safe precisely because the un-latched value is
+ * live and correct at that instant: freezing it changes nothing on the frame it
+ * happens, only on the frames after.
+ */
+internal fun btPullOwnerLatched(
+    held: BtPullOwner?,
+    armed: Boolean,
+    isRefreshing: Boolean,
+): BtPullOwner = held ?: btPullOwner(armed, isRefreshing)
 
 /**
  * The disarm window itself: the refresh gesture is handed to the sheet for

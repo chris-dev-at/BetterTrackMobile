@@ -47,7 +47,7 @@ class BtSheetGesturesTest {
 
     @Test
     fun `releasing anywhere before the resistance goes back one page`() {
-        listOf(SHEET_DEAD_ZONE, 0.3f, 0.5f, SHEET_NOTCH_START).forEach { t ->
+        listOf(SHEET_DEAD_ZONE, 0.2f, 0.3f, SHEET_NOTCH_START).forEach { t ->
             assertEquals("travel=$t", SheetRelease.BACK_ONE, sheetRelease(t, 0f, flick, true))
         }
     }
@@ -68,14 +68,28 @@ class BtSheetGesturesTest {
     }
 
     @Test
-    fun `the resistance sits before three quarters and close-all beyond it`() {
-        // The owner's spec as numbers, so tuning stays inside the shape he asked
-        // for: "meets the first resistance before ~3/4", "past it beyond ~3/4".
-        assertTrue("resistance must start before 3/4", SHEET_NOTCH_START < 0.75f)
-        assertTrue("...but late in the travel", SHEET_NOTCH_START >= 0.65f)
-        assertTrue("close-all must be beyond 3/4", SHEET_NOTCH_END >= 0.75f)
-        assertTrue(SHEET_NOTCH_START < SHEET_NOTCH_END)
-        assertTrue(SHEET_NOTCH_RESISTANCE > 0f && SHEET_NOTCH_RESISTANCE < 1f)
+    fun `the resistance sits early in the travel, and bites harder`() {
+        // The owner moved it (2026-08-09): "way more up" and "stronger". Both
+        // halves are pinned, because either one alone is a different gesture —
+        // an early notch that stays soft is a bump nobody notices, and a stiff
+        // notch left at 0.72 is a wall at the bottom of a pull that was already
+        // long. The stage boundary must land in the zone he named.
+        assertTrue("close-all must sit in the 0.35..0.45 zone", SHEET_NOTCH_END in 0.35f..0.45f)
+        assertTrue("the band must begin before it", SHEET_NOTCH_START < SHEET_NOTCH_END)
+        assertTrue("...and clear of the dead zone", SHEET_NOTCH_START > SHEET_DEAD_ZONE)
+        assertTrue("the resistance must be a real one", SHEET_NOTCH_RESISTANCE <= 0.5f)
+        assertTrue("...but not a wall", SHEET_NOTCH_RESISTANCE > 0f)
+    }
+
+    @Test
+    fun `there is still a real back-one band to release in`() {
+        // Moving the boundary up shortens the first stage. It must not shorten it
+        // to nothing: between letting go of the dead zone and reaching the notch
+        // there has to be room to mean "back one page" on purpose.
+        assertTrue(
+            "back-one band is only ${SHEET_NOTCH_END - SHEET_DEAD_ZONE} of the sheet",
+            SHEET_NOTCH_END - SHEET_DEAD_ZONE >= 0.25f,
+        )
     }
 
     @Test

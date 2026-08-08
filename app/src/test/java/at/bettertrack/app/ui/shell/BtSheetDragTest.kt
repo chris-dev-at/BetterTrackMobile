@@ -27,8 +27,11 @@ class BtSheetDragTest {
 
     @Test
     fun `below the notch the sheet tracks the finger exactly`() {
-        assertEquals(0.25f, sheetDragTravel(0f, 500f, height, stacked = true), 1e-4f)
-        assertEquals(0.5f, sheetDragTravel(0.25f, 500f, height, stacked = true), 1e-4f)
+        // Both steps have to land short of SHEET_NOTCH_START, or this stops
+        // testing the linear band and starts testing the notch by accident.
+        assertEquals(0.1f, sheetDragTravel(0f, 200f, height, stacked = true), 1e-4f)
+        assertEquals(0.3f, sheetDragTravel(0.1f, 400f, height, stacked = true), 1e-4f)
+        assertTrue("the band under test must be below the notch", 0.3f < SHEET_NOTCH_START)
     }
 
     @Test
@@ -64,7 +67,8 @@ class BtSheetDragTest {
 
     @Test
     fun `travel and pull are exact inverses`() {
-        listOf(0f, 0.2f, SHEET_NOTCH_START, 0.76f, SHEET_NOTCH_END, 0.9f, 1f).forEach { t ->
+        val insideBand = (SHEET_NOTCH_START + SHEET_NOTCH_END) / 2f
+        listOf(0f, 0.2f, SHEET_NOTCH_START, insideBand, SHEET_NOTCH_END, 0.9f, 1f).forEach { t ->
             assertEquals(t, sheetTravelFor(sheetPullFor(t)), 1e-4f)
         }
     }
@@ -74,12 +78,31 @@ class BtSheetDragTest {
         // Resistance is a budget, not a feeling: crossing the band costs
         // (END - START) / RESISTANCE of sheet height in FINGER travel, and an
         // earlier build put stage two beyond any thumb by getting this wrong.
+        //
+        // Re-cut for the 2026-08-09 geometry. Moving the notch up while making it
+        // stiffer pulls this number in two directions at once, which is exactly
+        // why it needs a guard: 0.36/0.44 at resistance 0.40 costs
+        // 0.36 + 0.08/0.40 = 0.56 sheet-heights, about 1255px of the test phone's
+        // 2241px sheet. Comfortably inside one stroke — the old 0.80 was not —
+        // while still far enough that no ordinary dismissal reaches it by
+        // accident.
         val fingerToCloseAll = sheetPullFor(SHEET_NOTCH_END)
         assertTrue(
             "reaching close-all costs $fingerToCloseAll sheet-heights of finger",
-            fingerToCloseAll <= 0.86f,
+            fingerToCloseAll <= 0.62f,
         )
-        assertTrue("...but it must stay a deliberate, full-screen pull", fingerToCloseAll >= 0.7f)
+        assertTrue("...but it must stay a deliberate pull", fingerToCloseAll >= 0.42f)
+    }
+
+    @Test
+    fun `crossing the notch costs distinctly more finger than the band is wide`() {
+        // The stiffening, stated as the thing the thumb actually feels: the last
+        // slice of travel before close-all must cost more than double its own
+        // width in finger movement, or the "stronger" half of the order is not in
+        // the numbers however early the boundary sits.
+        val band = SHEET_NOTCH_END - SHEET_NOTCH_START
+        val fingerAcross = sheetPullFor(SHEET_NOTCH_END) - sheetPullFor(SHEET_NOTCH_START)
+        assertTrue("band $band costs only $fingerAcross of finger", fingerAcross >= band * 2f)
     }
 
     @Test
@@ -111,6 +134,74 @@ class BtSheetDragTest {
                 assertEquals("travel=$t stacked=$stacked", expected, sheetStageOf(t, stacked))
             }
         }
+    }
+
+    // ── The detent haptic: once, on the way in ──────────────────────────────
+
+    @Test
+    fun `the detent fires on the crossing into close-all`() {
+        assertTrue(sheetNotchCrossed(SHEET_NOTCH_END - 0.01f, SHEET_NOTCH_END, stacked = true))
+        assertTrue(sheetNotchCrossed(0f, 1f, stacked = true))
+    }
+
+    @Test
+    fun `holding past the notch fires nothing more`() {
+        // The owner asked for a vibration "once you go past it", and once is the
+        // whole specification: a finger resting past the boundary still produces
+        // a stream of move events, and answering each of them would turn a detent
+        // into a buzz.
+        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, SHEET_NOTCH_END, stacked = true))
+        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, 0.9f, stacked = true))
+        assertFalse(sheetNotchCrossed(0.9f, 1f, stacked = true))
+    }
+
+    @Test
+    fun `retreating below the notch and crossing again fires again`() {
+        // Not a re-arm hack: going back is the user changing their mind, and
+        // coming forward again is them making the decision a second time.
+        assertFalse(sheetNotchCrossed(0.9f, 0.2f, stacked = true))
+        assertTrue(sheetNotchCrossed(0.2f, 0.9f, stacked = true))
+    }
+
+    @Test
+    fun `pulling back up across the notch is silent`() {
+        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, SHEET_NOTCH_END - 0.01f, stacked = true))
+    }
+
+    @Test
+    fun `a depth-1 sheet has no detent, because it has no second stage`() {
+        listOf(0f to 0.9f, 0.2f to 1f).forEach { (from, to) ->
+            assertFalse("$from -> $to", sheetNotchCrossed(from, to, stacked = false))
+        }
+    }
+
+    @Test
+    fun `the detent fires exactly where the release rule changes its mind`() {
+        // The haptic is a promise about what letting go will do. If the two ever
+        // disagreed, the buzz would be a lie — so they are pinned to each other
+        // rather than to a shared constant that one of them could stop using.
+        val step = 0.005f
+        var travel = 0f
+        var buzzed = false
+        while (travel <= 1f) {
+            val next = travel + step
+            if (sheetNotchCrossed(travel, next, stacked = true)) {
+                assertFalse("the detent must fire only once", buzzed)
+                buzzed = true
+                assertEquals(
+                    "the detent must land on the CLOSE_ALL boundary",
+                    SheetRelease.CLOSE_ALL,
+                    sheetRelease(next, 0f, flick, true),
+                )
+                assertEquals(
+                    "...and the frame before it must still be BACK_ONE",
+                    SheetRelease.BACK_ONE,
+                    sheetRelease(travel, 0f, flick, true),
+                )
+            }
+            travel = next
+        }
+        assertTrue("a full pull must cross the notch at all", buzzed)
     }
 
     // ── The depth axis: a rightward swipe walks back out ────────────────────
