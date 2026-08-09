@@ -1,9 +1,18 @@
 package at.bettertrack.app.ui.components
 
+import android.content.ContentResolver
+import android.media.AudioAttributes
+import android.os.Build
+import android.provider.Settings
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
@@ -49,8 +58,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * deliberate property of the keypad's original implementation and it survives
  * here — an app that vibrates after being told not to is a bug, not a feature.
  */
-@JvmInline
-value class BtHaptics(private val haptics: HapticFeedback) {
+class BtHaptics(
+    private val haptics: HapticFeedback,
+    /** See [detent]. Null when the device has no vibrator to reach past Compose. */
+    private val detentVibrator: BtDetent? = null,
+) {
 
     /**
      * A primary action committed — a save, a create, a submit, a destructive
@@ -94,17 +106,118 @@ value class BtHaptics(private val haptics: HapticFeedback) {
      * but the thumb is on the screen and the eye is not necessarily on the pill.
      * A detent is how physical controls have always reported this.
      *
-     * [HapticFeedbackType.LongPress] is deliberately the firmest constant
-     * available rather than a tick: this is a commitment boundary, and a faint
-     * blip past it would read as noise — the exact failure the rule above exists
-     * to prevent. It is fired once per crossing, never repeated while held.
+     * ## Why this one reaches past Compose to the [Vibrator]
+     *
+     * It shipped as [HapticFeedbackType.LongPress] and the owner did not feel it
+     * (2026-08-09: "make that haptic vibration once you go past"). Measured on the
+     * test phone: `LongPress` leaves Compose as `View.performHapticFeedback`, which
+     * Samsung resolves to its own light pattern — `SemHaptic{mType=50025}` in
+     * `dumpsys vibrator_manager` — and then plays on the TOUCH channel, which that
+     * phone has turned down to 40% (`VIB_FEEDBACK_MAGNITUDE=2` of 5,
+     * `mTouchMagnitude=4000` of 10000). A light pattern at 40% under a moving
+     * thumb is not a detent; it is nothing.
+     *
+     * So the effect is chosen here instead of delegated. `EFFECT_HEAVY_CLICK` is
+     * the heaviest predefined effect the LRA in that phone actually supports —
+     * probed against the alternatives, it runs 105ms where `CLICK` runs 64ms and
+     * `TICK` 61ms, and `THUD` is unsupported outright. Below API 29, where
+     * predefined effects do not exist, a short full-amplitude one-shot stands in.
+     *
+     * ## Why it asks whether it is allowed to, instead of assuming
+     *
+     * The obvious assumption — that tagging the vibration `USAGE_TOUCH` hands the
+     * user's touch-feedback switch back to the platform, the way
+     * `performHapticFeedback` does — was TESTED ON THE DEVICE AND IS FALSE. With
+     * `Settings.System.haptic_feedback_enabled` set to 0, a `USAGE_TOUCH`
+     * `Vibrator.vibrate` on the test phone was still recorded `status: finished`
+     * and still buzzed. That switch is enforced by `View.performHapticFeedback`
+     * on the way IN; a call that starts at the vibrator has already passed the
+     * place where it would have been stopped.
+     *
+     * So [BtDetent] reads the switch itself, on every crossing. An app that
+     * vibrates after being told not to is a bug, and reaching for a louder API
+     * would be a very easy way to write that bug by accident.
+     *
+     * Fired once per crossing, never repeated while held.
      */
-    fun detent() = haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    fun detent() {
+        if (detentVibrator == null) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        } else {
+            detentVibrator.play()
+        }
+    }
 }
+
+/**
+ * The sheet notch's detent, played straight at the motor. See [BtHaptics.detent]
+ * for why it exists and why [enabled] is checked here rather than trusted to the
+ * platform.
+ */
+class BtDetent internal constructor(
+    private val vibrator: Vibrator,
+    private val settings: ContentResolver,
+) {
+
+    /**
+     * The user's touch-feedback switch — the AOSP one every OEM toggle writes.
+     *
+     * Marked deprecated since API 33 with nothing offered in its place, and the
+     * framework has not stopped using it: `View.performHapticFeedback` still gates
+     * on exactly this key. Reading the deprecated constant is how the app stays
+     * silent in the same cases the platform would have silenced it.
+     */
+    @Suppress("DEPRECATION")
+    private fun enabled(): Boolean =
+        Settings.System.getInt(settings, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
+
+    fun play() {
+        if (!enabled()) return
+        val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+        } else {
+            VibrationEffect.createOneShot(BT_DETENT_FALLBACK_MS, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+        // USAGE_TOUCH is still the right tag even though it does not gate: it is
+        // what puts the vibration on the touch-intensity channel, so a user who
+        // has turned the strength DOWN rather than off still gets it down.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            vibrator.vibrate(
+                effect,
+                VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH),
+            )
+        } else {
+            // The pre-33 spelling of the same thing: sonification content on the
+            // sonification usage is what the platform maps to USAGE_TOUCH.
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(
+                effect,
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+        }
+    }
+}
+
+/** How long the pre-API-29 stand-in buzzes for. Long enough to register, short
+ *  enough to still read as one event rather than an alert. */
+private const val BT_DETENT_FALLBACK_MS = 35L
 
 /** The app's haptics, scoped to the current composition. */
 @Composable
 fun rememberBtHaptics(): BtHaptics {
     val haptics = LocalHapticFeedback.current
-    return remember(haptics) { BtHaptics(haptics) }
+    val context = LocalContext.current
+    return remember(haptics, context) {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Vibrator::class.java)
+        }
+        val motor = vibrator?.takeIf { it.hasVibrator() }
+        BtHaptics(haptics, motor?.let { BtDetent(it, context.contentResolver) })
+    }
 }

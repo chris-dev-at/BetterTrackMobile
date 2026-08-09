@@ -18,9 +18,9 @@ internal enum class SheetStage { IDLE, BACK, CLOSE_ALL }
 /**
  * What letting go of a swipe-down means.
  *
- * Owner's corrected model (2026-08-08): the travel meets its first resistance
- * just before three quarters of the sheet. Release at or before it = back ONE
- * page; drag through it past three quarters = the ENTIRE stack closes.
+ * Owner's model, as retuned 2026-08-09: the travel meets its resistance a QUARTER
+ * of the way down the sheet. Release at or before it = back ONE page; push
+ * through the band and release = the ENTIRE stack closes.
  */
 internal enum class SheetRelease {
     /** Inside the dead zone, or a flick back up — nothing happened. */
@@ -118,6 +118,57 @@ internal fun sheetPullFor(travel: Float): Float {
     }.coerceAtLeast(0f)
 }
 /**
+ * What the depth axis must be DRAWN at on the frame a depth change lands — or
+ * null when nothing is pending and the live value is the truth.
+ *
+ * ## The flicker this removes (owner, 2026-08-09)
+ *
+ * "There is still a light flicker when going back from a sub sub page to a sub
+ * page." Caught in the draw phase on the test phone, logging every plane's
+ * translation as it was painted:
+ *
+ * ```
+ * 10:57:35.069  planes=2 fromTop=0 key=93f6…  slide=1.0  tx=1080.0   leaving page, gone right
+ * 10:57:35.069  planes=2 fromTop=1 key=fdfa…  slide=1.0  tx=0.0      parent, exactly at rest
+ * 10:57:35.101  planes=1 fromTop=0 key=fdfa…  slide=1.0  tx=1080.0   <-- SAME page, off-screen
+ * 10:57:35.135  planes=1 fromTop=0 key=fdfa…  slide=0.0  tx=0.0      back where it was
+ * ```
+ *
+ * For 34ms — four frames of a 120Hz panel — the only page left was painted a full
+ * width to the right of where it had been painted the frame before, leaving the
+ * sheet showing nothing but its own background. That is the flicker, and it was
+ * never a rendering glitch: it is arithmetic.
+ *
+ * The two planes are positioned by two different expressions, `slide * w` for the
+ * top one and `-(1 - slide) * w` for the parent, and those agree only at
+ * `slide == 0`. A pop moves the surviving page from the second expression to the
+ * first while `slide` is still 1, so it moves by a whole width. The reset that
+ * fixes it lives in `LaunchedEffect(depth, topKey)`, and a `LaunchedEffect` body
+ * is dispatched *after* the composition that observed the smaller stack — so the
+ * frame in between draws with the old value. Nothing was wrong with the reset
+ * except that it could not possibly be early enough.
+ *
+ * So the frame is told the answer instead of waiting for it. A depth change is
+ * visible in composition (`depth` against the effect's `lastDepth`) one whole
+ * frame before the effect runs, and what the reset is *going* to write is fully
+ * determined by the direction of that change: a pop is heading for 0, a push is
+ * heading for 1 before it animates back to 0, and a sheet arriving from nothing
+ * is heading for 0. Returning it here makes the pop's own frame draw the settled
+ * geometry, and the effect's snap a moment later becomes a no-op on identical
+ * pixels — which is what the two-plane design always claimed it was.
+ */
+internal fun sheetPendingSlide(depth: Int, lastDepth: Int): Float? = when {
+    depth == lastDepth -> null
+    // Opening, or gone entirely: the top page is the only one that matters and it
+    // belongs at rest.
+    depth == 0 || lastDepth == 0 -> 0f
+    // A push starts off to the right and slides in.
+    depth > lastDepth -> 1f
+    // A pop has already slid out; the parent is the top page now, at rest.
+    else -> 0f
+}
+
+/**
  * Whether a rightward swipe on a depth->=2 sheet commits to going back.
  *
  * Distance OR velocity, and a flick back to the LEFT cancels — the same shape as
@@ -143,15 +194,18 @@ internal const val SHEET_DEAD_ZONE = 0.12f
 /**
  * Where the resistance begins. Depth >= 2 only.
  *
- * Moved "way more up" (owner, 2026-08-09): it sat at 0.72, which meant the second
- * stage only existed in the last quarter of a near-full-screen pull — most of the
- * travel was a single undifferentiated band and the decision arrived too late to
- * feel like a decision. It now begins near a third of the way down.
+ * **One quarter down (owner, 2026-08-09: "move the resistance point to 1/4 below
+ * the top and not at half way").** It sat at 0.36, which the owner read as
+ * halfway — and from the finger's side he was right: 0.36 of the sheet is 0.36 of
+ * a *full-screen* surface, so the wall arrived ~800px into the stroke, well past
+ * the middle of any comfortable thumb arc. A quarter is a quarter of the sheet AND
+ * roughly a quarter of the reachable stroke, which is the only reading of "1/4"
+ * that holds in both frames.
  */
-internal const val SHEET_NOTCH_START = 0.36f
+internal const val SHEET_NOTCH_START = 0.25f
 
-/** Past here releasing closes the whole stack. Inside the owner's 0.35–0.45 zone. */
-internal const val SHEET_NOTCH_END = 0.44f
+/** Past here releasing closes the whole stack. The band keeps its 0.09 width. */
+internal const val SHEET_NOTCH_END = 0.34f
 
 /**
  * How much of the finger's movement the sheet keeps while crossing the notch.
@@ -159,20 +213,20 @@ internal const val SHEET_NOTCH_END = 0.44f
  * `(END - START) / RESISTANCE` of sheet height in finger travel, so this is a
  * budget as much as a feeling — see the reachability guard in BtSheetDragTest.
  *
- * Retuned with the notch move (owner, 2026-08-09): "way more up" AND "stronger".
- * The two go together — a detent at 0.36 has most of the sheet left below it, so
- * it can afford to be much stiffer than one at 0.72 could. The sheet now keeps
- * 40% of the finger's movement while crossing (was 72%), which is a wall you
- * notice rather than a bump you might miss.
+ * **Softened (owner, 2026-08-09: "make the resistance less, because closing
+ * literally requires to swipe the entire screen").** The sheet now keeps HALF the
+ * finger's movement while crossing, up from 40%. The stiffening is still plainly
+ * there — the thumb moves twice as far as the sheet does — but it is a detent to
+ * push through rather than a wall to fight.
  *
- * The budget still works out easier than before, not harder: crossing costs
- * `(0.44 - 0.36) / 0.40 = 0.20` sheet-heights, so reaching close-all takes
- * `0.36 + 0.20 = 0.56` of the sheet in finger travel. On the test phone's 2241px
- * sheet that is ~1255px — a firm, deliberate stroke, but one that no longer has
- * to start on the grabber to be completable. See the reachability guard in
- * BtSheetDragTest.
+ * Resistance is a budget as much as a feeling, and the budget is what the owner
+ * was actually complaining about. Crossing now costs `(0.34 - 0.25) / 0.50 = 0.18`
+ * sheet-heights, so reaching close-all takes `0.25 + 0.18 = 0.43` of the sheet in
+ * finger travel. On the test phone that is **~961px of a 2316px screen — 41%,
+ * down from 1255px / 54%** — one unhurried thumb stroke that ends mid-screen
+ * instead of at the bottom bezel. See the reachability guard in BtSheetDragTest.
  */
-internal const val SHEET_NOTCH_RESISTANCE = 0.40f
+internal const val SHEET_NOTCH_RESISTANCE = 0.50f
 
 /** Depth-1 pull-down-to-close commit point. Unchanged from the shipped model. */
 internal const val SHEET_CLOSE_FRACTION = 0.50f

@@ -22,6 +22,20 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!--
+      The sheet's notch detent (BtHaptics.detent, 2026-08-09) picks its own
+      VibrationEffect instead of letting the platform choose one, because the
+      constant Compose sends resolves to a pattern too light to feel on the test
+      phone's 40%-intensity touch channel. Choosing the effect means calling
+      Vibrator directly, and that needs this permission — a normal one, granted at
+      install with no prompt.
+
+      It changes nothing about who is in charge: the vibration is still tagged
+      USAGE_TOUCH, so the same system switch that silenced the old path silences
+      this one, and the same intensity slider scales it.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
       REQUEST_INSTALL_PACKAGES is NOT here: it is the self-update permission and
       lives ONLY in the `github` flavor (app/src/github/AndroidManifest.xml). Play
       builds must not declare it (Device-and-Network-Abuse policy forbids

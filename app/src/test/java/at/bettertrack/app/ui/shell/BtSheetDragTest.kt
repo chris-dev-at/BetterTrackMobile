@@ -30,8 +30,8 @@ class BtSheetDragTest {
         // Both steps have to land short of SHEET_NOTCH_START, or this stops
         // testing the linear band and starts testing the notch by accident.
         assertEquals(0.1f, sheetDragTravel(0f, 200f, height, stacked = true), 1e-4f)
-        assertEquals(0.3f, sheetDragTravel(0.1f, 400f, height, stacked = true), 1e-4f)
-        assertTrue("the band under test must be below the notch", 0.3f < SHEET_NOTCH_START)
+        assertEquals(0.2f, sheetDragTravel(0.1f, 200f, height, stacked = true), 1e-4f)
+        assertTrue("the band under test must be below the notch", 0.2f < SHEET_NOTCH_START)
     }
 
     @Test
@@ -79,30 +79,39 @@ class BtSheetDragTest {
         // (END - START) / RESISTANCE of sheet height in FINGER travel, and an
         // earlier build put stage two beyond any thumb by getting this wrong.
         //
-        // Re-cut for the 2026-08-09 geometry. Moving the notch up while making it
-        // stiffer pulls this number in two directions at once, which is exactly
-        // why it needs a guard: 0.36/0.44 at resistance 0.40 costs
-        // 0.36 + 0.08/0.40 = 0.56 sheet-heights, about 1255px of the test phone's
-        // 2241px sheet. Comfortably inside one stroke — the old 0.80 was not —
-        // while still far enough that no ordinary dismissal reaches it by
-        // accident.
+        // Re-cut to the owner's 2026-08-09 complaint — "closing literally requires
+        // to swipe the entire screen". The ceiling is the number he was feeling,
+        // not an abstract one: 0.25/0.34 at resistance 0.50 costs
+        // 0.25 + 0.09/0.50 = 0.43 sheet-heights, ~961px of the test phone's
+        // ~2228px sheet, or 41% of its 2316px screen. The shipped 0.56 was 1255px
+        // and 54%, which is where "the entire screen" came from.
         val fingerToCloseAll = sheetPullFor(SHEET_NOTCH_END)
         assertTrue(
             "reaching close-all costs $fingerToCloseAll sheet-heights of finger",
-            fingerToCloseAll <= 0.62f,
+            fingerToCloseAll <= 0.50f,
         )
-        assertTrue("...but it must stay a deliberate pull", fingerToCloseAll >= 0.42f)
+        assertTrue("...but it must stay a deliberate pull", fingerToCloseAll >= 0.35f)
     }
 
     @Test
-    fun `crossing the notch costs distinctly more finger than the band is wide`() {
-        // The stiffening, stated as the thing the thumb actually feels: the last
-        // slice of travel before close-all must cost more than double its own
-        // width in finger movement, or the "stronger" half of the order is not in
-        // the numbers however early the boundary sits.
+    fun `the notch is a detent to push through, not a wall to fight`() {
+        // Both halves of the owner's order live here, as one bracket. Below 1.5x
+        // the band stops being felt as a boundary at all and the close-all stage
+        // becomes an accident waiting to happen; above 2.5x the finger is doing
+        // more than twice the sheet's work for a fifth of its height, which is the
+        // "resistance" he asked to have taken out.
         val band = SHEET_NOTCH_END - SHEET_NOTCH_START
         val fingerAcross = sheetPullFor(SHEET_NOTCH_END) - sheetPullFor(SHEET_NOTCH_START)
-        assertTrue("band $band costs only $fingerAcross of finger", fingerAcross >= band * 2f)
+        assertTrue("band $band costs only $fingerAcross of finger", fingerAcross >= band * 1.5f)
+        assertTrue("band $band costs a punishing $fingerAcross", fingerAcross <= band * 2.5f)
+    }
+
+    @Test
+    fun `the resistance starts a quarter of the way down`() {
+        // The owner's words were "1/4 below the top", and the dead zone has to
+        // still fit underneath it or the BACK_ONE stage has nowhere to live.
+        assertEquals(0.25f, SHEET_NOTCH_START, 0.03f)
+        assertTrue("BACK_ONE needs room below the notch", SHEET_DEAD_ZONE < SHEET_NOTCH_START)
     }
 
     @Test
@@ -244,5 +253,55 @@ class BtSheetDragTest {
     @Test
     fun `the depth axis moves the two planes together, like the main pager`() {
         assertEquals("pager-exact means 1:1", 1f, SHEET_DEPTH_PARALLAX, 1e-6f)
+    }
+
+    // ── The frame a depth change lands on ───────────────────────────────────
+
+    @Test
+    fun `a settled stack draws with the live value`() {
+        listOf(0, 1, 2, 3).forEach { d ->
+            assertEquals("depth=$d", null, sheetPendingSlide(d, d))
+        }
+    }
+
+    @Test
+    fun `the frame a pop lands on already draws the parent at rest`() {
+        // The whole of the flicker fix. The surviving page changes which formula
+        // positions it at the pop, and the two only agree at 0 — so 0 is what the
+        // pop's own frame has to be drawn with, a frame before the effect says so.
+        assertEquals(0f, sheetPendingSlide(1, 2))
+        assertEquals(0f, sheetPendingSlide(2, 3))
+    }
+
+    @Test
+    fun `the frame a push lands on draws the new page off to the right`() {
+        // The same bug mirrored: without this the destination is painted at rest
+        // for one frame and only then slides in from the right.
+        assertEquals(1f, sheetPendingSlide(2, 1))
+        assertEquals(1f, sheetPendingSlide(3, 2))
+    }
+
+    @Test
+    fun `a sheet arriving from nothing is drawn at rest, not off-screen`() {
+        // Depth 0 -> 1 is a push by the numbers but not by the motion: the sheet
+        // comes UP, on the travel axis, and the one plane it has must be where it
+        // will stay. Drawing it a width to the right would be an empty sheet.
+        assertEquals(0f, sheetPendingSlide(1, 0))
+        assertEquals(0f, sheetPendingSlide(2, 0))
+        assertEquals(0f, sheetPendingSlide(0, 1))
+        assertEquals(0f, sheetPendingSlide(0, 3))
+    }
+
+    @Test
+    fun `the pending value is exactly what the effect goes on to write`() {
+        // The guard against the two drifting apart: whatever this returns, the
+        // LaunchedEffect in BtSheetStack must snap `slide` to the same number, or
+        // the correction becomes a second flicker in the opposite direction.
+        // (depth 0 snaps to 0; previous 0 snaps to 0; a push snaps to 1 and THEN
+        // animates to 0; a pop snaps to 0.)
+        assertEquals(0f, sheetPendingSlide(0, 2))
+        assertEquals(0f, sheetPendingSlide(3, 0))
+        assertEquals(1f, sheetPendingSlide(3, 1))
+        assertEquals(0f, sheetPendingSlide(1, 3))
     }
 }

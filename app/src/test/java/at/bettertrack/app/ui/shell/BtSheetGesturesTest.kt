@@ -68,17 +68,17 @@ class BtSheetGesturesTest {
     }
 
     @Test
-    fun `the resistance sits early in the travel, and bites harder`() {
-        // The owner moved it (2026-08-09): "way more up" and "stronger". Both
-        // halves are pinned, because either one alone is a different gesture —
-        // an early notch that stays soft is a bump nobody notices, and a stiff
-        // notch left at 0.72 is a wall at the bottom of a pull that was already
-        // long. The stage boundary must land in the zone he named.
-        assertTrue("close-all must sit in the 0.35..0.45 zone", SHEET_NOTCH_END in 0.35f..0.45f)
-        assertTrue("the band must begin before it", SHEET_NOTCH_START < SHEET_NOTCH_END)
+    fun `the resistance sits a quarter down, and gives more than it takes`() {
+        // The owner moved it again (2026-08-09, second pass): "1/4 below the top
+        // and not at half way", and "make the resistance less". Both halves are
+        // pinned, because either one alone is a different gesture — a quarter-down
+        // notch that stays stiff still costs the whole screen to push through, and
+        // a soft notch left low down is a bump nobody reaches.
+        assertTrue("the resistance must start near a quarter", SHEET_NOTCH_START in 0.22f..0.28f)
+        assertTrue("the band must begin before it ends", SHEET_NOTCH_START < SHEET_NOTCH_END)
         assertTrue("...and clear of the dead zone", SHEET_NOTCH_START > SHEET_DEAD_ZONE)
-        assertTrue("the resistance must be a real one", SHEET_NOTCH_RESISTANCE <= 0.5f)
-        assertTrue("...but not a wall", SHEET_NOTCH_RESISTANCE > 0f)
+        assertTrue("the sheet must keep at least half the finger", SHEET_NOTCH_RESISTANCE >= 0.5f)
+        assertTrue("...but the notch must still be felt", SHEET_NOTCH_RESISTANCE < 1f)
     }
 
     @Test
@@ -86,9 +86,15 @@ class BtSheetGesturesTest {
         // Moving the boundary up shortens the first stage. It must not shorten it
         // to nothing: between letting go of the dead zone and reaching the notch
         // there has to be room to mean "back one page" on purpose.
+        //
+        // Measured in FINGER travel, not sheet travel, now that the notch sits
+        // inside the band: what the thumb has to aim at is the window between
+        // clearing the dead zone and paying for stage two.
+        val fingerBand = sheetPullFor(SHEET_NOTCH_END) - SHEET_DEAD_ZONE
+        assertTrue("back-one band is only $fingerBand of finger", fingerBand >= 0.25f)
         assertTrue(
             "back-one band is only ${SHEET_NOTCH_END - SHEET_DEAD_ZONE} of the sheet",
-            SHEET_NOTCH_END - SHEET_DEAD_ZONE >= 0.25f,
+            SHEET_NOTCH_END - SHEET_DEAD_ZONE >= 0.20f,
         )
     }
 

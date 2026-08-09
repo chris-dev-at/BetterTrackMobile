@@ -165,11 +165,19 @@ internal fun BtSheetStack(
     }
 
     // What a change in the stack means, in motion. A gesture-driven pop has
-    // ALREADY animated by the time it lands here, and it leaves `slide` at 1 —
-    // where the parent plane is drawn at exactly its rest position — so snapping
-    // to 0 with the parent now the top page is pixel-identical. That identity is
-    // the seam the owner saw as "goes blank and something shifts".
+    // ALREADY animated by the time it lands here and leaves `slide` at 1, so all
+    // that is left to do is put the axis back where the next gesture expects it.
+    //
+    // These snaps are corrections, not events: by the time this body runs, the
+    // frame has been drawn with the value it was going to write anyway, because
+    // [sheetPendingSlide] told the draw phase which way the change was going. The
+    // effect is where the value is REMEMBERED; the composition is where it is
+    // first BELIEVED. Getting those two the wrong way round is what made the pop
+    // flicker for four frames.
     var lastDepth by remember { mutableIntStateOf(0) }
+    // Read in COMPOSITION, not just in the effect: the gap between the two is
+    // exactly the frame the sheet used to flicker in. See [sheetPendingSlide].
+    val pendingSlide = sheetPendingSlide(depth, lastDepth)
     LaunchedEffect(depth, topKey) {
         val previous = lastDepth
         lastDepth = depth
@@ -390,7 +398,7 @@ internal fun BtSheetStack(
                     BtSheetPlanes(
                         pages = pages,
                         stacked = stacked,
-                        slide = slide,
+                        slideValue = { pendingSlide ?: slide.value },
                         widthPx = { widthPx },
                         leaving = { leaving },
                         flingVelocityPx = flingVelocityPx,
@@ -431,7 +439,8 @@ internal fun BtSheetStack(
 private fun BtSheetPlanes(
     pages: List<BtSheetPage>,
     stacked: Boolean,
-    slide: BtSheetMotion,
+    /** Read in the draw phase only — a lambda so a drag never recomposes here. */
+    slideValue: () -> Float,
     widthPx: () -> Float,
     leaving: () -> Boolean,
     flingVelocityPx: Float,
@@ -450,10 +459,11 @@ private fun BtSheetPlanes(
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
+                            val at = slideValue()
                             translationX = if (fromTop == 0) {
-                                slide.value * widthPx()
+                                at * widthPx()
                             } else {
-                                -(1f - slide.value) * widthPx() * SHEET_DEPTH_PARALLAX
+                                -(1f - at) * widthPx() * SHEET_DEPTH_PARALLAX
                             }
                         }
                         .draggable(
@@ -463,7 +473,7 @@ private fun BtSheetPlanes(
                             onDragStopped = { velocity ->
                                 if (!leaving()) {
                                     val commits = sheetBackSwipeCommits(
-                                        slide.value,
+                                        slideValue(),
                                         velocity,
                                         flingVelocityPx,
                                     )
