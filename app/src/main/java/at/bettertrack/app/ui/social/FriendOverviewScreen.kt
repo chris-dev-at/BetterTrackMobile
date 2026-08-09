@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.PersonOff
 import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material3.AlertDialog
@@ -285,7 +286,7 @@ fun FriendOverviewScreen(
     onBack: () -> Unit,
     onOpenChat: (String, String) -> Unit,
     onOpenSharedPortfolio: (String) -> Unit,
-    onOpenSharedWatchlist: (watchlistId: String, ownerName: String) -> Unit,
+    onOpenSharedWatchlist: (watchlistId: String) -> Unit,
     onOpenSharedConglomerate: (String) -> Unit,
     /** Where a freshly cloned idea lands — the caller's OWN copy, on the ideas surface. */
     onOpenIdea: (String) -> Unit,
@@ -430,6 +431,26 @@ fun FriendOverviewScreen(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     )
                 }
+            } else if (!ui.stillFriend) {
+                // R3 §2 again, one relationship further out. `stillFriend` has
+                // been computed since this screen was written and nothing ever
+                // read it, so an ex-friend's overview rendered the ordinary empty
+                // state: "@name hasn't shared anything with you yet" — a
+                // statement about what the person chose, when the fact is that
+                // the friendship is gone and the server would withhold their
+                // shares either way.
+                //
+                // Ahead of `sharesNothing` rather than beside it, because a stale
+                // row still in the last `sharedWithMe()` payload must not let the
+                // screen keep pretending the link is live.
+                item {
+                    BtEmptyState(
+                        icon = Icons.Outlined.PersonOff,
+                        title = stringResource(R.string.bt_social_fo_not_friend_title),
+                        message = stringResource(R.string.bt_social_fo_not_friend_body, username),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    )
+                }
             } else if (ui.sharesNothing) {
                 item {
                     BtEmptyState(
@@ -469,7 +490,7 @@ fun FriendOverviewScreen(
                     subtitle = pluralStringResource(R.plurals.bt_social_assets, w.itemCount, w.itemCount),
                     alertsOn = ui.activity[w.watchlistId] ?: false,
                     onToggleAlerts = { vm.toggleActivity(ShareableKind.Watchlist, w.watchlistId) },
-                    onOpen = { onOpenSharedWatchlist(w.watchlistId, w.ownerName) },
+                    onOpen = { onOpenSharedWatchlist(w.watchlistId) },
                     trailing = null,
                 )
             }
@@ -487,8 +508,10 @@ fun FriendOverviewScreen(
                 )
             }
 
-            // Remove friend (moved off the row, into the overview).
-            item {
+            // Remove friend (moved off the row, into the overview) — and absent
+            // once `stillFriend` is false, because a destructive control whose
+            // only possible outcome is a server error is not an offer.
+            if (ui.stillFriend) item {
                 Spacer(Modifier.height(8.dp))
                 Surface(
                     onClick = { confirmRemove = true },

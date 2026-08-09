@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +33,7 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
+import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.data.repo.TaxRepository
 import at.bettertrack.app.data.repo.TaxSettings
 import at.bettertrack.app.di.AppGraph
@@ -41,6 +43,7 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
+import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtSnackbarEffect
@@ -73,10 +76,37 @@ internal sealed interface TaxSettingsUiState {
     }
 }
 
-internal class TaxSettingsViewModel(private val repo: TaxRepository) : ViewModel() {
+/**
+ * The portfolio the native tax-report doorway will open, named on the row.
+ *
+ * A pair rather than an id because the row must SAY which portfolio it means.
+ * The web resolves an active portfolio silently and lands you on figures for
+ * whichever one that turned out to be; on a phone the switcher lives two screens
+ * away, so an unnamed row would be exactly the guess this screen's KDoc refused
+ * to make.
+ */
+internal data class TaxReportTarget(val portfolioId: String, val name: String)
+
+internal class TaxSettingsViewModel(
+    private val repo: TaxRepository,
+    private val portfolios: PortfolioRepository,
+) : ViewModel() {
 
     private val _state = MutableStateFlow<TaxSettingsUiState>(TaxSettingsUiState.Loading)
     val state: StateFlow<TaxSettingsUiState> = _state.asStateFlow()
+
+    private val _reportTarget = MutableStateFlow<TaxReportTarget?>(null)
+
+    /**
+     * Which portfolio the native "Tax reports" row targets, or null when the
+     * account has none cached yet — in which case the row is absent rather than
+     * pointing at nothing.
+     *
+     * Resolved through [PortfolioRepository.defaultSelection], the same one-shot
+     * §6.1 read the overview's own cascade uses, so the row names the portfolio
+     * the rest of the app is currently governed by rather than a second opinion.
+     */
+    val reportTarget: StateFlow<TaxReportTarget?> = _reportTarget.asStateFlow()
 
     private val _saving = MutableStateFlow(false)
     val saving: StateFlow<Boolean> = _saving.asStateFlow()
@@ -95,6 +125,10 @@ internal class TaxSettingsViewModel(private val repo: TaxRepository) : ViewModel
         viewModelScope.launch {
             _state.value = TaxSettingsUiState.Loading
             _saveError.value = null
+            // Independent of the settings read and deliberately not gating it: a
+            // failure here costs the native row, not the screen.
+            _reportTarget.value = portfolios.defaultSelection()
+                ?.let { TaxReportTarget(portfolioId = it.id, name = it.name) }
             _state.value = when (val r = repo.userTaxSettings()) {
                 is BtResult.Ok -> {
                     val draft = r.value.toDraft()
@@ -163,12 +197,13 @@ internal class TaxSettingsViewModel(private val repo: TaxRepository) : ViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaxSettingsScreen(onBack: () -> Unit) {
+fun TaxSettingsScreen(onBack: () -> Unit, onOpenTaxReports: (portfolioId: String) -> Unit = {}) {
     val bt = BtTheme.colors
     val vm: TaxSettingsViewModel = viewModel(key = "tax-settings") {
-        TaxSettingsViewModel(AppGraph.taxRepository)
+        TaxSettingsViewModel(AppGraph.taxRepository, AppGraph.portfolioRepository)
     }
     val state by vm.state.collectAsStateWithLifecycle()
+    val reportTarget by vm.reportTarget.collectAsStateWithLifecycle()
     val saving by vm.saving.collectAsStateWithLifecycle()
     val saveError by vm.saveError.collectAsStateWithLifecycle()
     val savedToast by vm.savedToast.collectAsStateWithLifecycle()
@@ -263,11 +298,27 @@ fun TaxSettingsScreen(onBack: () -> Unit) {
                 // report row on either client.
                 if (taxReportsLinkVisible(s.settings.mode)) {
                     BtGroup {
+                        // Native FIRST. The app's own tax-year screens are the
+                        // better answer for everything they cover, and burying
+                        // them behind Portfolio settings while this screen sent
+                        // users to a browser was the granularity inversion this
+                        // row fixes.
+                        reportTarget?.let { target ->
+                            BtGroupRow(
+                                title = stringResource(R.string.bt_taxyears_title),
+                                subtitle = stringResource(
+                                    R.string.bt_tax_settings_reports_native_sub,
+                                    target.name,
+                                ),
+                                icon = Icons.Outlined.Description,
+                                onClick = { onOpenTaxReports(target.portfolioId) },
+                            )
+                        }
                         BtWebLinkRow(
                             title = stringResource(R.string.bt_tax_settings_reports_row),
                             path = TAX_REPORTS_WEB_PATH,
                             subtitle = stringResource(R.string.bt_tax_settings_reports_sub),
-                            icon = Icons.Outlined.Description,
+                            icon = Icons.Outlined.Print,
                         )
                     }
                 }
@@ -298,22 +349,34 @@ fun TaxSettingsScreen(onBack: () -> Unit) {
  * ) : null}
  * ```
  *
- * ## Why this is a web hand-off and not a native route
+ * ## Why the web row SURVIVES the native one (2026-08-09)
  *
- * The app HAS a native tax-report screen, `TaxYearsRoute(portfolioId)` — but it
- * takes its subject from the route, deliberately, so that an ambient switcher
- * selection cannot silently retarget it (see the nav graph's "Management parity"
- * note). This screen edits the default that portfolios *inherit* and holds no
- * portfolio at all, so there is no id to hand it that would not be a guess.
+ * This row used to be the only tax-report destination on the screen, and the
+ * reasoning was that a screen editing the *inherited* default holds no portfolio
+ * id, so handing one to `TaxYearsRoute(portfolioId)` would be a guess. That was
+ * true about the route and wrong about the guess: the web solves the identical
+ * problem by resolving an active portfolio (`TaxReportPage.tsx:387-388` reads the
+ * `?portfolio=` param and falls back to `resolveActivePortfolio`), and the app
+ * has the same resolution as a first-class §6.1 concept in
+ * `PortfolioRepository.defaultSelection()`. So the native row now resolves it
+ * too — and, unlike the web, **names the portfolio on the row**, which turns the
+ * resolution from a silent assumption into a visible one. Result: sending a user
+ * to a browser for figures the app renders natively was a granularity inversion,
+ * and it is gone.
  *
- * The web has the same shape of problem and solved it the other way: its route
- * `portfolio/tax` (`UserApp.tsx:333`) carries no id either and resolves the
- * ACTIVE portfolio from `usePortfolioStore()` (`TaxReportPage.tsx:367`). Linking
- * to it therefore lands the user on exactly the page the web's own tax-settings
- * panel links to, resolved against the same active portfolio — which is the
- * parity this screen is being held to. The native per-portfolio destination is
- * untouched and still reachable where it has a subject: Portfolio settings →
- * Tax reports.
+ * The web row stays because it is not the same destination. Checked against the
+ * platform source, the native screens already match the web on the years table,
+ * the per-year drill-down, the locked/"Passed" badge, the German year-end block
+ * (allowance, both loss pots, KapESt/Soli) and the locale-aware CSV. What the web
+ * page has that no native screen does is the **print route**:
+ * `/portfolio/tax/print` (`UserApp.tsx:285`), a chrome-free document that
+ * auto-calls `window.print()` (`TaxReportPrintPage.tsx:233-242`) and is the only
+ * surface on either client that renders per-position DIVIDENDS
+ * (`TaxReportPrintPage.tsx:165-192`; the web's own on-screen page omits them,
+ * `TaxReportPage.tsx:89`). A tax report you can hand to an accountant as a PDF is
+ * a real capability, so the row keeps its place — retitled by its icon and
+ * subtitle to say that printing is what it is FOR, rather than competing with the
+ * native row for the same job.
  *
  * The path is joined to the EFFECTIVE origin by [BtWebLinkRow], so a dev or
  * self-hosted stack opens its own web app rather than production.

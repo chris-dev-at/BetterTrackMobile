@@ -56,6 +56,53 @@ class StorageModeTransitionsTest {
         )
     }
 
+    // ── What is offered vs what may be RENDERED ─────────────────────────────
+    //
+    // A reachability audit (2026-08-09) found "Where your data lives" rendering
+    // a live row for both additive transitions whose only possible outcome was a
+    // sentence saying the flow is unavailable — `StorageSetupWizard` exists but
+    // its single call site is the first-run gate, so an installed app can never
+    // enter it. These pin the narrowing AND its shape, so the day Vaults v2 P4
+    // gives the wizard an add-medium entry the removal of the filter is a
+    // deliberate act with failing tests behind it, not a silent drift.
+
+    @Test
+    fun `the additive transitions are legal in the model but not offered today`() {
+        // The model keeps them: they are what the state machine permits.
+        assertTrue(StorageTransition.SERVER_TO_BOTH in availableTransitions(StorageMode.SERVER))
+        assertTrue(StorageTransition.DRIVE_TO_BOTH in availableTransitions(StorageMode.DRIVE))
+        // The screen does not: neither has a flow to open.
+        assertEquals(emptyList<StorageTransition>(), offerableTransitions(StorageMode.SERVER))
+        assertEquals(emptyList<StorageTransition>(), offerableTransitions(StorageMode.DRIVE))
+        assertEquals(emptyList<StorageTransition>(), offerableTransitions(StorageMode.UNSET))
+    }
+
+    @Test
+    fun `dropping a medium is untouched by the narrowing`() {
+        // BOTH is the mode where every offer is real, and it must stay whole:
+        // hiding a way OUT of a two-medium setup would be the actual regression.
+        assertEquals(
+            availableTransitions(StorageMode.BOTH),
+            offerableTransitions(StorageMode.BOTH),
+        )
+    }
+
+    @Test
+    fun `nothing offerable can answer NeedsFlow`() {
+        // The property that makes the dead-end row impossible rather than merely
+        // absent: every transition the screen may render executes to a real
+        // result. Stated over every mode so a new transition cannot be added as
+        // offerable-but-unimplemented without tripping this.
+        val offered = StorageMode.entries.flatMap { offerableTransitions(it) }.toSet()
+        assertTrue("expected at least one offerable transition", offered.isNotEmpty())
+        offered.forEach { transition ->
+            assertFalse(
+                "$transition is offered but needs a multi-screen flow the UI cannot run",
+                transition.isAdditive,
+            )
+        }
+    }
+
     @Test
     fun `no transition ever removes the last medium`() {
         // The structural guarantee: every removal starts from BOTH, and every

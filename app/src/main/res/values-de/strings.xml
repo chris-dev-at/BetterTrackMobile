@@ -1061,6 +1061,8 @@
     <string name="bt_social_fo_empty_title">Nichts mit dir geteilt</string>
     <string name="bt_social_fo_empty_body">@%1$s hat noch keine Portfolios, Watchlists, Konglomerate oder Ideen mit dir geteilt.</string>
     <string name="bt_social_fo_offline_body">Was dieser Freund mit dir teilt, braucht eine Verbindung. Verbinde dich neu und versuch es erneut.</string>
+    <string name="bt_social_fo_not_friend_title">Ihr seid nicht mehr befreundet</string>
+    <string name="bt_social_fo_not_friend_body">@%1$s steht nicht mehr in deiner Freundesliste, deshalb erreicht dich hier nichts mehr, was diese Person teilt. Schick erneut eine Freundschaftsanfrage, um ihre Freigaben zu sehen.</string>
 
     <!-- Die geteilte Idee eines Freundes. Die Zusammenfassung ist ein VERWEIS:
          ein Name und ob eine These existiert. Es gibt keine schreibgeschützte
@@ -2340,8 +2342,9 @@
     <!-- ==== /STREAM-SETTINGS (DE) ==== -->
 
     <!-- ==== STREAM-TAX (DE) ==== -->
-    <string name="bt_tax_settings_reports_row">Deinen Steuerbericht pro Jahr ansehen</string>
-    <string name="bt_tax_settings_reports_sub">Für dein aktives Portfolio, in der BetterTrack-Web-App</string>
+    <string name="bt_tax_settings_reports_native_sub">%1$s — jedes Steuerjahr, mit CSV-Export</string>
+    <string name="bt_tax_settings_reports_row">Druckfertiger Steuerbericht</string>
+    <string name="bt_tax_settings_reports_sub">Druckfertiges PDF für dein aktives Portfolio, in der BetterTrack-Web-App</string>
     <string name="bt_tax_settings_disclaimer">Schätzwerte nur für deine persönliche Übersicht — keine Steuerberatung, keine Gewähr für Richtigkeit, kein Dokument für die Steuererklärung.</string>
     <string name="bt_2fa_recovery_download">Codes herunterladen</string>
     <!-- ==== /STREAM-TAX (DE) ==== -->

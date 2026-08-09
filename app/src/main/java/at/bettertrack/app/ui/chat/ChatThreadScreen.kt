@@ -237,7 +237,7 @@ fun ChatThreadScreen(
     onBack: () -> Unit,
     onOpenAsset: (assetId: String) -> Unit,
     onOpenSharedPortfolio: (portfolioId: String) -> Unit,
-    onOpenSharedWatchlist: (watchlistId: String, ownerName: String) -> Unit,
+    onOpenSharedWatchlist: (watchlistId: String) -> Unit,
     onOpenSharedConglomerate: (conglomerateId: String) -> Unit,
 ) {
     val vm: ChatThreadViewModel = viewModel {
@@ -301,7 +301,7 @@ fun ChatThreadScreen(
         when (chip.kind) {
             ShareChipKind.Asset -> onOpenAsset(chip.refId)
             ShareChipKind.Portfolio -> onOpenSharedPortfolio(chip.refId)
-            ShareChipKind.Watchlist -> onOpenSharedWatchlist(chip.refId, chip.ownerName ?: headerName)
+            ShareChipKind.Watchlist -> onOpenSharedWatchlist(chip.refId)
             ShareChipKind.Conglomerate -> onOpenSharedConglomerate(chip.refId)
             // Unknown chips render non-clickable, so this never fires — but keep the
             // when exhaustive and a no-op so an unmodeled kind can never navigate.

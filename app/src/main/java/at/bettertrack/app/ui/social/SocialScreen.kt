@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -372,6 +373,7 @@ fun SocialScreen(
                 onSelect = { section = it },
                 sharedCount = ui.sharedWithMe?.count ?: 0,
                 requestCount = ui.incoming.size,
+                mySharesCount = mySharesBadgeCount(ui.myShared),
             )
             PullToRefreshBox(
                 isRefreshing = ui.refreshing,
@@ -517,12 +519,36 @@ fun SocialScreen(
 
 // ── Segmented control ────────────────────────────────────────────────────────
 
+/**
+ * What the My-shares segment's badge counts.
+ *
+ * The badge used to be the literal `0`, so the one segment that reports on the
+ * user's OWN outbound exposure was the one segment that never said anything —
+ * and a permanent zero is not a neutral placeholder, it is a claim ("you share
+ * nothing") that happened to be wrong for every sharing user.
+ *
+ * The number is [MyShared.sharedCount], which the repository already computes:
+ * items whose audience is not [ShareAudience.Private]. That is the right count
+ * rather than `items.size` because the My-shares list is a list of everything
+ * *shareable*, private items included — badging the full list would report
+ * exposure the user does not have.
+ *
+ * `null` means the list has not loaded yet, which is 0 for badge purposes: the
+ * segment renders a badge only above zero, so an unloaded state shows none
+ * instead of flashing a wrong number and correcting it.
+ *
+ * Pure and named so the wiring is pinned by a unit test — the hard-coded zero
+ * was invisible precisely because nothing could fail on it.
+ */
+internal fun mySharesBadgeCount(myShared: MyShared?): Int = myShared?.sharedCount ?: 0
+
 @Composable
 private fun SegmentedTabs(
     selected: SocialSection,
     onSelect: (SocialSection) -> Unit,
     sharedCount: Int,
     requestCount: Int,
+    mySharesCount: Int,
 ) {
     Row(
         modifier = Modifier
@@ -532,7 +558,7 @@ private fun SegmentedTabs(
     ) {
         Segment(stringResource(R.string.bt_social_tab_friends), requestCount, selected == SocialSection.Friends, Modifier.weight(1f)) { onSelect(SocialSection.Friends) }
         Segment(stringResource(R.string.bt_social_tab_shared), sharedCount, selected == SocialSection.SharedWithMe, Modifier.weight(1f)) { onSelect(SocialSection.SharedWithMe) }
-        Segment(stringResource(R.string.bt_social_tab_my_shares), 0, selected == SocialSection.MyShares, Modifier.weight(1f)) { onSelect(SocialSection.MyShares) }
+        Segment(stringResource(R.string.bt_social_tab_my_shares), mySharesCount, selected == SocialSection.MyShares, Modifier.weight(1f)) { onSelect(SocialSection.MyShares) }
     }
 }
 
@@ -548,11 +574,25 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
         modifier = modifier,
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 9.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            // `weight(fill = false)` + ellipsis: the label takes what it needs and
+            // no more, and yields to the badge when the pill is too narrow for
+            // both. Without this the badge is the thing that gets pushed out —
+            // the label had no bound, so a long one (DE "Meine Freigaben") ran to
+            // the pill edge and clipped the count off the screen. The number is
+            // the part that cannot be inferred, so it is the part that must
+            // survive; a truncated word still reads.
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
             if (badge > 0) {
                 Spacer(Modifier.width(6.dp))
                 Box(modifier = Modifier.size(18.dp), contentAlignment = Alignment.Center) {

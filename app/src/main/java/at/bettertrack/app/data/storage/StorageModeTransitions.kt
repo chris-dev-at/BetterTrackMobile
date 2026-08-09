@@ -117,16 +117,45 @@ data class TransitionCapabilities(
 )
 
 /**
- * Which transitions the "Where your data lives" screen offers from [mode].
+ * Which transitions the §1.4 table declares legal from [mode].
  *
  * Blocked ones are still returned: the plan's §4.5 "absent, not greyed" rule is
  * about features a mode can *never* have, and these are features it can have as
- * soon as a prerequisite is met. Hiding them would leave a user who wants a Drive
- * backup with no way to discover that the app is willing — so they are surfaced,
- * clearly marked, and open a designed explainer instead of failing.
+ * soon as a prerequisite is met. So this is the *model* answer — what the state
+ * machine permits — and it stays complete regardless of which of them the app can
+ * currently run. What the screen may actually put in front of a user is
+ * [offerableTransitions].
  */
 fun availableTransitions(mode: StorageMode): List<StorageTransition> =
     StorageTransition.entries.filter { it.from == mode.effective }
+
+/**
+ * Which transitions "Where your data lives" may actually OFFER today.
+ *
+ * ## Why this is narrower than [availableTransitions]
+ *
+ * The two additive transitions ([StorageTransition.isAdditive], i.e.
+ * `SERVER_TO_BOTH` and `DRIVE_TO_BOTH`) are legal in the model and
+ * [StorageModeSwitcher.apply] answers [SwitchResult.NeedsFlow] for both: adding a
+ * medium is connect → passphrase → recovery kit → acknowledgment → verified round
+ * trip, and only a multi-screen flow can run that. `StorageSetupWizard` holds
+ * exactly that flow, but its single call site is the first-run gate
+ * (`ui/shell/BtRoot.kt`, `RootGate.WIZARD`), so an installed app has no way to
+ * enter it — the row could only ever print "not available here".
+ *
+ * A row that exists solely to say no is worse than no row: it reads as a working
+ * offer, costs a tap to disprove, and teaches the user that this screen's
+ * controls are decorative. Until the flow has a second entry point, the honest
+ * surface is silence.
+ *
+ * **This narrowing is temporary and belongs to the Vaults v2 P4 rebuild**, which
+ * re-enters `StorageSetupWizard` in add-medium mode from this screen. When that
+ * lands, drop the filter and the offer comes back with a real destination behind
+ * it — nothing else in the transition machinery has to change, which is why the
+ * restriction lives here as one filter rather than as deletions across the model.
+ */
+fun offerableTransitions(mode: StorageMode): List<StorageTransition> =
+    availableTransitions(mode).filterNot { it.isAdditive }
 
 /**
  * The prerequisite check. Pure, so every row of the §1.4 table is a unit test.

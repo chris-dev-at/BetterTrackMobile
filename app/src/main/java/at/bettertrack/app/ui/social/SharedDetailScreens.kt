@@ -155,9 +155,17 @@ fun SharedPortfolioViewScreen(portfolioId: String, onBack: () -> Unit) {
     }
 }
 
-/** Read-only friend-shared watchlist. */
+/**
+ * Read-only friend-shared watchlist.
+ *
+ * Took an `ownerName` until 2026-08-09 and never used it: the owner rendered on
+ * this screen is `d.owner.username` from the detail response, which is the
+ * authority, while the argument was a stale copy carried through the route from
+ * whichever list the user tapped. Dropped end to end — route field, both call
+ * sites, both caller signatures.
+ */
 @Composable
-fun SharedWatchlistViewScreen(watchlistId: String, ownerName: String, onBack: () -> Unit) {
+fun SharedWatchlistViewScreen(watchlistId: String, onBack: () -> Unit) {
     val state by produceState<BtResult<SharedWatchlistDetailResponse>?>(initialValue = null, watchlistId) {
         value = AppGraph.socialRepository.sharedWatchlist(watchlistId)
     }

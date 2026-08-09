@@ -1115,6 +1115,14 @@
     <string name="bt_social_fo_empty_title">Nothing shared with you</string>
     <string name="bt_social_fo_empty_body">@%1$s hasn\'t shared any portfolios, watchlists, conglomerates or ideas with you yet.</string>
     <string name="bt_social_fo_offline_body">What this friend shares with you needs a connection. Reconnect and try again.</string>
+    <!-- Shown when the friends list came back and this person is not in it: the
+         friendship ended (either side) while a link, a back stack or a stale
+         notification still pointed here. Without it the screen fell through to
+         bt_social_fo_empty_* and told the user "@name hasn't shared anything with
+         you yet" — a claim about the person, when the real fact is about the
+         relationship. -->
+    <string name="bt_social_fo_not_friend_title">You are no longer friends</string>
+    <string name="bt_social_fo_not_friend_body">@%1$s is not in your friends list any more, so nothing they share reaches you here. Send a friend request again to see their shares.</string>
 
     <!-- A friend's shared idea. The summary is a POINTER: a name and whether a
          thesis exists. There is no read-only view to open — `GET /ideas/{id}` is
@@ -2437,13 +2445,20 @@
     <!-- ==== /STREAM-SETTINGS (EN) ==== -->
 
     <!-- ==== STREAM-TAX (EN) ==== -->
-    <!-- Tax settings → the report hand-off. Title is the web's own link label
-         (settings.taxes.reportLink) minus its trailing arrow: the row already
-         carries an open-in-new glyph, and two direction cues is one too many.
-         The subtitle says which portfolio, because the web page resolves the
-         ACTIVE one and this screen is the account-level default. -->
-    <string name="bt_tax_settings_reports_row">View your per-year tax report</string>
-    <string name="bt_tax_settings_reports_sub">For your active portfolio, in the BetterTrack web app</string>
+    <!-- Tax settings → the NATIVE report doorway. Reuses bt_taxyears_title for
+         the title so this row and the screen it opens are called the same thing.
+         The subtitle names the resolved portfolio: this screen edits the
+         account-level default, so which portfolio the figures belong to is the
+         one thing the row must not leave the user to assume. -->
+    <string name="bt_tax_settings_reports_native_sub">%1$s — every tax year, with CSV export</string>
+    <!-- Tax settings → the report hand-off that STAYS on the web. Reworded
+         2026-08-09 when the native row landed beside it: the two rows are not
+         the same destination, and the old label ("View your per-year tax
+         report") described what the native screens now do. What the web page
+         alone has is the printable document route, so the row says that and
+         nothing else. -->
+    <string name="bt_tax_settings_reports_row">Printable tax report</string>
+    <string name="bt_tax_settings_reports_sub">Print-ready PDF for your active portfolio, in the BetterTrack web app</string>
     <!-- Verbatim from the web's settings.taxes.disclaimer — owner-mandated
          liability framing (#635), three distinct claims, kept word for word. -->
     <string name="bt_tax_settings_disclaimer">Estimates for your personal overview only — not tax advice, no guarantee of correctness, not a filing document.</string>

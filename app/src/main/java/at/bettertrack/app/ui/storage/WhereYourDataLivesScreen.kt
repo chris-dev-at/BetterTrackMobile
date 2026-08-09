@@ -59,7 +59,7 @@ import at.bettertrack.app.data.storage.SwitchResult
 import at.bettertrack.app.data.storage.SwitchWarning
 import at.bettertrack.app.data.storage.TransitionBlocker
 import at.bettertrack.app.data.storage.TransitionOutcome
-import at.bettertrack.app.data.storage.availableTransitions
+import at.bettertrack.app.data.storage.offerableTransitions
 import at.bettertrack.app.data.storage.effective
 import at.bettertrack.app.data.storage.evaluateTransition
 import at.bettertrack.app.data.storage.holdsVault
@@ -243,7 +243,12 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
     PricesSection(effective)
 
     // ── Change where it lives ───────────────────────────────────────────────
-    val transitions = availableTransitions(effective)
+    // `offerableTransitions`, not `availableTransitions`: the two additive rows
+    // (SERVER→BOTH, DRIVE→BOTH) have no flow to open and could only print an
+    // "unavailable" sentence, so they are not rendered at all. They return with
+    // the Vaults v2 P4 rebuild, which gives `StorageSetupWizard` an add-medium
+    // entry point from this screen — see `offerableTransitions`' own doc.
+    val transitions = offerableTransitions(effective)
     if (transitions.isNotEmpty()) {
         BtSectionHeader(stringResource(R.string.bt_storage_section_change))
         var message by remember { mutableStateOf<Int?>(null) }
@@ -264,6 +269,12 @@ private fun MainSection(onOpenRekey: () -> Unit, onOpenDelete: () -> Unit) {
                                 }
 
                             is SwitchResult.Applied -> R.string.bt_storage_switch_done
+                            // Unreachable while `offerableTransitions` withholds
+                            // the additive rows — they are the only source of
+                            // NeedsFlow. Kept because the branch must exist for
+                            // the `when` and because it is the correct answer the
+                            // moment Vaults v2 P4 puts those rows back with a
+                            // half-built flow behind them.
                             is SwitchResult.NeedsFlow -> result.transition.flowUnavailableMessage()
                         }
                     },

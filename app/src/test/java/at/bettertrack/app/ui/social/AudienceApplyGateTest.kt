@@ -194,6 +194,42 @@ class AudienceApplyGateTest {
         }
     }
 
+    // ── Group management: reachable BECAUSE you have groups, not despite ─────
+    //
+    // The 2026-08-09 reachability audit found the "Go to friend groups" button
+    // rendered inside the `groups.isEmpty()` branch only, so the sheet's route to
+    // group management disappeared the moment the user made their first group —
+    // exactly inverted. The rule is now a named function so the condition cannot
+    // drift back into whichever `if` branch an edit leaves it in.
+
+    @Test
+    fun `group management is offered whether or not groups exist`() {
+        // The regression, stated directly: 0 and N must answer the same.
+        assertTrue(audienceGroupManagementOffered(ShareAudience.Group, groupCount = 0))
+        assertTrue(audienceGroupManagementOffered(ShareAudience.Group, groupCount = 1))
+        assertTrue(audienceGroupManagementOffered(ShareAudience.Group, groupCount = 27))
+    }
+
+    @Test
+    fun `group management belongs to the group rung and to no other`() {
+        // It is a property of the rung, like every other rule in this file — the
+        // sheet must not grow a groups button under "Private" or "Public link".
+        everyRung.filter { it != ShareAudience.Group }.forEach { rung ->
+            assertFalse(
+                "$rung must not offer group management",
+                audienceGroupManagementOffered(rung, groupCount = 3),
+            )
+        }
+    }
+
+    @Test
+    fun `offering management never changes whether apply may fire`() {
+        // The affordance is navigation, not friction: adding it must leave the
+        // web-parity gate exactly where it was on the group rung.
+        assertFalse(gate(selected = ShareAudience.Group, hasGroup = false))
+        assertTrue(gate(selected = ShareAudience.Group, hasGroup = true))
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────────
 
     private fun gate(

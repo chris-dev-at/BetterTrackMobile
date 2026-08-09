@@ -213,12 +213,6 @@ fun AudiencePickerSheet(
                     // Never a dead end: the rung explains what a group is for and
                     // hands over a way to make one.
                     HintCard(stringResource(R.string.bt_groups_audience_empty))
-                    Spacer(Modifier.height(8.dp))
-                    BtSecondaryButton(
-                        text = stringResource(R.string.bt_groups_audience_goto),
-                        onClick = onOpenGroups,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
@@ -243,6 +237,18 @@ fun AudiencePickerSheet(
                     Spacer(Modifier.height(8.dp))
                     HintCard(stringResource(R.string.bt_groups_audience_live))
                 }
+            }
+            // Hoisted out of the empty/non-empty split entirely, and gated by the
+            // named rule rather than by whichever branch it sits in: it used to
+            // live inside `groups.isEmpty()`, so the way to manage groups
+            // vanished the moment you had one. See [audienceGroupManagementOffered].
+            if (audienceGroupManagementOffered(selected, groups.size)) {
+                Spacer(Modifier.height(8.dp))
+                BtSecondaryButton(
+                    text = stringResource(R.string.bt_groups_audience_goto),
+                    onClick = onOpenGroups,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             Spacer(Modifier.height(8.dp))
             AudienceOption(
@@ -313,6 +319,56 @@ fun AudiencePickerSheet(
 }
 
 // ── The friction ladder, as a rule rather than an expression ─────────────────
+
+/**
+ * Whether the group rung offers a way to **manage** friend groups.
+ *
+ * ## The bug this replaces
+ *
+ * The button lived inside the `groups.isEmpty()` branch, so it appeared only
+ * while the user had zero groups and disappeared the instant they made one. That
+ * is backwards on its face — group management is *more* useful once groups
+ * exist, not less — and it left the sheet with no route to the groups screen for
+ * everyone who actually uses the feature. Nothing was lost outright (People →
+ * Friends → Groups is still a live door), but this rung became a dead end at
+ * exactly the moment its subject became real.
+ *
+ * ## Why this is additive to the web rather than a copy of it
+ *
+ * The web's picker has **no group-management affordance at all**. Its group tier
+ * renders the radio list, or — only when `groups.length === 0` — one line of
+ * static prose:
+ *
+ * ```tsx
+ * // apps/web/src/user/components/AudiencePicker.tsx:466-470
+ * {audience === 'group' ? (
+ *   <div className="flex flex-col gap-2">
+ *     {groups.length === 0 ? (
+ *       <p className="bt-meta">{t('sharing.groupsNone')}</p>
+ * ```
+ *
+ * `sharing.groupsNone` (en.json:2954) reads *"You have no groups yet. Create one
+ * on the Friends page to share with a circle."* — a sentence, not a link; the
+ * file imports no router at all. So the web points at a destination and makes the
+ * user find it, and it stops pointing once you have a group.
+ *
+ * The parity law binds the ladder's *gates* ([audienceApplyAllowed] is the web's
+ * `canSubmit` clause for clause) — it does not require reproducing a navigation
+ * gap. On the web the Friends page is one persistent nav item away from an
+ * always-visible sidebar; on a phone this sheet is modal over a tab, there is no
+ * address bar, and the groups screen is three levels back. The web's pointer has
+ * to become a real control here or it is not a pointer.
+ *
+ * Pure and named so the condition is pinned by a unit test rather than by
+ * whichever branch of an `if` a future edit happens to leave it in.
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun audienceGroupManagementOffered(selected: ShareAudience, groupCount: Int): Boolean =
+    // `groupCount` is accepted and deliberately NOT read. The defect was a rule
+    // that read it; a signature blind to it would let the same mistake back in
+    // without ever touching this function, and the test that pins "same answer
+    // for 0 groups and for 5" needs the argument to pass in.
+    selected == ShareAudience.Group
 
 /**
  * Whether the public rung's **blocking acknowledgment** is owed.

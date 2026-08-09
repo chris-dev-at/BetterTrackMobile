@@ -144,7 +144,12 @@ import kotlinx.serialization.Serializable
 @Serializable data object FriendGroupsRoute
 /** Read-only friend-shared views (Step 14, §6.9). */
 @Serializable data class SharedPortfolioViewRoute(val portfolioId: String)
-@Serializable data class SharedWatchlistViewRoute(val watchlistId: String, val ownerName: String)
+// `ownerName` was dropped from this route 2026-08-09. The screen was handed it,
+// threaded it through two callers, and rendered `d.owner.username` from the
+// detail response instead — the argument was never read. Its two sibling routes
+// (`SharedPortfolioViewRoute`, `SharedConglomerateViewRoute`) always carried the
+// id alone; this one now matches them.
+@Serializable data class SharedWatchlistViewRoute(val watchlistId: String)
 @Serializable data class SharedConglomerateViewRoute(val conglomerateId: String)
 @Serializable data object ChatListRoute                                     // Step 15
 /**

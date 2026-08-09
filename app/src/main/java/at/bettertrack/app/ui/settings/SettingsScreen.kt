@@ -198,7 +198,11 @@ fun SettingsScreen(
     onOpenTaxSettings: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
-    onOpenChangelog: () -> Unit = {},
+    // `onOpenChangelog` was removed 2026-08-09: it went vestigial in a1e7882 when
+    // the About block left Settings for `AboutScreen`, which took the "What's new"
+    // row with it and wires its own `onOpenChangelog` (AppShell → AboutScreen).
+    // Settings kept the parameter and a live lambda for thirteen months and never
+    // invoked either. The doorway exists; only the plumbing to it was dead.
     onOpenDataHome: () -> Unit = {},
     onOpenGallery: () -> Unit = {},
     onOpenSyncDebug: () -> Unit = {},

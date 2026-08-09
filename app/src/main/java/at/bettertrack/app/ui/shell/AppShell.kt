@@ -820,8 +820,6 @@ fun BtApp() {
                 sheets = sheets,
                 onDeepLink = navigateDeepLink,
                 onSwitchTab = switchToTab,
-                discreetMode = discreetMode,
-                onToggleDiscreet = toggleDiscreet,
                 notifUnread = notifUnread,
                 showNotifications = showNotificationSurfaces,
                 occlusion = occlusion,
@@ -1324,9 +1322,12 @@ private fun BtSheetHost(
     sheets: BtSheetHostState,
     onDeepLink: (NotifDeepLink) -> Unit,
     onSwitchTab: (BtTab) -> Unit,
-    /** Discreet-mode state + its one implementation, shared with Overview's tail. */
-    discreetMode: Boolean,
-    onToggleDiscreet: (Boolean) -> Unit,
+    // `discreetMode` / `onToggleDiscreet` were removed 2026-08-09: declared here,
+    // handed a live lambda by the caller, and never invoked by any of the 47
+    // sheets. Discreet mode keeps both of its real doorways — Home's tail row
+    // (`HomeScreen`, fed from this same hoisted pair) and Settings → Preferences,
+    // which reads `AppGraph.discreetModeStore` directly. Nothing user-facing
+    // moved; only the third, unused thread through the sheet layer is gone.
     /** Inbox unread count, rendered on Overview's inbox row. */
     notifUnread: Int,
     showNotifications: Boolean,
@@ -1569,9 +1570,7 @@ private fun BtSheetHost(
                     navController.navigate(ChatThreadRoute(friendUserId = uid, friendUsername = un))
                 },
                 onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
-                onOpenSharedWatchlist = { watchlistId, ownerName ->
-                    navController.navigate(SharedWatchlistViewRoute(watchlistId, ownerName))
-                },
+                onOpenSharedWatchlist = { id -> navController.navigate(SharedWatchlistViewRoute(id)) },
                 onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
                 // A cloned idea is the caller's OWN idea from the moment it
                 // exists, so it opens on the ordinary owner-only detail route —
@@ -1586,7 +1585,7 @@ private fun BtSheetHost(
         }
         btSheet<SharedWatchlistViewRoute> { entry ->
             val route = entry.toRoute<SharedWatchlistViewRoute>()
-            SharedWatchlistViewScreen(watchlistId = route.watchlistId, ownerName = route.ownerName, onBack = back)
+            SharedWatchlistViewScreen(watchlistId = route.watchlistId, onBack = back)
         }
         btSheet<SharedConglomerateViewRoute> { entry ->
             val route = entry.toRoute<SharedConglomerateViewRoute>()
@@ -1614,9 +1613,7 @@ private fun BtSheetHost(
                 // chip opens the friend-shared read-only view (or the asset page).
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                 onOpenSharedPortfolio = { id -> navController.navigate(SharedPortfolioViewRoute(id)) },
-                onOpenSharedWatchlist = { watchlistId, ownerName ->
-                    navController.navigate(SharedWatchlistViewRoute(watchlistId, ownerName))
-                },
+                onOpenSharedWatchlist = { id -> navController.navigate(SharedWatchlistViewRoute(id)) },
                 onOpenSharedConglomerate = { id -> navController.navigate(SharedConglomerateViewRoute(id)) },
             )
         }
@@ -1636,7 +1633,6 @@ private fun BtSheetHost(
                 onOpenTaxSettings = { navController.navigate(TaxSettingsRoute) },
                 onOpenAbout = { navController.navigate(SettingsAboutRoute) },
                 onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
-                onOpenChangelog = { navController.navigate(ChangelogRoute) },
                 onOpenDataHome = { navController.navigate(StorageHomeRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
                 onOpenSyncDebug = { navController.navigate(SyncDebugRoute) },
@@ -1680,7 +1676,14 @@ private fun BtSheetHost(
 
         btSheet<TaxSettingsRoute> {
             ParanoidGate(onBack = back) {
-                at.bettertrack.app.ui.tax.TaxSettingsScreen(onBack = back)
+                at.bettertrack.app.ui.tax.TaxSettingsScreen(
+                    onBack = back,
+                    // The one exception to the "subject from the route" rule
+                    // above, and it is not one: this screen resolves the §6.1
+                    // selection itself and NAMES it on the row, so the id handed
+                    // over here is the one the user just read.
+                    onOpenTaxReports = { navController.navigate(TaxYearsRoute(it)) },
+                )
             }
         }
 
