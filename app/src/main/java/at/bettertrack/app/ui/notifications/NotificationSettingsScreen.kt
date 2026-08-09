@@ -22,8 +22,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -88,9 +91,9 @@ import kotlinx.coroutines.launch
  *    channel chips wrapped under a heading is the same data in a shape that is
  *    slower to read and easy to mis-tap.
  *
- * So the matrix and cadence became ONE [BtWebLinkRow] to `/control/notifications`,
- * and what remains is deliberately not a stub of the old screen. It is the set of
- * things that are either **device-only** or **genuinely identical on both sides**:
+ * So the matrix and cadence moved to the web, and what remains natively is
+ * deliberately not a stub of the old screen. It is the set of things that are
+ * either **device-only** or **genuinely identical on both sides**:
  *
  *  1. the **system permission** card — Android's, nothing to do with the web;
  *  2. the **account-wide mute** — the web's single "silence everything" switch,
@@ -118,6 +121,48 @@ import kotlinx.coroutines.launch
  *
  * Nothing is cleared, and the mute row's own subtitle is the web's sentence for
  * saying so — the difference between "muted" and "wiped".
+ *
+ * ## Why the web hand-off is FOUR named rows and not one (owner, 2026-08-09)
+ *
+ * *"if you have a feature that's only on web version link for it. don't just say
+ * all settings unless it's really nested."*
+ *
+ * The 2026-08-08 ruling was right about where these features live and wrong about
+ * how to say it. One row reading "All settings on the web" is not a link, it is a
+ * shrug: it names no feature, so the only way to find out whether the thing you
+ * want is over there is to go and look. The owner's own example is the giveaway —
+ * he had to describe the digest by function ("digestion button") because the app
+ * never gave it a name.
+ *
+ * So the section now carries one row per web-only feature family, each named the
+ * way the web names it, and between them they are **exhaustive**. The web panel
+ * (`NotificationsPanel.tsx:1181-1228`) is exactly four `PanelGroup`s:
+ *
+ *  - *General* — account mute (native here) + **browser push** (web-only);
+ *  - *Channels* — **Telegram + Discord** (web-only, and gated: see below);
+ *  - *Routing* — **the 25 × 6 type/channel matrix** (web-only);
+ *  - *Timing* — **delivery frequency / the digest** (web-only) + quiet hours
+ *    (native here).
+ *
+ * Every web-only item in that list has its own row, so there is nothing left for
+ * a catch-all row to stand for and none is drawn. That is the test for whether a
+ * blanket row is honest, and here it fails.
+ *
+ * ## Why all four rows open the same URL
+ *
+ * Because that is the only URL there is, and the alternative was to invent ones
+ * that 404. The Control Center matches `^/control(?:/([^/]+))?/?$`
+ * (`ControlCenterOverlay.tsx:278-284`) — **at most one** path segment — so
+ * `/control/notifications/digest` falls through to the web's own not-found page.
+ * There is no tab state, no `?tab=` parameter, and no hash handling anywhere in
+ * the panel; the ⌘K palette's "digest" and "quiet hours" entries are search
+ * KEYWORDS pointing at the same root path, not destinations.
+ *
+ * A row that names its feature and lands on the page containing it is still doing
+ * the job the owner asked for: it answers *"is this a thing, and where?"* before
+ * the tap rather than after. Two of the four (digest, quiet hours) additionally
+ * arrive inside a `<details>` fold that is collapsed by default, which is why no
+ * subtitle here promises to open anything "directly".
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,6 +175,9 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
 
     val delivery by store.delivery.collectAsStateWithLifecycle()
     val accountMuted by store.accountMuted.collectAsStateWithLifecycle()
+    // Which optional channels this deployment can deliver on — gates the
+    // Telegram/Discord row below, exactly as it gates the web's own group.
+    val channels by store.availability.collectAsStateWithLifecycle()
 
     // Pull the account settings on open. The result is STATE, not a fire-and-forget
     // call: while it is in flight the cached values are placeholders, not settings,
@@ -315,12 +363,40 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             }
 
             // ── ON THE WEB ───────────────────────────────────────────────────
+            // One NAMED row per web-only feature family — see this screen's KDoc
+            // for why the single "All settings on the web" row it replaces was
+            // the wrong shape.
             BtSectionHeader(stringResource(R.string.bt_notif_web_section))
             BtGroup {
                 BtWebLinkRow(
-                    title = stringResource(R.string.bt_notif_web_link_title),
-                    subtitle = stringResource(R.string.bt_notif_web_link_sub),
+                    title = stringResource(R.string.bt_notif_web_digest_title),
+                    subtitle = stringResource(R.string.bt_notif_web_digest_sub),
+                    icon = Icons.Outlined.Schedule,
+                    path = WEB_NOTIFICATION_SETTINGS_PATH,
+                )
+                BtWebLinkRow(
+                    title = stringResource(R.string.bt_notif_web_routing_title),
+                    subtitle = stringResource(R.string.bt_notif_web_routing_sub),
                     icon = Icons.Outlined.Tune,
+                    path = WEB_NOTIFICATION_SETTINGS_PATH,
+                )
+                // Only when the deployment can actually deliver on them. The
+                // server's `channels` object is the same gate the web uses to
+                // decide whether its Channels group exists at all, so a build
+                // without BT_TELEGRAM_DISCORD_ENABLED does not advertise a
+                // section its own web app is not rendering.
+                if (channels.telegram || channels.discord) {
+                    BtWebLinkRow(
+                        title = stringResource(R.string.bt_notif_web_channels_title),
+                        subtitle = stringResource(R.string.bt_notif_web_channels_sub),
+                        icon = Icons.Outlined.Forum,
+                        path = WEB_NOTIFICATION_SETTINGS_PATH,
+                    )
+                }
+                BtWebLinkRow(
+                    title = stringResource(R.string.bt_notif_web_browserpush_title),
+                    subtitle = stringResource(R.string.bt_notif_web_browserpush_sub),
+                    icon = Icons.Outlined.DesktopWindows,
                     path = WEB_NOTIFICATION_SETTINGS_PATH,
                 )
             }

@@ -1,6 +1,7 @@
 package at.bettertrack.app.navigation
 
 import at.bettertrack.app.data.notifications.NotifDeepLink
+import at.bettertrack.app.data.notifications.resolveDeepLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -70,6 +71,41 @@ class DeepLinkTabsTest {
         assertNull(owningTab(NotifDeepLink.Settings))
         assertNull(owningTab(NotifDeepLink.Security))
         assertNull(owningTab(NotifDeepLink.NotificationSettings))
+        // The inbox joined them on 2026-08-09. It is reached from the bell on all
+        // four tabs, so there is no tab it could be said to belong to — and a
+        // budget/chain push must not move the user to Portfolio to show it.
+        assertNull(owningTab(NotifDeepLink.Inbox))
+    }
+
+    /**
+     * A tapped push with no specific target lands on the INBOX, not nowhere.
+     *
+     * [at.bettertrack.app.data.notifications.resolveDeepLink] returns `null` for
+     * six kinds — budget.exceeded and the chain events by contract, the alert
+     * kinds and dividend.event when the payload carries no assetId — and every one
+     * of those branches carries a comment saying the tap "lands on the inbox".
+     * That was false for as long as it was written: `MainActivity` parked the
+     * result with `?.let`, so the null was dropped and the app cold-opened on
+     * Portfolio showing nothing.
+     *
+     * `null` still means "no specific destination" — that is the honest answer and
+     * the one the inbox's own row taps rely on, since a row resolving to `Inbox`
+     * would reopen the screen it was tapped on. This checks the two halves that
+     * make the promise true: the resolver keeps returning null, and the value the
+     * push path substitutes is unowned so it pushes over the current tab.
+     */
+    @Test
+    fun `kinds with no specific target resolve to null and fall back to the inbox`() {
+        listOf("budget.exceeded", "mirror.event", "alert.triggered", "dividend.event")
+            .forEach { type ->
+                assertNull(
+                    "$type without a usable payload must stay null — the fallback is " +
+                        "applied at the push call site, not here",
+                    resolveDeepLink(type, null),
+                )
+            }
+        // What MainActivity substitutes, and the property that makes it safe.
+        assertNull(owningTab(resolveDeepLink("budget.exceeded", null) ?: NotifDeepLink.Inbox))
     }
 
     @Test
@@ -78,6 +114,7 @@ class DeepLinkTabsTest {
             NotifDeepLink.Settings,
             NotifDeepLink.Security,
             NotifDeepLink.NotificationSettings,
+            NotifDeepLink.Inbox,
         )
         val all = listOf(
             NotifDeepLink.Social,
@@ -93,7 +130,7 @@ class DeepLinkTabsTest {
         // If a future link type is added, `owningTab`'s exhaustive `when` fails to
         // compile — this list keeps the runtime side honest for the cases that
         // exist today.
-        assertEquals("all twelve deep-link targets are covered", 12, all.size)
+        assertEquals("all thirteen deep-link targets are covered", 13, all.size)
         val (unowned, owned) = all.partition { it in accountLevel }
         assertTrue("no non-account link may be unowned", owned.all { owningTab(it) in BtTab.entries })
         assertTrue("account-level links are unowned", unowned.all { owningTab(it) == null })

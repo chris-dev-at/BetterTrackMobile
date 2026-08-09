@@ -35,6 +35,7 @@ import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.ui.components.BT_HEADER_COLLAPSED_HEIGHT
 import at.bettertrack.app.ui.components.BtHeaderSelector
 import at.bettertrack.app.ui.components.BtHeaderWordmark
+import at.bettertrack.app.ui.components.BtNotificationBell
 import at.bettertrack.app.ui.components.BtSettingsGear
 import at.bettertrack.app.ui.components.btBarScrolledHairline
 import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
@@ -88,6 +89,11 @@ import at.bettertrack.app.ui.theme.BtTheme
  * right edge no matter what else the row carries, and the wordmark's left edge is
  * the bar's. The transition below only ever changes what sits *between* them, and
  * a zone whose width changes pushes its own contents around rather than theirs.
+ *
+ * The bell (2026-08-09) joins that fixed set rather than the moving one: it is
+ * rendered unconditionally between the swap zone and the gear, so the trailing
+ * pair — bell, gear — is the same object on all four tabs and survives a swipe
+ * without moving. Only its badge changes, and a badge changing is information.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +106,15 @@ internal fun BtTabHeader(
     onLongPressWordmark: () -> Unit,
     onOpenSwitcher: () -> Unit,
     onAction: (BtTabHeaderAction) -> Unit,
+    /** Unread notifications, for the bell's badge. See [BtNotificationBell]. */
+    unreadNotifications: Int,
+    /**
+     * Whether this deployment HAS an inbox at all. Drive-only has no server to
+     * hold one, so the bell is absent there rather than present and broken —
+     * the same rule the tab badges and Overview's inbox row already follow.
+     */
+    showInbox: Boolean,
+    onOpenInbox: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -141,6 +156,16 @@ internal fun BtTabHeader(
                     )
                 }
             }
+            // The bell: second-to-last, on every tab, never in a swap zone.
+            //
+            // NOT a BtTabHeaderFace action, deliberately. A face action is the
+            // ONE thing a tab contributes and it cross-fades with the pager —
+            // both wrong here. The inbox is not any tab's business (it is the
+            // account's), and an affordance that fades in and out under a swipe
+            // is one a user cannot aim at. Constant position, constant presence:
+            // that is the whole repair — see [BtNotificationBell]'s KDoc for
+            // where it went.
+            if (showInbox) BtNotificationBell(unreadNotifications, onOpenInbox)
             // Last, always — the corner is the gear's address, and now it is one
             // address for the whole app rather than four that happen to agree.
             BtSettingsGear(onOpenSettings)

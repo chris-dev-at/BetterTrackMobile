@@ -153,6 +153,83 @@ class TopBarNavigationTest {
     }
 
     /**
+     * The notification BELL sits between the tab's action and the gear — on every
+     * tab, always (owner order 2026-08-09).
+     *
+     * ## The regression this exists to prevent, which already happened twice
+     *
+     * *"add the notifications back. I don't know where they went."* They went in
+     * two steps, and neither step was noticed by any test. `2b7b0e9` deleted
+     * `ui/notifications/NotificationBell.kt` and moved its job into an Overview
+     * overflow; `ec722a7` — the very commit that added THIS FILE — dissolved that
+     * overflow. Its KDoc carefully listed a second home for every item the menu
+     * held, and for the inbox it named two in-content paths on Overview. Then
+     * `0e6fd58` demoted Overview into the Portfolio switcher and both paths went
+     * four navigation steps deep, one of them appearing only when there was
+     * already unread mail.
+     *
+     * Every one of those commits was individually defensible and the suite stayed
+     * green through all three, because "the inbox is reachable" was a property
+     * nobody had written down. The screen never broke — it kept its route, its
+     * sheet registration and every v4 semantic — it simply ran out of callers.
+     *
+     * So the rule is now mechanical, and it is deliberately about POSITION rather
+     * than mere presence: a bell that exists but rides
+     * [at.bettertrack.app.ui.shell.BtTabHeaderAction] would cross-fade with the
+     * pager and be absent on three tabs out of four, which is the same defect in a
+     * newer costume.
+     */
+    @Test
+    fun `the shared tab bar carries the notification bell, before the gear`() {
+        val bar = sharedTabBar()
+        val actions = bar.substringAfter("actions = {").substringBefore("expandedHeight")
+        val swapZone = actions.indexOf("BtHeaderSwapZone(")
+        val bell = actions.indexOf("BtNotificationBell(")
+        val gear = actions.indexOf("BtSettingsGear(")
+
+        assertTrue(
+            "BtTabHeader no longer renders BtNotificationBell in its actions row. The " +
+                "inbox must stay one tap from every tab — owner order 2026-08-09. See " +
+                "this test's KDoc for the two commits that removed it last time.",
+            bell >= 0,
+        )
+        assertTrue(
+            "The bell must come AFTER the tab's own action (the swap zone) and BEFORE " +
+                "the settings gear. Order was: swapZone=$swapZone bell=$bell gear=$gear",
+            bell in (swapZone + 1) until gear,
+        )
+    }
+
+    /**
+     * The bell is a CONSTANT of the bar, not one tab's contextual action.
+     *
+     * [at.bettertrack.app.ui.shell.BtTabHeaderAction] is rendered through
+     * [at.bettertrack.app.ui.shell.BtTabHeader]'s swap zone, which composes every
+     * tab's version and cross-fades them with the pager. Anything routed through
+     * it is per-tab by construction and fades under a swipe. The inbox is an
+     * ACCOUNT surface — it belongs to no tab — and an affordance that fades in and
+     * out mid-gesture is one a user cannot aim at.
+     *
+     * The cheap way to add a bell is a fourth enum constant, and it would look
+     * right on whichever tab the author was testing while silently replacing
+     * Overview's search or People's messages. This forbids it.
+     */
+    @Test
+    fun `the bell is not routed through the per-tab action enum`() {
+        val bar = sharedTabBar()
+        val enumBlock = bar.substringAfter("internal enum class BtTabHeaderAction {")
+            .substringBefore("\n}")
+        listOf("Notification", "Bell", "Inbox").forEach { forbidden ->
+            assertTrue(
+                "BtTabHeaderAction gained a `$forbidden` constant. The bell must be a " +
+                    "constant of the bar rendered outside the swap zone, not a per-tab " +
+                    "action — see this test's KDoc.",
+                !enumBlock.contains(forbidden),
+            )
+        }
+    }
+
+    /**
      * The shared bar LEADS with the BetterTrack wordmark (owner order 2026-08-07).
      *
      * *"Have the BetterTrack logo on the top of the main pages — like on EVERY

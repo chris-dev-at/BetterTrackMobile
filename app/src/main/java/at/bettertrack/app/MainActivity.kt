@@ -20,6 +20,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import at.bettertrack.app.data.auth.AuthRepository
+import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.data.push.BtMessagingService
@@ -226,7 +227,11 @@ class MainActivity : FragmentActivity() {
         val type = intent?.getStringExtra(BtMessagingService.EXTRA_TYPE) ?: return
         val payloadRaw = intent.getStringExtra(BtMessagingService.EXTRA_PAYLOAD)
         val payload = payloadRaw?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
-        resolveDeepLink(type, payload)?.let { AppGraph.pendingDeepLink.value = it }
+        // No specific target ⇒ the INBOX, which is what this path always claimed
+        // to do and never did: the old `?.let` dropped the null and the app
+        // cold-opened on Portfolio, so tapping a budget, chain or id-less alert
+        // push showed the user nothing at all. See [NotifDeepLink.Inbox].
+        AppGraph.pendingDeepLink.value = resolveDeepLink(type, payload) ?: NotifDeepLink.Inbox
         // Consume so a rotation/restart doesn't re-fire the deep link.
         intent.removeExtra(BtMessagingService.EXTRA_TYPE)
         intent.removeExtra(BtMessagingService.EXTRA_PAYLOAD)

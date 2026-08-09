@@ -2399,7 +2399,7 @@
     <!-- ==== STREAM-NOTIF (EN) ==== -->
     <!-- Notification settings, web-parity pass: section names -->
     <string name="bt_notif_device_section">This device</string>
-    <string name="bt_notif_web_section">More settings</string>
+    <string name="bt_notif_web_section">More on the web</string>
     <!-- Account-wide mute. Wording is settings.notifications.mute from the web, verbatim. -->
     <string name="bt_notif_mute_all_title">Mute all notifications</string>
     <string name="bt_notif_mute_all_sub">While muted, nothing is delivered on any channel. Your choices are kept.</string>
@@ -2409,9 +2409,15 @@
     <string name="bt_notif_quiet_timezone_use_detected">Use my timezone (%1$s)</string>
     <string name="bt_notif_quiet_inbox_hint">Urgent account and security alerts always get through, and the in-app bell stays instant.</string>
     <!-- Hand-off to the web app -->
-    <string name="bt_notif_web_link_title">All settings on the web</string>
-    <string name="bt_notif_web_link_sub">Choose channels per notification type and how often they are bundled</string>
-    <string name="bt_notif_web_explainer">Which notification type reaches which channel — in-app, email, push, Telegram, Discord — and how often they are bundled is set once on the web. The app follows those settings; what is here is what only a phone can do.</string>
+    <string name="bt_notif_web_digest_title">Delivery frequency</string>
+    <string name="bt_notif_web_digest_sub">Instant, daily digest or weekly digest — per notification type</string>
+    <string name="bt_notif_web_routing_title">Routing</string>
+    <string name="bt_notif_web_routing_sub">Which notification type reaches which channel</string>
+    <string name="bt_notif_web_channels_title">Telegram and Discord</string>
+    <string name="bt_notif_web_channels_sub">Connect a chat account and pick what gets sent there</string>
+    <string name="bt_notif_web_browserpush_title">Browser push</string>
+    <string name="bt_notif_web_browserpush_sub">Notifications on a computer, set up per browser</string>
+    <string name="bt_notif_web_explainer">These open the web app\'s notification settings, where each of them lives. Everything else on this screen is set here, on the phone.</string>
     <!-- ==== /STREAM-NOTIF (EN) ==== -->
 
     <!-- ==== STREAM-SETTINGS (EN) ==== -->

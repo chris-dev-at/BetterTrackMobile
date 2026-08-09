@@ -105,8 +105,12 @@ import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.BtUnreadDot
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.shell.BtSheetRefreshBox
+import at.bettertrack.app.ui.shell.btRefreshAttempt
+import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 private enum class InboxPhase { Loading, Loaded, Error }
@@ -163,6 +167,39 @@ fun NotificationsInboxScreen(
         phase = InboxPhase.Loading
         val r = repo.refresh(selectedView)
         phase = if (r is BtResult.Err && notifications.isEmpty()) InboxPhase.Error else InboxPhase.Loaded
+    }
+
+    // ── Pull-to-refresh: the shared sheet mechanism, not a private one ───────
+    //
+    // The inbox is the one list in the app where "is this all of it?" is the
+    // question the screen exists to answer, and until now the only way to ask it
+    // again was to leave and come back. It joins the refresh family rather than
+    // growing its own indicator: that family owns the routing between a pull that
+    // refreshes and a pull that dismisses the sheet, including the 1100 ms
+    // latched disarm after a refresh fires (BT_REFRESH_DISARM_MS) — a private
+    // pullToRefresh here would fight the sheet exactly the way the family exists
+    // to stop.
+    //
+    // A StateFlow rather than a plain boolean because [btRefreshAttempt] is the
+    // other half of the mechanism: it raises the flag, puts a 25 s ceiling on the
+    // attempt, and lowers the flag in a `finally` so no path can strand the
+    // spinner. This screen has no view model to hold it, so it holds it itself.
+    val refreshingFlow = remember { MutableStateFlow(false) }
+    val refreshing by refreshingFlow.collectAsStateWithLifecycle()
+    fun refresh() {
+        scope.launch {
+            // A failed REFRESH keeps whatever is on screen and reports itself in
+            // the snackbar; only a failed FIRST load owns the screen (the Error
+            // phase above). Retry re-issues the same read, which is exactly what
+            // the pull asked for.
+            when (val r = btRefreshAttempt(refreshingFlow) { repo.refresh(selectedView) }) {
+                is BtResult.Err -> snackbar.showError(r.error.asMessage(), onRetry = { refresh() })
+                // The ceiling. Same routing as a refusal, because a request the
+                // app gave up on is a failed request.
+                null -> snackbar.showError(btRefreshTimedOutMessage(), onRetry = { refresh() })
+                else -> Unit
+            }
+        }
     }
 
     // Android 13+ POST_NOTIFICATIONS — asked IN CONTEXT here (never cold-launch).
@@ -281,7 +318,15 @@ fun NotificationsInboxScreen(
                             },
                         )
                     }
-                    InboxPhase.Loaded -> {
+                    // Both loaded shapes are inside the refresh box, the empty one
+                    // included: "nothing here" is precisely the state a user most
+                    // wants to re-ask, and BtStateFill is a LazyColumn, so it
+                    // dispatches the nested scroll the gesture is taken from.
+                    InboxPhase.Loaded -> BtSheetRefreshBox(
+                        isRefreshing = refreshing,
+                        onRefresh = { refresh() },
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
                         if (notifications.isEmpty()) {
                             BtStateFill {
                                 EmptyForView(selectedView, actionsEnabled, Modifier)

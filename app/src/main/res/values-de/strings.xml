@@ -2306,7 +2306,7 @@
     <!-- ==== STREAM-NOTIF (DE) ==== -->
     <!-- Mitteilungs-Einstellungen, Web-Parität: Abschnittsnamen -->
     <string name="bt_notif_device_section">Dieses Gerät</string>
-    <string name="bt_notif_web_section">Weitere Einstellungen</string>
+    <string name="bt_notif_web_section">Mehr im Web</string>
     <!-- Kontoweite Stummschaltung. Wortlaut = settings.notifications.mute.* des Webs. -->
     <string name="bt_notif_mute_all_title">Alle Mitteilungen stummschalten</string>
     <string name="bt_notif_mute_all_sub">Solange stummgeschaltet, wird auf keinem Kanal etwas zugestellt. Deine Auswahl bleibt erhalten.</string>
@@ -2316,9 +2316,15 @@
     <string name="bt_notif_quiet_timezone_use_detected">Meine Zeitzone verwenden (%1$s)</string>
     <string name="bt_notif_quiet_inbox_hint">Dringende Konto- und Sicherheitshinweise kommen immer durch, und die Glocke in der App bleibt sofort.</string>
     <!-- Übergabe an die Web-App -->
-    <string name="bt_notif_web_link_title">Alle Einstellungen im Web</string>
-    <string name="bt_notif_web_link_sub">Kanäle je Mitteilungstyp wählen und wie oft gebündelt wird</string>
-    <string name="bt_notif_web_explainer">Welcher Mitteilungstyp welchen Kanal erreicht — In-App, E-Mail, Push, Telegram, Discord — und wie oft gebündelt wird, legst du einmal im Web fest. Die App richtet sich danach; hier steht, was nur ein Telefon kann.</string>
+    <string name="bt_notif_web_digest_title">Zustellhäufigkeit</string>
+    <string name="bt_notif_web_digest_sub">Sofort, tägliche oder wöchentliche Zusammenfassung — je Mitteilungstyp</string>
+    <string name="bt_notif_web_routing_title">Zuordnung</string>
+    <string name="bt_notif_web_routing_sub">Welcher Mitteilungstyp welchen Kanal erreicht</string>
+    <string name="bt_notif_web_channels_title">Telegram und Discord</string>
+    <string name="bt_notif_web_channels_sub">Chat-Konto verbinden und festlegen, was dorthin geht</string>
+    <string name="bt_notif_web_browserpush_title">Browser-Push</string>
+    <string name="bt_notif_web_browserpush_sub">Mitteilungen am Computer, je Browser eingerichtet</string>
+    <string name="bt_notif_web_explainer">Diese Punkte öffnen die Mitteilungs-Einstellungen der Web-App, wo sie jeweils liegen. Alles andere auf diesem Bildschirm wird hier am Telefon eingestellt.</string>
     <!-- ==== /STREAM-NOTIF (DE) ==== -->
 
     <!-- ==== STREAM-SETTINGS (DE) ==== -->

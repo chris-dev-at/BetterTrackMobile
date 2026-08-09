@@ -106,8 +106,8 @@ fun tabTapAction(tapped: BtTab, exactTab: BtTab?): TabTap =
  *
  * ## The account-level exception, and why it is `null` rather than a tab
  *
- * Settings, Security and Notification settings are not *about* any tab: they are
- * account-level surfaces reachable from every one of them. Before the IA change
+ * Settings, Security, Notification settings and the Inbox are not *about* any
+ * tab: they are account-level surfaces reachable from every one of them. Before the IA change
  * they were mapped to Home purely because Home was the graph's start
  * destination — a deterministic parent, chosen for the absence of a better one.
  *
@@ -140,8 +140,12 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     NotifDeepLink.Alerts -> BtTab.Workbench
 
     // Account-level: owned by no tab, pushed over the current one — see the KDoc.
+    // The inbox belongs here for the same reason and one of its own: it is now
+    // reachable from the bell on ALL FOUR tabs, so there is no tab it could be
+    // said to live under, and forcing a switch would move the user for nothing.
     NotifDeepLink.Settings,
     NotifDeepLink.Security,
     NotifDeepLink.NotificationSettings,
+    NotifDeepLink.Inbox,
     -> null
 }

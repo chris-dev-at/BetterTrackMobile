@@ -192,18 +192,21 @@ private enum class TabBadge {
     /** Alerts that have fired — the other badge the top bar used to carry. */
     Alerts,
 
-    /**
-     * Unread notifications — inherited from Overview's ⋮ when that menu was
-     * dissolved (nav restoration 2026-08-06).
-     *
-     * It belongs on **Portfolio** because that is the tab the inbox is reached
-     * from: Overview lives inside it, and Overview is where both entry points to
-     * the inbox are (the "Needs you" card and the quiet tail's Inbox row). The
-     * old home for this dot was the ⋮ glyph itself, which meant the app could
-     * only tell you something was waiting while you were already looking at the
-     * screen that would have told you anyway.
-     */
-    Inbox,
+    // ── Inbox: RETIRED 2026-08-09 ────────────────────────────────────────────
+    //
+    // Unread notifications used to light the Portfolio tab's dot, inherited from
+    // Overview's ⋮ when that menu was dissolved (nav restoration 2026-08-06).
+    // The reasoning then was that Portfolio is "the tab the inbox is reached
+    // from" — true at the time, and the whole problem: it made a global signal
+    // point at one tab because that tab happened to contain the only door.
+    //
+    // The bell in the shared bar is that door now, on every tab, and it carries
+    // the COUNT rather than a dot. Keeping the Portfolio dot as well would mean
+    // one fact drawn twice, in two grammars, one of which sends you to a tab
+    // whose own content has nothing to do with it. So the bell is the single
+    // unread surface and this constant is gone. The two remaining badges are
+    // unaffected: Chat and Alerts point at tabs that really do CONTAIN their
+    // destination, which is the property Inbox never had.
 }
 
 /**
@@ -244,7 +247,8 @@ private data class TabSpec(
  * by a comment that claimed the shell read the enum — it never did.
  */
 private val Tabs = listOf(
-    TabSpec(BtTab.Portfolio, R.string.bt_tab_portfolio, BtIcons.Pie, BtSurface.PORTFOLIO, badge = TabBadge.Inbox),
+    // No badge: unread notifications moved to the bell (see [TabBadge]).
+    TabSpec(BtTab.Portfolio, R.string.bt_tab_portfolio, BtIcons.Pie, BtSurface.PORTFOLIO),
     TabSpec(BtTab.Markets, R.string.bt_tab_markets, BtIcons.Assets, BtSurface.MARKET),
     TabSpec(BtTab.Workbench, R.string.bt_tab_workbench, BtIcons.Workbench, BtSurface.CONGLOMERATES, badge = TabBadge.Alerts),
     TabSpec(BtTab.People, R.string.bt_tab_people, BtIcons.People, BtSurface.SOCIAL, badge = TabBadge.Chat),
@@ -547,6 +551,9 @@ fun BtApp() {
             NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
             NotifDeepLink.NotificationSettings ->
                 open(link) { navController.navigate(SettingsNotificationsRoute) }
+            // The fallback destination for a tapped push with no specific target
+            // — the same sheet the bell opens. See [NotifDeepLink.Inbox].
+            NotifDeepLink.Inbox -> open(link) { navController.navigate(NotificationsInboxRoute) }
         }
         }
     }
@@ -694,7 +701,6 @@ fun BtApp() {
                             TabBadge.None -> false
                             TabBadge.Chat -> showSocialSurfaces && chatUnread > 0
                             TabBadge.Alerts -> showNotificationSurfaces && triggeredAlerts > 0
-                            TabBadge.Inbox -> showNotificationSurfaces && notifUnread > 0
                         }
                     },
                     // Owner directive 2026-08-07: tapping Portfolio while the
@@ -761,6 +767,12 @@ fun BtApp() {
                                 BtTabHeaderAction.None -> Unit
                             }
                         },
+                        // The bell, restored to the chrome (owner 2026-08-09). Same
+                        // count the Portfolio tab's dot used to carry — that dot is
+                        // retired, see [TabBadge].
+                        unreadNotifications = notifUnread,
+                        showInbox = showNotificationSurfaces,
+                        onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
                         onOpenSettings = { navController.navigate(SettingsRoute) },
                     )
                     // Global offline banner (§7.4): real connectivity + cached-data

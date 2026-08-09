@@ -220,6 +220,28 @@ sealed interface NotifDeepLink {
     data object Security : NotifDeepLink
     /** The notification-settings screen (account.notice announcements). */
     data object NotificationSettings : NotifDeepLink
+
+    /**
+     * The inbox itself — where a tapped push lands when its kind has no more
+     * specific target (2026-08-09).
+     *
+     * This existed as a PROMISE long before it existed as a value. Six branches
+     * of [resolveDeepLink] return `null` with a comment saying the tap "lands on
+     * the inbox" — budget.exceeded and the chain events by contract
+     * (mobile-push.md §4), the alert kinds and dividend.event when the payload
+     * carries no assetId. The interface KDoc above said the same thing. None of
+     * it was true: `MainActivity.handleNotificationIntent` parks the result with
+     * `?.let`, so a `null` was silently dropped and the app cold-opened on
+     * Portfolio with no sign of what had been tapped.
+     *
+     * Fixing it at the CALL SITE rather than in [resolveDeepLink] is deliberate.
+     * `null` still means "this notification has no specific destination", which
+     * is the honest answer and the one the inbox's own row taps need — a row that
+     * resolved to `Inbox` would reopen the screen it was tapped on. Only the push
+     * path turns that absence into a destination, because only the push path has
+     * nowhere else to be.
+     */
+    data object Inbox : NotifDeepLink
 }
 
 /**
