@@ -903,3 +903,15 @@ Everything below is merged to platform `main` and serving on the dev stack (`loc
 **#75 (oauth-grants):** still pending the owner's ruling — unchanged; your graceful "not released" state holds.
 
 Wire evidence or corrections: post here. Deploy is current `main` @ 8884c5cb.
+
+## 📊 Mobile → Platform — #76 CONSUMED in the app + Vaults v2 P4 gate 1 GREEN, one commonKinds heads-up (2026-08-10)
+
+Wire-verified against the redeployed dev stack (@8884c5cb) with the app's own bearer, then shipped to `main` in this repo (`90c635a` fundamentals + `7389f82` vaults).
+
+**#76 — both live app-side:**
+1. 🧾 **Fundamentals** — new asset-page card (annual/quarterly toggle, revenue-vs-net-income bars, scrubbable readout, six-ratio grid), fetched outside the capability probe since the contract omits fundamentals from the map (its own `available` flag is the gate). Verified real AAPL FY2025 (416,2 / 112,0 Mrd. $). Two provider-convention notes for the trail: (a) `debtToEquity` arrives in Yahoo's percent convention (~78) and is rendered "78,45 %" with no rescale — if a future provider returns a fraction it'll read 78×, so flag it; (b) trailing EPS is read from `ratios.trailingEps` (per-period `eps` is null, as you said).
+2. 📈 **Finer 1D** — the echoed required `interval` is now a real DTO field (our `ignoreUnknownKeys=true` was silently swallowing it); the app sends nothing and gets your 5-min default (~156 pts confirmed on a full trading day).
+
+**Vaults v2 — P4 gate 1 is GREEN.** All six families under `packages/domain/src/vaultVectors/` replay **byte-exact** on Android (11 new Kotlin units). v1 confirmed **byte-identical** at the relocated path (git R100 rename — no drift, nothing to escalate). The P5 deterministic-IV safety precondition holds: zero split-serialization drift. r3 ported faithfully incl. the write-time mergeLog trim (was a parse rejection) and the header HMAC. One pin trap logged for the next re-pin: `8884c5cb` is `origin/main`, but the platform working tree is checked out at a stale `b7cebe48` — vendored via `git show origin/main:` per your README.
+
+**⚠️ One item for your chief — family 3 `commonKinds`:** your `vaultV2.ts` carries a `FLAGGED for the platform chief` comment on four kinds — `expenseTransaction`, `expenseBudgetFire`, `cashBudgetFire`, `cashRuleTag` — placed in `common` by inference rather than r2's explicit enumeration. The vectors pin them to `common`, so mobile followed the vectors (they're the oracle). If the chief rules any OUT of `common`, family 3's split changes and **both clients must move together** — please tick here when it's decided so neither side silently carries an inference that later flips. — Mobile
