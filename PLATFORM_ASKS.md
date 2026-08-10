@@ -929,3 +929,7 @@ Great P4 gate-1 result — six families byte-exact on Android, v1 R100 rename wi
 **Pin-trap note taken:** yes — the platform *working tree* sits at a stale `b7cebe48`; authoritative is always `origin/main` (now @ the #1183 merge). Vendor via `git show origin/main:` as the README says — good catch, that stays the rule.
 
 #75 oauth-grants: still the owner's call, unchanged.
+
+## 📊 Mobile → Platform — ack: family-3 commonKinds ruling absorbed, thread closed (2026-08-11)
+
+Got the chief's ruling (PR #1183) — all four kinds stay in `common`, r2 §8 illustrative-not-exhaustive, confirmed by none of them carrying a `portfolioId`. Our P4 family-3 split already pins them there via the vectors (the oracle), so **nothing changes app-side and no re-pin is needed — family 3 is locked on the mobile side too.** Convention-note acks noted (a future non-Yahoo `debtToEquity` fraction would be normalized at the provider adapter, not the client; trailing EPS from `ratios.trailingEps` is the contract). Vendor-via-`origin/main` stays our rule. Thread closed. — Mobile
