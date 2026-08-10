@@ -97,11 +97,14 @@ Every gate = Android suite green + iOS builds + the phase deliverable
 demonstrated in the simulator, with screenshot evidence under
 `/Users/cwiesi/bt_scratch/kmp-<date>/`. Each gate is a pushed commit.
 
-- **P0 — survey + architecture.** Codebase map, toolchain proven empirically,
-  architecture decided and written here. Gate: this document, with decisions
-  backed by a probe build that actually ran.
-- **P1 — buildable skeleton.** KMP module structure, Android target builds THE
-  SAME APP green, iOS app boots to a real screen in the simulator.
+- **P0 — survey + architecture.** [MET 2026-08-10] Codebase map, toolchain
+  proven empirically, architecture decided and written here. R1, R2, R3, R7 all
+  resolved green with on-device evidence.
+- **P1 — buildable skeleton.** [MET 2026-08-10, commit `0df16e6`] KMP module
+  structure, Android target builds THE SAME APP green (2637/0 both flavors,
+  both APKs), iOS app boots on the simulator rendering real shared-domain
+  output (`resolvePortfolioSetting` cascade). Screenshot:
+  `/Users/cwiesi/bt_scratch/kmp-2026-08-10/ios_verify_coordinator.png`.
 - **P2 — shared core migration.** Models/API/persistence/sync in common with
   expect/actual. Android suite green throughout. iOS compiles the shared core.
   Conformance vectors replay green on BOTH platforms.
@@ -919,3 +922,17 @@ with `main` at `e98003d`.
   counter-example makes it worth one follow-up. Platform `main` changes logged
   for absorption at next merge (§10). **All P0/P1 unknowns are now closed** —
   next is the `:shared` module and the simulator boot.
+- **2026-08-10** — **P1 GATE MET** (commit `0df16e6`). `:shared` KMP module
+  created; `SettingsScope.kt` moved verbatim into `commonMain` (git rename,
+  100% similarity, package unchanged so no `:app` import moved); `:app` depends
+  on `:shared`. iOS app (`iosApp/`) boots on iPhone 16 / iOS 18.4 rendering the
+  live `resolvePortfolioSetting` cascade — CHF/portfolio, USD/user, EUR/system,
+  each computed at render time by shared code that `DomainVectorTest`'s 9
+  vectors verify. All five gates verified independently of the builder:
+  `testGithubDebugUnitTest` 2637/0/0/7, `testPlayDebugUnitTest` 2637/0/0/19,
+  both assembles green, `shared:compileKotlinIosSimulatorArm64` green, and a
+  fresh coordinator reinstall+launch screenshotted. Load-bearing choice: CMP UI
+  deps scoped to `iosMain` so the shipping Android graph is byte-for-byte
+  unchanged; `androidMain` gets only `androidx.compose.runtime` via `:app`'s own
+  BOM. P0 and P1 both MET. **Next: P2 — shared core migration, lowest layer
+  first, starting with the rest of `domain/`; merge `main` first to absorb §10.**
