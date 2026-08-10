@@ -160,7 +160,13 @@ class CashLedgerHandPortedTest {
         val e = assertThrows(InsufficientCashError::class.java) {
             applyCashMovement(0.0, mv("withdrawal", -1.0, "2026-01-05"))
         }
-        assertFalse("InsufficientCashError must not be a CashLedgerError", e is CashLedgerError)
+        // Both checks go through `as Any` deliberately. The compiler can prove
+        // statically that InsufficientCashError is neither of these, so a direct
+        // `e is …` is a warning at Kotlin 2.3 and a hard ERROR at 2.4 (KTLC-365)
+        // — but proving it statically is exactly what this test is asserting
+        // stays true. Widening to Any keeps it a genuine runtime check, so the
+        // test still fails if someone later makes the hierarchies overlap.
+        assertFalse("InsufficientCashError must not be a CashLedgerError", (e as Any) is CashLedgerError)
         assertTrue("both are still DomainExceptions", (e as Any) is DomainException)
     }
 
