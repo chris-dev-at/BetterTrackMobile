@@ -568,12 +568,50 @@ schema real users already have on disk.
 
 ### D8 — Network: Ktor 3.5.2, with Ktorfit as the preferred shape (UNVERIFIED)
 
-Ktor + Darwin is proven (§6.4). **Ktorfit is not** — it was in the untested Q5
-batch. The choice matters: with Ktorfit the 189 endpoints are re-plumbed and
-four middleware classes rewritten; without it, it is a 189-endpoint hand
-rewrite. A P1 spike settles it. Either way the middleware must reproduce
-exactly: the `Authenticator`'s retry-once via `priorResponse` with the
-`X-Bt-No-Reauth` per-request opt-out, and the 304 → synthetic-200 cache replay.
+**RESOLVED 2026-08-10 — GREEN, and it is a re-plumb, not a rewrite (§9).**
+
+Pinned: `ktorfit-lib-light:2.7.3` + `ktorfit-converters-response:2.7.2` (the
+converter has no 2.7.3 — it jumps 2.7.2 → 2.7.5) + `ktorfit-ksp:2.7.3`.
+Ktorfit 2.7.4/2.7.5 are ABI 2.4.0, too new for Kotlin 2.3.20. The
+`ktorfit-gradle-plugin` is the legacy compiler-subplugin path and is not needed.
+
+Proven on the simulator: **8/8 endpoints against a real HTTP server**, covering
+`@GET` with `@Path`+`@Query`, `@POST` with `@Body`, `@DELETE` returning 204
+Unit, `@PATCH`, `@HTTP` with a body, a bare return, a 404 with `errorBody`, and
+header echo. Evidence:
+`/Users/cwiesi/bt_scratch/kmp-deps-spike/ktorfit-ios-proof.png`.
+
+Why the cost collapsed:
+- **Annotations are byte-identical to Retrofit's**, including the semantic the
+  app depends on: a null `@Header` is omitted from the request exactly as
+  Retrofit does — which is what the nullable `Idempotency-Key` params rely on.
+- `Response<T>` is a near-exact analogue: `isSuccessful` and `body()` identical,
+  `code()` → `code` property (mechanical), while `headers()`, `message()` and
+  `raw()` have **zero uses** in the app.
+- **All 189 endpoints return `Response<T>`, and ~93% of consumption (180 of 194
+  call sites) funnels through just 3 functions in 2 files** — `apiCall` and
+  `unitApiCall` (`data/api/BtApiError.kt`) plus `runMutation`
+  (`sync/ApiOpExecutor.kt`). Only 14 inline `isSuccessful` sites remain.
+- `errorBody()` is parsed in exactly **one** function, and its only Retrofit
+  coupling is the `ResponseBody?` parameter type. Concretely it becomes
+  `(resp.errorBody() as? HttpResponse)?.bodyAsText()` — one line, one place.
+- Zero `Call<T>`, zero CallAdapters, zero custom `Converter.Factory`.
+
+**Rewriting ~70 lines across 2 files converts the whole network layer.** The
+1568-line interface file needs its 12 `retrofit2.http.*` imports swapped and
+nothing else.
+
+Three briefing premises were wrong, all in our favour: `@HTTP` is **2**
+endpoints (not 4), `@Streaming` is **1** (not 2), and `@Header("Idempotency-Key")`
+is **10** params (not 15) — the surplus grep hits were KDoc prose.
+
+**The real cost was never the endpoints — it is the 5 OkHttp components.**
+`TokenAuthenticator` (401→refresh→retry-once via `priorResponse`, with the
+`X-Bt-No-Reauth` per-request opt-out) and `ConditionalGetInterceptor`
+(304 → synthesised 200 replay) have no direct Ktor analogue and need genuine
+redesign onto Ktor's `Auth` plugin and a custom plugin. Plus the one
+`@Streaming` endpoint returning `okhttp3.ResponseBody`, and 16 MockWebServer
+test harnesses.
 
 ### D9 — UI: Compose Multiplatform 1.10.3, pinned deliberately
 
@@ -588,6 +626,31 @@ different Compose patch levels.
 Not needed and not installed (§6.5). P1 boots via the proven direct-executable
 path. A real Xcode project is introduced when P4 needs it for free-Apple-ID
 cable deploy, since that is the phase whose requirements actually shape it.
+
+### D13 — Module layout
+
+```
+:app      com.android.application only (no Kotlin plugin, ever). Android host.
+:shared   kotlin.multiplatform + com.android.kotlin.multiplatform.library
+          commonMain / androidMain / iosMain, targets iosArm64 + iosSimulatorArm64
+iosApp/   Kotlin/Native executable + UIApplicationMain AppDelegate (no Xcode
+          project until P4, no CocoaPods ever)
+```
+
+One shared module, not many. Rationale: the survey found the OS seam is narrow
+(127 of 323 files already import no `android.*`) and the migration is
+layer-by-layer, so multiple modules would add Gradle wiring cost with no
+isolation benefit while `:app` still owns every screen. Split later only if
+build times demand it.
+
+Migration direction is **`:app` → `:shared`, lowest layer first**: `domain/`
+(100% Android-free already) → vault pure files → `sync/` seams → `data/` →
+`ui/`. The Android app keeps compiling against `:shared` at every step, so the
+2637-case suite stays the gate throughout.
+
+**`:shared` carries one exception to the "no KSP in commonMain" rule** — see
+R11: Ktorfit interfaces must live in a source set mounted into the iOS targets,
+behind an `expect`/`actual` seam.
 
 ---
 
@@ -676,6 +739,128 @@ back-stack branch is retired.
 
 ---
 
+## 9. Dependency matrix at Kotlin 2.3.20 (2026-08-10, compile+link verified)
+
+Verified by a module whose `commonMain` actually imports and uses each API;
+`compileKotlinIosSimulatorArm64` and `linkDebugExecutableIosSimulatorArm64`
+both succeeded.
+
+**Baseline correction:** an earlier draft matrix was measured at Kotlin 2.2.10,
+which rejects `abi_version=2.3.0` klibs. At 2.3.20 (which consumes ABI ≤ 2.3.0)
+**every REJECT in that draft flips to OK.** The matrix below was re-derived,
+not inherited.
+
+| Library | Version | Status |
+| --- | --- | --- |
+| kotlinx-coroutines-core | 1.11.0 | GREEN |
+| kotlinx-serialization-json | 1.11.0 | GREEN |
+| kotlinx-datetime | 0.8.0 | GREEN |
+| **multiplatform-settings** (+no-arg) | **1.3.0** | GREEN — chosen (D11) |
+| androidx datastore-preferences | 1.3.0-alpha10 | AMBER (alpha) — not chosen |
+| JB lifecycle-viewmodel / -compose / runtime-compose | 2.11.0 | GREEN, caveat below |
+| koin-core / koin-compose | 4.2.2 | GREEN — but not adopted (D12) |
+
+### D11 — Preferences: `multiplatform-settings`, not DataStore
+
+Decided by a startup-ordering constraint, not taste. `ServerOrigins` and
+`DriveModeGate` are read **synchronously during DI init, before any HTTP base
+URL is captured**. DataStore's API is Flow/suspend-only, so honouring that
+ordering would mean `runBlocking` on the iOS main thread at startup.
+`multiplatform-settings` no-arg maps to **NSUserDefaults on iOS and
+SharedPreferences on Android** — both synchronous — and maps 1:1 onto the
+existing 10 plain `SharedPreferences` stores. `KeychainSettings` for secrets
+ships in the same iOS artifact, which also serves the `SecureStore` seam.
+
+### D12 — DI: keep the hand-written `AppGraph.kt`; do not adopt Koin
+
+Koin 4.2.2 is verified compatible if ever wanted. Adopting it now would convert
+compile-time wiring into runtime resolution across 41 ViewModels **for no
+portability gain** — `AppGraph` is plain Kotlin and ports as-is. Changing
+nothing is the lowest-risk option.
+
+### Caveat carried: lifecycle 2.11.0 vs CMP 1.10.3
+
+JB lifecycle 2.11.0 force-upgrades `androidx.compose.runtime` 1.10.5 → 1.11.1
+while CMP UI stays at 1.10.3. That mix **compiles and links** on Xcode 16.3 —
+the CMP 1.11.1 failure in §6.3 was in compose-**UI** (`UIViewLayoutRegion`), not
+the runtime — but it was **not run on the simulator**, so it is UNTESTED at
+runtime. Lower-risk alternative: pin JB lifecycle to 2.10.x to match CMP.
+
+### `java.time` → `kotlinx-datetime`: the survey was right
+
+`OffsetDateTime` has **no equivalent** — `Instant` alone does not retain the
+source offset. The verified replacement is
+`DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(s)` then
+`toUtcOffset()` / `toLocalDateTime()` / `toInstantUsingOffset()`. Also note
+`Clock` moved to `kotlin.time.Clock` in 0.8.0. Budget real work across the ~40
+`java.time` files.
+
+### Argon2id — nothing beats D2; the decision stands
+
+Maven Central still has no vetted KMP Argon2, and `org.kotlincrypto.*` publishes
+no KDF group. One candidate the earlier probe missed — `com.diglol.crypto:kdf:0.2.0`
+— is a genuine KMP Argon2id with real iOS klibs, and is **rejected for the
+vault**: v0.2.0, single small maintainer, stale (Kotlin 1.9.22 era), no audit,
+no published vectors. That bar is not negotiable for the one function standing
+between a user and their vault.
+`com.ionspin.kotlin:multiplatform-crypto-libsodium-bindings:0.9.5` remains the
+only credible prebuilt fallback and bundles its own libsodium cinterop (no brew
+needed). **The literal BouncyCastle translation with its test vectors stands.**
+
+### R11 (new, AMBER) — KSP will not process Ktorfit interfaces in `commonMain`
+
+Measured repeatedly with the build cache off and `--rerun-tasks`: KSP 2.3.11
+generates Ktorfit clients from `iosMain` and from target source sets, but
+produces **nothing** from `commonMain` or from a custom shared source set.
+Generated code always lands in the **target** source set, so the
+`createXxxApi()` caller must live there too.
+
+Proven working layout:
+
+```
+src/apiShared/kotlin -> srcDir into iosMain                  (the @GET interfaces)
+src/apiWiring/kotlin -> srcDir into iosArm64Main AND iosSimulatorArm64Main
+```
+
+Consequence: common-source repositories cannot reference the Ktorfit interface
+directly — it needs an `expect`/`actual` seam. That seam was built and works.
+
+**Unresolved anomaly, flagged rather than papered over:** Room 2.8.4 *does*
+generate from `commonMain` under the same KSP 2.3.11 (probe `p6` proves it).
+Adding an Android target did not change Ktorfit's behaviour, and Ktorfit's
+processor contains no source-set filter. **One focused follow-up is owed before
+committing to the layout above** — if this is a fixable configuration mistake,
+the network layer gets a cleaner shape.
+
+**Gradle trap worth remembering:** KSP task inputs are *relative*-path
+sensitive, so moving a file between source sets keeps the same cache key and
+replays a stale/empty result as `FROM-CACHE`/`UP-TO-DATE`. Re-runs must use
+`org.gradle.caching=false` and `--rerun-tasks`. This produced several false
+results before it was spotted.
+
+---
+
+## 10. Incoming from platform `main` — absorb at next merge
+
+Relayed by the chief 2026-08-10. Not yet on this branch; `kmp-ios` last synced
+with `main` at `e98003d`.
+
+1. **Portfolio history now echoes a REQUIRED `interval` field**, and the
+   platform serves a finer 1D interval plus a new fundamentals endpoint.
+   Direct impact on the shared-core DTO work: the history DTO must **carry**
+   `interval`, not merely tolerate it. Since the 261 `@Serializable` DTOs are
+   the part of `data/` that ports essentially as-is, this must be merged
+   **before** the DTO layer moves to `:shared`, or the port will carry a stale
+   contract. Note the app's `Json` is `ignoreUnknownKeys = true`, so a missing
+   field would fail silently rather than loudly — worth an explicit test.
+2. **Vaults v2 vector families now live at `packages/domain/src/vaultVectors/`
+   (v1 + v2)**; the Android side is replaying them on `main` now. This changes
+   the P2 conformance target: the iOS vault work must replay **v1 and v2**, not
+   the v1-era fixtures inventoried in §4. Re-count the vectors at merge time —
+   the 622 domain figure and the vault fixture inventory both predate this.
+
+---
+
 ## 5. Program log
 
 - **2026-08-09** — P0 opened. Baseline captured (2637 green, assemble green).
@@ -723,3 +908,14 @@ back-stack branch is retired.
   identified as a trap (drags Compose runtime to 1.12.0-alpha and breaks the
   iOS link). New standing rule recorded: subpages must always use `btSheet<T>`,
   never `composable<T>`, or the whole sheet stack auto-dismisses.
+- **2026-08-10** — **D8 RESOLVED GREEN**: Ktorfit 2.7.3 proven on the simulator,
+  8/8 endpoints against a real server. The 189-endpoint layer is a ~70-line
+  re-plumb across 2 files, not a rewrite, because 93% of call sites funnel
+  through 3 functions. Full dependency matrix re-derived at Kotlin 2.3.20 (§9),
+  correcting a draft measured at 2.2.10 where every ABI 2.3.0 klib had been
+  wrongly marked REJECT. D11 (multiplatform-settings over DataStore), D12 (keep
+  manual DI), D13 (module layout) recorded. New AMBER risk R11: KSP will not
+  process Ktorfit interfaces in `commonMain`; workaround proven, but a Room
+  counter-example makes it worth one follow-up. Platform `main` changes logged
+  for absorption at next merge (§10). **All P0/P1 unknowns are now closed** —
+  next is the `:shared` module and the simulator boot.
