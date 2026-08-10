@@ -1,11 +1,12 @@
 package at.bettertrack.app.domain
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Instant
 
 /**
  * Realized-P/L & tax engine — a **literal** Kotlin port of
@@ -244,7 +245,7 @@ fun taxFloorCents(amountEur: Double): Double {
  * function for the same reason (constructing one per call is costly), and the
  * mapping (UTC instant → Vienna year) is deterministic — no clock.
  */
-private val VIENNA_ZONE: ZoneId = ZoneId.of(TAX_YEAR_TIME_ZONE)
+private val VIENNA_ZONE: TimeZone = TimeZone.of(TAX_YEAR_TIME_ZONE)
 
 /**
  * The Europe/Vienna calendar year a timestamp falls in (§16 2026-07-08) — the
@@ -254,10 +255,10 @@ private val VIENNA_ZONE: ZoneId = ZoneId.of(TAX_YEAR_TIME_ZONE)
  * §3.3 rule 8: parsing goes through [jsDateParse], the shared `Date.parse` shim,
  * so an unparseable string yields `NaN` and throws exactly where the TypeScript
  * throws. The zone lookup replaces `Intl.DateTimeFormat(…, { year: 'numeric' })`;
- * `ZonedDateTime.year` is an `Int`, which makes the TypeScript's second guard
- * (`!Number.isFinite(year)`, reachable only if `Intl` formatted something
- * non-numeric such as a BC era) unreachable here. It is retained as a comment
- * rather than as dead code.
+ * the kotlinx-datetime `LocalDateTime.year` is an `Int`, which makes the
+ * TypeScript's second guard (`!Number.isFinite(year)`, reachable only if `Intl`
+ * formatted something non-numeric such as a BC era) unreachable here. It is
+ * retained as a comment rather than as dead code.
  */
 fun viennaYearOf(isoTimestamp: String): Int {
     val ms = jsDateParse(isoTimestamp)
@@ -267,7 +268,12 @@ fun viennaYearOf(isoTimestamp: String): Int {
         )
     }
     // `Number(viennaYearFormatter.format(ms))`; always finite here — see the KDoc.
-    return Instant.ofEpochMilli(ms.toLong()).atZone(VIENNA_ZONE).year
+    // KMP/iOS port: `ZonedDateTime(...).year` becomes the kotlinx-datetime
+    // `Instant → LocalDateTime@Europe/Vienna → year`. On Kotlin/Native the zone
+    // rules (incl. DST, which sets the tax-year boundary) come from the IANA tz
+    // database kotlinx-datetime bundles; on the JVM they come from java.time —
+    // the same data TaxVectorTest already pins.
+    return Instant.fromEpochMilliseconds(ms.toLong()).toLocalDateTime(VIENNA_ZONE).year
 }
 
 // ---------------------------------------------------------------------------
@@ -462,8 +468,15 @@ private class OrderedTaxable(val t: TaxableTransaction, val index: Int, val ms: 
  * sells before the buys that funded them). The mapping runs over EVERY transaction
  * before the sort, so an unparseable timestamp anywhere throws even if the sort
  * would never have compared it.
+ *
+ * KMP/iOS port: the original `@JvmOverloads` is removed — `kotlin.jvm.JvmOverloads`
+ * does not exist in `commonMain` (it is a JVM-only annotation and fails the
+ * Kotlin/Native compilation). It only ever generated a Java-interop overload for
+ * the defaulted [strategy]; every caller here is Kotlin (the vector and
+ * hand-ported test suites call both `realizedSellsEur(log)` and
+ * `realizedSellsEur(log, "…")` via the Kotlin default parameter, and there is no
+ * Java caller in the tree), so dropping it changes nothing observable.
  */
-@JvmOverloads
 fun realizedSellsEur(
     transactions: List<TaxableTransaction>,
     strategy: CostBasisStrategy = "moving-average",

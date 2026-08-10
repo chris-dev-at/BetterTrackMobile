@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.domain.ResolvedSetting
 import at.bettertrack.app.domain.SettingSource
+import at.bettertrack.app.domain.jsNumberToString
 import at.bettertrack.app.domain.resolvePortfolioSetting
 
 /**
@@ -85,7 +86,7 @@ fun IosProofScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 44.dp),
+                .padding(horizontal = 18.dp, vertical = 22.dp),
         ) {
             Text(
                 text = "BetterTrack",
@@ -99,6 +100,8 @@ fun IosProofScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(18.dp))
+            FormatterProofCard()
+            Spacer(Modifier.height(14.dp))
             CasesCard()
             Spacer(Modifier.height(14.dp))
             ProvenanceCard()
@@ -211,5 +214,95 @@ private fun ProvenanceLine(key: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(text = value, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/**
+ * One [jsNumberToString] byte-identity case. [expected] is the STRING produced by
+ * running the identical input through the JVM/Android path (the audited source of
+ * truth, == V8's `String(value)`); [actual] is computed on THIS device by the
+ * migrated shared Kotlin/Native code. They must be equal to the byte.
+ */
+private class FmtCase(val label: String, val value: Double, val expected: String) {
+    val actual: String = jsNumberToString(value)
+    val pass: Boolean = actual == expected
+}
+
+private val fmtCases: List<FmtCase> = listOf(
+    FmtCase("0.1", 0.1, "0.1"),
+    FmtCase("0.2", 0.2, "0.2"),
+    FmtCase("0.3", 0.3, "0.3"),
+    FmtCase("100.0", 100.0, "100"),
+    FmtCase("1e21", 1e21, "1e+21"),
+    FmtCase("1e-7 (JS→exp)", 1e-7, "1e-7"),
+    FmtCase("5e-324 min subnormal", Double.MIN_VALUE, "5e-324"),
+    FmtCase("1.797…e308 max", Double.MAX_VALUE, "1.7976931348623157e+308"),
+    FmtCase("123456789.123456789", 123456789.123456789, "123456789.12345679"),
+    FmtCase("0.1+0.2 (17 sig digits)", 0.1 + 0.2, "0.30000000000000004"),
+)
+
+@Composable
+private fun FormatterProofCard() {
+    val passCount = fmtCases.count { it.pass }
+    val allPass = passCount == fmtCases.size
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = "jsNumberToString()  — vault number rendering",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "shared Kotlin/Native on iOS  vs  JVM source of truth",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                color = if (allPass) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(
+                    text = if (allPass) "PASS  $passCount / ${fmtCases.size} byte-identical"
+                    else "FAIL  ${fmtCases.size - passCount} of ${fmtCases.size} differ",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            fmtCases.forEach { case ->
+                Spacer(Modifier.height(7.dp))
+                FmtRow(case)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FmtRow(case: FmtCase) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (case.pass) "PASS" else "FAIL",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = if (case.pass) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(text = case.label, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+        // want == got on every pass; show both so the equality is checkable by eye.
+        Text(
+            text = "jvm ${case.expected}   ios ${case.actual}",
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            color = if (case.pass) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.error,
+        )
     }
 }

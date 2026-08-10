@@ -36,9 +36,17 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
-        // commonMain — compiled for BOTH platforms. Phase 1 puts only pure
-        // domain code here (at.bettertrack.app.domain.SettingsScope), which is
-        // why it declares no dependencies at all.
+        // commonMain — compiled for BOTH platforms. It holds the pure domain
+        // layer (at.bettertrack.app.domain.*). Phase 1 declared no dependencies
+        // here; Phase 2 migrated the calculation engine down, whose JS-runtime
+        // date shims need a multiplatform date/time library — hence the single
+        // commonMain dependency below. It is pure Kotlin with no UI surface, so
+        // it is independent of the Compose BOM reconciliation described further
+        // down; it changes nothing about :app's shipping graph (kotlinx-datetime
+        // is added to :shared, and :app reaches it only transitively).
+        commonMain.dependencies {
+            implementation(libs.kotlinx.datetime)
+        }
         //
         // androidMain — the Compose RUNTIME only, and pinned by :app's own BOM.
         //

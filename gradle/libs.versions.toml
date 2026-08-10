@@ -115,6 +115,23 @@ bouncycastle = "1.80"
 # compiler plugin version must keep tracking `kotlin` and not either of these.
 composeMultiplatform = "1.10.3"
 
+# ── KMP/iOS port, Phase 2 (docs/KMP_PLAN.md — shared-core migration) ─────────
+# kotlinx-datetime backs the domain layer's JS-runtime date shims once they move
+# to :shared/commonMain (DomainTypes.jsDateOnlyToMs / jsDateParse / jsIsoDay and
+# Tax.viennaYearOf). The Android app previously reached those through java.time,
+# which does not exist on Kotlin/Native; kotlinx-datetime is the multiplatform
+# replacement that compiles for BOTH the JVM/Android target and iosArm64/
+# iosSimulatorArm64. It carries its own IANA tz database on Native, which is what
+# lets `TimeZone.of("Europe/Vienna")` resolve the tax-year boundary on-device
+# without the JVM. 0.8.0 is the release verified to compile AND link for
+# iosSimulatorArm64 on this stack (Kotlin 2.3.20). NOTE for 0.8.0: `Clock` now
+# lives at `kotlin.time.Clock` and instants are `kotlin.time.Instant`; there is
+# no `OffsetDateTime` — an offset timestamp parses via
+# `DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(s).toInstantUsingOffset()`.
+# Added to :shared commonMain ONLY (never to :app — the app reaches it through
+# :shared), so the Android shipping dependency graph gains nothing new.
+kotlinxDatetime = "0.8.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -122,6 +139,9 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+# KMP/iOS Phase 2 — multiplatform date/time for the migrated domain shims
+# (:shared commonMain only; see the `kotlinxDatetime` version note above).
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 
 # Jetpack Compose — versions come from the BOM below (leave version off the rest)
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

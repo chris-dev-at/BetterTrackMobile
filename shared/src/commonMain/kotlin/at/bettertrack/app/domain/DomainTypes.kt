@@ -1,20 +1,38 @@
 package at.bettertrack.app.domain
 
-import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeParseException
-import java.util.Locale
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.format.DateTimeComponents
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /**
  * Shared types and JS-runtime shims for the literal Kotlin port of the platform's
  * audited `packages/domain` engine (`docs/S3S4_STORAGE_PLAN.md` §3).
  *
- * **This package is pure Kotlin.** No `android.*`, no Compose, no Room, no
- * kotlinx — only the Kotlin stdlib, `kotlinx.coroutines` (for `suspend`) and
- * `java.time`. That is what makes it JVM-unit-testable, and it is what lets the
- * generated conformance vectors be replayed with exact `Double` equality.
+ * **This package is pure, multiplatform Kotlin.** No `android.*`, no Compose,
+ * no Room, no `java.*` — only the Kotlin stdlib, `kotlinx.coroutines` (for
+ * `suspend`) and `kotlinx-datetime` (the multiplatform replacement for the
+ * `java.time` this file used before it moved into `:shared`). That is what makes
+ * it JVM-unit-testable *and* compilable for Kotlin/Native, and it is what lets
+ * the generated conformance vectors be replayed with exact `Double` equality.
+ *
+ * The one genuinely platform-specific primitive — fixed-precision scientific
+ * formatting inside [jsNumberToString] — is isolated behind
+ * [formatScientific] (`expect`/`actual`); see that declaration.
+ *
+ * ## Visibility note (KMP/iOS port, Phase 2)
+ *
+ * Three JS-runtime shims — [jsNumberToString], [jsNum] and [jsDateParse] — are
+ * `public` rather than `internal`. They were `internal` while this file lived in
+ * `:app`, where module-internal visibility still reached the `:app` consumers
+ * that use them: `vault/VaultJson.kt` (which delegates the vault JSON number
+ * rendering to [jsNumberToString]) and the JVM test harness that pins them. Once
+ * the file moved into `:shared`, `internal` would hide them across the module
+ * boundary and break both — so the visibility is widened. It changes no behavior
+ * and no output byte. The two shims used only *within* this package
+ * ([jsDateOnlyToMs], [jsIsoDay]) stay `internal`.
  *
  * ## Why the port is *literal*
  *
@@ -91,17 +109,20 @@ interface CurrencyConverter {
  * shortest-round-trip algorithm, so the search is done here), then lay those
  * digits out using the spec's own case analysis.
  */
-internal fun jsNumberToString(value: Double): String {
+fun jsNumberToString(value: Double): String {
     if (value.isNaN()) return "NaN"
     if (value == Double.POSITIVE_INFINITY) return "Infinity"
     if (value == Double.NEGATIVE_INFINITY) return "-Infinity"
     if (value == 0.0) return "0" // covers -0.0, which JS also renders as "0"
     if (value < 0) return "-" + jsNumberToString(-value)
 
-    // Shortest round-tripping representation, as `d.dddde±xx`.
+    // Shortest round-tripping representation, as `d.dddde±xx`. [formatScientific]
+    // is the sole platform-specific step (`expect`/`actual`): on the JVM it is
+    // `String.format(Locale.ROOT, "%.<n>e", value)`; on Kotlin/Native it is an
+    // exact-decimal reimplementation that produces the identical bytes.
     var scientific = ""
     for (significantDigits in 1..17) {
-        scientific = String.format(Locale.ROOT, "%.${significantDigits - 1}e", value)
+        scientific = formatScientific(value, significantDigits - 1)
         if (scientific.toDouble() == value) break
     }
 
@@ -128,7 +149,7 @@ internal fun jsNumberToString(value: Double): String {
 }
 
 /** Shorthand for [jsNumberToString] at the message-interpolation sites. */
-internal fun jsNum(value: Double): String = jsNumberToString(value)
+fun jsNum(value: Double): String = jsNumberToString(value)
 
 /**
  * `Date.parse("<date>T00:00:00Z")` — UTC midnight epoch-ms of an ISO
@@ -139,11 +160,21 @@ internal fun jsNum(value: Double): String = jsNumberToString(value)
  * `years` so that `years > 0` is false and the CAGR comes back `null`. Likewise
  * `valueOverTime` only regex-checks its dates, so an impossible-but-well-shaped
  * date like `2026-13-45` must yield an empty series, not an exception.
+ *
+ * **Widened catch (KMP/iOS port).** The `java.time` version caught
+ * `DateTimeParseException`. `kotlinx-datetime`'s `LocalDate.parse` instead
+ * signals bad input with `IllegalArgumentException` (its `DateTimeFormatException`
+ * is a subclass), a *different* type — so the catch is widened to
+ * `IllegalArgumentException`. This is load-bearing on Kotlin/Native, which has no
+ * checked exceptions: had the narrow type been kept, malformed server data would
+ * turn the **designed** `NaN` fallback into a crash instead. Both the impossible
+ * date (`2026-13-45`) and a structurally wrong string funnel to `NaN` exactly as
+ * before, which the JVM vector suite still pins.
  */
 internal fun jsDateOnlyToMs(date: String): Double =
     try {
-        LocalDate.parse(date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli().toDouble()
-    } catch (_: DateTimeParseException) {
+        LocalDate.parse(date).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds().toDouble()
+    } catch (_: IllegalArgumentException) {
         Double.NaN
     }
 
@@ -157,14 +188,25 @@ internal fun jsDateOnlyToMs(date: String): Double =
  * which `holdings.ts` explicitly tells callers not to rely on ("callers should
  * pass timestamps in a single, consistent zone"). Failing loud beats guessing on
  * the money path.
+ *
+ * **KMP/iOS port.** `java.time.OffsetDateTime` has no `kotlinx-datetime`
+ * equivalent, so an offset instant is parsed with
+ * `DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET` — which, like
+ * `OffsetDateTime.parse`, *requires* an explicit offset and rejects a bare date
+ * (that then falls through to [jsDateOnlyToMs], preserving the original
+ * two-stage behavior). The catch is widened to `IllegalArgumentException` for the
+ * same reason as [jsDateOnlyToMs]: `kotlinx-datetime` throws that (not
+ * `DateTimeParseException`) on unparseable input, and the fallback must not
+ * become a crash on Native.
  */
-internal fun jsDateParse(value: String): Double =
+fun jsDateParse(value: String): Double =
     try {
-        OffsetDateTime.parse(value).toInstant().toEpochMilli().toDouble()
-    } catch (_: DateTimeParseException) {
+        DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(value)
+            .toInstantUsingOffset().toEpochMilliseconds().toDouble()
+    } catch (_: IllegalArgumentException) {
         jsDateOnlyToMs(value)
     }
 
 /** `new Date(ms).toISOString().slice(0, 10)` — the UTC calendar day of an instant. */
 internal fun jsIsoDay(ms: Double): String =
-    Instant.ofEpochMilli(ms.toLong()).atZone(ZoneOffset.UTC).toLocalDate().toString()
+    Instant.fromEpochMilliseconds(ms.toLong()).toLocalDateTime(TimeZone.UTC).date.toString()
