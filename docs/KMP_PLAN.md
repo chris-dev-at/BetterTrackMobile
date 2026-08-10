@@ -80,7 +80,7 @@ Ordered by how badly each one can hurt the program. Status updated per phase.
 | --- | --- | --- | --- |
 | R1 | AGP 9 built-in Kotlin vs the KMP plugin | KMP is built on the `kotlin.sourceSets` DSL, which AGP 9's built-in Kotlin rejects by default — the project already carries `android.disallowKotlinSourceSets=false` as an escape hatch for KSP. If these cannot coexist, the whole module strategy changes. | UNDER TEST |
 | R2 | Argon2id byte-identity on iOS | BouncyCastle is pure Java, unusable on Kotlin/Native. Vault data is unreadable if the KEK differs by one byte. | **RESOLVED** — achievable; RFC 9106 makes byte-identity a property of the spec. Route chosen in D2 |
-| R3 | Room schema continuity for existing Android users | Android users sit at schema v10; a broken migration chain corrupts real installs. | OPEN — but Room usage is unusually clean (§4.4). **`exportSchema = false` is the live sub-risk: no golden schema JSON exists** |
+| R3 | Room schema continuity for existing Android users | Android users sit at schema v10; a broken migration chain corrupts real installs. | **CLOSED for the move** (§13, `c47b6f5`) — DB moved to `:shared` with golden v10 identityHash `a9fab166…` byte-identical, Android migrations + test verbatim/unchanged (7/7), shipping graph byte-identical, iOS DB opens+queries on the simulator |
 | R4 | CMP maturity for the custom shell | The pager-tab + gesture-tuned sheet navigator is hand-built and heavily tuned. | NARROWED — shell is ~90% portable pure Compose; risk concentrates in **one 153-LOC file**, `BtSheetNavigator.kt` (see R7) |
 | R5 | Android regression on this branch | The hardest constraint of the program. | CONTROLLED — 2637-case gate per phase; **weakened by CI running no tests (§4.8), fixed in P1** |
 | R6 | Background work + push differ fundamentally on iOS | WorkManager has no iOS equal; FCM/APNs differ. | OPEN but SOFTENED — both workers are one-shot and idempotent with engine-owned retry, so iOS loses latency, not data |
@@ -1021,6 +1021,70 @@ hand-ported suites above. **UNTESTED on real `iosArm64` hardware** — the
 vectors executed only on `iosSimulatorArm64`; the device target compiles clean
 but running on hardware needs a connected device (a P4 concern).
 
+---
+
+## 13. P2 Room persistence seam → `:shared` (2026-08-11, `c47b6f5`) — R3 closed
+
+The single riskiest migration in the program, done under an explicit
+stop-condition from the chief: keep the golden v10 identityHash stable and
+Android DB behaviour byte-identical, or STOP and report rather than push
+through. No stop trigger was hit; both invariants were **independently
+re-verified by the sub-coordinator** before the commit.
+
+### The strategy that avoided rewriting battle-tested migrations
+
+The probe established that classic `SupportSQLiteDatabase` migrations still
+compile on the **Android target** of a KMP module. So the split is:
+- **commonMain** — `@Database` (version 10, `exportSchema = true`, unchanged),
+  the 18 entities and 13 DAOs (5 files, R100 verbatim renames), plus
+  `@ConstructedBy(BtDatabaseConstructor::class)` and
+  `internal expect object BtDatabaseConstructor : RoomDatabaseConstructor<BtDatabase>`
+  (Room KSP generates the actual per target — never hand-written).
+- **androidMain** — the 9 migration bodies, the Cursor-based
+  `hasColumn`/`addColumnIfMissing` guards, and the `MIGRATIONS` array moved
+  **verbatim**. Android still constructs via
+  `Room.databaseBuilder(context, BtDatabase::class.java, "bettertrack.db")
+  .addMigrations(*MIGRATIONS).build()`, so `db.openHelper` stays live and
+  `AccountDataManager`'s wipe path (which relies on invalidation triggers
+  firing on its DELETEs) is untouched — it stayed in `:app`.
+- **iosMain** — a fresh `Room.databaseBuilder<BtDatabase>(path)
+  .setDriver(BundledSQLiteDriver())` into `NSDocumentDirectory`, v10, no
+  migrations (there is no existing iOS data to migrate).
+
+### The two invariants, verified
+
+1. **identityHash byte-identical.** The schema is now exported by `:shared`;
+   `shared/schemas/…/10.json` is byte-for-byte identical to the committed golden
+   `app/schemas/…/10.json` — same `a9fab166f6bcb1451ac240972a08a408`, same md5,
+   empty `diff`. Moving `@Database` to commonMain does not touch the schema, so
+   no existing install's DB can be rejected at open. The golden `app/schemas`
+   file is itself git-untouched.
+2. **Android behaviour byte-identical.** Migration bodies verbatim;
+   `BtDatabaseMigrationTest` stayed in `:app` **unchanged** and passes **7/7**
+   (`MIGRATIONS`/`create` exposed as `BtDatabase.Companion` extensions so the
+   same-package test resolves them with no edit). Shipping graph unchanged:
+   `:app` runtime resolves `room-runtime:2.8.4` and `sqlite:2.6.2` exactly as
+   before, and `sqlite-bundled` does **not** leak into `:app` (iosMain-only).
+
+### On-device proof
+
+The iOS app links Room + `BundledSQLiteDriver` into the Native binary and boots.
+The builder additionally opened the KMP DB on the simulator and ran a DAO
+write→read plus a `price_cache` query (smoke test then reverted; `Main.kt`
+byte-identical to HEAD) — **the database runs on Kotlin/Native, not just
+compiles.**
+
+### Deliberate leftovers
+
+- `app/schemas/10.json` is now a frozen golden reference (`:app` has no
+  `@Database`, so its Room export is a NO-SOURCE no-op); `shared/schemas/10.json`
+  is the live export. Both byte-identical.
+- `:app` still applies the room/ksp plugins as a green no-op — left to minimise
+  `:app` churn; an optional future cleanup.
+- Five `:app` UI null-guards captured into locals (a cross-module entity `val`
+  no longer smart-casts) — behaviour byte-identical, the 2101-test suite is the
+  proof.
+
 - **2026-08-09** — P0 opened. Baseline captured (2637 green, assemble green).
   `local.properties` recreated in the worktree. Five parallel surveys
   dispatched: data layer, vault/domain/sync, UI, Android platform surface,
@@ -1149,3 +1213,19 @@ but running on hardware needs a connected device (a P4 concern).
   `@ConstructedBy` expect/actual, 9 migrations `SupportSQLiteDatabase` →
   `SQLiteConnection`), guarded by the golden schema whose identityHash must
   survive unchanged.
+- **2026-08-11** — **P2 Room persistence seam COMPLETE — R3 CLOSED for the move**
+  (§13, commit `c47b6f5`). The single riskiest migration in the program, done
+  under the chief's explicit stop-condition, with **both invariants
+  independently re-verified by the sub-coordinator before commit**: the golden
+  v10 identityHash `a9fab166…` is byte-identical (schema unchanged), and Android
+  DB behaviour is byte-identical (the 9 migrations + `hasColumn` guards + test
+  moved **verbatim** into `androidMain`, unchanged; migration test 7/7). The
+  chosen strategy sidestepped rewriting any Android migration: `@Database` +
+  entities + DAOs live in `commonMain`, Android keeps its classic
+  `SupportSQLiteDatabase` path, and iOS gets a fresh `BundledSQLiteDriver` v10
+  (no existing data to migrate). Shipping graph proven unchanged (room 2.8.4 /
+  sqlite 2.6.2; bundled driver iOS-only). The KMP DB was opened and queried on
+  the simulator. All gates green; no stop trigger hit. **The entire data core —
+  DTOs and persistence — plus the calculation engine now compile and run on iOS
+  from shared source. Next: the network layer** (Ktorfit re-plumb per D8) and
+  the `sync/` seams.
