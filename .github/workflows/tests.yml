@@ -1,0 +1,238 @@
+name: Tests
+
+# The JVM unit suite (2000 @Test methods; three @RunWith(Parameterized) suites
+# expand 622 conformance vectors on top) is the only regression net under the
+# KMP/iOS port, so it gates the branches the work actually lands on — including
+# `kmp-ios`, where the port lives.
+on:
+  push:
+    branches:
+      - main
+      - kmp-ios
+      - 'kmp-**'
+    # Same minute-saving convention as android-apk.yml: a docs/markdown-only push
+    # cannot change a test outcome, so it does not start a run. Keep this list in
+    # sync with anything that feeds the Gradle build.
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    branches:
+      - main
+      - kmp-ios
+    # Deliberately NO paths filter on pull_request. A path-filtered PR check never
+    # reports at all on a non-matching PR, and a required status check that never
+    # reports blocks the merge button forever. A PR is the one place the gate has
+    # to speak every time, even if the answer is cheap.
+  workflow_dispatch:
+
+# Read-only. android-apk.yml needs contents:write to cut releases; the test gate
+# publishes nothing and must not inherit that.
+permissions:
+  contents: read
+
+# Separate group from android-apk.yml's `apk-build` so the two workflows never
+# cancel each other; keyed per ref so a new push supersedes only its own run.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: JVM unit tests
+    runs-on: ubuntu-latest
+    # The full suite is ~1-2 min of actual testing; the rest is SDK + compile.
+    # 45 min is a hang-catcher, not a budget.
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # No fetch-depth/fetch-tags overrides: unlike the release job, nothing
+        # here reads git history, so the default shallow clone is fine.
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Identical to android-apk.yml: installs cmdline-tools and exports
+      # ANDROID_HOME / ANDROID_SDK_ROOT. local.properties is gitignored and so
+      # absent on the runner; Gradle resolves the SDK from those env vars
+      # instead. Unit tests still need the SDK — the Android variant has to be
+      # configured and android.jar resolved before any test can compile.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept licenses and prefetch SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37" >/dev/null 2>&1 || true
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # Both flavor legs, one Gradle invocation (shared configuration phase and
+      # dependency resolution — far cheaper than a two-job matrix).
+      #
+      # Why `play` is worth its minutes even though the flavor only differs in
+      # BuildConfig flags and signing: three tests in the shared app/src/test
+      # source set branch on those flags, so the github leg alone leaves the play
+      # half unproven —
+      #   • ServerOriginsTest asserts SERVER_SETTING_ENABLED == (FLAVOR ==
+      #     "github"), i.e. the false case is only ever exercised on play;
+      #   • UpdateCheckerTest is assumeTrue(SELF_UPDATE_ENABLED)-gated, so it
+      #     SKIPS entirely on play — play is where "self-update is off" is the
+      #     assertion, and that flag is a Play Device-and-Network-Abuse policy
+      #     requirement, not a preference;
+      #   • DirectProviderFlagTest asserts on a BuildConfig flag too.
+      # app/src/github/ holds only an AndroidManifest (no Kotlin), so the play
+      # variant compiles the identical sources — no divergence risk, just a
+      # second variant compile. Drop `:app:testPlayDebugUnitTest` from the line
+      # below if Actions minutes ever matter more than that coverage.
+      #
+      # `--continue` runs BOTH legs even after the first goes red, so one run
+      # reports every failure. It does NOT soften the outcome: Gradle still exits
+      # non-zero, which fails this step and therefore the job.
+      #
+      # No jvmargs override on purpose. gradle.properties asks for a 2 GB Gradle
+      # JVM plus a 3 GB Kotlin daemon; a GitHub-hosted ubuntu-latest runner has
+      # 16 GB, so both fit with headroom for the forked test JVM. Keeping CI on
+      # the exact heap settings a developer machine uses means "green locally,
+      # OOM in CI" can never be a heap-config difference between the two.
+      #
+      # No signing secrets are wired in: unit tests sign nothing, and the gate
+      # should not hold credentials it does not need.
+      - name: Run JVM unit tests
+        id: tests
+        run: >
+          ./gradlew :app:testGithubDebugUnitTest :app:testPlayDebugUnitTest
+          --continue --no-daemon --stacktrace
+
+      # Uploaded FIRST and on failure too (`!cancelled()`), so a red run is
+      # diagnosable straight from the Actions UI without reproducing locally.
+      # The HTML report rides along because it is the pleasant thing to open.
+      # if-no-files-found is `warn`, not `error`: when the failure is a compile
+      # error there are legitimately no results, and a second red step would just
+      # obscure the real cause. The "no results at all" case is caught properly by
+      # the summary step below, which fails the job for it.
+      - name: Upload JUnit results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results-${{ github.run_number }}
+          path: |
+            app/build/test-results/**/*.xml
+            app/build/reports/tests/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Reads the JUnit XML and writes a per-leg table plus the actual failure
+      # list into the job summary, so a red run is legible at a glance instead of
+      # buried in log scroll. Plain python3 (preinstalled on ubuntu-latest) rather
+      # than a marketplace reporter: no third-party action in the supply chain and
+      # no `checks: write` escalation.
+      #
+      # It is also the anti-false-green guard. If Gradle somehow reports success
+      # while the XML says otherwise — zero results, a missing flavor leg, or
+      # recorded failures — this step fails the job on purpose.
+      - name: Publish test summary
+        if: ${{ !cancelled() }}
+        env:
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          EXPECTED_LEGS: testGithubDebugUnitTest testPlayDebugUnitTest
+        run: |
+          python3 - <<'PY'
+          import glob, os, sys
+          import xml.etree.ElementTree as ET
+
+          RESULTS = "app/build/test-results"
+          outcome = os.environ.get("TESTS_OUTCOME", "unknown")
+          expected = os.environ.get("EXPECTED_LEGS", "").split()
+
+          legs = {}       # leg -> [tests, failures, errors, skipped, seconds]
+          bad = []        # (leg, classname, testname, kind, message)
+
+          for path in sorted(glob.glob(os.path.join(RESULTS, "**", "*.xml"), recursive=True)):
+              leg = os.path.relpath(path, RESULTS).split(os.sep)[0]
+              agg = legs.setdefault(leg, [0, 0, 0, 0, 0.0])
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception as exc:
+                  bad.append((leg, os.path.basename(path), "(file unreadable)", "ParseError", str(exc)))
+                  continue
+              suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+              for s in suites:
+                  agg[0] += int(s.get("tests") or 0)
+                  agg[1] += int(s.get("failures") or 0)
+                  agg[2] += int(s.get("errors") or 0)
+                  agg[3] += int(s.get("skipped") or 0)
+                  agg[4] += float(s.get("time") or 0)
+                  for tc in s.iter("testcase"):
+                      for node in list(tc.findall("failure")) + list(tc.findall("error")):
+                          msg = " ".join((node.get("message") or node.text or "").split())
+                          bad.append((leg, tc.get("classname", ""), tc.get("name", ""),
+                                      node.get("type") or node.tag, msg))
+
+          total = sum(a[0] for a in legs.values())
+          red = sum(a[1] + a[2] for a in legs.values())
+          skipped = sum(a[3] for a in legs.values())
+
+          # Anti-false-green guards: only meaningful when Gradle claimed success.
+          problems = []
+          if outcome == "success":
+              if total == 0:
+                  problems.append("Gradle reported success but produced no JUnit results — "
+                                  "nothing was actually verified.")
+              if red or bad:
+                  problems.append("Gradle reported success but the JUnit XML records %d "
+                                  "failing test(s)." % max(red, len(bad)))
+              missing = [leg for leg in expected if leg not in legs]
+              if missing:
+                  problems.append("Expected flavor leg(s) never ran: %s." % ", ".join(missing))
+
+          ok = not (red or bad or problems) and outcome == "success"
+          out = ["## JVM unit tests — %s" % ("PASSED" if ok else "FAILED"), ""]
+          if legs:
+              out += ["| Flavor leg | Tests | Failures | Errors | Skipped | Time |",
+                      "|---|---:|---:|---:|---:|---:|"]
+              for leg in sorted(legs):
+                  t, f, e, s, secs = legs[leg]
+                  out.append("| `%s` | %d | %d | %d | %d | %.1fs |" % (leg, t, f, e, s, secs))
+              out.append("| **Total** | **%d** | **%d** | **%d** | **%d** | |"
+                         % (total, sum(a[1] for a in legs.values()),
+                            sum(a[2] for a in legs.values()), skipped))
+          else:
+              out.append("No JUnit XML was produced under `%s`." % RESULTS)
+              out.append("")
+              out.append("That usually means compilation failed before any test ran "
+                         "— check the **Run JVM unit tests** step log.")
+
+          if bad:
+              shown = bad[:50]
+              out += ["", "### Failures (%d)" % len(bad), ""]
+              for leg, cls, name, kind, msg in shown:
+                  out.append("- **`%s`** · `%s.%s` — %s%s"
+                             % (leg, cls, name, kind, (": " + msg[:300]) if msg else ""))
+              if len(bad) > len(shown):
+                  out.append("- …and %d more — see the `junit-results` artifact."
+                             % (len(bad) - len(shown)))
+
+          if problems:
+              out += ["", "### Gate violation", ""] + ["- %s" % p for p in problems]
+
+          text = "\n".join(out) + "\n"
+          print(text)
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(text)
+          if problems:
+              sys.exit(1)
+          PY
