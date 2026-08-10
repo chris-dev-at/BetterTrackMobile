@@ -349,6 +349,213 @@ concrete blockers to running them on Kotlin/Native, with the chosen answers:
 
 ---
 
+## 6. Toolchain probe results (empirical, 2026-08-09/10)
+
+Six probe projects built on this Mac. **Everything below was executed, not read
+in documentation.** The probe agent died during Q5; its notes and artifacts
+were salvaged, so Q5 is the one open gap (§6.7).
+
+### 6.1 R1 RESOLVED — AGP 9 and KMP do coexist
+
+`p1` BUILD SUCCESSFUL; `p6` proved the full stack in one project.
+
+Working shape:
+- **root**: `com.android.application` 9.2.1 + `com.android.kotlin.multiplatform.library` 9.2.1 + `org.jetbrains.kotlin.multiplatform`, all `apply false`
+- **shared**: applies `kotlin.multiplatform` + `com.android.kotlin.multiplatform.library`, declares `iosArm64()` + `iosSimulatorArm64()`
+- **app**: applies **ONLY** `com.android.application` (plus compiler plugins). Both flavors work.
+
+Two negative results pin the shape down:
+- Applying `org.jetbrains.kotlin.android` alongside AGP 9 **fails**: `Cannot add
+  extension with name (kotlin), as there is an extension already registered`.
+  With AGP 9's built-in Kotlin the app module must stay plugin-free.
+- `com.android.library` + `kotlin.multiplatform` **fails**: *"not compatible …
+  since AGP 9.0. Solution: replace with `com.android.kotlin.multiplatform.library`."*
+
+**Key mechanism:** AGP 9.2.1's built-in Kotlin *is* kotlin-gradle-plugin 2.2.10.
+Declaring the KMP plugin at a **higher** version upgrades the entire build
+classpath — including the app module's compiler — via normal Gradle conflict
+resolution. That is how this program reaches Kotlin 2.3.20 without ever
+applying `kotlin-android`.
+
+### 6.2 R3 RESOLVED — Room KMP works AND preserves the Android API surface
+
+Proven **running on the iOS simulator**, not merely compiling:
+
+```
+ROOM-KMP-PROBE-OK rows=2 first=morning run
+ROOM-MIGRATION-PROBE-OK survived=legacy row newCount=2
+```
+
+The second line is the one that matters: a hand-built v9 database was migrated
+to v10 through a real `Migration` object and **the legacy row survived**.
+
+The classic Android API still compiles inside a KMP module:
+- `Room.databaseBuilder(context, AppDatabase::class.java, "probe.db")` — works
+- `object : Migration(8,9) { override fun migrate(db: SupportSQLiteDatabase) }` — works
+- **mixing legacy and KMP-style migrations in one `.addMigrations(...)` compiles**
+- `exportSchema = true` + `room { schemaDirectory(...) }` emits the same
+  `schemas/<db>/10.json` layout as Android
+
+**SQLDelight is off the table.** Room KMP delivers schema and migration
+continuity for existing v10 installs, which is the only reason R3 outranked
+convenience.
+
+Failure chain worth keeping (each cost a rebuild):
+1. KSP `2.2.10-2.0.2` + `com.android.kotlin.multiplatform.library` 9.2.1 →
+   `KotlinMultiplatformAndroidCompilationImpl cannot be cast to
+   KotlinJvmAndroidCompilation`, plus `Configuration with name kspAndroid not found`
+2. Hand-writing the `@ConstructedBy` actual → `The @ConstructedBy definition
+   must be an expect declaration`. **Do not write those actuals** — Room's KSP
+   generates the constructor per target.
+3. `androidx.sqlite` 2.7.0 klib is ABI 2.3.0, incompatible with Kotlin 2.2.10
+   (2.6.2 there). `room-runtime` 2.8.4 is ABI 2.2.0 and fine either way.
+
+### 6.3 CMP 1.10.3 is a hard ceiling on this Mac
+
+- CMP **1.11.1 + Kotlin 2.2.10** → klib ABI 2.3.0 vs consumable ≤ 2.2.0. Fails.
+- CMP **1.11.1 + Kotlin 2.3.20** → still fails, now at **link** time:
+  `Undefined symbols for architecture arm64: "_OBJC_CLASS_$_UIViewLayoutRegion"`,
+  `Could not find or use auto-linked framework (UIUtilities)`.
+  **CMP 1.11.x needs a newer iOS SDK than 18.4 / Xcode 16.3.**
+- CMP **1.10.3** builds and renders — the ceiling **regardless of Kotlin
+  version**, until Xcode is upgraded.
+
+**Mandatory runtime gotcha:** CMP crashes at launch unless `Info.plist` carries
+`CADisableMinimumFrameDurationOnPhone = true`
+(`kotlin.IllegalStateException: Error: Info.plist doesnt have a valid
+CADisableMinimumFrameDurationOnPhone entry`).
+
+Evidence: `/Users/cwiesi/bt_scratch/kmp-probe/q2-cmp-1103-ios-renders.png`
+(Material3 on iOS 18.4), and the crash it replaced,
+`q2-cmp-ios-crash-missing-plist-key.png`.
+
+### 6.4 Ktor green — and the dev stack needs NO ATS weakening
+
+Ktor 3.5.2 + Darwin engine on the simulator fetched
+`http://192.168.0.114:8099/probe.json` **with no `NSAppTransportSecurity` key
+in the bundle at all**.
+
+The probe ran a control in the same binary: `http://neverssl.com/` failed with
+`NSURLErrorDomain -1022 … App Transport Security policy requires the use of a
+secure connection`. So ATS *is* enforced — **raw IPv4-literal origins are
+simply exempt from it**.
+
+This is the best possible outcome: the LAN dev stack
+(`http://192.168.0.114:3000`) needs **no plist exception and no security
+weakening whatsoever**. The exception format was verified separately against
+the control domain and is recorded only in case a hostname-based dev origin
+ever appears.
+
+Also proven live: Compose recomposition ticks advanced (11 → 19) — the Compose
+runtime and kotlinx-coroutines are alive on iOS.
+
+Ktor/Kotlin pairing by klib ABI: **3.3.3** is newest for Kotlin 2.2.10;
+**3.5.2** for Kotlin 2.3.20.
+
+### 6.5 No CocoaPods, and no Xcode project needed to boot
+
+kdoctor 1.1.0 (installed by the probe — the **only** thing installed) reports
+*"Your operation system is ready for Kotlin Multiplatform Mobile Development"*.
+It flags CocoaPods as missing, but that is advisory: the probe **built and ran
+two iOS apps with zero pods**, via `binaries.executable` + a `UIApplicationMain`
+AppDelegate, a hand-assembled `.app`, ad-hoc codesign and `simctl install/launch`.
+
+Kotlin/Native toolchains (2.2.10 / 2.3.20 / 2.4.10 + LLVM 19/21 + libffi) were
+auto-downloaded by Gradle into `~/.konan`.
+
+### 6.6 The verified stack (built together in probe `p6`)
+
+| Component | Version | Note |
+| --- | --- | --- |
+| Gradle / JDK | 9.4.1 / 17.0.18 | unchanged |
+| AGP | 9.2.1 | unchanged |
+| Kotlin | **2.3.20** | up from 2.2.10 — see D6 |
+| KSP | 2.3.11 | |
+| compose compiler plugin | 2.3.20 | tracks Kotlin |
+| Compose Multiplatform | **1.10.3** | ceiling (§6.3) |
+| Room | 2.8.4 | unchanged |
+| androidx.sqlite | 2.7.0 | bundled driver |
+| Ktor | 3.5.2 | |
+
+`p6` produced **both** flavor APKs, passed both iOS Room tests, and exported
+the schema JSON — one build, no plugin conflicts between AGP's built-in Kotlin,
+KMP, Compose, serialization, KSP and Room.
+
+**Compose BOM caveat (must be decided in P2):** on Android, CMP artifacts *are*
+`androidx.compose`, so `compose-bom:2026.06.01` wins (foundation → 1.11.4,
+material3 → 1.4.0); on iOS the `org.jetbrains.compose` 1.10.3 klibs govern.
+**Android and iOS would run different Compose patch versions** unless the BOM
+is dropped or pinned to match CMP.
+
+### 6.7 Q5 is the open gap — UNTESTED
+
+The probe died before testing multiplatform availability of `androidx.datastore`,
+`androidx.lifecycle` (viewmodel-compose), `org.jetbrains.androidx.navigation`,
+koin, multiplatform-settings, a KMP argon2, and **Ktorfit**. None of those is
+claimed as verified anywhere in this document.
+
+The two that matter most are folded into P1 spikes: **navigation-compose
+multiplatform** (this is R7 — the `BtSheetNavigator` question and the single
+largest UI unknown) and **Ktorfit** (which decides whether 189 endpoints are
+re-plumbed or rewritten).
+
+---
+
+## 7. Structural decisions (probe-backed)
+
+### D6 — Move to Kotlin 2.3.20, gated on the 2637-case suite
+
+The recommended stack needs Kotlin 2.3.20; the app is on AGP's built-in 2.2.10.
+Both routes were proven to build:
+
+- **A** — stay on 2.2.10: requires `com.android.library` plus the bypass flags
+  `android.builtInKotlin=false` and `android.newDsl=false`, Ktor 3.3.3,
+  androidx.sqlite 2.6.2.
+- **B** — move to 2.3.20: the modern, supported path with
+  `com.android.kotlin.multiplatform.library` and no bypass flags.
+
+**Decision: pursue B, but prove it before building anything on it.** The very
+first P1 task is to raise Kotlin to 2.3.20 on the *existing single-module app*
+and run the full suite plus assembles. A compiler bump across 145k LOC is a
+real regression risk and it is cheap to test in isolation. If the suite does
+not come back green, fall back to A and record why — CMP 1.10.3 (the ceiling)
+works on both, so nothing downstream depends on winning this.
+
+### D7 — Persistence: Room KMP. Turn on `exportSchema` first.
+
+R3's answer is Room KMP, on the §6.2 evidence. Sequencing is not optional:
+**enable `exportSchema` and land the golden v10 schema JSON as a standalone
+commit before touching anything in `db/`.** Today no golden schema exists, and
+the 753-LOC migration test that guards the chain is sqlite-jdbc + reflection on
+Room's generated `_Impl` and cannot follow the code into common code. Without
+the exported schema, nothing mechanically proves a KMP Room build produces the
+schema real users already have on disk.
+
+### D8 — Network: Ktor 3.5.2, with Ktorfit as the preferred shape (UNVERIFIED)
+
+Ktor + Darwin is proven (§6.4). **Ktorfit is not** — it was in the untested Q5
+batch. The choice matters: with Ktorfit the 189 endpoints are re-plumbed and
+four middleware classes rewritten; without it, it is a 189-endpoint hand
+rewrite. A P1 spike settles it. Either way the middleware must reproduce
+exactly: the `Authenticator`'s retry-once via `priorResponse` with the
+`X-Bt-No-Reauth` per-request opt-out, and the 304 → synthetic-200 cache replay.
+
+### D9 — UI: Compose Multiplatform 1.10.3, pinned deliberately
+
+1.10.3 is a hardware/toolchain ceiling, not a preference (§6.3). Two
+consequences to carry: `Info.plist` must set
+`CADisableMinimumFrameDurationOnPhone`, and the Compose BOM/CMP version
+divergence (§6.6) must be resolved so Android and iOS do not silently run
+different Compose patch levels.
+
+### D10 — iOS app packaging: no CocoaPods
+
+Not needed and not installed (§6.5). P1 boots via the proven direct-executable
+path. A real Xcode project is introduced when P4 needs it for free-Apple-ID
+cable deploy, since that is the phase whose requirements actually shape it.
+
+---
+
 ## 5. Program log
 
 - **2026-08-09** — P0 opened. Baseline captured (2637 green, assemble green).
@@ -364,3 +571,14 @@ concrete blockers to running them on Kotlin/Native, with the chosen answers:
   portability by behaviour or non-import grep, never by import lists.
   R2 resolved (D2). Risk register extended to R10. Toolchain probe still
   running — module/persistence/network decisions deliberately deferred.
+- **2026-08-10** — Toolchain probe died during Q5; notes and artifacts
+  salvaged, five of six questions answered empirically (§6). **R1 and R3 both
+  resolved green**: AGP 9 and KMP coexist, and Room KMP preserves the classic
+  Android builder/`Migration`/`SupportSQLiteDatabase` surface with a real v9→v10
+  migration proven **on the simulator**. CMP 1.10.3 found to be a hard ceiling
+  (1.11.x needs a newer iOS SDK than Xcode 16.3 ships). Ktor proven, and the
+  LAN dev origin turns out to need **no ATS exception at all** — IPv4-literal
+  origins are exempt, confirmed with a control. Structural decisions D6–D10
+  recorded. Q5 (datastore/lifecycle/navigation/koin/Ktorfit) remains untested
+  and is explicitly labelled so; the two that matter became P1 spikes.
+  P1 opened.
