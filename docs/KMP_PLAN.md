@@ -84,7 +84,7 @@ Ordered by how badly each one can hurt the program. Status updated per phase.
 | R4 | CMP maturity for the custom shell | The pager-tab + gesture-tuned sheet navigator is hand-built and heavily tuned. | NARROWED — shell is ~90% portable pure Compose; risk concentrates in **one 153-LOC file**, `BtSheetNavigator.kt` (see R7) |
 | R5 | Android regression on this branch | The hardest constraint of the program. | CONTROLLED — 2637-case gate per phase; **weakened by CI running no tests (§4.8), fixed in P1** |
 | R6 | Background work + push differ fundamentally on iOS | WorkManager has no iOS equal; FCM/APNs differ. | OPEN but SOFTENED — both workers are one-shot and idempotent with engine-owned retry, so iOS loses latency, not data |
-| R7 | `BtSheetNavigator` subclasses navigation-compose internals-adjacent APIs | `Navigator.Name`, `NavigatorState.backStack`, `FloatingWindow`, `NavDestinationBuilder`, `NavBackStackEntry.LocalOwnersProvider` must behave identically in JetBrains' multiplatform artifact, or all 47 sheet routes need a new foundation. | OPEN — **mandatory spike before any shell work**; fallback (hand-rolled stack) is ~15 d, and the codebase already contains the pattern |
+| R7 | `BtSheetNavigator` subclasses navigation-compose internals-adjacent APIs | `Navigator.Name`, `NavigatorState.backStack`, `FloatingWindow`, `NavDestinationBuilder`, `NavBackStackEntry.LocalOwnersProvider` must behave identically in JetBrains' multiplatform artifact, or all 47 sheet routes need a new foundation. | **RESOLVED GREEN** (§8) — every API present and public; the file compiled **unchanged**; `FloatingWindow` behaviorally honored on-device. Hand-rolled fallback not needed |
 | R8 | Byte-identity formatters (§4.2) | Two of the three decide encrypted bytes; one ULP of disagreement silently corrupts user data rather than throwing. | OPEN — highest correctness risk in the program. Addressed by D1 |
 | R9 | `RawDeflate` sort stability on Kotlin/Native | If `sortWith` is not stable on Native, Huffman ties break differently and every vault envelope diverges. | OPEN — cheap to test, must be tested **first** (D3) |
 | R10 | Two capabilities blocked on owner actions | Drive needs a Google Cloud OAuth client (exists on no platform); iOS push needs a Firebase iOS app + APNs `.p8` + entitlements. | OPEN — not on the critical path, but has lead time; raise early |
@@ -591,6 +591,91 @@ cable deploy, since that is the phase whose requirements actually shape it.
 
 ---
 
+## 8. R7 spike — the sheet architecture survives intact (2026-08-10)
+
+**GREEN.** The 47-route sheet architecture ports to iOS. This was the single
+largest UI unknown and it closes without a fallback.
+
+`SpikeSheetNavigator.kt` is a literal copy of the app's 153-line
+`BtSheetNavigator.kt` with only the class renamed. It compiled with **zero
+changes to the navigation code** — the one compile error in the whole spike was
+the spike author's own UIKit typo.
+
+### API verdict — all PRESENT, none with a changed signature
+
+`Navigator<D>` + `@Navigator.Name`, `FloatingWindow`, `NavigatorState` +
+`state.backStack: StateFlow<List<NavBackStackEntry>>`, subclassable
+`NavDestination`, `NavDestinationBuilder<D>(navigator, KClass, typeMap)` +
+`instantiateDestination()`, `NavGraphBuilder.destination(...)`,
+`provider[KClass]`, `@Serializable` routes + `toRoute<T>()` + `hasRoute(KClass)`,
+`NavType`, `rememberNavController(vararg navigators)` — and critically
+**`NavBackStackEntry.LocalOwnersProvider(saveableStateHolder)` is present and
+public**, which was the API most likely to be missing or internal.
+
+### The behavioral proof (not a compile-only answer)
+
+The question was a runtime lifecycle guarantee, so it was measured as one. Each
+destination ticks a counter every 500 ms; a truth strip polls every entry's
+lifecycle from **outside** those compositions, so it reports correctly even if a
+page were disposed.
+
+- Two sheets stacked, t=8.5 s → t=10.0 s: covered sheet A went `tick=12` →
+  `tick=15` while B went `4` → `7`. **Both advanced exactly +3 in 1.5 s** — the
+  covered page is not merely retained, it runs at full cadence, STARTED.
+- Back stack while stacked: `<graph> RESUMED / SheetRootRoute STARTED /
+  SheetARoute STARTED / SheetBRoute RESUMED` — the empty floor stays STARTED
+  exactly as the app's KDoc claims it should.
+- **Pop 2→1**: A's counter was **continuous, never reset**, and its
+  `ViewModelStore` identity was unchanged from depth 2. The composition
+  **moved between planes rather than being rebuilt** — precisely the premise of
+  the two-plane connected slide. Each entry had a distinct store, so
+  `LocalOwnersProvider` really does install per-entry ViewModelStore +
+  SavedStateRegistry.
+- **Control experiment**: two ordinary `composable<T>()` destinations, same nav
+  version, same runtime, same screen. Pushing one over the other dropped the
+  lower to `CREATED` and disposed its composition. That attributes the
+  STARTED-while-covered guarantee to `FloatingWindow` **and nothing else**.
+
+Screenshots: `/Users/cwiesi/bt_scratch/kmp-nav-spike/` (`01-one-sheet.png`,
+`02-two-sheets-first.png`, `03-two-sheets-later.png`,
+`04-after-pop-one-sheet.png`, `05-plain-E-alone.png`, `06-plain-D-over-E.png`).
+
+### Version pin, and a trap
+
+**`org.jetbrains.androidx.navigation:navigation-compose:2.9.2`** — pinned.
+
+**2.10.0-alpha is poison.** It compiles, then silently drags
+`org.jetbrains.compose.runtime` 1.10.3 → 1.12.0-alpha02 and the link dies with
+the same `_OBJC_CLASS_$_UIViewLayoutRegion` / `UIUtilities` failure that rules
+out CMP 1.11.x (§6.3). Note there was **never a klib ABI problem** here — nav
+2.9.2 and CMP 1.10.3 are both `abi_version=2.2.0`; the transitive Compose bump
+was the whole issue. Also: nav 2.9.2 publishes iOS artifacts under the older
+`uikitsimarm64` classifier; Gradle attribute matching resolves it with no
+special configuration.
+
+### Three consequences for the port
+
+1. **`androidx.activity.compose.PredictiveBackHandler` (used in `BtSheetStack`)
+   is Android-only**, but CMP 1.10.3 ships `PredictiveBackHandler`,
+   `BackHandler` and `BackEventCompat` in `org.jetbrains.compose.ui:ui-backhandler`
+   (verified present in the 1.10.3 klib). **An import swap, not a rewrite.**
+   Whether iOS should have a system-back driver at all remains the UX question
+   already flagged for the owner.
+2. **STANDING RULE — every new subpage goes through `btSheet<T>`, never
+   `composable<T>`.** Navigating to any non-`FloatingWindow` destination
+   auto-dismisses the entire sheet stack (observed: depth 2 → 0). This is stock
+   androidx behavior faithfully reproduced on iOS. The graph is safe today
+   because the only non-sheet destination is `SheetRootRoute`, which nothing
+   navigates to directly — but it must stay that way.
+3. `BtSheetStack` also pulls `R.string` via `androidx.compose.ui.res.stringResource`
+   — that belongs to the compose-resources migration (§4.4), not to this risk.
+
+**Effect on the estimate:** the UI survey's hardest item was 5–15 engineer-days
+depending on this answer. It lands at the low end, and the ~15-day hand-rolled
+back-stack branch is retired.
+
+---
+
 ## 5. Program log
 
 - **2026-08-09** — P0 opened. Baseline captured (2637 green, assemble green).
@@ -627,3 +712,14 @@ cable deploy, since that is the phase whose requirements actually shape it.
   `android-apk.yml` is a Node 20 action and Node 20 is EOL — works today, but
   it is a scheduled outage; recommend bumping both workflows together.
   Navigation (R7) and Ktorfit spikes still running.
+- **2026-08-10** — **R7 RESOLVED GREEN** (§8). `BtSheetNavigator` compiled
+  unchanged against `navigation-compose:2.9.2`, and `FloatingWindow` was proven
+  behaviorally on-device: the covered sheet kept ticking at full cadence while
+  STARTED, and a pop preserved both the counter and the `ViewModelStore`
+  identity, i.e. the composition moved between planes instead of being rebuilt.
+  A control experiment with plain `composable<T>()` destinations dropped the
+  covered page to CREATED, attributing the guarantee to `FloatingWindow` alone.
+  The ~15-day hand-rolled back-stack fallback is retired. nav 2.10.0-alpha
+  identified as a trap (drags Compose runtime to 1.12.0-alpha and breaks the
+  iOS link). New standing rule recorded: subpages must always use `btSheet<T>`,
+  never `composable<T>`, or the whole sheet stack auto-dismisses.
