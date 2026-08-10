@@ -1,9 +1,9 @@
-commit  = fc970e8a84ce70d35a095316aefdc7e0ac2ec72e
-date    = 2026-08-05 (fetched 2026-08-05)
+commit  = 8884c5cb3aa643e8ce6a175973c4518e7191898a
+date    = 2026-08-10 07:44:07 +0000 (fetched 2026-08-10)
 repo    = BetterTrack platform monorepo (apps/web + packages/*)
 ref     = origin/main
-copied  = 2026-08-05
-previous= cb530f7e30a2ce3502e708f4b05711d1d0bde685 (2026-08-04 09:24:39 +0200)
+copied  = 2026-08-10
+previous= fc970e8a84ce70d35a095316aefdc7e0ac2ec72e (2026-08-05)
 
 # Paths vendored under vendor/ (read-only snapshot, `git show origin/main:<path>`)
 #
@@ -24,13 +24,18 @@ previous= cb530f7e30a2ce3502e708f4b05711d1d0bde685 (2026-08-04 09:24:39 +0200)
 #   apps/web/src/user/vault/mirrorProvenance.ts                 -> vendor/web-vault/
 #   apps/web/src/user/vault/mirrorProvenance.test.ts            -> vendor/web-vault/
 #   apps/web/src/user/vault/vault.test.ts                       -> vendor/web-vault/
-#   apps/web/src/user/vault/vectors.ts                          -> vendor/web-vault/
-#   apps/web/src/user/vault/vectors.fixture.json                -> vendor/web-vault/
 #   packages/contracts/src/vault.ts                             -> vendor/web-vault/contracts-vault.ts
+#   [RELOCATED at 8884c5cb — the v1 oracle now lives in packages/domain and so
+#    arrives through the `packages/domain/**` line above; see the re-pin note
+#    at the bottom of this file:
+#      was apps/web/src/user/vault/vectors.ts          -> vendor/web-vault/
+#      was apps/web/src/user/vault/vectors.fixture.json-> vendor/web-vault/
+#      now packages/domain/src/vaultVectors/{v1,v2}.{ts,fixture.json}]
 #
-# The two published fixtures are ALSO copied byte-identically into the app's test
+# The published fixtures are ALSO copied byte-identically into the app's test
 # resources, because they are replayed directly rather than reshaped:
-#   app/src/test/resources/vault-vectors/vectors.fixture.json
+#   app/src/test/resources/vault-vectors/vectors.fixture.json  (= v1.fixture.json)
+#   app/src/test/resources/vault-vectors/v2.fixture.json
 #   app/src/test/resources/vault-vectors/clientMoney.fixture.json
 #
 # NOT from the monorepo — a third-party npm package, vendored for the same
@@ -132,3 +137,88 @@ previous= cb530f7e30a2ce3502e708f4b05711d1d0bde685 (2026-08-04 09:24:39 +0200)
 # the platform accepts and its own merge suite exercises on purpose. When porting
 # a validator, check the version that actually RESOLVES, not the one in the
 # manifest. (Fixed in VaultContracts.kt; see the KDoc on DATETIME_REGEX.)
+
+# ── RE-PIN fc970e8a → 8884c5cb (2026-08-10): Vaults v2 P5 + the six vectors ──
+#
+# WHY: platform shipped the Vaults v2 contract r3, its P5 hardening pass, and
+# THE SIX CONFORMANCE-VECTOR FAMILIES. This is the re-pin that unblocks P4
+# GATE 1 in the app.
+#
+# NOTE on the pin vs. the platform working tree: their checkout was stale at
+# b7cebe48 (2026-08-05) when this snapshot was taken, and 8884c5cb is NOT an
+# ancestor of it. 8884c5cb IS the tip of origin/main. Every path below was
+# therefore vendored with `git show origin/main:<path>`, which is what the
+# README's own procedure prescribes and needs no checkout. Do not "fix" a
+# future drift check by checking their main out.
+#
+# ── THE V1 ORACLE RELOCATED (verified byte-identical) ────────────────────────
+#
+#   apps/web/src/user/vault/vectors.ts          -> packages/domain/src/vaultVectors/v1.ts
+#   apps/web/src/user/vault/vectors.fixture.json-> packages/domain/src/vaultVectors/v1.fixture.json
+#
+# Platform's stated reason (v1.ts header): `packages/domain` is the SHARED
+# vectors location both clients pin, "so the mobile port never again has to
+# vendor crypto oracles out of the web APP".
+#
+# The relocation was verified, not trusted. sha256 of the fixture is
+#   b9f507349726a702dfee78798da288c36df339c61fe0f89fd5a1b18f54bc4cfb
+# at ALL FOUR of: the old apps/web path @fc970e8a, the new packages/domain path
+# @origin/main, `vendor/domain/src/vaultVectors/v1.fixture.json`, and
+# `app/src/test/resources/vault-vectors/vectors.fixture.json`. Zero v1 drift —
+# a move, not a regeneration, exactly as claimed. The stale
+# `vendor/web-vault/vectors.{ts,fixture.json}` copies were deleted; the oracle
+# now arrives through the `packages/domain/**` vendoring like every other
+# vector. The app's test resource KEEPS its existing `vectors.fixture.json`
+# name (the bytes are identical and every v1 replay path already points at it);
+# only the vendored copy follows the platform's `v1.fixture.json` naming.
+#
+# ── NEW: the v2 fixture ─────────────────────────────────────────────────────
+#   packages/domain/src/vaultVectors/v2.fixture.json
+#     -> vendor/domain/src/vaultVectors/v2.fixture.json
+#     -> app/src/test/resources/vault-vectors/v2.fixture.json  (byte-identical)
+#     sha256 5b6e447bd7455fe8c1c1c9325ed4e19946739462864da1804b547bf6ab6e0509
+#   Replayed by `VaultV2ConformanceTest`, all six r3 §25 families.
+#
+# ── NEW: the Vaults v2 reference implementation (the P4 port oracle) ────────
+# Same W3 discipline — a literal port needs its source pinned:
+#   apps/web/src/user/vault/canonicalJson.ts    -> vendor/web-vault/
+#   apps/web/src/user/vault/hkdf.ts + .test.ts  -> vendor/web-vault/
+#   apps/web/src/user/vault/v2/*.ts             -> vendor/web-vault/v2/
+#   apps/web/src/user/vault/v2/vectors/*.ts     -> vendor/web-vault/v2/vectors/
+#   packages/contracts/src/vaultV2.ts           -> vendor/web-vault/contracts-vaultV2.ts
+#
+# ── ENGINE DRIFT: NONE ──────────────────────────────────────────────────────
+#   git diff --stat fc970e8a origin/main -- packages/domain
+# touches ONLY `package.json` (+4, an export map entry for the new
+# `./vaultVectors` subpath) and the new `src/vaultVectors/` directory. No money
+# engine source moved, so every domain vector regenerates identically and the
+# W2 port is unaffected by this re-pin.
+#
+# ── TWO BEHAVIOURAL CHANGES IN ALREADY-VENDORED FILES ───────────────────────
+#
+# 1. `packages/contracts/src/vault.ts` — `mergeLog` LOST its `.max(20)` at
+#    parse time, in all three document schemas. It is now a WRITE-side trim
+#    (`VAULT_MERGE_LOG_LIMIT` + `trimVaultMergeLog`), never a parse rejection.
+#    This is design r3 closing MOBILE finding A1.2, and the reasoning is
+#    load-bearing: a parse-time max turns a merely oversized diagnostic log into
+#    an unreadable document, and in the v2 layout an unreadable `common` doc
+#    takes `clientSecurity` and `mirrorProvenance` down with it — the whole
+#    vault, lost to a bookkeeping array. Writers trim; parsers tolerate.
+#    ACTIONED in the port: `VaultContracts.kt` dropped its parse-time check and
+#    gained `VaultDocument.trimMergeLog`. The v2 split calls it.
+#
+#    Same file also ADDED three `portfolioRow` fields (`kind`, `vaultId`,
+#    `alias`). NO port impact: `VaultContracts.kt` keeps entity `data` opaque
+#    (a `JsonObject`) and has no strict per-row schema, so there is nothing to
+#    widen. Recorded here so the next re-pin does not re-investigate it.
+#
+# 2. `apps/web/src/user/vault/crypto.ts` — `aesGcmEncrypt` / `aesGcmDecrypt`
+#    widened from module-private to EXPORTED, explicitly so the v2 layer reuses
+#    the one implementation "including the fail-closed key-material check"
+#    instead of standing up a second one. Mirrored exactly: the Kotlin pair went
+#    `private` -> `internal`. No behaviour change on either side.
+#
+#    `merge.ts` also shrank by 79 lines, but that is a pure EXTRACTION —
+#    `canonicalJson` moved verbatim into the new `canonicalJson.ts` so the merge
+#    tie-breaks and the r3 §21 header MAC share one definition. `VaultJson.kt`'s
+#    `canonicalJson` already IS that function and needed no change.
