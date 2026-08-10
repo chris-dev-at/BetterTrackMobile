@@ -19,6 +19,12 @@ plugins {
     // does not compile without this plugin. Same plugin :app already applies, at
     // the SAME Kotlin version (catalog `kotlin-serialization`, version.ref=kotlin).
     alias(libs.plugins.kotlin.serialization)
+    // KMP/iOS port, Phase 2 (Room -> :shared). KSP runs Room's annotation
+    // processor per target (android + both iOS), generating BtDatabase_Impl and
+    // the DAO/constructor implementations. The `androidx.room` Gradle plugin owns
+    // the exported-schema directory (room {} below) the same way it does in :app.
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.room)
 }
 
 kotlin {
@@ -67,6 +73,16 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
+            // KMP/iOS port, Phase 2 (Room -> :shared): the @Database, its 18
+            // entities and 13 DAOs now compile here for BOTH platforms. room-runtime
+            // is the multiplatform artifact (2.8.4, the SAME version :app declares
+            // directly); :app reaches it transitively via :shared at the identical
+            // coordinate, so its resolved shipping graph is unchanged (the classic
+            // Android SupportSQLite APIs live in room-runtime-android, pulled in on
+            // the android target only). coroutines-core backs the DAO `Flow<>`
+            // returns — 1.10.2, again the version :app already resolves.
+            implementation(libs.androidx.room.runtime)
+            implementation(libs.kotlinx.coroutines.core)
         }
 
         // commonTest — the domain CONFORMANCE harness (Phase 2). It runs on BOTH
@@ -133,8 +149,36 @@ kotlin {
             // compose.ui carries ComposeUIViewController, the UIKit bridge the
             // iOS executable hosts its Compose content in.
             implementation(compose.ui)
+            // KMP/iOS port, Phase 2 (Room -> :shared): the bundled SQLite driver
+            // that backs the KMP Room database on Kotlin/Native. iOS-ONLY — it is
+            // declared here, never in commonMain/androidMain, so nothing new lands
+            // on :app's classpath (see the androidxSqlite version note). It pulls
+            // androidx.sqlite (2.6.2) transitively for the Native targets only.
+            implementation(libs.androidx.sqlite.bundled)
         }
     }
+}
+
+// ── Room exported schema (KMP/iOS port, Phase 2) ────────────────────────────
+// The @Database now lives in :shared, so Room's compiler exports the schema JSON
+// from HERE. `shared/schemas/at.bettertrack.app.data.db.BtDatabase/10.json` must
+// reproduce the golden v10 identityHash (a9fab166f6bcb1451ac240972a08a408) the
+// app committed under app/schemas — moving the @Database does not change the
+// schema, so the hash is unchanged. Kept next to the module so it travels with
+// :shared, exactly as :app's room {} block did.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
+// Room's KSP processor runs once per target compilation: the android target
+// generates the SupportSQLite-backed BtDatabase_Impl (the one :app + the
+// migration regression suite consume), and each iOS target generates the
+// SQLiteDriver-backed one. There is no commonMain KSP configuration — Room codegen
+// is inherently per-platform.
+dependencies {
+    add("kspAndroid", libs.androidx.room.compiler)
+    add("kspIosArm64", libs.androidx.room.compiler)
+    add("kspIosSimulatorArm64", libs.androidx.room.compiler)
 }
 
 // ── Domain conformance fixtures: JSON -> Kotlin source (Phase 2) ────────────

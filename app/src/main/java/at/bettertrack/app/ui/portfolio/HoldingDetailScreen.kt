@@ -489,8 +489,12 @@ private fun HoldingContent(
                     color = bt.textMuted,
                 )
                 Spacer(Modifier.height(2.dp))
-                if (holding.marketValueEur != null) {
-                    MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneyLarge)
+                // Captured into a local so the null-guard narrows the type: since
+                // the KMP port, HoldingEntity lives in :shared and Kotlin will not
+                // smart-cast a public `val` across a module boundary.
+                val marketValueEur = holding.marketValueEur
+                if (marketValueEur != null) {
+                    MoneyText(value = marketValueEur, style = BtTheme.type.moneyLarge)
                 } else if (manualPricesAvailable) {
                     // W6: in Drive mode a missing value has a cause the user can
                     // act on, so it says so instead of showing a bare dash.
@@ -633,9 +637,10 @@ private fun HoldingContent(
                             }
                         },
                     ) {
-                        if (holding.unrealizedPnlEur != null) {
+                        val unrealizedPnlEur = holding.unrealizedPnlEur
+                        if (unrealizedPnlEur != null) {
                             MoneyText(
-                                value = holding.unrealizedPnlEur,
+                                value = unrealizedPnlEur,
                                 style = BtTheme.type.moneyMedium,
                                 colorMode = MoneyColorMode.GainLoss,
                                 showSign = true,
@@ -661,9 +666,10 @@ private fun HoldingContent(
                             }
                         },
                     ) {
-                        if (holding.dayChangeEur != null) {
+                        val dayChangeEur = holding.dayChangeEur
+                        if (dayChangeEur != null) {
                             MoneyText(
-                                value = holding.dayChangeEur,
+                                value = dayChangeEur,
                                 style = BtTheme.type.moneyMedium,
                                 colorMode = MoneyColorMode.GainLoss,
                                 showSign = true,

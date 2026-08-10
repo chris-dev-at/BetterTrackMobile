@@ -514,11 +514,17 @@ class TransactionFormViewModel(
                 val editable = op != null && (
                     op.status == OpStatus.PENDING.wire || op.status == OpStatus.NEEDS_ATTENTION.wire
                     )
-                if (row == null || !editable || op.portfolioId == null) {
+                // op is a local (smart-casts fine), but op.portfolioId is a
+                // SyncOpEntity property, which since the KMP port lives in :shared;
+                // a public `val` does not smart-cast across a module boundary, so
+                // capture it once. Behaviour is unchanged: when op is null, row is
+                // null too, so the guard's first term still short-circuits.
+                val queuedPortfolioId = op?.portfolioId
+                if (row == null || !editable || queuedPortfolioId == null) {
                     _targetMissing.value = true
                 } else {
-                    mode = FormMode.EditQueued(opId, op.portfolioId)
-                    _portfolioId.value = op.portfolioId
+                    mode = FormMode.EditQueued(opId, queuedPortfolioId)
+                    _portfolioId.value = queuedPortfolioId
                     _isBuy.value = row.isBuy
                     _asset.value = AssetPick(
                         row.assetId, row.assetSymbol, row.assetName ?: row.assetSymbol, null,

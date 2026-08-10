@@ -1689,8 +1689,11 @@ private fun HoldingRow(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    if (holding.marketValueEur != null) {
-                        MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneySmall)
+                    // Local capture: HoldingEntity is in :shared since the KMP
+                    // port, and a public `val` does not smart-cast across modules.
+                    val marketValueEur = holding.marketValueEur
+                    if (marketValueEur != null) {
+                        MoneyText(value = marketValueEur, style = BtTheme.type.moneySmall)
                     } else {
                         // W6: a dash says "nothing here". In Drive mode the truth is
                         // "no price yet", which is a different and fixable statement.

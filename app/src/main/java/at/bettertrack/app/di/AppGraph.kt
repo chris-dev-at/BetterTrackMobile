@@ -15,6 +15,11 @@ import at.bettertrack.app.data.auth.SecureStore
 import at.bettertrack.app.data.auth.TokenManager
 import at.bettertrack.app.data.db.AccountDataManager
 import at.bettertrack.app.data.db.BtDatabase
+// KMP/iOS port (Phase 2): BtDatabase moved to :shared and its Android factory is
+// now a `BtDatabase.Companion` extension in androidMain, so the create() call
+// site below needs this explicit import (the `BtDatabase.create(context)` call
+// itself is unchanged).
+import at.bettertrack.app.data.db.create
 import at.bettertrack.app.data.notifications.DefaultNotificationRepository
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotificationRepository
