@@ -843,24 +843,36 @@ results before it was spotted.
 
 ---
 
-## 10. Incoming from platform `main` — absorb at next merge
+## 10. Absorbed from platform `main` (merge `fe1a542`, 2026-08-10)
 
-Relayed by the chief 2026-08-10. Not yet on this branch; `kmp-ios` last synced
-with `main` at `e98003d`.
+`kmp-ios` merged `origin/main` @`5a104c7` (7 commits, conflict-free — no file
+was changed on both branches). Post-merge gates all green (§log).
 
-1. **Portfolio history now echoes a REQUIRED `interval` field**, and the
-   platform serves a finer 1D interval plus a new fundamentals endpoint.
-   Direct impact on the shared-core DTO work: the history DTO must **carry**
-   `interval`, not merely tolerate it. Since the 261 `@Serializable` DTOs are
-   the part of `data/` that ports essentially as-is, this must be merged
-   **before** the DTO layer moves to `:shared`, or the port will carry a stale
-   contract. Note the app's `Json` is `ignoreUnknownKeys = true`, so a missing
-   field would fail silently rather than loudly — worth an explicit test.
-2. **Vaults v2 vector families now live at `packages/domain/src/vaultVectors/`
-   (v1 + v2)**; the Android side is replaying them on `main` now. This changes
-   the P2 conformance target: the iOS vault work must replay **v1 and v2**, not
-   the v1-era fixtures inventoried in §4. Re-count the vectors at merge time —
-   the 622 domain figure and the vault fixture inventory both predate this.
+1. **Portfolio history's REQUIRED `interval` field — ABSORBED** (main
+   `90c635a`). `interval: String?` now on `PortfolioDtos.kt:91` and
+   `MarketDtos.kt:82`; the app reads the echoed value and still sends nothing.
+   The DTO layer carries the current contract before it moves to `:shared` —
+   which mattered because the app's `Json` is `ignoreUnknownKeys = true`, so a
+   stale-contract miss would have failed silently.
+2. **Vaults v2 conformance families — ABSORBED** (main `7389f82`). Fixtures at
+   `tools/domain-vectors/vendor/domain/src/vaultVectors/` (`v1.fixture.json` +
+   `v2.fixture.json`), 11 new Kotlin classes under `vault/v2/`, and
+   `VaultV2ConformanceTest`. The suite grew **+90 (2637 → 2727)**, green on both
+   flavors. The P2 crypto conformance target is now **v1 + v2**.
+
+**v2 crypto scope added to the port (2511 LOC, 11 files).** Beyond v1's
+Argon2id + deflate, v2 introduces:
+- **BouncyCastle HKDF** (`HKDFBytesGenerator` + `SHA256Digest`) — a *second*
+  BouncyCastle KDF. Like Argon2, HKDF is fully specified (RFC 5869), so
+  byte-identity is a property of the spec: literal-translate (per D2) or
+  CryptoKit `HKDF`.
+- **HMAC-SHA256** (`javax.crypto.Mac`) for the header MAC → CommonCrypto/CryptoKit.
+- **`java.text.Normalizer` NFKD** at `VaultWords.kt:51`, on the BIP39
+  mnemonic → seed path. Kotlin/Native has **no** `Normalizer`; this is a new
+  `expect`/`actual` seam that **must be byte-identical** (iOS:
+  `precomposedStringWithCompatibilityMapping` / `CFStringNormalize` NFKD).
+- Otherwise clean: zero `BigDecimal`/`Math.`/`synchronized`/`ThreadLocal` in
+  `vault/v2/`.
 
 ---
 
@@ -936,3 +948,14 @@ with `main` at `e98003d`.
   unchanged; `androidMain` gets only `androidx.compose.runtime` via `:app`'s own
   BOM. P0 and P1 both MET. **Next: P2 — shared core migration, lowest layer
   first, starting with the rest of `domain/`; merge `main` first to absorb §10.**
+- **2026-08-10** — **P2 opened. Merged `origin/main` @`5a104c7` into `kmp-ios`**
+  (merge `fe1a542`, 7 commits, conflict-free). Absorbed the required `interval`
+  DTO field and the Vaults v2 conformance families (§10). Re-verified all four
+  gates on the merged tree: `testGithubDebugUnitTest` **2727**/0/0/7,
+  `testPlayDebugUnitTest` **2727**/0/0/19 (the +90 is Vaults v2, reconciled
+  against main's count), `:shared` compiles for iOS, and the iOS app rebuilt
+  from the merged tree still boots and renders the domain cascade
+  (`ios_postmerge.png`). v2 crypto scope now folded into the port plan (§10):
+  it adds HKDF, an HMAC header MAC, and — the sharp new item — a
+  `java.text.Normalizer` NFKD seam on the BIP39 path. Now beginning the
+  lowest-layer shared-core migration (`domain/`).
