@@ -514,12 +514,47 @@ Both routes were proven to build:
 - **B** — move to 2.3.20: the modern, supported path with
   `com.android.kotlin.multiplatform.library` and no bypass flags.
 
-**Decision: pursue B, but prove it before building anything on it.** The very
-first P1 task is to raise Kotlin to 2.3.20 on the *existing single-module app*
-and run the full suite plus assembles. A compiler bump across 145k LOC is a
-real regression risk and it is cheap to test in isolation. If the suite does
-not come back green, fall back to A and record why — CMP 1.10.3 (the ceiling)
-works on both, so nothing downstream depends on winning this.
+**Decision: pursue B, proven before anything was built on it.**
+
+**RESOLVED 2026-08-10 — B is GREEN; route A is retired.** Commit `73d24a9`.
+
+The override is classpath-only: the root build file declares
+`org.jetbrains.kotlin.multiplatform` at 2.3.20 with `apply false`, applied to no
+module. Its plugin marker pulls kotlin-gradle-plugin 2.3.20, and Gradle conflict
+resolution raises AGP's built-in 2.2.10 across the whole build — `:app` never
+applies a Kotlin plugin (which fails outright). Two files, four functional
+lines, **zero source fixes required**.
+
+Verified independently of the builder that made the change, from a
+`--rerun-tasks` rebuild where every task actually executed:
+
+| Leg | Result |
+| --- | --- |
+| `testGithubDebugUnitTest` | 169 suites / **2637 tests / 0 failures / 0 errors** / 7 skipped |
+| `testPlayDebugUnitTest` | 169 suites / **2637 tests / 0 failures / 0 errors** / 19 skipped |
+
+Both flavors assemble. The play leg had **never been executed anywhere** before
+this; its larger skip count is the `assumeTrue(SELF_UPDATE_ENABLED)`-gated tests
+correctly skipping off-flavor — which also de-risks the new CI gate's one
+unproven leg.
+
+**The bump was proven to have actually taken effect, two ways**, because a green
+suite that silently still ran the old compiler would be a false gate: the
+resolved classpath carries `kotlin-gradle-plugin:2.3.20` with zero occurrences
+of 2.2.10 anywhere, and freshly emitted bytecode carries `@Metadata mv=[2,3,0]`
+against the baseline's `mv=[2,2,0]`. A classpath can lie about what compiled;
+the metadata the compiler stamps into a class file cannot.
+
+Incidental finding: KSP dropped the `<kotlin>-<ksp>` scheme at 2.3.0 and now
+tracks the Kotlin *language* line, so 2.3.11 pairs with any Kotlin 2.3.x — no
+more KSP republish per Kotlin patch.
+
+Also fixed under this gate (`be0052e`): `CashLedgerHandPortedTest.kt:163`
+asserted `e is CashLedgerError` to guard that two error classes stay separate.
+Kotlin 2.3 warns it is statically always false (KTLC-365) and **Kotlin 2.4 makes
+that a hard compile error** — a deliberate guard would have become a build
+failure at an arbitrary future moment. Widened through `as Any`, as the adjacent
+line already did, so it remains a genuine runtime check.
 
 ### D7 — Persistence: Room KMP. Turn on `exportSchema` first.
 
@@ -582,3 +617,13 @@ cable deploy, since that is the phase whose requirements actually shape it.
   recorded. Q5 (datastore/lifecycle/navigation/koin/Ktorfit) remains untested
   and is explicitly labelled so; the two that matter became P1 spikes.
   P1 opened.
+- **2026-08-10** — P1 progress. **Kotlin 2.3.20 gate GREEN** (D6, `73d24a9`):
+  2637/0 on BOTH flavors, bump proven real via bytecode metadata, zero source
+  fixes. Route A retired. **CI now has a real test gate** (`968c83a`) — the
+  suite had never run in CI at all; hardened against a green tick on red tests
+  and verified against synthetic red XML. A Kotlin-2.4 hard-error was fixed
+  before it could bite (`be0052e`). `testPlayDebugUnitTest` executed for the
+  first time ever, green. Reported upward: every action in the pre-existing
+  `android-apk.yml` is a Node 20 action and Node 20 is EOL — works today, but
+  it is a scheduled outage; recommend bumping both workflows together.
+  Navigation (R7) and Ktorfit spikes still running.
