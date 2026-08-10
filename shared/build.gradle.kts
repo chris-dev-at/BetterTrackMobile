@@ -14,6 +14,11 @@ plugins {
     // …and the Kotlin COMPILER half. Both are required on a KMP module; the
     // JetBrains plugin does not imply the compiler plugin.
     alias(libs.plugins.compose.compiler)
+    // kotlinx-serialization COMPILER plugin (Phase 2 DTO migration). The API DTO
+    // package (261 @Serializable classes) moved into commonMain; @Serializable
+    // does not compile without this plugin. Same plugin :app already applies, at
+    // the SAME Kotlin version (catalog `kotlin-serialization`, version.ref=kotlin).
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -51,8 +56,17 @@ kotlin {
         // it is independent of the Compose BOM reconciliation described further
         // down; it changes nothing about :app's shipping graph (kotlinx-datetime
         // is added to :shared, and :app reaches it only transitively).
+        //
+        // kotlinx-serialization-json is the SECOND commonMain dependency (Phase 2
+        // DTO migration): the API DTO package's @Serializable classes now compile
+        // here for both platforms. This is pinned to the SAME version :app already
+        // declares directly (catalog `kotlinxSerializationJson` = 1.9.0), so :app
+        // reaching it transitively via :shared changes nothing in :app's resolved
+        // shipping graph — verified with :app:dependencies before/after. Pure data,
+        // no Compose: it stays in commonMain and pulls in no UI.
         commonMain.dependencies {
             implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.serialization.json)
         }
 
         // commonTest — the domain CONFORMANCE harness (Phase 2). It runs on BOTH
@@ -61,10 +75,11 @@ kotlin {
         // JVM inside :app, so the Kotlin/Native arithmetic was unverified.
         //
         // Both dependencies are TEST-scoped on :shared and therefore invisible to
-        // :app's shipping graph. kotlinx-serialization-json is used purely as a
-        // runtime JSON tree API (parseToJsonElement / JsonObject / buildJsonObject)
-        // — no @Serializable class anywhere — so the serialization COMPILER plugin
-        // is deliberately NOT applied to this module.
+        // :app's shipping graph. kotlinx-serialization-json is used here purely as a
+        // runtime JSON tree API (parseToJsonElement / JsonObject / buildJsonObject),
+        // no @Serializable class in the harness. (The serialization COMPILER plugin
+        // IS applied module-wide as of Phase 2 for the commonMain DTOs; it is inert
+        // over this harness since there is nothing @Serializable to generate for.)
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.serialization.json)

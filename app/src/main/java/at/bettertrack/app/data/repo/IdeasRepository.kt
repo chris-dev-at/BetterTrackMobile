@@ -206,6 +206,10 @@ class IdeasRepository(
 
     private fun IdeaDto.toDomain(): Idea {
         val src = state.source
+        // Capture the nullable DTO field into a local val: since the DTOs moved to
+        // :shared, a public property from another module is no longer smart-castable
+        // at its use site. The local read has no side effects, so behaviour is identical.
+        val srcConglomerateId = src.conglomerateId
         val source: IdeaSource = when {
             src.kind == "adhoc" -> IdeaSource.Adhoc(
                 src.positions.orEmpty().map { IdeaPosition(it.assetId, it.weight) },
@@ -214,15 +218,20 @@ class IdeasRepository(
             // conglomerate branch; an unmodelled future kind degrades to an
             // empty ad-hoc list, which renders as "no positions" rather than
             // crashing a screen.
-            src.conglomerateId != null -> IdeaSource.Conglomerate(src.conglomerateId)
+            srcConglomerateId != null -> IdeaSource.Conglomerate(srcConglomerateId)
             else -> IdeaSource.Adhoc(emptyList())
         }
         val bench = state.benchmark
+        // Same cross-module smart-cast reason as above; `bench?.` keeps the null-guard
+        // ordering below byte-for-byte (preset, then assetId, then conglomerateId).
+        val benchPreset = bench?.preset
+        val benchAssetId = bench?.assetId
+        val benchConglomerateId = bench?.conglomerateId
         val benchmark: IdeaBenchmark? = when {
             bench == null -> null
-            bench.preset != null -> IdeaBenchmark.Preset(bench.preset)
-            bench.assetId != null -> IdeaBenchmark.Asset(bench.assetId)
-            bench.conglomerateId != null -> IdeaBenchmark.Conglomerate(bench.conglomerateId)
+            benchPreset != null -> IdeaBenchmark.Preset(benchPreset)
+            benchAssetId != null -> IdeaBenchmark.Asset(benchAssetId)
+            benchConglomerateId != null -> IdeaBenchmark.Conglomerate(benchConglomerateId)
             else -> null
         }
         return Idea(
