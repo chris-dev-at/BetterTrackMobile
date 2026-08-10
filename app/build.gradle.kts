@@ -261,6 +261,13 @@ android {
 }
 
 dependencies {
+    // KMP/iOS port, Phase 1 — the multiplatform module. It currently supplies
+    // at.bettertrack.app.domain.SettingsScope (moved out of :app verbatim, same
+    // package, so no import in this module changed). :shared brings NO
+    // transitive dependencies into the Android build by design; see the
+    // androidMain note in shared/build.gradle.kts.
+    implementation(project(":shared"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
 

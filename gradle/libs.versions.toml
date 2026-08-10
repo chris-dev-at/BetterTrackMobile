@@ -98,6 +98,23 @@ zxingCore = "3.5.3"
 # exactly. Argon2 version 1.0 does NOT — the version is part of the contract.
 bouncycastle = "1.80"
 
+# ── KMP/iOS port, Phase 1 (docs/KMP_PLAN.md) ───────────────────────────────
+# Compose Multiplatform — the iOS UI toolkit for the :shared module. This is a
+# HARD CEILING, not a "latest wins" pin: 1.11.x fails to LINK against the
+# iOS 18.4 SDK on the Xcode 16.3 installed here, with
+#   Undefined symbols for architecture arm64: "_OBJC_CLASS_$_UIViewLayoutRegion"
+#   Could not find or use auto-linked framework 'UIUtilities'
+# because 1.11 binds UIKit symbols that only exist in a newer SDK. 1.10.3 is the
+# newest release that links and runs on this toolchain. Do NOT bump it until
+# Xcode itself is upgraded and the iOS app is re-verified on a simulator.
+#
+# Note this is INDEPENDENT of `composeBom` above: that BOM versions ANDROIDX
+# Compose (androidx.compose.*, :app only), while this versions JETBRAINS Compose
+# (org.jetbrains.compose.*, :shared only). Both are driven by the SAME Compose
+# COMPILER plugin (`compose-compiler`, pinned to `kotlin`), which is why the
+# compiler plugin version must keep tracking `kotlin` and not either of these.
+composeMultiplatform = "1.10.3"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -117,6 +134,13 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
+# Compose RUNTIME on its own. :app never needs to name it (it arrives
+# transitively via ui/material3), but :shared's ANDROID target must put it on
+# the compile classpath explicitly or the Compose compiler plugin aborts with
+# IncompatibleComposeRuntimeVersionException. Version-less on purpose: it
+# resolves through the SAME `androidx-compose-bom` :app uses, which is what
+# guarantees :shared cannot drag the app onto a different Compose version.
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 
 # Step 4 — login + API client
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidxBrowser" }
@@ -166,11 +190,12 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-# Declared `apply false` in the ROOT build.gradle.kts and applied to NO module.
-# Its only job is to put kotlin-gradle-plugin 2.3.20 on the build classpath so
-# Gradle's conflict resolution overrides AGP 9's built-in Kotlin 2.2.10 (see the
-# long note at `kotlin` above). It becomes a real, applied plugin when the KMP
-# shared module lands.
+# Declared `apply false` in the ROOT build.gradle.kts, and APPLIED by :shared
+# (Phase 1 of the KMP/iOS port — the shared module has now landed).
+# It keeps its second, older job as well: merely being on the root plugins block
+# puts kotlin-gradle-plugin 2.3.20 on the build classpath so Gradle's conflict
+# resolution overrides AGP 9's built-in Kotlin 2.2.10 for the WHOLE build (see
+# the long note at `kotlin` above). :app still must NOT apply any Kotlin plugin.
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 # Compose compiler plugin — must track the Kotlin version (see note above).
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
@@ -180,3 +205,21 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # Step 16 — google-services processes app/google-services.json for FCM.
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+
+# ── KMP/iOS port, Phase 1 ──────────────────────────────────────────────────
+# The ANDROID target of a Kotlin Multiplatform module. This is deliberately NOT
+# `com.android.library`: AGP 9 hard-REJECTS combining that with
+# kotlin.multiplatform ("The Android Gradle plugin library plugin is not
+# compatible with the Kotlin Multiplatform plugin since AGP 9.0"). The
+# KMP-specific variant below is the only supported pairing, and it ships in AGP
+# itself — hence `version.ref = "agp"`, never a version of its own.
+# At Kotlin 2.3.20 its DSL lives at `kotlin { android { … } }`; the older
+# top-level `androidLibrary { }` block is deprecated and warns.
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+# Compose Multiplatform's Gradle plugin — provides the `compose.*` dependency
+# accessors (compose.runtime / compose.foundation / compose.material3) that
+# resolve per-target, so :shared's UI compiles for BOTH Android and iOS. It is
+# the RUNTIME/library half only: the Kotlin compiler half is `compose-compiler`
+# above, and BOTH must be applied to :shared (the JetBrains plugin does not pull
+# the compiler plugin in for you on a KMP module).
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
