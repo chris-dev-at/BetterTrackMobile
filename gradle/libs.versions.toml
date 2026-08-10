@@ -1,16 +1,25 @@
 [versions]
 agp = "9.2.1"
-# AGP 9.2.1 bundles built-in Kotlin (kotlin-gradle-plugin) 2.2.10 — the Compose
-# compiler plugin below is pinned to the SAME version so there is no compiler/
-# Kotlin mismatch. Do not bump one without the other.
-kotlin = "2.2.10"
+# AGP 9.2.1's built-in Kotlin (kotlin-gradle-plugin) is 2.2.10, but the KMP/iOS
+# port needs 2.3.20, so the build OVERRIDES it: the root build.gradle.kts
+# declares `org.jetbrains.kotlin.multiplatform` at this version with
+# `apply false`, whose plugin marker depends on kotlin-gradle-plugin 2.3.20.
+# Gradle's conflict resolution then raises kotlin-gradle-plugin 2.2.10 -> 2.3.20
+# for the WHOLE build classpath, including :app's built-in-Kotlin compilation.
+# (:app must still NOT apply `org.jetbrains.kotlin.android` — doing so fails with
+# "Cannot add extension with name (kotlin)"; the override is classpath-only.)
+# The Compose compiler and kotlinx-serialization compiler plugins below are
+# pinned to this SAME version so there is no compiler/Kotlin mismatch.
+# Do not bump one without the others (KSP included, see `ksp`).
+kotlin = "2.3.20"
 coreKtx = "1.19.0"
 coreSplashscreen = "1.2.0"
 composeBom = "2026.06.01"
 activityCompose = "1.13.0"
 navigationCompose = "2.9.8"
 lifecycleRuntimeCompose = "2.11.0"
-# kotlinx-serialization runtime for the Kotlin 2.2.x line (typed nav routes).
+# kotlinx-serialization runtime (typed nav routes). 1.9.0 is compatible with the
+# 2.3.x serialization compiler plugin — the runtime is not version-locked to it.
 kotlinxSerializationJson = "1.9.0"
 # material-icons was dropped from recent Compose BOMs; last published version.
 materialIconsExtended = "1.7.8"
@@ -23,9 +32,13 @@ sqliteJdbc = "3.41.2.2"
 espressoCore = "3.7.0"
 
 # ── Step 5 (local database & sync engine core) ─────────────────────────────
-# Room needs KSP; the KSP version's Kotlin half MUST match the built-in Kotlin
-# (2.2.10, see note at `kotlin` above). Do not bump independently.
-ksp = "2.2.10-2.0.2"
+# Room needs KSP. KSP used to version as `<kotlin>-<ksp>` (we were on
+# 2.2.10-2.0.2) and its Kotlin half had to match the compiler exactly. From KSP
+# 2.3.0 that scheme is gone — KSP now publishes a plain version that tracks the
+# Kotlin LANGUAGE line, so 2.3.x pairs with any Kotlin 2.3.x. 2.3.11 is the
+# release verified against Kotlin 2.3.20 here. Still do not bump across a Kotlin
+# minor independently of `kotlin` above.
+ksp = "2.3.11"
 room = "2.8.4"
 # WorkManager drives the outbound-queue drain (connectivity + backoff, §7.3).
 workManager = "2.11.2"
@@ -153,11 +166,17 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+# Declared `apply false` in the ROOT build.gradle.kts and applied to NO module.
+# Its only job is to put kotlin-gradle-plugin 2.3.20 on the build classpath so
+# Gradle's conflict resolution overrides AGP 9's built-in Kotlin 2.2.10 (see the
+# long note at `kotlin` above). It becomes a real, applied plugin when the KMP
+# shared module lands.
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 # Compose compiler plugin — must track the Kotlin version (see note above).
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 # Serialization compiler plugin — must track the Kotlin version too.
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-# KSP for the Room compiler — Kotlin half of the version must match `kotlin`.
+# KSP for the Room compiler — must stay on the same Kotlin line as `kotlin`.
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # Step 16 — google-services processes app/google-services.json for FCM.
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
