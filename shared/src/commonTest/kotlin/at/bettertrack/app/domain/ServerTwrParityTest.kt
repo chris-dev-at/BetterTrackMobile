@@ -1,14 +1,15 @@
 package at.bettertrack.app.domain
 
+import at.bettertrack.app.domain.vectors.GeneratedVectorFixtures
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
- * **The golden gate** (plan §3.4 step 5) — the highest-value conformance asset
- * in this work package.
+ * **The golden gate** (plan §3.4 step 5) — the highest-value conformance asset in
+ * this work package.
  *
  * `serverTwrParity.fixture.json` is not a hand-written expectation and not a
  * recording of the TypeScript domain either: the platform's
@@ -19,13 +20,14 @@ import org.junit.Test
  * vectors. Asserting the Kotlin port against it proves the app computes the same
  * money as the production backend — not merely the same money as a translation.
  *
- * This test reads the **raw fixture** (copied byte-identically out of the
- * platform monorepo by `tools/domain-vectors/generate.ts`) rather than the
- * generator's reshaped vector file, so it is an independent check: if the
- * generator's reshaping were wrong, this test would still fail.
+ * This test reads the **raw fixture** (copied byte-identically out of the platform
+ * monorepo by `tools/domain-vectors/generate.ts`) rather than the generator's
+ * reshaped vector file, so it is an independent check: if the generator's
+ * reshaping were wrong, this test would still fail.
  *
- * Every assertion is `assertEquals(expected, actual, 0.0)` — **byte-for-byte**
- * double equality across all 34 published points.
+ * Every assertion is exact — **byte-for-byte** double equality across all 34
+ * published points — and, since the move to commonTest, on Kotlin/Native as well
+ * as the JVM.
  *
  * ## How the fixture's scenario inputs become `timeWeightedReturn` inputs
  *
@@ -53,23 +55,32 @@ import org.junit.Test
 class ServerTwrParityTest {
 
     private val fixture: JsonObject by lazy {
-        val stream = javaClass.getResourceAsStream("/domain-vectors/serverTwrParity.fixture.json")
-            ?: error("serverTwrParity.fixture.json missing from test resources")
-        VECTOR_JSON.parseToJsonElement(stream.bufferedReader().use { it.readText() }).jsonObject
+        VECTOR_JSON.parseToJsonElement(
+            GeneratedVectorFixtures.text("serverTwrParity.fixture"),
+        ).jsonObject
     }
 
-    /** Synthetic ascending ISO dates; only their order matters to the TWR chain. */
-    private fun dates(n: Int): List<String> = (0 until n).map { "2026-07-%02d".format(19 + it) }
+    /**
+     * Synthetic ascending ISO dates; only their order matters to the TWR chain.
+     * (`String.format` is JVM-only, hence `padStart`.)
+     */
+    private fun dates(n: Int): List<String> =
+        (0 until n).map { "2026-07-" + (19 + it).toString().padStart(2, '0') }
 
     private fun expected(scenario: String, key: String = "twrPct"): List<Double> =
         fixture.o(scenario).a(key).doubles()
 
     /** Assert every point byte-for-byte, and say which point diverged if not. */
-    private fun assertExact(scenario: String, expectedPct: List<Double>, actual: List<PerformancePoint>) {
-        assertEquals("$scenario: point count", expectedPct.size, actual.size)
+    private fun assertExact(
+        scenario: String,
+        expectedPct: List<Double>,
+        actual: List<PerformancePoint>,
+    ) {
+        assertEquals(expectedPct.size, actual.size, "$scenario: point count")
         expectedPct.indices.forEach { i ->
-            assertEquals(
-                "$scenario point $i (${actual[i].date})",
+            assertDoubleEquals(
+                "$scenario point $i (${actual[i].date}): expected ${expectedPct[i]} " +
+                    "but was ${actual[i].pct}",
                 expectedPct[i],
                 actual[i].pct,
                 0.0,
@@ -78,7 +89,7 @@ class ServerTwrParityTest {
     }
 
     @Test
-    fun `sinceInceptionMax reproduces the server TWR vector exactly`() {
+    fun sinceInceptionMaxReproducesTheServerTwrVectorExactly() {
         val scenario = fixture.o("sinceInceptionMax")
         val closes = scenario.a("closes").doubles()
         val quoteToday = scenario.d("quoteToday")
@@ -88,21 +99,25 @@ class ServerTwrParityTest {
         // Guard the fixture shape the way clientMoney.test.ts does, so a platform
         // change to the inputs fails here instead of silently re-baselining.
         assertEquals(listOf(100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 128.0), closes)
-        assertEquals(130.0, quoteToday, 0.0)
-        assertEquals(10.0, qty, 0.0)
-        assertEquals(100.0, buy.d("price"), 0.0)
-        assertEquals(5.0, buy.d("fee"), 0.0)
+        assertDoubleEquals("quoteToday", 130.0, quoteToday, 0.0)
+        assertDoubleEquals("quantity", 10.0, qty, 0.0)
+        assertDoubleEquals("price", 100.0, buy.d("price"), 0.0)
+        assertDoubleEquals("fee", 5.0, buy.d("fee"), 0.0)
 
         val d = dates(8)
         val values = closes.mapIndexed { i, c -> ValuePoint(d[i], qty * c) } +
             ValuePoint(d[7], qty * quoteToday)
         val flows = listOf(FlowPoint(d[0], qty * buy.d("price") + buy.d("fee")))
 
-        assertExact("sinceInceptionMax", expected("sinceInceptionMax"), timeWeightedReturn(values, flows))
+        assertExact(
+            "sinceInceptionMax",
+            expected("sinceInceptionMax"),
+            timeWeightedReturn(values, flows),
+        )
     }
 
     @Test
-    fun `splitDateCashBuy reproduces the server TWR vector exactly`() {
+    fun splitDateCashBuyReproducesTheServerTwrVectorExactly() {
         val scenario = fixture.o("splitDateCashBuy")
         val closes = scenario.a("closes").doubles()
         val quoteToday = scenario.d("quoteToday")
@@ -111,10 +126,15 @@ class ServerTwrParityTest {
         val deposit = scenario.d("depositEur")
         val linked = scenario.o("linkedBuyMovement").d("amountEur")
 
-        assertEquals(2000.0, deposit, 0.0)
-        assertEquals(-1005.0, linked, 0.0)
-        assertEquals(-8.0, scenario.d("depositDayOffset"), 0.0)
-        assertEquals(-5.0, scenario.o("linkedBuyMovement").d("dayOffset"), 0.0)
+        assertDoubleEquals("depositEur", 2000.0, deposit, 0.0)
+        assertDoubleEquals("linkedBuyMovement.amountEur", -1005.0, linked, 0.0)
+        assertDoubleEquals("depositDayOffset", -8.0, scenario.d("depositDayOffset"), 0.0)
+        assertDoubleEquals(
+            "linkedBuyMovement.dayOffset",
+            -5.0,
+            scenario.o("linkedBuyMovement").d("dayOffset"),
+            0.0,
+        )
 
         val d = dates(9)
         // Cash steps down when the linked buy movement lands (dayOffset −5 ⇒ index 3).
@@ -127,15 +147,19 @@ class ServerTwrParityTest {
         val gross = qty * buy.d("price") + buy.d("fee")
         val flows = listOf(
             FlowPoint(d[0], deposit),
-            FlowPoint(d[1], gross),   // compensator on the buy day
-            FlowPoint(d[3], -gross),  // compensator on the settlement day
+            FlowPoint(d[1], gross), // compensator on the buy day
+            FlowPoint(d[3], -gross), // compensator on the settlement day
         )
 
-        assertExact("splitDateCashBuy", expected("splitDateCashBuy"), timeWeightedReturn(values, flows))
+        assertExact(
+            "splitDateCashBuy",
+            expected("splitDateCashBuy"),
+            timeWeightedReturn(values, flows),
+        )
     }
 
     @Test
-    fun `internalCashFeeDrag proves a fee drags the curve instead of dividing out`() {
+    fun internalCashFeeDragProvesAFeeDragsTheCurveInsteadOfDividingOut() {
         val scenario = fixture.o("internalCashFeeDrag")
         val closes = scenario.a("closes").doubles()
         val quoteToday = scenario.d("quoteToday")
@@ -144,9 +168,9 @@ class ServerTwrParityTest {
         val deposit = scenario.d("depositEur")
         val fee = scenario.o("cashFee").d("amountEur")
 
-        assertEquals(2000.0, deposit, 0.0)
-        assertEquals(100.0, fee, 0.0)
-        assertEquals(-5.0, scenario.o("cashFee").d("dayOffset"), 0.0)
+        assertDoubleEquals("depositEur", 2000.0, deposit, 0.0)
+        assertDoubleEquals("cashFee.amountEur", 100.0, fee, 0.0)
+        assertDoubleEquals("cashFee.dayOffset", -5.0, scenario.o("cashFee").d("dayOffset"), 0.0)
 
         val d = dates(9)
         val gross = qty * buy.d("price") + buy.d("fee")
@@ -173,17 +197,19 @@ class ServerTwrParityTest {
 
         // The drag, stated directly (mirrors clientMoney.test.ts): identical until
         // the fee lands on index 3, strictly lower from there on.
-        for (i in 0 until 3) assertEquals(withoutFee[i].pct, withFee[i].pct, 0.0)
+        for (i in 0 until 3) {
+            assertDoubleEquals("point $i: curves must match before the fee", withoutFee[i].pct, withFee[i].pct, 0.0)
+        }
         for (i in 3 until withFee.size) {
             assertTrue(
-                "point $i: fee curve ${withFee[i].pct} should be below ${withoutFee[i].pct}",
                 withFee[i].pct < withoutFee[i].pct,
+                "point $i: fee curve ${withFee[i].pct} should be below ${withoutFee[i].pct}",
             )
         }
     }
 
     @Test
-    fun `rebasePerformance restarts a bounded window at exactly zero and compounds`() {
+    fun rebasePerformanceRestartsABoundedWindowAtExactlyZeroAndCompounds() {
         // The other half of the golden path: the web engine rebases every BOUNDED
         // range while leaving MAX on the since-inception vector
         // (`expect(bounded.value.series[0]?.twrPct).toBe(0)`).
@@ -202,12 +228,12 @@ class ServerTwrParityTest {
         val slice = sinceInception.drop(3)
         val rebased = rebasePerformance(slice)
 
-        assertEquals("first point of a bounded window", 0.0, rebased[0].pct, 0.0)
+        assertDoubleEquals("first point of a bounded window", 0.0, rebased[0].pct, 0.0)
         // Compounding, not subtraction: re-basing must reproduce the ratio of the
         // chained indices exactly.
         val base = 1 + slice[0].pct / 100
         slice.indices.forEach { i ->
-            assertEquals(
+            assertDoubleEquals(
                 "rebased point $i",
                 ((1 + slice[i].pct / 100) / base - 1) * 100,
                 rebased[i].pct,
@@ -215,6 +241,11 @@ class ServerTwrParityTest {
             )
         }
         // MAX is NOT rebased — it keeps the audited since-inception vector.
-        assertEquals(expected("sinceInceptionMax")[0], sinceInception[0].pct, 0.0)
+        assertDoubleEquals(
+            "MAX keeps the since-inception vector",
+            expected("sinceInceptionMax")[0],
+            sinceInception[0].pct,
+            0.0,
+        )
     }
 }

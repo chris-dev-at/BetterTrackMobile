@@ -26,6 +26,13 @@ kotlin {
         // compile against — :app is compileSdk 37 / minSdk 28.
         compileSdk = 37
         minSdk = 28
+
+        // The KMP Android plugin creates NO unit-test compilation unless asked —
+        // unlike `com.android.library`, which always has one. Without this opt-in
+        // `commonTest` compiles for iOS only and the JVM half of the conformance
+        // suite silently does not exist. This creates the `androidHostTest`
+        // source set (which commonTest feeds) and the task that runs it.
+        withHostTestBuilder {}.configure {}
     }
 
     // Real devices (arm64) and the Apple-silicon simulator. No iosX64: this Mac
@@ -46,6 +53,21 @@ kotlin {
         // is added to :shared, and :app reaches it only transitively).
         commonMain.dependencies {
             implementation(libs.kotlinx.datetime)
+        }
+
+        // commonTest — the domain CONFORMANCE harness (Phase 2). It runs on BOTH
+        // the Android/JVM target and iosSimulatorArm64, which is the whole point:
+        // the 622 platform-generated vectors previously only ever replayed on the
+        // JVM inside :app, so the Kotlin/Native arithmetic was unverified.
+        //
+        // Both dependencies are TEST-scoped on :shared and therefore invisible to
+        // :app's shipping graph. kotlinx-serialization-json is used purely as a
+        // runtime JSON tree API (parseToJsonElement / JsonObject / buildJsonObject)
+        // — no @Serializable class anywhere — so the serialization COMPILER plugin
+        // is deliberately NOT applied to this module.
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.serialization.json)
         }
         //
         // androidMain — the Compose RUNTIME only, and pinned by :app's own BOM.
@@ -98,4 +120,232 @@ kotlin {
             implementation(compose.ui)
         }
     }
+}
+
+// ── Domain conformance fixtures: JSON -> Kotlin source (Phase 2) ────────────
+//
+// Kotlin/Native has no `javaClass.getResourceAsStream`, so the vector fixtures
+// cannot be loaded from a test-resources directory the way :app's JVM-only
+// suite loaded them. They are therefore CODE-GENERATED into commonTest sources.
+//
+// The JSON under `app/src/test/resources/domain-vectors/` stays the single
+// source of truth — it is exactly what `tools/domain-vectors/generate.ts`
+// writes, and the Kotlin below is derived from it, never hand-maintained.
+//
+// THE 64 KB TRAP: a JVM class file stores every string literal as a
+// CONSTANT_Utf8 entry whose length field is an unsigned 16-bit count of
+// MODIFIED-UTF8 bytes — a hard 65535-byte ceiling per literal. commonTest also
+// compiles for the Android/JVM target, so a naive `const val TAX_JSON =
+// "<177 KB>"` fails to compile outright. Every fixture is therefore emitted as
+// a `listOf(chunk, chunk, ...)` joined at runtime. Modified UTF-8 spends at
+// most 3 bytes per Kotlin Char (a surrogate PAIR costs 6 bytes, i.e. 3 per
+// char), so a 16000-char chunk can never exceed 48000 bytes.
+//
+// The split and the Kotlin escaping are not TRUSTED, they are CHECKED: the
+// generator records the source file's character count and an FNV-1a 64 hash of
+// it, and DomainVectorFixtureTest re-derives both from the REJOINED string on
+// every target.
+
+/**
+ * The platform commit the vectors were generated from, pinned here as well as
+ * inside MANIFEST.json so that dropping in a differently-pinned fixture set
+ * fails the build instead of silently re-baselining the money.
+ */
+val pinnedPlatformCommit = "cb530f7e30a2ce3502e708f4b05711d1d0bde685"
+
+/** The fixture files embedded into commonTest, by basename (without `.json`). */
+val embeddedVectorFixtures = listOf(
+    "MANIFEST",
+    "holdings",
+    "seriesStats",
+    "settingsScope",
+    "cashLedger",
+    "tax",
+    "serverTwrParity",
+    "serverTwrParity.fixture",
+)
+
+abstract class GenerateVectorFixtures : DefaultTask() {
+
+    /** `app/src/test/resources/domain-vectors` — the single source of truth. */
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val vectorsDir: DirectoryProperty
+
+    @get:Input
+    abstract val fixtureNames: ListProperty<String>
+
+    @get:Input
+    abstract val pinnedCommit: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    /** Max characters per emitted string literal; see the 64 KB note above. */
+    private val chunkChars = 16000
+
+    @TaskAction
+    fun generate() {
+        val dir = vectorsDir.get().asFile
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        val pkgDir = File(out, "at/bettertrack/app/domain/vectors")
+        pkgDir.mkdirs()
+
+        val manifest = File(dir, "MANIFEST.json").readText(Charsets.UTF_8)
+        val pinned = Regex("\"pinnedAt\"\\s*:\\s*\"([^\"]+)\"").find(manifest)?.groupValues?.get(1)
+            ?: throw GradleException("MANIFEST.json carries no pinnedAt")
+        if (pinned != pinnedCommit.get()) {
+            throw GradleException(
+                "domain vectors are pinned at platform commit $pinned but shared/build.gradle.kts " +
+                    "expects ${pinnedCommit.get()}. Re-pin deliberately — the vectors ARE the money contract.",
+            )
+        }
+
+        val emitted = fixtureNames.get().map { name ->
+            val file = File(dir, "$name.json")
+            if (!file.isFile) throw GradleException("missing vector fixture: $file")
+            val text = file.readText(Charsets.UTF_8)
+            val obj = objectNameFor(name)
+            File(pkgDir, "$obj.kt").writeText(renderFixture(obj, name, text), Charsets.UTF_8)
+            Triple(name, obj, text)
+        }
+        File(pkgDir, "GeneratedVectorFixtures.kt")
+            .writeText(renderRegistry(emitted, pinned), Charsets.UTF_8)
+        logger.lifecycle(
+            "generateVectorFixtures: embedded ${emitted.size} fixtures " +
+                "(${emitted.sumOf { it.third.length }} chars) pinned at $pinned",
+        )
+    }
+
+    /** `serverTwrParity.fixture` -> `FixtureServerTwrParityFixture`. */
+    private fun objectNameFor(name: String): String =
+        "Fixture" + name.split('.', '-', '_')
+            .filter { it.isNotEmpty() }
+            .joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
+
+    /**
+     * Split on character boundaries, never between a high and a low surrogate —
+     * a chunk that ended mid-pair would still rejoin correctly, but each half
+     * would be an unpaired surrogate in its own literal, which some encoders
+     * mangle. Cheap to avoid, so avoid it.
+     */
+    private fun chunk(text: String): List<String> {
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < text.length) {
+            var end = minOf(i + chunkChars, text.length)
+            if (end < text.length && text[end - 1].isHighSurrogate()) end--
+            out.add(text.substring(i, end))
+            i = end
+        }
+        return if (out.isEmpty()) listOf("") else out
+    }
+
+    /**
+     * Escape to PURE ASCII Kotlin source. Emitting `\uXXXX` for every non-ASCII
+     * character removes source-encoding from the trust chain entirely: the
+     * generated file is byte-identical under any charset the compiler might
+     * assume. `$` must be escaped too — Kotlin string templates.
+     */
+    private fun escape(s: String): String = buildString(s.length + s.length / 2) {
+        for (c in s) {
+            when {
+                c == '\\' -> append("\\\\")
+                c == '"' -> append("\\\"")
+                c == '$' -> append("\\$")
+                c == '\n' -> append("\\n")
+                c == '\r' -> append("\\r")
+                c == '\t' -> append("\\t")
+                c >= ' ' && c <= '~' -> append(c)
+                else -> append("\\u").append(c.code.toString(16).padStart(4, '0'))
+            }
+        }
+    }
+
+    /** FNV-1a 64. Reproduced character-for-character in the commonTest harness. */
+    private fun fnv1a64(s: String): Long {
+        var h = -3750763034362895579L // 0xcbf29ce484222325
+        for (c in s) {
+            h = h xor c.code.toLong()
+            h *= 1099511628211L
+        }
+        return h
+    }
+
+    /** `Long.MIN_VALUE` has no negative literal form in Kotlin. */
+    private fun longLiteral(v: Long): String =
+        if (v == Long.MIN_VALUE) "Long.MIN_VALUE" else "${v}L"
+
+    private fun header(source: String) = buildString {
+        appendLine("// GENERATED by :shared:generateVectorFixtures - DO NOT EDIT.")
+        appendLine("// Source of truth: app/src/test/resources/domain-vectors/$source")
+        appendLine("// Regenerate the JSON with tools/domain-vectors/generate.ts, never this file.")
+        appendLine()
+        appendLine("package at.bettertrack.app.domain.vectors")
+        appendLine()
+    }
+
+    private fun renderFixture(obj: String, name: String, text: String): String = buildString {
+        append(header("$name.json"))
+        appendLine("@Suppress(\"MaxLineLength\", \"ktlint\")")
+        appendLine("internal object $obj {")
+        appendLine("    const val NAME: String = \"$name\"")
+        appendLine("    const val CHARS: Int = ${text.length}")
+        appendLine("    const val HASH: Long = ${longLiteral(fnv1a64(text))}")
+        appendLine()
+        appendLine("    // Each literal stays under the JVM's 65535-byte CONSTANT_Utf8 ceiling.")
+        appendLine("    private val CHUNKS: List<String> = listOf(")
+        chunk(text).forEach { appendLine("        \"${escape(it)}\",") }
+        appendLine("    )")
+        appendLine()
+        appendLine("    val text: String by lazy { CHUNKS.joinToString(\"\") }")
+        appendLine("}")
+    }
+
+    private fun renderRegistry(
+        emitted: List<Triple<String, String, String>>,
+        pinned: String,
+    ): String = buildString {
+        append(header("(all fixtures)"))
+        appendLine("internal object GeneratedVectorFixtures {")
+        appendLine("    const val PINNED_AT: String = \"$pinned\"")
+        appendLine()
+        appendLine("    val NAMES: List<String> = listOf(")
+        emitted.forEach { appendLine("        \"${it.first}\",") }
+        appendLine("    )")
+        appendLine()
+        appendLine("    fun text(name: String): String = when (name) {")
+        emitted.forEach { appendLine("        \"${it.first}\" -> ${it.second}.text") }
+        appendLine("        else -> error(\"no embedded fixture named '\$name'\")")
+        appendLine("    }")
+        appendLine()
+        appendLine("    fun chars(name: String): Int = when (name) {")
+        emitted.forEach { appendLine("        \"${it.first}\" -> ${it.second}.CHARS") }
+        appendLine("        else -> error(\"no embedded fixture named '\$name'\")")
+        appendLine("    }")
+        appendLine()
+        appendLine("    fun hash(name: String): Long = when (name) {")
+        emitted.forEach { appendLine("        \"${it.first}\" -> ${it.second}.HASH") }
+        appendLine("        else -> error(\"no embedded fixture named '\$name'\")")
+        appendLine("    }")
+        appendLine("}")
+    }
+}
+
+val generateVectorFixtures = tasks.register<GenerateVectorFixtures>("generateVectorFixtures") {
+    group = "build"
+    description = "Embeds the domain conformance vector JSON into commonTest Kotlin sources."
+    // A plain relative path, NOT `project(":app")`: :shared must not reach into
+    // another project's model (project isolation / configuration cache).
+    vectorsDir.set(layout.projectDirectory.dir("../app/src/test/resources/domain-vectors"))
+    fixtureNames.set(embeddedVectorFixtures)
+    pinnedCommit.set(pinnedPlatformCommit)
+    outputDir.set(layout.buildDirectory.dir("generated/domainVectors/kotlin"))
+}
+
+// `flatMap` carries the task dependency, so the generator always runs before any
+// commonTest compilation on any target.
+kotlin.sourceSets.named("commonTest") {
+    kotlin.srcDir(generateVectorFixtures.flatMap { it.outputDir })
 }

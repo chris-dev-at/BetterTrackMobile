@@ -1,5 +1,6 @@
 package at.bettertrack.app.domain
 
+import at.bettertrack.app.domain.vectors.GeneratedVectorFixtures
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -12,33 +13,75 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assert.assertEquals
-import org.junit.Assert.fail
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
+import kotlin.math.abs
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.fail
 
 /**
  * Shared plumbing for the domain conformance harness.
  *
- * The vectors in `app/src/test/resources/domain-vectors/` were produced by
- * running the PINNED platform TypeScript (`tools/domain-vectors/generate.ts`),
- * so everything here decodes them, drives the Kotlin port, and compares with
- * **exact** `Double` equality.
+ * The vectors were produced by running the PINNED platform TypeScript
+ * (`tools/domain-vectors/generate.ts`), so everything here decodes them, drives
+ * the Kotlin port, and compares with **exact** `Double` equality.
  *
  * Doubles survive the JSON round-trip losslessly: JavaScript writes the shortest
- * string that reparses to the identical double, and `String.toDouble()` on the
- * JVM correctly rounds. Parsing goes through the raw literal (`content`) rather
- * than any intermediate representation so nothing is re-formatted on the way in.
+ * string that reparses to the identical double, and `String.toDouble()` correctly
+ * rounds on both the JVM and Kotlin/Native. Parsing goes through the raw literal
+ * (`content`) rather than any intermediate representation so nothing is
+ * re-formatted on the way in.
+ *
+ * ## Why this lives in `:shared/commonTest`
+ *
+ * It used to live in `app/src/test/` and therefore only ever ran on the JVM,
+ * which left the Kotlin/Native arithmetic of the migrated engine unverified. Here
+ * the identical source replays on the Android/JVM target AND on
+ * iosSimulatorArm64.
+ *
+ * Three things had to change to make that possible, and each is called out where
+ * it happens: `kotlin.test` instead of JUnit, ONE looping test per module instead
+ * of `@RunWith(Parameterized::class)` (with the vector id in every message), and
+ * code-generated fixtures instead of `getResourceAsStream`.
  */
 
 internal val VECTOR_JSON = Json { ignoreUnknownKeys = true }
 
-internal fun loadVectorFile(module: String): List<JsonObject> {
-    val stream = object {}.javaClass.getResourceAsStream("/domain-vectors/$module.json")
-        ?: error(
-            "Missing /domain-vectors/$module.json — regenerate with " +
-                "`node --experimental-strip-types tools/domain-vectors/generate.ts`",
-        )
-    val text = stream.bufferedReader().use { it.readText() }
-    return VECTOR_JSON.parseToJsonElement(text).jsonObject["vectors"]!!.jsonArray.map { it.jsonObject }
+/**
+ * Load a vector module out of the CODE-GENERATED fixtures.
+ *
+ * Kotlin/Native has no classpath resources, so `shared/build.gradle.kts` embeds
+ * the JSON files under `app/src/test/resources/domain-vectors/` into Kotlin
+ * source. (A star-dot-json glob cannot be spelled out in a comment here: Kotlin
+ * block comments NEST, so the slash-star would open a second one.) The JSON is
+ * still the single source of truth; see DomainVectorFixtureTest for the
+ * byte-identity proof.
+ */
+internal fun loadVectorFile(module: String): List<JsonObject> =
+    VECTOR_JSON.parseToJsonElement(GeneratedVectorFixtures.text(module))
+        .jsonObject["vectors"]!!.jsonArray.map { it.jsonObject }
+
+// ---------------------------------------------------------------------------
+// Driving suspend domain functions without a coroutines dependency
+// ---------------------------------------------------------------------------
+
+/**
+ * `runBlocking` does not exist in common code, and adding kotlinx-coroutines(-test)
+ * to :shared for four call sites would be a dependency the module does not
+ * otherwise need. The domain's suspend functions never actually suspend — the
+ * only suspension point is [CurrencyConverter.toBase], and the vector converter
+ * is a pure table lookup — so starting the coroutine and reading the completion
+ * synchronously is sufficient AND is self-checking: if anything ever did suspend,
+ * this fails loudly instead of silently returning a wrong answer.
+ */
+internal fun <T> runVector(block: suspend () -> T): T {
+    var outcome: Result<T>? = null
+    block.startCoroutine(Continuation(EmptyCoroutineContext) { outcome = it })
+    val completed = outcome
+        ?: error("the domain suspended; the vector harness requires synchronous completion")
+    return completed.getOrThrow()
 }
 
 // ---------------------------------------------------------------------------
@@ -208,12 +251,34 @@ internal fun encodeComparison(c: SeriesComparison): JsonElement = buildJsonObjec
 // ---------------------------------------------------------------------------
 
 /**
+ * A literal reproduction of JUnit's `assertEquals(double, double, double)`, which
+ * this suite was written against and whose semantics are NOT the same as
+ * `kotlin.test.assertEquals(Double, Double, Double)`.
+ *
+ * JUnit passes when `Double.compare(expected, actual) == 0` **OR**
+ * `abs(expected - actual) <= delta` (`Assert.doubleIsDifferent`). The first
+ * clause is what makes `NaN` equal to `NaN`; the second is what makes `-0.0`
+ * equal to `+0.0` at delta 0.0. `kotlin.test`'s tolerance overload only ever
+ * evaluates the absolute difference, so it would silently start REJECTING a
+ * NaN-vs-NaN vector. `Double.toBits()` canonicalises NaN exactly the way
+ * `Double.doubleToLongBits` does, on both the JVM and Kotlin/Native, so the
+ * first clause ports verbatim.
+ *
+ * These are money vectors: the tolerance semantics are preserved to the letter.
+ */
+internal fun assertDoubleEquals(message: String, expected: Double, actual: Double, delta: Double) {
+    if (expected.toBits() == actual.toBits()) return
+    if (abs(expected - actual) <= delta) return
+    fail("$message (compared with delta=$delta)")
+}
+
+/**
  * Structural comparison of an expected (generated-from-TypeScript) JSON value
  * against the encoded Kotlin result.
  *
- * Numbers are compared with `assertEquals(expected, actual, 0.0)` — **bit-exact**
- * — unless [tolerance] is non-null, which is only ever the case for the handful
- * of vectors documented in `DomainVectorTest.TOLERANCES`.
+ * Numbers are compared **bit-exact** unless [tolerance] is non-null, which is
+ * only ever the case for the handful of vectors documented in
+ * `DomainVectorTest.TOLERANCES`.
  */
 internal fun assertJsonEquals(
     path: String,
@@ -223,14 +288,14 @@ internal fun assertJsonEquals(
 ) {
     when {
         expected is JsonNull || actual is JsonNull -> {
-            assertEquals("$path: null-ness differs", expected.toString(), actual.toString())
+            assertEquals(expected.toString(), actual.toString(), "$path: null-ness differs")
         }
 
         expected is JsonObject && actual is JsonObject -> {
             assertEquals(
-                "$path: key sets differ",
                 expected.keys.sorted().toString(),
                 actual.keys.sorted().toString(),
+                "$path: key sets differ",
             )
             expected.keys.forEach {
                 assertJsonEquals("$path.$it", expected[it]!!, actual[it]!!, tolerance)
@@ -238,7 +303,7 @@ internal fun assertJsonEquals(
         }
 
         expected is JsonArray && actual is JsonArray -> {
-            assertEquals("$path: length differs", expected.size, actual.size)
+            assertEquals(expected.size, actual.size, "$path: length differs")
             expected.indices.forEach {
                 assertJsonEquals("$path[$it]", expected[it], actual[it], tolerance)
             }
@@ -248,15 +313,15 @@ internal fun assertJsonEquals(
             val expectedNumber = if (expected.isString) null else expected.content.toDoubleOrNull()
             val actualNumber = if (actual.isString) null else actual.content.toDoubleOrNull()
             if (expectedNumber != null && actualNumber != null) {
-                val delta = tolerance?.let { rel -> rel * kotlin.math.abs(expectedNumber) } ?: 0.0
-                assertEquals(
+                val delta = tolerance?.let { rel -> rel * abs(expectedNumber) } ?: 0.0
+                assertDoubleEquals(
                     "$path: expected ${expected.content} but was ${actual.content}",
                     expectedNumber,
                     actualNumber,
                     delta,
                 )
             } else {
-                assertEquals(path, expected.content, actual.content)
+                assertEquals(expected.content, actual.content, path)
             }
         }
 
@@ -264,24 +329,120 @@ internal fun assertJsonEquals(
     }
 }
 
-/** Assert the port threw the same error class and the same message as the TypeScript. */
-internal fun assertThrewLike(expected: JsonObject, thrown: Throwable?) {
-    val expectedName = expected.s("name")
-    val expectedMessage = expected.s("message")
-    if (thrown == null) {
-        fail("expected $expectedName(\"$expectedMessage\") but nothing was thrown")
-        return
-    }
-    // Mirrors the TypeScript `Error.name` each class sets in its constructor; a
-    // bare `throw new Error(...)` in the domain reports "Error".
-    val actualName = when (thrown) {
+// ---------------------------------------------------------------------------
+// Error-class mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors the TypeScript `Error.name` each class sets in its constructor; a bare
+ * `throw new Error(...)` in the domain reports "Error".
+ */
+internal val DOMAIN_ERROR_NAME: (Throwable) -> String = { thrown ->
+    when (thrown) {
         is OversellError -> "OversellError"
         is InsufficientCashError -> "InsufficientCashError"
         is CashLedgerError -> "CashLedgerError"
         else -> "Error"
     }
-    assertEquals("error class", expectedName, actualName)
-    assertEquals("error message", expectedMessage, thrown.message)
+}
+
+/** Assert the port threw the same error class and the same message as the TypeScript. */
+internal fun assertThrewLike(
+    id: String,
+    expected: JsonObject,
+    thrown: Throwable?,
+    errorName: (Throwable) -> String = DOMAIN_ERROR_NAME,
+) {
+    val expectedName = expected.s("name")
+    val expectedMessage = expected.s("message")
+    if (thrown == null) {
+        fail("$id: expected $expectedName(\"$expectedMessage\") but nothing was thrown")
+    }
+    assertEquals(expectedName, errorName(thrown), "$id: error class")
+    assertEquals(expectedMessage, thrown.message, "$id: error message")
+}
+
+// ---------------------------------------------------------------------------
+// The replay driver — what `@RunWith(Parameterized::class)` used to be
+// ---------------------------------------------------------------------------
+//
+// Kotlin/Native has no JUnit runner, so each module's vectors are replayed by ONE
+// looping test function instead of one JUnit case per vector. Two consequences
+// are handled deliberately here:
+//
+//  1. There are no per-vector test NAMES any more, so the vector's module,
+//     function and original vitest case are baked into EVERY assertion message.
+//     A bare "expected 1.0 but was 1.1" out of a 273-vector loop would be
+//     undiagnosable.
+//  2. A loop stops at the first failure, which would hide the shape of a
+//     systematic divergence (exactly what a first Kotlin/Native run is likely to
+//     produce). So failures are COLLECTED and reported together.
+//
+// The count assertions are the real regression guard: they are what stops a
+// silently-empty or truncated fixture from masquerading as a green run.
+
+/** Replay every vector of [module], asserting the fixture really held [expectedCount] of them. */
+internal fun replayModule(
+    module: String,
+    expectedCount: Int,
+    tolerances: Map<Pair<String, String>, Double> = emptyMap(),
+    errorName: (Throwable) -> String = DOMAIN_ERROR_NAME,
+    run: (fn: String, input: JsonObject) -> JsonElement,
+) {
+    val vectors = loadVectorFile(module)
+    assertEquals(expectedCount, vectors.size, "$module: vectors present in the embedded fixture")
+
+    val failures = mutableListOf<String>()
+    var processed = 0
+    vectors.forEach { vector ->
+        val fn = vector.s("fn")
+        val case = vector.s("case")
+        val id = "$module/$fn — $case"
+        try {
+            replayOne(id, vector, tolerances[fn to case], errorName, run)
+        } catch (failure: Throwable) {
+            failures.add("$id -> ${failure.message ?: failure.toString()}")
+        }
+        processed++
+    }
+
+    // Belt-and-braces against a loop that quietly skips work.
+    assertEquals(expectedCount, processed, "$module: vectors actually replayed")
+
+    if (failures.isNotEmpty()) {
+        val shown = failures.take(25).joinToString("\n  - ", prefix = "\n  - ")
+        val more = if (failures.size > 25) "\n  ... and ${failures.size - 25} more" else ""
+        fail("$module: ${failures.size} of $processed vectors diverged:$shown$more")
+    }
+}
+
+private fun replayOne(
+    id: String,
+    vector: JsonObject,
+    tolerance: Double?,
+    errorName: (Throwable) -> String,
+    run: (fn: String, input: JsonObject) -> JsonElement,
+) {
+    val fn = vector.s("fn")
+    val input = vector.o("input")
+    val expectedThrows = vector.oOrNull("throws")
+
+    var actual: JsonElement? = null
+    var thrown: Throwable? = null
+    try {
+        actual = run(fn, input)
+    } catch (e: DomainException) {
+        thrown = e
+    }
+
+    if (expectedThrows != null) {
+        assertThrewLike(id, expectedThrows, thrown, errorName)
+        return
+    }
+
+    if (thrown != null) fail("$id threw unexpectedly: ${thrown::class.simpleName}: ${thrown.message}")
+    assertNull(vector["throws"]?.takeIf { it !is JsonNull }, "$id: expected no error")
+    assertJsonEquals(id, vector["output"]!!, actual!!, tolerance)
 }
 
 // ---------------------------------------------------------------------------
@@ -291,10 +452,6 @@ internal fun assertThrewLike(expected: JsonObject, thrown: Throwable?) {
 /**
  * Deterministic [CurrencyConverter] rebuilt from the `fx` table the generator
  * emitted alongside each input, so the Kotlin replay sees byte-identical rates.
- *
- * It also **counts** its calls, which is what lets the hand-ported coalescing
- * tests assert "exactly one conversion per (currency, day)" without any mocking
- * framework.
  */
 internal class VectorConverter(private val spec: JsonObject) : CurrencyConverter {
     val calls = mutableListOf<Call>()

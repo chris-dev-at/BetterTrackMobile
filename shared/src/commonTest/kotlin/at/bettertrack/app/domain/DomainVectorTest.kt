@@ -1,104 +1,69 @@
 package at.bettertrack.app.domain
 
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assert.assertNull
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
+import kotlin.test.Test
 
 /**
  * The conformance runner (plan §3.4 step 3).
  *
- * Every vector in `app/src/test/resources/domain-vectors/` is replayed against
- * the Kotlin port as its own JUnit case, and compared with **exact** `Double`
- * equality — `assertEquals(expected, actual, 0.0)`. The expected values were
- * produced by executing the pinned platform TypeScript, so a divergence here is
- * a real translation defect, not a disagreement about what the answer should be.
+ * Every vector for `holdings`, `seriesStats`, `settingsScope` and
+ * `serverTwrParity` is replayed against the Kotlin port and compared with
+ * **exact** `Double` equality. The expected values were produced by executing the
+ * pinned platform TypeScript, so a divergence here is a real translation defect,
+ * not a disagreement about what the answer should be.
  *
- * A failing case names the module, the function, the original vitest case, and
- * the exact JSON path that diverged.
+ * Now runs on the JVM **and** on Kotlin/Native. See `VectorHarness.replayModule`
+ * for why one looping test per module replaced the JUnit `Parameterized` runner,
+ * and how the per-vector diagnosability was kept.
  */
-@RunWith(Parameterized::class)
-class DomainVectorTest(
-    private val module: String,
-    @Suppress("unused") private val label: String,
-    private val vector: JsonObject,
-) {
+class DomainVectorTest {
 
-    companion object {
-        /**
-         * The ONLY vectors that cannot be bit-exact, with the reason.
-         *
-         * `deflateSeries` (flat rate) is the single case in the whole suite that
-         * evaluates `Math.pow` with a non-trivial fractional exponent whose result
-         * lands on a different double in V8 than on the JVM. Both engines are
-         * within their specified accuracy — ECMAScript leaves `Math.pow`
-         * implementation-approximated, and Java guarantees only ≤ 1 ulp — but they
-         * are not required to agree, and here they differ by exactly **1 ulp**
-         * (e.g. `1.1 ** -(731/365.25)`: V8 `0x3FEA71EC…D9`, JVM `…D8`). Java's
-         * `StrictMath.pow` (fdlibm) gives the same answer as `Math.pow`, so there
-         * is no JVM function that reproduces V8 here.
-         *
-         * The tolerance is therefore RELATIVE 1e-15 — about 4.5 ulp at these
-         * magnitudes, i.e. tight enough that any genuine formula or
-         * operation-order error still fails, while a last-bit `pow` disagreement
-         * does not. Every other vector in every module, including all four
-         * server-generated TWR goldens, is asserted at 0.0.
-         *
-         * `computeSeriesStats` / `indexAveragePctPerYear` also call `Math.pow`,
-         * but their vectors' exponents happen to land on identical doubles on
-         * both engines and are asserted exactly.
-         */
-        private val TOLERANCES: Map<Pair<String, String>, Double> = mapOf(
-            ("deflateSeries" to "flat: slopes a flat nominal series downward at 10 %/yr over ~2 years")
-                to 1e-15,
-        )
-
-        @JvmStatic
-        @Parameterized.Parameters(name = "{0}/{1}")
-        fun vectors(): Collection<Array<Any>> =
-            listOf("holdings", "seriesStats", "settingsScope", "serverTwrParity").flatMap { module ->
-                loadVectorFile(module).map { v ->
-                    arrayOf<Any>(module, "${v.s("fn")} — ${v.s("case")}", v)
-                }
-            }
-    }
+    /**
+     * The ONLY vectors that cannot be bit-exact, with the reason.
+     *
+     * `deflateSeries` (flat rate) is the single case in the whole suite that
+     * evaluates `Math.pow` with a non-trivial fractional exponent whose result
+     * lands on a different double in V8 than on the JVM. Both engines are within
+     * their specified accuracy — ECMAScript leaves `Math.pow`
+     * implementation-approximated, and Java guarantees only ≤ 1 ulp — but they
+     * are not required to agree, and here they differ by exactly **1 ulp**
+     * (e.g. `1.1 ** -(731/365.25)`: V8 `0x3FEA71EC…D9`, JVM `…D8`). Java's
+     * `StrictMath.pow` (fdlibm) gives the same answer as `Math.pow`, so there is
+     * no JVM function that reproduces V8 here.
+     *
+     * The tolerance is therefore RELATIVE 1e-15 — about 4.5 ulp at these
+     * magnitudes, i.e. tight enough that any genuine formula or operation-order
+     * error still fails, while a last-bit `pow` disagreement does not. Every
+     * other vector in every module, including all four server-generated TWR
+     * goldens, is asserted at 0.0.
+     *
+     * `computeSeriesStats` / `indexAveragePctPerYear` also call `Math.pow`, but
+     * their vectors' exponents happen to land on identical doubles on both
+     * engines and are asserted exactly.
+     */
+    private val tolerances: Map<Pair<String, String>, Double> = mapOf(
+        ("deflateSeries" to "flat: slopes a flat nominal series downward at 10 %/yr over ~2 years")
+            to 1e-15,
+    )
 
     @Test
-    fun replaysExactly() {
-        val fn = vector.s("fn")
-        val case = vector.s("case")
-        val input = vector.o("input")
-        val expectedThrows = vector.oOrNull("throws")
+    fun holdingsVectorsReplayExactly() = replayModule("holdings", 104, tolerances, run = ::run)
 
-        var actual: JsonElement? = null
-        var thrown: Throwable? = null
-        try {
-            actual = run(fn, input)
-        } catch (e: DomainException) {
-            thrown = e
-        }
+    @Test
+    fun seriesStatsVectorsReplayExactly() = replayModule("seriesStats", 41, tolerances, run = ::run)
 
-        if (expectedThrows != null) {
-            assertThrewLike(expectedThrows, thrown)
-            return
-        }
+    @Test
+    fun settingsScopeVectorsReplayExactly() =
+        replayModule("settingsScope", 9, tolerances, run = ::run)
 
-        if (thrown != null) throw AssertionError("$fn/$case threw unexpectedly", thrown)
-        assertNull("$fn/$case: expected no error", vector["throws"]?.takeIf { it !is JsonNull })
-        assertJsonEquals(
-            "$fn/$case",
-            vector["output"]!!,
-            actual!!,
-            TOLERANCES[fn to case],
-        )
-    }
+    @Test
+    fun serverTwrParityVectorsReplayExactly() =
+        replayModule("serverTwrParity", 4, tolerances, run = ::run)
 
     /** Decode the vector's input, drive the Kotlin port, encode the result. */
     private fun run(fn: String, input: JsonObject): JsonElement = when (fn) {
@@ -106,7 +71,7 @@ class DomainVectorTest(
         "reducePosition" ->
             encodePositionState(reducePosition(decodeTransactions(input.a("transactions"))))
 
-        "deriveHoldings" -> runBlocking {
+        "deriveHoldings" -> runVector {
             encodeHoldings(
                 deriveHoldings(
                     decodeTransactions(input.a("transactions")),
@@ -116,7 +81,7 @@ class DomainVectorTest(
             )
         }
 
-        "valueOverTime" -> runBlocking {
+        "valueOverTime" -> runVector {
             val series = valueOverTime(
                 ValueOverTimeInput(
                     transactions = decodeTransactions(input.a("transactions")),
@@ -128,7 +93,7 @@ class DomainVectorTest(
             encodeDatedSeries(series.map { it.date }, series.map { it.valueEur }, "valueEur")
         }
 
-        "costBasisOverTime" -> runBlocking {
+        "costBasisOverTime" -> runVector {
             val series = costBasisOverTime(
                 CostBasisOverTimeInput(
                     transactions = decodeTransactions(input.a("transactions")),
@@ -153,7 +118,7 @@ class DomainVectorTest(
             encodeDatedSeries(series.map { it.date }, series.map { it.close }, "close")
         }
 
-        "netFlowsOverTime" -> runBlocking {
+        "netFlowsOverTime" -> runVector {
             val currencyByAsset = LinkedHashMap<String, String>()
             input.o("currencyByAsset").forEach { (k, v) ->
                 currencyByAsset[k] = (v as JsonPrimitive).content
@@ -243,7 +208,7 @@ class DomainVectorTest(
                 layer("userDefault"),
                 input["systemDefault"]!!,
             )
-            kotlinx.serialization.json.buildJsonObject {
+            buildJsonObject {
                 put("value", resolved.value)
                 put("source", JsonPrimitive(resolved.source.wire))
             }

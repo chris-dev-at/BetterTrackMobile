@@ -6,20 +6,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
-import org.junit.Assert.assertNull
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
+import kotlin.test.Test
 
 /**
  * The conformance runner for the `cashLedger` module (plan §3.4 step 3) — the
- * sibling of [DomainVectorTest], sharing all of its plumbing in `DomainVectors.kt`.
+ * sibling of [DomainVectorTest], sharing all of its plumbing in `VectorHarness.kt`.
  *
- * Every vector in `app/src/test/resources/domain-vectors/cashLedger.json` is
- * replayed against `CashLedger.kt` as its own JUnit case and compared with
- * **exact** `Double` equality — `assertEquals(expected, actual, 0.0)`. The
- * expected values were produced by executing the pinned platform TypeScript
+ * Every vector in the `cashLedger` fixture is replayed against `CashLedger.kt`
+ * and compared with **exact** `Double` equality. The expected values were
+ * produced by executing the pinned platform TypeScript
  * (`packages/domain/src/cashLedger.ts` plus the `cashBySourceOverTime` half of
  * `dailySnapshotSeries.test.ts`), so a divergence here is a real translation
  * defect, not a disagreement about what the answer should be.
@@ -30,46 +25,10 @@ import org.junit.runners.Parameterized
  * and the JVM (contrast [DomainVectorTest]'s single `Math.pow` case). The
  * composed `timeWeightedReturn` vectors are exact too.
  */
-@RunWith(Parameterized::class)
-class CashLedgerVectorTest(
-    @Suppress("unused") private val label: String,
-    private val vector: JsonObject,
-) {
-
-    companion object {
-        @JvmStatic
-        @Parameterized.Parameters(name = "{0}")
-        fun vectors(): Collection<Array<Any>> =
-            loadVectorFile("cashLedger").map { v ->
-                arrayOf<Any>("${v.s("fn")} — ${v.s("case")}", v)
-            }
-    }
+class CashLedgerVectorTest {
 
     @Test
-    fun replaysExactly() {
-        val fn = vector.s("fn")
-        val case = vector.s("case")
-        val input = vector.o("input")
-        val expectedThrows = vector.oOrNull("throws")
-
-        var actual: JsonElement? = null
-        var thrown: Throwable? = null
-        try {
-            actual = run(fn, input)
-        } catch (e: DomainException) {
-            thrown = e
-        }
-
-        if (expectedThrows != null) {
-            assertThrewLike(expectedThrows, thrown)
-            return
-        }
-
-        if (thrown != null) throw AssertionError("$fn/$case threw unexpectedly", thrown)
-        assertNull("$fn/$case: expected no error", vector["throws"]?.takeIf { it !is JsonNull })
-        // tolerance = null → assertEquals(expected, actual, 0.0) at every leaf.
-        assertJsonEquals("$fn/$case", vector["output"]!!, actual!!, null)
-    }
+    fun cashLedgerVectorsReplayExactly() = replayModule("cashLedger", 191, run = ::run)
 
     /** Decode the vector's input, drive the Kotlin port, encode the result. */
     private fun run(fn: String, input: JsonObject): JsonElement = when (fn) {
