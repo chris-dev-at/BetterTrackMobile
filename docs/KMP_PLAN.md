@@ -1129,3 +1129,23 @@ but running on hardware needs a connected device (a P4 concern).
   entire audited calculation engine is confirmed identical on Android and iOS.**
   Next P2 chunk: the `data/` layer — DTOs and the Room persistence seam (turn on
   `exportSchema` first, per D7).
+- **2026-08-10/11** — **P2 data-layer, steps 1 & 2 COMPLETE.**
+  - Step 1 (commit `fc697bf`): Room `exportSchema` turned on via the
+    `androidx.room` Gradle plugin; **golden v10 schema committed** as a
+    standalone contract artifact BEFORE any `db/` work, per D7. 18 entities,
+    identityHash `a9fab166…`; spot-checked to reflect the migration endpoint
+    (`sync_ops.errorCode`, the 9→10 column), not just base entities.
+    Behaviourally inert — both flavors stay 2101/0, migration test green.
+  - Step 2 (commit `7e67344`): **all 20 API DTO files (261 `@Serializable`
+    classes) migrated to `:shared/commonMain`** — 19 R100 verbatim renames,
+    `VersionDto.kt` ported java.time→kotlinx-datetime, one cross-module
+    smart-cast fix in `IdeasRepository`. The `interval` field rode along
+    verbatim. Gates verified independently: 2101/0 both flavors (unchanged),
+    Native vector harness 13/0, iOS boots, and the Android shipping graph
+    **proven byte-identical** (single serialization-json 1.9.0 / datetime 0.8.0,
+    no Compose/Ktor/test-dep leak into `:app` runtime). The wire contract now
+    compiles once for both platforms.
+  **Next: the Room persistence seam** — the R3 heavy lift (entities, 13 DAOs,
+  `@ConstructedBy` expect/actual, 9 migrations `SupportSQLiteDatabase` →
+  `SQLiteConnection`), guarded by the golden schema whose identityHash must
+  survive unchanged.
