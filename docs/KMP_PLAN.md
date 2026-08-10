@@ -85,9 +85,10 @@ Ordered by how badly each one can hurt the program. Status updated per phase.
 | R5 | Android regression on this branch | The hardest constraint of the program. | CONTROLLED — 2637-case gate per phase; **weakened by CI running no tests (§4.8), fixed in P1** |
 | R6 | Background work + push differ fundamentally on iOS | WorkManager has no iOS equal; FCM/APNs differ. | OPEN but SOFTENED — both workers are one-shot and idempotent with engine-owned retry, so iOS loses latency, not data |
 | R7 | `BtSheetNavigator` subclasses navigation-compose internals-adjacent APIs | `Navigator.Name`, `NavigatorState.backStack`, `FloatingWindow`, `NavDestinationBuilder`, `NavBackStackEntry.LocalOwnersProvider` must behave identically in JetBrains' multiplatform artifact, or all 47 sheet routes need a new foundation. | **RESOLVED GREEN** (§8) — every API present and public; the file compiled **unchanged**; `FloatingWindow` behaviorally honored on-device. Hand-rolled fallback not needed |
-| R8 | Byte-identity formatters (§4.2) | Two of the three decide encrypted bytes; one ULP of disagreement silently corrupts user data rather than throwing. | OPEN — highest correctness risk in the program. Addressed by D1 |
+| R8 | Byte-identity formatters (§4.2) | Two of the three decide encrypted bytes; one ULP of disagreement silently corrupts user data rather than throwing. | **1 of 3 CLOSED** — `jsNumberToString` proven byte-identical on-device, 10/10 (§11). `moneyString` and `BtNumberFormat` still open |
 | R9 | `RawDeflate` sort stability on Kotlin/Native | If `sortWith` is not stable on Native, Huffman ties break differently and every vault envelope diverges. | OPEN — cheap to test, must be tested **first** (D3) |
 | R10 | Two capabilities blocked on owner actions | Drive needs a Google Cloud OAuth client (exists on no platform); iOS push needs a Firebase iOS app + APNs `.p8` + entitlements. | OPEN — not on the critical path, but has lead time; raise early |
+| R12 | **Pre-existing** JVM-vs-V8 number rendering divergence on Android | OpenJDK 17's `Double.toString` (pre-JDK-19 `FloatingDecimal`) emits a non-shortest representation for a small class of large 17-significant-digit doubles, so Android's `jsNumberToString` can differ from the web client **today**, independent of the port. Discovered by the P2 formatter work. | OPEN — **not introduced by this branch and not urgent** (unreachable by realistic money/quantity values, hit by no vector). Needs an owner/chief source-of-truth call — see §11 |
 
 ---
 
@@ -876,7 +877,79 @@ Argon2id + deflate, v2 introduces:
 
 ---
 
-## 5. Program log
+## 11. P2 chunk 1 — domain engine migrated (2026-08-10, commit `c51f172`)
+
+All six remaining `domain/` files now live in `:shared/commonMain`, package
+unchanged. Four moved verbatim (`R100` renames); only `Tax.kt` (`R097`) and
+`DomainTypes.kt` (`R063`) needed edits — the engine really was as portable as
+§4.4 predicted.
+
+### The formatter seam is built and proven (R8, 1 of 3 closed)
+
+`jsNumberToString` had exactly one platform-specific line. It is now
+`expect fun formatScientific(value, fractionDigits)`:
+
+- **Android actual delegates to the original `String.format(Locale.ROOT, "%.Ne", v)`.**
+  This is the important design choice: Android's runtime output is unchanged
+  **by construction**, so the 2727-case suite is *unaffected* rather than merely
+  *observed green*. The migration cannot regress Android number rendering.
+- **iOS actual** reproduces it without `java.text`, via an exact base-10
+  expansion (no `BigDecimal` on Native). Key discovery from the build: Java's
+  `%e` does not round the exact binary value — it renders the shortest
+  round-trip digits and then rounds/zero-pads *those* HALF_UP. The iOS actual
+  mirrors that two-stage behaviour, including the ≥2-digit exponent width.
+- **Proven on-device: 10/10 byte-identical** vs the JVM as source of truth,
+  including `1e21`, `1e-7`, `5e-324` (min subnormal), `MAX_VALUE`, and the
+  17-significant-digit `0.1+0.2 → 0.30000000000000004`.
+  Evidence: `/Users/cwiesi/bt_scratch/kmp-2026-08-10/jsnts_ios_proof_all10.png`.
+
+### The date seam
+
+kotlinx-datetime 0.8.0, added to `:shared` only. The load-bearing detail was
+**catch widening**: the old shims caught `java.time.format.DateTimeParseException`
+to return `NaN`, and kotlinx-datetime throws `IllegalArgumentException` instead.
+The KDoc documents that callers *rely* on `NaN` propagating (so an impossible
+date yields an empty series, not an exception), so a missed catch would have
+converted a designed fallback into a crash on malformed server data.
+
+### R12 — a pre-existing Android/web divergence this work uncovered
+
+While validating the iOS actual against a JVM twin over hundreds of thousands
+of random doubles, roughly 1 in 300k disagreed — always large
+17-significant-digit values (>1e17). Ground truth shows the cause is **not** the
+new code: **OpenJDK 17's `Double.toString` emits a non-shortest representation**
+for those inputs (the known pre-JDK-19 `FloatingDecimal` imperfection), while
+the iOS implementation produces the true shortest round-trip — i.e. it matches
+**V8/ECMAScript**.
+
+That direction matters. `jsNumberToString` exists *specifically* to emulate
+JavaScript number rendering, and the conformance vectors were generated from the
+platform's TypeScript running on V8. So on those inputs **iOS is right and the
+JVM is wrong against the contract** — Android may already differ from the web
+client today, independently of this port.
+
+Assessment, and why nothing is being changed unilaterally:
+- **Not urgent.** The affected values are >1e17 with 17 significant digits —
+  unreachable by realistic money amounts or share quantities — and no current
+  vector or test touches them.
+- **Not introduced here.** Android's output is byte-identical before and after
+  this commit.
+- **The clean end-state** is for *both* platforms to match V8, since that is the
+  spec the function emulates. But that means changing the shipping Android app's
+  behaviour on the money path, which is an owner/chief decision, not a
+  sub-coordinator's — and it should be driven by a vector that demonstrates it.
+- **One caveat that must not be lost:** the 2727 tests run on the **JVM
+  (OpenJDK 17)**, not on ART. Android's *runtime* rendering is therefore not
+  actually pinned by the suite for these values, and ART's libcore may differ
+  from both OpenJDK 17 and V8. Anyone settling this should measure on a device
+  rather than reason from the JVM.
+
+### Still open in this layer
+
+The domain engine compiles for iOS (gate d) but its **numerical output is not
+yet vector-replayed on-device** — only the formatter path is. Running the
+622-vector domain suites on Kotlin/Native (per D5: `kotlin.test`, collapsed
+parameterization, code-generated fixtures) is the next P2 chunk.
 
 - **2026-08-09** — P0 opened. Baseline captured (2637 green, assemble green).
   `local.properties` recreated in the worktree. Five parallel surveys
@@ -959,3 +1032,16 @@ Argon2id + deflate, v2 introduces:
   it adds HKDF, an HMAC header MAC, and — the sharp new item — a
   `java.text.Normalizer` NFKD seam on the BIP39 path. Now beginning the
   lowest-layer shared-core migration (`domain/`).
+- **2026-08-10** — **P2 chunk 1 COMPLETE** (commit `c51f172`, §11). The whole
+  domain calculation engine now lives in `:shared/commonMain`; four of six files
+  moved verbatim. Both platform seams built as `expect`/`actual`: the scientific
+  formatter (Android delegating to the original call, so Android is unchanged by
+  construction; iOS **proven 10/10 byte-identical on-device**) and the
+  kotlinx-datetime port with its catches correctly widened. Gates re-verified
+  from a forced `--rerun-tasks` run: 2727/0 both flavors, both APKs, iOS
+  compile green, and every migrated vector suite passing from `:shared`
+  (TaxVectorTest 273, CashLedgerVectorTest 191, DomainVectorTest 158).
+  **R8 is now 1-of-3 closed.** New R12 logged: a *pre-existing* Android-vs-web
+  number-rendering divergence uncovered by this work — not introduced here, not
+  urgent, but it needs a source-of-truth call and must be measured on ART rather
+  than the JVM. **Next: replay the 622 domain vectors on Kotlin/Native.**
