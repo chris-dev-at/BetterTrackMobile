@@ -1539,6 +1539,24 @@
     <string name="bt_intel_eps_history">EPS je Bericht</string>
     <string name="bt_intel_beat">Übertroffen</string>
     <string name="bt_intel_miss">Verfehlt</string>
+    <!-- Fundamentals card (platform arc f / board #76): statement figures + ratios. -->
+    <string name="bt_fundamentals_section">Geschäftszahlen</string>
+    <string name="bt_fundamentals_annual">Jährlich</string>
+    <string name="bt_fundamentals_quarterly">Quartalsweise</string>
+    <string name="bt_fundamentals_revenue">Umsatz</string>
+    <string name="bt_fundamentals_net_income">Gewinn</string>
+    <string name="bt_fundamentals_market_cap">Marktkapitalisierung</string>
+    <string name="bt_fundamentals_pe">KGV</string>
+    <string name="bt_fundamentals_profit_margin">Gewinnmarge</string>
+    <string name="bt_fundamentals_roe">Eigenkapitalrendite</string>
+    <string name="bt_fundamentals_debt_equity">Verschuldungsgrad</string>
+    <string name="bt_fundamentals_trailing_eps">EPS (12M)</string>
+    <string name="bt_fundamentals_empty">Keine Geschäftszahlen für diesen Wert</string>
+    <string name="bt_fundamentals_chart_cd">Umsatz und Gewinn je Berichtszeitraum. Zum Ablesen wischen.</string>
+    <!-- %1$s is the fiscal year, e.g. "GJ 2025". -->
+    <string name="bt_fundamentals_period_annual">GJ %1$s</string>
+    <!-- %1$s is the quarter ("Q3"), %2$s the fiscal year. -->
+    <string name="bt_fundamentals_period_quarter">%1$s %2$s</string>
     <string name="bt_intel_news_empty">Aktuell keine Schlagzeilen</string>
     <string name="bt_intel_open_article">Artikel öffnen</string>
     <string name="bt_intel_earnings_calendar">Berichtstermine</string>

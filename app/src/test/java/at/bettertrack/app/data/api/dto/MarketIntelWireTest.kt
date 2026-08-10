@@ -308,4 +308,102 @@ class MarketIntelWireTest {
         assertFalse(e.held)
         assertFalse(e.watched)
     }
+
+    // ── Fundamentals (platform arc f, board #76 item 1) ─────────────────────
+
+    @Test
+    fun `fundamentals decodes a real annual body with full-size revenue figures`() {
+        // Shaped exactly like the dev stack's AAPL answer: plain JSON numbers in
+        // the reporting currency, most-recent-first, `eps` and `reportDate` null.
+        val body = """
+            {"available":true,"currency":"USD","period":"annual","periods":[
+              {"fiscalPeriod":"FY","fiscalYear":2025,"endDate":"2025-09-27T00:00:00.000Z",
+               "reportDate":null,"revenue":416161000000,"netIncome":112010000000,"eps":null,
+               "grossProfit":195000000000,"operatingIncome":127000000000,
+               "totalAssets":365000000000,"totalLiabilities":308000000000,
+               "totalEquity":57000000000,"operatingCashFlow":118000000000,
+               "freeCashFlow":109000000000}],
+             "ratios":{"marketCap":3900000000000,"trailingPe":38.2,"forwardPe":33.1,
+               "priceToBook":61.4,"profitMargin":0.269,"returnOnEquity":1.497,
+               "debtToEquity":145.0,"trailingEps":6.9,"forwardEps":7.8}}
+        """
+        val r = json.decodeFromString(FundamentalsResponse.serializer(), body)
+
+        assertTrue(r.available)
+        assertEquals("USD", r.currency)
+        assertEquals("annual", r.period)
+        val p = r.periods.single()
+        assertEquals("FY", p.fiscalPeriod)
+        assertEquals(2025, p.fiscalYear)
+        // A twelve-digit revenue must survive the Double round-trip exactly —
+        // it is far inside the 2^53 integer range, so this is not a hope.
+        assertEquals(416_161_000_000.0, p.revenue!!, 0.0)
+        assertEquals(112_010_000_000.0, p.netIncome!!, 0.0)
+        assertEquals(3_900_000_000_000.0, r.ratios.marketCap!!, 0.0)
+        assertEquals(0.269, r.ratios.profitMargin!!, 1e-9)
+        assertEquals(6.9, r.ratios.trailingEps!!, 1e-9)
+    }
+
+    @Test
+    fun `fundamentals keeps a provider gap as null rather than a fabricated zero`() {
+        // The whole reason these fields have no `0.0` default: "reported nothing"
+        // and "the provider did not carry the line" are different facts, and only
+        // null can tell them apart.
+        val r = json.decodeFromString(
+            FundamentalsResponse.serializer(),
+            """{"available":true,"currency":"EUR","period":"quarterly","periods":[
+                {"fiscalPeriod":"Q3","fiscalYear":2025,"endDate":null,"reportDate":null,
+                 "revenue":null,"netIncome":null,"eps":null,"grossProfit":null,
+                 "operatingIncome":null,"totalAssets":null,"totalLiabilities":null,
+                 "totalEquity":null,"operatingCashFlow":null,"freeCashFlow":null}],
+                "ratios":{"marketCap":null,"trailingPe":null,"forwardPe":null,
+                 "priceToBook":null,"profitMargin":null,"returnOnEquity":null,
+                 "debtToEquity":null,"trailingEps":null,"forwardEps":null}}""",
+        )
+        val p = r.periods.single()
+        assertNull(p.revenue)
+        assertNull(p.netIncome)
+        assertNull(p.eps)
+        assertNull(p.reportDate)
+        assertNull(p.endDate)
+        assertNull(r.ratios.marketCap)
+        assertNull(r.ratios.trailingPe)
+    }
+
+    @Test
+    fun `a capability-less provider decodes as unavailable with nothing in it`() {
+        val r = json.decodeFromString(
+            FundamentalsResponse.serializer(),
+            """{"available":false,"currency":null,"period":"annual","periods":[],
+                "ratios":{"marketCap":null,"trailingPe":null,"forwardPe":null,
+                 "priceToBook":null,"profitMargin":null,"returnOnEquity":null,
+                 "debtToEquity":null,"trailingEps":null,"forwardEps":null}}""",
+        )
+        assertFalse(r.available)
+        assertNull(r.currency)
+        assertTrue(r.periods.isEmpty())
+    }
+
+    @Test
+    fun `a fundamentals body missing every optional key still decodes`() {
+        // A pre-arc-f server, or a partially-populated row: a decode failure here
+        // would surface to the user as a retry button for a healthy server.
+        val r = json.decodeFromString(FundamentalsResponse.serializer(), """{"available":true}""")
+        assertTrue(r.available)
+        assertEquals("annual", r.period)
+        assertTrue(r.periods.isEmpty())
+        assertNull(r.ratios.marketCap)
+    }
+
+    @Test
+    fun `an unknown fundamentals field does not break the decode`() {
+        val r = json.decodeFromString(
+            FundamentalsResponse.serializer(),
+            """{"available":true,"currency":"USD","period":"annual","ebitda":123,
+                "periods":[{"fiscalPeriod":"FY","fiscalYear":2024,"revenue":1.0,
+                 "researchAndDevelopment":9}],"ratios":{"pegRatio":1.4}}""",
+        )
+        assertTrue(r.available)
+        assertEquals(2024, r.periods.single().fiscalYear)
+    }
 }

@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -694,9 +695,22 @@ internal fun IntelCard(
     }
 }
 
-/** A label over a value — the small stat pair used across the intel surfaces. */
+/**
+ * A label over a value — the small stat pair used across the intel surfaces.
+ *
+ * [valueColor] is null for the overwhelming majority of stats, which are neutral
+ * facts. It exists for the one case that is not: a NEGATIVE figure (a loss-making
+ * year's net income) that a reader must be able to see without parsing a minus
+ * sign. Defaulting to null rather than to a colour keeps every existing call site
+ * neutral by construction.
+ */
 @Composable
-internal fun IntelStat(label: String, value: String, modifier: Modifier = Modifier) {
+internal fun IntelStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color? = null,
+) {
     val bt = BtTheme.colors
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
@@ -705,7 +719,7 @@ internal fun IntelStat(label: String, value: String, modifier: Modifier = Modifi
             text = value,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = bt.textPrimary,
+            color = valueColor ?: bt.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

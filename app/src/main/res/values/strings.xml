@@ -1598,6 +1598,24 @@
     <string name="bt_intel_eps_history">EPS per report</string>
     <string name="bt_intel_beat">Beat</string>
     <string name="bt_intel_miss">Miss</string>
+    <!-- Fundamentals card (platform arc f / board #76): statement figures + ratios. -->
+    <string name="bt_fundamentals_section">Fundamentals</string>
+    <string name="bt_fundamentals_annual">Annual</string>
+    <string name="bt_fundamentals_quarterly">Quarterly</string>
+    <string name="bt_fundamentals_revenue">Revenue</string>
+    <string name="bt_fundamentals_net_income">Net income</string>
+    <string name="bt_fundamentals_market_cap">Market cap</string>
+    <string name="bt_fundamentals_pe">P/E</string>
+    <string name="bt_fundamentals_profit_margin">Profit margin</string>
+    <string name="bt_fundamentals_roe">Return on equity</string>
+    <string name="bt_fundamentals_debt_equity">Debt/equity</string>
+    <string name="bt_fundamentals_trailing_eps">EPS (TTM)</string>
+    <string name="bt_fundamentals_empty">No reported figures for this asset</string>
+    <string name="bt_fundamentals_chart_cd">Revenue and net income by reporting period. Drag to read a period.</string>
+    <!-- %1$s is the fiscal year, e.g. "FY 2025". -->
+    <string name="bt_fundamentals_period_annual">FY %1$s</string>
+    <!-- %1$s is the quarter ("Q3"), %2$s the fiscal year. -->
+    <string name="bt_fundamentals_period_quarter">%1$s %2$s</string>
     <string name="bt_intel_news_empty">No headlines right now</string>
     <string name="bt_intel_open_article">Open article</string>
     <string name="bt_intel_earnings_calendar">Earnings calendar</string>

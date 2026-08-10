@@ -104,6 +104,7 @@ import at.bettertrack.app.data.api.dto.WatchlistListResponse
 import at.bettertrack.app.data.api.dto.WatchlistSummaryDto
 import at.bettertrack.app.data.api.dto.FriendRequestListResponse
 import at.bettertrack.app.data.api.dto.FriendsListResponse
+import at.bettertrack.app.data.api.dto.FundamentalsResponse
 import at.bettertrack.app.data.api.dto.MySharedResponse
 import at.bettertrack.app.data.api.dto.SharedConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.SharedPortfolioDetailResponse
@@ -407,6 +408,23 @@ interface BtApi {
     /** Historical splits (`upcoming` is always empty with today's provider). */
     @GET("assets/{id}/intel/splits")
     suspend fun assetSplits(@Path("id") id: String): Response<SplitsResponse>
+
+    /**
+     * Statement figures + snapshot ratios for the asset page's fundamentals
+     * block (platform arc f, board #76 item 1).
+     *
+     * NOT gated on [assetIntel]'s capability probe — fundamentals is deliberately
+     * absent from that map, so this read is issued unconditionally and its own
+     * `available` flag is the gate. [period] is `annual` | `quarterly`; an
+     * out-of-enum value is the one 400 on this surface. [limit] is clamped
+     * server-side to `1..12`, never rejected.
+     */
+    @GET("assets/{id}/intel/fundamentals")
+    suspend fun assetFundamentals(
+        @Path("id") id: String,
+        @Query("period") period: String,
+        @Query("limit") limit: Int,
+    ): Response<FundamentalsResponse>
 
     /** Earnings dates across everything I hold or watch, ascending. */
     @GET("assets/intel/earnings-calendar")

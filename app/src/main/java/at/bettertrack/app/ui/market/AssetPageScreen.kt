@@ -628,6 +628,15 @@ private fun AssetLoadedContent(
             AssetIntelSection(assetId = snapshot.asset.id, modifier = inset)
         }
 
+        // Statement figures + ratios (platform arc f). Below the intel blocks
+        // because it is the deepest read on the page — someone who wants six
+        // years of revenue has already looked at the price, the stats and the
+        // next report date. Renders zero height when the provider has no
+        // fundamentals, so a custom asset pays nothing for it.
+        item(key = "fundamentals") {
+            FundamentalsSection(assetId = snapshot.asset.id, modifier = inset)
+        }
+
         // Quick buy / sell.
         item(key = "trade") {
             Column(inset) {

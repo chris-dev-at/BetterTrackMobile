@@ -48,20 +48,24 @@ import kotlin.math.min
  * The earnings graphic (owner order 2026-08-10: *"more info for earnings. like
  * yearly quarterly reports and nice graphics"*).
  *
- * ## What this can and cannot show, and why
+ * ## What this shows, and what now shows the rest
  *
- * The platform serves **EPS only** — `GET /assets/{id}/intel/earnings` returns a
- * report date, an EPS estimate and an EPS actual per period, and nothing else.
- * There is no revenue, no income statement, no fiscal-period label and no annual
- * roll-up anywhere in the API: the Yahoo provider's module whitelist does not
- * even fetch them, so they are not sitting unused behind the route either.
+ * `GET /assets/{id}/intel/earnings` serves **EPS only** — a report date, an EPS
+ * estimate and an EPS actual per period, and nothing else. So this draws exactly
+ * that, properly: **estimate against actual, one group per report, in report
+ * order** — which is the question an EPS series answers ("does this company beat
+ * its guidance, and is it getting better or worse at it?").
  *
- * So this draws the thing that exists, properly: **estimate against actual, one
- * group per report, in report order** — which is exactly the question an EPS
- * series answers ("does this company beat its guidance, and is it getting better
- * or worse at it?"). It does not aggregate quarters into years, because summing
- * four EPS figures is a calculation the server did not do and §7.1 says the app
- * does not do those. The missing half is a platform ask, not a thing to fake.
+ * The revenue / income-statement half of the owner's order was a platform gap
+ * when this chart was written and is not one any more: it arrived as the
+ * fundamentals capability (arc f) and is drawn by
+ * [FundamentalsChart] in its own card. The two are deliberately not merged —
+ * guidance-versus-result and top-line-versus-bottom-line are different questions
+ * at different granularities, and a provider can serve either without the other.
+ *
+ * This chart still does not aggregate quarters into years: summing four EPS
+ * figures is a calculation the server did not do, and §7.1 says the app does not
+ * do those.
  *
  * Periods are labelled by REPORT MONTH, not "Q1/Q2": the wire has a date and no
  * fiscal calendar, and deriving a fiscal quarter from a report date is a guess
@@ -293,20 +297,11 @@ val EARNINGS_CHART_HEIGHT = 132.dp
 /**
  * An EPS figure as a reader wants it: two decimals.
  *
- * The rows used to render these through `formatQuantity`, which is the ASSET
- * QUANTITY formatter — up to eight decimals, because a holding can be 0.06251
- * BTC. Applied to a provider's EPS estimate it printed *"EPS-Schätzung 4,71331"*,
- * which is five decimals of false precision on a number nobody trades in and the
- * exact kind of clutter the owner meant by wanting this section cleaner. Cents
- * per share is the unit; the provider's extra digits are its regression fit, not
- * a company's result.
+ * Delegates to [formatBareDecimal], which is the same display rule generalised
+ * once the fundamentals card needed it for P/E as well. The name stays because
+ * every call site here is an EPS figure and reads better for saying so.
  */
-fun formatEps(value: Double, locale: Locale): String {
-    val nf = java.text.NumberFormat.getNumberInstance(locale)
-    nf.minimumFractionDigits = 2
-    nf.maximumFractionDigits = 2
-    return nf.format(value)
-}
+fun formatEps(value: Double, locale: Locale): String = formatBareDecimal(value, locale)
 
 /** Guard against a chart of one bar pretending to be a trend. */
 internal fun earningsBarSpread(bars: List<EarningsBar>): Double =

@@ -64,13 +64,31 @@ data class UpdatePortfolioRequest(
 )
 
 // ── GET /portfolios/{id}/history — the §6.1 graph (server-computed series) ──
-// The endpoint is DAY-granular and supports ONLY range=1M|6M|1Y|MAX — there is
-// no server-side 1D/1W/3M portfolio window (platform gap noted in TODO.md; the
-// web app offers the same subset for the same reason). `performance` is the
+// Ranges are 1D|1W|1M|6M|1Y|5Y|MAX. 1D/1W/1M come back as sub-daily intraday
+// curves; 6M/1Y/5Y are the daily snapshot series downsampled to the point
+// budget; MAX is the full daily since-inception curve. `performance` is the
 // server-computed time-weighted % series — the app never derives it locally.
 @Serializable
 data class PortfolioHistoryResponse(
     val range: String,
+    /**
+     * The grid the server ACTUALLY served (platform IN3, board #76 item 2) —
+     * `5m`|`15m`|`30m`|`1h`|`144m`|`1d`.
+     *
+     * Required on the wire, but modelled nullable-with-default here for the same
+     * reason every other field on this surface is: a build that meets a server
+     * predating the field must still decode. `ignoreUnknownKeys = true` already
+     * kept the app from throwing when this appeared; carrying it explicitly is
+     * what lets the app *read* it.
+     *
+     * The app sends no `interval` on the request, so this is always the server's
+     * `auto` resolution: **1D ⇒ `5m`** (~156 points across a market-hours day),
+     * 1W ⇒ `1h`, 1M ⇒ `144m`, everything longer ⇒ `1d`. Requesting a grid finer
+     * than a range can serve is COARSENED to the finest that fits rather than
+     * rejected, so this echo — not the request — is the only honest answer to
+     * "what am I looking at".
+     */
+    val interval: String? = null,
     val baseCurrency: String,
     val points: List<HistoryPointDto> = emptyList(),
     val performance: List<PerformancePointDto> = emptyList(),
