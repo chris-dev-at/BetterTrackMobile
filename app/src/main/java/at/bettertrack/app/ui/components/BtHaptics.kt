@@ -62,6 +62,8 @@ class BtHaptics(
     private val haptics: HapticFeedback,
     /** See [detent]. Null when the device has no vibrator to reach past Compose. */
     private val detentVibrator: BtDetent? = null,
+    /** See [scrubTick]. Null on the same devices [detentVibrator] is null on. */
+    private val scrubVibrator: BtDetent? = null,
 ) {
 
     /**
@@ -147,6 +149,47 @@ class BtHaptics(
             detentVibrator.play()
         }
     }
+
+    /**
+     * The crosshair crossed one point of a chart series.
+     *
+     * **Owner order 2026-08-10: "every point you at gives another haptic feedback
+     * so it feels cool like on the samsung watches with the fake bezel spin".**
+     * A rotating bezel is a row of detents, and that is exactly what a scrub over
+     * a discrete series is — the readout snaps to real points (never an
+     * interpolation), so every step the finger takes lands on a *thing*, and the
+     * motor is how you feel the row of them going past under your thumb.
+     *
+     * It is the sixth meaning and it earns its place by the same test [detent]
+     * passed: it answers "how fast am I moving through the data", which the eye
+     * cannot answer while the eye is busy reading the value.
+     *
+     * ## Why a different effect from [detent], and why it is not a buzz
+     *
+     * `EFFECT_TICK` where the notch takes `EFFECT_HEAVY_CLICK`: a detent is one
+     * decision and wants weight, a scrub is dozens of crossings a second and wants
+     * to stay out of the way — a heavy click repeated at scrub rate is a rattle,
+     * not a bezel. The pre-API-29 fallback is correspondingly shorter than
+     * [detent]'s.
+     *
+     * The other half of "not a buzz" is not here: it is
+     * [at.bettertrack.app.ui.charts.nextScrubTick], the throttle that decides
+     * WHICH crossings ring. A dense range puts several hundred points under a
+     * 400px canvas, and firing the motor on every one of them would be a
+     * continuous vibrato. Both halves are needed; neither is sufficient.
+     *
+     * Reuses the [detent] plumbing wholesale, which is the point: that class
+     * already carries the measured fact that a `Vibrator.vibrate` bypasses the
+     * user's touch-feedback switch, and re-solving that here would be how the app
+     * ends up with one haptic that respects the setting and one that does not.
+     */
+    fun scrubTick() {
+        if (scrubVibrator == null) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        } else {
+            scrubVibrator.play()
+        }
+    }
 }
 
 /**
@@ -157,7 +200,21 @@ class BtHaptics(
 class BtDetent internal constructor(
     private val vibrator: Vibrator,
     private val settings: ContentResolver,
+    /**
+     * How heavy this instance's crossing feels. Both weights go through the same
+     * [enabled] gate, which is the reason this is a constructor parameter rather
+     * than a second class.
+     *
+     * It is an enum rather than the platform's `EFFECT_*` int so that every
+     * API-29 constant stays *inside* [play]'s version guard — minSdk is 28, and a
+     * default argument naming `VibrationEffect.EFFECT_TICK` would put one of them
+     * on a construction path that runs on 28.
+     */
+    private val weight: Weight = Weight.NOTCH,
 ) {
+
+    /** See [weight]. */
+    enum class Weight { NOTCH, TICK }
 
     /**
      * The user's touch-feedback switch — the AOSP one every OEM toggle writes.
@@ -174,9 +231,20 @@ class BtDetent internal constructor(
     fun play() {
         if (!enabled()) return
         val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+            VibrationEffect.createPredefined(
+                when (weight) {
+                    Weight.NOTCH -> VibrationEffect.EFFECT_HEAVY_CLICK
+                    Weight.TICK -> VibrationEffect.EFFECT_TICK
+                },
+            )
         } else {
-            VibrationEffect.createOneShot(BT_DETENT_FALLBACK_MS, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createOneShot(
+                when (weight) {
+                    Weight.NOTCH -> BT_DETENT_FALLBACK_MS
+                    Weight.TICK -> BT_SCRUB_FALLBACK_MS
+                },
+                VibrationEffect.DEFAULT_AMPLITUDE,
+            )
         }
         // USAGE_TOUCH is still the right tag even though it does not gate: it is
         // what puts the vibration on the touch-intensity channel, so a user who
@@ -205,6 +273,9 @@ class BtDetent internal constructor(
  *  enough to still read as one event rather than an alert. */
 private const val BT_DETENT_FALLBACK_MS = 35L
 
+/** The scrub tick's pre-API-29 stand-in: half the notch's, because it repeats. */
+private const val BT_SCRUB_FALLBACK_MS = 16L
+
 /** The app's haptics, scoped to the current composition. */
 @Composable
 fun rememberBtHaptics(): BtHaptics {
@@ -218,6 +289,12 @@ fun rememberBtHaptics(): BtHaptics {
             context.getSystemService(Vibrator::class.java)
         }
         val motor = vibrator?.takeIf { it.hasVibrator() }
-        BtHaptics(haptics, motor?.let { BtDetent(it, context.contentResolver) })
+        BtHaptics(
+            haptics = haptics,
+            detentVibrator = motor?.let { BtDetent(it, context.contentResolver) },
+            scrubVibrator = motor?.let {
+                BtDetent(it, context.contentResolver, BtDetent.Weight.TICK)
+            },
+        )
     }
 }

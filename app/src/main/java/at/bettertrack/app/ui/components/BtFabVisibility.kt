@@ -5,8 +5,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import android.os.SystemClock
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,12 +19,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /**
  * Ignore-below-this jitter, in pixels of a single scroll delta. Without it a
  * fling's tail (and a fingertip's natural wobble) flickers the FAB in and out.
  */
 private const val FAB_SCROLL_THRESHOLD_PX = 4f
+
+/**
+ * How long the list has to be still before a shrunken FAB grows back.
+ *
+ * Long enough to survive the gap between two drag gestures in one flick-flick
+ * scroll (which would otherwise pump the FAB), short enough that stopping to
+ * read never leaves you looking at the small one.
+ */
+private const val FAB_IDLE_EXPAND_MS = 550L
 
 /**
  * The FAB-visibility rule as a pure function so it can be unit-tested without a
@@ -82,8 +98,16 @@ class BtFabVisibility internal constructor() {
     var visible: Boolean by mutableStateOf(true)
         internal set
 
+    /**
+     * When the last scroll delta arrived. Only [ShrinkingContent] reads it, to
+     * decide when the scroll has actually STOPPED — see its "at rest" note.
+     */
+    internal var lastScrollAtMs: Long = 0L
+        private set
+
     val nestedScroll: NestedScrollConnection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            lastScrollAtMs = SystemClock.uptimeMillis()
             visible = nextFabVisible(visible, available.y)
             return Offset.Zero
         }
@@ -92,6 +116,58 @@ class BtFabVisibility internal constructor() {
     /** Re-show the FAB (called when the scrollable is back at the very top). */
     fun show() {
         visible = true
+    }
+
+    /**
+     * The FAB as something that SHRINKS while scrolling instead of leaving.
+     *
+     * **Coordinator ruling on the owner's 2026-08-10 "should it be like that??"**
+     * The hiding behaviour was itself a fix — the buy/sell FAB sat exactly over
+     * the allocation legend's value column (S6 P1-7) — but it solved an overlap
+     * by removing an action, and a primary action that disappears when you look
+     * away from the top of the page is a control the user has to go hunting for.
+     *
+     * Shrinking keeps both properties: at rest the FAB is the full 56dp target it
+     * always was, and while the finger is pulling content up it collapses to a
+     * 40dp mini that clears the legend's numbers and is still perfectly tappable.
+     * Nothing is ever unreachable, and nothing is ever covered.
+     *
+     * The size is animated rather than scaled with `graphicsLayer`, so the touch
+     * target really is the size it looks — a scaled-down FAB keeps its original
+     * 56dp hit rect and would go on eating taps meant for the row underneath.
+     *
+     * [fab] receives the size to draw at; the icon inside should size off it too.
+     */
+    @Composable
+    fun ShrinkingContent(modifier: Modifier = Modifier, fab: @Composable (Dp) -> Unit) {
+        val reducedMotion = rememberReducedMotion()
+
+        // "…and expands at rest / scroll-up". The shared state machine only
+        // knows about DIRECTION, which would leave the FAB mini for as long as
+        // the reader sat still half-way down the page. Compact is a statement
+        // about *motion*, so it ends when the motion does: once no delta has
+        // arrived for [FAB_IDLE_EXPAND_MS], the FAB grows back on its own.
+        //
+        // A poll rather than a per-frame effect key: one coroutine per hide,
+        // sleeping exactly as long as the remaining idle time, instead of a
+        // cancel-and-relaunch on every frame of a fling.
+        LaunchedEffect(visible) {
+            while (!visible) {
+                val idleFor = SystemClock.uptimeMillis() - lastScrollAtMs
+                if (idleFor >= FAB_IDLE_EXPAND_MS) {
+                    visible = true
+                } else {
+                    delay(FAB_IDLE_EXPAND_MS - idleFor)
+                }
+            }
+        }
+
+        val size by animateDpAsState(
+            targetValue = if (visible) BT_FAB_SIZE else BT_FAB_MINI_SIZE,
+            animationSpec = tween(if (reducedMotion) 0 else 180),
+            label = "fabSize",
+        )
+        Box(modifier) { fab(size) }
     }
 
     /** The FAB itself, animated in/out with the shell's quiet motion language. */
@@ -108,3 +184,27 @@ class BtFabVisibility internal constructor() {
 
 @Composable
 fun rememberBtFabVisibility(): BtFabVisibility = remember { BtFabVisibility() }
+
+/** The resting FAB — Material's standard size, and the app's tap-target floor. */
+val BT_FAB_SIZE: Dp = 56.dp
+
+/**
+ * The scrolling FAB. Material's own mini-FAB size, which is also exactly the
+ * smallest thing this app is willing to ask a thumb to hit.
+ */
+val BT_FAB_MINI_SIZE: Dp = 40.dp
+
+/**
+ * The glyph inside the FAB at [size] — 24dp at rest, 20dp mini.
+ *
+ * Linear in the container so the icon keeps its optical weight instead of
+ * rattling around inside a box that shrank without it. Pure, and pinned by
+ * `BtFabVisibilityTest` for the same reason [nextFabVisible] is.
+ */
+fun btFabIconSize(size: Dp): Dp {
+    val t = ((size - BT_FAB_MINI_SIZE) / (BT_FAB_SIZE - BT_FAB_MINI_SIZE)).coerceIn(0f, 1f)
+    return BT_FAB_MINI_ICON + (BT_FAB_ICON - BT_FAB_MINI_ICON) * t
+}
+
+private val BT_FAB_ICON: Dp = 24.dp
+private val BT_FAB_MINI_ICON: Dp = 20.dp

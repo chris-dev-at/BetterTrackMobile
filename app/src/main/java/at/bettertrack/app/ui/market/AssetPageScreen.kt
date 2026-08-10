@@ -31,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,7 +54,6 @@ import at.bettertrack.app.sync.ConnectivityMonitor
 import at.bettertrack.app.ui.charts.BtPriceChart
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
-import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -67,6 +68,7 @@ import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
+import at.bettertrack.app.ui.components.StatCard
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberReducedMotion
@@ -83,6 +85,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import at.bettertrack.app.ui.portfolio.deltaColor
 import at.bettertrack.app.ui.portfolio.rangeAccent
 
 /** The error code [at.bettertrack.app.data.storage.NoLivePricesMarketDataSource] raises. */
@@ -345,16 +348,24 @@ private fun AssetLoadedContent(
     onSell: () -> Unit,
 ) {
     val bt = BtTheme.colors
+    val chartCd = stringResource(R.string.bt_asset_chart_cd)
     var scrub by remember { mutableStateOf<PricePoint?>(null) }
+    LaunchedEffect(range) { scrub = null }
+
+    // Everything is inset to the page gutter EXCEPT the chart, which bleeds
+    // edge-to-edge exactly as the portfolio hero does (owner order 2026-08-10:
+    // the asset chart "looks squished and too small" — a canvas that stops 28dp
+    // short of the screen on each side inside a card is a big part of why).
+    val inset = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Name + meta.
         item(key = "header") {
-            Column {
+            Column(inset) {
                 Text(
                     text = snapshot.asset.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -374,7 +385,7 @@ private fun AssetLoadedContent(
         item(key = "price") {
             val scrubbed = scrub
             val priceValue = scrubbed?.close ?: snapshot.nativePrice
-            Column {
+            Column(inset) {
                 Text(
                     text = if (scrubbed != null) formatScrubTime(scrubbed.timeMs, locale)
                     else stringResource(R.string.bt_asset_price),
@@ -412,22 +423,53 @@ private fun AssetLoadedContent(
             }
         }
 
-        // Chart + range chips.
+        // Chart + range chips. No card: the chart IS the page here, the same way
+        // the portfolio hero is, and a card around it only served to make the
+        // canvas smaller than the thing it was competing with.
         item(key = "chart") {
-            BtCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+            Column(Modifier.fillMaxWidth()) {
+                // Range verdict, right-aligned above the canvas — the hero's
+                // exact placement, hidden while scrubbing so the scrub readout in
+                // the price block above is the single focus.
+                val rangePct = (history as? AssetHistoryUiState.Loaded)
+                    ?.let { rangePerformancePct(it.series.points) }
+                Row(
+                    modifier = inset,
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (scrub == null && rangePct != null) {
+                        Text(
+                            text = formatPercent(rangePct, locale),
+                            style = BtTheme.type.numberCaption,
+                            color = rangeAccent(rangePct),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = rangeLabel(range),
+                            style = BtTheme.type.numberCaption,
+                            color = bt.textMuted,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Column(Modifier.fillMaxWidth()) {
                     when (history) {
                         // R3 §2: a skeleton, not a spinner — the block that is
                         // coming is a chart of known size, and the rest of the app
                         // says so with BtSkeleton (see PortfolioOverviewScreen's
                         // hero chart). A spinner here was the odd one out.
                         AssetHistoryUiState.Loading -> Box(
-                            Modifier.fillMaxWidth().height(180.dp),
+                            Modifier.fillMaxWidth().height(ASSET_CHART_HEIGHT),
                             contentAlignment = Alignment.Center,
-                        ) { BtSkeleton(Modifier.fillMaxWidth().height(140.dp)) }
+                        ) {
+                            BtSkeleton(
+                                Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 16.dp),
+                            )
+                        }
 
                         AssetHistoryUiState.Empty -> Box(
-                            Modifier.fillMaxWidth().height(180.dp),
+                            Modifier.fillMaxWidth().height(ASSET_CHART_HEIGHT),
                             contentAlignment = Alignment.Center,
                         ) { BtInlineEmpty(stringResource(R.string.bt_asset_chart_empty)) }
 
@@ -436,7 +478,7 @@ private fun AssetLoadedContent(
                         // sections on this page use — one line plus a retry, never
                         // a full-surface error over content that already loaded.
                         is AssetHistoryUiState.Failed -> Box(
-                            Modifier.fillMaxWidth().height(180.dp),
+                            Modifier.fillMaxWidth().height(ASSET_CHART_HEIGHT),
                             contentAlignment = Alignment.Center,
                         ) {
                             BtInlineError(
@@ -447,17 +489,26 @@ private fun AssetLoadedContent(
 
                         is AssetHistoryUiState.Loaded -> BtPriceChart(
                             points = history.series.points,
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(ASSET_CHART_HEIGHT)
+                                .semantics { contentDescription = chartCd },
                             // §4.3: an asset chart is an ASSET-level value, so it
                             // wears its verdict rather than the brand. Gold stays
                             // on the portfolio hero, which is account-scope.
                             // The area gradient follows automatically — it derives
                             // from lineColor.
                             lineColor = rangeAccent(rangePerformancePct(history.series.points)),
+                            // Hero mode. The price above and the scrub readout
+                            // carry every number the axis used to, and dropping
+                            // the scaffolding is what lets the curve have the
+                            // whole canvas — see the redesign note on the page.
+                            minimal = true,
+                            scrimColor = bt.bg,
                             onScrub = { scrub = it },
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
                     // The same control the portfolio hero uses (owner order
                     // 2026-08-08). Eight windows do not divide a phone's width
                     // into comfortable segments, so this one takes
@@ -470,36 +521,101 @@ private fun AssetLoadedContent(
                         selected = range,
                         label = { rangeLabel(it) },
                         onSelect = onRange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = inset,
                         contentDescription = stringResource(R.string.bt_chart_range_cd),
                     )
                 }
             }
         }
 
-        // Key stats.
+        // Key stats — a 2×2 of the app's own stat cards rather than four
+        // label/value rows in a box (owner order 2026-08-10, "cleaner"). It is
+        // the same grid the holding page uses for the same job, it gives each
+        // number room to be read as a number, and the two facts that are NOT
+        // numbers (currency, as-of) drop to one muted line instead of pretending
+        // to be stats.
         item(key = "stats") {
-            BtCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.bt_asset_stats),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = bt.textSecondary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    StatRow(
-                        stringResource(R.string.bt_asset_prev_close),
-                        snapshot.prevClose?.let { formatPrice(it, snapshot.quoteCurrency, locale) }
-                            ?: stringResource(R.string.bt_value_dash),
-                    )
-                    snapshot.dayChangePct?.let {
-                        StatRow(stringResource(R.string.bt_asset_day_change), formatPercent(it, locale))
+            val loadedSeries = (history as? AssetHistoryUiState.Loaded)?.series?.points
+            Column(inset, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SectionHeader(stringResource(R.string.bt_asset_stats))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCard(
+                        label = stringResource(R.string.bt_asset_prev_close),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = snapshot.prevClose
+                                ?.let { formatPrice(it, snapshot.quoteCurrency, locale) }
+                                ?: stringResource(R.string.bt_value_dash),
+                            style = BtTheme.type.moneyMedium,
+                            color = bt.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    StatRow(stringResource(R.string.bt_asset_currency), snapshot.quoteCurrency.uppercase())
-                    snapshot.asOf?.let {
-                        StatRow(stringResource(R.string.bt_asset_as_of), formatAsOf(it, locale))
+                    StatCard(
+                        label = stringResource(R.string.bt_asset_day_change),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = snapshot.dayChangePct?.let { formatPercent(it, locale) }
+                                ?: stringResource(R.string.bt_value_dash),
+                            style = BtTheme.type.moneyMedium,
+                            color = snapshot.dayChangePct?.let { deltaColor(it) } ?: bt.textPrimary,
+                            maxLines = 1,
+                        )
                     }
                 }
+                // High and low OF THE PLOTTED RANGE, and labelled with that
+                // range: they are read off the very points on screen, the same
+                // provenance the accent colour above already has, so they can
+                // never disagree with the curve the reader is looking at.
+                if (loadedSeries != null && loadedSeries.size >= 2) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatCard(
+                            label = stringResource(R.string.bt_asset_range_high, rangeLabel(range)),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = formatPrice(
+                                    loadedSeries.maxOf { it.close },
+                                    snapshot.quoteCurrency,
+                                    locale,
+                                ),
+                                style = BtTheme.type.moneyMedium,
+                                color = bt.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        StatCard(
+                            label = stringResource(R.string.bt_asset_range_low, rangeLabel(range)),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = formatPrice(
+                                    loadedSeries.minOf { it.close },
+                                    snapshot.quoteCurrency,
+                                    locale,
+                                ),
+                                style = BtTheme.type.moneyMedium,
+                                color = bt.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = listOfNotNull(
+                        snapshot.quoteCurrency.uppercase(),
+                        snapshot.asOf?.let {
+                            stringResource(R.string.bt_asset_as_of) + " " + formatAsOf(it, locale)
+                        },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
             }
         }
 
@@ -509,11 +625,21 @@ private fun AssetLoadedContent(
         // serves none of it (every custom asset), so this item costs an
         // unsupported asset no space and no heading.
         item(key = "intel") {
-            AssetIntelSection(assetId = snapshot.asset.id, modifier = Modifier.fillMaxWidth())
+            AssetIntelSection(assetId = snapshot.asset.id, modifier = inset)
+        }
+
+        // Statement figures + ratios (platform arc f). Below the intel blocks
+        // because it is the deepest read on the page — someone who wants six
+        // years of revenue has already looked at the price, the stats and the
+        // next report date. Renders zero height when the provider has no
+        // fundamentals, so a custom asset pays nothing for it.
+        item(key = "fundamentals") {
+            FundamentalsSection(assetId = snapshot.asset.id, modifier = inset)
         }
 
         // Quick buy / sell.
         item(key = "trade") {
+            Column(inset) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BtPrimaryButton(
                     text = stringResource(R.string.bt_action_buy),
@@ -536,26 +662,37 @@ private fun AssetLoadedContent(
                     color = bt.textMuted,
                 )
             }
+            }
         }
     }
 }
 
+/**
+ * The one section heading this page uses.
+ *
+ * `titleMedium` on `textPrimary` — the same weight the portfolio overview gives
+ * "Aufteilung" and "Positionen", so a reader moving between the two screens is
+ * reading one document rather than two apps.
+ */
 @Composable
-private fun StatRow(label: String, value: String) {
-    val bt = BtTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
-        Text(
-            value,
-            style = BtTheme.type.moneySmall,
-            fontWeight = FontWeight.Medium,
-            color = bt.textPrimary,
-        )
-    }
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = BtTheme.colors.textPrimary,
+    )
 }
+
+/**
+ * The asset chart's height — the portfolio hero's exact 240dp.
+ *
+ * Owner order 2026-08-10: *"they look very goofy and too squished and too thick
+ * of a line and too small"*. It was 180dp inside a card that took another 24dp of
+ * horizontal padding and 28dp of vertical, i.e. ~138dp of plot after the axis
+ * strip. Matching the hero — same height, same full-bleed width, same stroke —
+ * is what makes the two charts in this app read as one chart in two places.
+ */
+private val ASSET_CHART_HEIGHT = 240.dp
 
 @Composable
 private fun AssetPageSkeleton() {

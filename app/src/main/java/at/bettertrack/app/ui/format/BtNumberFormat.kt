@@ -68,6 +68,9 @@ private enum class NfShape {
     /** Money and percent: exactly 2 decimals, grouped. */
     FIXED_2,
 
+    /** Compact abbreviated magnitudes: exactly 1 decimal, grouped. */
+    FIXED_1,
+
     /** Sub-cent unit prices: up to 20 decimals, trailing zeros already trimmed. */
     SIGNIFICANT,
 
@@ -103,6 +106,11 @@ private fun btNumberFormat(locale: Locale, shape: NfShape): NumberFormat =
                 NfShape.FIXED_2 -> {
                     minimumFractionDigits = 2
                     maximumFractionDigits = 2
+                }
+
+                NfShape.FIXED_1 -> {
+                    minimumFractionDigits = 1
+                    maximumFractionDigits = 1
                 }
 
                 NfShape.SIGNIFICANT -> {
@@ -190,4 +198,105 @@ internal fun btFormatQuantityCore(value: Double?, locale: Locale): String {
     if (!isFinite(value)) return BT_EM_DASH
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!))
     return btNumberFormat(locale, NfShape.QUANTITY).format(bd)
+}
+
+// ── Rule 7: compact magnitudes (fundamentals, board #76 arc f) ──────────────
+//
+// Corporate statement figures are 6 to 12 digits long. Rule 1 renders Apple's
+// FY2025 revenue as "416.161.000.000,00 $", which is not a number anyone reads —
+// it is a ruler. The fundamentals surface therefore abbreviates: "416,2 Mrd. $".
+//
+// This is a SEPARATE rule rather than a flag on rule 1 because the two must never
+// be confused at a call site: portfolio money is exact and masked, corporate
+// money is approximate and public.
+
+/** Abbreviation ladder, largest first. Each entry is (threshold, DE, EN). */
+private val BT_COMPACT_TIERS: List<Triple<Double, String, String>> = listOf(
+    Triple(1e12, "Bio.", "T"),
+    Triple(1e9, "Mrd.", "B"),
+    Triple(1e6, "Mio.", "M"),
+    Triple(1e3, "Tsd.", "K"),
+)
+
+/**
+ * The abbreviated magnitude of [value] — the number scaled into its tier, at one
+ * decimal, plus that tier's unit word — or `null` when |value| < 1000 and the
+ * caller should fall back to an exact rendering.
+ *
+ * Handles the rounding-promotion case that makes naive versions of this function
+ * wrong: `999_950_000` sits in the "Mio." tier, but rounds at one decimal to
+ * `1000,0`, which must be promoted to `1,0 Mrd.` rather than printed as
+ * "1.000,0 Mio.".
+ */
+private fun btCompactParts(value: Double, locale: Locale): Pair<String, String>? {
+    val german = locale.language == "de"
+    val magnitude = kotlin.math.abs(value)
+    var index = BT_COMPACT_TIERS.indexOfFirst { magnitude >= it.first }
+    if (index < 0) return null
+
+    var scaled = BigDecimal.valueOf(value)
+        .divide(BigDecimal.valueOf(BT_COMPACT_TIERS[index].first))
+        .setScale(1, RoundingMode.HALF_UP)
+    // Rounding may have pushed the value into the next tier up.
+    if (scaled.abs() >= BigDecimal.valueOf(1000) && index > 0) {
+        index -= 1
+        scaled = BigDecimal.valueOf(value)
+            .divide(BigDecimal.valueOf(BT_COMPACT_TIERS[index].first))
+            .setScale(1, RoundingMode.HALF_UP)
+    }
+
+    val tier = BT_COMPACT_TIERS[index]
+    val number = btNumberFormat(locale, NfShape.FIXED_1).format(scaled)
+    return number to (if (german) tier.second else tier.third)
+}
+
+/**
+ * Rule 7 — a **corporate** money figure, abbreviated: "416,2 Mrd. $" (DE) /
+ * "416.2B $" (EN). Values under 1000 fall through to rule 1 so a small figure
+ * stays exact rather than becoming "0,4 Tsd.".
+ *
+ * Symbol-last like every other money label in the app, so a fundamentals card
+ * reads consistently with the price above it. German gets the spelled-out
+ * Tsd./Mio./Mrd./Bio. ladder with a space before the unit; every other locale
+ * gets the tight K/M/B/T ladder.
+ *
+ * **Deliberately NOT masked by discreet mode.** Rule 6 blanks absolute money
+ * because it reveals the size of the user's portfolio. A company's revenue is
+ * public filing data that says nothing whatsoever about who is looking at it —
+ * the identical reasoning that leaves earnings EPS unmasked
+ * ([at.bettertrack.app.ui.market.IntelEarningsBlock]). Masking it would hide a
+ * public fact and make discreet mode look broken, not discreet.
+ */
+internal fun btFormatCompactMoneyCore(
+    value: Double?,
+    currencyCode: String,
+    locale: Locale,
+): String {
+    if (!isFinite(value)) return BT_EM_DASH
+    val v = withoutNegativeZero(value!!)
+    val symbol = btMoneySymbol(currencyCode, locale)
+    val parts = btCompactParts(v, locale)
+        ?: return "${btNumberFormat(locale, NfShape.FIXED_2).format(
+            BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP),
+        )} $symbol"
+    val (number, unit) = parts
+    val glue = if (locale.language == "de") " " else ""
+    return "$number$glue$unit $symbol"
+}
+
+/**
+ * Rule 7 without a currency — the bare abbreviated magnitude ("416,2 Mrd."), for
+ * chart axis labels where the unit is already stated once in the card's header
+ * and repeating the symbol on every gridline is noise.
+ */
+internal fun btFormatCompactNumberCore(value: Double?, locale: Locale): String {
+    if (!isFinite(value)) return BT_EM_DASH
+    val v = withoutNegativeZero(value!!)
+    val parts = btCompactParts(v, locale)
+        ?: return btNumberFormat(locale, NfShape.FIXED_2).format(
+            BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP),
+        )
+    val (number, unit) = parts
+    val glue = if (locale.language == "de") " " else ""
+    return "$number$glue$unit"
 }

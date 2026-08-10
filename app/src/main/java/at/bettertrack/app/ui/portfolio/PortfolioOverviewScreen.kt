@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.portfolio
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -54,6 +57,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -89,6 +94,7 @@ import at.bettertrack.app.ui.components.BtSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
+import at.bettertrack.app.ui.components.btFabIconSize
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyText
 import androidx.compose.foundation.BorderStroke
@@ -415,17 +421,25 @@ fun PortfolioOverviewScreen(
                 )
                 selected?.takeIf { holdingsFabVisible }?.let { p ->
                     val fabCd = stringResource(R.string.bt_overview_fab_cd)
-                    fabVisibility.Content(
+                    // Shrinks while scrolling; never leaves. See
+                    // [BtFabVisibility.ShrinkingContent] for the ruling.
+                    fabVisibility.ShrinkingContent(
                         modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
-                    ) {
+                    ) { size ->
                         FloatingActionButton(
                             onClick = { onNewTransaction(p.id) },
                             containerColor = bt.gold,
                             contentColor = bt.onGold,
                             elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                            modifier = Modifier.semantics { contentDescription = fabCd },
+                            modifier = Modifier
+                                .size(size)
+                                .semantics { contentDescription = fabCd },
                         ) {
-                            Icon(Icons.Outlined.Add, contentDescription = null)
+                            Icon(
+                                Icons.Outlined.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(btFabIconSize(size)),
+                            )
                         }
                     }
                 }
@@ -1138,17 +1152,11 @@ private fun HeroChart(
             }
         }
 
-        // What a neutralized curve means, said once, only where it applies —
-        // same placement and same sentence as the web's perf-mode hint.
-        if (mode.plotsPerformance) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.bt_chart_perf_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = bt.textMuted,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
+        // The performance modes used to carry a sentence here explaining that
+        // deposits and withdrawals are neutralized. Deleted by owner order
+        // 2026-08-10 ("delete this"): it was a paragraph of methodology under a
+        // hero chart, restating what the % segment already promises, and it
+        // pushed the range picker a line further from the canvas it belongs to.
         Spacer(Modifier.height(12.dp))
 
         // The range picker (inset) — the set the platform serves (3M needs a
@@ -1447,61 +1455,63 @@ private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, lo
     if (segments.isEmpty() || total <= 0.0) return
 
     Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.bt_overview_allocation_section),
-                style = MaterialTheme.typography.titleMedium,
-                color = bt.textPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            BtChip(
-                text = stringResource(
-                    if (expanded) R.string.bt_overview_alloc_less else R.string.bt_overview_alloc_see_all,
-                ),
-                onClick = { expanded = !expanded },
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        AllocationBar(segments = segments, total = total)
-        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.bt_overview_allocation_section),
+            style = MaterialTheme.typography.titleMedium,
+            color = bt.textPrimary,
+        )
+        Spacer(Modifier.height(10.dp))
 
-        // The top three, as compact legend cells. Three because that is what fits
-        // one row at a readable size on 360dp — and because past the third slice
-        // the question stops being "what is this mostly" and starts being the one
-        // the donut answers.
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            segments.take(ALLOCATION_SUMMARY_LEGEND).forEach { segment ->
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).background(segment.color, CircleShape))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = segment.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = bt.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    weightPct(segment.value, total)?.let { pct ->
-                        Text(
-                            text = formatWeight(pct, locale),
-                            style = BtTheme.type.numberCaption,
-                            color = bt.textPrimary,
-                        )
-                    }
-                }
+        // Two chips became one segmented control (owner order 2026-08-10: the
+        // section "looks kinda not well fitting"). By-asset/by-category is an
+        // exclusive choice, and this app already says exclusive choice with
+        // [BtSegmented] — on the chart mode, on the ranges, on the tax year. A
+        // pair of filter chips said "two independent filters" and then behaved
+        // like neither.
+        //
+        // It also moved OUT of the expanded half. It governs the bar and the
+        // legend the reader is looking at right now, so hiding it behind "see
+        // all" meant the control that changes the picture was not on screen with
+        // the picture.
+        BtSegmented(
+            options = ALLOCATION_GROUPINGS,
+            selected = if (byCategory) AllocationGrouping.CATEGORY else AllocationGrouping.ASSET,
+            label = { stringResource(allocationGroupingLabel(it)) },
+            onSelect = { byCategory = it == AllocationGrouping.CATEGORY },
+            modifier = Modifier.fillMaxWidth(),
+            equalWidths = true,
+        )
+        Spacer(Modifier.height(14.dp))
+        // ONE graphic at a time. Collapsed, the slim stacked bar is the compact
+        // statement; expanded, it opens into the donut. Showing both at once —
+        // which is what the old layout did, donut beside a squeezed legend under
+        // a bar — is two pictures of one number, and it is most of what made the
+        // section feel like it did not fit together.
+        if (expanded) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                BtDonutChart(segments = segments, modifier = Modifier.size(ALLOCATION_DONUT_SIZE))
+            }
+        } else {
+            AllocationBar(segments = segments, total = total)
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // One row per slice, in the SAME shape whether three of them or all of
+        // them are showing — expanding now grows a list instead of swapping one
+        // layout for a different one.
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            val shown = if (expanded) segments else segments.take(ALLOCATION_SUMMARY_LEGEND)
+            shown.forEach { segment ->
+                AllocationLegendRow(segment = segment, total = total, locale = locale)
             }
         }
 
-        if (expanded) {
-            Spacer(Modifier.height(16.dp))
-            AllocationDetail(
-                segments = segments,
-                total = total,
-                byCategory = byCategory,
-                onByCategory = { byCategory = it },
-                locale = locale,
+        if (segments.size > ALLOCATION_SUMMARY_LEGEND) {
+            Spacer(Modifier.height(4.dp))
+            AllocationExpandRow(
+                expanded = expanded,
+                hidden = segments.size - ALLOCATION_SUMMARY_LEGEND,
+                onToggle = { expanded = !expanded },
             )
         }
     }
@@ -1509,6 +1519,102 @@ private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, lo
 
 /** How many slices the collapsed allocation summary names. */
 private const val ALLOCATION_SUMMARY_LEGEND = 3
+
+/** The expanded donut. Centred and given room, rather than squeezed beside text. */
+private val ALLOCATION_DONUT_SIZE = 168.dp
+
+/** The two ways the allocation section can group a portfolio. */
+private enum class AllocationGrouping { ASSET, CATEGORY }
+
+private val ALLOCATION_GROUPINGS = listOf(AllocationGrouping.ASSET, AllocationGrouping.CATEGORY)
+
+private fun allocationGroupingLabel(grouping: AllocationGrouping): Int = when (grouping) {
+    AllocationGrouping.ASSET -> R.string.bt_overview_alloc_by_asset
+    AllocationGrouping.CATEGORY -> R.string.bt_overview_alloc_by_category
+}
+
+/**
+ * One legend line: swatch, weight, name.
+ *
+ * **The number leads.** Every other legend in the world puts the name first and
+ * right-aligns the value, and this one did too — which is precisely how the
+ * allocation weights ended up underneath the buy/sell FAB (S6 P1-7), and why that
+ * FAB was taught to disappear. Putting the figures in a fixed leading column
+ * fixes the cause rather than the symptom: they are column-aligned to the digit,
+ * they are the thing the eye is scanning for anyway in a ranked list, and there
+ * is now nothing at the right edge for a floating button to sit on top of.
+ */
+@Composable
+private fun AllocationLegendRow(segment: DonutSegment, total: Double, locale: Locale) {
+    val bt = BtTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).background(segment.color, CircleShape))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = weightPct(segment.value, total)?.let { formatWeight(it, locale) }
+                ?: stringResource(R.string.bt_value_dash),
+            style = BtTheme.type.numberCaption,
+            color = bt.textPrimary,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            modifier = Modifier.width(ALLOCATION_WEIGHT_COLUMN),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = segment.label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * The width the weights column reserves. Wide enough for "100,0 %" at the
+ * largest font scale the app supports without the names starting at a different
+ * x on one row than on the next.
+ */
+private val ALLOCATION_WEIGHT_COLUMN = 58.dp
+
+/**
+ * The expand/collapse control.
+ *
+ * A full-width row with a chevron, not the pill it used to be: "see all" is a
+ * disclosure, and a pill in the same vocabulary as the grouping segments right
+ * above it read as a third grouping option. It also says HOW MANY more there
+ * are, which is the one thing a reader wants before deciding to tap.
+ */
+@Composable
+private fun AllocationExpandRow(expanded: Boolean, hidden: Int, onToggle: () -> Unit) {
+    val bt = BtTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(BtShapes.card)
+            .clickable(onClick = onToggle)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (expanded) {
+                stringResource(R.string.bt_overview_alloc_less)
+            } else {
+                stringResource(R.string.bt_overview_alloc_see_all_count, hidden)
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = bt.goldInk,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = bt.goldInk,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
 
 /**
  * The slim stacked bar.
@@ -1538,72 +1644,6 @@ private fun AllocationBar(segments: List<DonutSegment>, total: Double) {
                         .fillMaxHeight()
                         .background(segment.color, BtShapes.pill),
                 )
-            }
-        }
-    }
-}
-
-/** The full donut + legend, behind "See all". Unchanged in substance from S6. */
-@Composable
-private fun AllocationDetail(
-    segments: List<DonutSegment>,
-    total: Double,
-    byCategory: Boolean,
-    onByCategory: (Boolean) -> Unit,
-    locale: Locale,
-) {
-    val bt = BtTheme.colors
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BtChip(
-                text = stringResource(R.string.bt_overview_alloc_by_asset),
-                selected = !byCategory,
-                onClick = { onByCategory(false) },
-            )
-            Spacer(Modifier.width(8.dp))
-            BtChip(
-                text = stringResource(R.string.bt_overview_alloc_by_category),
-                selected = byCategory,
-                onClick = { onByCategory(true) },
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BtDonutChart(
-                segments = segments,
-                modifier = Modifier.size(132.dp),
-            )
-            Spacer(Modifier.width(20.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                segments.forEach { segment ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(8.dp)
-                                .background(segment.color, CircleShape),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = segment.label,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = bt.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        weightPct(segment.value, total)?.let { pct ->
-                            Text(
-                                text = formatWeight(pct, locale),
-                                style = BtTheme.type.numberCaption,
-                                color = bt.textPrimary,
-                            )
-                        }
-                    }
-                }
             }
         }
     }

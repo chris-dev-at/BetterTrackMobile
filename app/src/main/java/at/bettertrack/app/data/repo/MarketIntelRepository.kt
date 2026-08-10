@@ -8,6 +8,7 @@ import at.bettertrack.app.data.api.dto.DividendProjectionResponse
 import at.bettertrack.app.data.api.dto.DividendsResponse
 import at.bettertrack.app.data.api.dto.EarningsCalendarResponse
 import at.bettertrack.app.data.api.dto.EarningsResponse
+import at.bettertrack.app.data.api.dto.FundamentalsResponse
 import at.bettertrack.app.data.api.dto.MarketIntelStatusResponse
 import at.bettertrack.app.data.api.dto.NewsDigestResponse
 import at.bettertrack.app.data.api.dto.NewsResponse
@@ -121,6 +122,33 @@ class MarketIntelRepository(
             )
         }
     }
+
+    /**
+     * Statement figures + snapshot ratios for one asset (platform arc f).
+     *
+     * Returns the RAW result rather than an [IntelSection] on purpose, and is
+     * NOT folded into [assetIntel]'s parallel round. Two reasons, both structural:
+     *
+     *  1. Fundamentals is not in the capability probe — the contract leaves it
+     *     out deliberately — so there is no boolean to gate it on. The probe
+     *     cannot tell the caller anything about this block.
+     *  2. It is the only intel read with a QUERY: flipping the annual/quarterly
+     *     toggle re-fetches, and a block that re-fetches on user input cannot
+     *     ride a one-shot bundle computed when the page opened. (The server
+     *     caches both granularities behind one provider call, so the second
+     *     round-trip is a cache read, not a second upstream hit.)
+     *
+     * The `available:false` → hide-the-block mapping therefore happens in the
+     * ViewModel, where the retryable transport error stays distinguishable from
+     * the honest "this provider has no fundamentals" — the same three-outcome
+     * split [IntelSection] enforces for the other four families.
+     */
+    suspend fun fundamentals(
+        assetId: String,
+        period: String,
+        limit: Int,
+    ): BtResult<FundamentalsResponse> =
+        apiCall(json) { api.assetFundamentals(assetId, period, limit) }
 
     // ── Portfolio-wide roll-ups ─────────────────────────────────────────────
     //

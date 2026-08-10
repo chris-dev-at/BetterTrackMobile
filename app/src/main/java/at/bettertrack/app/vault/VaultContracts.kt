@@ -633,8 +633,30 @@ class VaultDocument(
     ): VaultDocument = VaultDocument(schemaVersion, entities, mergeLog, mirrorProvenance, clientSecurity)
 
     companion object {
-        /** `.max(20)` on `mergeLog` (vault.ts:1242). */
+        /**
+         * The merge-log bound is a **write-side trim, never a parse-time
+         * rejection** (`vault.ts` `VAULT_MERGE_LOG_LIMIT` / `trimVaultMergeLog`,
+         * design r3 closing mobile finding A1.2).
+         *
+         * This used to be `.max(20)` on the schema and was enforced here as a
+         * parse failure. r3 removed it from the parse on purpose: a parse-time
+         * maximum turns a merely OVERSIZED diagnostic log into an unreadable
+         * document, and in the v2 layout an unreadable `common` doc takes
+         * `clientSecurity` and `mirrorProvenance` down with it — the whole
+         * vault, lost to a bookkeeping array. Writers trim; parsers tolerate.
+         *
+         * The trim itself lives on the writer, [VAULT_MERGE_LOG_LIMIT] in
+         * `VaultMerge.kt` (and `trimVaultMergeLog` below for the v2 split).
+         */
         const val MERGE_LOG_MAX: Int = 20
+
+        /**
+         * Keep the newest [MERGE_LOG_MAX] records — the write-side trim
+         * (`trimVaultMergeLog`, vault.ts).
+         */
+        fun trimMergeLog(mergeLog: List<VaultMergeRecord>): List<VaultMergeRecord> =
+            if (mergeLog.size <= MERGE_LOG_MAX) mergeLog.toList()
+            else mergeLog.subList(mergeLog.size - MERGE_LOG_MAX, mergeLog.size).toList()
 
         fun parse(element: JsonElement): VaultDocument {
             val obj = element as? JsonObject
@@ -671,9 +693,8 @@ class VaultDocument(
                     ?: documentInvalid("Vault document 'mergeLog' must be an array."))
                     .map { VaultMergeRecord.parse(it) }
             }
-            if (mergeLog.size > MERGE_LOG_MAX) {
-                documentInvalid("Vault document 'mergeLog' may hold at most $MERGE_LOG_MAX records.")
-            }
+            // NO length check here — see [MERGE_LOG_MAX]. r3 (mobile A1.2)
+            // deliberately made an oversized log readable rather than fatal.
 
             // `.optional()` with NO default: absent must stay absent.
             val mirrorProvenance = obj["mirrorProvenance"]?.let { raw ->

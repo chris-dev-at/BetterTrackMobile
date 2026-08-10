@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import at.bettertrack.app.ui.format.btFormatCompactMoneyCore
+import at.bettertrack.app.ui.format.btFormatCompactNumberCore
 import at.bettertrack.app.ui.format.btFormatMoneyCore
 import at.bettertrack.app.ui.format.btFormatPercentCore
 import at.bettertrack.app.ui.format.btMoneySymbol
@@ -90,3 +92,18 @@ fun formatMoney(value: Double, currencyCode: String, locale: Locale, showSign: B
  */
 fun formatPercent(value: Double, locale: Locale, showSign: Boolean = true): String =
     btFormatPercentCore(value, locale, signed = showSign)
+
+/**
+ * Formats a **corporate** money figure abbreviated (rule 7): "416,2 Mrd. $" (DE),
+ * "416.2B $" (EN); under 1000 it falls through to the exact rule-1 rendering.
+ *
+ * For public company data — revenue, net income, market cap — NOT for the user's
+ * own money, which must stay exact and maskable through [formatMoney]. Unlike
+ * rule 1 this does not blank in discreet mode; see [btFormatCompactMoneyCore].
+ */
+fun formatCompactMoney(value: Double, currencyCode: String, locale: Locale): String =
+    btFormatCompactMoneyCore(value, currencyCode, locale)
+
+/** [formatCompactMoney] without the currency symbol — for chart axis labels. */
+fun formatCompactNumber(value: Double, locale: Locale): String =
+    btFormatCompactNumberCore(value, locale)

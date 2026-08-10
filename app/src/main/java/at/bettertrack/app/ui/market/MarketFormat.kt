@@ -24,6 +24,25 @@ import java.util.Locale
 fun formatPrice(value: Double, currency: String, locale: Locale): String =
     btFormatUnitPriceCore(value, currency, locale)
 
+/**
+ * A **bare 2-decimal figure** with locale separators and no currency — the shape
+ * every unitless market number on the asset page shares: EPS, P/E, price-to-book.
+ *
+ * Two decimals is the whole rule, and it exists because the alternative in this
+ * codebase was `formatQuantity`, the ASSET-QUANTITY formatter, which allows eight
+ * decimals because a holding can be 0.06251 BTC. Pointed at a provider's EPS
+ * estimate it printed *"EPS-Schätzung 4,71331"* — five decimals of false
+ * precision on a number nobody trades in. Cents per share is the unit; the
+ * provider's extra digits are its regression fit, not a company's result. The
+ * same is true of a P/E to five places.
+ */
+fun formatBareDecimal(value: Double, locale: Locale): String {
+    val nf = java.text.NumberFormat.getNumberInstance(locale)
+    nf.minimumFractionDigits = 2
+    nf.maximumFractionDigits = 2
+    return nf.format(value)
+}
+
 /** A localized human label for an asset type ("Stock", "ETF", "Crypto"…). */
 @Composable
 fun assetTypeLabel(type: String): String = rememberAssetTypeLabeller()(type)

@@ -381,8 +381,15 @@ fun decryptVaultDocument(envelope: ByteArray, vaultKey: ByteArray): DecryptedVau
 // Internals
 // ---------------------------------------------------------------------------
 
-/** `aesGcmEncrypt` (crypto.ts:277-291) — output is `ciphertext ‖ tag`, tag 128-bit. */
-private fun aesGcmEncrypt(
+/**
+ * `aesGcmEncrypt` (crypto.ts:277-296) — output is `ciphertext ‖ tag`, tag 128-bit.
+ *
+ * `internal` rather than `private` so the Vaults v2 layer (`vault.v2`) reuses
+ * this exact implementation instead of standing up a second one. That mirrors
+ * the platform, which widened the same two functions from module-private to
+ * exported for the same reason and says so in `crypto.ts`'s own KDoc.
+ */
+internal fun aesGcmEncrypt(
     key: ByteArray,
     iv: ByteArray,
     plaintext: ByteArray,
@@ -394,8 +401,8 @@ private fun aesGcmEncrypt(
     return cipher.doFinal(plaintext)
 }
 
-/** `aesGcmDecrypt` (crypto.ts:293-311) — every failure is `authentication-failed`. */
-private fun aesGcmDecrypt(
+/** `aesGcmDecrypt` (crypto.ts:298-316) — the matching open; every failure is one opaque code. */
+internal fun aesGcmDecrypt(
     key: ByteArray,
     iv: ByteArray,
     ciphertext: ByteArray,
