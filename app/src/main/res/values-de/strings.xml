@@ -82,7 +82,6 @@
     <string name="bt_chart_mode_performance_cd">Performance in Prozent</string>
     <string name="bt_chart_mode_hybrid">€%</string>
     <string name="bt_chart_mode_hybrid_cd">Euro und Prozent — Performance-Kurve, Kontostand als Anzeige</string>
-    <string name="bt_chart_perf_hint">Ein- und Auszahlungen werden neutralisiert — die Kurve bewegt sich nur, wenn sich deine Bestände bewegen.</string>
     <string name="bt_range_1d">1D</string>
     <string name="bt_range_1w">1W</string>
     <string name="bt_range_1m">1M</string>
@@ -148,6 +147,12 @@
     <string name="bt_holding_pl">Buchgewinn/-verlust</string>
     <string name="bt_holding_day">Heute</string>
     <string name="bt_holding_transactions_section">Transaktionen</string>
+    <string name="bt_holding_timing_section">Kauf- und Verkaufszeitpunkte</string>
+    <string name="bt_holding_timing_buys">Käufe</string>
+    <string name="bt_holding_timing_sells">Verkäufe</string>
+    <string name="bt_holding_timing_outside">%1$d außerhalb</string>
+    <string name="bt_holding_timing_empty">Keine Transaktionen in diesem Zeitraum.</string>
+    <string name="bt_holding_timing_cd">Kursdiagramm mit deinen Käufen und Verkäufen</string>
     <string name="bt_holding_no_tx">Noch keine Transaktionen für diese Position.</string>
     <string name="bt_holding_asset_page_link">Wert-Seite</string>
     <string name="bt_holding_not_found_title">Position nicht gefunden</string>
@@ -407,6 +412,9 @@
     <string name="bt_asset_currency">Währung</string>
     <string name="bt_asset_as_of">Stand</string>
     <string name="bt_asset_chart_empty">Kein Kursverlauf für diesen Zeitraum.</string>
+    <string name="bt_asset_chart_cd">Kursdiagramm über die Zeit</string>
+    <string name="bt_asset_range_high">Hoch %1$s</string>
+    <string name="bt_asset_range_low">Tief %1$s</string>
     <string name="bt_asset_requires_connection_message">Für Wert-Seiten brauchst du eine Verbindung. Verbinde dich, um Live-Kurse zu sehen.</string>
     <string name="bt_asset_type_stock">Aktie</string>
     <string name="bt_asset_type_etf">ETF</string>
@@ -1526,6 +1534,9 @@
     <string name="bt_intel_date_confirmed">Termin bestätigt</string>
     <string name="bt_intel_eps_estimate_value">EPS-Schätzung %1$s</string>
     <string name="bt_intel_eps_pair">erw. %1$s → %2$s</string>
+    <string name="bt_intel_eps_estimate">Schätzung</string>
+    <string name="bt_intel_eps_actual">Gemeldet</string>
+    <string name="bt_intel_eps_history">EPS je Bericht</string>
     <string name="bt_intel_beat">Übertroffen</string>
     <string name="bt_intel_miss">Verfehlt</string>
     <string name="bt_intel_news_empty">Aktuell keine Schlagzeilen</string>
@@ -1837,6 +1848,7 @@
     <!-- Portfolio (R1-B) -->
     <string name="bt_overview_manage_portfolios">Portfolios verwalten</string>
     <string name="bt_overview_alloc_see_all">Alle anzeigen</string>
+    <string name="bt_overview_alloc_see_all_count">%1$d weitere anzeigen</string>
     <string name="bt_overview_alloc_less">Weniger anzeigen</string>
     <string name="bt_overview_alloc_bar_cd">Aufteilung über deine Positionen</string>
     <!-- ===== API error-code copy (DE) — generated catalog, see BtErrorCopy.kt ===== -->

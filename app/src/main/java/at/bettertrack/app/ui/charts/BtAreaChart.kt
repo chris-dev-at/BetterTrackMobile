@@ -98,6 +98,13 @@ import kotlin.math.roundToInt
  * beat the shell's tab swipe on the chart area — see `btTabSwipe`). Web enters
  * scrub on a 240ms long-press instead, because a browser cannot let a child claim
  * a drag from the page; Compose can, so the app keeps the cheaper gesture.
+ *
+ * ## What a scrub feels like, not just what it reads (owner order 2026-08-10)
+ *
+ * Crossing a point rings a light detent tick, and the stretch of chart to the
+ * right of the crosshair dims. Both live in `ChartScrub.kt` — see
+ * [BtScrubTicker] for the bezel cadence and [drawScrubFuture] for why the dim is
+ * a scrim on THIS canvas rather than a repaint of the series one.
  */
 @Composable
 fun BtAreaChart(
@@ -133,10 +140,17 @@ fun BtAreaChart(
      * Defaults to [baseline] so every existing call site keeps its behaviour.
      */
     colorBySign: Boolean = baseline,
+    /**
+     * The colour the scrub's future-dimming scrim is mixed from — see
+     * [drawScrubFuture]. It must be whatever the chart is drawn ON: this one is
+     * full-bleed on the page, so it is the page.
+     */
+    scrimColor: Color = BtTheme.colors.bg,
     onScrub: ((HistoryPoint?) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     val reducedMotion = rememberReducedMotion()
+    val ticker = rememberBtScrubTicker()
     val textMeasurer = rememberTextMeasurer()
     val locale = rememberBtLocale()
 
@@ -162,7 +176,10 @@ fun BtAreaChart(
     // recomposing at all.
     var scrubIndex by remember { mutableStateOf<Int?>(null) }
     val onScrubState = rememberUpdatedState(onScrub)
-    LaunchedEffect(currentPoints) { scrubIndex = null }
+    LaunchedEffect(currentPoints) {
+        scrubIndex = null
+        ticker.end()
+    }
 
     val labelStyle = TextStyle(
         fontSize = 10.sp,
@@ -182,11 +199,15 @@ fun BtAreaChart(
                 val i = scrubIndexAt(x, size.width.toFloat(), currentPoints.size)
                 if (i != scrubIndex) {
                     scrubIndex = i
+                    // Fired from here rather than from the draw, so a tick marks
+                    // a POINT CROSSED and not a frame rendered.
+                    ticker.crossed(i, x)
                     onScrubState.value?.invoke(currentPoints[i])
                 }
             }
             val clear: () -> Unit = {
                 scrubIndex = null
+                ticker.end()
                 onScrubState.value?.invoke(null)
             }
             detectHorizontalDragGestures(
@@ -410,6 +431,10 @@ fun BtAreaChart(
             p.valueEur >= 0.0 -> bt.gain
             else -> bt.loss
         }
+        // The future recedes FIRST, so the crosshair and its dot stay full
+        // strength on top of it — the point being read is the one thing on the
+        // canvas the scrim must not touch.
+        drawScrubFuture(x, plotH, scrimColor.copy(alpha = bt.chartFutureScrimAlpha))
         drawLine(
             color = bt.borderStrong,
             start = Offset(x, 0f),

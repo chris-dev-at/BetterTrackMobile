@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,7 +59,6 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatMoney
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
-import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.time.Instant
@@ -495,12 +495,35 @@ private fun IntelEarningsBlock(response: EarningsResponse, locale: Locale) {
                 Text(
                     text = stringResource(
                         R.string.bt_intel_eps_estimate_value,
-                        formatQuantity(eps, locale),
+                        formatEps(eps, locale),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textSecondary,
                 )
             }
+        }
+
+        // The graphic (owner order 2026-08-10). It leads the history rows rather
+        // than following them: the shape of six quarters of beats and misses is
+        // the answer most readers want, and the rows are the detail they drop to
+        // afterwards. Drawn only when there are at least two periods to compare —
+        // a single bar is not a trend, it is a number with a rectangle around it.
+        val bars = remember(response) { earningsChartBars(response) }
+        if (earningsChartWorthDrawing(bars)) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.bt_intel_eps_history),
+                style = MaterialTheme.typography.labelSmall,
+                color = bt.textMuted,
+            )
+            Spacer(Modifier.height(8.dp))
+            EarningsChart(
+                bars = bars,
+                locale = locale,
+                modifier = Modifier.fillMaxWidth().height(EARNINGS_CHART_HEIGHT),
+            )
+            Spacer(Modifier.height(8.dp))
+            EarningsChartLegend()
         }
 
         val recent = intelRecentEarnings(response)
@@ -532,8 +555,8 @@ private fun IntelEarningsRow(event: EarningsEventDto, locale: Locale) {
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        val estimate = event.epsEstimate?.takeIf { it.isFinite() }?.let { formatQuantity(it, locale) }
-        val actual = event.epsActual?.takeIf { it.isFinite() }?.let { formatQuantity(it, locale) }
+        val estimate = event.epsEstimate?.takeIf { it.isFinite() }?.let { formatEps(it, locale) }
+        val actual = event.epsActual?.takeIf { it.isFinite() }?.let { formatEps(it, locale) }
         if (estimate != null || actual != null) {
             Spacer(Modifier.width(10.dp))
             Text(

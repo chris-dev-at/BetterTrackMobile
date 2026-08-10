@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.components
 
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -7,8 +8,13 @@ import org.junit.Test
 
 /**
  * S6 P1-7: the overview FAB permanently covered the allocation legend's value
- * column. It now hides while the user scrolls down and returns on the way up —
- * the rule is a pure function so the behaviour is pinned without a device.
+ * column. It hides while the user scrolls down and returns on the way up — the
+ * rule is a pure function so the behaviour is pinned without a device.
+ *
+ * 2026-08-10: on the portfolio overview the same state now drives a SHRINK
+ * rather than a disappearance (owner: *"should it be like that??"*). The state
+ * machine below is unchanged and shared; what differs is only how the two states
+ * are rendered, which is [btFabIconSize] and the sizes it interpolates between.
  */
 class FabVisibilityTest {
 
@@ -103,5 +109,28 @@ class FabVisibilityTest {
             fabVisibleForList(BtListSurface.SKELETON),
             fabVisibleForList(resolved = false, empty = false),
         )
+    }
+
+    // ── The shrink (2026-08-10) ──────────────────────────────────────────────
+
+    @Test
+    fun `the mini fab is smaller than the resting one but still a tap target`() {
+        assertTrue(BT_FAB_MINI_SIZE < BT_FAB_SIZE)
+        // 40dp is the floor: below it this stops being a control and starts
+        // being a decoration you have to aim at.
+        assertTrue(BT_FAB_MINI_SIZE >= 40.dp)
+    }
+
+    @Test
+    fun `the icon tracks the container between the two sizes`() {
+        assertEquals(24.dp, btFabIconSize(BT_FAB_SIZE))
+        assertEquals(20.dp, btFabIconSize(BT_FAB_MINI_SIZE))
+        assertEquals(22.dp, btFabIconSize((BT_FAB_SIZE + BT_FAB_MINI_SIZE) / 2))
+    }
+
+    @Test
+    fun `a size outside the animation's range cannot produce a runaway icon`() {
+        assertEquals(24.dp, btFabIconSize(200.dp))
+        assertEquals(20.dp, btFabIconSize(0.dp))
     }
 }

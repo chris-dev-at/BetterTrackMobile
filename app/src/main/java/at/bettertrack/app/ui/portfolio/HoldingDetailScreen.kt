@@ -43,6 +43,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.bettertrack.app.R
+import androidx.compose.foundation.Canvas
+import at.bettertrack.app.data.repo.AssetRange
+import at.bettertrack.app.data.repo.MarketRepository
+import at.bettertrack.app.data.repo.PricePoint
+import at.bettertrack.app.ui.charts.BtPriceChart
+import at.bettertrack.app.ui.charts.ChartMarker
+import at.bettertrack.app.ui.charts.rangeLabel
+import at.bettertrack.app.ui.components.BtRangeSegmented
+import at.bettertrack.app.ui.market.formatPrice
+import at.bettertrack.app.ui.market.rangePerformancePct
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Path
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
@@ -90,6 +107,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
+ * The position's price chart — the surface the buy/sell markers hang on.
+ *
+ * [Unavailable] is a real answer and not a failure: a custom asset has no market
+ * series to draw, and this mode may have no live prices at all. The screen
+ * renders nothing in that case rather than an empty frame apologising.
+ */
+sealed interface HoldingChartState {
+    data object Loading : HoldingChartState
+    data class Loaded(val points: List<PricePoint>) : HoldingChartState
+    data object Unavailable : HoldingChartState
+}
+
+/**
  * Holding detail (Step 7, spec §6.1): the position view — value, P/L, amount,
  * that asset's transactions — for one asset inside the governing portfolio.
  * All numbers are the server's (§7.1); renders offline from Room.
@@ -97,6 +127,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalCoroutinesApi::class)
 class HoldingDetailViewModel(
     private val repo: PortfolioRepository,
+    private val market: MarketRepository,
     connectivity: ConnectivityMonitor,
     db: at.bettertrack.app.data.db.BtDatabase,
     json: kotlinx.serialization.json.Json,
@@ -153,6 +184,14 @@ class HoldingDetailViewModel(
 
     private var refreshedOnce = false
 
+    // ── The price chart behind the buy/sell markers ─────────────────────────
+
+    private val _chartRange = MutableStateFlow(HOLDING_CHART_DEFAULT_RANGE)
+    val chartRange: StateFlow<AssetRange> = _chartRange.asStateFlow()
+
+    private val _chart = MutableStateFlow<HoldingChartState>(HoldingChartState.Loading)
+    val chart: StateFlow<HoldingChartState> = _chart.asStateFlow()
+
     init {
         viewModelScope.launch {
             portfolioId.collect { pid ->
@@ -160,6 +199,37 @@ class HoldingDetailViewModel(
                     refreshedOnce = true
                     refresh()
                 }
+            }
+        }
+        viewModelScope.launch {
+            // Gated on the HOLDING rather than fired blind: a custom asset has no
+            // market history, and asking for it anyway would be a request whose
+            // only possible outcome is an error we already know the answer to.
+            val h = holding.filterNotNull().first()
+            if (h.assetIsCustom) _chart.value = HoldingChartState.Unavailable
+            else loadChart(_chartRange.value)
+        }
+    }
+
+    fun setChartRange(range: AssetRange) {
+        if (range == _chartRange.value) return
+        _chartRange.value = range
+        loadChart(range)
+    }
+
+    private fun loadChart(range: AssetRange) {
+        viewModelScope.launch {
+            _chart.value = HoldingChartState.Loading
+            _chart.value = when (val r = market.assetHistory(assetId, range)) {
+                is BtResult.Ok ->
+                    if (r.value.points.size < 2) HoldingChartState.Unavailable
+                    else HoldingChartState.Loaded(r.value.points)
+
+                // Every failure lands on Unavailable on purpose. This chart is a
+                // bonus on a page whose real content (value, P/L, ledger) renders
+                // from Room offline; a retry button for it would be the third
+                // error affordance on one screen.
+                is BtResult.Err -> HoldingChartState.Unavailable
             }
         }
     }
@@ -205,6 +275,7 @@ fun HoldingDetailScreen(
     val vm: HoldingDetailViewModel = viewModel {
         HoldingDetailViewModel(
             AppGraph.portfolioRepository,
+            AppGraph.marketRepository,
             AppGraph.connectivityMonitor,
             AppGraph.database,
             AppGraph.json,
@@ -239,6 +310,8 @@ fun HoldingDetailScreen(
     val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
     val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
+    val chart by vm.chart.collectAsStateWithLifecycle()
+    val chartRange by vm.chartRange.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
 
@@ -300,6 +373,9 @@ fun HoldingDetailScreen(
                         holding = h,
                         transactions = transactions,
                         pendingRows = pendingRows,
+                        chart = chart,
+                        chartRange = chartRange,
+                        onChartRange = { vm.setChartRange(it) },
                         locale = locale,
                         manualPricesAvailable = manualPricesAvailable,
                         manualPricePoints = manualPricePoints,
@@ -384,6 +460,9 @@ private fun HoldingContent(
     holding: HoldingEntity,
     transactions: List<TransactionEntity>,
     pendingRows: List<PendingTxRow>,
+    chart: HoldingChartState,
+    chartRange: AssetRange,
+    onChartRange: (AssetRange) -> Unit,
     locale: Locale,
     manualPricesAvailable: Boolean,
     manualPricePoints: List<at.bettertrack.app.data.storage.ManualPricePoint>,
@@ -451,6 +530,22 @@ private fun HoldingContent(
                         )
                     }
                 }
+            }
+        }
+
+        // The timing chart (owner order 2026-08-10): the asset's price with THIS
+        // position's buys and sells marked on it, so "how well did I time this"
+        // is a picture rather than an arithmetic exercise over the ledger below.
+        if (chart !is HoldingChartState.Unavailable) {
+            item(key = "timing-chart") {
+                HoldingTimingChart(
+                    state = chart,
+                    range = chartRange,
+                    onRange = onChartRange,
+                    transactions = transactions,
+                    currency = holding.assetCurrency,
+                    locale = locale,
+                )
             }
         }
 
@@ -678,6 +773,273 @@ private fun HoldingContent(
         }
     }
 }
+
+/**
+ * The position's price curve with its own buys and sells marked on it.
+ *
+ * **Owner order 2026-08-10:** *"make a nice graph that shows you where you bought
+ * at what time and where you sold so you see how good you hit the sell and buy
+ * timings."*
+ *
+ * ## The two honesty rules this section is built around
+ *
+ * 1. **A marker's y is the price the user actually paid**, not the curve's close
+ *    at that instant. The gap between the glyph and the line IS the content — a
+ *    fill above the line is a worse entry than the day's close, and flattening
+ *    the mark onto the curve would erase exactly the thing being asked about.
+ *    The two are commensurable because they are the same unit: the transaction
+ *    price is entered in (and auto-filled from) the asset's own quote currency,
+ *    which is what `assetHistory` returns.
+ * 2. **Trades outside the plotted window are not drawn at all** — see
+ *    [placeMarkers]. They are COUNTED instead, in a line under the chart, so a
+ *    1M window over a two-year position says "9 outside this range" rather than
+ *    quietly implying the position began last month.
+ */
+@Composable
+private fun HoldingTimingChart(
+    state: HoldingChartState,
+    range: AssetRange,
+    onRange: (AssetRange) -> Unit,
+    transactions: List<TransactionEntity>,
+    currency: String,
+    locale: Locale,
+) {
+    val bt = BtTheme.colors
+    val markers = remember(transactions) { holdingChartMarkers(transactions) }
+    var scrub by remember { mutableStateOf<PricePoint?>(null) }
+    var focused by remember { mutableStateOf<List<ChartMarker>>(emptyList()) }
+    LaunchedEffect(range, state) {
+        scrub = null
+        focused = emptyList()
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.bt_holding_timing_section),
+            style = MaterialTheme.typography.titleMedium,
+            color = bt.textPrimary,
+        )
+        Spacer(Modifier.height(10.dp))
+        when (state) {
+            HoldingChartState.Loading ->
+                BtSkeleton(Modifier.fillMaxWidth().height(HOLDING_CHART_HEIGHT))
+
+            // Never rendered — the caller drops the whole item — but a `when`
+            // over a sealed type says so out loud rather than by omission.
+            HoldingChartState.Unavailable -> Unit
+
+            is HoldingChartState.Loaded -> {
+                val points = state.points
+                val cd = stringResource(R.string.bt_holding_timing_cd)
+                BtPriceChart(
+                    points = points,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(HOLDING_CHART_HEIGHT)
+                        .semantics { contentDescription = cd },
+                    lineColor = rangeAccent(rangePerformancePct(points)),
+                    minimal = true,
+                    markers = markers,
+                    scrimColor = bt.bg,
+                    onScrub = { scrub = it },
+                    onMarkerFocus = { focused = it },
+                )
+                Spacer(Modifier.height(10.dp))
+                HoldingTimingReadout(
+                    focused = focused,
+                    scrub = scrub,
+                    markers = markers,
+                    points = points,
+                    currency = currency,
+                    locale = locale,
+                )
+                Spacer(Modifier.height(12.dp))
+                BtRangeSegmented(
+                    options = AssetRange.entries,
+                    selected = range,
+                    label = { rangeLabel(it) },
+                    onSelect = onRange,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentDescription = stringResource(R.string.bt_chart_range_cd),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The line under the timing chart. It has three jobs and does exactly one at a
+ * time, because they answer the same question at different levels of zoom:
+ * the trade under the finger, else the price under the finger, else what the
+ * glyphs mean and how many trades the window is leaving out.
+ */
+@Composable
+private fun HoldingTimingReadout(
+    focused: List<ChartMarker>,
+    scrub: PricePoint?,
+    markers: List<ChartMarker>,
+    points: List<PricePoint>,
+    currency: String,
+    locale: Locale,
+) {
+    val bt = BtTheme.colors
+    when {
+        focused.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            focused.take(HOLDING_FOCUS_ROWS).forEach { marker ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MarkerSwatch(marker.kind)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(
+                            if (marker.kind == ChartMarker.Kind.BUY) R.string.bt_tx_side_buy
+                            else R.string.bt_tx_side_sell,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = listOfNotNull(
+                            marker.quantity?.let { formatQuantity(it, locale) },
+                            formatPrice(marker.price, currency, locale),
+                            holdingMarkerDate(marker.timeMs, locale),
+                        ).joinToString(" · "),
+                        style = BtTheme.type.numberCaption,
+                        color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        scrub != null -> Text(
+            text = formatPrice(scrub.close, currency, locale) + " · " +
+                holdingMarkerDate(scrub.timeMs, locale),
+            style = BtTheme.type.numberCaption,
+            color = bt.textPrimary,
+        )
+
+        else -> {
+            val from = points.first().timeMs
+            val to = points.last().timeMs
+            val inRange = markers.count { it.timeMs in from..to }
+            val outside = markers.size - inRange
+            // Nothing in the window is ONE sentence, not a legend for glyphs that
+            // are not there plus a right-aligned footnote colliding with it.
+            if (inRange == 0) {
+                Text(
+                    text = listOfNotNull(
+                        stringResource(R.string.bt_holding_timing_empty),
+                        outside.takeIf { it > 0 }
+                            ?.let { stringResource(R.string.bt_holding_timing_outside, it) },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+                return
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                run {
+                    MarkerSwatch(ChartMarker.Kind.BUY)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.bt_holding_timing_buys),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    MarkerSwatch(ChartMarker.Kind.SELL)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.bt_holding_timing_sells),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                    )
+                }
+                if (outside > 0) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = stringResource(R.string.bt_holding_timing_outside, outside),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The legend's glyph — the chart's own triangle, drawn at legend size. */
+@Composable
+private fun MarkerSwatch(kind: ChartMarker.Kind) {
+    val bt = BtTheme.colors
+    val color = if (kind == ChartMarker.Kind.BUY) bt.gain else bt.loss
+    Canvas(Modifier.size(9.dp)) {
+        val up = kind == ChartMarker.Kind.BUY
+        val path = Path().apply {
+            if (up) {
+                moveTo(size.width / 2f, 0f)
+                lineTo(0f, size.height)
+                lineTo(size.width, size.height)
+            } else {
+                moveTo(size.width / 2f, size.height)
+                lineTo(0f, 0f)
+                lineTo(size.width, 0f)
+            }
+            close()
+        }
+        drawPath(path, color)
+    }
+}
+
+/**
+ * The ledger as chart markers.
+ *
+ * Rows whose `executedAtMs` never parsed (0L) are dropped: a trade with no
+ * timestamp has no x, and the marker's whole claim is about *when*.
+ */
+internal fun holdingChartMarkers(transactions: List<TransactionEntity>): List<ChartMarker> =
+    transactions.mapNotNull { tx ->
+        if (tx.executedAtMs <= 0L || !tx.price.isFinite()) return@mapNotNull null
+        ChartMarker(
+            timeMs = tx.executedAtMs,
+            price = tx.price,
+            kind = if (tx.side.equals("sell", ignoreCase = true)) {
+                ChartMarker.Kind.SELL
+            } else {
+                ChartMarker.Kind.BUY
+            },
+            quantity = tx.quantity,
+            id = tx.id,
+        )
+    }
+
+private fun holdingMarkerDate(timeMs: Long, locale: Locale): String =
+    java.time.Instant.ofEpochMilli(timeMs)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(
+            java.time.format.DateTimeFormatter
+                .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                .withLocale(locale),
+        )
+
+/**
+ * The timing chart's default window.
+ *
+ * A year, not the asset page's month: this chart exists to show entries and
+ * exits, and most positions were opened further back than four weeks. The 1M
+ * default would have opened on a chart with no marks on it for the majority of
+ * holdings — which reads as a broken feature rather than as a short window.
+ */
+private val HOLDING_CHART_DEFAULT_RANGE = AssetRange.Y1
+
+/** Shorter than the page heroes: this is a section, not the page's subject. */
+private val HOLDING_CHART_HEIGHT = 200.dp
+
+/** How many trades one slot's readout names before it stops. */
+private const val HOLDING_FOCUS_ROWS = 3
 
 @Composable
 private fun HoldingSkeleton() {

@@ -294,6 +294,24 @@ data class BtColors(
     /** Alpha where a baseline (gain/loss split) gradient meets zero. */
     val chartAreaZeroAlpha: Float,
     /**
+     * How hard a scrubbed chart dims everything to the RIGHT of the crosshair
+     * (owner order 2026-08-10: *"grey out or give opacity to the stuff to the
+     * right of the point you are looking at"*).
+     *
+     * It is the alpha of a scrim in the chart's own container colour, which is
+     * why one number covers both themes and every palette the charts use — gold,
+     * gain-green and loss-red all recede by the same amount because they are all
+     * being covered by the same page. Dimming by *repainting the curve* at
+     * reduced opacity would need a per-hue value and would put scrub state back
+     * into the series layer, which is the one thing that layer is built not to
+     * read.
+     *
+     * Light is the heavier value: a white scrim over `#F6B82E` lifts the hue
+     * toward cream long before it loses shape, so it needs more of it to read as
+     * "this part is not what you are looking at" than a near-black one does.
+     */
+    val chartFutureScrimAlpha: Float,
+    /**
      * Categorical ramp for allocation slices / identity tints — the platform's
      * `CATEGORICAL_SERIES` (`apps/web/src/ui/charts/palette.ts:20-31`). Assign
      * slots IN ORDER by descending weight; never cycle past the last slot — fold
@@ -505,6 +523,7 @@ val BtDarkColors = BtColors(
     chartAxis = Color(0xFF77818D),
     chartAreaTopAlpha = 0.24f,
     chartAreaZeroAlpha = 0.02f,
+    chartFutureScrimAlpha = 0.68f,
     // Bright gold on near-black never needed the help light needs.
     chartLineWidth = 2.dp,
     // `CATEGORICAL_SERIES` verbatim. Re-validated against THIS ramp's card
@@ -666,6 +685,7 @@ val BtLightColors = BtColors(
     // keeping `#F6B82E` on a white canvas. See the token KDocs.
     chartAreaTopAlpha = 0.26f,
     chartAreaZeroAlpha = 0.015f,
+    chartFutureScrimAlpha = 0.74f,
     chartLineWidth = 3.dp,
     // Same-hue darkened counterparts of the dark ramp, because the platform
     // validated `CATEGORICAL_SERIES` against a dark canvas ONLY — the dark inks
