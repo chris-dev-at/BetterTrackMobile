@@ -74,7 +74,11 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         PriceCacheRow::class,
     ],
     version = 10,
-    exportSchema = false,
+    // Exported to app/schemas/ (room { schemaDirectory } in app/build.gradle.kts).
+    // The golden v10 JSON is committed as the schema-continuity contract for the
+    // KMP/iOS port (D7): it is what proves a Room build — Android today, iOS
+    // tomorrow — reproduces the exact schema existing installs already hold.
+    exportSchema = true,
 )
 abstract class BtDatabase : RoomDatabase() {
     abstract fun portfolioDao(): PortfolioDao

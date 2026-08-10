@@ -223,6 +223,13 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 # KSP for the Room compiler — must stay on the same Kotlin line as `kotlin`.
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# Room's own Gradle plugin (tracks `room`). Owns the exported-schema directory as
+# a first-class Gradle input/output via `room { schemaDirectory(...) }`, instead
+# of the legacy `ksp { arg("room.schemaLocation", …) }` which does not register
+# the dir with the task graph and mis-caches. Turning exportSchema on (KMP/iOS
+# port, D7) needs this: the golden v10 schema JSON is the artifact that
+# mechanically proves a Room build reproduces the schema real users hold on disk.
+androidx-room = { id = "androidx.room", version.ref = "room" }
 # Step 16 — google-services processes app/google-services.json for FCM.
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 

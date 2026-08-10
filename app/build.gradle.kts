@@ -7,6 +7,11 @@ plugins {
     // KSP runs the Room annotation processor (Step 5). Applied after the
     // Android plugin so it picks up AGP 9's built-in Kotlin compilation.
     alias(libs.plugins.ksp)
+    // Room's Gradle plugin — owns the exported-schema directory (see the `room {}`
+    // block below). KMP/iOS port D7: exportSchema is now on, and this plugin
+    // registers `app/schemas/` as a real task input/output so the golden v10
+    // schema is generated deterministically and survives the config cache.
+    alias(libs.plugins.androidx.room)
     // Step 16 — Firebase Cloud Messaging: the google-services plugin reads the
     // already-placed app/google-services.json (project bettertrackapp-c6996) and
     // generates the Firebase config resources the FCM SDK needs at runtime.
@@ -258,6 +263,19 @@ android {
         // throwing "not mocked" so pure-logic tests can run on the JVM.
         unitTests.isReturnDefaultValues = true
     }
+}
+
+// ── Room exported schema (KMP/iOS port, D7) ─────────────────────────────────
+// The database is `@Database(version = 10, exportSchema = true)`. This directory
+// is where Room's compiler writes the canonical JSON description of each schema
+// version. `app/schemas/at.bettertrack.app.data.db.BtDatabase/10.json` is the
+// GOLDEN v10 schema — the artifact that mechanically proves a future Room build
+// (including the KMP/Kotlin-Native one) reproduces exactly the schema real users
+// already hold on disk. It is committed to version control on purpose; it is a
+// contract, not a build output. Kept next to the module (`$projectDir/schemas`)
+// so it travels with `:app`.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
