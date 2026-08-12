@@ -48,18 +48,18 @@ class OAuthScopeTest {
     }
 
     // ── V5 drop: cash:* + mirrorchain:* + vault:sync (migrations 0079/0080/0081) ──
+    // History: these five shipped 2026-08-04 behind a per-backend gate
+    // (`v5ScopesAllowedFor`, board #42.1) that held PRODUCTION to the proven 14
+    // while the prod seed was unverified — prod was offline for the holiday
+    // sprint, and requesting an un-seeded scope hard-rejects the whole login.
+    // Gate REMOVED 2026-08-12 now the prod seed is confirmed: the app requests
+    // the client's full 19-scope ceiling on every backend. These tests pin that
+    // new contract — a regression to 14 on prod is what made every /cash call
+    // 403 INSUFFICIENT_SCOPE.
 
     @Test
-    fun `v5 scopes are held out of the request while the flag is off`() {
-        val scopes = requestedScopes(alertsScopesEnabled = true, v5ScopesEnabled = false)
-        assertFalse(scopes.contains("cash:"))
-        assertFalse(scopes.contains("mirrorchain:"))
-        assertFalse(scopes.contains("vault:"))
-    }
-
-    @Test
-    fun `enabling the v5 flag appends all five scopes without dropping the rest`() {
-        val scopes = requestedScopes(alertsScopesEnabled = true, v5ScopesEnabled = true)
+    fun `the v5 scopes are requested unconditionally without dropping the rest`() {
+        val scopes = requestedScopes(alertsScopesEnabled = true)
         assertTrue(scopes.contains("cash:read"))
         assertTrue(scopes.contains("cash:write"))
         assertTrue(scopes.contains("mirrorchain:read"))
@@ -71,11 +71,22 @@ class OAuthScopeTest {
     }
 
     @Test
+    fun `the v5 scopes survive the alerts flag being off`() {
+        // The two levers are independent: retracting alerts:* must not take the
+        // cash/mirrorchain/vault surfaces down with it.
+        val scopes = requestedScopes(alertsScopesEnabled = false)
+        assertFalse(scopes.contains("alerts:"))
+        assertTrue(scopes.contains("cash:read"))
+        assertTrue(scopes.contains("mirrorchain:read"))
+        assertTrue(scopes.contains("vault:sync"))
+    }
+
+    @Test
     fun `vault sync is a single combined scope with no read write split`() {
         // The platform shipped ONE scope for the vault surface (PR #1049) — asking
         // for a `vault:read`/`vault:write` pair the client row does not allow is
         // exactly the whole-login hard-reject the alerts scopes taught us.
-        val scopes = requestedScopes(alertsScopesEnabled = true, v5ScopesEnabled = true)
+        val scopes = requestedScopes(alertsScopesEnabled = true)
             .split(" ")
             .filter { it.startsWith("vault:") }
         assertEquals(listOf("vault:sync"), scopes)
@@ -85,7 +96,7 @@ class OAuthScopeTest {
     fun `the requested scope set is space-separated with no doubled or edge spaces`() {
         // The authorize endpoint splits on whitespace; a stray empty token in the
         // list is the kind of thing that hard-rejects a whole login.
-        val scopes = requestedScopes(alertsScopesEnabled = true, v5ScopesEnabled = true)
+        val scopes = requestedScopes(alertsScopesEnabled = true)
         assertFalse(scopes.contains("  "))
         assertTrue(scopes == scopes.trim())
         assertTrue(scopes.split(" ").all { it.isNotBlank() && it.contains(':') })
@@ -94,57 +105,48 @@ class OAuthScopeTest {
         assertTrue(scopes.split(" ").toSet().size == 19) // no duplicates
     }
 
-    // ── Per-backend v5 gate (board #42.1, supersedes the flat flag) ──────────
-    // History: 2026-08-04 the v5 scopes shipped behind a flat V5_SCOPES_ENABLED
-    // boolean, flipped ON for the dev stack (migrations 0079/0080). That flag
-    // could not be right for both backends at once — ON breaks a PROD login with
-    // the whole-request hard-reject the alerts scopes taught us, OFF costs the
-    // sprint its cash:*/mirrorchain:* work. It is now decided per EFFECTIVE API
-    // origin instead; prod keeps the proven 14 until its seed is confirmed.
+    // ── The production request (the gate that used to live here) ─────────────
 
     @Test
-    fun `production origin is held to the proven 14 scopes`() {
-        assertFalse(v5ScopesAllowedFor(PROD_API_ORIGIN))
-        val scopes = requestedScopes(
-            alertsScopesEnabled = true,
-            v5ScopesEnabled = v5ScopesAllowedFor(PROD_API_ORIGIN),
-        )
-        assertFalse(scopes.contains("cash:"))
-        assertFalse(scopes.contains("mirrorchain:"))
-        assertFalse(scopes.contains("vault:"))
-        assertTrue(scopes.contains("alerts:read"))
-        assertEquals(14, scopes.split(" ").size)
-    }
-
-    @Test
-    fun `a non-production origin requests all 19`() {
-        // The sprint's live target: the local dev stack through adb reverse.
-        assertTrue(v5ScopesAllowedFor("http://localhost:3000"))
-        assertTrue(v5ScopesAllowedFor("http://192.168.0.114:3000"))
-        assertTrue(v5ScopesAllowedFor("https://staging.bettertrack.at"))
-        val scopes = requestedScopes(
-            alertsScopesEnabled = true,
-            v5ScopesEnabled = v5ScopesAllowedFor("http://localhost:3000"),
-        )
+    fun `production requests the full 19 including the cash scopes`() {
+        // THE tripwire for the INSUFFICIENT_SCOPE bug: prod used to be the one
+        // origin that requested only 14, so every /cash endpoint 403'd there.
+        // There is no origin-dependent branch any more — one scope string, every
+        // backend — so this is simply what the app asks for on api.bettertrack.at.
+        val scopes = requestedScopes(alertsScopesEnabled = true)
         assertTrue(scopes.contains("cash:read"))
+        assertTrue(scopes.contains("cash:write"))
+        assertTrue(scopes.contains("mirrorchain:read"))
         assertTrue(scopes.contains("mirrorchain:write"))
         assertTrue(scopes.contains("vault:sync"))
+        assertTrue(scopes.contains("alerts:read"))
         assertEquals(19, scopes.split(" ").size)
     }
 
     @Test
-    fun `the prod gate is not defeated by case or a trailing slash`() {
-        // The override normalizes what a developer types, but the gate must be
-        // the thing that is robust here — a miss means requesting un-seeded
-        // scopes against prod, which hard-rejects the whole login.
-        assertFalse(v5ScopesAllowedFor("https://api.bettertrack.at/"))
-        assertFalse(v5ScopesAllowedFor("HTTPS://API.BetterTrack.at"))
-        assertFalse(v5ScopesAllowedFor("  https://api.bettertrack.at  "))
-    }
-
-    @Test
-    fun `a lookalike host is not treated as production`() {
-        assertTrue(v5ScopesAllowedFor("https://api.bettertrack.at.evil.test"))
-        assertTrue(v5ScopesAllowedFor("http://api.bettertrack.at"))
+    fun `the shipped request is exactly the client's 19-scope ceiling`() {
+        // What the app asks for as configured today, on every backend — nothing
+        // about the effective API origin (prod, the dev stack, a LAN box) can
+        // change it. ALERTS_SCOPES_ENABLED is a const, so this still needs no
+        // OAuthConfig init (which would read BuildConfig).
+        val scopes = requestedScopes(alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED)
+            .split(" ")
+            .toSet()
+        assertEquals(
+            setOf(
+                "portfolio:read", "portfolio:write",
+                "workboard:read", "workboard:write",
+                "market:read",
+                "social:read", "social:write",
+                "account:security",
+                "notifications:read", "notifications:write",
+                "chat:read", "chat:write",
+                "alerts:read", "alerts:write",
+                "cash:read", "cash:write",
+                "mirrorchain:read", "mirrorchain:write",
+                "vault:sync",
+            ),
+            scopes,
+        )
     }
 }
