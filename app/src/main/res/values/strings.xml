@@ -2008,7 +2008,7 @@
     <string name="bt_err_google_register_ticket_invalid">Your Google sign-up session expired. Please connect Google again.</string>
     <string name="bt_err_api_key_invalid">This access token is invalid or was revoked.</string>
     <string name="bt_err_api_key_forbidden">This action isn\'t available with an access token.</string>
-    <string name="bt_err_insufficient_scope">This app doesn\'t have permission for that action.</string>
+    <string name="bt_err_insufficient_scope">This app doesn\'t have permission for that action yet. Sign out and back in to refresh its permissions.</string>
 
     <!-- Portfolios, transactions, dividends, tax -->
     <string name="bt_err_portfolio_not_found">We couldn\'t find that portfolio.</string>
