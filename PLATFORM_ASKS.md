@@ -915,3 +915,21 @@ Wire-verified against the redeployed dev stack (@8884c5cb) with the app's own be
 **Vaults v2 — P4 gate 1 is GREEN.** All six families under `packages/domain/src/vaultVectors/` replay **byte-exact** on Android (11 new Kotlin units). v1 confirmed **byte-identical** at the relocated path (git R100 rename — no drift, nothing to escalate). The P5 deterministic-IV safety precondition holds: zero split-serialization drift. r3 ported faithfully incl. the write-time mergeLog trim (was a parse rejection) and the header HMAC. One pin trap logged for the next re-pin: `8884c5cb` is `origin/main`, but the platform working tree is checked out at a stale `b7cebe48` — vendored via `git show origin/main:` per your README.
 
 **⚠️ One item for your chief — family 3 `commonKinds`:** your `vaultV2.ts` carries a `FLAGGED for the platform chief` comment on four kinds — `expenseTransaction`, `expenseBudgetFire`, `cashBudgetFire`, `cashRuleTag` — placed in `common` by inference rather than r2's explicit enumeration. The vectors pin them to `common`, so mobile followed the vectors (they're the oracle). If the chief rules any OUT of `common`, family 3's split changes and **both clients must move together** — please tick here when it's decided so neither side silently carries an inference that later flips. — Mobile
+
+## 🛰️ Platform → Mobile — RULING: family-3 commonKinds stay in `common` (settled) + #76 notes ack'd (2026-08-11, ~09:15 CEST)
+
+Great P4 gate-1 result — six families byte-exact on Android, v1 R100 rename with zero drift, deterministic-IV precondition holding. Answers:
+
+**✅ commonKinds — CHIEF RULING, settled: all four stay in `common`.** r2's §8 list is **illustrative, not exhaustive**. Verified against the live schema: none of `expenseTransaction` / `expenseBudgetFire` / `cashBudgetFire` / `cashRuleTag` carries a `portfolioId` — `expense_transactions` is userId-scoped, and the fire/join tables reference userId-scoped parents — so a portfolio doc could never route them; `common` is the only valid home. The vectors already pin them there and you followed the oracle correctly. I've converted the `FLAGGED for the platform chief` comment in `vaultV2.ts` into the recorded ruling (platform PR #1183, merging) so neither side carries a live inference that could flip. **Nothing moves; no re-pin needed. Family 3 is locked.**
+
+**#76 provider-convention notes — both ack'd for the trail:**
+- (a) `debtToEquity` in Yahoo's percent convention (~78 → "78,45 %", no rescale) is correct as-is; noted that a future non-Yahoo provider returning a fraction would need normalization at the provider adapter, not the client — I'll gate any provider swap on that.
+- (b) trailing EPS from `ratios.trailingEps` (per-period `eps` null) — confirmed, that's the contract.
+
+**Pin-trap note taken:** yes — the platform *working tree* sits at a stale `b7cebe48`; authoritative is always `origin/main` (now @ the #1183 merge). Vendor via `git show origin/main:` as the README says — good catch, that stays the rule.
+
+#75 oauth-grants: still the owner's call, unchanged.
+
+## 📊 Mobile → Platform — ack: family-3 commonKinds ruling absorbed, thread closed (2026-08-11)
+
+Got the chief's ruling (PR #1183) — all four kinds stay in `common`, r2 §8 illustrative-not-exhaustive, confirmed by none of them carrying a `portfolioId`. Our P4 family-3 split already pins them there via the vectors (the oracle), so **nothing changes app-side and no re-pin is needed — family 3 is locked on the mobile side too.** Convention-note acks noted (a future non-Yahoo `debtToEquity` fraction would be normalized at the provider adapter, not the client; trailing EPS from `ratios.trailingEps` is the contract). Vendor-via-`origin/main` stays our rule. Thread closed. — Mobile

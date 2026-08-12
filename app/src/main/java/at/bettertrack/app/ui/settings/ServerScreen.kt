@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.OAuthConfig
-import at.bettertrack.app.data.auth.v5ScopesAllowedFor
 import at.bettertrack.app.data.prefs.OriginError
 import at.bettertrack.app.data.prefs.OriginValidation
 import at.bettertrack.app.data.prefs.OriginWarning
@@ -353,7 +352,6 @@ private fun DevDiagnostics(revision: Int) {
     val storageModeLabel = "${storedMode.effective.name} (stored: ${storedMode.name})"
     val backendName = remember { AppGraph.portfolioBackend::class.java.simpleName }
     val marketSourceName = remember { AppGraph.marketDataSource::class.java.simpleName }
-    val v5ScopesOn = remember(revision) { v5ScopesAllowedFor(ServerOrigins.apiOrigin) }
     val requestedScopeCount = remember(revision) { OAuthConfig.SCOPES.split(" ").size }
 
     BtCard(modifier = Modifier.fillMaxWidth()) {
@@ -370,15 +368,6 @@ private fun DevDiagnostics(revision: Int) {
                 "Requested scopes ($requestedScopeCount): ${OAuthConfig.SCOPES}",
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
-            )
-            Text(
-                if (v5ScopesOn) {
-                    "v5 scopes (cash:* mirrorchain:*): ON — effective API origin is not production."
-                } else {
-                    "v5 scopes (cash:* mirrorchain:*): OFF — production origin keeps the proven 14."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (v5ScopesOn) bt.gold else bt.textMuted,
             )
         }
     }
