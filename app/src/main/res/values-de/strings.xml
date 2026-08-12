@@ -1933,7 +1933,7 @@
     <string name="bt_err_google_register_ticket_invalid">Deine Google-Registrierung ist abgelaufen. Bitte verbinde Google erneut.</string>
     <string name="bt_err_api_key_invalid">Dieses Zugriffstoken ist ungültig oder wurde widerrufen.</string>
     <string name="bt_err_api_key_forbidden">Diese Aktion ist mit einem Zugriffstoken nicht möglich.</string>
-    <string name="bt_err_insufficient_scope">Dieser App fehlt die Berechtigung für diese Aktion.</string>
+    <string name="bt_err_insufficient_scope">Dieser App fehlt noch die Berechtigung für diese Aktion. Melde dich ab und wieder an, um die Berechtigungen zu aktualisieren.</string>
 
     <!-- Portfolios, Transaktionen, Dividenden, Steuern -->
     <string name="bt_err_portfolio_not_found">Dieses Portfolio konnten wir nicht finden.</string>
