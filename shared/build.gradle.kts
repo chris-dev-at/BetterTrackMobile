@@ -155,6 +155,25 @@ kotlin {
             // on :app's classpath (see the androidxSqlite version note). It pulls
             // androidx.sqlite (2.6.2) transitively for the Native targets only.
             implementation(libs.androidx.sqlite.bundled)
+            // KMP/iOS port, Phase 2 (network layer, Option B): the Ktor Darwin
+            // client that REPRODUCES Android's Retrofit/OkHttp session behaviours
+            // for iOS (BtKtorApiClient + the two session-critical plugins). Ktor is
+            // iOS-ONLY — declared here, never in commonMain/androidMain — so it never
+            // reaches :app's classpath (Android keeps its Retrofit stack verbatim;
+            // verified with `:app:dependencies` — no io.ktor on the runtime graph).
+            // ktor-client-core carries createClientPlugin / MockEngine SPI / the
+            // HttpClientCall+HttpResponseData used to synthesize the 304→200 replay.
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.darwin)
+        }
+
+        // iosTest — the three SESSION-INTEGRITY behavioural proofs. They exercise
+        // the iOS Ktor client with Ktor's MockEngine (in-memory, no socket), so
+        // they run on iosSimulatorArm64Test with no server. TEST-scoped on :shared
+        // and iOS-only, so invisible to :app entirely. kotlin("test") is inherited
+        // from commonTest via the default hierarchy; only MockEngine is added here.
+        iosTest.dependencies {
+            implementation(libs.ktor.client.mock)
         }
     }
 }

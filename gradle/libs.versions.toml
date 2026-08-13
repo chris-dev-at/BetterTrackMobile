@@ -138,6 +138,17 @@ composeMultiplatform = "1.10.3"
 # :shared), so the Android shipping dependency graph gains nothing new.
 kotlinxDatetime = "0.8.0"
 
+# ── KMP/iOS port, Phase 2 (network layer — iOS Ktor client, Option B) ────────
+# Ktor is the iOS HTTP stack that REPRODUCES Android's Retrofit/OkHttp session
+# behaviours (AuthInterceptor+TokenAuthenticator, ConditionalGetInterceptor). It
+# is declared for :shared iosMain/iosTest ONLY — never commonMain/androidMain —
+# so it NEVER enters :app's classpath (Android keeps Retrofit/OkHttp verbatim;
+# owner-mandated Option B). Same iosMain-only pattern as androidx-sqlite-bundled.
+# 3.5.2 is the Ktor 3.x release verified to compile+link for iosSimulatorArm64 on
+# this Kotlin 2.3.20 / Xcode 16.3 stack. ktor-client-mock is TEST-scoped (iosTest)
+# and drives the three session-integrity behavioural proofs via MockEngine.
+ktor = "3.5.2"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -206,6 +217,12 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # BundledSQLiteDriver for the KMP Room database on Kotlin/Native (:shared iosMain
 # ONLY). See the androidxSqlite version note — this never reaches :app.
 androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
+
+# KMP/iOS Phase 2 — Ktor (iOS network layer, :shared iosMain/iosTest ONLY; see
+# the `ktor` version note above — these never reach :app).
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
+ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
 
