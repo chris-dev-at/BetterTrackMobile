@@ -126,6 +126,47 @@
             android:name=".data.update.UpdateInstallReceiver"
             android:exported="false" />
 
+        <!--
+          Home-screen widgets (Jetpack Glance).
+
+          Both are `exported="true"`, which is REQUIRED and is not a widening of
+          the app's surface: the launcher is a different process and cannot bind
+          an unexported AppWidget provider, so a widget receiver that is not
+          exported simply never appears in the picker. What crosses the boundary
+          is only the AppWidget framework's own broadcasts — the receiver reads
+          no data from the intent, it asks Room.
+
+          Each one pairs with its `appwidget-provider` meta-data XML in res/xml,
+          which is where the sizes and the picker description live.
+          BtWidgetManifestTest pins that pairing: a receiver added here without
+          its XML (or pointing at a class that does not exist) fails the build,
+          because the failure mode otherwise is a widget that is silently absent
+          from the picker with nothing logged.
+        -->
+        <receiver
+            android:name=".widget.BtNetWorthWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_net_worth_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_net_worth_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtWatchlistWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_watchlist_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_watchlist_info" />
+        </receiver>
+
         <!-- FCM defaults for notifications posted by the system (background data). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

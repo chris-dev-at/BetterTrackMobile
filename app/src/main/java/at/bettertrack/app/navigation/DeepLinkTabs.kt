@@ -139,6 +139,12 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     // The price-alert manager is a Workbench segment.
     NotifDeepLink.Alerts -> BtTab.Workbench
 
+    // Overview is a SELECTION inside the Portfolio tab, not a tab of its own
+    // (owner IA change 2026-08-05). It still names Portfolio here, because the
+    // tab is genuinely where it renders — the shell pairs this switch with the
+    // selection itself, exactly as it does for the Alerts segment above.
+    NotifDeepLink.Overview -> BtTab.Portfolio
+
     // Account-level: owned by no tab, pushed over the current one — see the KDoc.
     // The inbox belongs here for the same reason and one of its own: it is now
     // reachable from the bell on ALL FOUR tabs, so there is no tab it could be

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.widget.BtWidgets
 
 /**
  * WorkManager shell around [SyncEngine.drain] (§7.3). All retry logic lives in
@@ -33,6 +34,18 @@ class SyncWorker(
             DrainResult.Offline
         }
         Log.i(TAG, "Drain (manual=$manual) → $outcome")
+        // A drain that completed ops changed the numbers the home-screen widgets
+        // show, and `afterDrain` has already refetched server truth into Room by
+        // the time we get here — so this is a repaint from cache, not a fetch.
+        // `updateAll` swallows its own failures; the guard is for the AppGraph
+        // touch inside it, per the note above.
+        if (outcome is DrainResult.Drained) {
+            try {
+                BtWidgets.updateAll(applicationContext)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not repaint the widgets after the drain.", e)
+            }
+        }
         try {
             when (outcome) {
                 is DrainResult.RetryAt -> AppGraph.syncScheduler.scheduleRetryAt(outcome.atMs)

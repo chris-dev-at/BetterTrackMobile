@@ -38,6 +38,17 @@ class SessionInitializer(
     private val watchlists: WatchlistRepository,
     private val connectivity: ConnectivityMonitor,
     private val scope: CoroutineScope,
+    /**
+     * Called once the first-of-session cascade has finished, successfully or
+     * not. Surfaces that render from Room but are NOT observing it — the
+     * home-screen widgets — use this as their cue to redraw, because this is the
+     * pass that turns an empty cache into a real one.
+     *
+     * Deliberately a plain callback with a default: this class is constructed in
+     * several tests, and a required dependency here would make every one of them
+     * care about a widget.
+     */
+    private val onDataLoaded: () -> Unit = {},
 ) {
     private val started = AtomicBoolean(false)
 
@@ -144,6 +155,12 @@ class SessionInitializer(
             Log.w(TAG, "Initial session load failed: ${e.message}", e)
         } finally {
             _initialLoading.value = false
+            // Never allowed to break the load it reports on.
+            try {
+                onDataLoaded()
+            } catch (e: Exception) {
+                Log.w(TAG, "Post-load notification failed: ${e.message}", e)
+            }
         }
     }
 

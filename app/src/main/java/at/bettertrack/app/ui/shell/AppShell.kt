@@ -547,6 +547,15 @@ fun BtApp() {
                 WorkboardEntry.requestAlerts()
                 open(link)
             }
+            // Overview is a SELECTION inside the Portfolio tab, not a route:
+            // assert the selection, then let `open` switch to the tab that
+            // renders it. Same shape as Alerts directly above — the pairing IS
+            // the destination, because the IA change left Overview addressable
+            // only as "Portfolio tab, overview selected".
+            NotifDeepLink.Overview -> {
+                AppGraph.devicePrefs.setOverviewSelected(true)
+                open(link)
+            }
             NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
             NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
             NotifDeepLink.NotificationSettings ->

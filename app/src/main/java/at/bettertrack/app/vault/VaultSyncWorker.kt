@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.widget.BtWidgets
 import java.util.concurrent.TimeUnit
 
 /**
@@ -47,6 +48,10 @@ class VaultSyncWorker(
             return Result.success()
         }
         Log.i(TAG, "Vault push → ${state.status}")
+        // Drive-mode parity with [at.bettertrack.app.sync.SyncWorker]: the vault
+        // is the read model's source in this mode, so a completed push is the
+        // moment the home-screen widgets can be stale. Repaint from Room only.
+        BtWidgets.updateAll(applicationContext)
         return Result.success()
     }
 

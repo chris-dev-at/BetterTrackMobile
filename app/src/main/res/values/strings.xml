@@ -2583,4 +2583,18 @@
     <!-- ==== SHEET GESTURE HINTS (EN) ==== -->
     <string name="bt_sheet_pull_again_close">Pull again to close</string>
     <string name="bt_sheet_pull_again_back">Pull again to go back</string>
+    <!-- ==== HOME-SCREEN WIDGETS (EN) ==== -->
+    <string name="bt_widget_net_worth_title">Net worth</string>
+    <string name="bt_widget_net_worth_description">Your net worth and today\'s change, on your home screen.</string>
+    <string name="bt_widget_watchlist_title">Watchlist</string>
+    <string name="bt_widget_watchlist_description">Prices and daily moves for the assets you watch.</string>
+    <string name="bt_widget_signed_out">Sign in to BetterTrack</string>
+    <string name="bt_widget_syncing">Syncing…</string>
+    <string name="bt_widget_no_portfolios">No portfolios yet</string>
+    <string name="bt_widget_watchlist_empty">Add assets to your watchlist</string>
+    <!-- Time the figures were captured, shown only once they have gone stale. -->
+    <string name="bt_widget_as_of">as of %1$s</string>
+    <!-- Covered/active portfolios: the sum above is partial. Counts only, no
+         noun — the label is the widget it sits in. -->
+    <string name="bt_widget_partial">%1$d/%2$d</string>
 </resources>

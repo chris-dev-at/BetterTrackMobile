@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Watchlist widget (at.bettertrack.app.widget.BtWatchlistWidget).
+
+  See bt_widget_net_worth_info.xml for why initialLayout points at Glance's own
+  loading layout and why updatePeriodMillis is 0.
+
+  It defaults to 3 cells tall rather than 2: this one is a LIST, and a list that
+  opens showing a single row asks every user to resize it before it is useful.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/bt_widget_watchlist_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewLayout="@layout/glance_default_loading_layout"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="3"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

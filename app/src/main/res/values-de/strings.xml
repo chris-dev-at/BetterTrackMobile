@@ -2464,4 +2464,15 @@
     <!-- ==== HINWEISE ZUR WISCHGESTE (DE) ==== -->
     <string name="bt_sheet_pull_again_close">Nochmal ziehen zum Schließen</string>
     <string name="bt_sheet_pull_again_back">Nochmal ziehen für zurück</string>
+    <!-- ==== STARTBILDSCHIRM-WIDGETS (DE) ==== -->
+    <string name="bt_widget_net_worth_title">Vermögen</string>
+    <string name="bt_widget_net_worth_description">Dein Vermögen und die heutige Veränderung auf dem Startbildschirm.</string>
+    <string name="bt_widget_watchlist_title">Watchlist</string>
+    <string name="bt_widget_watchlist_description">Kurse und Tagesveränderungen der Werte, die du beobachtest.</string>
+    <string name="bt_widget_signed_out">Bei BetterTrack anmelden</string>
+    <string name="bt_widget_syncing">Wird synchronisiert…</string>
+    <string name="bt_widget_no_portfolios">Noch keine Portfolios</string>
+    <string name="bt_widget_watchlist_empty">Werte zur Watchlist hinzufügen</string>
+    <string name="bt_widget_as_of">Stand %1$s</string>
+    <string name="bt_widget_partial">%1$d/%2$d</string>
 </resources>

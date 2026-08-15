@@ -27,6 +27,9 @@ import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.shell.BtRoot
+import at.bettertrack.app.widget.BT_WIDGET_EXTRA_ASSET_ID
+import at.bettertrack.app.widget.BT_WIDGET_EXTRA_TARGET
+import at.bettertrack.app.widget.btWidgetDeepLink
 import kotlinx.serialization.json.Json
 import at.bettertrack.app.ui.theme.BetterTrackTheme
 import at.bettertrack.app.ui.theme.resolveDarkTheme
@@ -99,6 +102,8 @@ class MainActivity : FragmentActivity() {
         handleAuthDeepLink(intent)
         // Cold-start notification tap (Step 16): park the deep-link target.
         handleNotificationIntent(intent)
+        // Cold-start home-screen widget tap.
+        handleWidgetIntent(intent)
 
         // Step 17 (§5): keep the recents/task-switcher mask in sync with the
         // app-lock enabled state. Driven off the controller (not onPause) so the
@@ -216,6 +221,27 @@ class MainActivity : FragmentActivity() {
         handleAuthDeepLink(intent)
         // Warm notification tap.
         handleNotificationIntent(intent)
+        // Warm home-screen widget tap.
+        handleWidgetIntent(intent)
+    }
+
+    /**
+     * A tapped home-screen widget carries its target as extras (see
+     * [at.bettertrack.app.widget.btWidgetIntent]). Resolve and park it on the
+     * same holder the push path uses, so the shell applies the identical landing
+     * discipline — clear the sheets, switch to the owning tab, then push.
+     *
+     * Separate from [handleNotificationIntent] on purpose: that one decodes the
+     * FCM wire, and a widget is not a notification. Both funnel into
+     * `AppGraph.pendingDeepLink`, which is where the sharing belongs.
+     */
+    private fun handleWidgetIntent(intent: Intent?) {
+        val target = intent?.getStringExtra(BT_WIDGET_EXTRA_TARGET) ?: return
+        val assetId = intent.getStringExtra(BT_WIDGET_EXTRA_ASSET_ID)
+        btWidgetDeepLink(target, assetId)?.let { AppGraph.pendingDeepLink.value = it }
+        // Consume so a rotation/restart doesn't re-fire the deep link.
+        intent.removeExtra(BT_WIDGET_EXTRA_TARGET)
+        intent.removeExtra(BT_WIDGET_EXTRA_ASSET_ID)
     }
 
     /**

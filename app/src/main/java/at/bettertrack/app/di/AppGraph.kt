@@ -628,10 +628,20 @@ object AppGraph {
             watchlists = watchlistRepository,
             connectivity = connectivityMonitor,
             scope = appScope,
+            // The first-of-session pull is what fills `PortfolioEntity.totals` on
+            // a cold cache — i.e. the moment a home-screen widget goes from
+            // "Syncing…" to a real figure. Repaint only: the data was just
+            // fetched, so a warm pass here would refetch it.
+            onDataLoaded = { widgetScheduler.repaintNow() },
         )
     }
 
     val syncScheduler: SyncScheduler by lazy { SyncScheduler(appContext) }
+
+    /** Schedules the home-screen widgets' background refresh. */
+    val widgetScheduler: at.bettertrack.app.widget.BtWidgetScheduler by lazy {
+        at.bettertrack.app.widget.BtWidgetScheduler(appContext)
+    }
 
     val syncEngine: SyncEngine by lazy {
         SyncEngine(

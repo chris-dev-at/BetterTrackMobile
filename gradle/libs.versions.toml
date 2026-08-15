@@ -85,6 +85,16 @@ zxingCore = "3.5.3"
 # exactly. Argon2 version 1.0 does NOT — the version is part of the contract.
 bouncycastle = "1.80"
 
+# ── Home-screen widgets (Jetpack Glance) ───────────────────────────────────
+# Glance renders RemoteViews, NOT Compose UI: a widget process has no Activity,
+# no `BtTheme`, and no access to the app's composition. It is therefore a
+# deliberately ISOLATED artifact — it does not participate in, and must not be
+# used to move, the Compose BOM above. 1.1.1 is the newest STABLE release
+# (1.2.0 has only reached rc01 and 1.3.0 only alpha02); Glance's own
+# `androidx.compose.runtime` requirement is far below the BOM's, so Gradle
+# resolves the BOM's newer runtime for both and nothing is downgraded.
+glance = "1.1.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -138,6 +148,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

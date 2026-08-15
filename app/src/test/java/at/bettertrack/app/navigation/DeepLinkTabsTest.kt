@@ -59,6 +59,18 @@ class DeepLinkTabsTest {
         assertEquals(BtTab.Workbench, owningTab(NotifDeepLink.Alerts))
     }
 
+    // ── Overview ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `the overview belongs to the Portfolio tab that renders it`() {
+        // Added for the home-screen net-worth widget, which had no way to say
+        // "open the app where this number lives". Overview stopped being a tab in
+        // the 2026-08-05 IA change and became a selection inside Portfolio, so it
+        // names Portfolio here and the shell pairs the switch with the selection —
+        // the same two-part shape `Alerts` uses for a tab SEGMENT.
+        assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Overview))
+    }
+
     // ── Account-level: pushed over the current tab, never a forced switch ─────
 
     @Test
@@ -126,11 +138,13 @@ class DeepLinkTabsTest {
             NotifDeepLink.Asset("a"),
             NotifDeepLink.Holding("a"),
             NotifDeepLink.Alerts,
+            // Overview joined on 2026-08-15, for the home-screen net-worth widget.
+            NotifDeepLink.Overview,
         ) + accountLevel
         // If a future link type is added, `owningTab`'s exhaustive `when` fails to
         // compile — this list keeps the runtime side honest for the cases that
         // exist today.
-        assertEquals("all thirteen deep-link targets are covered", 13, all.size)
+        assertEquals("all fourteen deep-link targets are covered", 14, all.size)
         val (unowned, owned) = all.partition { it in accountLevel }
         assertTrue("no non-account link may be unowned", owned.all { owningTab(it) in BtTab.entries })
         assertTrue("account-level links are unowned", unowned.all { owningTab(it) == null })

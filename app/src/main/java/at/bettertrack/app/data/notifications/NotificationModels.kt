@@ -214,6 +214,23 @@ sealed interface NotifDeepLink {
      * an alert that just fired is one tap away instead of four.
      */
     data object Alerts : NotifDeepLink
+    /**
+     * The Overview — the app's front door.
+     *
+     * Never produced by [resolveDeepLink]: no server notification is *about* the
+     * overview, and none should be. It exists for the home-screen net-worth
+     * widget, which shows the overview's own figure and therefore has exactly one
+     * honest destination for a tap.
+     *
+     * It had to be added rather than reused because the 2026-08-05 IA change
+     * retired the Home TAB: Overview is now a selection inside the Portfolio tab
+     * (`DevicePrefs.overviewSelected`), not a route, so "open the overview" is a
+     * tab switch PLUS a selection and there was no value that said both. See the
+     * shell's branch for the pairing — the same shape `Alerts` already uses for a
+     * target that is a tab segment rather than a destination.
+     */
+    data object Overview : NotifDeepLink
+
     /** Account settings (invites). */
     data object Settings : NotifDeepLink
     /** Security settings (temp-password / security events). */

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Net-worth widget (at.bettertrack.app.widget.BtNetWorthWidget).
+
+  initialLayout is Glance's own loading layout: a Glance widget has no static
+  XML layout of its own, and this is the view the host shows for the instant
+  between placement and the first `provideGlance` pass. Referencing the library
+  layout is the documented way to do it.
+
+  updatePeriodMillis is 0 ON PURPOSE. The platform's widget alarm cannot be
+  constrained on connectivity and wakes the device to fire; BtWidgetScheduler's
+  connectivity-constrained WorkManager job is strictly better on both counts.
+
+  targetCellWidth/Height (API 31+) state the 2x2 intent for the modern picker;
+  minWidth/minHeight are the pre-31 fallback for the same size. resizeMode lets
+  the user stretch to the 4x2 breakpoint the widget also draws — see the
+  SizeMode.Responsive set in BtNetWorthWidget.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/bt_widget_net_worth_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewLayout="@layout/glance_default_loading_layout"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

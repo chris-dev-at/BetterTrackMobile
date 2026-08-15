@@ -322,6 +322,12 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
 
+    // Home-screen widgets — Jetpack Glance (at.bettertrack.app.widget). A widget
+    // is RemoteViews in the launcher's process: no Activity, no BtTheme, no
+    // shared composition with the app. The artifact is kept isolated on purpose
+    // (see the catalog note) — it neither reads from nor moves the Compose BOM.
+    implementation(libs.androidx.glance.appwidget)
+
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
