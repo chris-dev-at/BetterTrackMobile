@@ -145,6 +145,11 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     // selection itself, exactly as it does for the Alerts segment above.
     NotifDeepLink.Overview -> BtTab.Portfolio
 
+    // Cash is portfolio-scoped data (budgets, the ledger) reached from the
+    // Portfolio overview, so it names the Portfolio tab and the shell pushes the
+    // Cash sheet over it — the same shape as a held-position detail above.
+    is NotifDeepLink.Cash -> BtTab.Portfolio
+
     // Account-level: owned by no tab, pushed over the current one — see the KDoc.
     // The inbox belongs here for the same reason and one of its own: it is now
     // reachable from the bell on ALL FOUR tabs, so there is no tab it could be

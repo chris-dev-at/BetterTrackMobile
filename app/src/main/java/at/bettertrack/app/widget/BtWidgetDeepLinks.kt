@@ -35,14 +35,20 @@ import at.bettertrack.app.data.notifications.NotifDeepLink
 /** Intent extra naming the widget target. */
 const val BT_WIDGET_EXTRA_TARGET: String = "bt_widget_target"
 
-/** Intent extra carrying the asset a watchlist row points at. */
+/** Intent extra carrying the asset a watchlist / movers row points at. */
 const val BT_WIDGET_EXTRA_ASSET_ID: String = "bt_widget_asset_id"
 
-/** The net-worth widget: the Overview the app opens on. */
+/** Intent extra carrying the portfolio a budget widget's Cash tap opens. */
+const val BT_WIDGET_EXTRA_PORTFOLIO_ID: String = "bt_widget_portfolio_id"
+
+/** The net-worth / stats widgets: the Overview the app opens on. */
 const val BT_WIDGET_TARGET_OVERVIEW: String = "overview"
 
-/** A watchlist row: that asset's market page. */
+/** A watchlist / movers row: that asset's market page. */
 const val BT_WIDGET_TARGET_ASSET: String = "asset"
+
+/** The budget widget: the Cash screen for the budgeted portfolio. */
+const val BT_WIDGET_TARGET_CASH: String = "cash"
 
 /**
  * Resolve widget extras to a target. Pure and null-safe, in the same shape as
@@ -51,13 +57,20 @@ const val BT_WIDGET_TARGET_ASSET: String = "asset"
  * An asset target with no usable id falls back to Overview rather than to
  * `null`: a tap that opens the app somewhere sensible is always better than a
  * tap that appears to do nothing, which is the bug
- * [NotifDeepLink.Inbox] was introduced to fix on the push path.
+ * [NotifDeepLink.Inbox] was introduced to fix on the push path. The Cash target
+ * tolerates a null portfolio — [NotifDeepLink.Cash] carries it as nullable and the
+ * Cash screen resolves the selected portfolio itself when it is absent.
  */
-fun btWidgetDeepLink(target: String?, assetId: String?): NotifDeepLink? = when (target) {
+fun btWidgetDeepLink(
+    target: String?,
+    assetId: String?,
+    portfolioId: String? = null,
+): NotifDeepLink? = when (target) {
     BT_WIDGET_TARGET_OVERVIEW -> NotifDeepLink.Overview
     BT_WIDGET_TARGET_ASSET ->
         assetId?.takeIf { it.isNotBlank() }?.let { NotifDeepLink.Asset(it) }
             ?: NotifDeepLink.Overview
+    BT_WIDGET_TARGET_CASH -> NotifDeepLink.Cash(portfolioId?.takeIf { it.isNotBlank() })
     else -> null
 }
 
@@ -69,14 +82,24 @@ fun btWidgetDeepLink(target: String?, assetId: String?): NotifDeepLink? = when (
  * without a distinct action every row in the watchlist would collapse onto
  * whichever target happened to be registered first.
  */
-fun btWidgetIntent(context: Context, target: String, assetId: String? = null): Intent =
+fun btWidgetIntent(
+    context: Context,
+    target: String,
+    assetId: String? = null,
+    portfolioId: String? = null,
+): Intent =
     Intent(context, MainActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        action = btWidgetIntentAction(target, assetId)
+        action = btWidgetIntentAction(target, assetId ?: portfolioId)
         putExtra(BT_WIDGET_EXTRA_TARGET, target)
         if (assetId != null) putExtra(BT_WIDGET_EXTRA_ASSET_ID, assetId)
+        if (portfolioId != null) putExtra(BT_WIDGET_EXTRA_PORTFOLIO_ID, portfolioId)
     }
 
-/** Pure, so the uniqueness property can be asserted without an Android context. */
-fun btWidgetIntentAction(target: String, assetId: String?): String =
-    if (assetId == null) "bt.widget.open.$target" else "bt.widget.open.$target.$assetId"
+/**
+ * Pure, so the uniqueness property can be asserted without an Android context.
+ * [discriminator] is the per-row id (an asset, or a portfolio) that makes two
+ * otherwise-identical targets distinct PendingIntents.
+ */
+fun btWidgetIntentAction(target: String, discriminator: String?): String =
+    if (discriminator == null) "bt.widget.open.$target" else "bt.widget.open.$target.$discriminator"

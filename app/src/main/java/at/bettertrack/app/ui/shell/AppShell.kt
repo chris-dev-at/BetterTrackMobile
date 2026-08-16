@@ -556,6 +556,11 @@ fun BtApp() {
                 AppGraph.devicePrefs.setOverviewSelected(true)
                 open(link)
             }
+            // The Budget widget: open the Cash sheet for the ledger it budgeted.
+            // A null portfolioId lets CashScreen resolve the selected one, exactly
+            // as the overview's own onOpenCash does.
+            is NotifDeepLink.Cash ->
+                open(link) { navController.navigate(CashRoute(portfolioId = link.portfolioId)) }
             NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
             NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
             NotifDeepLink.NotificationSettings ->

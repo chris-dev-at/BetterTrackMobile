@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Budget widget (at.bettertrack.app.widget.BtBudgetWidget).
+
+  See bt_widget_net_worth_info.xml for why initialLayout points at Glance's own
+  loading layout and why updatePeriodMillis is 0.
+
+  Defaults to 4x3: like the watchlist and top-movers widgets it is a LIST (one
+  progress bar per budget), and a single-bar default would ask every user to
+  resize it before it is useful.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/bt_widget_budget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewLayout="@layout/glance_default_loading_layout"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="3"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

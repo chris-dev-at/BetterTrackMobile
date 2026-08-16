@@ -5,6 +5,7 @@ import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.navigation.BtTab
 import at.bettertrack.app.navigation.owningTab
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -42,6 +43,23 @@ class BtWidgetDeepLinkTest {
     }
 
     @Test
+    fun `the budget widget opens the Cash screen for its portfolio`() {
+        assertEquals(
+            NotifDeepLink.Cash("pf-1"),
+            btWidgetDeepLink(BT_WIDGET_TARGET_CASH, null, "pf-1"),
+        )
+    }
+
+    @Test
+    fun `a cash target with no portfolio still opens the Cash screen`() {
+        // NotifDeepLink.Cash carries a nullable id; CashScreen resolves the
+        // selected portfolio itself, so a blank id is a valid "open cash", not a
+        // dead tap.
+        assertEquals(NotifDeepLink.Cash(null), btWidgetDeepLink(BT_WIDGET_TARGET_CASH, null, null))
+        assertEquals(NotifDeepLink.Cash(null), btWidgetDeepLink(BT_WIDGET_TARGET_CASH, null, "   "))
+    }
+
+    @Test
     fun `an unknown target resolves to nothing rather than guessing`() {
         assertNull(btWidgetDeepLink(null, null))
         assertNull(btWidgetDeepLink("", null))
@@ -49,9 +67,10 @@ class BtWidgetDeepLinkTest {
     }
 
     @Test
-    fun `both widget targets land on a tab that renders them`() {
+    fun `every widget target lands on a tab that renders it`() {
         assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Overview))
         assertEquals(BtTab.Markets, owningTab(NotifDeepLink.Asset("AAPL")))
+        assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Cash("pf-1")))
     }
 
     @Test
@@ -75,6 +94,20 @@ class BtWidgetDeepLinkTest {
         listOf("alert.triggered", "dividend.event", "portfolio.shared", "budget.exceeded")
             .forEach { type ->
                 assertNotEquals(NotifDeepLink.Overview, resolveDeepLink(type, null))
+            }
+    }
+
+    @Test
+    fun `Cash is not something the push wire can produce`() {
+        // budget.exceeded is the kind that would seem to want it, but its payload
+        // has no portfolioId so it deliberately lands on the inbox (see that kind's
+        // branch). Cash exists for the budget widget, which HAS the portfolio.
+        listOf("budget.exceeded", "alert.triggered", "dividend.event", "portfolio.shared")
+            .forEach { type ->
+                assertFalse(
+                    "$type must not resolve to the widget-only Cash target",
+                    resolveDeepLink(type, null) is NotifDeepLink.Cash,
+                )
             }
     }
 }

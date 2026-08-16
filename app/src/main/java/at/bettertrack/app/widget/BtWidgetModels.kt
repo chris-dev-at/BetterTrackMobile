@@ -9,6 +9,7 @@ import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.format.BT_EM_DASH
 import at.bettertrack.app.ui.format.btMaskedMoney
 import at.bettertrack.app.ui.home.HomeHeroState
+import at.bettertrack.app.ui.home.homeMovers
 import at.bettertrack.app.ui.prices.NetWorthState
 import java.util.Locale
 
@@ -86,6 +87,35 @@ data class BtWidgetRow(
     val dayChangePct: Double?,
 )
 
+/**
+ * The holdings-derived stat set — the figures the Portfolio-stats widget shows
+ * next to the net worth.
+ *
+ * Every field is a SUM of already-server-computed, already-EUR holding aggregates,
+ * or a ratio of two such sums. That is the same class of operation
+ * [at.bettertrack.app.ui.home.homeNetWorth] performs (it sums the covered
+ * portfolios' totals and derives a day-change percent from the sums); what this
+ * file still refuses is computing a PRICE or a currency conversion, neither of
+ * which happens here. A field is `null` — an em dash, never a zero — when no
+ * holding carried the figure it sums, so an account whose detail has not synced
+ * shows "not known" rather than a confident €0.
+ */
+data class BtWidgetStats(
+    val unrealizedPnlEur: Double?,
+    val unrealizedPnlPct: Double?,
+    val investedEur: Double?,
+    val holdingsCount: Int,
+)
+
+/** One Top-movers row: an asset and its day move, already ranked. */
+data class BtWidgetMover(
+    val assetId: String,
+    val symbol: String,
+    /** Non-null by construction — [homeMovers] filters holdings with no known move. */
+    val dayChangePct: Double,
+    val dayChangeEur: Double?,
+)
+
 /** Everything one widget repaint needs. */
 data class BtWidgetSnapshot(
     val session: BtWidgetSession,
@@ -98,12 +128,21 @@ data class BtWidgetSnapshot(
     val rows: List<BtWidgetRow>,
     val quotesAsOfMs: Long?,
     val nowMs: Long,
+    /** Holdings-derived figures for the Portfolio-stats widget; null unless READY. */
+    val stats: BtWidgetStats? = null,
+    /** Ranked day movers for the Top-movers widget; empty unless READY. */
+    val movers: List<BtWidgetMover> = emptyList(),
+    /** The cached budget snapshot for the Budget widget (server-mode only). */
+    val budget: BtWidgetBudgetCache = BtWidgetBudgetCache.EMPTY,
 ) {
     /** No totals yet, but there ARE portfolios ⇒ the first sync is still running. */
     val netWorthSyncing: Boolean get() = netWorth == null && !noPortfolios
 
     val netWorthStale: Boolean get() = btWidgetStale(netWorthAsOfMs, nowMs)
     val quotesStale: Boolean get() = btWidgetStale(quotesAsOfMs, nowMs)
+
+    val budgetsAsOfMs: Long? get() = budget.cachedAtMs.takeIf { it > 0L }
+    val budgetsStale: Boolean get() = btWidgetStale(budgetsAsOfMs, nowMs)
 
     companion object {
         fun signedOut(nowMs: Long) = empty(BtWidgetSession.SIGNED_OUT, nowMs)
@@ -124,6 +163,9 @@ data class BtWidgetSnapshot(
             rows = emptyList(),
             quotesAsOfMs = null,
             nowMs = nowMs,
+            stats = null,
+            movers = emptyList(),
+            budget = BtWidgetBudgetCache.EMPTY,
         )
     }
 }
@@ -290,3 +332,90 @@ fun btWidgetMoney(
  */
 fun btWidgetPercent(pct: Double?, locale: Locale): String =
     if (pct == null) BT_EM_DASH else formatPercent(pct, locale, showSign = true)
+
+// ── Portfolio stats ───────────────────────────────────────────────────────────
+
+/**
+ * The stat set for the Portfolio-stats widget, summed from the cached holdings.
+ *
+ * `unrealizedPnlEur` / `investedEur` are sums of the holdings' already-EUR,
+ * already-server-computed aggregates ([HoldingEntity.unrealizedPnlEur] /
+ * [HoldingEntity.costBasisEur]); `unrealizedPnlPct` is the ratio of the two. A sum
+ * over an empty set is `null`, not `0.0`: a portfolio whose detail has never
+ * synced has NO known P&L, and rendering that as €0 would tell the user they broke
+ * exactly even. Net worth and the day change are NOT recomputed here — they come
+ * from [btWidgetNetWorth] so the stats card and the net-worth widget cannot
+ * disagree.
+ */
+fun btWidgetStats(holdings: List<HoldingEntity>): BtWidgetStats {
+    val invested = holdings.mapNotNull { it.costBasisEur }
+    val investedEur = invested.takeIf { it.isNotEmpty() }?.sum()
+    val pnl = holdings.mapNotNull { it.unrealizedPnlEur }
+    val unrealizedPnlEur = pnl.takeIf { it.isNotEmpty() }?.sum()
+    // Guarded exactly as homeNetWorth guards its day-change denominator: an account
+    // with no synced cost basis has no base to express the P&L against.
+    val unrealizedPnlPct =
+        if (unrealizedPnlEur != null && investedEur != null && investedEur != 0.0) {
+            unrealizedPnlEur / investedEur * 100.0
+        } else {
+            null
+        }
+    return BtWidgetStats(
+        unrealizedPnlEur = unrealizedPnlEur,
+        unrealizedPnlPct = unrealizedPnlPct,
+        investedEur = investedEur,
+        holdingsCount = holdings.size,
+    )
+}
+
+// ── Top movers ────────────────────────────────────────────────────────────────
+
+/**
+ * How many movers the widget keeps, and therefore the tallest list it can draw.
+ * Larger than Home's [at.bettertrack.app.ui.home.HOME_MOVERS_LIMIT] because a
+ * resized widget can be taller than Home's one-third strip; each size renders a
+ * `take(n)` of this.
+ */
+const val BT_WIDGET_MOVERS_LIMIT: Int = 8
+
+/**
+ * The day's biggest movers, ranked — the SAME calculation Home's strip uses.
+ *
+ * Delegates to [homeMovers] rather than re-sorting, so "biggest move first,
+ * skip the holdings with no known move, one row per asset across portfolios" has
+ * one implementation the widget and the screen share. The map only flattens the
+ * ranked [HoldingEntity] rows into the widget's read model.
+ */
+fun btWidgetMovers(
+    holdings: List<HoldingEntity>,
+    limit: Int = BT_WIDGET_MOVERS_LIMIT,
+): List<BtWidgetMover> =
+    homeMovers(holdings, limit).mapNotNull { h ->
+        // homeMovers guarantees dayChangePct is non-null; the guard keeps the map
+        // total rather than relying on a bang on a value from another module.
+        val pct = h.dayChangePct ?: return@mapNotNull null
+        BtWidgetMover(
+            assetId = h.assetId,
+            symbol = h.assetSymbol,
+            dayChangePct = pct,
+            dayChangeEur = h.dayChangeEur,
+        )
+    }
+
+// ── Budgets ───────────────────────────────────────────────────────────────────
+
+/**
+ * The fill fraction of a budget's progress bar, clamped to `0f..1f`.
+ *
+ * The bar cannot draw past full, so a 130 %-spent budget fills the whole track and
+ * is coloured with the loss tone instead — the TRUE percent is shown as text by
+ * [btWidgetBudgetPercent], which is not clamped. A non-positive limit yields 0
+ * rather than a divide-by-zero (the server guarantees `amount > 0`, but a cache
+ * from an older build must not crash the launcher).
+ */
+fun btWidgetBudgetFraction(spent: Double, amount: Double): Float =
+    if (amount <= 0.0) 0f else (spent / amount).coerceIn(0.0, 1.0).toFloat()
+
+/** The true spent-of-limit percentage for the row's label; null when there is no limit. */
+fun btWidgetBudgetPercent(spent: Double, amount: Double): Double? =
+    if (amount <= 0.0) null else spent / amount * 100.0

@@ -167,6 +167,42 @@
                 android:resource="@xml/bt_widget_watchlist_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.BtPortfolioStatsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_portfolio_stats_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_portfolio_stats_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtTopMoversWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_top_movers_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_top_movers_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtBudgetWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_budget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_budget_info" />
+        </receiver>
+
         <!-- FCM defaults for notifications posted by the system (background data). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

@@ -70,9 +70,9 @@ class BtWidgetManifestTest {
         // outcome this file could have.
         assertTrue("expected some <receiver> entries, found none", receivers().isNotEmpty())
         assertEquals(
-            "expected the two widget receivers (net worth, watchlist), found " +
-                widgetReceivers().map { it.first },
-            2,
+            "expected the five widget receivers (net worth, watchlist, portfolio " +
+                "stats, top movers, budget), found " + widgetReceivers().map { it.first },
+            5,
             widgetReceivers().size,
         )
     }

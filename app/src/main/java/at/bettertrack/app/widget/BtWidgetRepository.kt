@@ -7,8 +7,10 @@ import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.MetaEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
 import at.bettertrack.app.data.repo.prefetchPortfolioTotals
+import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.effective
 import at.bettertrack.app.data.storage.holdsVault
+import at.bettertrack.app.data.storage.writesToServer
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.home.homeActivePortfolios
 import at.bettertrack.app.ui.home.homeNetWorth
@@ -71,7 +73,8 @@ object BtWidgetRepository {
     }
 
     private suspend fun loadOrThrow(nowMs: Long): BtWidgetSnapshot {
-        if (!hasSession()) return BtWidgetSnapshot.signedOut(nowMs)
+        val mode = currentMode()
+        if (!hasSession(mode)) return BtWidgetSnapshot.signedOut(nowMs)
 
         val db = AppGraph.database
         val portfolios = db.portfolioDao().getAll()
@@ -97,6 +100,19 @@ object BtWidgetRepository {
             rows = btWidgetRows(items, cache.quotes, holdings),
             quotesAsOfMs = cache.cachedAtMs.takeIf { it > 0L },
             nowMs = nowMs,
+            // Stats and movers are pure Room reads over the same holdings the hero
+            // used — no fetch, so they are as fresh as the last portfolio sync.
+            stats = btWidgetStats(holdings),
+            movers = btWidgetMovers(holdings),
+            // Budgets are server-only. In any mode without a server there is no
+            // ledger to classify, so the cache is ignored and the widget degrades
+            // to "not available" — decided at read time, not left to the worker,
+            // so a Drive install shows the honest state before the first refresh.
+            budget = if (mode.writesToServer) {
+                BtWidgetBudgetStore.read(db, AppGraph.json)
+            } else {
+                BtWidgetBudgetCache.UNAVAILABLE
+            },
         )
     }
 
@@ -110,10 +126,12 @@ object BtWidgetRepository {
      * figures, which is why the signed-out snapshot carries no data rather than
      * hidden data.
      */
-    private fun hasSession(): Boolean {
-        val mode = AppGraph.gatedStorageMode(AppGraph.storageModeStore.modeNow()).effective
-        return AppGraph.tokenManager.hasTokens() || mode.holdsVault
-    }
+    private fun hasSession(mode: StorageMode = currentMode()): Boolean =
+        AppGraph.tokenManager.hasTokens() || mode.holdsVault
+
+    /** The effective storage mode, after the debug Drive-mode gate. */
+    private fun currentMode(): StorageMode =
+        AppGraph.gatedStorageMode(AppGraph.storageModeStore.modeNow()).effective
 
     /** The widget's board, and the items on it. */
     private suspend fun boardItems(db: BtDatabase): List<WatchlistItemEntity> {
@@ -133,6 +151,7 @@ object BtWidgetRepository {
         if (!AppGraph.connectivityMonitor.isOnline.value) return
         warmTotals()
         warmQuotes(nowMs)
+        warmBudget(nowMs)
     }
 
     /** Fill in portfolios that have never synced their totals — the app's own prefetch. */
@@ -199,6 +218,63 @@ object BtWidgetRepository {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Quote warm-up failed; rows keep their last-known prices.", e)
+        }
+    }
+
+    /**
+     * Refresh the Budget widget's cache through the real cash-classification repo.
+     *
+     * The cash layer is server-only ([at.bettertrack.app.data.cash.CashClassificationRepository]
+     * has no Drive equivalent), so this invents nothing:
+     *
+     *  * no server (Drive-autonomous) ⇒ mark the cache UNAVAILABLE, so the widget
+     *    degrades to "not available" the same way the watchlist degrades where it
+     *    has no server data;
+     *  * a `/cash` 403 (the account lacks the `cash:read` scope) ⇒ the same
+     *    UNAVAILABLE, because the account genuinely cannot see budgets;
+     *  * any other error ⇒ keep the last-known figures (an offline blip should age
+     *    the "as of" note, not blank the widget).
+     *
+     * The portfolio is resolved through the app's own [defaultSelection], so the
+     * ledger the widget shows — and the one a tap opens — is the SAME portfolio the
+     * Cash screen would choose.
+     */
+    private suspend fun warmBudget(nowMs: Long) {
+        try {
+            val db = AppGraph.database
+            if (!currentMode().writesToServer) {
+                BtWidgetBudgetStore.write(db, AppGraph.json, BtWidgetBudgetCache.UNAVAILABLE)
+                return
+            }
+            val portfolioId = AppGraph.portfolioRepository.defaultSelection()?.id
+            if (portfolioId == null) {
+                // A server account with no active portfolio has no budgets to show;
+                // the empty board is the honest state, not "unavailable".
+                BtWidgetBudgetStore.write(db, AppGraph.json, BtWidgetBudgetCache.EMPTY)
+                return
+            }
+            val repo = AppGraph.cashClassificationRepository
+            when (val budgets = repo.budgets(portfolioId)) {
+                is BtResult.Ok -> {
+                    // A companion read for the header only; its failure must not
+                    // cost the bars, so it is optional.
+                    val summary = (repo.summary(portfolioId) as? BtResult.Ok)?.value
+                    BtWidgetBudgetStore.write(
+                        db,
+                        AppGraph.json,
+                        btWidgetBudgetCache(portfolioId, budgets.value, summary, nowMs),
+                    )
+                }
+
+                is BtResult.Err ->
+                    if (budgets.error.isForbidden || budgets.error.isInsufficientScope) {
+                        BtWidgetBudgetStore.write(db, AppGraph.json, BtWidgetBudgetCache.UNAVAILABLE)
+                    }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Budget warm-up failed; the widget keeps its last figures.", e)
         }
     }
 }

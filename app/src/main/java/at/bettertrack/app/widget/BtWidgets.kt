@@ -31,10 +31,13 @@ object BtWidgets {
         try {
             // The common case is a user with no widgets at all, and this runs on
             // every sync drain — so ask the cheap question first rather than
-            // building two Glance managers to discover there is nothing to draw.
+            // building five Glance managers to discover there is nothing to draw.
             if (!anyPlaced(context)) return
             BtNetWorthWidget().updateAll(context)
             BtWatchlistWidget().updateAll(context)
+            BtPortfolioStatsWidget().updateAll(context)
+            BtTopMoversWidget().updateAll(context)
+            BtBudgetWidget().updateAll(context)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -44,10 +47,18 @@ object BtWidgets {
         }
     }
 
-    /** True when at least one widget of either kind is on a home screen. */
+    /** True when at least one widget of any kind is on a home screen. */
     fun anyPlaced(context: Context): Boolean =
-        placedCount(context, BtNetWorthWidgetReceiver::class.java) > 0 ||
-            placedCount(context, BtWatchlistWidgetReceiver::class.java) > 0
+        RECEIVERS.any { placedCount(context, it) > 0 }
+
+    /** Every widget receiver, so "is any widget placed" has one list to check. */
+    private val RECEIVERS: List<Class<*>> = listOf(
+        BtNetWorthWidgetReceiver::class.java,
+        BtWatchlistWidgetReceiver::class.java,
+        BtPortfolioStatsWidgetReceiver::class.java,
+        BtTopMoversWidgetReceiver::class.java,
+        BtBudgetWidgetReceiver::class.java,
+    )
 
     private fun placedCount(context: Context, receiver: Class<*>): Int = try {
         AppWidgetManager.getInstance(context)
@@ -111,6 +122,75 @@ class BtNetWorthWidgetReceiver : GlanceAppWidgetReceiver() {
 
 class BtWatchlistWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget get() = BtWatchlistWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        BtWidgetScheduler(context).ensurePeriodic()
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        BtWidgetScheduler(context).refreshNow()
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        BtWidgetScheduler(context).cancelIfNoneLeft()
+    }
+}
+
+class BtPortfolioStatsWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget get() = BtPortfolioStatsWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        BtWidgetScheduler(context).ensurePeriodic()
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        BtWidgetScheduler(context).refreshNow()
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        BtWidgetScheduler(context).cancelIfNoneLeft()
+    }
+}
+
+class BtTopMoversWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget get() = BtTopMoversWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        BtWidgetScheduler(context).ensurePeriodic()
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        BtWidgetScheduler(context).refreshNow()
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        BtWidgetScheduler(context).cancelIfNoneLeft()
+    }
+}
+
+class BtBudgetWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget get() = BtBudgetWidget()
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)

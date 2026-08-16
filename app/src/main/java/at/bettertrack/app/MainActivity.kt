@@ -28,6 +28,7 @@ import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.shell.BtRoot
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_ASSET_ID
+import at.bettertrack.app.widget.BT_WIDGET_EXTRA_PORTFOLIO_ID
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_TARGET
 import at.bettertrack.app.widget.btWidgetDeepLink
 import kotlinx.serialization.json.Json
@@ -238,10 +239,12 @@ class MainActivity : FragmentActivity() {
     private fun handleWidgetIntent(intent: Intent?) {
         val target = intent?.getStringExtra(BT_WIDGET_EXTRA_TARGET) ?: return
         val assetId = intent.getStringExtra(BT_WIDGET_EXTRA_ASSET_ID)
-        btWidgetDeepLink(target, assetId)?.let { AppGraph.pendingDeepLink.value = it }
+        val portfolioId = intent.getStringExtra(BT_WIDGET_EXTRA_PORTFOLIO_ID)
+        btWidgetDeepLink(target, assetId, portfolioId)?.let { AppGraph.pendingDeepLink.value = it }
         // Consume so a rotation/restart doesn't re-fire the deep link.
         intent.removeExtra(BT_WIDGET_EXTRA_TARGET)
         intent.removeExtra(BT_WIDGET_EXTRA_ASSET_ID)
+        intent.removeExtra(BT_WIDGET_EXTRA_PORTFOLIO_ID)
     }
 
     /**

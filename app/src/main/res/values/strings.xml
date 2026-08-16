@@ -2588,10 +2588,26 @@
     <string name="bt_widget_net_worth_description">Your net worth and today\'s change, on your home screen.</string>
     <string name="bt_widget_watchlist_title">Watchlist</string>
     <string name="bt_widget_watchlist_description">Prices and daily moves for the assets you watch.</string>
+    <string name="bt_widget_portfolio_stats_title">Portfolio</string>
+    <string name="bt_widget_portfolio_stats_description">Your key portfolio figures at a glance.</string>
+    <string name="bt_widget_top_movers_title">Top movers</string>
+    <string name="bt_widget_top_movers_description">Today\'s biggest moves across your holdings.</string>
+    <string name="bt_widget_budget_title">Budgets</string>
+    <string name="bt_widget_budget_description">Your monthly spending against each budget.</string>
     <string name="bt_widget_signed_out">Sign in to BetterTrack</string>
     <string name="bt_widget_syncing">Syncing…</string>
     <string name="bt_widget_no_portfolios">No portfolios yet</string>
     <string name="bt_widget_watchlist_empty">Add assets to your watchlist</string>
+    <string name="bt_widget_movers_empty">No moves today</string>
+    <string name="bt_widget_budget_empty">No budgets yet</string>
+    <string name="bt_widget_budget_unavailable">Not available in this mode</string>
+    <!-- Spent of limit under a budget bar: "spent / limit". Symbols only, no noun. -->
+    <string name="bt_widget_budget_spent_of">%1$s / %2$s</string>
+    <!-- Portfolio-stats figures. Short labels — the widget they sit in is the noun. -->
+    <string name="bt_widget_stat_today">Today</string>
+    <string name="bt_widget_stat_pnl">P&amp;L</string>
+    <string name="bt_widget_stat_invested">Invested</string>
+    <string name="bt_widget_stat_holdings">Holdings</string>
     <!-- Time the figures were captured, shown only once they have gone stale. -->
     <string name="bt_widget_as_of">as of %1$s</string>
     <!-- Covered/active portfolios: the sum above is partial. Counts only, no

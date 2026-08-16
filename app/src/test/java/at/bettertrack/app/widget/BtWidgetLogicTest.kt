@@ -1,5 +1,8 @@
 package at.bettertrack.app.widget
 
+import at.bettertrack.app.data.api.dto.CashBudgetListResponse
+import at.bettertrack.app.data.api.dto.CashBudgetProgressDto
+import at.bettertrack.app.data.api.dto.CashSummaryResponse
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
@@ -65,6 +68,32 @@ class BtWidgetLogicTest {
             dayChangeEur = 1.0,
             dayChangePct = dayPct,
         )
+
+    /** A holding with controllable stat aggregates, for [btWidgetStats]. */
+    private fun stat(
+        assetId: String,
+        costBasisEur: Double?,
+        unrealizedPnlEur: Double?,
+    ) = HoldingEntity(
+        portfolioId = "p1",
+        assetId = assetId,
+        assetSymbol = assetId,
+        assetName = "$assetId Inc.",
+        assetExchange = "NASDAQ",
+        assetCurrency = "USD",
+        assetType = "stock",
+        assetIsCustom = false,
+        quantity = 1.0,
+        avgCost = 1.0,
+        realizedPnl = 0.0,
+        price = 1.0,
+        marketValueEur = 100.0,
+        costBasisEur = costBasisEur,
+        unrealizedPnlEur = unrealizedPnlEur,
+        unrealizedPnlPct = null,
+        dayChangeEur = 1.0,
+        dayChangePct = 1.0,
+    )
 
     private fun ready(
         eur: Double?,
@@ -323,5 +352,155 @@ class BtWidgetLogicTest {
         )
         assertTrue(s.netWorthSyncing)
         assertFalse(s.copy(noPortfolios = true).netWorthSyncing)
+    }
+
+    // ── Portfolio stats ───────────────────────────────────────────────────────
+
+    @Test
+    fun `stats sum the holdings' EUR aggregates and derive the percent from the sums`() {
+        val stats = btWidgetStats(
+            listOf(
+                stat("A", costBasisEur = 100.0, unrealizedPnlEur = 20.0),
+                stat("B", costBasisEur = 300.0, unrealizedPnlEur = -30.0),
+            ),
+        )
+        assertEquals(400.0, stats.investedEur)
+        assertEquals(-10.0, stats.unrealizedPnlEur)
+        assertEquals(-10.0 / 400.0 * 100.0, stats.unrealizedPnlPct!!, 1e-9)
+        assertEquals(2, stats.holdingsCount)
+    }
+
+    @Test
+    fun `stats over an empty book are absent, not zero`() {
+        // A zero would tell the user they broke exactly even; "not known" is honest.
+        val stats = btWidgetStats(emptyList())
+        assertNull(stats.investedEur)
+        assertNull(stats.unrealizedPnlEur)
+        assertNull(stats.unrealizedPnlPct)
+        assertEquals(0, stats.holdingsCount)
+    }
+
+    @Test
+    fun `stats skip the holdings whose detail has not synced`() {
+        val stats = btWidgetStats(
+            listOf(
+                stat("A", costBasisEur = 100.0, unrealizedPnlEur = 25.0),
+                stat("B", costBasisEur = null, unrealizedPnlEur = null),
+            ),
+        )
+        assertEquals(100.0, stats.investedEur)
+        assertEquals(25.0, stats.unrealizedPnlEur)
+        // The count is positions held, present figures or not.
+        assertEquals(2, stats.holdingsCount)
+    }
+
+    @Test
+    fun `the P&L percent is guarded against a zero cost basis`() {
+        val stats = btWidgetStats(listOf(stat("A", costBasisEur = 0.0, unrealizedPnlEur = 5.0)))
+        assertNull("no base to express the P&L against", stats.unrealizedPnlPct)
+        assertEquals(5.0, stats.unrealizedPnlEur)
+    }
+
+    // ── Top movers ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `movers rank by absolute day move and drop the ones with no known move`() {
+        val movers = btWidgetMovers(
+            listOf(
+                holding("A", price = 1.0, dayPct = 2.0),
+                holding("B", price = 1.0, dayPct = -9.0),
+                holding("C", price = 1.0, dayPct = null),
+            ),
+        )
+        assertEquals(listOf("B", "A"), movers.map { it.symbol })
+        assertEquals(-9.0, movers.first().dayChangePct, 0.0)
+    }
+
+    @Test
+    fun `a mover carries its EUR move for the wide layout`() {
+        val movers = btWidgetMovers(listOf(holding("A", price = 1.0, dayPct = 3.0)))
+        assertEquals(1.0, movers.single().dayChangeEur)
+        assertEquals("A", movers.single().assetId)
+    }
+
+    @Test
+    fun `movers are capped to the widget limit`() {
+        val many = (1..20).map { holding("A$it", price = 1.0, dayPct = it.toDouble()) }
+        assertEquals(BT_WIDGET_MOVERS_LIMIT, btWidgetMovers(many).size)
+    }
+
+    // ── Budget progress ───────────────────────────────────────────────────────
+
+    @Test
+    fun `the budget bar fills to the spend but clamps, while the percent does not`() {
+        assertEquals(0.5f, btWidgetBudgetFraction(50.0, 100.0))
+        assertEquals(0f, btWidgetBudgetFraction(0.0, 100.0))
+        // Over budget: the bar can only fill to full, the label tells the truth.
+        assertEquals(1f, btWidgetBudgetFraction(130.0, 100.0))
+        assertEquals(130.0, btWidgetBudgetPercent(130.0, 100.0))
+        assertEquals(50.0, btWidgetBudgetPercent(50.0, 100.0))
+    }
+
+    @Test
+    fun `budget math is safe against a non-positive limit`() {
+        assertEquals(0f, btWidgetBudgetFraction(10.0, 0.0))
+        assertNull(btWidgetBudgetPercent(10.0, 0.0))
+    }
+
+    // ── Budget cache build ──────────────────────────────────────────────────────
+
+    @Test
+    fun `the budget cache flattens the server rows and stays available`() {
+        val cache = btWidgetBudgetCache(
+            portfolioId = "pf-1",
+            budgets = CashBudgetListResponse(
+                period = "2026-08",
+                budgets = listOf(
+                    CashBudgetProgressDto(
+                        id = "b1",
+                        tagName = "Food",
+                        amount = 200.0,
+                        spent = 250.0,
+                        exceeded = true,
+                        currency = "EUR",
+                    ),
+                ),
+            ),
+            summary = CashSummaryResponse(net = -42.0),
+            nowMs = 5_000L,
+        )
+        assertTrue(cache.available)
+        assertEquals("pf-1", cache.portfolioId)
+        assertEquals("2026-08", cache.period)
+        assertEquals(-42.0, cache.netEur)
+        assertEquals(5_000L, cache.cachedAtMs)
+        val b = cache.budgets.single()
+        assertEquals("Food", b.tagName)
+        assertEquals(250.0, b.spent, 0.0)
+        assertEquals(200.0, b.amount, 0.0)
+        assertTrue(b.exceeded)
+    }
+
+    @Test
+    fun `the budget cache tolerates a missing summary`() {
+        // The summary is a header-only companion read; losing it must not cost the
+        // bars, so the cache still renders with a null net.
+        val cache = btWidgetBudgetCache(
+            portfolioId = "pf-1",
+            budgets = CashBudgetListResponse(period = "2026-08"),
+            summary = null,
+            nowMs = 1L,
+        )
+        assertNull(cache.netEur)
+        assertTrue(cache.available)
+        assertTrue(cache.budgets.isEmpty())
+    }
+
+    @Test
+    fun `the unavailable budget cache is empty and marked so`() {
+        // The Drive-mode / cash-403 state: distinct from an empty server board.
+        assertFalse(BtWidgetBudgetCache.UNAVAILABLE.available)
+        assertTrue(BtWidgetBudgetCache.UNAVAILABLE.budgets.isEmpty())
+        assertTrue(BtWidgetBudgetCache.EMPTY.available)
     }
 }

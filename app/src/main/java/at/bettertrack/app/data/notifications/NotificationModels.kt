@@ -231,6 +231,20 @@ sealed interface NotifDeepLink {
      */
     data object Overview : NotifDeepLink
 
+    /**
+     * A portfolio's Cash screen (the budgets / ledger surface).
+     *
+     * Never produced by [resolveDeepLink] — a `budget.exceeded` push cannot pick a
+     * ledger to open (its payload carries a `categoryId` but no `portfolioId`, see
+     * that kind's branch), so it stays the inbox. This target exists for the
+     * home-screen Budget widget, which HAS the portfolio it cached and can name it.
+     *
+     * [portfolioId] is nullable: the widget passes the ledger it budgeted, but a
+     * null lets the Cash screen resolve the selected portfolio itself, exactly as
+     * `CashRoute(portfolioId = null)` already does from the overview.
+     */
+    data class Cash(val portfolioId: String?) : NotifDeepLink
+
     /** Account settings (invites). */
     data object Settings : NotifDeepLink
     /** Security settings (temp-password / security events). */
