@@ -369,6 +369,16 @@ fun BtAreaChart(
             fun px(i: Int) = seriesX(i, plotW, series.size)
             fun py(p: HistoryPoint) = plotH * (1f - scale.normalize(p.valueEur))
 
+            // Never stroke finer than the stroke is wide (owner 2026-08-17 —
+            // see [chartRenderIndices] for the measurement that explains why the
+            // settled chart looked heavier and spikier than the frame he liked).
+            // x still comes from the ORIGINAL index, so the reduced curve sits
+            // exactly where the full one did and stays aligned with the scrub.
+            val visitable = chartRenderIndices(
+                series.map { it.valueEur },
+                columns = (plotW / lineStroke.width).toInt(),
+            ).toHashSet()
+
             // The chart draws every connected run [chartSegments] hands it.
             //
             // OWNER OVERRIDE 2026-08-06: that is now always exactly ONE run over
@@ -376,11 +386,18 @@ fun BtAreaChart(
             // still draw several runs correctly if the call were ever reversed.
             chartSegments(series.map { it.epochMillis }).forEach { range ->
                 val linePath = Path()
+                var started = false
                 for (i in range) {
+                    if (i !in visitable) continue
                     val p = series[i]
-                    if (i == range.first) linePath.moveTo(px(i), py(p)) else linePath.lineTo(px(i), py(p))
+                    if (!started) {
+                        linePath.moveTo(px(i), py(p))
+                        started = true
+                    } else {
+                        linePath.lineTo(px(i), py(p))
+                    }
                 }
-                drawSegment(linePath)
+                if (started) drawSegment(linePath)
             }
 
             // The zero line itself, so "am I up or down" has a mark to read

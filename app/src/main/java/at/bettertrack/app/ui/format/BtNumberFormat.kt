@@ -202,25 +202,30 @@ internal fun btFormatQuantityCore(value: Double?, locale: Locale): String {
 
 /**
  * Rule 3b — holding-ROW quantity: a glanceable magnitude, not a ledger figure
- * (owner UI batch 2026-08-16: `0.0424512` → `0.042`, `11.66666667` → `11.6`).
+ * (owner UI batch 2026-08-17, which REPLACES the 2026-08-16 "three-digit budget"
+ * reading: *"max 2 comma so for stuff like 5.6666667 dont do 5.6 but 5.66 … and
+ * for numbers like BTC if you have less then 1 total so you have 0.42331 BTC it
+ * should take 3 comma values instead of 2"*).
  *
- * The rule, in one sentence: **a three-digit precision budget, spent on the
- * integer part first, truncated (never rounded up), trailing zeros dropped —
- * except that the full integer part always shows, and a sub-`0.001` fraction
- * keeps its first two significant digits instead of collapsing to zero.**
+ * The rule, in one sentence: **two decimals for a quantity of one or more, three
+ * for a fraction below one, truncated (never rounded up), trailing zeros
+ * dropped — except that a fraction too small to survive that keeps its first two
+ * significant digits instead of collapsing to zero.**
  *
- *  · `11.66666667` → integer takes 2 of the 3 digits → 1 decimal → `11.6`
- *  · `0.0424512`   → integer takes 0 → 3 decimals → `0.042`
- *  · `4.0`         → `4` (trailing zeros dropped)
- *  · `123.456`     → `123` (budget exhausted by the integer part)
- *  · `1234.5`      → `1234` (the integer part is never cut)
- *  · `0.00012345`  → `0.00012` (dust keeps two significant digits, capped at
+ *  · `5.6666667`   → `5.66`   (≥ 1 → two decimals, not one)
+ *  · `11.66666667` → `11.66`
+ *  · `0.42331`     → `0.423`  (< 1 → three decimals)
+ *  · `0.0424512`   → `0.042`
+ *  · `4.0`         → `4`      (trailing zeros dropped)
+ *  · `123.456`     → `123.45` (the integer part no longer eats the budget)
+ *  · `0.00042`     → `0.00042` (dust keeps two significant digits, capped at
  *    rule 3's 8-decimal ceiling)
  *
  * TRUNCATED rather than rounded because a rounded-up quantity claims the user
  * owns more than they do — `0.0426` shown as `0.043` is a small lie in the
- * direction small lies are worst. The full figure stays one tap away on the
- * holding's detail screen (rule 3).
+ * direction small lies are worst, and every example the owner gave is a
+ * truncation. The full figure stays one tap away on the holding's detail screen
+ * (rule 3).
  *
  * Like rule 3, deliberately NOT masked in discreet mode: a bare quantity is not
  * money and reveals nothing without the price beside it, which IS masked.
@@ -229,12 +234,11 @@ internal fun btFormatHoldingQuantityCore(value: Double?, locale: Locale): String
     if (!isFinite(value)) return BT_EM_DASH
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!))
     val abs = bd.abs()
-    val intDigits = if (abs < BigDecimal.ONE) 0 else abs.toBigInteger().toString().length
-    val scale = (HOLDING_QTY_PRECISION - intDigits).coerceAtLeast(0)
+    val scale = if (abs < BigDecimal.ONE) HOLDING_QTY_SUB_ONE_DECIMALS else HOLDING_QTY_DECIMALS
     var cut = bd.setScale(scale, RoundingMode.DOWN)
     if (cut.signum() == 0 && bd.signum() != 0) {
-        // Sub-0.001 dust: the first three decimals are all zero. Extend to the
-        // first two significant digits so a real position never renders as "0".
+        // Sub-0.001 dust: all three decimals are zero. Extend to the first two
+        // significant digits so a real position never renders as "0".
         val stripped = abs.stripTrailingZeros()
         val leadingZeros = stripped.scale() - stripped.precision()
         val dustScale = (leadingZeros + HOLDING_QTY_DUST_SIGNIFICANT).coerceAtMost(8)
@@ -243,8 +247,11 @@ internal fun btFormatHoldingQuantityCore(value: Double?, locale: Locale): String
     return btNumberFormat(locale, NfShape.QUANTITY).format(cut.stripTrailingZeros())
 }
 
-/** Rule 3b's total digit budget — see [btFormatHoldingQuantityCore]. */
-private const val HOLDING_QTY_PRECISION = 3
+/** Rule 3b's decimals for |q| ≥ 1 — see [btFormatHoldingQuantityCore]. */
+private const val HOLDING_QTY_DECIMALS = 2
+
+/** Rule 3b's decimals for a fraction below one (the BTC case). */
+private const val HOLDING_QTY_SUB_ONE_DECIMALS = 3
 
 /** How many significant digits a sub-0.001 quantity keeps. */
 private const val HOLDING_QTY_DUST_SIGNIFICANT = 2

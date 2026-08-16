@@ -7,36 +7,45 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The AMOLED true-black flag is *stranded state*, and [DevicePrefs] destroys it.
+ * The AMOLED true-black flag is a **persisted preference again** — owner
+ * override, 2026-08-17: *"also the oled dark mode dissapeared."*
+ *
+ * ## What this file used to assert, and why it flipped
  *
  * The Appearance section carried a True-black row for about a day before it was
- * removed for web parity. Removing the row left the stored flag behind, and a
- * stored `true` is not a preference any more — it is a black app with no control
- * anywhere in the UI that can turn it off, on a preference file that
- * deliberately survives logout. These tests pin the healing so a later reader
- * cannot "restore" the read and re-trap those devices.
+ * removed for web parity. That left the stored flag behind with no control able
+ * to unset it, so `DevicePrefs` destroyed the key on read and this file pinned
+ * that destruction: a choice you cannot revise is not a setting, it is a trap.
+ *
+ * The reasoning was sound and its premise is now false. The owner put the row
+ * back, so the control exists, so the value is his to keep — and a display
+ * preference that forgets itself on every cold start would be its own bug. The
+ * healing is gone and the assertions below are its mirror image: the flag is
+ * read, written, and survives a restart.
+ *
+ * The class name is kept so the history stays greppable from the commit that
+ * introduced the healing.
  */
 class TrueBlackHealingTest {
 
     private val prefs = FakeSharedPreferences()
 
     @Test
-    fun `a stored true is not honoured`() {
+    fun `a stored true is honoured`() {
         prefs.edit().putBoolean(KEY, true).apply()
 
-        assertFalse(DevicePrefs(prefs).trueBlackNow())
+        assertTrue(DevicePrefs(prefs).trueBlackNow())
     }
 
     @Test
-    fun `a stored true is removed, not merely ignored`() {
+    fun `a stored true survives construction`() {
         prefs.edit().putBoolean(KEY, true).apply()
 
         DevicePrefs(prefs)
 
-        // Removed rather than overwritten with `false`: an ABSENT key is this
-        // store's "never chose", which is exactly true again once the value the
-        // user can no longer revise is gone.
-        assertFalse("the key survived construction", prefs.contains(KEY))
+        // The exact regression this file now guards: an earlier build deleted
+        // this key on every read, which is how the owner's OLED mode vanished.
+        assertTrue("the key was destroyed on read", prefs.contains(KEY))
     }
 
     @Test
@@ -46,48 +55,55 @@ class TrueBlackHealingTest {
         val devicePrefs = DevicePrefs(prefs)
 
         // The Activity reads one before the first frame and collects the other;
-        // they must never disagree, or the app paints black and then repaints.
+        // they must never disagree, or the app paints white and then repaints.
         assertEquals(devicePrefs.trueBlackNow(), devicePrefs.trueBlack.value)
-        assertFalse(devicePrefs.trueBlack.value)
+        assertTrue(devicePrefs.trueBlack.value)
     }
 
     @Test
-    fun `healing touches nothing else in the file`() {
+    fun `writing it touches nothing else in the file`() {
         prefs.edit()
-            .putBoolean(KEY, true)
             .putBoolean("orientation_locked", false)
             .putString("theme_mode", "Dark")
             .apply()
 
         val devicePrefs = DevicePrefs(prefs)
+        devicePrefs.setTrueBlack(true)
 
-        assertFalse(prefs.contains(KEY))
+        assertTrue(prefs.contains(KEY))
         assertFalse("the orientation lock was collateral damage", devicePrefs.orientationLockedNow())
         assertEquals(BtThemeMode.Dark, devicePrefs.themeModeNow())
     }
 
     @Test
-    fun `a file that never had the key is left alone`() {
+    fun `a file that never had the key defaults to off and stays clean`() {
         val devicePrefs = DevicePrefs(prefs)
 
         assertFalse(devicePrefs.trueBlackNow())
-        // No key is written on the way past — "never chose" stays never chose,
-        // so exposing the setting again later starts from a clean file.
+        // Nothing is written just by reading — "never chose" stays never chose.
         assertFalse(prefs.contains(KEY))
     }
 
     @Test
-    fun `an in-session override is honoured but never persisted`() {
+    fun `the choice survives the next launch`() {
         val devicePrefs = DevicePrefs(prefs)
 
         devicePrefs.setTrueBlack(true)
 
-        // Live for the token machinery that reads the flow…
         assertTrue(devicePrefs.trueBlack.value)
-        // …and gone at the next launch, because persisting it would recreate the
-        // very stranding the healing above exists to undo.
-        assertFalse("setTrueBlack wrote to disk", prefs.contains(KEY))
-        assertFalse(DevicePrefs(prefs).trueBlackNow())
+        assertTrue("setTrueBlack did not reach the disk", prefs.contains(KEY))
+        assertTrue("the choice was lost on a cold start", DevicePrefs(prefs).trueBlackNow())
+    }
+
+    @Test
+    fun `turning it back off persists too`() {
+        prefs.edit().putBoolean(KEY, true).apply()
+        val devicePrefs = DevicePrefs(prefs)
+
+        devicePrefs.setTrueBlack(false)
+
+        assertFalse(devicePrefs.trueBlack.value)
+        assertFalse("the app came back black", DevicePrefs(prefs).trueBlackNow())
     }
 
     private companion object {

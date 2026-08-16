@@ -184,8 +184,9 @@ data class BtColors(
      * hue** — that is the whole trade, and it is why this is not simply a
      * regression to the pre-split state:
      *
-     *  - chart lines draw at [chartLineWidth], which is 3dp in light against
-     *    dark's 2dp, so the curve reads by mass rather than by darkness;
+     *  - chart lines draw at [chartLineWidth], which is 2.5dp in light against
+     *    dark's 2dp, so the curve reads by mass rather than by darkness (it was
+     *    3dp until 2026-08-17 — see that token for why it came down);
      *  - the area gradient under them is stronger in light ([chartAreaTopAlpha]);
      *  - every `edge(gold, …)` hairline doubles its alpha in light, which
      *    reproduces the retired `goldGraphic`'s exact luminance (see [edge]).
@@ -283,8 +284,22 @@ data class BtColors(
      * compensation for the 2026-08-07 owner order: light draws the brand
      * `#F6B82E` on white at 1.78:1, and what makes that curve read is width,
      * not darkness — the TradingView yellow-on-white reference is a fat line,
-     * not a dark one. Light is 3dp; dark keeps its 2dp, where a bright gold on
-     * near-black never needed the help.
+     * not a dark one. Dark keeps its 2dp, where a bright gold on near-black
+     * never needed the help.
+     *
+     * **Light was retuned 3dp → 2.5dp on 2026-08-17** (owner: *"they look kinda
+     * weird since a couple of versions… like thinner maybe? or less spikey?"*).
+     * 3dp is 8.2 px on his phone, and the settled 1M curve puts its vertices
+     * 3.5 px apart — the stroke was 2.4× wider than its own sampling pitch, so
+     * round caps piled on top of each other and every small wiggle read as a
+     * lump. The compensation was real but it had been sized against a sparse
+     * curve and the series got denser underneath it.
+     *
+     * The mass is not simply given back: the pile-up itself is fixed properly by
+     * [at.bettertrack.app.ui.charts.chartRenderIndices], which stops the stroke
+     * being asked to draw detail finer than its own width. 2.5dp keeps most of
+     * the luminance compensation the bright-yellow retune needs while bringing
+     * the stroke back inside the design language's weight.
      *
      * The crosshair dot and its halo are sized off this too, so dark stays
      * byte-identical (2dp → 4dp dot, 6dp halo — exactly the previous constants)
@@ -686,7 +701,7 @@ val BtLightColors = BtColors(
     chartAreaTopAlpha = 0.26f,
     chartAreaZeroAlpha = 0.015f,
     chartFutureScrimAlpha = 0.74f,
-    chartLineWidth = 3.dp,
+    chartLineWidth = 2.5.dp,
     // Same-hue darkened counterparts of the dark ramp, because the platform
     // validated `CATEGORICAL_SERIES` against a dark canvas ONLY — the dark inks
     // sit at ~2.5:1 on white. Six of the ten already had web light counterparts

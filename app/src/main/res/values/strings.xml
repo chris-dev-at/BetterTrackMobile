@@ -241,7 +241,10 @@
     <string name="bt_txform_date">Date</string>
     <string name="bt_txform_date_cd">Pick a date</string>
     <string name="bt_txform_date_ok">OK</string>
-    <string name="bt_txform_note">Note (optional)</string>
+    <!-- Owner 2026-08-17: the transaction/cash "note" is a first-class DESCRIPTION now.
+         The wire field is still `note` everywhere below the UI. -->
+    <string name="bt_txform_description">Description (optional)</string>
+    <string name="bt_txform_description_counter">%1$d/%2$d</string>
     <string name="bt_txform_pay_from_cash">Pay from cash</string>
     <string name="bt_txform_add_proceeds">Add proceeds to cash</string>
     <string name="bt_txform_cash_after">Cash after: %1$s</string>
@@ -295,8 +298,8 @@
     <string name="bt_pending_edit_retry">Edit &amp; retry</string>
     <string name="bt_pending_discard">Discard</string>
     <string name="bt_pending_offline_hint">Waiting for a connection — syncs automatically.</string>
-    <string name="bt_pending_op_cash_deposit">Cash deposit</string>
-    <string name="bt_pending_op_cash_withdraw">Cash withdrawal</string>
+    <string name="bt_pending_op_cash_deposit">Cash received</string>
+    <string name="bt_pending_op_cash_withdraw">Cash paid</string>
     <string name="bt_pending_op_cash_fee">Cash fee</string>
     <string name="bt_pending_op_cash_transfer">Cash transfer</string>
     <string name="bt_pending_op_value_point">Custom-asset value update</string>
@@ -318,14 +321,14 @@
     <!-- Step 9 — Cash & sources (spec §6.3) -->
     <string name="bt_cash_title">Cash</string>
     <string name="bt_cash_total">Total cash</string>
-    <string name="bt_cash_deposit">Add money</string>
-    <string name="bt_cash_withdraw">Spend</string>
+    <string name="bt_cash_deposit">Received</string>
+    <string name="bt_cash_withdraw">Paid</string>
     <string name="bt_cash_transfer">Transfer</string>
-    <string name="bt_cash_deposit_title">Add money</string>
-    <string name="bt_cash_withdraw_title">Record spending</string>
+    <string name="bt_cash_deposit_title">Money received</string>
+    <string name="bt_cash_withdraw_title">Money paid</string>
     <string name="bt_cash_transfer_title">Transfer between sources</string>
-    <string name="bt_cash_deposit_action">Add money</string>
-    <string name="bt_cash_withdraw_action">Record spending</string>
+    <string name="bt_cash_deposit_action">Record as received</string>
+    <string name="bt_cash_withdraw_action">Record as paid</string>
     <string name="bt_cash_transfer_action">Record transfer</string>
     <string name="bt_cash_amount">Amount</string>
     <string name="bt_cash_source_picker">Source</string>
@@ -339,7 +342,7 @@
     <!-- Owner UI batch 2026-08-16: the decrowded cash overview. -->
     <string name="bt_cash_all_sources">All sources</string>
     <string name="bt_cash_source_switcher_cd">Choose cash source</string>
-    <string name="bt_cash_transactions_row_sub">Deposits, spending and transfers</string>
+    <string name="bt_cash_transactions_row_sub">Paid, received, transferred</string>
     <string name="bt_budgets_row_sub">Monthly spending targets</string>
     <string name="bt_budgets_all">All budgets</string>
     <!-- Owner ask 2026-08-16: the ledger filters by source x tags x window and
@@ -369,15 +372,15 @@
     <string name="bt_cash_movements_section">Movements</string>
     <string name="bt_cash_movements_for">Movements · %1$s</string>
     <string name="bt_cash_empty_title">No cash movements yet</string>
-    <string name="bt_cash_empty_message">Deposits, withdrawals and transfers appear here.</string>
+    <string name="bt_cash_empty_message">Everything you paid, received or transferred appears here.</string>
     <string name="bt_cash_movements_error_title">Couldn\'t load your movements</string>
     <string name="bt_cash_requires_connection">Nothing is cached on this phone yet. Reconnect to load your movements.</string>
     <string name="bt_cash_type_bank">Bank</string>
     <string name="bt_cash_type_retirement">Retirement</string>
     <string name="bt_cash_type_cash">Cash</string>
     <string name="bt_cash_type_custom">Custom</string>
-    <string name="bt_cash_kind_deposit">Deposit</string>
-    <string name="bt_cash_kind_withdrawal">Withdrawal</string>
+    <string name="bt_cash_kind_deposit">Received</string>
+    <string name="bt_cash_kind_withdrawal">Paid</string>
     <string name="bt_cash_kind_buy">Buy (paid from cash)</string>
     <string name="bt_cash_kind_sell">Sell proceeds</string>
     <string name="bt_cash_kind_transfer_out">Transfer to %1$s</string>
@@ -395,7 +398,7 @@
          same thing and reads the same on both platforms. -->
     <string name="bt_cash_holding_cost">Holding cost</string>
     <string name="bt_cash_holding_cost_hint">For costs of holding — an account or custody charge is part of investing, so it should lower your reported return. Everyday spending should not.</string>
-    <string name="bt_cash_fee_hint">A fee is a cost, so it lowers your return. A withdrawal just moves money out and doesn\'t.</string>
+    <string name="bt_cash_fee_hint">A fee is a cost, so it lowers your return. A plain payment just moves money out and doesn\'t.</string>
 
     <!-- v5 cash corrections (edit / delete a synced movement) -->
     <string name="bt_cash_movement_actions_cd">Movement actions</string>
@@ -435,6 +438,7 @@
     <string name="bt_settings_theme_dark">Dark</string>
     <string name="bt_settings_true_black">True black</string>
     <string name="bt_settings_true_black_sub">Pure black background in dark mode. Saves power on OLED screens.</string>
+    <string name="bt_settings_true_black_light_hint">Applies in dark mode — your theme is set to light.</string>
     <string name="bt_settings_privacy_section">Privacy</string>
     <string name="bt_settings_discreet">Discreet mode</string>
     <string name="bt_settings_discreet_sub">Hide all amounts. Percentages stay visible. Press and hold your total to peek.</string>
@@ -1342,7 +1346,7 @@
     <!-- Auto-tag rules -->
     <string name="bt_rules_title">Auto-tag rules</string>
     <string name="bt_rules_empty_title">No rules yet</string>
-    <string name="bt_rules_empty_message">A rule tags movements by their note — “REWE” could mean Groceries every time.</string>
+    <string name="bt_rules_empty_message">A rule tags movements by their description — “REWE” could mean Groceries every time.</string>
     <string name="bt_rules_error_title">Couldn\'t load rules</string>
     <string name="bt_rules_new">New rule</string>
     <string name="bt_rules_new_title">New rule</string>
@@ -2748,8 +2752,8 @@
     <string name="bt_widget_perf_high">High</string>
     <string name="bt_widget_perf_return">Return</string>
     <string name="bt_widget_perf_low_high">Low %1$s · High %2$s</string>
-    <string name="bt_widget_event_deposit">Deposit</string>
-    <string name="bt_widget_event_withdrawal">Withdrawal</string>
+    <string name="bt_widget_event_deposit">Received</string>
+    <string name="bt_widget_event_withdrawal">Paid</string>
     <string name="bt_widget_event_buy">Buy</string>
     <string name="bt_widget_event_sell">Sale</string>
     <string name="bt_widget_event_transfer_in">Transfer in</string>

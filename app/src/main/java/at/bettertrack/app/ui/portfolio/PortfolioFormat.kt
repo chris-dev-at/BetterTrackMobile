@@ -19,9 +19,15 @@ fun formatQuantity(quantity: Double, locale: Locale): String =
     btFormatQuantityCore(quantity, locale)
 
 /**
- * Holding-ROW quantity (rule 3b): three digits of precision, truncated, full
- * integer part always — `0.0424512` → `0.042`, `11.66666667` → `11.6`. The
- * exact figure stays on the holding's detail screen via [formatQuantity].
+ * Holding-ROW quantity (rule 3b): two decimals at or above one, three below it,
+ * truncated — `5.6666667` → `5.66`, `0.42331` → `0.423`. The exact figure stays
+ * on the holding's detail screen via [formatQuantity].
+ *
+ * **Currently called by no row.** The owner put the quantity on the holdings row
+ * on 2026-08-16, re-spec'd its precision on 2026-08-17, and removed it from that
+ * row later the same day ([formatHoldingSubline]). The RULE is kept, with its
+ * test vectors, because it is his rule and it has now been specified twice — the
+ * next row that wants a glanceable quantity should read this, not re-derive it.
  */
 fun formatHoldingQuantity(quantity: Double, locale: Locale): String =
     at.bettertrack.app.ui.format.btFormatHoldingQuantityCore(quantity, locale)

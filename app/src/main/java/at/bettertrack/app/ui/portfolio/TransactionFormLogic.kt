@@ -447,7 +447,7 @@ fun executedAtMsFor(date: LocalDate, zone: ZoneId = ZoneId.systemDefault(), now:
     else date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
 }
 
-// ── Note submission (synced edits) ──────────────────────────────────────────
+// ── Description submission (synced edits) ───────────────────────────────────
 
 /**
  * The note an edit actually submits: exactly what the user typed, trimmed, with

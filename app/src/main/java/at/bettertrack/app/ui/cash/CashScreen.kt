@@ -108,6 +108,7 @@ import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtDescriptionField
 import at.bettertrack.app.ui.components.BtPickerRow
 import at.bettertrack.app.ui.components.BtPickerSheet
 import at.bettertrack.app.ui.components.BtSheetAction
@@ -139,6 +140,7 @@ import at.bettertrack.app.ui.format.parseRowSource
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
 import at.bettertrack.app.ui.portfolio.PendingUiStatus
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
+import at.bettertrack.app.ui.portfolio.displayNote
 import at.bettertrack.app.ui.portfolio.formatTxDate
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
 import at.bettertrack.app.ui.portfolio.sanitizeDecimalInput
@@ -1020,32 +1022,37 @@ fun CashScreen(
                         }
                     }
 
-                    // Add money (GREEN) · Spend (RED) · Transfer (owner order
-                    // 2026-08-16). The two money verbs wear their direction as
-                    // colour — in is emerald, out is red, the same pair every
-                    // gain/loss figure in the app already means — and "Spend"
-                    // replaced "Withdraw", which read as fetching physical cash
-                    // at a bank. Fee stays a PROPERTY of an outflow (the
-                    // Holding-cost tick inside the spend sheet, web parity
+                    // Paid (RED) · Received (GREEN) · Transfer — owner order
+                    // 2026-08-17, aligning the app with the approved Cash-Wallet
+                    // widget: *"bezahlt und erhalten … 1. option ist bezahlt und
+                    // 2. erhalten"*. Paid leads because it is the everyday one —
+                    // the entry a user makes several times a week, against a
+                    // salary they record once a month — and because the launcher
+                    // tile the owner signed off puts it there; two surfaces that
+                    // do the same two things must not disagree about which comes
+                    // first. The verbs still wear their direction as colour (out
+                    // red, in emerald, the pair every gain/loss figure already
+                    // means). Fee stays a PROPERTY of an outflow (the
+                    // Holding-cost tick inside the paid sheet, web parity
                     // 2026-08-07); transfer stays the quiet third action.
                     item(key = "actions") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                CashToneButton(
-                                    text = stringResource(R.string.bt_cash_deposit),
-                                    container = bt.gain,
-                                    onClick = {
-                                        editPrefill = null
-                                        sheet = CashSheet.Entry(CashKind.DEPOSIT)
-                                    },
-                                    modifier = Modifier.weight(1f).height(44.dp),
-                                )
                                 CashToneButton(
                                     text = stringResource(R.string.bt_cash_withdraw),
                                     container = bt.loss,
                                     onClick = {
                                         editPrefill = null
                                         sheet = CashSheet.Entry(CashKind.WITHDRAWAL)
+                                    },
+                                    modifier = Modifier.weight(1f).height(44.dp),
+                                )
+                                CashToneButton(
+                                    text = stringResource(R.string.bt_cash_deposit),
+                                    container = bt.gain,
+                                    onClick = {
+                                        editPrefill = null
+                                        sheet = CashSheet.Entry(CashKind.DEPOSIT)
                                     },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
@@ -1919,6 +1926,24 @@ internal fun MovementRow(
                     style = BtTheme.type.numberCaption,
                     color = bt.textMuted,
                 )
+                // The DESCRIPTION (owner 2026-08-17) — the same treatment the
+                // transaction row gets, for the same reason: the app asked for
+                // it and never showed it back. One line, ellipsized, left column
+                // only, nothing at all when there is none. It sits under the
+                // date · source line because that line identifies the movement
+                // and this one says what it WAS ("REWE", "Miete August") — which
+                // is also the text the auto-tag rules match on, so a row's tags
+                // and the words that earned them read together.
+                displayNote(movement.note)?.let { description ->
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 movement.mirror?.mirrorAddedByName?.let { who ->
                     Spacer(Modifier.height(2.dp))
                     MirrorAttributionChip(who)
@@ -2155,12 +2180,9 @@ internal fun CashCorrectionSheet(
                 )
             }
 
-            OutlinedTextField(
+            BtDescriptionField(
                 value = noteText,
-                onValueChange = { noteText = it.take(900) },
-                label = { Text(stringResource(R.string.bt_txform_note)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                onValue = { noteText = it },
                 colors = sheetFieldColors(),
             )
 
@@ -2348,12 +2370,9 @@ private fun CashEntrySheet(
                 )
             }
 
-            OutlinedTextField(
+            BtDescriptionField(
                 value = noteText,
-                onValueChange = { noteText = it.take(900); vm.previewNote(it) },
-                label = { Text(stringResource(R.string.bt_txform_note)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                onValue = { noteText = it; vm.previewNote(it) },
                 colors = sheetFieldColors(),
             )
 
@@ -2581,12 +2600,9 @@ private fun TransferSheet(
                 )
             }
 
-            OutlinedTextField(
+            BtDescriptionField(
                 value = noteText,
-                onValueChange = { noteText = it.take(900) },
-                label = { Text(stringResource(R.string.bt_txform_note)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                onValue = { noteText = it },
                 colors = sheetFieldColors(),
             )
 

@@ -3,6 +3,7 @@ package at.bettertrack.app.ui.charts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -52,8 +53,23 @@ class ScrubTickTest {
                 ticks++
             }
         }
-        // 400ms of drag at the 55ms floor: 8 or so, never dozens.
+        // 400ms of drag at the floor: one tick per interval, never one per point.
+        // At the owner's faster 30ms cadence (2026-08-17) that is 14, not 400.
         assertEquals(400 / SCRUB_TICK_MIN_INTERVAL_MS + 1, ticks.toLong())
+        assertEquals(14, ticks)
+    }
+
+    @Test
+    fun `the cadence stays inside the owner's fast-but-not-a-buzz band`() {
+        // Pinned as a NUMBER as well as a formula, because every assertion above
+        // is written against the constant and would follow it silently to any
+        // value at all — including back to a cadence he has already rejected as
+        // too slow, or down to one that asks the motor for a new attack faster
+        // than it can produce one.
+        assertTrue(
+            "scrub cadence out of band: ${SCRUB_TICK_MIN_INTERVAL_MS}ms",
+            SCRUB_TICK_MIN_INTERVAL_MS in 20L..35L,
+        )
     }
 
     @Test

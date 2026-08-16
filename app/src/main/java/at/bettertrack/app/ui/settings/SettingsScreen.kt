@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Info
@@ -485,16 +486,22 @@ fun SettingsScreen(
             // the two controls would multiply and neither would be the truth.
             // This is a ruling, not an oversight: do not "restore" it.
             //
-            // **True black.** The toggle was removed for web parity (the web has
-            // no such setting) — but only the row: `devicePrefs.trueBlack` and
-            // the token machinery it drives are intact, so the pref can be
-            // exposed again the day the platform grows the setting.
+            // (One thing it deliberately does NOT contain — the interface-scale
+            // ruling above still stands. True black is no longer on that list:)
             //
-            // Removing the row did strand the ~1 day of devices that had turned
-            // it ON: a black app with no control left to undo it. `DevicePrefs`
-            // heals that on read — the stored key is dropped and the flag reads
-            // false — because a choice the user can no longer revise is not a
-            // setting. See `DevicePrefs.healStrandedTrueBlack`.
+            // **True black — REINSTATED by the owner, 2026-08-17:** *"also the
+            // oled dark mode dissapeared."* It had been removed the day after it
+            // shipped, for web parity, and `DevicePrefs` additionally destroyed
+            // the stored key on read so nobody was left trapped in a black app
+            // with no control to undo it.
+            //
+            // That parity argument is overruled and the reasoning is worth
+            // keeping: the web has no OLED setting because a browser tab has no
+            // panel. This app runs on one specific piece of glass in the owner's
+            // hand, where pixel-off is a real, measurable property — so parity
+            // with a surface that cannot have the feature is the wrong test. The
+            // row is back below, the pref persists again, and the healing is
+            // gone (`DevicePrefs.setTrueBlack`).
             BtSectionHeader(stringResource(R.string.bt_settings_appearance_section))
             val themeMode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
             BtGroup {
@@ -504,6 +511,26 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.bt_settings_theme_sub),
                     onClick = { picker = SettingsPicker.Theme },
                     trailing = { SettingsValue(stringResource(themeModeLabelRes(themeMode))) },
+                )
+                // Reinstated 2026-08-17 (see the ruling above). Directly under
+                // Theme because it is a sub-setting OF the theme, not a peer of
+                // it — and greyed, with its own reason, whenever the app is
+                // rendering light, where it would change nothing.
+                val trueBlack by AppGraph.devicePrefs.trueBlack.collectAsStateWithLifecycle()
+                val darkActive = !BtTheme.colors.isLight
+                SettingsToggleRow(
+                    icon = Icons.Outlined.DarkMode,
+                    title = stringResource(R.string.bt_settings_true_black),
+                    subtitle = stringResource(
+                        if (darkActive) {
+                            R.string.bt_settings_true_black_sub
+                        } else {
+                            R.string.bt_settings_true_black_light_hint
+                        },
+                    ),
+                    checked = trueBlack,
+                    onCheckedChange = { AppGraph.devicePrefs.setTrueBlack(it) },
+                    enabled = darkActive,
                 )
                 BtGroupRow(
                     icon = Icons.Outlined.Translate,
@@ -1165,6 +1192,14 @@ private fun SettingsToggleRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    /**
+     * False when the toggle exists but cannot bite right now — the True-black
+     * row while the app is rendering light. Shown greyed WITH a subtitle that
+     * says why, rather than hidden: a control that vanishes teaches the reader
+     * nothing, and "where did my OLED setting go" is the exact bug this row is
+     * back to fix.
+     */
+    enabled: Boolean = true,
 ) {
     val bt = BtTheme.colors
     // R3 §4: a toggle is the one control whose result can sit under the thumb
@@ -1176,20 +1211,30 @@ private fun SettingsToggleRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable { commit(!checked) }
+            .clickable(enabled = enabled) { commit(!checked) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = bt.textSecondary, modifier = Modifier.size(22.dp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (enabled) bt.textSecondary else bt.textMuted,
+            modifier = Modifier.size(22.dp),
+        )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = bt.textPrimary)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (enabled) bt.textPrimary else bt.textMuted,
+            )
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
         }
         Spacer(Modifier.width(8.dp))
         Switch(
             checked = checked,
             onCheckedChange = commit,
+            enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = bt.onGold,
                 checkedTrackColor = bt.gold,

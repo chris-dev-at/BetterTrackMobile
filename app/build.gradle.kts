@@ -23,21 +23,34 @@ android {
     }
 
     // ── BuildConfig origins & OAuth client (§4) ─────────────────────────────
-    // Debug points at the local dev stack (10.0.2.2 == host loopback from an
-    // emulator) but every value is overridable WITHOUT code edits via optional
-    // Gradle properties, because the dev stack is often not running and a debug
-    // build may need to be pointed at production (gradle.properties currently
-    // points debug at production for Step-4 testing):
-    //   ./gradlew … -PbtApiOrigin=https://api.bettertrack.at -PbtWebOrigin=https://web.bettertrack.at
+    // PRODUCTION IS THE DEFAULT, for every build type (owner ruling 2026-08-17:
+    // *"make sure the default server is better track normal again since we
+    // develop on the main web.bettertrack.at right now and no longer on some dev
+    // server"*).
+    //
+    // Debug used to default to `http://10.0.2.2:3000` (the emulator's host
+    // loopback) with gradle.properties overriding it back to production. That
+    // made the checked-in default a dev stack and the production target a local
+    // file's opinion — so a clone without that property, or a CI job that does
+    // not pass one, silently produced an APK pointing at a machine that is not
+    // there. The default is now the real backend and the property is what points
+    // a build somewhere else, which is the right way round:
+    //   ./gradlew … -PbtApiOrigin=http://10.0.2.2:3000 -PbtWebOrigin=http://10.0.2.2:8090
     // Reading via `providers` keeps the configuration cache valid. Declared here
     // (before defaultConfig) so defaultConfig + buildTypes can both use them.
-    val apiOriginDebug = providers.gradleProperty("btApiOrigin").getOrElse("http://10.0.2.2:3000")
-    val webOriginDebug = providers.gradleProperty("btWebOrigin").getOrElse("http://10.0.2.2:8090")
-    // The "Local dev" preset offered by Settings → Server. It is shown ONLY in
-    // debug builds (a release APK must not advertise someone's LAN box), and it
-    // is a gradle property so a different dev machine needs no code edit.
-    val devPresetApiOrigin = providers.gradleProperty("btDevPresetApiOrigin").getOrElse("http://192.168.0.114:3000")
-    val devPresetWebOrigin = providers.gradleProperty("btDevPresetWebOrigin").getOrElse("http://192.168.0.114:6771")
+    val apiOriginDebug = providers.gradleProperty("btApiOrigin").getOrElse("https://api.bettertrack.at")
+    val webOriginDebug = providers.gradleProperty("btWebOrigin").getOrElse("https://web.bettertrack.at")
+    // The "Local dev" preset chip offered by Settings → Server, debug builds only
+    // (a release APK must not advertise someone's LAN box).
+    //
+    // EMPTY by default, on purpose. It used to ship `http://192.168.0.114:*` —
+    // a machine and a LAN that no longer exist — so the one-tap "Local dev" chip
+    // was a one-tap route to an unreachable server, and anyone who tapped it got
+    // an app that could not sign in. A dev pass -PbtDevPresetApiOrigin=… to arm
+    // it for their own box; with no value the chip is simply not offered, and
+    // typing an address by hand still works exactly as before.
+    val devPresetApiOrigin = providers.gradleProperty("btDevPresetApiOrigin").getOrElse("")
+    val devPresetWebOrigin = providers.gradleProperty("btDevPresetWebOrigin").getOrElse("")
     // PRODUCT_ORIGIN: the public site serving the legal documents (terms,
     // privacy, impressum, cookies). A THIRD origin on purpose — the platform
     // keeps it separate from the web app's own origin (apps/web/src/lib/

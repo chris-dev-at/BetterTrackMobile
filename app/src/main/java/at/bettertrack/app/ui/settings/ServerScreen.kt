@@ -202,9 +202,17 @@ fun ServerScreen(onBack: () -> Unit) {
                         )
                     },
                 )
-                // Debug only: a release build never advertises a LAN dev box.
-                // Typing the same addresses by hand still works everywhere.
-                if (BuildConfig.DEBUG) {
+                // Debug only, and only when this build was actually given a dev
+                // address (-PbtDevPresetApiOrigin=…). A release build never
+                // advertises a LAN dev box, and an UNARMED preset must not be
+                // offered either: the chip shipped a dead `192.168.0.114` for
+                // months, so one tap put the app on a server that does not
+                // answer and the user could no longer sign in. Typing an address
+                // by hand still works everywhere.
+                if (BuildConfig.DEBUG &&
+                    ServerOrigins.devPresetApiOrigin.isNotBlank() &&
+                    ServerOrigins.devPresetWebOrigin.isNotBlank()
+                ) {
                     BtChip(
                         text = stringResource(R.string.bt_server_preset_local),
                         selected = apiField.trim() == ServerOrigins.devPresetApiOrigin &&

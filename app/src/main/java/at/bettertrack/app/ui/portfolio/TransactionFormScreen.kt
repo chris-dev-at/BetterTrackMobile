@@ -107,8 +107,10 @@ import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
 import at.bettertrack.app.sync.TxOpPayload
 import at.bettertrack.app.sync.TxRebookOpPayload
+import at.bettertrack.app.ui.components.BT_DESCRIPTION_MAX_CHARS
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtDatePickerDialog
+import at.bettertrack.app.ui.components.BtDescriptionField
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtScrollFill
@@ -887,7 +889,7 @@ class TransactionFormViewModel(
     }
 
     fun setNote(text: String) {
-        _noteText.value = text.take(900)
+        _noteText.value = text.take(BT_DESCRIPTION_MAX_CHARS)
     }
 
     /**
@@ -1570,6 +1572,29 @@ fun TransactionFormScreen(
                     )
                 }
 
+                // The DESCRIPTION (owner 2026-08-17: *"mache notiz wichtiger für
+                // transaktionen und nenne es nicht notiz sondern etwas
+                // wichtigeres wie beschreibung"*).
+                //
+                // It used to be the last thing on the form, under the coupling
+                // and over-sell cards — the position a form gives to something
+                // it does not expect you to fill in. It sits here now, directly
+                // after the economic fields and before the cards that qualify
+                // them, because that is the order the thought arrives in: what
+                // you traded, for how much, and what it was about. It stays
+                // OPTIONAL — the label says so and nothing validates it.
+                //
+                // Three lines rather than two, and a live counter: this is the
+                // one free-text field in the app, the cap is real (the server
+                // 422s past it), and a field that silently stops accepting
+                // characters reads as a bug.
+                BtDescriptionField(
+                    value = noteText,
+                    onValue = vm::setNote,
+                    enabled = inputsEnabled,
+                    colors = btFieldColors(),
+                )
+
                 // Cash coupling (§6.2) — hidden on synced edits (the PATCH
                 // contract can't change the original cash movement).
                 if (!vm.isEditSynced) {
@@ -1605,17 +1630,6 @@ fun TransactionFormScreen(
                         locale = locale,
                     )
                 }
-
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = vm::setNote,
-                    label = { Text(stringResource(R.string.bt_txform_note)) },
-                    enabled = inputsEnabled,
-                    minLines = 2,
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = btFieldColors(),
-                )
 
                 Spacer(Modifier.height(4.dp))
             }

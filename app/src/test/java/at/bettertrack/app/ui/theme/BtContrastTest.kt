@@ -262,11 +262,20 @@ class BtContrastTest {
         // These are load-bearing: they are the ONLY thing making a 1.78:1 curve
         // read on white now that the darkening is gone. Weakening either without
         // a matching owner decision re-opens the defect the floors used to cover.
+        //
+        // The light stroke came down 3dp → 2.5dp on 2026-08-17 WITH such a
+        // decision (owner: the charts *"look kinda weird… less spikey?"*). The
+        // compensation is still there — light is still heavier than dark — but
+        // 3dp had been sized against a sparse curve, and at 313 points on a
+        // 1080px plot it was 2.4× wider than the gap between its own vertices,
+        // so the round caps piled up into the lumps he was seeing. The pile-up
+        // is fixed properly by `chartRenderIndices`; this half just brings the
+        // weight back inside the type/geometry language.
         assertTrue(
             "light chart lines must be drawn heavier than dark's to read on white",
             BtLightColors.chartLineWidth > BtDarkColors.chartLineWidth,
         )
-        assertEquals(3.dp, BtLightColors.chartLineWidth)
+        assertEquals(2.5.dp, BtLightColors.chartLineWidth)
         assertEquals(2.dp, BtDarkColors.chartLineWidth)
         assertTrue(
             "the light area gradient must carry more mass than it did at 0.18",

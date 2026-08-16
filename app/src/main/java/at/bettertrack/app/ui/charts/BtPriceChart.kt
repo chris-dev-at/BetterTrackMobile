@@ -216,10 +216,20 @@ fun BtPriceChart(
                     if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
                 }
             } else {
-                series.forEachIndexed { i, p ->
+                // One chart language: the asset chart reduces to its own stroke
+                // width exactly as the portfolio chart does (owner 2026-08-17,
+                // see [chartRenderIndices]). An intraday price series is the
+                // densest thing the app draws, so this is the surface that
+                // needed it most.
+                val visitable = chartRenderIndices(
+                    series.map { it.close },
+                    columns = (plotW / bt.chartLineWidth.toPx()).toInt(),
+                )
+                visitable.forEachIndexed { drawn, i ->
+                    val p = series[i]
                     val x = seriesX(i, plotW, series.size)
                     val y = plotH * (1f - scale.normalize(p.close))
-                    if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
+                    if (drawn == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
                 }
             }
             val fillPath = Path().apply {

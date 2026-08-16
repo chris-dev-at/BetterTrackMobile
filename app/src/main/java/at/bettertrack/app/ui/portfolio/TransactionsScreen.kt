@@ -741,6 +741,27 @@ fun TransactionRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // The DESCRIPTION (owner 2026-08-17). Write-only until now: the
+                // app asked for it on every trade and then never showed it
+                // again, which is the definition of a field nobody fills in.
+                //
+                // One line, ellipsized, in the LEFT column only — it can grow to
+                // 1000 characters and must never be allowed to push the money
+                // figures around or make one row taller than its neighbours.
+                // Absent means absent: no placeholder line, because a row that
+                // reserves space for nothing is how a tidy list starts looking
+                // ragged. The retired `[bt:…]` marker is stripped on the way out
+                // ([displayNote]) so historical rows read as they were typed.
+                displayNote(tx.note)?.let { description ->
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 tx.mirror?.mirrorAddedByName?.let { who ->
                     Spacer(Modifier.height(2.dp))
                     MirrorAttributionChip(who)

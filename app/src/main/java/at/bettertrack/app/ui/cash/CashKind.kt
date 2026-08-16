@@ -62,9 +62,16 @@ fun isEditableCashKind(wire: String): Boolean = CashKind.fromWire(wire)?.handTyp
 
 /**
  * The kinds the cash entry form can create, in the order the chooser shows them.
+ *
+ * PAID leads (owner order 2026-08-17: *"1. option ist bezahlt und 2. erhalten"*),
+ * so the edit sheet's kind chips read in the same order as the two buttons on the
+ * cash overview and as the approved Cash-Wallet widget's tiles. The enum's own
+ * declaration order stays wire-shaped; this list is the DISPLAY order and is the
+ * only place it is decided.
+ *
  * Transfers are a separate two-sided flow and are deliberately not in this list.
  */
-val CASH_ENTRY_KINDS: List<CashKind> = listOf(CashKind.DEPOSIT, CashKind.WITHDRAWAL, CashKind.FEE)
+val CASH_ENTRY_KINDS: List<CashKind> = listOf(CashKind.WITHDRAWAL, CashKind.DEPOSIT, CashKind.FEE)
 
 /**
  * Which kind a cash entry is, from the two things the form actually asks.

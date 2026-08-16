@@ -72,7 +72,22 @@ class CashKindTest {
 
     @Test
     fun `entry chooser offers exactly the hand-typed kinds`() {
-        assertEquals(CashKind.entries.filter { it.handTyped }, CASH_ENTRY_KINDS)
+        // Set equality, because the chooser's ORDER is a design decision the
+        // enum's wire order must not dictate — see the test below.
+        assertEquals(CashKind.entries.filter { it.handTyped }.toSet(), CASH_ENTRY_KINDS.toSet())
+        assertEquals(CASH_ENTRY_KINDS.size, CASH_ENTRY_KINDS.toSet().size)
+    }
+
+    @Test
+    fun `the chooser puts paid before received`() {
+        // Owner order 2026-08-17 ("1. option ist bezahlt und 2. erhalten"), the
+        // same order as the cash overview's two buttons and the approved
+        // Cash-Wallet widget. The enum declares deposit first because the wire
+        // does; the chooser must not inherit that.
+        assertEquals(
+            listOf(CashKind.WITHDRAWAL, CashKind.DEPOSIT, CashKind.FEE),
+            CASH_ENTRY_KINDS,
+        )
     }
 
     // ── Web parity: direction + holding-cost tick → kind (owner 2026-08-07) ────

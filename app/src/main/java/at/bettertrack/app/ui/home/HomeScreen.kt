@@ -780,14 +780,27 @@ private fun HomeUnpricedBlock(
 }
 
 /**
- * One portfolio (owner batch 2026-08-16): the same two tight two-line stacks the
- * holdings rows wear, so the two lists read as one system.
+ * One portfolio (owner batch 2026-08-16, anatomy re-spec'd 2026-08-17): two
+ * tight two-line stacks, so this list and the holdings list read as one system.
  *
- *  · LEFT — the NAME, prominent, over the portfolio's current value in the
- *    smaller muted figure.
- *  · RIGHT — the TOTAL gain/loss in € (emerald/red by sign, explicit `+`/`−`)
- *    over the total %. Total, not today's: the server's `unrealizedPnl` pair,
- *    rendered verbatim (§7.1).
+ *  · LEFT — the NAME, prominent, over the total gain/loss in PERCENT
+ *    (emerald/red by sign).
+ *  · RIGHT — the portfolio's current total value in NEUTRAL text, over the total
+ *    gain/loss in € (emerald/red, explicit `+`/`−`).
+ *
+ * The owner's final word: *"unter portfolios you swap the bottom 2 so bottom
+ * left is % and bottom right is the value"* — the last of three passes over the
+ * same four ingredients on 2026-08-17. The reading it buys: the two neutral
+ * facts (what it is called, what it is worth) hold the top line, the two
+ * coloured verdicts hold the bottom, and the € figure sits directly under the
+ * value it is a change in — same column, same alignment, so the eye reads
+ * *"20 515,15 € … of which +3 800,20 € is gain"* down one edge.
+ *
+ * `HoldingRow` on the portfolio page wears the identical arrangement so the two
+ * lists read as one system.
+ *
+ * Total, not today's: the server's `unrealizedPnl` pair, rendered verbatim
+ * (§7.1) — the same fields the previous layout read, in new places.
  */
 @Composable
 private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
@@ -809,11 +822,13 @@ private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(1.dp))
                 if (totals != null) {
-                    MoneyText(
-                        value = totals.totalValueEur,
-                        style = BtTheme.type.numberCaption,
-                        color = bt.textMuted,
-                    )
+                    totals.unrealizedPnlPct?.let { pct ->
+                        Text(
+                            text = formatPercent(pct, locale),
+                            style = BtTheme.type.numberCaption,
+                            color = deltaColor(pct),
+                        )
+                    }
                 } else {
                     // Not "0,00 €": this portfolio's detail has not landed yet,
                     // and the hero above already says the sum is partial. The
@@ -825,19 +840,17 @@ private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
             Column(horizontalAlignment = Alignment.End) {
                 if (totals != null) {
                     MoneyText(
-                        value = totals.unrealizedPnlEur,
+                        value = totals.totalValueEur,
                         style = BtTheme.type.moneySmall,
+                        color = bt.textPrimary,
+                    )
+                    Spacer(Modifier.height(1.dp))
+                    MoneyText(
+                        value = totals.unrealizedPnlEur,
+                        style = BtTheme.type.numberCaption,
                         color = deltaColor(totals.unrealizedPnlEur),
                         showSign = true,
                     )
-                    totals.unrealizedPnlPct?.let { pct ->
-                        Spacer(Modifier.height(1.dp))
-                        Text(
-                            text = formatPercent(pct, locale),
-                            style = BtTheme.type.numberCaption,
-                            color = deltaColor(pct),
-                        )
-                    }
                 } else {
                     BtSkeleton(Modifier.width(72.dp).height(16.dp))
                 }

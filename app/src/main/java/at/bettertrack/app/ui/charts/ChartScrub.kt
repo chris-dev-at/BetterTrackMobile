@@ -35,13 +35,30 @@ internal data class ScrubTick(val index: Int, val x: Float, val atMs: Long)
 /**
  * The floor between two ticks.
  *
- * `EFFECT_TICK` measures ~61ms on the test phone's LRA, so anything under about
- * that overlaps itself and the row of detents smears into one continuous buzz —
- * which is precisely the thing the owner did NOT ask for. 55ms leaves the motor
- * essentially always free by the time the next crossing wants it, and caps the
- * cadence at ~18 ticks/second, which still reads as *fast* under a quick drag.
+ * **Owner correction 2026-08-17: the ticks are too slow — he wants a faster,
+ * denser bezel.** So this went 55ms → 30ms, capping the cadence at ~33
+ * ticks/second instead of ~18.
+ *
+ * The 55ms it replaces was reasoned from the effect's own length: `EFFECT_TICK`
+ * measures ~61ms on the test phone's LRA, and the assumption was that a tick may
+ * not start before the previous one has finished, or the row of detents would
+ * smear into one continuous buzz. That assumption is what turned out to be too
+ * conservative. A re-triggered LRA does not sum with itself — the new
+ * `vibrate()` REPLACES what is playing, so a tick that arrives at 30ms truncates
+ * its predecessor's decay rather than piling onto it. What the finger feels is
+ * the attack, and the attack is the front few milliseconds; cutting the tail is
+ * how a bezel gets crisper, not muddier. It only smears if ticks arrive faster
+ * than the motor can restate an attack, which is far below 30ms.
+ *
+ * 30ms is also comfortably above the frame budget, so the cap is a property of
+ * the haptic rather than an accident of how often Compose delivers pointer
+ * events.
+ *
+ * The other floor ([SCRUB_TICK_MIN_STEP_PX]) is deliberately unchanged: this
+ * value governs how fast a *moving* finger may ring the motor, and nothing about
+ * wanting that faster means a still hand should start buzzing.
  */
-internal const val SCRUB_TICK_MIN_INTERVAL_MS = 55L
+internal const val SCRUB_TICK_MIN_INTERVAL_MS = 30L
 
 /**
  * The floor on how far the finger must travel between two ticks, in pixels.

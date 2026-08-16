@@ -1605,16 +1605,27 @@ private fun SecondaryRow(
 }
 
 /**
- * One holding (owner redesign 2026-08-16): two tight two-line stacks.
+ * One holding (owner redesign 2026-08-16, second pass 2026-08-17): two tight
+ * two-line stacks.
  *
- *  · LEFT — the name over the QUANTITY, plain (`4`, never `4 AMD`: the name
- *    directly above already says what the number counts), truncated by rule 3b
- *    ([formatHoldingQuantity]). The %-of-portfolio weight left the row — that
- *    proportion is the insights subpage's whole subject now.
- *  · RIGHT — the P&L in € (emerald/red, explicit sign) over the P&L %, the
- *    verdict pair the owner asked the row to lead with. The market value came
- *    off the row with it: one column, one statement. The exact value stays one
- *    tap away on the holding's detail screen.
+ *  · LEFT — the asset NAME over the P&L in PERCENT (emerald/red by sign).
+ *  · RIGHT — the position's current market value in NEUTRAL text, over the P&L
+ *    in € (emerald/red, explicit sign).
+ *
+ * Byte-for-byte the arrangement [at.bettertrack.app.ui.home.HomeScreen]'s
+ * portfolio rows wear, on the owner's instruction to *"do the same arrangement
+ * with the holdings in portfolio"* — the two lists are the same kind of object
+ * at two scales, and reading one should teach you how to read the other.
+ *
+ * The quantity and the %-of-portfolio weight both stay off the row: the exact
+ * quantity is a detail-screen figure (rule 3) and the proportion is the insights
+ * subpage's subject.
+ *
+ * The unpriced case states itself ONCE, in the value slot, instead of filling
+ * four cells with dashes: a holding with no quote has no value, no €, and no %,
+ * and "Kein Preis" in the one place the value would be is the whole truth about
+ * it. In Drive mode that is a fixable fact, which is why it reads differently
+ * there (W6).
  *
  * The intra-stack gap is 1dp against the old 2dp and the row's vertical inset
  * 10dp against 12dp — the owner's "they all seem a little disconnected", fixed
@@ -1644,25 +1655,23 @@ private fun HoldingRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(1.dp))
-                    Text(
-                        text = formatHoldingQuantity(holding.quantity, locale),
-                        style = BtTheme.type.numberCaption,
-                        color = bt.textMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    holding.unrealizedPnlPct?.let { plPct ->
+                        Spacer(Modifier.height(1.dp))
+                        Text(
+                            text = formatPercent(plPct, locale),
+                            style = BtTheme.type.numberCaption,
+                            color = deltaColor(plPct),
+                        )
+                    }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    val plEur = holding.unrealizedPnlEur
-                    val plPct = holding.unrealizedPnlPct
-                    if (plEur != null) {
+                    val value = holding.marketValueEur
+                    if (value != null) {
                         MoneyText(
-                            value = plEur,
+                            value = value,
                             style = BtTheme.type.moneySmall,
-                            color = deltaColor(plEur),
-                            showSign = true,
+                            color = bt.textPrimary,
                         )
                     } else {
                         // W6: a dash says "nothing here". In Drive mode the truth
@@ -1679,12 +1688,13 @@ private fun HoldingRow(
                             color = bt.textMuted,
                         )
                     }
-                    if (plPct != null) {
+                    holding.unrealizedPnlEur?.let { plEur ->
                         Spacer(Modifier.height(1.dp))
-                        Text(
-                            text = formatPercent(plPct, locale),
+                        MoneyText(
+                            value = plEur,
                             style = BtTheme.type.numberCaption,
-                            color = deltaColor(plPct),
+                            color = deltaColor(plEur),
+                            showSign = true,
                         )
                     }
                 }

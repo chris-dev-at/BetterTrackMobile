@@ -197,7 +197,8 @@
     <string name="bt_txform_date">Datum</string>
     <string name="bt_txform_date_cd">Datum wählen</string>
     <string name="bt_txform_date_ok">OK</string>
-    <string name="bt_txform_note">Notiz (optional)</string>
+    <string name="bt_txform_description">Beschreibung (optional)</string>
+    <string name="bt_txform_description_counter">%1$d/%2$d</string>
     <string name="bt_txform_pay_from_cash">Aus Bargeld bezahlen</string>
     <string name="bt_txform_add_proceeds">Erlös zum Bargeld hinzufügen</string>
     <string name="bt_txform_cash_after">Bargeld danach: %1$s</string>
@@ -251,8 +252,8 @@
     <string name="bt_pending_edit_retry">Bearbeiten &amp; erneut versuchen</string>
     <string name="bt_pending_discard">Verwerfen</string>
     <string name="bt_pending_offline_hint">Wartet auf eine Verbindung — synchronisiert automatisch.</string>
-    <string name="bt_pending_op_cash_deposit">Bargeld-Einzahlung</string>
-    <string name="bt_pending_op_cash_withdraw">Bargeld-Auszahlung</string>
+    <string name="bt_pending_op_cash_deposit">Bargeld erhalten</string>
+    <string name="bt_pending_op_cash_withdraw">Bargeld bezahlt</string>
     <string name="bt_pending_op_cash_fee">Bargeld-Gebühr</string>
     <string name="bt_pending_op_cash_transfer">Bargeld-Umbuchung</string>
     <string name="bt_pending_op_value_point">Wertaktualisierung eigener Wert</string>
@@ -270,14 +271,14 @@
     <!-- Bargeld &amp; Quellen (§6.3) -->
     <string name="bt_cash_title">Bargeld</string>
     <string name="bt_cash_total">Gesamtes Bargeld</string>
-    <string name="bt_cash_deposit">Einzahlen</string>
-    <string name="bt_cash_withdraw">Ausgeben</string>
+    <string name="bt_cash_deposit">Erhalten</string>
+    <string name="bt_cash_withdraw">Bezahlt</string>
     <string name="bt_cash_transfer">Umbuchen</string>
-    <string name="bt_cash_deposit_title">Geld einzahlen</string>
-    <string name="bt_cash_withdraw_title">Ausgabe erfassen</string>
+    <string name="bt_cash_deposit_title">Geld erhalten</string>
+    <string name="bt_cash_withdraw_title">Geld bezahlt</string>
     <string name="bt_cash_transfer_title">Zwischen Quellen umbuchen</string>
-    <string name="bt_cash_deposit_action">Einzahlen</string>
-    <string name="bt_cash_withdraw_action">Ausgabe erfassen</string>
+    <string name="bt_cash_deposit_action">Als erhalten erfassen</string>
+    <string name="bt_cash_withdraw_action">Als bezahlt erfassen</string>
     <string name="bt_cash_transfer_action">Umbuchung erfassen</string>
     <string name="bt_cash_amount">Betrag</string>
     <string name="bt_cash_source_picker">Quelle</string>
@@ -290,7 +291,7 @@
     <string name="bt_cash_new_source_title">Neue Bargeldquelle</string>
     <string name="bt_cash_all_sources">Alle Quellen</string>
     <string name="bt_cash_source_switcher_cd">Geldquelle wählen</string>
-    <string name="bt_cash_transactions_row_sub">Einzahlungen, Ausgaben und Überweisungen</string>
+    <string name="bt_cash_transactions_row_sub">Bezahlt, erhalten, umgebucht</string>
     <string name="bt_budgets_row_sub">Monatliche Ausgabenziele</string>
     <string name="bt_budgets_all">Alle Budgets</string>
     <string name="bt_ledger_all_tags">Alle Tags</string>
@@ -313,15 +314,15 @@
     <string name="bt_cash_movements_section">Bewegungen</string>
     <string name="bt_cash_movements_for">Bewegungen · %1$s</string>
     <string name="bt_cash_empty_title">Noch keine Bargeldbewegungen</string>
-    <string name="bt_cash_empty_message">Einzahlungen, Auszahlungen und Umbuchungen erscheinen hier.</string>
+    <string name="bt_cash_empty_message">Alles, was du bezahlt, erhalten oder umgebucht hast, erscheint hier.</string>
     <string name="bt_cash_movements_error_title">Bewegungen konnten nicht geladen werden</string>
     <string name="bt_cash_requires_connection">Auf diesem Handy ist noch nichts gespeichert. Verbinde dich, um deine Bewegungen zu laden.</string>
     <string name="bt_cash_type_bank">Bank</string>
     <string name="bt_cash_type_retirement">Vorsorge</string>
     <string name="bt_cash_type_cash">Bargeld</string>
     <string name="bt_cash_type_custom">Eigene</string>
-    <string name="bt_cash_kind_deposit">Einzahlung</string>
-    <string name="bt_cash_kind_withdrawal">Auszahlung</string>
+    <string name="bt_cash_kind_deposit">Erhalten</string>
+    <string name="bt_cash_kind_withdrawal">Bezahlt</string>
     <string name="bt_cash_kind_buy">Kauf (aus Bargeld bezahlt)</string>
     <string name="bt_cash_kind_sell">Verkaufserlös</string>
     <string name="bt_cash_kind_transfer_out">Umbuchung an %1$s</string>
@@ -336,7 +337,7 @@
     <string name="bt_cash_fee_action">Gebühr erfassen</string>
     <string name="bt_cash_holding_cost">Haltekosten</string>
     <string name="bt_cash_holding_cost_hint">Für Haltekosten — eine Konto- oder Depotgebühr gehört zum Investieren und soll die ausgewiesene Rendite senken. Alltägliche Ausgaben nicht.</string>
-    <string name="bt_cash_fee_hint">Eine Gebühr ist ein Kostenposten und senkt damit deine Rendite. Eine Auszahlung verschiebt nur Geld und tut das nicht.</string>
+    <string name="bt_cash_fee_hint">Eine Gebühr ist ein Kostenposten und senkt damit deine Rendite. Eine normale Zahlung verschiebt nur Geld und tut das nicht.</string>
 
     <!-- v5-Cash-Korrekturen (synchronisierte Bewegung bearbeiten / löschen) -->
     <string name="bt_cash_movement_actions_cd">Aktionen für Bewegung</string>
@@ -376,6 +377,7 @@
     <string name="bt_settings_theme_dark">Dunkel</string>
     <string name="bt_settings_true_black">Reines Schwarz</string>
     <string name="bt_settings_true_black_sub">Komplett schwarzer Hintergrund im dunklen Design. Spart Strom auf OLED-Displays.</string>
+    <string name="bt_settings_true_black_light_hint">Gilt im dunklen Design — dein Design steht gerade auf hell.</string>
     <string name="bt_settings_privacy_section">Privatsphäre</string>
     <string name="bt_settings_discreet">Diskreter Modus</string>
     <string name="bt_settings_discreet_sub">Blendet alle Beträge aus. Prozentwerte bleiben sichtbar. Halte deine Gesamtsumme gedrückt, um kurz hineinzusehen.</string>
@@ -1266,7 +1268,7 @@
     <!-- Auto-Tag-Regeln -->
     <string name="bt_rules_title">Auto-Tag-Regeln</string>
     <string name="bt_rules_empty_title">Noch keine Regeln</string>
-    <string name="bt_rules_empty_message">Eine Regel vergibt Tags anhand der Notiz — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
+    <string name="bt_rules_empty_message">Eine Regel vergibt Tags anhand der Beschreibung — „REWE“ kann jedes Mal Lebensmittel bedeuten.</string>
     <string name="bt_rules_error_title">Regeln konnten nicht geladen werden</string>
     <string name="bt_rules_new">Neue Regel</string>
     <string name="bt_rules_new_title">Neue Regel</string>
@@ -2595,8 +2597,8 @@
     <string name="bt_widget_perf_high">Hoch</string>
     <string name="bt_widget_perf_return">Rendite</string>
     <string name="bt_widget_perf_low_high">Tief %1$s · Hoch %2$s</string>
-    <string name="bt_widget_event_deposit">Einzahlung</string>
-    <string name="bt_widget_event_withdrawal">Auszahlung</string>
+    <string name="bt_widget_event_deposit">Erhalten</string>
+    <string name="bt_widget_event_withdrawal">Bezahlt</string>
     <string name="bt_widget_event_buy">Kauf</string>
     <string name="bt_widget_event_sell">Verkauf</string>
     <string name="bt_widget_event_transfer_in">Transfer ein</string>
