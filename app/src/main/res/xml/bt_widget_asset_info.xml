@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Asset widget (at.bettertrack.app.widget.BtAssetWidget).
+
+  android:configure names the picker the host runs between placement and first
+  draw — the one widget whose config stays REQUIRED, because there is no
+  sensible default asset; "reconfigurable" adds the long-press entry. An
+  instance that somehow arrives unconfigured (pin flow, restore) renders a
+  tap-to-choose card that opens the same picker. 2x1 by default (a ticker),
+  stretchable to 2x2 for the full name. Same initialLayout / updatePeriodMillis
+  / preview reasoning as bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtAssetWidgetConfigActivity"
+    android:description="@string/bt_widget_asset_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:maxResizeHeight="260dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="48dp"
+    android:minWidth="110dp"
+    android:previewImage="@drawable/bt_widget_preview_img_asset"
+    android:previewLayout="@layout/bt_widget_preview_asset"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="1"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Webhook
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -195,6 +196,7 @@ fun SettingsScreen(
     onOpenNotifications: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenLanguage: () -> Unit = {},
+    onOpenWidgets: () -> Unit = {},
     onOpenTaxSettings: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
@@ -516,6 +518,15 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.bt_settings_orientation_lock_sub),
                     checked = orientationLocked,
                     onCheckedChange = { AppGraph.devicePrefs.setOrientationLocked(it) },
+                )
+                // The in-app widget builder (widget redesign 2026-08-16). Filed
+                // under Appearance because that is where "how BetterTrack looks
+                // outside its own window" naturally reads from.
+                BtGroupRow(
+                    icon = Icons.Outlined.Widgets,
+                    title = stringResource(R.string.bt_dest_widgets),
+                    subtitle = stringResource(R.string.bt_settings_widgets_sub),
+                    onClick = onOpenWidgets,
                 )
             }
 

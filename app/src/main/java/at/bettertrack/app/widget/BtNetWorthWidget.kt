@@ -2,145 +2,506 @@ package at.bettertrack.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.getAppWidgetState
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
 import androidx.glance.layout.ColumnScope
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.width
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import at.bettertrack.app.R
+import java.text.DateFormat
+import java.util.Date
 
 /**
- * The net-worth widget: the Overview's own figure, on the home screen.
+ * Portfolio pulse (the Codex study's family 01): the fastest possible read —
+ * subject, total, movement, freshness.
  *
- * Resizable via [SizeMode.Responsive]. The two breakpoints are not two designs —
- * they are the same design with the parts that stop fitting removed, in the order
- * they stop being worth their space: at 4x2 the day change reads as an amount AND
- * a percent, at 2x2 the percent alone carries it, because a percentage survives
- * truncation and "+1.234," does not.
+ * ## The study's layout, on our data
  *
- * Tapping opens the app on the Overview ([BT_WIDGET_TARGET_OVERVIEW]).
+ * A gold-dot subject row ("Alle Depots", or one pinned portfolio's name) with
+ * the sync time as the right meta, the big tabular figure, and the day's
+ * movement as a tinted delta pill (arrow + € + %). The wide strip earns a real
+ * 1M trace on its right half — but ONLY when the instance is pinned to one
+ * portfolio: the platform serves no aggregate net-worth series and summing
+ * curves client-side is forbidden derived performance, so the all-account
+ * reading shows the pill large instead of a chart it would have to invent
+ * (deviation from the study, reported).
+ *
+ * ## Configuration ([BtWidgetPulseConfig] — never null, config-optional)
+ *
+ * Scope (all portfolios / one), delta style (both / € / %), sparkline on-off.
+ * The study's 1T/1W/1M delta-period knob is NOT offered: the day change is the
+ * only server-computed delta that exists for totals (a 1W/1M delta would be
+ * client-derived across series the account reading does not have) — reported
+ * as a data-gap deviation.
+ *
+ * Tapping opens the app on the Overview (all) or the pinned portfolio.
  */
 class BtNetWorthWidget : GlanceAppWidget() {
 
-    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(COMPACT, MEDIUM))
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val local = btWidgetContext(context)
         val snapshot = BtWidgetRepository.load(context)
         val colors = btGlanceColors(btWidgetThemeMode())
+        val night = btWidgetIsNight(context, btWidgetThemeMode())
+        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+        val config = if (state[BT_WIDGET_PREF_PULSE_STYLE] == null) {
+            btWidgetClaimPinnedPulse(context, id) ?: btWidgetPulseConfig(state)
+        } else {
+            btWidgetPulseConfig(state)
+        }
+        val pinned = config.portfolioId
+            ?.let { pid -> snapshot.portfolios.firstOrNull { it.id == pid } }
+        // The pinned reading's optional 1M trace, from the same history cache
+        // the app charts. All-account instances never load one (no such series).
+        val sparkValues = if (config.portfolioId != null && config.sparkline) {
+            pinned?.let { BtWidgetRepository.loadHistory(it.id) }
+                ?.points?.map { it.valueEur }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
         provideContent {
             BtWidgetCard(
                 colors = colors,
-                action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
+                action = actionStartActivity(
+                    if (config.portfolioId == null) {
+                        btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)
+                    } else {
+                        btWidgetIntent(
+                            context,
+                            BT_WIDGET_TARGET_PORTFOLIO,
+                            portfolioId = config.portfolioId,
+                        )
+                    },
+                ),
+                padding = if (btWidgetRowClass(LocalSize.current.height.value) == BtWidgetSizeClass.STRIP) {
+                    10.dp
+                } else {
+                    BT_WIDGET_PADDING
+                },
             ) {
-                Content(local, snapshot, colors)
+                Content(local, snapshot, config, pinned, sparkValues, colors, night)
             }
         }
     }
 
+    /** The figures this instance reads, whichever scope it is on. */
+    private data class Reading(
+        val subject: String,
+        val valueEur: Double?,
+        val dayEur: Double?,
+        val dayPct: Double?,
+        val partial: String?,
+    )
+
     @Composable
     private fun ColumnScope.Content(
-        context: Context,
+        local: Context,
         snapshot: BtWidgetSnapshot,
+        config: BtWidgetPulseConfig,
+        pinned: at.bettertrack.app.data.db.PortfolioEntity?,
+        sparkValues: List<Double>,
         colors: BtGlanceColors,
+        night: Boolean,
     ) {
-        BtWidgetLabel(context.getString(R.string.bt_widget_net_worth_title), colors)
-        Spacer(GlanceModifier.height(6.dp))
-
         when {
             snapshot.session == BtWidgetSession.SIGNED_OUT ->
                 BtWidgetMessage(
-                    context.getString(R.string.bt_widget_signed_out),
+                    local.getString(R.string.bt_widget_signed_out),
                     colors,
                     emphasis = true,
                 )
 
-            snapshot.session == BtWidgetSession.LOADING || snapshot.netWorthSyncing ->
-                BtWidgetMessage(context.getString(R.string.bt_widget_syncing), colors)
+            snapshot.session == BtWidgetSession.LOADING ->
+                BtWidgetMessage(local.getString(R.string.bt_widget_syncing), colors)
 
-            snapshot.noPortfolios ->
-                BtWidgetMessage(context.getString(R.string.bt_widget_no_portfolios), colors)
+            config.portfolioId != null && pinned == null -> {
+                BtWidgetTag(config.portfolioName, colors)
+                BtWidgetMessage(local.getString(R.string.bt_widget_portfolio_missing), colors)
+            }
 
-            else -> Figures(context, snapshot, colors)
+            config.portfolioId != null && pinned?.totals == null -> {
+                BtWidgetTag(pinned?.name ?: config.portfolioName, colors)
+                BtWidgetMessage(local.getString(R.string.bt_widget_syncing), colors)
+            }
+
+            config.portfolioId == null && snapshot.netWorthSyncing ->
+                BtWidgetMessage(local.getString(R.string.bt_widget_syncing), colors)
+
+            config.portfolioId == null && snapshot.noPortfolios ->
+                BtWidgetMessage(local.getString(R.string.bt_widget_no_portfolios), colors)
+
+            else -> {
+                val reading = if (pinned?.totals != null) {
+                    Reading(
+                        subject = pinned.name,
+                        valueEur = pinned.totals?.totalValueEur,
+                        dayEur = pinned.totals?.dayChangeEur,
+                        dayPct = pinned.totals?.dayChangePct,
+                        partial = null,
+                    )
+                } else {
+                    val net = snapshot.netWorth ?: return
+                    Reading(
+                        subject = local.getString(R.string.bt_widget_pulse_all),
+                        valueEur = net.eur,
+                        dayEur = net.dayChangeEur,
+                        dayPct = net.dayChangePct,
+                        partial = if (net.partial) {
+                            local.getString(R.string.bt_widget_partial, net.covered, net.active)
+                        } else {
+                            null
+                        },
+                    )
+                }
+                when {
+                    // 1x1 (round 2b): one answer, whole euros, the percent — and
+                    // nothing else. No subject, no freshness copy, no sparkline.
+                    LocalSize.current.width < MICRO_MAX_W ->
+                        Micro(local, snapshot, reading, colors)
+
+                    btWidgetRowClass(LocalSize.current.height.value) == BtWidgetSizeClass.STRIP ->
+                        Line(local, snapshot, config, reading, colors)
+
+                    else -> Block(local, snapshot, config, reading, sparkValues, colors, night)
+                }
+            }
         }
     }
 
+    /**
+     * The 2x1-and-up card: subject row, big figure, delta pill — the study's
+     * pulse hierarchy composed per size CLASS (device QA 2026-08-16):
+     *
+     *  * ROW1 (a real launcher row is 92–120dp) — the mockup's 2x1/4x1: figure
+     *    and pill bottom-anchored under the subject; the wide pinned reading
+     *    earns its 1M trace on the right half, painted at the exact dp it
+     *    occupies (no FillBounds stretch — that was the "squished" defect).
+     *  * ROW2+ (legacy tall placements; new ones are capped by maxResizeHeight)
+     *    — the pinned reading becomes a mini performance card (figure over the
+     *    trace); the aggregate reading centres its figure group as ONE unit
+     *    instead of leaving the old floating void.
+     */
     @Composable
-    private fun Figures(context: Context, snapshot: BtWidgetSnapshot, colors: BtGlanceColors) {
-        val net = snapshot.netWorth ?: return
-        val locale = btWidgetLocale(context)
-        val compact = LocalSize.current.width < MEDIUM.width
+    private fun ColumnScope.Block(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        config: BtWidgetPulseConfig,
+        reading: Reading,
+        sparkValues: List<Double>,
+        colors: BtGlanceColors,
+        night: Boolean,
+    ) {
+        val locale = btWidgetLocale(local)
+        val size = LocalSize.current
+        val wide = btWidgetIsWide(size.width.value)
+        val tall = btWidgetRowClass(size.height.value) >= BtWidgetSizeClass.ROW2
+        // ROW1 wide: trace beside the figures. ROW2+: trace under them.
+        val chart = sparkValues.size >= 2 && (wide || tall)
 
-        Text(
-            text = btWidgetMoney(net.eur, BT_WIDGET_QUOTE_CURRENCY, snapshot.discreet, locale),
-            style = TextStyle(
-                color = colors.textPrimary,
-                fontSize = if (compact) 20.sp else 26.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            maxLines = 1,
-        )
-
-        // Omitted entirely when the hero says the day change is not showable —
-        // see [btWidgetNetWorth]. A missing line is honest; a "+0,00 €" is not.
-        if (net.dayChangeEur != null || net.dayChangePct != null) {
-            Spacer(GlanceModifier.height(4.dp))
-            val tone = colors.tone(btWidgetTone(net.dayChangeEur ?: net.dayChangePct))
-            val style = TextStyle(color = tone, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Row {
-                if (!compact) {
-                    Text(
-                        text = btWidgetMoney(
-                            value = net.dayChangeEur,
-                            currency = BT_WIDGET_QUOTE_CURRENCY,
-                            discreet = snapshot.discreet,
-                            locale = locale,
-                            showSign = true,
-                        ),
-                        style = style,
-                        maxLines = 1,
-                    )
-                    Spacer(GlanceModifier.width(8.dp))
-                }
-                Text(text = btWidgetPercent(net.dayChangePct, locale), style = style, maxLines = 1)
+        BtSubjectRow(reading.subject, colors) {
+            snapshot.netWorthAsOfMs?.let { asOf ->
+                Text(
+                    text = DateFormat.getTimeInstance(DateFormat.SHORT, locale)
+                        .format(Date(asOf)),
+                    style = TextStyle(color = colors.textMuted, fontSize = 9.sp),
+                    maxLines = 1,
+                )
             }
         }
 
-        // Two honesty markers, and neither is decoration: `partial` means some
-        // active portfolio has never synced its totals, so the figure above is a
-        // sum of fewer things than the user owns.
-        if (net.partial) {
-            Spacer(GlanceModifier.height(4.dp))
+        // When the 1M trace is shown, the pill reads the SAME window — round
+        // 1's "+1.924,60 € · +5,25 % im Monat" — from the series' two
+        // endpoints; the "1M" tag by the chart names it. The pill and the
+        // chart must never describe two different windows.
+        val monthDelta = if (chart) btWidgetSeriesDelta(sparkValues) else null
+        val figureSp = if (tall || wide) 28f else 24f
+
+        if (tall && chart) {
+            // Mini performance composition: figures top, trace filling the rest.
             Text(
-                text = context.getString(R.string.bt_widget_partial, net.covered, net.active),
-                style = TextStyle(color = colors.textMuted, fontSize = 10.sp),
+                text = btWidgetMoney(
+                    reading.valueEur, BT_WIDGET_QUOTE_CURRENCY, snapshot.discreet, locale,
+                ),
+                style = TextStyle(
+                    color = colors.textPrimary,
+                    fontSize = figureSp.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
                 maxLines = 1,
             )
+            Spacer(GlanceModifier.height(4.dp))
+            PillRow(local, snapshot, config, reading, monthDelta, colors, locale)
+            Spacer(GlanceModifier.height(6.dp))
+            val fs = btWidgetFontScale(local)
+            val chartHDp = (size.height.value - 2 * BT_WIDGET_PADDING.value -
+                btWidgetTextDp(11f, fs) - btWidgetTextDp(figureSp, fs) -
+                btWidgetTextDp(11f, fs) - 8f - btWidgetTextDp(9f, fs) - 24f)
+                .coerceAtLeast(40f)
+            ExactTrace(
+                local, sparkValues,
+                widthDp = size.width.value - 2 * BT_WIDGET_PADDING.value,
+                heightDp = chartHDp,
+                night = night,
+                contentDescription = reading.subject,
+            )
+            Spacer(GlanceModifier.defaultWeight())
+            BtMicroLabel(local.getString(R.string.bt_widget_range_1m), colors)
+            return
         }
-        if (snapshot.netWorthStale && snapshot.netWorthAsOfMs != null) {
-            Spacer(GlanceModifier.height(2.dp))
-            BtWidgetAsOf(context, snapshot.netWorthAsOfMs, colors, locale)
+
+        Row(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+            Column(
+                modifier = GlanceModifier.defaultWeight().fillMaxHeight(),
+                verticalAlignment = if (tall) {
+                    Alignment.CenterVertically
+                } else {
+                    // The mockup's 2x1: the answer sits low, under the subject.
+                    Alignment.Bottom
+                },
+            ) {
+                Text(
+                    text = btWidgetMoney(
+                        reading.valueEur,
+                        BT_WIDGET_QUOTE_CURRENCY,
+                        snapshot.discreet,
+                        locale,
+                    ),
+                    style = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = figureSp.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+                if (monthDelta != null || reading.dayEur != null || reading.dayPct != null) {
+                    Spacer(GlanceModifier.height(5.dp))
+                    PillRow(local, snapshot, config, reading, monthDelta, colors, locale)
+                }
+                if (snapshot.netWorthStale && snapshot.netWorthAsOfMs != null) {
+                    Spacer(GlanceModifier.height(3.dp))
+                    BtWidgetAsOf(local, snapshot.netWorthAsOfMs, colors, locale)
+                }
+                if (!tall) Spacer(GlanceModifier.height(2.dp))
+            }
+            if (chart) {
+                Spacer(GlanceModifier.width(12.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    val fs = btWidgetFontScale(local)
+                    val chartWDp = (size.width.value - 2 * BT_WIDGET_PADDING.value - 12f) / 2f
+                    val chartHDp = (size.height.value - 2 * BT_WIDGET_PADDING.value -
+                        btWidgetTextDp(11f, fs) - btWidgetTextDp(9f, fs) - 6f)
+                        .coerceAtLeast(24f)
+                    ExactTrace(
+                        local, sparkValues,
+                        widthDp = chartWDp,
+                        heightDp = chartHDp,
+                        night = night,
+                        contentDescription = reading.subject,
+                    )
+                    BtMicroLabel(local.getString(R.string.bt_widget_range_1m), colors)
+                }
+            }
+        }
+    }
+
+    /** The delta pill and the optional partial note, on one line. */
+    @Composable
+    private fun PillRow(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        config: BtWidgetPulseConfig,
+        reading: Reading,
+        monthDelta: BtWidgetSeriesDelta?,
+        colors: BtGlanceColors,
+        locale: java.util.Locale,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BtDeltaPill(
+                text = btWidgetDeltaText(
+                    monthDelta?.eur ?: reading.dayEur,
+                    monthDelta?.pct ?: reading.dayPct,
+                    snapshot.discreet,
+                    locale,
+                    config.style,
+                ),
+                tone = btWidgetTone(
+                    (monthDelta?.eur ?: reading.dayEur)
+                        ?: (monthDelta?.pct ?: reading.dayPct),
+                ),
+                colors = colors,
+            )
+            reading.partial?.let {
+                Spacer(GlanceModifier.width(6.dp))
+                Text(
+                    text = it,
+                    style = TextStyle(color = colors.textMuted, fontSize = 9.sp),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+
+    /**
+     * The 1M trace, painted at the EXACT dp box it occupies. Explicit size on
+     * the Image (not fillMaxSize into a weighted box) is the anti-squish rule:
+     * the bitmap and the box are the same rectangle, so nothing rescales.
+     */
+    @Composable
+    private fun ExactTrace(
+        local: Context,
+        sparkValues: List<Double>,
+        widthDp: Float,
+        heightDp: Float,
+        night: Boolean,
+        contentDescription: String,
+    ) {
+        val density = local.resources.displayMetrics.density
+        val (wPx, hPx) = btWidgetBitmapSize(widthDp, heightDp, density)
+        val bitmap = btWidgetLineBitmap(
+            normalized = btWidgetSparkNormalize(
+                btWidgetSparkThin(sparkValues, BT_WIDGET_SPARK_MAX_POINTS),
+            ),
+            widthPx = wPx,
+            heightPx = hPx,
+            lineColor = BtGlanceChartPalette.portfolioLine(night),
+            density = density,
+            endpointRingColor = BtGlanceChartPalette.surface(night),
+        )
+        Image(
+            provider = ImageProvider(bitmap),
+            contentDescription = contentDescription,
+            modifier = GlanceModifier.width(widthDp.dp).height(heightDp.dp),
+            contentScale = ContentScale.FillBounds,
+        )
+    }
+
+    /** The 1x1 micro: the whole-euro figure over its day percent. */
+    @Composable
+    private fun ColumnScope.Micro(
+        context: Context,
+        snapshot: BtWidgetSnapshot,
+        reading: Reading,
+        colors: BtGlanceColors,
+    ) {
+        val locale = btWidgetLocale(context)
+        Column(
+            modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = btWidgetMoneyWhole(
+                    reading.valueEur,
+                    BT_WIDGET_QUOTE_CURRENCY,
+                    snapshot.discreet,
+                    locale,
+                ),
+                style = TextStyle(
+                    color = colors.textPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+            if (reading.dayPct != null) {
+                Text(
+                    text = btWidgetPercent(reading.dayPct, locale),
+                    style = TextStyle(
+                        color = colors.tone(btWidgetTone(reading.dayPct)),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+
+    /** The 1-cell strip: figure left, pill right — nothing else fits honestly. */
+    @Composable
+    private fun ColumnScope.Line(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        config: BtWidgetPulseConfig,
+        reading: Reading,
+        colors: BtGlanceColors,
+    ) {
+        val locale = btWidgetLocale(local)
+        Row(
+            modifier = GlanceModifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = btWidgetMoney(
+                    reading.valueEur,
+                    BT_WIDGET_QUOTE_CURRENCY,
+                    snapshot.discreet,
+                    locale,
+                ),
+                style = TextStyle(
+                    color = colors.textPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.defaultWeight(),
+            )
+            reading.partial?.let {
+                Text(
+                    text = it,
+                    style = TextStyle(color = colors.textMuted, fontSize = 9.sp),
+                    maxLines = 1,
+                )
+                Spacer(GlanceModifier.width(6.dp))
+            }
+            if (reading.dayEur != null || reading.dayPct != null) {
+                BtDeltaPill(
+                    text = btWidgetDeltaText(
+                        reading.dayEur,
+                        reading.dayPct,
+                        snapshot.discreet,
+                        locale,
+                        // The strip always shows the percent-first compact form.
+                        BtWidgetDeltaStyle.PERCENT,
+                    ),
+                    tone = btWidgetTone(reading.dayEur ?: reading.dayPct),
+                    colors = colors,
+                )
+            }
         }
     }
 
     private companion object {
-        /** ~2x2. */
-        val COMPACT = DpSize(140.dp, 100.dp)
-
-        /** ~4x2. */
-        val MEDIUM = DpSize(250.dp, 100.dp)
+        /**
+         * Below this width the card is a 1x1 micro (round 2b) — the bare
+         * whole-euro figure and its percent. Every real 2-cell placement on the
+         * measured grids reports ≥ 160dp.
+         */
+        val MICRO_MAX_W = 110.dp
     }
 }

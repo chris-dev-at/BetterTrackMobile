@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Watchlist widget: ticker rows with coloured day moves.
+  Pre-API-31 picker preview image (SAMPLE rendering; API 31+ uses the
+  matching res/layout preview with real text). Sizes are dp at 1x.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_surface" />
+            <corners android:radius="20dp" />
+            <size
+                android:width="160dp"
+                android:height="100dp" />
+        </shape>
+    </item>
+    <item
+        android:left="14dp"
+        android:top="16dp"
+        android:right="94dp"
+        android:bottom="74dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_text_primary" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item
+        android:left="120dp"
+        android:top="16dp"
+        android:right="14dp"
+        android:bottom="74dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_gain" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item
+        android:left="14dp"
+        android:top="45dp"
+        android:right="102dp"
+        android:bottom="45dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_text_primary" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item
+        android:left="120dp"
+        android:top="45dp"
+        android:right="14dp"
+        android:bottom="45dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_loss" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item
+        android:left="14dp"
+        android:top="74dp"
+        android:right="90dp"
+        android:bottom="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_text_primary" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <item
+        android:left="120dp"
+        android:top="74dp"
+        android:right="14dp"
+        android:bottom="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_gain" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+</layer-list>

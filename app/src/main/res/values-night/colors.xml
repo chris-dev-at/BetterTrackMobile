@@ -11,4 +11,22 @@
     <color name="bt_bg">#FF0A0D12</color>
     <color name="bt_surface">#FF161B22</color>
     <color name="bt_border">#FF272C33</color>
+
+    <!-- Widget picker-preview palette, night side — see res/values/colors.xml. -->
+    <color name="bt_widget_surface">#FF161B22</color>
+    <color name="bt_widget_track">#FF272C33</color>
+    <color name="bt_widget_text_primary">#FFF4F6F8</color>
+    <color name="bt_widget_text_secondary">#FFC7CDD5</color>
+    <color name="bt_widget_text_muted">#FF8B949F</color>
+    <color name="bt_widget_gold">#FFF6B82E</color>
+    <color name="bt_widget_gain">#FF34D399</color>
+    <color name="bt_widget_loss">#FFFB7185</color>
+    <color name="bt_widget_gold_wash">#22F6B82E</color>
+    <color name="bt_widget_series_1">#FF3987E5</color>
+    <color name="bt_widget_series_2">#FFD95926</color>
+    <color name="bt_widget_series_3">#FF199E70</color>
+    <color name="bt_widget_chip">#FF20262E</color>
+    <color name="bt_widget_gain_wash">#FF1A3533</color>
+    <color name="bt_widget_loss_wash">#FF362730</color>
+    <color name="bt_widget_on_gold">#FF171105</color>
 </resources>

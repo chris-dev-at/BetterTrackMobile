@@ -70,9 +70,11 @@ class BtWidgetManifestTest {
         // outcome this file could have.
         assertTrue("expected some <receiver> entries, found none", receivers().isNotEmpty())
         assertEquals(
-            "expected the five widget receivers (net worth, watchlist, portfolio " +
-                "stats, top movers, budget), found " + widgetReceivers().map { it.first },
-            5,
+            "expected the nine widget receivers of the 2026-08-16 redesign " +
+                "(pulse/net worth, performance/portfolio, asset, watchlist, " +
+                "movers, budget, monthly flow, allocation, quick actions), " +
+                "found " + widgetReceivers().map { it.first },
+            9,
             widgetReceivers().size,
         )
     }
@@ -109,17 +111,20 @@ class BtWidgetManifestTest {
     @Test
     fun `every declared widget class is wired into the manifest`() {
         // The direction that catches the real mistake: the Glance work is done,
-        // the manifest entry is not, and the widget never appears.
+        // the manifest entry is not, and the widget never appears. Concrete
+        // receivers extend the shared BtWidgetReceiver base (which is itself the
+        // GlanceAppWidgetReceiver subclass), so both spellings are scanned.
         val declared = widgetReceivers().map { simpleName(it.first) }.toSet()
         val defined = mainSources().flatMap { file ->
-            Regex("""class\s+([A-Za-z0-9_]+)\s*:\s*GlanceAppWidgetReceiver\(\)""")
+            Regex("""class\s+([A-Za-z0-9_]+)\s*:\s*(?:GlanceAppWidgetReceiver|BtWidgetReceiver)\(\)""")
                 .findAll(file.readText())
                 .map { it.groupValues[1] }
+                .filterNot { it == "BtWidgetReceiver" }
                 .toList()
         }
-        assertTrue("no GlanceAppWidgetReceiver subclasses found — has the scan broken?", defined.isNotEmpty())
+        assertTrue("no widget receiver subclasses found — has the scan broken?", defined.isNotEmpty())
         val missing = defined.filterNot { it in declared }
-        assertTrue("GlanceAppWidgetReceiver subclasses not declared in the manifest: $missing", missing.isEmpty())
+        assertTrue("widget receiver subclasses not declared in the manifest: $missing", missing.isEmpty())
     }
 
     @Test
@@ -135,6 +140,45 @@ class BtWidgetManifestTest {
             }
             .map { it.first }
         assertTrue("widget receivers must be exported to appear in the picker: $offenders", offenders.isEmpty())
+    }
+
+    @Test
+    fun `every configure activity a provider names is a registered, exported activity`() {
+        // The configurable widgets' equivalent of the receiver/XML pairing: an
+        // android:configure that names an unregistered (or unexported) Activity
+        // is a widget whose placement hangs or silently cancels — the host is
+        // another app and can only launch what the manifest admits to.
+        val xmlDir = projectFile("src/main/res/xml")
+        val configures = xmlDir.listFiles().orEmpty()
+            .filter { it.isFile && it.readText().contains("<appwidget-provider") }
+            .mapNotNull { file ->
+                Regex("""android:configure\s*=\s*"([^"]+)"""").find(file.readText())
+                    ?.groupValues?.get(1)?.let { file.name to it }
+            }
+        assertTrue("expected at least one configurable widget", configures.isNotEmpty())
+
+        val offenders = configures.flatMap { (xml, activity) ->
+            val simple = simpleName(activity)
+            buildList {
+                val registered = Regex(
+                    """<activity\b[^>]*?android:name\s*=\s*"[^"]*$simple"[^>]*?>""",
+                    RegexOption.DOT_MATCHES_ALL,
+                ).containsMatchIn(manifest())
+                if (!registered) add("$xml: $activity is not a registered <activity>")
+                val exported = Regex(
+                    """<activity\b[^>]*?android:name\s*=\s*"[^"]*$simple"[^>]*?android:exported\s*=\s*"true"""",
+                    RegexOption.DOT_MATCHES_ALL,
+                ).containsMatchIn(manifest()) || Regex(
+                    """<activity\b[^>]*?android:exported\s*=\s*"true"[^>]*?android:name\s*=\s*"[^"]*$simple"""",
+                    RegexOption.DOT_MATCHES_ALL,
+                ).containsMatchIn(manifest())
+                if (registered && !exported) add("$xml: $activity must be exported for the host to launch it")
+                if (!mainSources().any { it.readText().contains("class $simple ") }) {
+                    add("$xml: $activity names a class that does not exist")
+                }
+            }
+        }
+        assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
     }
 
     @Test
@@ -159,5 +203,59 @@ class BtWidgetManifestTest {
             }
         }
         assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
+    }
+
+    @Test
+    fun `every provider ships real picker previews, not the loading spinner`() {
+        // The owner's 2026-08-16 verdict: "the preview for these dont load …
+        // give them like a dummy view". previewLayout (API 31+) and
+        // previewImage (older pickers) are the fix, and both must exist and
+        // point at resources that exist — a provider without them regresses to
+        // the spinner (or the bare app icon) silently.
+        val xmlDir = projectFile("src/main/res/xml")
+        val layoutDir = projectFile("src/main/res/layout")
+        val drawableDir = projectFile("src/main/res/drawable")
+        val providers = xmlDir.listFiles().orEmpty()
+            .filter { it.isFile && it.readText().contains("<appwidget-provider") }
+        assertTrue("no appwidget-provider XML found", providers.isNotEmpty())
+
+        val offenders = providers.flatMap { file ->
+            val text = file.readText()
+            buildList {
+                val layout = Regex("""android:previewLayout\s*=\s*"@layout/([A-Za-z0-9_]+)"""")
+                    .find(text)?.groupValues?.get(1)
+                when {
+                    layout == null -> add("${file.name}: no previewLayout")
+                    layout.startsWith("glance_") ->
+                        add("${file.name}: previewLayout is the Glance spinner again")
+                    !File(layoutDir, "$layout.xml").isFile ->
+                        add("${file.name}: previewLayout @layout/$layout does not exist")
+                }
+                val image = Regex("""android:previewImage\s*=\s*"@drawable/([A-Za-z0-9_]+)"""")
+                    .find(text)?.groupValues?.get(1)
+                when {
+                    image == null -> add("${file.name}: no previewImage (pre-31 pickers)")
+                    !File(drawableDir, "$image.xml").isFile ->
+                        add("${file.name}: previewImage @drawable/$image does not exist")
+                }
+            }
+        }
+        assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
+    }
+
+    @Test
+    fun `optional configuration always names a configure activity`() {
+        // configuration_optional without android:configure is a contradiction
+        // the platform ignores silently: the flag only means anything when
+        // there is a configure step to skip.
+        val xmlDir = projectFile("src/main/res/xml")
+        val offenders = xmlDir.listFiles().orEmpty()
+            .filter { it.isFile && it.readText().contains("configuration_optional") }
+            .filterNot { it.readText().contains("android:configure") }
+            .map { it.name }
+        assertTrue(
+            "configuration_optional without android:configure: $offenders",
+            offenders.isEmpty(),
+        )
     }
 }

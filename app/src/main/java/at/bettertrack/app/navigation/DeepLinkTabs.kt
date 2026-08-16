@@ -150,6 +150,19 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     // Cash sheet over it — the same shape as a held-position detail above.
     is NotifDeepLink.Cash -> BtTab.Portfolio
 
+    // A specific portfolio is a SELECTION inside the Portfolio tab (the
+    // switcher's own state), so it names the tab that renders it and the shell
+    // pairs the switch with the selection — the same shape as Overview above.
+    // Added for the home-screen portfolio widgets (2026-08-16).
+    is NotifDeepLink.Portfolio -> BtTab.Portfolio
+
+    // Quick-actions widget (2026-08-16): a new trade is portfolio work, a new
+    // cash entry lives on the Portfolio tab's Cash sheet, and search is the
+    // Markets tab's own first control.
+    NotifDeepLink.AddTransaction -> BtTab.Portfolio
+    NotifDeepLink.AddCashEntry -> BtTab.Portfolio
+    NotifDeepLink.MarketSearch -> BtTab.Markets
+
     // Account-level: owned by no tab, pushed over the current one — see the KDoc.
     // The inbox belongs here for the same reason and one of its own: it is now
     // reachable from the bell on ALL FOUR tabs, so there is no tab it could be

@@ -72,7 +72,6 @@ class BtWidgetPaletteMirrorTest {
 
     /** Widget token → the `BtColors` property it mirrors. */
     private val mirrored = mapOf(
-        BtGlanceColor.Surface to "surface",
         BtGlanceColor.TextPrimary to "textPrimary",
         BtGlanceColor.TextSecondary to "textSecondary",
         BtGlanceColor.TextMuted to "textMuted",
@@ -80,6 +79,21 @@ class BtWidgetPaletteMirrorTest {
         BtGlanceColor.Gold to "goldInk",
         BtGlanceColor.Gain to "gain",
         BtGlanceColor.Loss to "loss",
+        // Round 2: the active-range-chip ink. onGold is copyable verbatim.
+        BtGlanceColor.OnGold to "onGold",
+    )
+
+    /**
+     * Tokens allowed to render identically in both modes, each with its reason.
+     * NOT a loosening lever: an entry here must name a substrate that itself
+     * does not flip. (The wash tokens are absent on purpose — they flatten over
+     * [BtGlanceColor.Surface], which flips, so they must flip too.)
+     */
+    private val flatExempt = mapOf(
+        // Ink on the brand-gold chip fill. Gold at fill strength is the one
+        // brand constant (see res/values/colors.xml `bt_gold`), so the ink
+        // contrasting with it is constant by construction.
+        BtGlanceColor.OnGold to "sits on brand gold, which does not flip",
     )
 
     @Test
@@ -118,17 +132,22 @@ class BtWidgetPaletteMirrorTest {
     }
 
     @Test
-    fun `the border mirrors the app's own flattened hairline`() {
-        // `BtColors.border` is an alpha hairline and cannot be copied directly;
-        // the app already publishes the flattened result for XML consumers, and
-        // the widget must use exactly that rather than flattening it a second
-        // time with a different answer.
+    fun `the card's NIGHT side mirrors the app, the DAY side pins the study ruling`() {
+        // Owner ruling 2026-08-16 (device review): the light widget card takes
+        // the Codex study's warm off-white and its border, NOT the app's pure
+        // white — a white card on a launcher read as unstyled. The night side
+        // stays the brand mirror. These literals are the ruling; changing them
+        // is a design decision, not a cleanup.
+        assertEquals("#FFFBFBF9", hex(BtGlanceColor.Surface.day))
+        assertEquals("#FFD9D9D4", hex(BtGlanceColor.Border.day))
+        assertEquals("#FFEFEFEB", hex(BtGlanceColor.Chip.day))
+        // Night: surface is BtColors.surface; border is the app's flattened
+        // bt_border, exactly as published for XML consumers.
+        assertEquals(token("BtDarkColors", "surface"), hex(BtGlanceColor.Surface.night))
         fun btBorder(qualifier: String): String? =
             Regex("""<color name="bt_border">(#[0-9A-Fa-f]{8})</color>""")
                 .find(projectFile("src/main/res/values$qualifier/colors.xml").readText())
                 ?.groupValues?.get(1)?.uppercase(Locale.ROOT)
-
-        assertEquals(hex(BtGlanceColor.Border.day), btBorder(""))
         assertEquals(hex(BtGlanceColor.Border.night), btBorder("-night"))
     }
 
@@ -139,8 +158,43 @@ class BtWidgetPaletteMirrorTest {
         // it matters more here: a widget sits on the user's wallpaper with no app
         // chrome to hide a mismatch. Gold is the sanctioned exception in the app's
         // palette, and even it differs (goldInk steps down on white).
-        val flat = BtGlanceColor.entries.filter { it.day == it.night }
+        val flat = BtGlanceColor.entries
+            .filter { it.day == it.night }
+            .filterNot { it in flatExempt }
         assertTrue("widget colours that do not flip with the theme: $flat", flat.isEmpty())
+    }
+
+    @Test
+    fun `the delta-pill washes really are the brand hue flattened over the card`() {
+        // The washes cannot be alpha colours (RemoteViews composites over the
+        // wallpaper, not the card), so BtGlanceColor carries them PRE-flattened.
+        // This re-derives each from its hue + Surface and pins the arithmetic,
+        // so a Surface or hue retune cannot leave a stale wash behind.
+        fun flatten(surface: Long, hue: Long, alpha: Double): Long {
+            fun ch(v: Long, shift: Int) = (v shr shift) and 0xFF
+            fun mix(shift: Int) =
+                Math.round(ch(surface, shift) * (1 - alpha) + ch(hue, shift) * alpha)
+            return 0xFF000000L or (mix(16) shl 16) or (mix(8) shl 8) or mix(0)
+        }
+
+        val cases = listOf(
+            Triple(BtGlanceColor.GainWash, BtGlanceColor.Gain, "GainWash"),
+            Triple(BtGlanceColor.LossWash, BtGlanceColor.Loss, "LossWash"),
+            Triple(BtGlanceColor.GoldWash, BtGlanceColor.Gold, "GoldWash"),
+        )
+        val offenders = cases.flatMap { (wash, hue, name) ->
+            buildList {
+                // Day pills sit on white at 12 %; night steps up to 14 % exactly
+                // as the app's own wash tokens strengthen on dark.
+                val day = flatten(BtGlanceColor.Surface.day, hue.day, 0.12)
+                val night = flatten(BtGlanceColor.Surface.night, hue.night, 0.14)
+                if (wash.day != day) add("$name day: expected ${hex(day)} got ${hex(wash.day)}")
+                if (wash.night != night) {
+                    add("$name night: expected ${hex(night)} got ${hex(wash.night)}")
+                }
+            }
+        }
+        assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
     }
 
     @Test

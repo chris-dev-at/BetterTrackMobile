@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allocation widget (at.bettertrack.app.widget.BtAllocationWidget) — reinstated
+  in round 2 by owner ruling, restyled to the Codex study's family 05.
+
+  configuration_optional: the defaults (grouped by asset class, cash included,
+  total centred) ARE a complete widget; the picker narrows grouping/cash/centre
+  on long-press or from the in-app builder. Same initialLayout /
+  updatePeriodMillis / preview reasoning as bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtAllocationWidgetConfigActivity"
+    android:description="@string/bt_widget_allocation_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:maxResizeHeight="260dp"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewImage="@drawable/bt_widget_preview_img_allocation"
+    android:previewLayout="@layout/bt_widget_preview_allocation"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Portfolio widget (at.bettertrack.app.widget.BtPortfolioWidget).
+
+  configuration_optional (API 28+): placement NEVER blocks on the picker — an
+  unconfigured instance follows the app's own portfolio selection and renders
+  real figures on the first draw. "reconfigurable" offers the picker on
+  long-press to PIN the card to one portfolio. Same initialLayout /
+  updatePeriodMillis / preview reasoning as bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtPortfolioWidgetConfigActivity"
+    android:description="@string/bt_widget_portfolio_pick_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="250dp"
+    android:minWidth="250dp"
+    android:previewImage="@drawable/bt_widget_preview_img_portfolio"
+    android:previewLayout="@layout/bt_widget_preview_portfolio"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

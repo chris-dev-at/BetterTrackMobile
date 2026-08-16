@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Movers widget (at.bettertrack.app.widget.BtMoversWidget).
+
+  2x2 = the ranked list; stretched to 4 cells wide it splits into winners |
+  losers. Same initialLayout / updatePeriodMillis / preview reasoning as
+  bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtMoversWidgetConfigActivity"
+    android:description="@string/bt_widget_movers_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewImage="@drawable/bt_widget_preview_img_movers"
+    android:previewLayout="@layout/bt_widget_preview_movers"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

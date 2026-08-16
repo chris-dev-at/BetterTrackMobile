@@ -47,7 +47,7 @@ class BtWidgetRefreshWorker(
         }
         if (warm) {
             try {
-                BtWidgetRepository.warm()
+                BtWidgetRepository.warm(applicationContext)
             } catch (e: Exception) {
                 // Forcing the graph can fail outright in a fresh process; the
                 // repaint below still shows whatever Room already had.

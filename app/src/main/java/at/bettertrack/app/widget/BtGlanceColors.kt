@@ -56,6 +56,14 @@ class BtGlanceColors(
     val gold: ColorProvider,
     val gain: ColorProvider,
     val loss: ColorProvider,
+    /** Neutral context-chip fill (the study's `--chip`), one tonal step off the card. */
+    val chip: ColorProvider,
+    /** Flattened washes for the delta pills — see [BtGlanceColor.GainWash]. */
+    val gainWash: ColorProvider,
+    val lossWash: ColorProvider,
+    val goldWash: ColorProvider,
+    /** Ink on a gold-filled chip (the active range chip) — `BtColors.onGold`. */
+    val onGold: ColorProvider,
 ) {
     /**
      * The colour of a signed number. Flat is [textSecondary], not [gain]: a day
@@ -79,11 +87,21 @@ class BtGlanceColors(
  * `bt_border` and its night twin) — same reasoning, same numbers.
  */
 enum class BtGlanceColor(val day: Long, val night: Long) {
-    /** `BtColors.surface` — the widget card. */
-    Surface(0xFFFFFFFF, 0xFF161B22),
+    /**
+     * The widget card. NIGHT mirrors `BtColors.surface`; DAY is the Codex
+     * study's warm off-white (`--surface: #fbfbf9`), owner-ruled 2026-08-16 —
+     * a pure-white card on a launcher read as "default-white", and the widget
+     * sits on the wallpaper, not on the app's page, so it takes the study's
+     * value rather than the app token. The palette-mirror test pins this
+     * ruling explicitly.
+     */
+    Surface(0xFFFBFBF9, 0xFF161B22),
 
-    /** `BtColors.border`, flattened — see the enum KDoc. */
-    Border(0xFFDCDEE2, 0xFF272C33),
+    /**
+     * NIGHT mirrors the app's flattened `bt_border`; DAY is the study's
+     * `--border: #d9d9d4`, part of the same owner ruling as [Surface].
+     */
+    Border(0xFFD9D9D4, 0xFF272C33),
 
     TextPrimary(0xFF131820, 0xFFF4F6F8),
     TextSecondary(0xFF3E4650, 0xFFC7CDD5),
@@ -98,6 +116,34 @@ enum class BtGlanceColor(val day: Long, val night: Long) {
 
     Gain(0xFF0F7853, 0xFF34D399),
     Loss(0xFFB23A4E, 0xFFFB7185),
+
+    /**
+     * The neutral context-chip fill (widget redesign round 2, per the Codex
+     * study's `--chip`): one quiet tonal step off the card, carrying the "EUR" /
+     * month / grouping badges. Mapped onto the brand neutrals rather than the
+     * study's raw greys so it sits on OUR surfaces.
+     */
+    Chip(0xFFEFEFEB, 0xFF20262E),
+
+    /**
+     * The delta pills' tinted fills. A RemoteViews colour cannot carry alpha
+     * (see `every token is fully opaque`), so these are the brand hue
+     * PRE-FLATTENED over [Surface] at pill strength (12 % day / 14 % night —
+     * night washes step up exactly as the app's own wash tokens do). Recompute
+     * when Surface / Gain / Loss / Gold change; the derivation lives in this
+     * KDoc so the next retune has the formula.
+     */
+    GainWash(0xFFDFEBE5, 0xFF1A3533),
+    LossWash(0xFFF2E4E4, 0xFF362730),
+    GoldWash(0xFFF6F0E0, 0xFF353124),
+
+    /**
+     * Ink on a gold-filled chip — `BtColors.onGold`, verbatim. Deliberately the
+     * SAME on both sides: the substrate it sits on is the brand gold, which does
+     * not flip with the theme, so the ink that must contrast with it cannot
+     * flip either. The palette-mirror test carries a named exemption for it.
+     */
+    OnGold(0xFF171105, 0xFF171105),
     ;
 
     fun provider(mode: BtThemeMode): ColorProvider = when (mode) {
@@ -118,4 +164,9 @@ fun btGlanceColors(mode: BtThemeMode): BtGlanceColors = BtGlanceColors(
     gold = BtGlanceColor.Gold.provider(mode),
     gain = BtGlanceColor.Gain.provider(mode),
     loss = BtGlanceColor.Loss.provider(mode),
+    chip = BtGlanceColor.Chip.provider(mode),
+    gainWash = BtGlanceColor.GainWash.provider(mode),
+    lossWash = BtGlanceColor.LossWash.provider(mode),
+    goldWash = BtGlanceColor.GoldWash.provider(mode),
+    onGold = BtGlanceColor.OnGold.provider(mode),
 )

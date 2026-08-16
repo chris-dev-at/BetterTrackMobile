@@ -245,6 +245,42 @@ sealed interface NotifDeepLink {
      */
     data class Cash(val portfolioId: String?) : NotifDeepLink
 
+    /**
+     * A specific portfolio, SELECTED in the Portfolio tab.
+     *
+     * Never produced by [resolveDeepLink] — no push is "about" switching the
+     * user's selection. It exists for the home-screen portfolio widgets
+     * (2026-08-16): a widget showing ONE portfolio's value has exactly one
+     * honest destination, and that destination is a selection plus a tab
+     * switch, the same two-part shape [Overview] documents above. The shell
+     * writes the selection through the repository's own `selectPortfolio` and
+     * leaves Overview mode, so a stale id degrades exactly as the switcher's
+     * stored choice does — `resolveSelection` falls back rather than dead-ends.
+     */
+    data class Portfolio(val portfolioId: String) : NotifDeepLink
+
+    /**
+     * The blank transaction form (buy preselected). Never produced by
+     * [resolveDeepLink] — no push means "start typing a trade". It exists for
+     * the Quick-actions widget (owner order 2026-08-16): a launcher shortcut's
+     * whole worth is landing INSIDE the form in one tap.
+     */
+    data object AddTransaction : NotifDeepLink
+
+    /**
+     * The Cash screen, poised for a new entry. Same widget-only contract as
+     * [AddTransaction]. Deliberately the SCREEN, not a hypothetical add-sheet
+     * route: the add affordance is the screen's first control, and inventing a
+     * new nav parameter for one shortcut would be config for config's sake.
+     */
+    data object AddCashEntry : NotifDeepLink
+
+    /**
+     * The Markets tab, where global search lives. Widget-only, a pure tab
+     * switch — the search field is that tab's first control.
+     */
+    data object MarketSearch : NotifDeepLink
+
     /** Account settings (invites). */
     data object Settings : NotifDeepLink
     /** Security settings (temp-password / security events). */

@@ -50,6 +50,18 @@ const val BT_WIDGET_TARGET_ASSET: String = "asset"
 /** The budget widget: the Cash screen for the budgeted portfolio. */
 const val BT_WIDGET_TARGET_CASH: String = "cash"
 
+/** A portfolio widget: the Portfolio tab with that portfolio selected. */
+const val BT_WIDGET_TARGET_PORTFOLIO: String = "portfolio"
+
+/** Quick actions: the blank transaction form. */
+const val BT_WIDGET_TARGET_ADD_TRANSACTION: String = "add_transaction"
+
+/** Quick actions: the Cash screen, poised for a new entry. */
+const val BT_WIDGET_TARGET_ADD_CASH: String = "add_cash"
+
+/** Quick actions: the Markets tab (global search). */
+const val BT_WIDGET_TARGET_SEARCH: String = "search"
+
 /**
  * Resolve widget extras to a target. Pure and null-safe, in the same shape as
  * `resolveDeepLink`, so the mapping can be pinned on the JVM.
@@ -71,6 +83,16 @@ fun btWidgetDeepLink(
         assetId?.takeIf { it.isNotBlank() }?.let { NotifDeepLink.Asset(it) }
             ?: NotifDeepLink.Overview
     BT_WIDGET_TARGET_CASH -> NotifDeepLink.Cash(portfolioId?.takeIf { it.isNotBlank() })
+    // A portfolio target with no usable id falls back to the Overview — the one
+    // place every portfolio is visible — by the same never-a-dead-tap rule the
+    // asset target follows above.
+    BT_WIDGET_TARGET_PORTFOLIO ->
+        portfolioId?.takeIf { it.isNotBlank() }?.let { NotifDeepLink.Portfolio(it) }
+            ?: NotifDeepLink.Overview
+    // The Quick-actions tiles (2026-08-16): id-less, one destination each.
+    BT_WIDGET_TARGET_ADD_TRANSACTION -> NotifDeepLink.AddTransaction
+    BT_WIDGET_TARGET_ADD_CASH -> NotifDeepLink.AddCashEntry
+    BT_WIDGET_TARGET_SEARCH -> NotifDeepLink.MarketSearch
     else -> null
 }
 

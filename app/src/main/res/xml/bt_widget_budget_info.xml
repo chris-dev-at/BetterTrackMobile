@@ -2,23 +2,27 @@
 <!--
   Budget widget (at.bettertrack.app.widget.BtBudgetWidget).
 
-  See bt_widget_net_worth_info.xml for why initialLayout points at Glance's own
-  loading layout and why updatePeriodMillis is 0.
-
-  Defaults to 4x3: like the watchlist and top-movers widgets it is a LIST (one
-  progress bar per budget), and a single-bar default would ask every user to
-  resize it before it is useful.
+  configuration_optional (API 28+): unconfigured = the all-budgets list, so
+  placement never blocks on the picker. The picker ("reconfigurable" long-press,
+  or the in-app builder) narrows it to ONE budget in a chosen style — ring, bar
+  or number. minResizeHeight is one cell for the 2x1 bar/number readings. Same
+  initialLayout / updatePeriodMillis / preview reasoning as
+  bt_widget_net_worth_info.xml.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtBudgetWidgetConfigActivity"
     android:description="@string/bt_widget_budget_description"
     android:initialLayout="@layout/glance_default_loading_layout"
+    android:maxResizeHeight="260dp"
     android:minHeight="110dp"
-    android:minResizeHeight="110dp"
-    android:minResizeWidth="140dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="48dp"
     android:minWidth="140dp"
-    android:previewLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@drawable/bt_widget_preview_img_budget"
+    android:previewLayout="@layout/bt_widget_preview_budget"
     android:resizeMode="horizontal|vertical"
-    android:targetCellHeight="3"
-    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

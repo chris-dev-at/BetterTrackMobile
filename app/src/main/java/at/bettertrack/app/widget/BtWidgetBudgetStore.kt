@@ -29,6 +29,23 @@ data class BtWidgetBudget(
 )
 
 /**
+ * One per-tag outflow row of the month, for the Spending widget's donut —
+ * flattened out of [at.bettertrack.app.data.api.dto.CashTagSummaryDto].
+ *
+ * [untagged] marks the summary's tagId-null bucket, whose label the widget
+ * localises; [name] is "" on that row. The summary DTO's warning travels with
+ * the data: a movement carrying two tags counts fully in BOTH rows, so these
+ * are a breakdown whose sum may exceed [BtWidgetBudgetCache.totalOutflowEur] —
+ * never derive a total from them.
+ */
+@Serializable
+data class BtWidgetTagSpend(
+    val name: String = "",
+    val outflow: Double = 0.0,
+    val untagged: Boolean = false,
+)
+
+/**
  * The persisted budget blob: the rows, the month they were evaluated for, the
  * portfolio they belong to (so a tap can open THAT ledger), and whether the cash
  * layer is reachable at all.
@@ -37,6 +54,14 @@ data class BtWidgetBudget(
  * mode (no server ledger to classify) and after a `/cash` 403 (the account has no
  * `cash:read` scope). The widget renders "not available" for that, distinct from
  * [budgets] being empty, which means "a server account with no budgets set yet".
+ *
+ * Since the Spending widget (2026-08-16) the same blob also carries the month's
+ * summary breakdown ([tags], [totalInflowEur], [totalOutflowEur]) — both widgets
+ * ride the SAME `/cash/summary` read the worker was already making for the
+ * header, so caching them together costs no extra request and cannot let the
+ * two widgets show two different months. Every new field defaults, so a blob
+ * written by an older build still decodes (a missing breakdown is an empty
+ * donut, not a crash).
  */
 @Serializable
 data class BtWidgetBudgetCache(
@@ -48,6 +73,11 @@ data class BtWidgetBudgetCache(
     /** Server-computed month net (inflow − outflow), EUR, for the header; null when unknown. */
     val netEur: Double? = null,
     val budgets: List<BtWidgetBudget> = emptyList(),
+    /** Server-computed month totals (EUR); null when the summary read failed. */
+    val totalInflowEur: Double? = null,
+    val totalOutflowEur: Double? = null,
+    /** Per-tag outflow breakdown, as the summary sent it (outflow-heaviest first). */
+    val tags: List<BtWidgetTagSpend> = emptyList(),
 ) {
     companion object {
         /** A server account with nothing fetched yet, or no budgets — the empty board. */
@@ -97,9 +127,10 @@ object BtWidgetBudgetStore {
  * Build the cache from a refresh pass. Pure, so the flattening is testable.
  *
  * The budget rows come from `GET /cash/budgets` (the authoritative per-tag
- * progress); [summary] is an optional companion read that only fills the header's
- * month-net figure — when it failed the budgets still render, so its absence is a
- * missing header line, never a missing widget.
+ * progress); [summary] is an optional companion read that fills the header's
+ * month-net figure and the Spending widget's breakdown — when it failed the
+ * budgets still render, so its absence is a missing header line and an empty
+ * spending donut, never a missing widget.
  */
 fun btWidgetBudgetCache(
     portfolioId: String,
@@ -120,6 +151,17 @@ fun btWidgetBudgetCache(
             amount = row.amount,
             currency = row.currency,
             exceeded = row.exceeded,
+        )
+    },
+    totalInflowEur = summary?.totalInflow,
+    totalOutflowEur = summary?.totalOutflow,
+    tags = summary?.tags.orEmpty().map { tag ->
+        BtWidgetTagSpend(
+            // tagId == null is the summary's UNTAGGED bucket (its name is null
+            // with it); the widget supplies the localised label for that row.
+            name = tag.name.orEmpty(),
+            outflow = tag.outflow,
+            untagged = tag.tagId == null,
         )
     },
 )

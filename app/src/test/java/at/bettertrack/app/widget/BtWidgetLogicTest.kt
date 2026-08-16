@@ -69,32 +69,6 @@ class BtWidgetLogicTest {
             dayChangePct = dayPct,
         )
 
-    /** A holding with controllable stat aggregates, for [btWidgetStats]. */
-    private fun stat(
-        assetId: String,
-        costBasisEur: Double?,
-        unrealizedPnlEur: Double?,
-    ) = HoldingEntity(
-        portfolioId = "p1",
-        assetId = assetId,
-        assetSymbol = assetId,
-        assetName = "$assetId Inc.",
-        assetExchange = "NASDAQ",
-        assetCurrency = "USD",
-        assetType = "stock",
-        assetIsCustom = false,
-        quantity = 1.0,
-        avgCost = 1.0,
-        realizedPnl = 0.0,
-        price = 1.0,
-        marketValueEur = 100.0,
-        costBasisEur = costBasisEur,
-        unrealizedPnlEur = unrealizedPnlEur,
-        unrealizedPnlPct = null,
-        dayChangeEur = 1.0,
-        dayChangePct = 1.0,
-    )
-
     private fun ready(
         eur: Double?,
         dayEur: Double = 12.5,
@@ -336,6 +310,104 @@ class BtWidgetLogicTest {
         assertNull(s.netWorthAsOfMs)
         assertNull(s.quotesAsOfMs)
         assertFalse(s.discreet)
+        // Every field a widget draws from must be empty here, or a signed-out
+        // launcher can leak through the widget that reads it.
+        assertTrue(s.portfolios.isEmpty())
+        assertNull(s.selectedPortfolioId)
+        assertTrue(s.holdings.isEmpty())
+        assertTrue(s.quotes.isEmpty())
+        assertTrue(s.winnersLosers.isEmpty)
+        assertTrue(s.movers.isEmpty())
+        assertTrue(s.budget.budgets.isEmpty())
+        assertTrue(s.cashflow.points.isEmpty())
+    }
+
+    // ── Round-2 presentation helpers ─────────────────────────────────────────
+
+    @Test
+    fun `the delta text carries the arrow and honours the style`() {
+        assertEquals(
+            "↗ " + formatMoney(12.5, "EUR", de, showSign = true) + " · " +
+                btWidgetPercent(1.25, de),
+            btWidgetDeltaText(12.5, 1.25, discreet = false, locale = de),
+        )
+        assertEquals(
+            "↘ " + btWidgetPercent(-2.0, de),
+            btWidgetDeltaText(-5.0, -2.0, false, de, BtWidgetDeltaStyle.PERCENT),
+        )
+        // A style whose figure is unknown falls back to the one that is known.
+        assertEquals(
+            "↗ " + btWidgetPercent(2.0, de),
+            btWidgetDeltaText(null, 2.0, false, de, BtWidgetDeltaStyle.ABSOLUTE),
+        )
+        assertEquals("→ " + BT_EM_DASH, btWidgetDeltaText(null, null, false, de))
+    }
+
+    @Test
+    fun `the delta text masks the amount under discreet and keeps the percent`() {
+        val masked = btWidgetDeltaText(12.5, 1.25, discreet = true, locale = de)
+        assertFalse(
+            "no digit of the amount may survive before the separator",
+            masked.substringBefore("·").any { it.isDigit() },
+        )
+        assertTrue(masked.substringAfter("·").any { it.isDigit() })
+    }
+
+    @Test
+    fun `month labels come from the period and reject garbage`() {
+        assertEquals("August", btWidgetMonthLabel("2026-08", java.util.Locale.GERMANY))
+        // The exact abbreviation is CLDR's business; the contract here is "a
+        // short, non-empty label derived from the right month".
+        val short = btWidgetMonthShort("2026-03", java.util.Locale.GERMANY)
+        assertTrue("expected a short March label, got $short", !short.isNullOrEmpty() && short.length <= 6)
+        assertNull(btWidgetMonthLabel("garbage", de))
+        assertNull(btWidgetMonthShort("", de))
+    }
+
+    @Test
+    fun `the budget pace counts the month's remaining days, today inclusive`() {
+        val pace = btWidgetBudgetPace(
+            "2026-08",
+            remainingEur = 112.60,
+            today = java.time.LocalDate.of(2026, 8, 17),
+        )!!
+        assertEquals(15, pace.daysLeft)
+        assertEquals(112.60 / 15, pace.perDayEur!!, 1e-9)
+    }
+
+    @Test
+    fun `the pace refuses a stale month and an over-spent budget paces at nothing`() {
+        assertNull(
+            "last month's cache must not pace this month",
+            btWidgetBudgetPace("2026-07", 50.0, java.time.LocalDate.of(2026, 8, 17)),
+        )
+        val over = btWidgetBudgetPace("2026-08", -37.4, java.time.LocalDate.of(2026, 8, 17))!!
+        assertNull("a negative allowance is not a pace", over.perDayEur)
+    }
+
+    @Test
+    fun `whole-euro money keeps the mask, the dash, and drops only the cents`() {
+        assertEquals(
+            btMaskedMoney("EUR", de),
+            btWidgetMoneyWhole(1234.56, "EUR", discreet = true, locale = de),
+        )
+        assertEquals(BT_EM_DASH, btWidgetMoneyWhole(null, "EUR", false, de))
+        val whole = btWidgetMoneyWhole(1234.56, "EUR", false, de)
+        assertFalse("no cents in the micro reading: $whole", whole.contains(","))
+        assertTrue(whole.any { it.isDigit() })
+        // A junk currency code degrades to the full formatter, never crashes.
+        assertTrue(btWidgetMoneyWhole(10.0, "???", false, de).isNotEmpty())
+    }
+
+    @Test
+    fun `cash movements lean the way the ledger says`() {
+        listOf("deposit", "sell_proceeds", "transfer_in").forEach {
+            assertEquals(BtWidgetTone.UP, btWidgetMovementTone(it))
+        }
+        listOf("withdrawal", "buy", "transfer_out").forEach {
+            assertEquals(BtWidgetTone.DOWN, btWidgetMovementTone(it))
+        }
+        assertEquals("an unknown kind stays neutral", BtWidgetTone.FLAT, btWidgetMovementTone("dividend-esque"))
     }
 
     @Test
@@ -354,54 +426,7 @@ class BtWidgetLogicTest {
         assertFalse(s.copy(noPortfolios = true).netWorthSyncing)
     }
 
-    // ── Portfolio stats ───────────────────────────────────────────────────────
-
-    @Test
-    fun `stats sum the holdings' EUR aggregates and derive the percent from the sums`() {
-        val stats = btWidgetStats(
-            listOf(
-                stat("A", costBasisEur = 100.0, unrealizedPnlEur = 20.0),
-                stat("B", costBasisEur = 300.0, unrealizedPnlEur = -30.0),
-            ),
-        )
-        assertEquals(400.0, stats.investedEur)
-        assertEquals(-10.0, stats.unrealizedPnlEur)
-        assertEquals(-10.0 / 400.0 * 100.0, stats.unrealizedPnlPct!!, 1e-9)
-        assertEquals(2, stats.holdingsCount)
-    }
-
-    @Test
-    fun `stats over an empty book are absent, not zero`() {
-        // A zero would tell the user they broke exactly even; "not known" is honest.
-        val stats = btWidgetStats(emptyList())
-        assertNull(stats.investedEur)
-        assertNull(stats.unrealizedPnlEur)
-        assertNull(stats.unrealizedPnlPct)
-        assertEquals(0, stats.holdingsCount)
-    }
-
-    @Test
-    fun `stats skip the holdings whose detail has not synced`() {
-        val stats = btWidgetStats(
-            listOf(
-                stat("A", costBasisEur = 100.0, unrealizedPnlEur = 25.0),
-                stat("B", costBasisEur = null, unrealizedPnlEur = null),
-            ),
-        )
-        assertEquals(100.0, stats.investedEur)
-        assertEquals(25.0, stats.unrealizedPnlEur)
-        // The count is positions held, present figures or not.
-        assertEquals(2, stats.holdingsCount)
-    }
-
-    @Test
-    fun `the P&L percent is guarded against a zero cost basis`() {
-        val stats = btWidgetStats(listOf(stat("A", costBasisEur = 0.0, unrealizedPnlEur = 5.0)))
-        assertNull("no base to express the P&L against", stats.unrealizedPnlPct)
-        assertEquals(5.0, stats.unrealizedPnlEur)
-    }
-
-    // ── Top movers ──────────────────────────────────────────────────────────────
+    // ── Movers ──────────────────────────────────────────────────────────────────
 
     @Test
     fun `movers rank by absolute day move and drop the ones with no known move`() {
@@ -502,5 +527,59 @@ class BtWidgetLogicTest {
         assertFalse(BtWidgetBudgetCache.UNAVAILABLE.available)
         assertTrue(BtWidgetBudgetCache.UNAVAILABLE.budgets.isEmpty())
         assertTrue(BtWidgetBudgetCache.EMPTY.available)
+    }
+
+    @Test
+    fun `the budget cache flattens the summary's spending breakdown for the Spending widget`() {
+        val cache = btWidgetBudgetCache(
+            portfolioId = "pf-1",
+            budgets = CashBudgetListResponse(period = "2026-08"),
+            summary = CashSummaryResponse(
+                totalInflow = 3000.0,
+                totalOutflow = 1200.0,
+                net = 1800.0,
+                tags = listOf(
+                    at.bettertrack.app.data.api.dto.CashTagSummaryDto(
+                        tagId = "t1",
+                        name = "Food",
+                        outflow = 400.0,
+                    ),
+                    // The untagged bucket: tagId AND name are null on the wire.
+                    at.bettertrack.app.data.api.dto.CashTagSummaryDto(
+                        tagId = null,
+                        name = null,
+                        outflow = 800.0,
+                    ),
+                ),
+            ),
+            nowMs = 1L,
+        )
+        assertEquals(3000.0, cache.totalInflowEur)
+        assertEquals(1200.0, cache.totalOutflowEur)
+        assertEquals(
+            listOf(
+                BtWidgetTagSpend("Food", 400.0, untagged = false),
+                BtWidgetTagSpend("", 800.0, untagged = true),
+            ),
+            cache.tags,
+        )
+    }
+
+    @Test
+    fun `a budget blob written before the spending fields decodes as a cache miss on them`() {
+        // The Spending widget rides the SAME meta blob the Budget widget was
+        // already writing; a pre-2026-08-16 blob must decode with the new
+        // fields absent, not crash the launcher or blank the bars.
+        val old = """{"cachedAtMs":5,"available":true,"portfolioId":"pf-1",""" +
+            """"period":"2026-07","netEur":-3.5,"budgets":[]}"""
+        val decoded = kotlinx.serialization.json.Json.decodeFromString(
+            BtWidgetBudgetCache.serializer(),
+            old,
+        )
+        assertEquals(5L, decoded.cachedAtMs)
+        assertEquals("2026-07", decoded.period)
+        assertNull(decoded.totalInflowEur)
+        assertNull(decoded.totalOutflowEur)
+        assertTrue(decoded.tags.isEmpty())
     }
 }

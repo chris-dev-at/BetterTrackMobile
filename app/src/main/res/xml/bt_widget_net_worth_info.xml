@@ -2,30 +2,32 @@
 <!--
   Net-worth widget (at.bettertrack.app.widget.BtNetWorthWidget).
 
-  initialLayout is Glance's own loading layout: a Glance widget has no static
-  XML layout of its own, and this is the view the host shows for the instant
-  between placement and the first `provideGlance` pass. Referencing the library
-  layout is the documented way to do it.
+  initialLayout is Glance's own loading layout — the view for the instant
+  between placement and the first `provideGlance` pass. previewLayout (API 31+)
+  and previewImage (older pickers) are SAMPLE renderings with dummy data, so the
+  picker shows what the widget looks like instead of a spinner.
 
-  updatePeriodMillis is 0 ON PURPOSE. The platform's widget alarm cannot be
-  constrained on connectivity and wakes the device to fire; BtWidgetScheduler's
-  connectivity-constrained WorkManager job is strictly better on both counts.
+  updatePeriodMillis is 0 ON PURPOSE: BtWidgetScheduler's connectivity-
+  constrained WorkManager job owns the cadence (the platform alarm wakes the
+  device and cannot be constrained).
 
-  targetCellWidth/Height (API 31+) state the 2x2 intent for the modern picker;
-  minWidth/minHeight are the pre-31 fallback for the same size. resizeMode lets
-  the user stretch to the 4x2 breakpoint the widget also draws — see the
-  SizeMode.Responsive set in BtNetWorthWidget.
+  minResizeHeight is ONE cell: the former separate "mini" widget is now this
+  widget's strip breakpoint, so a placement can shrink to a 2x1 line.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtNetWorthWidgetConfigActivity"
     android:description="@string/bt_widget_net_worth_description"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:minHeight="110dp"
-    android:minResizeHeight="110dp"
-    android:minResizeWidth="140dp"
+    android:maxResizeHeight="150dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="48dp"
     android:minWidth="140dp"
-    android:previewLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@drawable/bt_widget_preview_img_net_worth"
+    android:previewLayout="@layout/bt_widget_preview_net_worth"
     android:resizeMode="horizontal|vertical"
-    android:targetCellHeight="2"
+    android:targetCellHeight="1"
     android:targetCellWidth="2"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

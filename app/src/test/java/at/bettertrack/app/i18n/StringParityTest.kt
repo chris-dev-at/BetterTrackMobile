@@ -68,6 +68,12 @@ class StringParityTest {
         "bt_source_import",
         // "Sync · %1$s" — same reasoning; "Sync" is the established loanword.
         "bt_source_sync",
+        // "Bayer AG · XETRA" — a widget-preview SAMPLE made of proper nouns
+        // (a company and an exchange); there is nothing to translate.
+        "bt_widget_preview_asset_subline",
+        // "Rocket Lab USA" — the same reasoning: a company name in the widget
+        // previews' sample rows (the study's own data set).
+        "bt_widget_preview_mover1_name",
     )
 
     @Test

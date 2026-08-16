@@ -6,6 +6,10 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.MetaEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
+import at.bettertrack.app.data.repo.AssetRange
+import at.bettertrack.app.data.repo.HistoryRange
+import at.bettertrack.app.data.repo.PortfolioHistory
+import at.bettertrack.app.data.repo.parsePortfolioHistory
 import at.bettertrack.app.data.repo.prefetchPortfolioTotals
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.effective
@@ -100,9 +104,8 @@ object BtWidgetRepository {
             rows = btWidgetRows(items, cache.quotes, holdings),
             quotesAsOfMs = cache.cachedAtMs.takeIf { it > 0L },
             nowMs = nowMs,
-            // Stats and movers are pure Room reads over the same holdings the hero
-            // used — no fetch, so they are as fresh as the last portfolio sync.
-            stats = btWidgetStats(holdings),
+            // Movers are a pure Room read over the same holdings the hero used —
+            // no fetch, so they are as fresh as the last portfolio sync.
             movers = btWidgetMovers(holdings),
             // Budgets are server-only. In any mode without a server there is no
             // ledger to classify, so the cache is ignored and the widget degrades
@@ -113,7 +116,63 @@ object BtWidgetRepository {
             } else {
                 BtWidgetBudgetCache.UNAVAILABLE
             },
+            // The raw rows the per-widget pure functions run on. Carried instead
+            // of pre-answering every widget's question here, because the
+            // configurable widgets ask theirs with an input (an asset, a
+            // portfolio) that only exists at render time.
+            portfolios = portfolios,
+            selectedPortfolioId = db.metaDao().get(MetaEntity.KEY_SELECTED_PORTFOLIO),
+            holdings = holdings,
+            quotes = cache.quotes,
+            // Winners/losers are a pure map over the same holdings the hero
+            // used — no fetch, fresh as the last sync.
+            winnersLosers = btWidgetWinnersLosers(holdings),
+            // Cash-flow trends share the budget cache's server-only reasoning.
+            cashflow = if (mode.writesToServer) {
+                BtWidgetCashflowStore.read(db, AppGraph.json)
+            } else {
+                BtWidgetCashflowCache.UNAVAILABLE
+            },
+            assetHistory = BtWidgetAssetHistoryStore.read(db, AppGraph.json),
         )
+    }
+
+    /**
+     * The 4x4 performance hero's events feed: the newest cached cash movements
+     * of ONE portfolio, display-only. Room-only and safe-wrapped like [load] —
+     * a failure is an absent list, never a launcher error view.
+     */
+    suspend fun loadRecentMovements(
+        portfolioId: String,
+        limit: Int = BT_WIDGET_EVENTS_LIMIT,
+    ): List<at.bettertrack.app.data.db.CashMovementEntity> = try {
+        // The dao already orders newest-first; the sort is belt to that braces.
+        AppGraph.database.cashDao().observeMovements(portfolioId).first()
+            .sortedByDescending { it.executedAtMs }
+            .take(limit)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Movements load failed for $portfolioId; the events list is absent.", e)
+        emptyList()
+    }
+
+    /**
+     * One portfolio's parsed 1M history from the cache — the chart widgets' own
+     * read. Room-only and safe-wrapped like [load]: a corrupt blob or an unbuilt
+     * graph is "no chart yet", never a launcher error view.
+     */
+    suspend fun loadHistory(
+        portfolioId: String,
+        range: HistoryRange = HistoryRange.M1,
+    ): PortfolioHistory? = try {
+        AppGraph.database.portfolioHistoryDao().observe(portfolioId, range.wire).first()
+            ?.let { parsePortfolioHistory(it, AppGraph.json) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "History load failed for $portfolioId; the chart shows its empty state.", e)
+        null
     }
 
     /**
@@ -145,13 +204,169 @@ object BtWidgetRepository {
      * Offline is a no-op rather than a pile of failed requests: `prefetchPortfolioTotals`
      * deliberately does NOT gate on connectivity itself ("the caller must gate on
      * connectivity, or every id comes back in the failed set").
+     *
+     * [context] exists for one purpose: asking WHICH widgets are placed, so a
+     * pass only spends requests on data some widget will draw (the chart
+     * widgets' history, the cash widgets' trends). The always-cheap warms run
+     * unconditionally as before.
      */
-    suspend fun warm(nowMs: Long = System.currentTimeMillis()) {
+    suspend fun warm(context: Context, nowMs: Long = System.currentTimeMillis()) {
         if (!hasSession()) return
         if (!AppGraph.connectivityMonitor.isOnline.value) return
         warmTotals()
-        warmQuotes(nowMs)
+        warmQuotes(context, nowMs)
         warmBudget(nowMs)
+        warmHistory(context)
+        warmTrends(context, nowMs)
+        warmAssetHistory(context, nowMs)
+    }
+
+    /**
+     * Refresh the asset hero's 3M close series for every CONFIGURED asset-widget
+     * asset (round 2b) — through the app's own `MarketRepository.assetHistory`,
+     * the real `GET /assets/{id}/history`. Same fan-out politeness as the quote
+     * warm (the configured-asset cap), same merge honesty (failures keep the
+     * last series, removed assets drop, an empty pass keeps the clock).
+     */
+    private suspend fun warmAssetHistory(context: Context, nowMs: Long) {
+        try {
+            if (!BtWidgets.placed(context, BtAssetWidgetReceiver::class.java)) return
+            val ids = btWidgetConfiguredAssets(context)
+                .map { it.assetId }
+                .distinct()
+                .take(BT_WIDGET_CONFIGURED_QUOTE_LIMIT)
+            val db = AppGraph.database
+            val previous = BtWidgetAssetHistoryStore.read(db, AppGraph.json)
+            if (ids.isEmpty()) {
+                if (previous.series.isNotEmpty()) {
+                    BtWidgetAssetHistoryStore.write(db, AppGraph.json, BtWidgetAssetHistoryCache.EMPTY)
+                }
+                return
+            }
+            val market = AppGraph.marketRepository
+            val fetched = mutableMapOf<String, BtWidgetAssetSeries>()
+            ids.forEach { assetId ->
+                when (val r = market.assetHistory(assetId, AssetRange.M3)) {
+                    is BtResult.Ok -> fetched[assetId] = BtWidgetAssetSeries(
+                        // The range the server ANSWERED with — labelled truthfully.
+                        range = r.value.range.wire,
+                        closes = btWidgetSparkThin(
+                            r.value.points.map { it.close },
+                            BT_WIDGET_SPARK_MAX_POINTS,
+                        ),
+                    )
+
+                    is BtResult.Err -> Unit // keep the last series
+                }
+            }
+            BtWidgetAssetHistoryStore.write(
+                db,
+                AppGraph.json,
+                btWidgetMergeAssetHistory(previous, fetched, ids.toSet(), nowMs),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Asset history warm-up failed; heroes keep their last series.", e)
+        }
+    }
+
+    /**
+     * Refresh the Monthly-flow widget's trend window — same server-only
+     * contract, portfolio resolution and error policy as [warmBudget]: Drive
+     * mode and a `/cash` 403 mark the cache unavailable, any other failure
+     * keeps the last-known window and lets the "as of" note age.
+     */
+    private suspend fun warmTrends(context: Context, nowMs: Long) {
+        try {
+            if (!BtWidgets.placed(context, BtSpendingWidgetReceiver::class.java)) return
+            val db = AppGraph.database
+            if (!currentMode().writesToServer) {
+                BtWidgetCashflowStore.write(db, AppGraph.json, BtWidgetCashflowCache.UNAVAILABLE)
+                return
+            }
+            val portfolioId = AppGraph.portfolioRepository.defaultSelection()?.id
+            if (portfolioId == null) {
+                BtWidgetCashflowStore.write(db, AppGraph.json, BtWidgetCashflowCache.EMPTY)
+                return
+            }
+            when (val trends = AppGraph.cashClassificationRepository.trends(
+                portfolioId,
+                BT_WIDGET_CASHFLOW_MONTHS,
+            )) {
+                is BtResult.Ok -> BtWidgetCashflowStore.write(
+                    db,
+                    AppGraph.json,
+                    btWidgetCashflowCache(portfolioId, trends.value, nowMs),
+                )
+
+                is BtResult.Err ->
+                    if (trends.error.isForbidden || trends.error.isInsufficientScope) {
+                        BtWidgetCashflowStore.write(db, AppGraph.json, BtWidgetCashflowCache.UNAVAILABLE)
+                    }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Trends warm-up failed; the widget keeps its last window.", e)
+        }
+    }
+
+    /**
+     * Refresh the budget cache NOW, for the screens that let the user pick a
+     * budget (the widget's config Activity, the in-app builder). Those lists
+     * read [BtWidgetBudgetStore], which before the first worker pass is empty —
+     * and a picker with nothing to pick would read as "you have no budgets".
+     * Unlike [warm] this is user-initiated on an open screen, so it runs
+     * regardless of which widgets are placed; it still no-ops offline.
+     */
+    suspend fun warmBudgetsForPicker(nowMs: Long = System.currentTimeMillis()) {
+        if (!hasSession()) return
+        if (!AppGraph.connectivityMonitor.isOnline.value) return
+        warmBudget(nowMs)
+    }
+
+    /**
+     * Refresh the history caches through the app's own
+     * [at.bettertrack.app.data.repo.PortfolioRepository.refreshHistory] — the
+     * same call the overview's range picker makes, writing the same Room row the
+     * widget then reads. Only fetches series some placed widget will actually
+     * chart ([btWidgetHistoryWants]): each performance instance's chosen
+     * (portfolio, range) — a follow-mode instance resolves to the GOVERNING
+     * portfolio (`defaultSelection`, the switcher's own rule) — plus the pinned
+     * pulse sparklines' 1M. Capped and deduplicated; failures logged per series
+     * so one dead portfolio cannot starve the rest.
+     */
+    private suspend fun warmHistory(context: Context) {
+        try {
+            val wants = btWidgetHistoryWants(context)
+            if (wants.isEmpty()) return
+            val repo = AppGraph.portfolioRepository
+            val governing = if (wants.any { it.portfolioId == null }) {
+                repo.defaultSelection()?.id
+            } else {
+                null
+            }
+            wants
+                .mapNotNull { want ->
+                    (want.portfolioId ?: governing)?.let { it to want.range }
+                }
+                .distinct()
+                .take(BT_WIDGET_HISTORY_WARM_LIMIT)
+                .forEach { (pid, range) ->
+                    try {
+                        repo.refreshHistory(pid, range)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "History warm-up failed for $pid/$range; its chart keeps the last series.", e)
+                    }
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "History warm-up failed; charts keep their last series.", e)
+        }
     }
 
     /** Fill in portfolios that have never synced their totals — the app's own prefetch. */
@@ -170,18 +385,25 @@ object BtWidgetRepository {
     }
 
     /**
-     * Capture a quote per watched asset through the existing single-asset read.
+     * Capture a quote per wanted asset through the existing single-asset read.
      *
-     * Chunked rather than fanned out at once: the app has one answer to how many
-     * concurrent asset reads are polite, and a job that runs unattended every
-     * three quarters of an hour is the last place to disagree with it.
+     * "Wanted" is the watchlist board plus every asset a configured single-asset
+     * widget shows — one cache, one merge policy, one fan-out budget for all of
+     * them. Chunked rather than fanned out at once: the app has one answer to
+     * how many concurrent asset reads are polite, and a job that runs unattended
+     * every three quarters of an hour is the last place to disagree with it.
      */
-    private suspend fun warmQuotes(nowMs: Long) {
+    private suspend fun warmQuotes(context: Context, nowMs: Long) {
         try {
             val db = AppGraph.database
-            val items = boardItems(db).take(BT_WIDGET_ROW_LIMIT)
+            val ids = (
+                boardItems(db).take(BT_WIDGET_ROW_LIMIT).map { it.assetId } +
+                    btWidgetConfiguredAssets(context).map { it.assetId }
+                )
+                .distinct()
+                .take(BT_WIDGET_ROW_LIMIT + BT_WIDGET_CONFIGURED_QUOTE_LIMIT)
             val previous = BtWidgetQuoteStore.read(db, AppGraph.json)
-            if (items.isEmpty()) {
+            if (ids.isEmpty()) {
                 if (previous.quotes.isNotEmpty()) {
                     BtWidgetQuoteStore.write(db, AppGraph.json, BtWidgetQuoteCache.EMPTY)
                 }
@@ -189,12 +411,12 @@ object BtWidgetRepository {
             }
             val market = AppGraph.marketRepository
             val fetched = mutableMapOf<String, BtWidgetQuote>()
-            for (chunk in items.chunked(BT_WIDGET_QUOTE_CONCURRENCY)) {
+            for (chunk in ids.chunked(BT_WIDGET_QUOTE_CONCURRENCY)) {
                 coroutineScope {
-                    chunk.map { item ->
+                    chunk.map { assetId ->
                         async {
-                            when (val r = market.quote(item.assetId)) {
-                                is BtResult.Ok -> item.assetId to BtWidgetQuote(
+                            when (val r = market.quote(assetId)) {
+                                is BtResult.Ok -> assetId to BtWidgetQuote(
                                     eurPrice = r.value.eurPrice,
                                     dayChangePct = r.value.dayChangePct,
                                 )
@@ -210,7 +432,7 @@ object BtWidgetRepository {
                 btWidgetMergeQuotes(
                     previous = previous,
                     fetched = fetched,
-                    keep = items.map { it.assetId }.toSet(),
+                    keep = ids.toSet(),
                     nowMs = nowMs,
                 ),
             )

@@ -52,6 +52,19 @@ data class AssetSnapshot(
     val stale: Boolean,
 )
 
+/**
+ * The €-price a surface may display: the server's converted figure, or — when
+ * the quote is already denominated in euros — the quote itself.
+ *
+ * The server only CONVERTS: for BMW.DE or BTC-EUR it sends `eurPrice = null`
+ * because there is nothing to convert, and every consumer that equated
+ * "no eurPrice" with "no price" drew "—" beside a live day-percent (device QA
+ * 2026-08-16, home-screen widgets and the in-app watchlist alike). This is an
+ * identity read, not client-side FX: no rate is invented, no math is done.
+ */
+fun eurDisplayPrice(eurPrice: Double?, nativePrice: Double?, quoteCurrency: String): Double? =
+    eurPrice ?: nativePrice?.takeIf { quoteCurrency.equals("EUR", ignoreCase = true) }
+
 /** One close observation of a price series (x is epoch-ms so intraday works). */
 data class PricePoint(val timeMs: Long, val close: Double)
 

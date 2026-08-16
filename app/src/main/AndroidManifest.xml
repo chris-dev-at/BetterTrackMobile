@@ -127,9 +127,10 @@
             android:exported="false" />
 
         <!--
-          Home-screen widgets (Jetpack Glance).
+          Home-screen widgets (Jetpack Glance) — the seven-card set of the
+          2026-08-16 redesign (see BtWidgets' KDoc for the composition).
 
-          Both are `exported="true"`, which is REQUIRED and is not a widening of
+          All are `exported="true"`, which is REQUIRED and is not a widening of
           the app's surface: the launcher is a different process and cannot bind
           an unexported AppWidget provider, so a widget receiver that is not
           exported simply never appears in the picker. What crosses the boundary
@@ -137,7 +138,7 @@
           no data from the intent, it asks Room.
 
           Each one pairs with its `appwidget-provider` meta-data XML in res/xml,
-          which is where the sizes and the picker description live.
+          which is where the sizes, the previews and the picker description live.
           BtWidgetManifestTest pins that pairing: a receiver added here without
           its XML (or pointing at a class that does not exist) fails the build,
           because the failure mode otherwise is a widget that is silently absent
@@ -156,6 +157,30 @@
         </receiver>
 
         <receiver
+            android:name=".widget.BtPortfolioWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_portfolio_pick_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_portfolio_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtAssetWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_asset_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_asset_info" />
+        </receiver>
+
+        <receiver
             android:name=".widget.BtWatchlistWidgetReceiver"
             android:exported="true"
             android:label="@string/bt_widget_watchlist_title">
@@ -168,27 +193,15 @@
         </receiver>
 
         <receiver
-            android:name=".widget.BtPortfolioStatsWidgetReceiver"
+            android:name=".widget.BtMoversWidgetReceiver"
             android:exported="true"
-            android:label="@string/bt_widget_portfolio_stats_title">
+            android:label="@string/bt_widget_movers_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/bt_widget_portfolio_stats_info" />
-        </receiver>
-
-        <receiver
-            android:name=".widget.BtTopMoversWidgetReceiver"
-            android:exported="true"
-            android:label="@string/bt_widget_top_movers_title">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/bt_widget_top_movers_info" />
+                android:resource="@xml/bt_widget_movers_info" />
         </receiver>
 
         <receiver
@@ -202,6 +215,133 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/bt_widget_budget_info" />
         </receiver>
+
+        <receiver
+            android:name=".widget.BtSpendingWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_spending_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_spending_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtQuickActionsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_actions_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_actions_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtAllocationWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_allocation_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_allocation_info" />
+        </receiver>
+
+        <!--
+          Widget configuration steps (asset / portfolio / budget pickers).
+          Exported with the APPWIDGET_CONFIGURE filter because the HOST launches
+          them — a launcher is another app, and an unexported configure Activity
+          is a widget that can never finish placement. Each guards itself: no
+          valid EXTRA_APPWIDGET_ID ⇒ immediate finish, and the result defaults
+          to CANCELED so the host deletes the placement on any failure. The
+          portfolio and budget widgets mark their config OPTIONAL in their
+          provider XML — placement never blocks on them; the picker is for
+          narrowing a card that already works.
+        -->
+        <activity
+            android:name=".widget.BtAssetWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtPortfolioWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtBudgetWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtNetWorthWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtAllocationWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtWatchlistWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtMoversWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtSpendingWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
 
         <!-- FCM defaults for notifications posted by the system (background data). -->
         <meta-data

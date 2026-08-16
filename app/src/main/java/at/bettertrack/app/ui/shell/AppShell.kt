@@ -109,6 +109,7 @@ import at.bettertrack.app.navigation.SearchRoute
 import at.bettertrack.app.navigation.ServerRoute
 import at.bettertrack.app.navigation.SettingsAboutRoute
 import at.bettertrack.app.navigation.SettingsLanguageRoute
+import at.bettertrack.app.navigation.SettingsWidgetsRoute
 import at.bettertrack.app.navigation.SettingsNotificationsRoute
 import at.bettertrack.app.navigation.SettingsRoute
 import at.bettertrack.app.navigation.SettingsSecurityRoute
@@ -556,11 +557,29 @@ fun BtApp() {
                 AppGraph.devicePrefs.setOverviewSelected(true)
                 open(link)
             }
+            // A portfolio widget: select THAT portfolio, then land on the tab
+            // that renders it — the same pairing shape Overview uses above, and
+            // the same order the switcher's own selectPortfolio uses (leave
+            // Overview synchronously, persist the choice async). A stale id is
+            // safe: resolveSelection falls back to the default portfolio.
+            is NotifDeepLink.Portfolio -> {
+                AppGraph.devicePrefs.setOverviewSelected(false)
+                scope.launch { AppGraph.portfolioRepository.selectPortfolio(link.portfolioId) }
+                open(link)
+            }
             // The Budget widget: open the Cash sheet for the ledger it budgeted.
             // A null portfolioId lets CashScreen resolve the selected one, exactly
             // as the overview's own onOpenCash does.
             is NotifDeepLink.Cash ->
                 open(link) { navController.navigate(CashRoute(portfolioId = link.portfolioId)) }
+            // Quick-actions widget: straight into the blank buy form / the cash
+            // screen — the shortcut's worth is being INSIDE in one tap.
+            NotifDeepLink.AddTransaction ->
+                open(link) { navController.navigate(TransactionFormRoute()) }
+            NotifDeepLink.AddCashEntry ->
+                open(link) { navController.navigate(CashRoute()) }
+            // Search is the Markets tab's own first control — a pure switch.
+            NotifDeepLink.MarketSearch -> open(link)
             NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
             NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
             NotifDeepLink.NotificationSettings ->
@@ -1644,6 +1663,7 @@ private fun BtSheetHost(
                 onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
                 onOpenChangePassword = { navController.navigate(ChangePasswordRoute) },
                 onOpenLanguage = { navController.navigate(SettingsLanguageRoute) },
+                onOpenWidgets = { navController.navigate(SettingsWidgetsRoute) },
                 onOpenTaxSettings = { navController.navigate(TaxSettingsRoute) },
                 onOpenAbout = { navController.navigate(SettingsAboutRoute) },
                 onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
@@ -1759,6 +1779,9 @@ private fun BtSheetHost(
         }
         btSheet<SettingsNotificationsRoute> { NotificationSettingsScreen(onBack = back) }
         btSheet<SettingsLanguageRoute> { LanguageScreen(onBack = back) }
+        btSheet<SettingsWidgetsRoute> {
+            at.bettertrack.app.ui.settings.WidgetsScreen(onBack = back)
+        }
         btSheet<SettingsAboutRoute> {
             AboutScreen(onBack = back, onOpenChangelog = { navController.navigate(ChangelogRoute) })
         }

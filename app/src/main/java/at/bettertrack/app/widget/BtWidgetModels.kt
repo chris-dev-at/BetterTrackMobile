@@ -1,6 +1,7 @@
 package at.bettertrack.app.widget
 
 import at.bettertrack.app.data.db.HoldingEntity
+import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
 import at.bettertrack.app.data.repo.PORTFOLIO_TOTALS_PREFETCH_CONCURRENCY
@@ -14,7 +15,7 @@ import at.bettertrack.app.ui.prices.NetWorthState
 import java.util.Locale
 
 /**
- * The read model both home-screen widgets render from — pure Kotlin, no Android,
+ * The read model the home-screen widgets render from — pure Kotlin, no Android,
  * no Compose, no Glance.
  *
  * ## Why the widget has a model of its own at all
@@ -85,29 +86,11 @@ data class BtWidgetRow(
     val price: Double?,
     val currency: String,
     val dayChangePct: Double?,
+    /** Merged position value (holdings source only) — a SORT key, never displayed. */
+    val valueEur: Double? = null,
 )
 
-/**
- * The holdings-derived stat set — the figures the Portfolio-stats widget shows
- * next to the net worth.
- *
- * Every field is a SUM of already-server-computed, already-EUR holding aggregates,
- * or a ratio of two such sums. That is the same class of operation
- * [at.bettertrack.app.ui.home.homeNetWorth] performs (it sums the covered
- * portfolios' totals and derives a day-change percent from the sums); what this
- * file still refuses is computing a PRICE or a currency conversion, neither of
- * which happens here. A field is `null` — an em dash, never a zero — when no
- * holding carried the figure it sums, so an account whose detail has not synced
- * shows "not known" rather than a confident €0.
- */
-data class BtWidgetStats(
-    val unrealizedPnlEur: Double?,
-    val unrealizedPnlPct: Double?,
-    val investedEur: Double?,
-    val holdingsCount: Int,
-)
-
-/** One Top-movers row: an asset and its day move, already ranked. */
+/** One movers row: an asset and its day move, already ranked. */
 data class BtWidgetMover(
     val assetId: String,
     val symbol: String,
@@ -128,12 +111,24 @@ data class BtWidgetSnapshot(
     val rows: List<BtWidgetRow>,
     val quotesAsOfMs: Long?,
     val nowMs: Long,
-    /** Holdings-derived figures for the Portfolio-stats widget; null unless READY. */
-    val stats: BtWidgetStats? = null,
-    /** Ranked day movers for the Top-movers widget; empty unless READY. */
+    /** Ranked day movers for the Movers widget; empty unless READY. */
     val movers: List<BtWidgetMover> = emptyList(),
     /** The cached budget snapshot for the Budget widget (server-mode only). */
     val budget: BtWidgetBudgetCache = BtWidgetBudgetCache.EMPTY,
+    /** Every cached portfolio row — the per-portfolio widgets resolve against these. */
+    val portfolios: List<PortfolioEntity> = emptyList(),
+    /** The persisted switcher choice, for `resolveSelection`; null until ever picked. */
+    val selectedPortfolioId: String? = null,
+    /** The raw cross-portfolio holdings — inputs to the per-widget pure functions. */
+    val holdings: List<HoldingEntity> = emptyList(),
+    /** The cached watch/asset quotes, for the configurable single-asset widget. */
+    val quotes: Map<String, BtWidgetQuote> = emptyMap(),
+    /** The day's two ends for the row family's split layout; empty sides unless READY. */
+    val winnersLosers: BtWidgetWinnersLosers = BtWidgetWinnersLosers(emptyList(), emptyList()),
+    /** The cached cash-flow trend window (server-mode only) — Monthly flow's bars. */
+    val cashflow: BtWidgetCashflowCache = BtWidgetCashflowCache.EMPTY,
+    /** The asset hero's cached close series per configured asset (round 2b). */
+    val assetHistory: BtWidgetAssetHistoryCache = BtWidgetAssetHistoryCache.EMPTY,
 ) {
     /** No totals yet, but there ARE portfolios ⇒ the first sync is still running. */
     val netWorthSyncing: Boolean get() = netWorth == null && !noPortfolios
@@ -143,6 +138,9 @@ data class BtWidgetSnapshot(
 
     val budgetsAsOfMs: Long? get() = budget.cachedAtMs.takeIf { it > 0L }
     val budgetsStale: Boolean get() = btWidgetStale(budgetsAsOfMs, nowMs)
+
+    val cashflowAsOfMs: Long? get() = cashflow.cachedAtMs.takeIf { it > 0L }
+    val cashflowStale: Boolean get() = btWidgetStale(cashflowAsOfMs, nowMs)
 
     companion object {
         fun signedOut(nowMs: Long) = empty(BtWidgetSession.SIGNED_OUT, nowMs)
@@ -163,7 +161,6 @@ data class BtWidgetSnapshot(
             rows = emptyList(),
             quotesAsOfMs = null,
             nowMs = nowMs,
-            stats = null,
             movers = emptyList(),
             budget = BtWidgetBudgetCache.EMPTY,
         )
@@ -333,42 +330,7 @@ fun btWidgetMoney(
 fun btWidgetPercent(pct: Double?, locale: Locale): String =
     if (pct == null) BT_EM_DASH else formatPercent(pct, locale, showSign = true)
 
-// ── Portfolio stats ───────────────────────────────────────────────────────────
-
-/**
- * The stat set for the Portfolio-stats widget, summed from the cached holdings.
- *
- * `unrealizedPnlEur` / `investedEur` are sums of the holdings' already-EUR,
- * already-server-computed aggregates ([HoldingEntity.unrealizedPnlEur] /
- * [HoldingEntity.costBasisEur]); `unrealizedPnlPct` is the ratio of the two. A sum
- * over an empty set is `null`, not `0.0`: a portfolio whose detail has never
- * synced has NO known P&L, and rendering that as €0 would tell the user they broke
- * exactly even. Net worth and the day change are NOT recomputed here — they come
- * from [btWidgetNetWorth] so the stats card and the net-worth widget cannot
- * disagree.
- */
-fun btWidgetStats(holdings: List<HoldingEntity>): BtWidgetStats {
-    val invested = holdings.mapNotNull { it.costBasisEur }
-    val investedEur = invested.takeIf { it.isNotEmpty() }?.sum()
-    val pnl = holdings.mapNotNull { it.unrealizedPnlEur }
-    val unrealizedPnlEur = pnl.takeIf { it.isNotEmpty() }?.sum()
-    // Guarded exactly as homeNetWorth guards its day-change denominator: an account
-    // with no synced cost basis has no base to express the P&L against.
-    val unrealizedPnlPct =
-        if (unrealizedPnlEur != null && investedEur != null && investedEur != 0.0) {
-            unrealizedPnlEur / investedEur * 100.0
-        } else {
-            null
-        }
-    return BtWidgetStats(
-        unrealizedPnlEur = unrealizedPnlEur,
-        unrealizedPnlPct = unrealizedPnlPct,
-        investedEur = investedEur,
-        holdingsCount = holdings.size,
-    )
-}
-
-// ── Top movers ────────────────────────────────────────────────────────────────
+// ── Movers ────────────────────────────────────────────────────────────────────
 
 /**
  * How many movers the widget keeps, and therefore the tallest list it can draw.
@@ -419,3 +381,154 @@ fun btWidgetBudgetFraction(spent: Double, amount: Double): Float =
 /** The true spent-of-limit percentage for the row's label; null when there is no limit. */
 fun btWidgetBudgetPercent(spent: Double, amount: Double): Double? =
     if (amount <= 0.0) null else spent / amount * 100.0
+
+// ── Round-2 presentation helpers (the Codex study's language) ────────────────
+
+/** How a delta renders: amount and percent, amount only, or percent only. */
+enum class BtWidgetDeltaStyle { BOTH, ABSOLUTE, PERCENT }
+
+fun btWidgetDeltaStyle(raw: String?): BtWidgetDeltaStyle =
+    BtWidgetDeltaStyle.entries.firstOrNull { it.name == raw } ?: BtWidgetDeltaStyle.BOTH
+
+/** The study's direction glyph: ↗ up, ↘ down, → flat/unknown. */
+fun btWidgetArrow(tone: BtWidgetTone): String = when (tone) {
+    BtWidgetTone.UP -> "↗"
+    BtWidgetTone.DOWN -> "↘"
+    BtWidgetTone.FLAT -> "→"
+}
+
+/**
+ * The delta pill's text: "↗ +478,18 € · +1,26 %" (style-dependent). Pure
+ * assembly of already-formatted parts — the amount masks under discreet, the
+ * percent stays live, exactly the app's rule. Falls back across the styles
+ * rather than rendering an empty pill (an ABSOLUTE pill with no known amount
+ * shows the percent it does know).
+ */
+fun btWidgetDeltaText(
+    eur: Double?,
+    pct: Double?,
+    discreet: Boolean,
+    locale: Locale,
+    style: BtWidgetDeltaStyle = BtWidgetDeltaStyle.BOTH,
+): String {
+    val tone = btWidgetTone(eur ?: pct)
+    val amount = eur?.let {
+        btWidgetMoney(it, BT_WIDGET_QUOTE_CURRENCY, discreet, locale, showSign = true)
+    }
+    val percent = pct?.let { btWidgetPercent(it, locale) }
+    val parts = when (style) {
+        BtWidgetDeltaStyle.BOTH -> listOfNotNull(amount, percent)
+        BtWidgetDeltaStyle.ABSOLUTE -> listOfNotNull(amount ?: percent)
+        BtWidgetDeltaStyle.PERCENT -> listOfNotNull(percent ?: amount)
+    }
+    if (parts.isEmpty()) return "${btWidgetArrow(tone)} $BT_EM_DASH"
+    return "${btWidgetArrow(tone)} " + parts.joinToString(" · ")
+}
+
+/**
+ * "2026-08" → the localized month name ("August"). Null on garbage — the badge
+ * is simply absent rather than lying about the period.
+ */
+fun btWidgetMonthLabel(period: String, locale: Locale): String? = try {
+    java.time.YearMonth.parse(period).month
+        .getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, locale)
+} catch (e: Exception) {
+    null
+}
+
+/** "2026-03" → "Mär"/"Mar" — the flow chart's axis labels. Null on garbage. */
+fun btWidgetMonthShort(period: String, locale: Locale): String? = try {
+    java.time.YearMonth.parse(period).month
+        .getDisplayName(java.time.format.TextStyle.SHORT_STANDALONE, locale)
+} catch (e: Exception) {
+    null
+}
+
+/** The budget pace footer's two figures — see [btWidgetBudgetPace]. */
+data class BtWidgetBudgetPace(val daysLeft: Int, val perDayEur: Double?)
+
+/**
+ * "Noch 15 Tage · 7,51 €/Tag": how many days the budget's month still has
+ * (today inclusive) and the remaining amount spread over them. PRESENTATION
+ * math only — a calendar count and one division of two figures already on the
+ * card — sanctioned as such for round 2; no server figure is recomputed.
+ *
+ * Null when [period] is not the month [today] is in: a stale cache must not
+ * pace this month with last month's remainder. An over-spent budget paces at
+ * zero-per-day rather than a negative allowance.
+ */
+/**
+ * The longest hero figure that renders without loss at hero type sizes. Beyond
+ * it the HERO drops its cents rather than ellipsizing — a money hero must
+ * never say "21 052,…" (device review 2026-08-16).
+ */
+const val BT_WIDGET_HERO_MAX_CHARS: Int = 12
+
+/** Hero money: full precision while it fits, whole euros beyond — never "…". */
+fun btWidgetHeroMoney(
+    value: Double?,
+    currency: String,
+    discreet: Boolean,
+    locale: Locale,
+): String {
+    val full = btWidgetMoney(value, currency, discreet, locale)
+    return if (full.length <= BT_WIDGET_HERO_MAX_CHARS) {
+        full
+    } else {
+        btWidgetMoneyWhole(value, currency, discreet, locale)
+    }
+}
+
+/**
+ * Whole-euro money for the 1x1 micros (round 2b: "precision may reduce
+ * automatically; meaning may not") and the pulse card's cents-off knob.
+ * Formatting only — the same discreet masking, the em dash for absence, and a
+ * fallback to the full formatter when the currency code is not ISO-resolvable.
+ */
+fun btWidgetMoneyWhole(
+    value: Double?,
+    currency: String,
+    discreet: Boolean,
+    locale: Locale,
+): String = when {
+    discreet -> btMaskedMoney(currency, locale)
+    value == null -> BT_EM_DASH
+    else -> try {
+        java.text.NumberFormat.getCurrencyInstance(locale).apply {
+            this.currency = java.util.Currency.getInstance(currency)
+            maximumFractionDigits = 0
+        }.format(value)
+    } catch (e: Exception) {
+        formatMoney(value, currency, locale)
+    }
+}
+
+/**
+ * Which way a cached cash movement leans, for the events list's tone and sign.
+ * The LEDGER's own semantics, restated for display: money arriving in cash
+ * (deposits, sale proceeds, inbound transfers) reads up; money leaving reads
+ * down; an unknown kind stays neutral rather than guessing a direction.
+ */
+fun btWidgetMovementTone(kind: String): BtWidgetTone = when (kind) {
+    "deposit", "sell_proceeds", "transfer_in" -> BtWidgetTone.UP
+    "withdrawal", "buy", "transfer_out" -> BtWidgetTone.DOWN
+    else -> BtWidgetTone.FLAT
+}
+
+fun btWidgetBudgetPace(
+    period: String,
+    remainingEur: Double,
+    today: java.time.LocalDate,
+): BtWidgetBudgetPace? {
+    val month = try {
+        java.time.YearMonth.parse(period)
+    } catch (e: Exception) {
+        return null
+    }
+    if (month != java.time.YearMonth.from(today)) return null
+    val daysLeft = month.lengthOfMonth() - today.dayOfMonth + 1
+    return BtWidgetBudgetPace(
+        daysLeft = daysLeft,
+        perDayEur = if (daysLeft > 0 && remainingEur > 0.0) remainingEur / daysLeft else null,
+    )
+}

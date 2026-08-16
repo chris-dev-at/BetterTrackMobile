@@ -60,6 +60,53 @@ class BtWidgetDeepLinkTest {
     }
 
     @Test
+    fun `a portfolio widget opens its portfolio, selected`() {
+        assertEquals(
+            NotifDeepLink.Portfolio("pf-1"),
+            btWidgetDeepLink(BT_WIDGET_TARGET_PORTFOLIO, null, "pf-1"),
+        )
+    }
+
+    @Test
+    fun `a portfolio target with no usable id falls back to the Overview`() {
+        // The one place every portfolio is visible — never a dead tap.
+        assertEquals(
+            NotifDeepLink.Overview,
+            btWidgetDeepLink(BT_WIDGET_TARGET_PORTFOLIO, null, null),
+        )
+        assertEquals(
+            NotifDeepLink.Overview,
+            btWidgetDeepLink(BT_WIDGET_TARGET_PORTFOLIO, null, "   "),
+        )
+    }
+
+    @Test
+    fun `the quick-action tiles resolve to their forms`() {
+        assertEquals(
+            NotifDeepLink.AddTransaction,
+            btWidgetDeepLink(BT_WIDGET_TARGET_ADD_TRANSACTION, null),
+        )
+        assertEquals(NotifDeepLink.AddCashEntry, btWidgetDeepLink(BT_WIDGET_TARGET_ADD_CASH, null))
+        assertEquals(NotifDeepLink.MarketSearch, btWidgetDeepLink(BT_WIDGET_TARGET_SEARCH, null))
+    }
+
+    @Test
+    fun `the quick-action targets are not something the push wire can produce`() {
+        // Widget-only, like Overview/Cash/Portfolio: a push that started opening
+        // ENTRY FORMS would be putting words in the user's mouth.
+        listOf("alert.triggered", "dividend.event", "portfolio.shared", "budget.exceeded")
+            .forEach { type ->
+                val resolved = resolveDeepLink(type, null)
+                assertFalse(
+                    "$type must not resolve to a widget-only quick action",
+                    resolved == NotifDeepLink.AddTransaction ||
+                        resolved == NotifDeepLink.AddCashEntry ||
+                        resolved == NotifDeepLink.MarketSearch,
+                )
+            }
+    }
+
+    @Test
     fun `an unknown target resolves to nothing rather than guessing`() {
         assertNull(btWidgetDeepLink(null, null))
         assertNull(btWidgetDeepLink("", null))
@@ -71,6 +118,7 @@ class BtWidgetDeepLinkTest {
         assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Overview))
         assertEquals(BtTab.Markets, owningTab(NotifDeepLink.Asset("AAPL")))
         assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Cash("pf-1")))
+        assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.Portfolio("pf-1")))
     }
 
     @Test
@@ -107,6 +155,19 @@ class BtWidgetDeepLinkTest {
                 assertFalse(
                     "$type must not resolve to the widget-only Cash target",
                     resolveDeepLink(type, null) is NotifDeepLink.Cash,
+                )
+            }
+    }
+
+    @Test
+    fun `Portfolio is not something the push wire can produce`() {
+        // Selecting the user's portfolio is a WIDGET tap's meaning; a server push
+        // that started doing it would be silently rewriting the switcher state.
+        listOf("portfolio.shared", "alert.triggered", "dividend.event", "budget.exceeded")
+            .forEach { type ->
+                assertFalse(
+                    "$type must not resolve to the widget-only Portfolio target",
+                    resolveDeepLink(type, null) is NotifDeepLink.Portfolio,
                 )
             }
     }

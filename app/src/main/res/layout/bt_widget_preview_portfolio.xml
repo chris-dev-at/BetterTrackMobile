@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Picker preview (API 31+) for the performance widget — SAMPLE DATA ONLY.
+  Subject row with the CONFIGURED range chip, value + delta pill, gold curve,
+  Tief/Hoch footer. No range-switcher row: the real widget has none (owner
+  ruling — the span is per-instance configuration, not chrome).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bt_widget_preview_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/bt_widget_preview_dot"
+            android:textColor="@color/bt_widget_gold"
+            android:textSize="7sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:text="@string/bt_widget_preview_portfolio_name"
+            android:textColor="@color/bt_widget_text_secondary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bt_widget_preview_chip_gold"
+            android:maxLines="1"
+            android:paddingHorizontal="7dp"
+            android:paddingVertical="3dp"
+            android:text="@string/bt_widget_range_1m"
+            android:textColor="@color/bt_widget_on_gold"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:text="@string/bt_widget_preview_portfolio_value"
+            android:textColor="@color/bt_widget_text_primary"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bt_widget_preview_pill_gain"
+            android:maxLines="1"
+            android:paddingHorizontal="7dp"
+            android:paddingVertical="4dp"
+            android:text="@string/bt_widget_preview_portfolio_day"
+            android:textColor="@color/bt_widget_gain"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="4dp"
+        android:layout_weight="1"
+        android:contentDescription="@string/bt_widget_preview_portfolio_name"
+        android:scaleType="fitXY"
+        android:src="@drawable/bt_widget_preview_curve" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="1"
+        android:text="@string/bt_widget_preview_low_high"
+        android:textColor="@color/bt_widget_text_muted"
+        android:textSize="9sp" />
+</LinearLayout>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The widget picker-preview card. 20dp approximates the launcher's system
+  radius; the real widget takes the exact system dimension at runtime
+  (btWidgetCardModifier), a preview only has to look like it belongs.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_surface" />
+    <corners android:radius="20dp" />
+</shape>

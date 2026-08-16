@@ -6,6 +6,7 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.repo.AssetPriceSeries
 import at.bettertrack.app.data.repo.AssetRange
 import at.bettertrack.app.data.repo.AssetSnapshot
+import at.bettertrack.app.data.repo.eurDisplayPrice
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PricePoint
@@ -45,14 +46,18 @@ class ApiMarketDataSource(
         when (val r = apiCall(json) { api.assetDetail(assetId) }) {
             is BtResult.Ok -> {
                 val a = r.value.asset
+                val quoteCurrency = r.value.quote?.currency ?: a.currency
                 BtResult.Ok(
                     AssetSnapshot(
                         asset = MarketAsset(a.id, a.symbol, a.name, a.exchange, a.type, a.currency, a.isCustom),
                         nativePrice = r.value.quote?.price,
-                        quoteCurrency = r.value.quote?.currency ?: a.currency,
+                        quoteCurrency = quoteCurrency,
                         dayChangePct = r.value.quote?.dayChangePct,
                         prevClose = r.value.quote?.prevClose,
-                        eurPrice = r.value.eurPrice,
+                        // EUR-identity fallback — see [eurDisplayPrice]: the server
+                        // omits `eurPrice` for quotes already IN euros, which left
+                        // BMW.DE/BTC-EUR showing "—" beside a live percent.
+                        eurPrice = eurDisplayPrice(r.value.eurPrice, r.value.quote?.price, quoteCurrency),
                         asOf = r.value.asOf ?: r.value.quote?.asOf,
                         stale = r.value.stale,
                     ),

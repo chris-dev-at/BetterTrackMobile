@@ -171,6 +171,12 @@ import kotlinx.serialization.Serializable
 @Serializable data object SettingsNotificationsRoute
 @Serializable data object SettingsLanguageRoute
 @Serializable data object SettingsAboutRoute
+/**
+ * The in-app widget builder (widget redesign 2026-08-16): preview every
+ * home-screen widget with sample data, configure the configurable ones, and
+ * pin them to the launcher pre-configured via `requestPinAppWidget`.
+ */
+@Serializable data object SettingsWidgetsRoute
 /** Step 18: change the account password (current + new + confirm). */
 @Serializable data object ChangePasswordRoute
 /** Step 18: 2FA management (TOTP enroll/QR, email codes, recovery codes, disable). */

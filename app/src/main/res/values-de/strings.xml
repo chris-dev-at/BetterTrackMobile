@@ -2466,15 +2466,19 @@
     <string name="bt_sheet_pull_again_back">Nochmal ziehen für zurück</string>
     <!-- ==== STARTBILDSCHIRM-WIDGETS (DE) ==== -->
     <string name="bt_widget_net_worth_title">Vermögen</string>
-    <string name="bt_widget_net_worth_description">Dein Vermögen und die heutige Veränderung auf dem Startbildschirm.</string>
+    <string name="bt_widget_net_worth_description">Dein Vermögen und die heutige Veränderung — von der Einzeiler-Leiste bis zur großen Karte.</string>
+    <string name="bt_widget_portfolio_pick_title">Portfolio</string>
+    <string name="bt_widget_portfolio_pick_description">Wert, Tagesveränderung und die Ein-Monats-Kurve. Folgt der App, oder fixiere ein Portfolio.</string>
+    <string name="bt_widget_asset_title">Wertpapier</string>
+    <string name="bt_widget_asset_description">Ein Wert deiner Wahl, mit Kurs und Tagesbewegung.</string>
     <string name="bt_widget_watchlist_title">Watchlist</string>
     <string name="bt_widget_watchlist_description">Kurse und Tagesveränderungen der Werte, die du beobachtest.</string>
-    <string name="bt_widget_portfolio_stats_title">Portfolio</string>
-    <string name="bt_widget_portfolio_stats_description">Deine wichtigsten Portfolio-Kennzahlen auf einen Blick.</string>
-    <string name="bt_widget_top_movers_title">Top-Bewegungen</string>
-    <string name="bt_widget_top_movers_description">Die größten Tagesbewegungen deiner Positionen.</string>
-    <string name="bt_widget_budget_title">Budgets</string>
-    <string name="bt_widget_budget_description">Deine monatlichen Ausgaben je Budget.</string>
+    <string name="bt_widget_movers_title">Bewegungen</string>
+    <string name="bt_widget_movers_description">Die größten Tagesbewegungen — verbreitert Gewinner und Verlierer nebeneinander.</string>
+    <string name="bt_widget_budget_title">Budget</string>
+    <string name="bt_widget_budget_description">Alle Budgets als Balken — oder ein Budget als Ring, Balken oder Zahl.</string>
+    <string name="bt_widget_spending_title">Monatsfluss</string>
+    <string name="bt_widget_spending_description">Eingang, Ausgang und Netto — als Monatsbilanz, 6-Monats-Balken oder Ausgaben-Ring.</string>
     <string name="bt_widget_signed_out">Bei BetterTrack anmelden</string>
     <string name="bt_widget_syncing">Wird synchronisiert…</string>
     <string name="bt_widget_no_portfolios">Noch keine Portfolios</string>
@@ -2482,13 +2486,194 @@
     <string name="bt_widget_movers_empty">Heute keine Bewegung</string>
     <string name="bt_widget_budget_empty">Noch keine Budgets</string>
     <string name="bt_widget_budget_unavailable">In diesem Modus nicht verfügbar</string>
-    <!-- Ausgegeben von Limit unter einem Budget-Balken: "ausgegeben / Limit". -->
+    <string name="bt_widget_budget_missing">Dieses Budget gibt es nicht mehr</string>
     <string name="bt_widget_budget_spent_of">%1$s / %2$s</string>
-    <!-- Portfolio-Kennzahlen. Kurze Labels — das Widget selbst ist das Substantiv. -->
-    <string name="bt_widget_stat_today">Heute</string>
+    <string name="bt_widget_budget_of">von %1$s</string>
     <string name="bt_widget_stat_pnl">G/V</string>
-    <string name="bt_widget_stat_invested">Investiert</string>
-    <string name="bt_widget_stat_holdings">Positionen</string>
     <string name="bt_widget_as_of">Stand %1$s</string>
     <string name="bt_widget_partial">%1$d/%2$d</string>
+    <string name="bt_widget_chart_empty">Noch keine Chartdaten</string>
+    <string name="bt_widget_spending_empty">Diesen Monat keine Ausgaben</string>
+    <string name="bt_widget_spending_untagged">Ohne Tag</string>
+    <string name="bt_widget_spending_other">Sonstige</string>
+    <string name="bt_widget_asset_unconfigured">Tippen und Wert auswählen</string>
+    <string name="bt_widget_portfolio_missing">Dieses Portfolio gibt es nicht mehr</string>
+    <string name="bt_widget_config_pick_asset">Wert auswählen</string>
+    <string name="bt_widget_config_pick_portfolio">Portfolio auswählen</string>
+    <string name="bt_widget_config_pick_budget">Budget auswählen</string>
+    <string name="bt_widget_config_empty">Noch nichts zur Auswahl — öffne zuerst BetterTrack</string>
+    <string name="bt_widget_config_follow">Der App folgen</string>
+    <string name="bt_widget_config_follow_sub">Zeigt immer das in BetterTrack gewählte Portfolio</string>
+    <string name="bt_widget_config_all_budgets">Alle Budgets</string>
+    <string name="bt_widget_config_all_budgets_sub">Jedes Budget als kompakter Balken</string>
+    <string name="bt_widget_style_ring">Ring</string>
+    <string name="bt_widget_style_bar">Balken</string>
+    <string name="bt_widget_style_amount">Zahl</string>
+    <!-- Beispieldaten für die Picker-Vorschau — platzierte Widgets zeigen echte Daten. -->
+    <string name="bt_widget_preview_networth_value">38.579,23 €</string>
+    <string name="bt_widget_preview_networth_day">↗ +478,18 € · +1,26 %</string>
+    <string name="bt_widget_preview_portfolio_name">Wachstum</string>
+    <string name="bt_widget_preview_portfolio_value">38.579,23 €</string>
+    <string name="bt_widget_preview_portfolio_day">↗ +1.924,60 € · +5,25 %</string>
+    <string name="bt_widget_preview_asset_symbol">BAYN.DE</string>
+    <string name="bt_widget_preview_asset_price">25,91 €</string>
+    <string name="bt_widget_preview_asset_day">↗ +1,81 %</string>
+    <string name="bt_widget_preview_row1_symbol">RKLB</string>
+    <string name="bt_widget_preview_row1_pct">+4,92 %</string>
+    <string name="bt_widget_preview_row2_symbol">MSFT</string>
+    <string name="bt_widget_preview_row2_pct">+2,18 %</string>
+    <string name="bt_widget_preview_row3_symbol">ETH</string>
+    <string name="bt_widget_preview_row3_pct">−1,07 %</string>
+    <string name="bt_widget_preview_mover1_name" translatable="false">Rocket Lab USA</string>
+    <string name="bt_widget_preview_mover1_price">48,06 €</string>
+    <string name="bt_widget_preview_mover2_name" translatable="false">Ethereum</string>
+    <string name="bt_widget_preview_mover2_price">3.184,52 €</string>
+    <string name="bt_widget_preview_mover3_name" translatable="false">Bayer AG</string>
+    <string name="bt_widget_preview_mover3_price">25,91 €</string>
+    <string name="bt_widget_preview_mover1_symbol">RKLB</string>
+    <string name="bt_widget_preview_mover1_pct">+4,92 %</string>
+    <string name="bt_widget_preview_mover2_symbol">ETH</string>
+    <string name="bt_widget_preview_mover2_pct">−1,07 %</string>
+    <string name="bt_widget_preview_mover3_symbol">BAYN.DE</string>
+    <string name="bt_widget_preview_mover3_pct">+1,81 %</string>
+    <string name="bt_widget_preview_budget_tag">Essen</string>
+    <string name="bt_widget_preview_budget_pct">62 %</string>
+    <string name="bt_widget_preview_budget_spent">187,40 € / 300,00 €</string>
+    <string name="bt_widget_preview_spending_total">2.864,73 €</string>
+    <string name="bt_widget_preview_legend1">Miete</string>
+    <string name="bt_widget_preview_legend2">Essen</string>
+    <string name="bt_widget_preview_legend3">Mobilität</string>
+    <!-- ==== RUNDE 2: Codex-Studie-Redesign (DE) ==== -->
+    <string name="bt_widget_pulse_all">Alle Depots</string>
+    <string name="bt_widget_rows_subject" translatable="false">%1$s · %2$s</string>
+    <string name="bt_widget_range_1d">1T</string>
+    <string name="bt_widget_range_1y">1J</string>
+    <string name="bt_widget_asset_qty">Bestand</string>
+    <string name="bt_widget_asset_value">Wert</string>
+    <string name="bt_widget_budget_left">%1$s übrig</string>
+    <string name="bt_widget_budget_over">%1$s darüber</string>
+    <string name="bt_widget_budget_of_pair">%1$s von %2$s</string>
+    <string name="bt_widget_budget_spent_label">Ausgegeben</string>
+    <string name="bt_widget_budget_remaining_label">Verbleibend</string>
+    <plurals name="bt_widget_budget_days_left">
+        <item quantity="one">Noch %1$d Tag</item>
+        <item quantity="other">Noch %1$d Tage</item>
+    </plurals>
+    <string name="bt_widget_budget_used_pct">%1$s genutzt</string>
+    <string name="bt_widget_budget_per_day">%1$s/Tag</string>
+    <string name="bt_widget_asset_high_low">H %1$s · T %2$s</string>
+    <string name="bt_widget_perf_invested">Einbezahlt</string>
+    <string name="bt_widget_perf_high">Hoch</string>
+    <string name="bt_widget_perf_return">Rendite</string>
+    <string name="bt_widget_perf_low_high">Tief %1$s · Hoch %2$s</string>
+    <string name="bt_widget_event_deposit">Einzahlung</string>
+    <string name="bt_widget_event_withdrawal">Auszahlung</string>
+    <string name="bt_widget_event_buy">Kauf</string>
+    <string name="bt_widget_event_sell">Verkauf</string>
+    <string name="bt_widget_event_transfer_in">Transfer ein</string>
+    <string name="bt_widget_event_transfer_out">Transfer aus</string>
+    <string name="bt_widget_allocation_title">Allokation</string>
+    <string name="bt_widget_allocation_description">Wie sich dein Geld verteilt — nach Anlageklasse, Depot oder Währung.</string>
+    <string name="bt_widget_allocation_cash">Cash</string>
+    <string name="bt_widget_allocation_empty">Noch nichts darzustellen</string>
+    <string name="bt_widget_allocation_more">+%1$d weitere</string>
+    <string name="bt_widget_alloc_group_class">Anlageklasse</string>
+    <string name="bt_widget_alloc_group_portfolio">Depot</string>
+    <string name="bt_widget_alloc_group_currency">Währung</string>
+    <string name="bt_widget_rows_moved_short">%1$d/%2$d bewegt</string>
+    <string name="bt_widget_rows_day">Depot %1$s</string>
+    <string name="bt_widget_flow_empty">Noch keine Cash-Bewegungen</string>
+    <string name="bt_widget_flow_current_month">Laufender Monat</string>
+    <string name="bt_widget_flow_in">Eingang</string>
+    <string name="bt_widget_flow_out">Ausgang</string>
+    <string name="bt_widget_flow_net">Netto</string>
+    <string name="bt_widget_flow_in_short">Ein</string>
+    <string name="bt_widget_flow_out_short">Aus</string>
+    <string name="bt_widget_flow_net_window">Netto · %1$d M</string>
+    <string name="bt_widget_flow_elapsed">1.–%1$d. %2$s</string>
+    <string name="bt_widget_config_save">Speichern</string>
+    <string name="bt_widget_config_pulse">Vermögens-Widget</string>
+    <string name="bt_widget_config_allocation">Allokations-Widget</string>
+    <string name="bt_widget_config_rows">Listen-Widget</string>
+    <string name="bt_widget_config_flow">Monatsfluss-Widget</string>
+    <string name="bt_widget_config_emphasis">Führend</string>
+    <string name="bt_widget_config_delta_style">Veränderung als</string>
+    <string name="bt_widget_config_sparkline">Sparkline</string>
+    <string name="bt_widget_config_range">Zeitraum</string>
+    <string name="bt_widget_config_on">An</string>
+    <string name="bt_widget_config_off">Aus</string>
+    <string name="bt_widget_config_group_by">Gruppieren nach</string>
+    <string name="bt_widget_config_center">Mitte</string>
+    <string name="bt_widget_config_center_total">Gesamt</string>
+    <string name="bt_widget_config_center_top">Größter Anteil</string>
+    <string name="bt_widget_config_source">Quelle</string>
+    <string name="bt_widget_config_source_holdings">Bestände</string>
+    <string name="bt_widget_config_sort">Sortierung</string>
+    <string name="bt_widget_config_sort_movement">Bewegung</string>
+    <string name="bt_widget_config_sort_value">Wert</string>
+    <string name="bt_widget_config_sort_manual">Manuell</string>
+    <string name="bt_widget_config_direction">Richtung</string>
+    <string name="bt_widget_config_dir_all">Alle</string>
+    <string name="bt_widget_rows_side_winners">↗ Gewinner</string>
+    <string name="bt_widget_rows_side_losers">↘ Verlierer</string>
+    <string name="bt_widget_config_dir_winners">Gewinner</string>
+    <string name="bt_widget_config_dir_losers">Verlierer</string>
+    <string name="bt_widget_config_dir_split">Geteilt</string>
+    <string name="bt_widget_config_flow_mode">Ansicht</string>
+    <string name="bt_widget_flow_mode_equation">Monat</string>
+    <string name="bt_widget_flow_mode_bars">6 Monate</string>
+    <string name="bt_widget_flow_mode_donut">Nach Tags</string>
+    <string name="bt_widget_preview_low_high">Tief 36.588,40 € · Hoch 38.904,12 €</string>
+    <string name="bt_widget_range_1m" translatable="false">1M</string>
+    <string name="bt_widget_range_6m" translatable="false">6M</string>
+    <string name="bt_widget_range_max" translatable="false">MAX</string>
+    <string name="bt_widget_config_style_both" translatable="false">€ + %</string>
+    <string name="bt_widget_config_style_abs" translatable="false">€</string>
+    <string name="bt_widget_config_style_pct" translatable="false">%</string>
+    <string name="bt_widget_preview_dot" translatable="false">\u25cf</string>
+    <string name="bt_widget_preview_time" translatable="false">16:42</string>
+    <string name="bt_widget_preview_asset_currency" translatable="false">EUR</string>
+    <string name="bt_widget_preview_asset_subline" translatable="false">Bayer AG · XETRA</string>
+    <string name="bt_widget_preview_alloc1_pct" translatable="false">42 %</string>
+    <string name="bt_widget_preview_alloc2" translatable="false">ETFs</string>
+    <string name="bt_widget_preview_alloc2_pct" translatable="false">28 %</string>
+    <string name="bt_widget_preview_alloc3_pct" translatable="false">16 %</string>
+    <string name="bt_widget_preview_alloc_total">38.579,23 €</string>
+    <string name="bt_widget_preview_alloc1">Aktien</string>
+    <string name="bt_widget_preview_alloc3">Krypto</string>
+    <string name="bt_widget_preview_networth_day_abs">↗ +478,18 €</string>
+    <string name="bt_widget_preview_networth_day_pct">↗ +1,26 %</string>
+    <string name="bt_widget_preview_split_up" translatable="false">4 ↑</string>
+    <string name="bt_widget_preview_split_down" translatable="false">4 ↓</string>
+    <string name="bt_widget_preview_day_pct">+1,26 %</string>
+    <string name="bt_widget_preview_budget_left_amount">112,60 €</string>
+    <string name="bt_widget_preview_budget_spent_amount">187,40 €</string>
+    <string name="bt_widget_preview_budget_month" translatable="false">August</string>
+    <string name="bt_widget_preview_flow_in">+4.280,00 €</string>
+    <string name="bt_widget_preview_flow_out">−2.864,73 €</string>
+    <string name="bt_widget_preview_flow_net">+1.415,27 €</string>
+    <string name="bt_widget_preview_flow_window">+6.842,19 €</string>
+    <string name="bt_widget_actions_title">Schnellaktionen</string>
+    <string name="bt_widget_actions_description">Ein Tipp: neue Transaktion, Cash-Buchung, Märkte.</string>
+    <string name="bt_widget_action_trade">Neue Transaktion</string>
+    <string name="bt_widget_action_trade_short">Transaktion</string>
+    <string name="bt_widget_action_cash">Cash-Buchung</string>
+    <string name="bt_widget_action_market">Märkte</string>
+    <string name="bt_widget_preview_plus" translatable="false">+</string>
+    <string name="bt_widget_preview_euro" translatable="false">€</string>
+    <!-- ==== IN-APP-WIDGET-BAUKASTEN (DE) ==== -->
+    <string name="bt_dest_widgets">Widgets</string>
+    <string name="bt_settings_widgets_sub">Startbildschirm-Widgets ansehen, einrichten und hinzufügen</string>
+    <string name="bt_widgets_intro">Hol dir BetterTrack auf den Startbildschirm. Die Vorschauen unten zeigen Beispieldaten — platzierte Widgets zeigen deine.</string>
+    <string name="bt_widgets_add">Zum Startbildschirm hinzufügen</string>
+    <string name="bt_widgets_pin_requested">Bestätige das Widget auf deinem Startbildschirm.</string>
+    <string name="bt_widgets_pin_unsupported">Dein Launcher unterstützt das nicht — füge es über die Widget-Auswahl des Startbildschirms hinzu.</string>
+    <string name="bt_widgets_sample_badge">Beispieldaten</string>
+    <string name="bt_widgets_pick_budget_label">Budget</string>
+    <string name="bt_widgets_pick_style_label">Darstellung</string>
+    <string name="bt_widgets_pick_asset_label">Wertpapier</string>
+    <string name="bt_widgets_pick_portfolio_label">Portfolio</string>
+    <string name="bt_widgets_no_budgets">Noch keine Budgets — lege zuerst eins auf dem Cash-Bildschirm an.</string>
+    <string name="bt_widgets_no_assets">Noch nichts zur Auswahl — füge zuerst Positionen oder Watchlist-Einträge hinzu.</string>
+    <string name="bt_widgets_resize_hint">Widgets passen sich an, wenn du sie auf dem Startbildschirm vergrößerst.</string>
 </resources>
