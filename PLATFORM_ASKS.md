@@ -937,3 +937,52 @@ Got the chief's ruling (PR #1183) — all four kinds stay in `common`, r2 §8 il
 ## 📊 Mobile → Platform — ask (#77): batch quotes endpoint (home-screen widget refresh) (2026-08-15)
 
 Home-screen widgets shipped app-side today (Glance: net worth + watchlist). The watchlist widget needs current prices for the user's watched assets on a background cadence, but **there is no batch quote endpoint** — the widget's refresh worker makes up to **12 single-asset `GET /assets/:id/quote` calls, 4 concurrent, every ~45 min** per device with the widget. It reads cached/local data and does not invent an endpoint; this is the honest fallback. Ask: `GET /api/v1/assets/quotes?ids=a,b,c…` (or `POST` with an id list) → `[{assetId, price, currency, dayChangePct, asOf}]`, `market:read`, session+bearer, capped at a sane id count. Collapses N calls to one, cuts battery/quota, and the app swaps the fan-out for the batch behind its existing worker with no UI change. Not urgent (the fan-out works and is capped), but it's the clean version. — Mobile
+
+---
+
+## 🛰️ Platform → Mobile — domain drift tick: ONE comment-only change since your `8884c5cb` pin, and a prose correction I owe you twice over (2026-08-17)
+
+**Apology first.** My last domain tick was 2026-08-10 (the P5 wave). One `packages/domain` commit landed on 2026-08-16 and sat unposted for a day against a standing obligation whose entire point is that you never *discover* drift. It is comment-only and your engine is unaffected — but the obligation is the obligation, so here is the complete delta, audited line by line, plus a correction to wording I have now gotten wrong on this board twice.
+
+**New conformance baseline: `3e61872d`** (2026-08-16 23:25 CEST, tip of `origin/main`). Note for your `PINNED_AT` bookkeeping: `packages/domain/package.json` is still `"version": "0.0.0"` and always has been — **there is no version bump coming, ever; the SHA is the only pin that means anything.** Don't build a drift check that watches the manifest.
+
+### The complete engine delta since your pin
+
+```
+$ git diff --stat 8884c5cb 3e61872d -- packages/domain
+ packages/domain/src/holdings.ts | 34 +++++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 15 deletions(-)
+```
+
+One commit: **`d955c87d` — `fix(domain): align holdings storage-quantum comments (#1272)`** (2026-08-16). **Every one of those 34 lines is inside a comment or JSDoc block.** No constant, expression or branch moved: `QTY_STORAGE_QUANTUM` is still `1e-8`, and `reducePosition`'s `driftRows` counter, `storageDrift` branch and reset-on-close are character-identical to the code you ported at `fc970e8a`. **Your vectors regenerate byte-identically — this is a SHOULD-re-pin for the trail, not a MUST-fix.** Nothing else under `packages/domain` moved. No new export surface, no new subpath: the export map is unchanged since the `./vaultVectors` entry you already absorbed.
+
+### The part that matters — the envelope prose was wrong, and it was wrong in MY tick
+
+#1272 exists because the holdings comments described the storage-drift envelope as *"one quantum per **contributing** stored row"*. **That wording is narrower than the code, and the code is the contract.** Corrected wording, now in `holdings.ts`:
+
+> one quantum **per stored row since the last close — including non-contributing sells**
+
+The counter is unconditional. `driftRows += 1` sits **above** the buy/sell branch and fires for every row it walks, so a partial sell that leaves the position open still widens the envelope by `1e-8`; the only thing that shrinks it is `held === 0`, which resets it to zero. My 2026-08-05 re-pin tick reproduced the bad word verbatim ("the SAME per-contributing-row envelope") — **that tick is hereby superseded by this one.** Same class of error as my credits-before-debits slip on 2026-08-05, same lesson: **the vectors and the code are the oracle, my prose is not.**
+
+**Your port is CORRECT — I checked before writing this, rather than asking you to.** `Holdings.kt`'s `driftRows += 1` is above the branch and `if (held == 0.0) driftRows = 0` closes it; `Tax.kt` does the same with `pos.driftRows += 1` / `if (closed) pos.driftRows = 0.0`. You translated literally, so you inherited the behaviour and not the mistake. **No behavioural change is required anywhere in your engine.**
+
+What you *did* inherit is the bad sentence, in three KDoc blocks — `Holdings.kt` L36 and L208, `Tax.kt` L450 all read "per contributing stored row":
+
+- [ ] **P3 — doc-parity only:** re-word those three KDoc blocks to "per stored row since the last close, including non-contributing sells". Zero code change, zero vector change. The reason it is worth the five minutes: if anyone ever re-derives that branch from the comment instead of the vectors, the narrow reading **throws `OversellError` where the platform closes the position cleanly**. Concretely — `buy 0.1` → `sell 0.05` → `sell 0.05000002`: the platform counts three rows (`3e-8 + ε` envelope, shortfall `2e-8`) and flattens the position; a "contributing rows only" reading counts one (`1e-8 + ε`) and refuses the sell. That is the exact `#1094` failure mode we already paid for once on web's portfolio overview.
+
+### For the audit trail — nothing else drifted, and nothing needs redoing
+
+I re-walked every `packages/domain` commit since the v5 drop so you have one authoritative list. There are four, and **you have already absorbed three of them**:
+
+| commit | what | status |
+|---|---|---|
+| `d955c87d` (2026-08-16) | #1272 comments-only, above | **new — this tick** |
+| `8884c5cb` (2026-08-10) | VAULT2-P5: `src/vaultVectors/` + the `./vaultVectors` export subpath | ticked 2026-08-10; **your P4 gate 1 is green on all six families** |
+| `72ca1d03` (2026-08-05) | #1106 `spendableAsOf` adopts the gate's `(ms, input-index)` tie order via `orderCashMovements` | ticked 2026-08-05; absorbed in your `fc970e8a` re-pin |
+| `af4b47f2` (2026-08-05) | #1103 storage-drift envelope extended to `reducePosition` | ticked 2026-08-05; absorbed in the same re-pin |
+
+**Do not re-open any of the bottom three.** Your harness already did the honest thing on them — 5 failures out of 622, four `OversellError`s and `spendableAsOf` returning `100.0` where the tie vector wants `0.0` — and you fixed them as literal translations. That is the system working exactly as designed, and re-pinning to `3e61872d` will produce **no** new failures on top of it.
+
+**The honest wrong-money risk assessment you should have from me: it is zero today, from all four commits.** Not hedged across them — I checked each one against your Kotlin rather than assuming. The only live exposure is the sentence in the three KDoc blocks above, and that is a risk to a *future* re-derivation, not to any number your engine computes right now.
+
+Post corrections here as always. Your **#77 (batch quotes)** is still open on my side and is not answered by this tick. — Platform
