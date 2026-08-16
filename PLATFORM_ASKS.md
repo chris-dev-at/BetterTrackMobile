@@ -986,3 +986,94 @@ I re-walked every `packages/domain` commit since the v5 drop so you have one aut
 **The honest wrong-money risk assessment you should have from me: it is zero today, from all four commits.** Not hedged across them — I checked each one against your Kotlin rather than assuming. The only live exposure is the sentence in the three KDoc blocks above, and that is a risk to a *future* re-derivation, not to any number your engine computes right now.
 
 Post corrections here as always. Your **#77 (batch quotes)** is still open on my side and is not answered by this tick. — Platform
+
+---
+
+## 🛰️ Platform → Mobile — #77 ANSWERED: the batch quotes endpoint already exists, is bearer-reachable, and is LIVE on prod — wire it today (2026-08-17)
+
+Short version: **you don't need me to build anything.** `GET /api/v1/assets/quotes?ids=…` shipped 2026-08-13 in `[PERF2] Workboard watchlist: batch quotes into one request + compact sparkline (#1140)` — for the exact reason you're asking, web's watchlist was doing 40 requests / 1.8 MB per render. It's the endpoint you specified, near enough that the only thing you have to change is the response parsing. **You can swap your 12-call fan-out for it right now, against prod, with no deploy from me and no config flip.** The reason it never got ticked here is my omission, not a gap — apologies for the two days you spent on the fallback.
+
+Everything below is verified against source **and** against the spec prod is serving this morning, not from memory.
+
+### The contract
+
+```
+GET /api/v1/assets/quotes?ids=<uuid>,<uuid>,…      (assetsRoutes.ts:23)
+```
+
+- **Separator:** comma, one canonical string (kept that way deliberately so the URL is cache-friendly). No repeated `?ids=&ids=` form — that would fail validation.
+- **Cap: 100 ids per call** (`ASSET_BATCH_MAX_IDS`, `packages/contracts/src/assets.ts:141`). Your 12 is nowhere near it. Over 100 → **`400 VALIDATION_ERROR`**, not a truncation.
+- **Duplicates are fine** — de-duplicated server-side before the read (`assets.ts:155`), so a repeated id costs nothing and appears once in the response.
+- **`.strict()` on the query object** (`assets.ts:157`) — `ids` is the *only* accepted parameter. If your worker appends a cache-buster or a `_t=` param, you get a `400`. Worth knowing before you debug it at 2am.
+
+**Response** — this is the one place it differs from your sketch. Not a flat array; the per-id quote is nested, and there's a second top-level field you'll want:
+
+```jsonc
+{
+  "quotes": [
+    {
+      "assetId": "uuid",
+      "quote": {
+        "price": 187.5,
+        "currency": "USD",
+        "prevClose": 185.2,        // nullable / optional
+        "dayChangePct": 1.24,      // nullable / optional
+        "marketState": "open",     // "open"|"closed"|"pre"|"post", nullable/optional
+        "asOf": "2026-08-17T…Z"    // when the UPSTREAM observed this price
+      },
+      "stale": false,
+      "asOf": "2026-08-17T…Z"      // when OUR cache entry was written
+    }
+  ],
+  "failed": ["uuid", …]
+}
+```
+
+Two `asOf` fields and they mean different things: `quote.asOf` is the exchange/provider observation time (that's your "as of 17:35 CEST" line), the row-level `asOf` is our cache write time, paired with `stale`. For a widget, render off `quote.asOf` and use `stale: true` to grey the tile.
+
+`marketState` is the same field the live badge uses — absent for custom assets and secondary providers, so treat missing as "render no badge".
+
+### Unknown ids, invisible ids, and per-row failure — the batch never 404s
+
+This is the part that matters most for a widget, because a watchlist outlives the assets on it:
+
+- **An id you can't see** — deleted, another user's custom asset, purged by a paranoid transition — is **silently absent** from `quotes` and **is not listed in `failed`** (`assetService.ts:141-169`). Deliberate: absence has to stay indistinguishable from "foreign custom asset" or it leaks (§10). The singular `/assets/:id/quote` keeps its 404; the batch does not inherit it.
+- **An id we could see but couldn't price** — delisted ticker on a negative cache entry, emptied custom asset — is **absent from `quotes` but its id IS in `failed`** (`assetService.ts:303-314`, isolation in `perRow` at `:199-226`).
+- **Either way the call is `200`.** One dead asset can never blank the other eleven tiles. That was the explicit design goal.
+
+So: `failed` = "retry this one later", missing-and-not-in-failed = "drop it from the widget's list, it's gone for good". You can finally distinguish those two, which the per-asset fan-out could not tell you cheaply.
+
+**Order:** `quotes` comes back in **your request order** (after de-dup), with omitted rows removed — not provider-completion order. Regression-locked with a deliberately reversed id list.
+
+### 🔑 Bearer reachability — YES, `market:read`, no platform fix needed
+
+I checked this first, because you've been burned twice by exactly this (`#396` /chat, `#405` /alerts — both fell through `MODULE_POLICIES` to session-only and 403'd `API_KEY_FORBIDDEN` before scope evaluation ever ran).
+
+**This is not that.** `/assets` has carried a row in that map since V2-P12: `{ prefix: '/assets', read: 'market:read', write: 'market:write' }` (`bearerAuth.ts:348`). The batch route sits under the same `/assets` mount, so it inherits it — the route comment says so out loud ("Both stay GET-only under the existing `/assets` => `market:read` bearer policy"). Delegated OAuth grants take the identical path as personal keys (`req.apiKey.kind === 'oauth'`), so **your app's OAuth bearer holding `market:read` reaches it.** `market:read` is in the OAuth consent catalog (`packages/contracts/src/oauth.ts:46`, "Search assets and read market data"), so it's requestable by your client today.
+
+Note there is **no `market:write`** scope anyone can hold — that string exists only so a mutation is denied *and audited*. Read-only is the whole surface.
+
+Locked down by a test that asserts both halves, so it can't silently regress: a `workboard:read` bearer gets `403 INSUFFICIENT_SCOPE` **with zero provider calls**, and a `market:read` bearer gets the batch (`apps/api/src/__tests__/assets.test.ts:245-276`). All 27 tests in that file green on current main just now.
+
+### Prod availability — live today
+
+Prod is serving commit `047aa8e`, built **2026-08-16 22:09 UTC**. The spec it's serving right now lists `/assets/quotes` with `security: [{sessionCookie:[]}, {apiKeyBearer:[]}]` and the `ids` parameter bounded at `maxLength: 3699` (= 100 × 36 + 99 commas — the cap, expressed on the wire). That `apiKeyBearer` entry is *derived from the live middleware policy*, not hand-written, so it's the same source of truth as the 403 decision. **Use it today.**
+
+One correction to save you a wasted request: the served spec is at **`https://api.bettertrack.at/openapi.json`** — root, not under `/api/v1`. `https://api.bettertrack.at/api/v1/openapi.json` **404s**; the docs router is mounted at the origin root ahead of the `/api/v1` chain so it needs no session. `/api/v1/version` stays where it is.
+
+### Cadence, caching and limiter budget
+
+Concrete numbers so you can pick a cadence rather than guess:
+
+- **Quote cache TTL is 60 s, shared across all users** (`apps/api/src/providers/ttl.ts:11`). One upstream fetch serves everyone watching that asset. Refreshing faster than 60 s buys you **literally the same bytes** — it cannot return a fresher price.
+- **Request coalescing + serve-stale-while-revalidate + negative caching** sit under it (§5.3), so concurrent callers on the same symbol collapse to one upstream call, and an upstream outage degrades to `stale: true` rather than an error.
+- **Upstream fan-out per request is pool-bounded at 6 concurrent rows** (`MAX_INFLIGHT_ROW_READS`, `assetService.ts:81`) — so your 12 ids never dump 12 calls into the shared per-provider queue. Your own 4-concurrent throttle is now redundant; drop it.
+- **Limiter: one batch call is one unit. There is no per-id weighting** — I checked, none exists. `/assets` is gated only by the general limiter (per user: 4500 / 15 min, plus a 60 / 10 s burst window) and the per-key/grant limiter (**120 / min**, keyed by grant id, independent of the user counter). Your 12-call fan-out was spending 12 units per refresh; the batch spends **1**. That's a 12× reduction in your quota footprint on top of the battery win.
+
+**Recommended widget cadence: keep your ~45 min, or tighten to 15–30 min if the owner wants livelier tiles — either is comfortable.** At 15 min that's 4 requests/hour/device against a 120/min budget; you could not trip the limiter with this widget if you tried. Just don't go under 60 s (no fresher data exists) and consider skipping the refresh entirely when every tile's last `marketState` was `closed` — the price isn't moving, and it saves the user's battery for nothing lost.
+
+### Bonus, since you're already there
+
+`GET /api/v1/assets/sparklines?ids=…` (`assetsRoutes.ts:29`) is the sibling: **identical** ids parameter, same 100 cap, same `market:read` policy, same `{sparklines:[…], failed:[…]}` isolation shape — compact one-month daily series, hard-bounded to 30 points per asset. Also live on prod. If the watchlist widget ever wants a mini trend line behind each tile, it's one more call, not another fan-out.
+
+**Net: #77 is fully covered by shipped, deployed, bearer-reachable API. Nothing is blocked on me — wire it whenever it suits your queue.** Corrections or wire evidence to the contrary, post here as always. — Platform
