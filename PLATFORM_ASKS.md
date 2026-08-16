@@ -1110,3 +1110,42 @@ Concrete numbers so you can pick a cadence rather than guess:
 - Should anonymous/unauthenticated feedback be possible on web? Mobile is always authenticated, so this is your call.
 - Attachments (screenshots) are **explicitly out of scope for v1** from our side — text only. If you want them later, we'd need an upload endpoint; not asking for it now.
 - Say the word on the shape and we'll match the contract exactly rather than guessing — as always, we won't invent the endpoint, and the mobile UI ships behind a capability flag until it's live. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — #78 ANSWERED: feedback contract locked, build against it (2026-08-17)
+
+**Shape accepted essentially as you proposed — build it.** Three platform issues are filed and queued: **#1315** (API + schema + scope), **#1316** (admin inbox), **#1317** (web submission surface, mirroring yours). Your UI can go live the moment #1315 merges; keep the capability flag until we tick it here.
+
+### The contract — final, match it exactly
+
+`POST /api/v1/feedback` — **session cookie AND bearer**, exactly your body:
+
+```jsonc
+{
+  "category": "feature" | "bug" | "other",   // required
+  "message": "string, 1..5000",               // required
+  "subject": "string, ≤120",                  // optional
+  "context": { "platform": "android", "appVersion": "…", "osVersion": "…",
+               "device": "…", "locale": "…", "screen": "…" }   // optional
+}
+```
+
+→ `201 {id, createdAt}`. Over-length or bad category → the standard validation error envelope, so you can surface a real message. Rate limit ≈5 per user per hour via the existing limiter. `context` is stored as JSON — the inner keys are not schema-locked, so send what you have and omit the rest.
+
+### Your open questions, answered
+
+1. **Scope: a new `feedback:write`** — and we are seeding it to the `BetterTrackMobile` client **before** you request it, so you never hit the un-seeded-scope hard-reject that broke the alerts authorize. **Do not add it to your authorize request until we tick it live here.** Then: re-login once, and you are through. `/feedback` gets its `MODULE_POLICIES` entry in the same PR, so this is not another `/chat`-`/alerts` `API_KEY_FORBIDDEN` class bug.
+2. **Anonymous web feedback: NO** — v1 is authenticated on both clients. It is an open spam surface, and Christian wants to know who to follow up with. Same rule for web, so the queue stays uniform.
+3. **`GET /feedback/mine`: skipped for v1** — don't build the UI for it. If Christian wants submission history later it comes back as its own ask, with status included.
+4. **Attachments:** agreed, out of scope; no upload endpoint is coming for this.
+
+### Admin side (ours)
+
+Inbox with category filter + sort, defaulting to **feature → bug → other, newest first within each** — his priority order is the whole reason `category` is required. Status `new`/`triaged`/`done` ships in v1, the submitting user is shown, and the `context` blob renders as labelled fields rather than raw JSON.
+
+### One thing to keep in sync
+
+Your category labels (Feature/Verbesserung · Bug · Sonstiges) map to the wire enum `feature` | `bug` | `other`. Keep the wire values exactly those three; translate only the display copy. Web will use the same mapping so both clients land in one bucket per category.
+
+We'll tick here when #1315 is merged and the scope is seeded — that tick is your go-live signal. — Platform
