@@ -18,15 +18,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,10 +59,12 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.repo.BtPortfolioKind
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtPrimaryButton
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -572,72 +576,67 @@ private fun SwitcherRow(
                     tint = if (actionsEnabled) bt.textSecondary else bt.border,
                 )
             }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                containerColor = bt.surfaceHigh,
-            ) {
+        }
+    }
+
+    if (menuOpen) {
+        val openChainLabel = stringResource(R.string.bt_chain_open_action)
+        val settingsLabel = stringResource(R.string.bt_psettings_row)
+        val renameLabel = stringResource(R.string.bt_switcher_rename)
+        val archiveLabel = stringResource(R.string.bt_switcher_archive)
+        val deleteLabel = stringResource(R.string.bt_switcher_delete)
+        val chainId = portfolio.mirror?.mirrorChainId
+        BtActionSheet(
+            title = portfolio.name,
+            actions = buildList {
                 // Full-size twin of the gold badge's tap target (see above).
-                portfolio.mirror?.mirrorChainId?.let { chainId ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_chain_open_action), color = bt.textPrimary) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenChain(chainId)
-                        },
+                if (chainId != null) {
+                    add(
+                        BtSheetAction(
+                            label = openChainLabel,
+                            icon = Icons.Outlined.Link,
+                            onClick = { onOpenChain(chainId) },
+                        ),
                     )
                 }
                 // The door to this portfolio's full settings page. It leads the
-                // menu's own actions on purpose: rename/archive/delete are the
+                // sheet's own actions on purpose: rename/archive/delete are the
                 // three fast verbs, but everything ELSE about a portfolio —
                 // sharing, taxes, the group — lives on that page, and a user
-                // hunting for any of it opens this menu first.
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Tune,
-                            contentDescription = null,
-                            tint = bt.textSecondary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    text = { Text(stringResource(R.string.bt_psettings_row), color = bt.textPrimary) },
-                    onClick = {
-                        menuOpen = false
-                        onOpenSettings()
-                    },
+                // hunting for any of it opens this sheet first.
+                add(
+                    BtSheetAction(
+                        label = settingsLabel,
+                        icon = Icons.Outlined.Tune,
+                        onClick = onOpenSettings,
+                    ),
                 )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_switcher_rename), color = bt.textPrimary) },
-                    onClick = {
-                        menuOpen = false
-                        onRename()
-                    },
+                add(
+                    BtSheetAction(
+                        label = renameLabel,
+                        icon = Icons.Outlined.DriveFileRenameOutline,
+                        onClick = onRename,
+                    ),
                 )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_switcher_archive), color = bt.loss) },
-                    onClick = {
-                        menuOpen = false
-                        onArchive()
-                    },
+                add(
+                    BtSheetAction(
+                        label = archiveLabel,
+                        icon = Icons.Outlined.Archive,
+                        destructive = true,
+                        onClick = onArchive,
+                    ),
                 )
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.DeleteOutline,
-                            contentDescription = null,
-                            tint = bt.loss,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    text = { Text(stringResource(R.string.bt_switcher_delete), color = bt.loss) },
-                    onClick = {
-                        menuOpen = false
-                        onDelete()
-                    },
+                add(
+                    BtSheetAction(
+                        label = deleteLabel,
+                        icon = Icons.Outlined.DeleteOutline,
+                        destructive = true,
+                        onClick = onDelete,
+                    ),
                 )
-            }
-        }
+            },
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 
@@ -712,35 +711,28 @@ private fun ArchivedRow(
                     tint = if (actionsEnabled) bt.textSecondary else bt.border,
                 )
             }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                containerColor = bt.surfaceHigh,
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_switcher_restore), color = bt.textPrimary) },
-                    onClick = {
-                        menuOpen = false
-                        onRestore()
-                    },
-                )
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.DeleteOutline,
-                            contentDescription = null,
-                            tint = bt.loss,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    text = { Text(stringResource(R.string.bt_switcher_delete), color = bt.loss) },
-                    onClick = {
-                        menuOpen = false
-                        onDelete()
-                    },
-                )
-            }
         }
+    }
+
+    if (menuOpen) {
+        BtActionSheet(
+            title = portfolio.name,
+            subtitle = stringResource(R.string.bt_switcher_archived_section),
+            actions = listOf(
+                BtSheetAction(
+                    label = stringResource(R.string.bt_switcher_restore),
+                    icon = Icons.Outlined.Unarchive,
+                    onClick = onRestore,
+                ),
+                BtSheetAction(
+                    label = stringResource(R.string.bt_switcher_delete),
+                    icon = Icons.Outlined.DeleteOutline,
+                    destructive = true,
+                    onClick = onDelete,
+                ),
+            ),
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 

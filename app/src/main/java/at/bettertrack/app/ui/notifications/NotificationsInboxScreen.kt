@@ -52,8 +52,6 @@ import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,12 +92,14 @@ import at.bettertrack.app.data.notifications.NotificationFlags
 import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtScrollFill
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.BtUnreadDot
@@ -628,6 +628,9 @@ private fun NotificationRow(
 ) {
     val bt = BtTheme.colors
     val unreadTint = if (notification.isUnread) bt.wash(bt.gold, 0.06f) else bt.surface
+    // The row's headline, resolved once: it is both what the row prints and what
+    // the overflow sheet names as the thing its actions act on.
+    val rowTitle = notification.title.ifBlank { stringResource(notifKindTitleRes(notification.kind)) }
     Surface(
         onClick = onClick,
         color = unreadTint,
@@ -655,7 +658,7 @@ private fun NotificationRow(
                 // does not stretch the title line.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        notification.title.ifBlank { stringResource(notifKindTitleRes(notification.kind)) },
+                        rowTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (notification.isUnread) FontWeight.SemiBold else FontWeight.Medium,
                         color = bt.textPrimary,
@@ -676,6 +679,7 @@ private fun NotificationRow(
                         ) {
                             RowOverflow(
                                 notification = notification,
+                                title = rowTitle,
                                 onAlerts = onAlerts,
                                 onArchive = onArchive,
                                 onUnarchive = onUnarchive,
@@ -706,6 +710,8 @@ private fun NotificationRow(
 @Composable
 private fun RowOverflow(
     notification: AppNotification,
+    /** The row's visible headline — the action sheet names it (see [BtActionSheet]). */
+    title: String,
     onAlerts: (() -> Unit)?,
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
@@ -713,46 +719,63 @@ private fun RowOverflow(
 ) {
     val bt = BtTheme.colors
     var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.requiredSize(40.dp)) {
-            Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.bt_notif_more_actions), tint = bt.textMuted, modifier = Modifier.size(20.dp))
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // S6 P1-10: an alert that just fired is exactly when you want to
-            // re-arm, retune or delete it — and the manager was four taps away
-            // (Workboard → Alerts, after finding the Workboard tab at all). The
-            // row's PRIMARY tap still opens the asset, which is what you came to
-            // look at; this rides the overflow the row already had, so nothing
-            // new competes for the row surface.
-            onAlerts?.let { alerts ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_notif_action_manage_alerts)) },
-                    leadingIcon = { Icon(Icons.Outlined.NotificationsActive, contentDescription = null) },
-                    onClick = { open = false; alerts() },
+    IconButton(onClick = { open = true }, modifier = Modifier.requiredSize(40.dp)) {
+        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.bt_notif_more_actions), tint = bt.textMuted, modifier = Modifier.size(20.dp))
+    }
+    if (open) {
+        val manageAlertsLabel = stringResource(R.string.bt_notif_action_manage_alerts)
+        val unarchiveLabel = stringResource(R.string.bt_notif_action_unarchive)
+        val archiveLabel = stringResource(R.string.bt_notif_action_archive)
+        val deleteLabel = stringResource(R.string.bt_notif_action_delete)
+        BtActionSheet(
+            title = title,
+            actions = buildList {
+                // S6 P1-10: an alert that just fired is exactly when you want to
+                // re-arm, retune or delete it — and the manager was four taps away
+                // (Workboard → Alerts, after finding the Workboard tab at all). The
+                // row's PRIMARY tap still opens the asset, which is what you came to
+                // look at; this rides the overflow the row already had, so nothing
+                // new competes for the row surface.
+                if (onAlerts != null) {
+                    add(
+                        BtSheetAction(
+                            label = manageAlertsLabel,
+                            icon = Icons.Outlined.NotificationsActive,
+                            onClick = onAlerts,
+                        ),
+                    )
+                }
+                // No separate "Mark read": on v4 reading a row ARCHIVES it (PR #486), so
+                // mark-read and archive are the SAME server op. "Archive" (below) is the
+                // single non-delete affordance — it reads + archives and offers Undo.
+                if (notification.isArchived) {
+                    add(
+                        BtSheetAction(
+                            label = unarchiveLabel,
+                            icon = Icons.Outlined.Unarchive,
+                            onClick = onUnarchive,
+                        ),
+                    )
+                } else {
+                    add(
+                        BtSheetAction(
+                            label = archiveLabel,
+                            icon = Icons.Outlined.Archive,
+                            onClick = onArchive,
+                        ),
+                    )
+                }
+                add(
+                    BtSheetAction(
+                        label = deleteLabel,
+                        icon = Icons.Outlined.DeleteOutline,
+                        destructive = true,
+                        onClick = onDelete,
+                    ),
                 )
-            }
-            // No separate "Mark read": on v4 reading a row ARCHIVES it (PR #486), so
-            // mark-read and archive are the SAME server op. "Archive" (below) is the
-            // single non-delete affordance — it reads + archives and offers Undo.
-            if (notification.isArchived) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_notif_action_unarchive)) },
-                    leadingIcon = { Icon(Icons.Outlined.Unarchive, contentDescription = null) },
-                    onClick = { open = false; onUnarchive() },
-                )
-            } else {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_notif_action_archive)) },
-                    leadingIcon = { Icon(Icons.Outlined.Archive, contentDescription = null) },
-                    onClick = { open = false; onArchive() },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.bt_notif_action_delete), color = bt.loss) },
-                leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = bt.loss) },
-                onClick = { open = false; onDelete() },
-            )
-        }
+            },
+            onDismiss = { open = false },
+        )
     }
 }
 

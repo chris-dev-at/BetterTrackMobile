@@ -19,6 +19,14 @@ fun formatQuantity(quantity: Double, locale: Locale): String =
     btFormatQuantityCore(quantity, locale)
 
 /**
+ * Holding-ROW quantity (rule 3b): three digits of precision, truncated, full
+ * integer part always — `0.0424512` → `0.042`, `11.66666667` → `11.6`. The
+ * exact figure stays on the holding's detail screen via [formatQuantity].
+ */
+fun formatHoldingQuantity(quantity: Double, locale: Locale): String =
+    at.bettertrack.app.ui.format.btFormatHoldingQuantityCore(quantity, locale)
+
+/**
  * Unsigned weight percent (rule 2) — allocation legend / holding weights.
  * Returns the FULL localized string incl. "%" (2 decimals, DE space, EN none),
  * so callers render it directly (no separate "%" suffix).

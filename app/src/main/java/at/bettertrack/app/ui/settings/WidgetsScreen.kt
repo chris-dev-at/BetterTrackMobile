@@ -24,8 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -57,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtPickerRow
+import at.bettertrack.app.ui.components.BtPickerSheet
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -252,6 +252,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                             label = stringResource(R.string.bt_widgets_pick_portfolio_label),
                             value = pulseScope?.name
                                 ?: stringResource(R.string.bt_widget_pulse_all),
+                            selected = pulseScope,
                             options = listOf(null) + portfolioChoices,
                             optionLabel = {
                                 it?.name ?: stringResource(R.string.bt_widget_pulse_all)
@@ -307,6 +308,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                             label = stringResource(R.string.bt_widgets_pick_portfolio_label),
                             value = perfPortfolio?.name
                                 ?: stringResource(R.string.bt_widget_config_follow),
+                            selected = perfPortfolio,
                             options = listOf(null) + portfolioChoices,
                             optionLabel = {
                                 it?.name ?: stringResource(R.string.bt_widget_config_follow)
@@ -353,6 +355,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                             SelectorRow(
                                 label = stringResource(R.string.bt_widgets_pick_asset_label),
                                 value = selectedAsset?.symbol.orEmpty(),
+                                selected = selectedAsset,
                                 options = assetChoices,
                                 optionLabel = { "${it.symbol} — ${it.name}" },
                                 onSelect = { selectedAsset = it },
@@ -441,6 +444,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                                 label = stringResource(R.string.bt_widgets_pick_budget_label),
                                 value = selectedBudget?.tagName
                                     ?: stringResource(R.string.bt_widget_config_all_budgets),
+                                selected = selectedBudget,
                                 options = listOf<BtWidgetBudget?>(null) + budgetChoices,
                                 optionLabel = {
                                     it?.tagName
@@ -690,48 +694,87 @@ private fun EmptyHint(text: String) {
     )
 }
 
-/** A labelled value row that opens a dropdown of [options]. */
+/**
+ * A labelled value row that opens a [BtPickerSheet] of [options].
+ *
+ * ## Why this is a sheet (owner order 2026-08-16)
+ *
+ * *"Every remaining anchored 3-dot dropdown / context menu becomes a bottom
+ * sheet."* This row was the app's LAST anchored popup — an `M3 DropdownMenu`
+ * that opened as a floating square over the config block, in a screen whose
+ * every other transient surface slides up from the bottom. It is a single-choice
+ * value picker with no destructive verb, so its home is [BtPickerSheet] (the
+ * family already behind 14 other choices) rather than `BtActionSheet`, which is
+ * for verbs.
+ *
+ * The sheet also repairs two real defects the menu had. An anchored menu is
+ * capped by the window it is anchored in, so a user with a dozen portfolios got
+ * a cramped scrolling square pinned to a row halfway down a scrolling list; the
+ * sheet gets the picker family's height cap and its own scroll. And the menu
+ * marked NOTHING as current — the collapsed row said which value was chosen and
+ * then the open list gave no tick, so the reader had to remember. [BtPickerRow]
+ * carries the wash + hairline + tick, which is the whole reason that component
+ * exists.
+ *
+ * @param value the CURRENT value as the collapsed row prints it. Kept separate
+ *   from `optionLabel(selected)` on purpose: the asset picker's row shows the
+ *   bare symbol while its options show `SYMBOL — Name`, and collapsing the two
+ *   would either bloat the row or starve the list.
+ * @param selected the chosen option itself, so the tick is decided by IDENTITY
+ *   rather than by matching rendered labels. Two portfolios may legitimately
+ *   share a name, and a label match would tick both of them. Declared `T?`
+ *   rather than `T` so a picker whose options are non-null (the asset list) can
+ *   still say "nothing chosen yet" without widening its own element type.
+ */
 @Composable
 private fun <T> SelectorRow(
     label: String,
     value: String,
+    selected: T?,
     options: List<T>,
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
     val bt = BtTheme.colors
     var open by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { open = true }
-                .padding(vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { open = true }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textPrimary,
+            fontWeight = FontWeight.Medium,
+        )
+        Icon(
+            Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = bt.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+    if (open) {
+        BtPickerSheet(
+            // The row's own label is the sheet's title: it is already the noun
+            // the user tapped ("Portfolio", "Asset", "Budget"), so the sheet
+            // names itself out of the vocabulary that opened it.
+            title = label,
+            onDismiss = { open = false },
         ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = bt.textSecondary,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = bt.textPrimary,
-                fontWeight = FontWeight.Medium,
-            )
-            Icon(
-                Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = bt.textMuted,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(optionLabel(option)) },
+                BtPickerRow(
+                    label = optionLabel(option),
+                    selected = option == selected,
                     onClick = {
                         onSelect(option)
                         open = false

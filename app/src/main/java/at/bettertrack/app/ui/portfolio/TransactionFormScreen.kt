@@ -90,9 +90,14 @@ import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.SyncOpEntity
 import at.bettertrack.app.data.db.TransactionEntity
+import at.bettertrack.app.data.repo.CashLink
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
+import at.bettertrack.app.data.repo.TxEditRoute
+import at.bettertrack.app.data.repo.cashLinkOf
+import at.bettertrack.app.data.repo.isFinancialEdit
+import at.bettertrack.app.data.repo.txEditRoute
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.navigation.TransactionFormRoute
 import at.bettertrack.app.sync.ConnectivityMonitor
@@ -101,6 +106,7 @@ import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
 import at.bettertrack.app.sync.TxOpPayload
+import at.bettertrack.app.sync.TxRebookOpPayload
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtDatePickerDialog
 import at.bettertrack.app.ui.components.BtInlineEmpty
@@ -1044,6 +1050,47 @@ class TransactionFormViewModel(
         val newNote = submittedNote(_noteText.value)
         val dateChanged = _date.value != epochMsToLocalDate(orig.executedAtMs)
 
+        // ── The cash-linked edit (owner order 2026-08-16) ────────────────────
+        //
+        // A trade coupled to a wallet cannot have its economics PATCHed: the
+        // update contract carries no cash fields and the server refuses the
+        // edit outright (`TRANSACTION_CASH_LINKED`) rather than let the trade
+        // and its cash movement drift apart. The app used to render that
+        // refusal and stop, telling the user to delete the row and type it in
+        // again — which is both the same two writes and a worse way to do them,
+        // because doing it by hand loses the coupling and the wallet.
+        //
+        // So the app performs the correction the platform's own replica path
+        // performs: delete, then re-create with the intent restored. It is
+        // routed through the QUEUE ([OpType.TX_REBOOK]) rather than run here,
+        // so the replacement payload is on disk before the delete is attempted
+        // and a crash between the two legs is recoverable instead of
+        // destructive. The link is read locally BEFORE submitting, so this is a
+        // decision the app makes knowingly rather than a 400 it reacts to.
+        val financial = isFinancialEdit(
+            sideChanged = newSide != orig.side,
+            quantityChanged = newQty != orig.quantity,
+            priceChanged = newPrice != orig.price,
+            feeChanged = newFee != orig.fee,
+            dateChanged = dateChanged,
+        )
+        val noteChanged = newNote != displayNote(orig.note)
+        val link = cashLinkOf(m.txId, db.cashDao().movementsForTransaction(m.txId))
+        when (txEditRoute(financial, noteChanged, link)) {
+            TxEditRoute.NOTHING -> {
+                _events.value = TxFormEvent.Close
+                return
+            }
+
+            TxEditRoute.REBOOK -> {
+                submitRebook(m, link, newSide, newQty, newPrice, newFee, newNote)
+                return
+            }
+
+            // Unlinked, or note-only — the ordinary PATCH below still applies.
+            TxEditRoute.PATCH -> Unit
+        }
+
         // Uncovered (over-)sell (PR #429): a synced edit that raises the sold
         // quantity past the held amount must carry the flag or the PATCH 400s
         // OVERSELL. Only sent when the edit is actually uncovered + acknowledged.
@@ -1072,6 +1119,97 @@ class TransactionFormViewModel(
         when (val r = repo.updateTransaction(m.portfolioId, m.txId, body, key)) {
             is BtResult.Ok -> _events.value = TxFormEvent.Close
             is BtResult.Err -> _serverError.value = r.error.asMessage()
+        }
+    }
+
+    /**
+     * Deliver a cash-linked economic edit as a durable re-book.
+     *
+     * Enqueue-then-drain, the exact shape [submitViaQueue] uses for a create,
+     * and for the same reason: the queue entry is the record. It is written
+     * before anything is deleted server-side, it carries the complete
+     * replacement, and if this process dies mid-flight the next drain finishes
+     * the job. The user is told the outcome the same way a create tells them —
+     * DONE closes the form, a refusal stays on screen with the server's reason.
+     *
+     * The asset cannot change on an edit (the PATCH contract has no `assetId`
+     * and this path deliberately does not widen that), so the replacement's
+     * asset comes from the ORIGINAL transaction rather than from the picker.
+     *
+     * One fidelity note, inherited from the platform: `settleCashAsOfToday` is
+     * not restorable. The server's own correction path drops it too — the
+     * original intent is not recorded anywhere the client can read — so a
+     * backdated buy whose cash leg had been settled today gets its leg re-dated
+     * on re-creation. Passing the flag for a re-booked BUY keeps the behaviour
+     * identical to how that same trade would be recorded today, which is the
+     * closest truthful reconstruction available.
+     */
+    private suspend fun submitRebook(
+        m: FormMode.EditSynced,
+        link: CashLink,
+        newSide: String,
+        newQty: Double,
+        newPrice: Double,
+        newFee: Double,
+        newNote: String?,
+    ) {
+        val orig = origSynced ?: return
+        val buy = newSide == "buy"
+        val payload = TxRebookOpPayload(
+            txId = m.txId,
+            replacement = TxOpPayload(
+                assetId = orig.assetId,
+                side = newSide,
+                quantity = newQty,
+                price = newPrice,
+                fee = newFee,
+                executedAt = executedAtIso(_date.value),
+                note = newNote,
+                // The coupling is RESTORED, not re-asked: it is a property of
+                // the trade the user is correcting, and the edit form has no
+                // control that could change it.
+                payFromCash = if (link.payFromCash) true else null,
+                addProceedsToCash = if (link.addProceedsToCash) true else null,
+                cashSourceId = link.cashSourceId,
+                settleCashAsOfToday = if (buy && link.payFromCash) true else null,
+                allowUncovered = if (uncoveredSell.value.active) true else null,
+                uncoveredEntryPrice = if (uncoveredSell.value.active) {
+                    parseUncoveredEntryPrice(_uncoveredEntryPriceText.value)
+                } else {
+                    null
+                },
+                assetSymbol = orig.assetSymbol,
+                assetName = orig.assetName,
+                assetCurrency = orig.assetCurrency,
+            ),
+        )
+        val op = engine.enqueue(
+            type = OpType.TX_REBOOK,
+            portfolioId = m.portfolioId,
+            payloadJson = json.encodeToString(TxRebookOpPayload.serializer(), payload),
+        )
+        try {
+            engine.drain()
+        } catch (_: Exception) {
+            // Op stays queued; WorkManager picks it up. Nothing is lost.
+        }
+        when (val after = db.syncOpDao().getById(op.id)) {
+            // Drained and pruned, or done: the correction landed.
+            null -> _events.value = TxFormEvent.Close
+            else -> when {
+                after.status == OpStatus.DONE.wire -> _events.value = TxFormEvent.Close
+                // A refusal the user can act on — most likely the DELETE leg
+                // being declined (an overdrawn wallet, a locked tax year), in
+                // which case NOTHING was destroyed and the original trade is
+                // still there.
+                after.errorCode != null || after.serverError != null ->
+                    _serverError.value = after.rejectionMessage()
+                // Queued but unresolved: the durable row is the record.
+                else -> {
+                    scheduler.scheduleDrain()
+                    _events.value = TxFormEvent.Close
+                }
+            }
         }
     }
 

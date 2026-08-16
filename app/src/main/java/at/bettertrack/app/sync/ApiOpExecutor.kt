@@ -53,6 +53,7 @@ class ApiOpExecutor(
             OpType.CASH_FEE -> executeCash(op, CashKind.FEE)
             OpType.CASH_TRANSFER -> executeTransfer(op)
             OpType.CUSTOM_ASSET_VALUE_POINT -> executeValuePoint(op)
+            OpType.TX_REBOOK -> executeRebook(op)
         }
     }
 
@@ -80,6 +81,84 @@ class ApiOpExecutor(
                     uncoveredEntryPrice = payload.uncoveredEntryPrice,
                 ),
                 idempotencyKey = op.clientId,
+            )
+        }) { body ->
+            resultJson("transactionIds", body.transactions.map { it.id })
+        }
+    }
+
+    // ── Re-book: the cash-linked edit (owner order 2026-08-16) ───────────────
+
+    /**
+     * Replace a cash-linked transaction: DELETE the old row, CREATE the edited
+     * one with its wallet coupling restored.
+     *
+     * ## Order, and what happens if it is interrupted
+     *
+     * Delete first, create second — never the other way round. The reverse order
+     * would leave the portfolio holding BOTH trades if the run stopped in the
+     * middle, i.e. it would double the user's position and their cash movement.
+     * This order can only leave the trade MISSING, which is recoverable: the op
+     * is still on the queue with the whole replacement payload in it, and the
+     * next drain re-runs from the top.
+     *
+     * Re-running from the top is safe because both legs carry derived, stable
+     * idempotency keys ([rebookLegKey]). A resumed op replays the delete (the
+     * server returns its stored 2xx rather than a 404 for the row that is
+     * already gone) and then either replays or performs the create. The one
+     * window the keys cannot cover is a resume after the server's 48h
+     * idempotency TTL has lapsed — past that a replayed delete really would 404.
+     * That is precisely the case the queue's own `REPLAY_SAFE_WINDOW_MS` already
+     * refuses to blind-replay, so the op parks for the user instead, which is
+     * the honest outcome.
+     *
+     * ## Why the delete's own failures are not swallowed
+     *
+     * `CASH_LEDGER_WOULD_GO_NEGATIVE` (removing a sale would overdraw the
+     * wallet) and `TAX_YEAR_LOCKED` are real refusals of the whole edit, and the
+     * user has to see them. They come back through the normal 4xx classification
+     * and park the op with the server's reason — at which point NOTHING has been
+     * destroyed, because the delete is the first leg and it did not happen.
+     */
+    private suspend fun executeRebook(op: SyncOp): ExecResult {
+        val payload = decode(TxRebookOpPayload.serializer(), op) ?: return malformed(op)
+        val portfolioId = op.portfolioId ?: return malformed(op)
+        val tx = payload.replacement
+
+        val deleted = runMutation(op, {
+            api.deleteTransaction(
+                portfolioId,
+                payload.txId,
+                idempotencyKey = rebookLegKey(op.clientId, REBOOK_LEG_DELETE),
+            )
+        }) { null }
+        // Anything other than a proven delete stops here, with the op intact.
+        // Success is the ONLY state in which the original row is known to be
+        // gone, and therefore the only state in which creating its replacement
+        // cannot duplicate it.
+        if (deleted !is ExecResult.Success) return deleted
+
+        return runMutation(op, {
+            api.createTransaction(
+                portfolioId,
+                CreateTransactionRequest(
+                    assetId = tx.assetId,
+                    side = tx.side,
+                    quantity = tx.quantity,
+                    price = tx.price,
+                    fee = tx.fee,
+                    executedAt = tx.executedAt,
+                    note = tx.note,
+                    payFromCash = tx.payFromCash,
+                    addProceedsToCash = tx.addProceedsToCash,
+                    // The whole reason this field was added to the contract DTO:
+                    // without it the re-created leg silently lands on Main.
+                    cashSourceId = tx.cashSourceId,
+                    settleCashAsOfToday = tx.settleCashAsOfToday,
+                    allowUncovered = tx.allowUncovered,
+                    uncoveredEntryPrice = tx.uncoveredEntryPrice,
+                ),
+                idempotencyKey = rebookLegKey(op.clientId, REBOOK_LEG_CREATE),
             )
         }) { body ->
             resultJson("transactionIds", body.transactions.map { it.id })

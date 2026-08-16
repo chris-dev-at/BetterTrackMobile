@@ -29,8 +29,6 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -81,6 +79,7 @@ import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PriceAlert
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -91,6 +90,7 @@ import at.bettertrack.app.ui.components.BtNeedsYouGroup
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtScrollFill
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
@@ -637,6 +637,10 @@ private fun AlertRow(
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
+    // One condition line, two consumers: the row's second line and the action
+    // sheet's subtitle — a symbol can carry several alerts, so the sheet has to
+    // say WHICH one it is about.
+    val condition = conditionLine(alert)
 
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
@@ -668,7 +672,7 @@ private fun AlertRow(
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = conditionLine(alert),
+                    text = condition,
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textSecondary,
                     maxLines = 1,
@@ -684,36 +688,25 @@ private fun AlertRow(
                     tint = if (actionsEnabled) bt.textSecondary else bt.border,
                 )
             }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                containerColor = bt.surfaceHigh,
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_alert_edit), color = bt.textPrimary) },
-                    onClick = {
-                        menuOpen = false
-                        onEdit()
-                    },
-                )
-                if (alert.status == AlertStatus.Triggered) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_alert_rearm), color = bt.textPrimary) },
-                        onClick = {
-                            menuOpen = false
-                            onRearm()
-                        },
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.bt_alert_delete), color = bt.loss) },
-                    onClick = {
-                        menuOpen = false
-                        onDelete()
-                    },
-                )
-            }
         }
+    }
+
+    if (menuOpen) {
+        val editLabel = stringResource(R.string.bt_alert_edit)
+        val rearmLabel = stringResource(R.string.bt_alert_rearm)
+        val deleteLabel = stringResource(R.string.bt_alert_delete)
+        BtActionSheet(
+            title = alert.asset.symbol,
+            subtitle = condition,
+            actions = buildList {
+                add(BtSheetAction(label = editLabel, onClick = onEdit))
+                if (alert.status == AlertStatus.Triggered) {
+                    add(BtSheetAction(label = rearmLabel, onClick = onRearm))
+                }
+                add(BtSheetAction(label = deleteLabel, destructive = true, onClick = onDelete))
+            },
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 

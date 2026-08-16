@@ -23,8 +23,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +66,7 @@ import at.bettertrack.app.data.api.dto.CashRuleMatchTypes
 import at.bettertrack.app.data.cash.CashClassificationRepository
 import at.bettertrack.app.data.db.CashTagEntity
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -79,6 +78,7 @@ import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.LocalBtSnackbar
@@ -626,36 +626,35 @@ private fun CashRuleRow(
                     uncheckedBorderColor = bt.borderStrong,
                 ),
             )
-            Box {
-                IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled) {
-                    Icon(
-                        Icons.Outlined.MoreVert,
-                        contentDescription = stringResource(R.string.bt_rules_actions_cd),
-                        tint = if (actionsEnabled) bt.textSecondary else bt.border,
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surfaceHigh,
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary) },
-                        onClick = {
-                            menuOpen = false
-                            onEdit()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_cash_delete), color = bt.loss) },
-                        onClick = {
-                            menuOpen = false
-                            onDelete()
-                        },
-                    )
-                }
+            IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled) {
+                Icon(
+                    Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(R.string.bt_rules_actions_cd),
+                    tint = if (actionsEnabled) bt.textSecondary else bt.border,
+                )
             }
         }
+    }
+
+    if (menuOpen) {
+        BtActionSheet(
+            // The pattern is what the user recognises the rule by; the match type
+            // is the same meta the row shows under it.
+            title = rule.pattern,
+            subtitle = matchTypeLabel(rule.matchType),
+            actions = listOf(
+                BtSheetAction(
+                    label = stringResource(R.string.bt_cash_edit),
+                    onClick = onEdit,
+                ),
+                BtSheetAction(
+                    label = stringResource(R.string.bt_cash_delete),
+                    destructive = true,
+                    onClick = onDelete,
+                ),
+            ),
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 

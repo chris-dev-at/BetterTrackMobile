@@ -126,6 +126,25 @@
     <string name="bt_range_3y">3Y</string>
     <string name="bt_range_5y">5Y</string>
     <string name="bt_range_max">Max</string>
+    <!-- Owner UI batch 2026-08-16: the hero delta line names its window in WORDS
+         ("+120 € (2.1 %) · past month"), never in picker shorthand. One word per
+         served portfolio window; the chips above keep their compact labels. -->
+    <string name="bt_range_word_1d">today</string>
+    <string name="bt_range_word_1w">past week</string>
+    <string name="bt_range_word_1m">past month</string>
+    <!-- 6M left the portfolio picker in the same batch; the word stays so the
+         mapping is total for as long as the enum carries the window. -->
+    <string name="bt_range_word_6m">past six months</string>
+    <string name="bt_range_word_1y">past year</string>
+    <string name="bt_range_word_max">all time</string>
+    <!-- Owner UI batch 2026-08-16: allocation moved off the overview into its own
+         insights subpage, entered from a row beside Portfolio settings. -->
+    <string name="bt_overview_more_insights">More insights</string>
+    <string name="bt_insights_title">Insights</string>
+    <!-- Holdings sort toggle (owner UI batch 2026-08-16). -->
+    <string name="bt_holdings_sort_cd">Sort holdings</string>
+    <string name="bt_holdings_sort_allocation">Allocation</string>
+    <string name="bt_holdings_sort_profit">Profit</string>
 
     <!-- Step 6 — Portfolio switcher (spec §6.1) -->
     <string name="bt_switcher_title">Portfolios</string>
@@ -281,6 +300,11 @@
     <string name="bt_pending_op_cash_fee">Cash fee</string>
     <string name="bt_pending_op_cash_transfer">Cash transfer</string>
     <string name="bt_pending_op_value_point">Custom-asset value update</string>
+    <!-- Owner UI batch 2026-08-16: a cash-linked trade is corrected by re-booking
+         it (delete + re-create), because the platform refuses to PATCH one. The
+         queued op is that pair, so it is named for what the user did — corrected
+         a trade — not for the two writes it takes to do it. -->
+    <string name="bt_pending_op_tx_rebook">Corrected trade</string>
     <string name="bt_offline_banner_tap_cd">Open pending sync</string>
     <plurals name="bt_pending_strip_waiting">
         <item quantity="one">%1$d change waiting to sync</item>
@@ -294,14 +318,14 @@
     <!-- Step 9 — Cash & sources (spec §6.3) -->
     <string name="bt_cash_title">Cash</string>
     <string name="bt_cash_total">Total cash</string>
-    <string name="bt_cash_deposit">Deposit</string>
-    <string name="bt_cash_withdraw">Withdraw</string>
+    <string name="bt_cash_deposit">Add money</string>
+    <string name="bt_cash_withdraw">Spend</string>
     <string name="bt_cash_transfer">Transfer</string>
-    <string name="bt_cash_deposit_title">Deposit cash</string>
-    <string name="bt_cash_withdraw_title">Withdraw cash</string>
+    <string name="bt_cash_deposit_title">Add money</string>
+    <string name="bt_cash_withdraw_title">Record spending</string>
     <string name="bt_cash_transfer_title">Transfer between sources</string>
-    <string name="bt_cash_deposit_action">Record deposit</string>
-    <string name="bt_cash_withdraw_action">Record withdrawal</string>
+    <string name="bt_cash_deposit_action">Add money</string>
+    <string name="bt_cash_withdraw_action">Record spending</string>
     <string name="bt_cash_transfer_action">Record transfer</string>
     <string name="bt_cash_amount">Amount</string>
     <string name="bt_cash_source_picker">Source</string>
@@ -312,6 +336,28 @@
     <string name="bt_cash_sources_section">Sources</string>
     <string name="bt_cash_new_source">New source</string>
     <string name="bt_cash_new_source_title">New cash source</string>
+    <!-- Owner UI batch 2026-08-16: the decrowded cash overview. -->
+    <string name="bt_cash_all_sources">All sources</string>
+    <string name="bt_cash_source_switcher_cd">Choose cash source</string>
+    <string name="bt_cash_transactions_row_sub">Deposits, spending and transfers</string>
+    <string name="bt_budgets_row_sub">Monthly spending targets</string>
+    <string name="bt_budgets_all">All budgets</string>
+    <!-- Owner ask 2026-08-16: the ledger filters by source x tags x window and
+         rolls up whatever the three leave standing. The roll-up is named FOR THE
+         SELECTION on purpose — the platform's cash aggregates are month-scoped,
+         so these sums describe exactly the rows on screen and nothing wider. -->
+    <string name="bt_ledger_all_tags">All tags</string>
+    <string name="bt_ledger_window_all">Any time</string>
+    <string name="bt_ledger_window_30d">30 days</string>
+    <string name="bt_ledger_window_90d">90 days</string>
+    <string name="bt_ledger_window_1y">1 year</string>
+    <string name="bt_ledger_stats_title">For this selection</string>
+    <string name="bt_ledger_stats_in">In</string>
+    <string name="bt_ledger_stats_out">Out</string>
+    <string name="bt_ledger_stats_net">Net</string>
+    <string name="bt_ledger_reset_filters">Reset filters</string>
+    <string name="bt_ledger_no_match_title">Nothing matches these filters</string>
+    <string name="bt_ledger_no_match_message">No movement fits the source, tags and period you picked. Widen one of them to see more.</string>
     <string name="bt_cash_rename_source_title">Edit cash source</string>
     <!-- S6 P1-15: was "Main", which collided with the portfolio named "Main" and
          the source named "Main" on the very same screen ("Main / Main / Main").
@@ -1336,7 +1382,7 @@
         <item quantity="one">%1$d movement</item>
         <item quantity="other">%1$d movements</item>
     </plurals>
-    <string name="bt_cash_trends_section">Last months</string>
+    <string name="bt_cash_trends_section">Cash flow</string>
     <string name="bt_cash_trends_empty">No cash history yet.</string>
 
     <!-- ── V5 S2c: standing orders ─────────────────────────────────────────── -->

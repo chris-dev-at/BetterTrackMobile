@@ -432,6 +432,10 @@ private class FakeCashDao : CashDao {
     override fun observeMovements(portfolioId: String): Flow<List<CashMovementEntity>> =
         MutableStateFlow(emptyList())
 
+    /** Not exercised here — this fake exists for the classification repo. */
+    override suspend fun movementsForTransaction(transactionId: String): List<CashMovementEntity> =
+        emptyList()
+
     override suspend fun upsertSources(sources: List<CashSourceEntity>) = Unit
     override suspend fun insertMovements(movements: List<CashMovementEntity>) = Unit
     override suspend fun deleteSourcesForPortfolio(portfolioId: String) = Unit

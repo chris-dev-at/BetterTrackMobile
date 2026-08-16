@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class PriceStatesTest {
 
-    private fun holding(assetId: String, marketValueEur: Double?) = HoldingEntity(
+    private fun holding(assetId: String, marketValueEur: Double?, quantity: Double = 10.0) = HoldingEntity(
         portfolioId = "p1",
         assetId = assetId,
         assetSymbol = assetId,
@@ -26,7 +26,7 @@ class PriceStatesTest {
         assetCurrency = "EUR",
         assetType = "stock",
         assetIsCustom = false,
-        quantity = 10.0,
+        quantity = quantity,
         avgCost = 100.0,
         realizedPnl = 0.0,
         price = marketValueEur?.let { it / 10.0 },
@@ -46,6 +46,41 @@ class PriceStatesTest {
         assertEquals(0, coverage.total)
         assertTrue(coverage.complete)
         assertFalse(coverage.nothingPriced)
+    }
+
+    // ── Sold-out positions (owner UI batch 2026-08-16) ──────────────────────
+    //
+    // The owner's report, verbatim in spirit: he owns 0 PEBIX and still saw
+    // the "excludes N holdings with no price" warning. A closed position is
+    // worth zero whatever its price, so it can neither be covered nor
+    // uncovered — it must not exist for coverage at all.
+
+    @Test
+    fun `a sold-out unpriced position does not trip the coverage caveat`() {
+        val coverage = priceCoverage(
+            listOf(
+                holding("AAPL", 2_314.0),
+                holding("PEBIX", null, quantity = 0.0),
+            ),
+        )
+        assertEquals(PriceCoverage(priced = 1, unpriced = 0), coverage)
+        assertTrue(coverage.complete)
+    }
+
+    @Test
+    fun `a portfolio of only sold-out positions is complete coverage of nothing`() {
+        val coverage = priceCoverage(listOf(holding("PEBIX", null, quantity = 0.0)))
+        assertEquals(PriceCoverage.EMPTY, coverage)
+        assertTrue(coverage.complete)
+        assertFalse(coverage.nothingPriced)
+    }
+
+    @Test
+    fun `a dust position still counts for coverage`() {
+        // 0.00000001 BTC is a real position; only an EXACT server zero is sold out.
+        val coverage = priceCoverage(listOf(holding("BTC", null, quantity = 0.00000001)))
+        assertEquals(PriceCoverage(priced = 0, unpriced = 1), coverage)
+        assertTrue(coverage.nothingPriced)
     }
 
     @Test

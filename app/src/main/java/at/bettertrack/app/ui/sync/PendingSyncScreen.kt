@@ -490,5 +490,6 @@ private fun genericOpLabel(opType: String): String = when (OpType.fromWire(opTyp
     OpType.CASH_FEE -> stringResource(R.string.bt_pending_op_cash_fee)
     OpType.CASH_TRANSFER -> stringResource(R.string.bt_pending_op_cash_transfer)
     OpType.CUSTOM_ASSET_VALUE_POINT -> stringResource(R.string.bt_pending_op_value_point)
+    OpType.TX_REBOOK -> stringResource(R.string.bt_pending_op_tx_rebook)
     else -> opType
 }

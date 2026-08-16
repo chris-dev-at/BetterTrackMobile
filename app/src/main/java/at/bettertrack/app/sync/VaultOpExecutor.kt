@@ -116,6 +116,15 @@ class VaultOpExecutor(
             OpType.CASH_FEE -> applyCash(op, graph, context, "fee")
             OpType.CASH_TRANSFER -> applyTransfer(op, graph, context)
             OpType.CUSTOM_ASSET_VALUE_POINT -> applyValuePoint(op, graph, context)
+            // The re-book exists to work around a SERVER guard: the platform
+            // refuses to PATCH a cash-linked trade, so the app deletes and
+            // re-creates it instead. The vault has no such guard — it owns both
+            // rows and edits them together — so this op is never enqueued in
+            // Drive mode and reaching here means a mode changed under a queued
+            // op. Refusing loudly is right: silently applying half of a
+            // server-shaped correction to the vault would desync the ledger,
+            // which is the exact failure the whole path exists to prevent.
+            OpType.TX_REBOOK -> refuse(BtErrorCopy.AppCodes.OP_MALFORMED_VAULT)
         }
 
     // ── Transactions ────────────────────────────────────────────────────────

@@ -1,0 +1,53 @@
+package at.bettertrack.app.ui.portfolio
+
+import at.bettertrack.app.data.db.HoldingEntity
+
+/**
+ * Display rules for the Holdings list (owner UI batch 2026-08-16).
+ *
+ * Pure Kotlin — no Compose — so both rules are unit tests rather than
+ * screenshots, and so the overview screen, its view model and the insights
+ * subpage cannot each grow a private variant.
+ */
+
+/**
+ * The holdings a portfolio SURFACE may show: every position that is not
+ * completely sold.
+ *
+ * The server keeps a row for a sold-out position (`quantity == 0`) because the
+ * ledger behind it still exists — realized P&L, tax years, transaction history
+ * all hang off it. The *display* has nothing to say about it: it is worth
+ * nothing, weighs nothing, and (owner report: a 0-quantity PEBIX row) drags a
+ * "no price" caveat into banners about money that is not there. So it is
+ * filtered HERE, once, as a display rule — the server's totals are rendered
+ * untouched (§7.1), and the position's history stays reachable through the
+ * transactions screen.
+ *
+ * Exact `0.0`, deliberately: a dust position (`0.00000001 BTC`) is real and
+ * must stay visible. Only a position the ledger has fully closed nets to an
+ * exact server-computed zero.
+ */
+fun visibleHoldings(holdings: List<HoldingEntity>): List<HoldingEntity> =
+    holdings.filter { it.quantity != 0.0 }
+
+/** The two orders the holdings list can be read in. */
+enum class HoldingsSort { ALLOCATION, PROFIT }
+
+/**
+ * The list in the chosen order.
+ *
+ * ALLOCATION is the DAO's own order (`marketValueEur DESC`) restated, so the
+ * default render never re-sorts what Room already delivered sorted — it is
+ * here so PROFIT has a symmetric, testable counterpart. Nulls sink to the
+ * bottom in both orders: a row with no price (or no P&L yet) has no rank to
+ * claim, and floating it would put the least-known rows first.
+ *
+ * PROFIT ranks by unrealized P&L in EUR — the owner's "Profit" toggle — best
+ * first, losses last, so the two ends of the list are the two answers the sort
+ * exists for.
+ */
+fun sortedHoldings(holdings: List<HoldingEntity>, sort: HoldingsSort): List<HoldingEntity> =
+    when (sort) {
+        HoldingsSort.ALLOCATION -> holdings.sortedByDescending { it.marketValueEur ?: Double.NEGATIVE_INFINITY }
+        HoldingsSort.PROFIT -> holdings.sortedByDescending { it.unrealizedPnlEur ?: Double.NEGATIVE_INFINITY }
+    }

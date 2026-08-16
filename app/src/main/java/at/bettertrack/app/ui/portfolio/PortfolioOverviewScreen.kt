@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -19,13 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -39,7 +37,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
@@ -57,8 +54,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -76,13 +73,10 @@ import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PortfolioHistory
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.charts.BtAreaChart
+import at.bettertrack.app.ui.charts.rangeWord
 import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.shell.BtTabSelector
-import at.bettertrack.app.ui.theme.BtColors
-import at.bettertrack.app.ui.charts.BtDonutChart
-import at.bettertrack.app.ui.charts.DonutSegment
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -95,6 +89,7 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtFabVisibility
 import at.bettertrack.app.ui.components.btFabIconSize
+import at.bettertrack.app.ui.components.equalSegmentShareDp
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.MoneyText
 import androidx.compose.foundation.BorderStroke
@@ -103,11 +98,9 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import at.bettertrack.app.data.prefs.BtChartMode
 import at.bettertrack.app.ui.components.btPressScale
-import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.BtDiscreetMode
-import at.bettertrack.app.ui.market.rememberAssetTypeLabeller
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -205,6 +198,8 @@ fun PortfolioOverviewScreen(
     onOpenCash: (String) -> Unit,
     /** Opens ONE portfolio's settings page (name, sharing, taxes, group, danger). */
     onOpenPortfolioSettings: (String) -> Unit,
+    /** Opens the portfolio's insights subpage (allocation + future modules). */
+    onOpenInsights: (String) -> Unit,
     /**
      * What to draw when the switcher's pinned **Overview** entry is selected —
      * the account-wide index that used to be the Home tab (owner IA change).
@@ -401,6 +396,7 @@ fun PortfolioOverviewScreen(
                             onOpenPendingSync = onOpenPendingSync,
                             onOpenCash = onOpenCash,
                             onOpenPortfolioSettings = onOpenPortfolioSettings,
+                            onOpenInsights = onOpenInsights,
                             onNewTransaction = onNewTransaction,
                         )
                     }
@@ -503,11 +499,21 @@ private fun OverviewContent(
     onOpenPendingSync: () -> Unit,
     onOpenCash: (String) -> Unit,
     onOpenPortfolioSettings: (String) -> Unit,
+    onOpenInsights: (String) -> Unit,
     onNewTransaction: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
     val totals = portfolio.totals
+
+    // The list's reading order (owner UI batch 2026-08-16): allocation size by
+    // default — the DAO's own order — with a Profit re-sort one tap away.
+    // `rememberSaveable` so the choice survives rotation; deliberately NOT
+    // persisted further: the default is the order the owner named as right.
+    var holdingsSort by rememberSaveable { mutableStateOf(HoldingsSort.ALLOCATION) }
+    val shownHoldings = remember(holdings, holdingsSort) {
+        sortedHoldings(holdings, holdingsSort)
+    }
 
     // W6: true when this mode has no live quotes, so an absent price is a state
     // the user can act on rather than a transient server gap.
@@ -531,12 +537,6 @@ private fun OverviewContent(
     // Net-Worth readout (Robinhood-style). A fresh selection/range clears it.
     var scrub by remember { mutableStateOf<HistoryPoint?>(null) }
     LaunchedEffect(portfolio.id, range) { scrub = null }
-    // The chart only needs to know WHETHER a scrub is in progress. Passing
-    // `scrub != null` subscribed the chart's item scope to the scrubbed POINT,
-    // so every pointer sample recomposed the hero — its readout, its six range
-    // chips and the canvas — instead of only the two frames where the boolean
-    // actually flips (perf pass 2026-08-06).
-    val scrubbing by remember { derivedStateOf { scrub != null } }
     // Same shape: the pending strip's promotion is an O(n) count that gates two
     // `item {}` declarations, so it ran on every rebuild of the item provider.
     val attention = remember(pendingTx) {
@@ -668,39 +668,69 @@ private fun OverviewContent(
                                 color = bt.textSecondary,
                             )
                         }
-                        // W6: with nothing priced, `dayChangeEur` is a sum of
-                        // zeroes and would render "+0,00 € · today" — which reads
-                        // as "no movement" when the truth is "not known". Same
-                        // €0 lie, one line lower down.
+                        // ── The consolidated delta line (owner UI batch 2026-08-16) ──
+                        //
+                        // ONE statement about the selected window, directly above
+                        // the chart that draws it: "+120 € (2,1 %) · past month".
+                        // It replaced two half-statements — the fixed day-change
+                        // line here and a "+x % 1M" readout beside the retired
+                        // mode row — that each told part of the story in a
+                        // different corner.
+                        //
+                        //  · 1D: the server's own day change (€ AND %), verbatim.
+                        //  · Every other window: the server's range performance %
+                        //    plus the € difference of the first and last points
+                        //    of the server's balance series — a DISPLAY
+                        //    subtraction of two server values, the same standing
+                        //    `weightPct` has (§7.1: no derived performance, and
+                        //    this derives none).
+                        //
+                        // Sign-coloured by owner order ("money and percent
+                        // colored emerald/red"), deliberately NOT `deltaTint`:
+                        // this line is the page's one verdict and keeps it in
+                        // every chart mode. The window is a WORD ([rangeWord]),
+                        // never the picker's `1M` shorthand.
+                        //
+                        // W6 guard unchanged: with nothing priced, a delta of
+                        // summed zeroes would claim "no movement" when the truth
+                        // is "not known".
                         if (s == null && totals != null && !coverage.nothingPriced) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // The day-change pair was the loudest of the two
-                                // hue bleeds: a green/red line sitting directly
-                                // under the headline of a chart the mode had
-                                // already neutralised. `deltaTint` resolves
-                                // exactly as `MoneyColorMode.GainLoss` did
-                                // wherever a verdict is still allowed (gain /
-                                // loss / textSecondary at zero), so % mode is
-                                // untouched — and the explicit `+`/`−` means
-                                // neutralising costs no information.
-                                MoneyText(
-                                    value = totals.dayChangeEur,
-                                    style = BtTheme.type.numberCaption,
-                                    color = deltaTint(chartMode, totals.dayChangeEur),
-                                    showSign = true,
-                                )
-                                totals.dayChangePct?.let { pct ->
-                                    Text(
-                                        text = " (${formatPercent(pct, locale)})",
+                            val deltaEur: Double?
+                            val deltaPct: Double?
+                            if (range == HistoryRange.D1) {
+                                deltaEur = totals.dayChangeEur
+                                deltaPct = totals.dayChangePct
+                            } else {
+                                deltaEur = remember(history) {
+                                    rangeDeltaEur(history?.points.orEmpty())
+                                }
+                                deltaPct = history?.rangePerformancePct
+                            }
+                            if (deltaEur != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    MoneyText(
+                                        value = deltaEur,
                                         style = BtTheme.type.numberCaption,
-                                        color = deltaTint(chartMode, pct),
+                                        color = deltaColor(deltaEur),
+                                        showSign = true,
+                                    )
+                                    deltaPct?.let { pct ->
+                                        Text(
+                                            text = if (samePairBasis(range)) {
+                                                " (${formatPercent(pct, locale)})"
+                                            } else {
+                                                " · " + formatPercent(pct, locale)
+                                            },
+                                            style = BtTheme.type.numberCaption,
+                                            color = deltaColor(pct),
+                                        )
+                                    }
+                                    Text(
+                                        text = " · " + rangeWord(range),
+                                        style = BtTheme.type.numberCaption,
+                                        color = bt.textMuted,
                                     )
                                 }
-                                Text(
-                                    text = " · " + stringResource(R.string.bt_overview_today),
-                                    style = BtTheme.type.numberCaption,
-                                    color = bt.textMuted,
-                                )
                             }
                         }
                     }
@@ -730,11 +760,9 @@ private fun OverviewContent(
                 history = history,
                 range = range,
                 mode = chartMode,
-                scrubbing = scrubbing,
                 onRange = onRange,
                 onMode = onChartMode,
                 onScrub = { scrub = it },
-                locale = locale,
             )
         }
 
@@ -791,31 +819,36 @@ private fun OverviewContent(
             }
         }
 
-        // Allocation, PROMOTED above the holdings and reduced to a summary
-        // (decision O-5). What a reader wants here is proportion, and a stacked
-        // bar answers that in one glance and 10dp of height where the 132dp donut
-        // needed a card of its own between the value and the positions.
-        if (holdings.isNotEmpty() || (totals?.cashEur ?: 0.0) > 0.0) {
-            item(key = "allocation", contentType = "allocation") {
-                Box(inset) {
-                    AllocationSummary(
-                        holdings = holdings,
-                        cashEur = totals?.cashEur ?: 0.0,
-                        locale = locale,
-                    )
-                }
-            }
-        }
+        // The allocation summary LEFT this page (owner UI batch 2026-08-16): it
+        // now lives on the insights subpage behind the "More insights" row at
+        // the bottom, so the overview reads value → curve → positions with
+        // nothing between the list and the number it explains.
 
-        // Holdings — the thing this screen is for, now immediately after the
-        // value and the summary (mandate §3).
+        // Holdings — the thing this screen is for, immediately after the value
+        // (mandate §3). The header row carries the sort toggle (owner UI batch
+        // 2026-08-16): Allocation | Profit, in the same segmented vocabulary as
+        // the chart's range picker, so "one of these orders is on" reads the
+        // same way "one of these windows is on" does.
         item(key = "holdings-header", contentType = "section-header") {
             Column(inset.padding(top = 4.dp)) {
-                Text(
-                    text = stringResource(R.string.bt_overview_holdings_section),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = bt.textPrimary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.bt_overview_holdings_section),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = bt.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (holdings.size > 1) {
+                        val sortCd = stringResource(R.string.bt_holdings_sort_cd)
+                        BtSegmented(
+                            options = HOLDINGS_SORTS,
+                            selected = holdingsSort,
+                            label = { stringResource(holdingsSortLabel(it)) },
+                            onSelect = { holdingsSort = it },
+                            modifier = Modifier.semantics { contentDescription = sortCd },
+                        )
+                    }
+                }
                 // W6, inherited from the deleted "Holdings value" roll-up: with
                 // nothing priced, the rows below all read "No price yet" and the
                 // section says why once, here, instead of the card that used to
@@ -851,8 +884,8 @@ private fun OverviewContent(
             }
         } else {
             items(
-                count = holdings.size,
-                key = { "holding-" + holdings[it].assetId },
+                count = shownHoldings.size,
+                key = { "holding-" + shownHoldings[it].assetId },
                 // Every `item {}` above declares its own contentType too. Without
                 // them the whole list shared ONE reuse pool, so a holding row
                 // could be handed a retained slot that last held the 150dp chart
@@ -862,11 +895,10 @@ private fun OverviewContent(
                 // 2026-08-06).
                 contentType = { "holding" },
             ) { index ->
-                val h = holdings[index]
+                val h = shownHoldings[index]
                 Box(inset) {
                     HoldingRow(
                         holding = h,
-                        weightOfPortfolioPct = weightPct(h.marketValueEur, portfolio.totals?.marketValueEur),
                         locale = locale,
                         noLivePrices = noLivePrices,
                         onClick = { onOpenHolding(h.assetId) },
@@ -891,6 +923,15 @@ private fun OverviewContent(
                 // means "the app's settings". A second gear meaning "this
                 // portfolio's settings" would make the landmark ambiguous, which
                 // is exactly the failure the nav restoration removed.
+                // The insights subpage's door (owner UI batch 2026-08-16): the
+                // allocation section that used to sit mid-page, plus whatever
+                // insight modules come later. A peer of Portfolio settings —
+                // both are "about this portfolio" rows, not positions.
+                SecondaryRow(
+                    label = stringResource(R.string.bt_overview_more_insights),
+                    value = null,
+                    onClick = { onOpenInsights(portfolio.id) },
+                )
                 SecondaryRow(
                     label = stringResource(R.string.bt_psettings_row),
                     value = null,
@@ -992,102 +1033,36 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
  * did, with the € balance as the readout, because that is the number you want
  * when you point at a day.*
  *
- * ## Why the two pickers are not side by side (owner ask 2026-08-08)
+ * ## The controls sit BELOW the canvas, side by side (owner order 2026-08-16)
  *
- * *"Maybe put them side by side but you figure out what looks better."* They do
- * not fit, and not by a little. Nine segments' fixed geometry alone — 14dp of
- * side padding twice per segment, plus two 3dp tracks and the 2dp gaps — is
- * ~282dp before a single glyph is drawn, against the 328dp of content width a
- * 360dp-class phone has between the gutters. Adding the labels puts the pair at
- * ~407dp at `fontScale` 1.0 and ~443dp at 1.3: 24% and 35% over. Every way of
- * closing that gap costs something the owner already fought for — shrinking the
- * padding takes the range targets under the display picker's, and scrolling the
- * pair hides windows behind a swipe on the one control whose value is that you
- * can see all of it at once. The arithmetic is pinned in
- * `BtSegmentedGeometryTest` so this stays a measured answer.
+ * *"Move the €/% toggle and the range selector side-by-side, below the chart."*
+ * What made that impossible on 2026-08-08 — nine segments of fixed geometry
+ * against 328dp of content width — is not the situation any more: 6M left the
+ * range set (same batch), and the mode picker gives up its content-sized 46dp
+ * pills for a compact equal-width track of a fixed, font-scaled width. Five
+ * range segments then divide the remainder. Whether the pair actually fits is
+ * MEASURED per composition ([chartControlsFitSideBySide], pinned by unit test):
+ * whenever the widest range label would lose its breathing room — accessibility
+ * font scales, narrow windows — the two controls stack instead, mode above
+ * range, rather than squeezing or scrolling. Nothing is ever clipped and no
+ * window ever hides behind a swipe.
  *
- * So the two pickers keep their split and now BRACKET the canvas — mode above,
- * range below — which is the better reading of the same constraint anyway. They
- * answer different questions ("what am I looking at" vs "over what window"), the
- * split matches the web's, and identical segmented tracks above and below one
- * chart frame it as a pair rather than lining up as a nine-segment wall. What
- * changed is that they are now visibly the same control, which is the ask.
- *
- * The range-% readout keeps its home on the mode row, right-aligned. It belongs
- * to the top: it is tinted by the MODE ([deltaTint]), and its `1M` suffix names
- * the window without the eye having to travel to the picker below the chart to
- * find it.
+ * The range-% readout that lived beside the retired top row is gone with it:
+ * the hero's delta line above the canvas now states €, % and the window in
+ * words, in one place.
  */
 @Composable
 private fun HeroChart(
     history: PortfolioHistory?,
     range: HistoryRange,
     mode: BtChartMode,
-    scrubbing: Boolean,
     onRange: (HistoryRange) -> Unit,
     onMode: (BtChartMode) -> Unit,
     onScrub: (HistoryPoint?) -> Unit,
-    locale: Locale,
 ) {
     val bt = BtTheme.colors
     val chartCd = stringResource(R.string.bt_overview_chart_cd)
-    val modeCd = stringResource(R.string.bt_chart_mode_cd)
     Column(Modifier.fillMaxWidth()) {
-        // Mode chips (left) + range performance (right). One row, because they
-        // are both statements about the curve directly beneath them.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .semantics { contentDescription = modeCd },
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // ONE control, not three chips. The six range chips sit directly
-            // below this same chart, so a chip row here was the same pill
-            // vocabulary saying two different things on one screen — and an
-            // exclusive choice is exactly what a segmented control is for.
-            BtSegmented(
-                options = CHART_MODES,
-                selected = mode,
-                // No string labels: all three segments are drawn marks.
-                label = null,
-                onSelect = onMode,
-                contentDescription = { stringResource(chartModeContentDescription(it)) },
-                // A slot rather than a plain string, because the combined mode's
-                // label is a composed MARK (`€%`, tightened) and not a word —
-                // see [ChartModeLabel].
-                labelContent = { ChartModeLabel(it) },
-                // Three one-glyph labels of three different widths read as a
-                // ragged row and give three different tap targets. The floor
-                // follows the system font scale within a band, so they stay
-                // equal at other font sizes too — see the constants.
-                minSegmentWidth = CHART_MODE_SEGMENT_MIN_WIDTH *
-                    LocalDensity.current.fontScale.coerceIn(CHART_MODE_SEGMENT_SCALE_RANGE),
-            )
-            Spacer(Modifier.weight(1f))
-            // Hidden while scrubbing so the hero's scrub readout is the single
-            // focus — the same rule this line has always followed.
-            val pct = history?.rangePerformancePct
-            if (!scrubbing && pct != null) {
-                Text(
-                    text = formatPercent(pct, locale),
-                    style = BtTheme.type.numberCaption,
-                    // The other hue bleed, and the one closest to the picker: a
-                    // tinted range return sat on the SAME ROW as the segment
-                    // that had just promised a neutral chart.
-                    color = deltaTint(mode, pct),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = rangeLabel(range),
-                    style = BtTheme.type.numberCaption,
-                    color = bt.textMuted,
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-
         // Which series the curve draws. The performance modes plot `pct` through
         // the same [HistoryPoint] shape the chart already speaks — the chart maps
         // numbers to pixels and has no opinion about their unit; the readout
@@ -1152,29 +1127,167 @@ private fun HeroChart(
             }
         }
 
-        // The performance modes used to carry a sentence here explaining that
-        // deposits and withdrawals are neutralized. Deleted by owner order
-        // 2026-08-10 ("delete this"): it was a paragraph of methodology under a
-        // hero chart, restating what the % segment already promises, and it
-        // pushed the range picker a line further from the canvas it belongs to.
         Spacer(Modifier.height(12.dp))
 
-        // The range picker (inset) — the set the platform serves (3M needs a
-        // server-side window that doesn't exist yet; platform gap).
-        //
-        // It spans the gutter width on purpose: the canvas above bleeds
-        // edge-to-edge, and a full-width track under it reads as that canvas's
-        // x-axis rather than as a stray row of buttons. See [BtRangeSegmented].
-        BtRangeSegmented(
-            options = HistoryRange.entries,
-            selected = range,
-            label = { rangeLabel(it) },
-            onSelect = onRange,
+        // Both pickers, one row, below the canvas — see the KDoc.
+        ChartControls(
+            mode = mode,
+            range = range,
+            onMode = onMode,
+            onRange = onRange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            contentDescription = stringResource(R.string.bt_chart_range_cd),
         )
     }
 }
+
+/**
+ * The chart's two pickers as one control row (owner order 2026-08-16): the
+ * display-mode toggle on the left, the range selector filling the rest — or,
+ * when the measured arithmetic says the range labels would suffocate, the same
+ * two controls stacked. See [HeroChart]'s KDoc for the decision and
+ * [chartControlsFitSideBySide] for the arithmetic.
+ */
+@Composable
+private fun ChartControls(
+    mode: BtChartMode,
+    range: HistoryRange,
+    onMode: (BtChartMode) -> Unit,
+    onRange: (HistoryRange) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val modeCd = stringResource(R.string.bt_chart_mode_cd)
+    val rangeCd = stringResource(R.string.bt_chart_range_cd)
+    val density = LocalDensity.current
+    val fontScale = density.fontScale.coerceIn(CHART_MODE_SEGMENT_SCALE_RANGE)
+    // The compact mode track: a FIXED width divided equally by its three
+    // one-glyph segments, so the row's arithmetic has one unknown (the labels'
+    // width) instead of three.
+    val modeWidth = CHART_MODE_COMPACT_WIDTH * fontScale
+
+    // Measured in the widest state (SemiBold winner), like BtRangeSegmented.
+    val style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+    val measurer = rememberTextMeasurer()
+    val rangeLabels = PORTFOLIO_RANGES.map { rangeLabel(it) }
+    val widestRangeDp = remember(rangeLabels.joinToString(" "), density.density, density.fontScale) {
+        with(density) {
+            rangeLabels.maxOfOrNull { measurer.measure(it, style).size.width.toDp().value } ?: 0f
+        }
+    }
+
+    BoxWithConstraints(modifier) {
+        val sideBySide = chartControlsFitSideBySide(
+            availableWidthDp = this.maxWidth.value,
+            modeTrackWidthDp = modeWidth.value,
+            widestRangeLabelDp = widestRangeDp,
+        )
+        if (sideBySide) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(CHART_CONTROLS_GAP),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ChartModePicker(
+                    mode = mode,
+                    onMode = onMode,
+                    modifier = Modifier
+                        .width(modeWidth)
+                        .semantics { contentDescription = modeCd },
+                    equalWidths = true,
+                )
+                BtSegmented(
+                    options = PORTFOLIO_RANGES,
+                    selected = range,
+                    label = { rangeLabel(it) },
+                    onSelect = onRange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = rangeCd },
+                    equalWidths = true,
+                )
+            }
+        } else {
+            // The accessibility fallback: same controls, stacked — never
+            // squeezed labels, never a scrolling range row.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChartModePicker(
+                    mode = mode,
+                    onMode = onMode,
+                    modifier = Modifier.semantics { contentDescription = modeCd },
+                    minSegmentWidth = CHART_MODE_SEGMENT_MIN_WIDTH * fontScale,
+                )
+                BtRangeSegmented(
+                    options = PORTFOLIO_RANGES,
+                    selected = range,
+                    label = { rangeLabel(it) },
+                    onSelect = onRange,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentDescription = rangeCd,
+                )
+            }
+        }
+    }
+}
+
+/** The mode toggle itself — one definition for both ChartControls layouts. */
+@Composable
+private fun ChartModePicker(
+    mode: BtChartMode,
+    onMode: (BtChartMode) -> Unit,
+    modifier: Modifier = Modifier,
+    equalWidths: Boolean = false,
+    minSegmentWidth: Dp = Dp.Unspecified,
+) {
+    BtSegmented(
+        options = CHART_MODES,
+        selected = mode,
+        // No string labels: all three segments are drawn marks.
+        label = null,
+        onSelect = onMode,
+        modifier = modifier,
+        contentDescription = { stringResource(chartModeContentDescription(it)) },
+        // A slot rather than a plain string, because the combined mode's label
+        // is a composed MARK (`€%`, tightened) and not a word — [ChartModeLabel].
+        labelContent = { ChartModeLabel(it) },
+        equalWidths = equalWidths,
+        minSegmentWidth = minSegmentWidth,
+    )
+}
+
+/**
+ * Whether the two chart pickers may share one row.
+ *
+ * True when the five range segments' equal share of what the mode track leaves
+ * over still clears the widest range label with [CHART_CONTROLS_RANGE_BREATHING]
+ * to spare per side. Pure arithmetic on the segmented control's own geometry
+ * constants — unit-tested, so "it fits on a 360dp phone" is a checked claim
+ * rather than a screenshot.
+ */
+internal fun chartControlsFitSideBySide(
+    availableWidthDp: Float,
+    modeTrackWidthDp: Float,
+    widestRangeLabelDp: Float,
+): Boolean {
+    val rangeWidthDp = availableWidthDp - modeTrackWidthDp - CHART_CONTROLS_GAP.value
+    val share = equalSegmentShareDp(rangeWidthDp, PORTFOLIO_RANGES.size)
+    return share >= widestRangeLabelDp + 2 * CHART_CONTROLS_RANGE_BREATHING.value
+}
+
+/**
+ * The compact mode track's width at `fontScale` 1.0. Three equal segments of
+ * ~31dp — comfortably above the `€%` mark's ~25dp need under the equal-width
+ * policy's 4dp side padding, compact enough to leave five range segments a
+ * ~40dp share on a 360dp-class phone (328dp of content width).
+ */
+private val CHART_MODE_COMPACT_WIDTH = 105.dp
+
+/** The gap between the two tracks — the quick-access chips' 8dp rhythm. */
+internal val CHART_CONTROLS_GAP = 8.dp
+
+/**
+ * The air a range label must keep per side for the pair to stay on one row.
+ * Matches the equal-width segment's own 4dp padding: at the threshold the label
+ * touches its padding, never its pill. Below it the controls stack.
+ */
+internal val CHART_CONTROLS_RANGE_BREATHING = 4.dp
 
 /**
  * The € balance the server reported closest to [epochMillis].
@@ -1191,6 +1304,58 @@ private fun HeroChart(
  */
 internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
     points.minByOrNull { kotlin.math.abs(it.epochMillis - epochMillis) }?.valueEur
+
+/**
+ * The € change across a server balance series — its last point minus its first,
+ * for the hero's delta line (owner UI batch 2026-08-16).
+ *
+ * A DISPLAY difference of two server-reported values, the same standing
+ * [weightPct] has: nothing is re-derived, no path is interpolated, and the two
+ * operands are rendered by the very chart underneath the line. Null when the
+ * series cannot carry a difference (fewer than two points), so the line simply
+ * stays silent instead of claiming ±0.
+ */
+internal fun rangeDeltaEur(points: List<HistoryPoint>): Double? =
+    if (points.size < 2) null else points.last().valueEur - points.first().valueEur
+
+/**
+ * Whether the delta line's € and % are two views of ONE quantity — and may
+ * therefore be written as `+12,30 € (+0,8 %)` — or two different measurements
+ * that merely share a window.
+ *
+ * ## The bug this closes
+ *
+ * The line shipped as `€ (%)` for every window, and for every window except 1D
+ * that parenthesis was a false claim. The two numbers come from different server
+ * series with **different bases**:
+ *
+ *  · The € is the change in the `points` series, which is NET WORTH — holdings
+ *    plus cash. A deposit moves it by exactly the amount deposited.
+ *  · The % is the last value of the `performance` series, which the platform
+ *    computes as a chain-linked daily **time-weighted return** over external
+ *    cash flows: a 1 000 € deposit causes no jump at all, by design.
+ *
+ * So a portfolio that received 3 000 € and barely moved reads `+3 004 €` beside
+ * `+0,85 %`, and the bracket asserts that the first is the second expressed
+ * differently. It is not. Roughly 3 000 € of that was contributed, not earned.
+ *
+ * ## Why the fix is punctuation and not arithmetic
+ *
+ * The two obvious "make them agree" repairs are both worse. Deriving the € from
+ * the return would invent money the platform never computed — it publishes no
+ * per-range EUR figure on any endpoint. Deriving the % from the balance series
+ * would have the app publish a performance number that CONTRADICTS the server's
+ * own, and contradicts the very curve the chart draws in % mode; the server owns
+ * that answer (§7.1) and overriding it is the worse sin, not the lesser one.
+ *
+ * So both numbers stay exactly as the server reported them and the punctuation
+ * stops lying: `+3 004,07 € · +0,85 % · letzter Monat` — three statements about
+ * one window, in the same separator the window itself already uses. 1D keeps the
+ * bracket, because there the pair really is one quantity: `dayChangePct` is
+ * `dayChangeEur` over the same holdings' prior close, computed together by the
+ * server.
+ */
+internal fun samePairBasis(range: HistoryRange): Boolean = range == HistoryRange.D1
 
 /**
  * The display modes in picker order: **combined → € → %** (owner order
@@ -1214,6 +1379,31 @@ internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
  * happens to do, the same reason [balanceAt] is.
  */
 internal val CHART_MODES = listOf(BtChartMode.HYBRID, BtChartMode.BALANCE, BtChartMode.PERFORMANCE)
+
+/**
+ * The windows the PORTFOLIO hero offers — [HistoryRange] minus 6M (owner order
+ * 2026-08-16: *"remove the 6M range option"*). A display list, not a wire
+ * change: the enum keeps the window because the platform still serves it and
+ * the widgets still request it; only this picker stopped offering it. The
+ * default (1M) is unaffected, and the range state is session-local, so nobody
+ * can be stranded ON 6M. Pinned by `ChartRangeTest`.
+ */
+internal val PORTFOLIO_RANGES: List<HistoryRange> = listOf(
+    HistoryRange.D1,
+    HistoryRange.W1,
+    HistoryRange.M1,
+    HistoryRange.Y1,
+    HistoryRange.MAX,
+)
+
+/** The holdings sort toggle's options, in display order (default first). */
+internal val HOLDINGS_SORTS = listOf(HoldingsSort.ALLOCATION, HoldingsSort.PROFIT)
+
+/** The segment label for a holdings sort. `internal` so the mapping is testable. */
+internal fun holdingsSortLabel(sort: HoldingsSort): Int = when (sort) {
+    HoldingsSort.ALLOCATION -> R.string.bt_holdings_sort_allocation
+    HoldingsSort.PROFIT -> R.string.bt_holdings_sort_profit
+}
 
 /**
  * Every segment is one glyph wide, so the row is pinned to a common floor rather
@@ -1415,244 +1605,24 @@ private fun SecondaryRow(
 }
 
 /**
- * Allocation as a summary first, the donut second (decision O-5).
+ * One holding (owner redesign 2026-08-16): two tight two-line stacks.
  *
- * ## Why the bar replaced the card in the first screen
+ *  · LEFT — the name over the QUANTITY, plain (`4`, never `4 AMD`: the name
+ *    directly above already says what the number counts), truncated by rule 3b
+ *    ([formatHoldingQuantity]). The %-of-portfolio weight left the row — that
+ *    proportion is the insights subpage's whole subject now.
+ *  · RIGHT — the P&L in € (emerald/red, explicit sign) over the P&L %, the
+ *    verdict pair the owner asked the row to lead with. The market value came
+ *    off the row with it: one column, one statement. The exact value stays one
+ *    tap away on the holding's detail screen.
  *
- * The donut was never wrong — it is the right shape for "how is this divided" —
- * but at 132dp inside a card with a legend it cost roughly a third of a phone
- * screen, sitting between the portfolio's value and its positions. The mandate
- * asks for "value + allocation summary first; holdings list immediately after",
- * and a stacked bar is the smallest honest answer to "summary": it encodes the
- * same proportions, reads left to right in one glance, and takes 10dp. The three
- * largest names underneath it turn the shape into something you can also read.
- *
- * The donut is not deleted — it is one tap behind "See all", together with the
- * by-asset / by-category switch, because that switch is a question you ask
- * *while studying* allocation, not while glancing at it.
+ * The intra-stack gap is 1dp against the old 2dp and the row's vertical inset
+ * 10dp against 12dp — the owner's "they all seem a little disconnected", fixed
+ * by making each pair visibly one unit and the rows sit closer to their list.
  */
-@Composable
-private fun AllocationSummary(holdings: List<HoldingEntity>, cashEur: Double, locale: Locale) {
-    val bt = BtTheme.colors
-    var byCategory by rememberSaveable { mutableStateOf(false) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
-
-    val otherLabel = stringResource(R.string.bt_overview_alloc_other)
-    val cashLabel = stringResource(R.string.bt_overview_alloc_cash)
-    // R3 §3: the category names are resolved HERE, like the two labels above,
-    // because `allocationSegments` is a pure function and `assetTypeLabel` is a
-    // composable. They used to come from a private `categoryLabel` in this file
-    // that returned hard-coded English — so a German user's donut read "Stocks",
-    // "ETFs", "Commodities". `assetTypeLabel` is the app's real, localized
-    // mapping for exactly these server type strings, and it already carried the
-    // identical unknown-type fallback; the duplicate is gone.
-    val categoryLabels = rememberAssetTypeLabeller()
-    val palette = BtTheme.colors
-    val segments = remember(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels, palette) {
-        allocationSegments(holdings, cashEur, byCategory, otherLabel, cashLabel, categoryLabels, palette)
-    }
-    val total = segments.sumOf { it.value }
-    if (segments.isEmpty() || total <= 0.0) return
-
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.bt_overview_allocation_section),
-            style = MaterialTheme.typography.titleMedium,
-            color = bt.textPrimary,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        // Two chips became one segmented control (owner order 2026-08-10: the
-        // section "looks kinda not well fitting"). By-asset/by-category is an
-        // exclusive choice, and this app already says exclusive choice with
-        // [BtSegmented] — on the chart mode, on the ranges, on the tax year. A
-        // pair of filter chips said "two independent filters" and then behaved
-        // like neither.
-        //
-        // It also moved OUT of the expanded half. It governs the bar and the
-        // legend the reader is looking at right now, so hiding it behind "see
-        // all" meant the control that changes the picture was not on screen with
-        // the picture.
-        BtSegmented(
-            options = ALLOCATION_GROUPINGS,
-            selected = if (byCategory) AllocationGrouping.CATEGORY else AllocationGrouping.ASSET,
-            label = { stringResource(allocationGroupingLabel(it)) },
-            onSelect = { byCategory = it == AllocationGrouping.CATEGORY },
-            modifier = Modifier.fillMaxWidth(),
-            equalWidths = true,
-        )
-        Spacer(Modifier.height(14.dp))
-        // ONE graphic at a time. Collapsed, the slim stacked bar is the compact
-        // statement; expanded, it opens into the donut. Showing both at once —
-        // which is what the old layout did, donut beside a squeezed legend under
-        // a bar — is two pictures of one number, and it is most of what made the
-        // section feel like it did not fit together.
-        if (expanded) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                BtDonutChart(segments = segments, modifier = Modifier.size(ALLOCATION_DONUT_SIZE))
-            }
-        } else {
-            AllocationBar(segments = segments, total = total)
-        }
-        Spacer(Modifier.height(14.dp))
-
-        // One row per slice, in the SAME shape whether three of them or all of
-        // them are showing — expanding now grows a list instead of swapping one
-        // layout for a different one.
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            val shown = if (expanded) segments else segments.take(ALLOCATION_SUMMARY_LEGEND)
-            shown.forEach { segment ->
-                AllocationLegendRow(segment = segment, total = total, locale = locale)
-            }
-        }
-
-        if (segments.size > ALLOCATION_SUMMARY_LEGEND) {
-            Spacer(Modifier.height(4.dp))
-            AllocationExpandRow(
-                expanded = expanded,
-                hidden = segments.size - ALLOCATION_SUMMARY_LEGEND,
-                onToggle = { expanded = !expanded },
-            )
-        }
-    }
-}
-
-/** How many slices the collapsed allocation summary names. */
-private const val ALLOCATION_SUMMARY_LEGEND = 3
-
-/** The expanded donut. Centred and given room, rather than squeezed beside text. */
-private val ALLOCATION_DONUT_SIZE = 168.dp
-
-/** The two ways the allocation section can group a portfolio. */
-private enum class AllocationGrouping { ASSET, CATEGORY }
-
-private val ALLOCATION_GROUPINGS = listOf(AllocationGrouping.ASSET, AllocationGrouping.CATEGORY)
-
-private fun allocationGroupingLabel(grouping: AllocationGrouping): Int = when (grouping) {
-    AllocationGrouping.ASSET -> R.string.bt_overview_alloc_by_asset
-    AllocationGrouping.CATEGORY -> R.string.bt_overview_alloc_by_category
-}
-
-/**
- * One legend line: swatch, weight, name.
- *
- * **The number leads.** Every other legend in the world puts the name first and
- * right-aligns the value, and this one did too — which is precisely how the
- * allocation weights ended up underneath the buy/sell FAB (S6 P1-7), and why that
- * FAB was taught to disappear. Putting the figures in a fixed leading column
- * fixes the cause rather than the symptom: they are column-aligned to the digit,
- * they are the thing the eye is scanning for anyway in a ranked list, and there
- * is now nothing at the right edge for a floating button to sit on top of.
- */
-@Composable
-private fun AllocationLegendRow(segment: DonutSegment, total: Double, locale: Locale) {
-    val bt = BtTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(segment.color, CircleShape))
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = weightPct(segment.value, total)?.let { formatWeight(it, locale) }
-                ?: stringResource(R.string.bt_value_dash),
-            style = BtTheme.type.numberCaption,
-            color = bt.textPrimary,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            modifier = Modifier.width(ALLOCATION_WEIGHT_COLUMN),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = segment.label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = bt.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-/**
- * The width the weights column reserves. Wide enough for "100,0 %" at the
- * largest font scale the app supports without the names starting at a different
- * x on one row than on the next.
- */
-private val ALLOCATION_WEIGHT_COLUMN = 58.dp
-
-/**
- * The expand/collapse control.
- *
- * A full-width row with a chevron, not the pill it used to be: "see all" is a
- * disclosure, and a pill in the same vocabulary as the grouping segments right
- * above it read as a third grouping option. It also says HOW MANY more there
- * are, which is the one thing a reader wants before deciding to tap.
- */
-@Composable
-private fun AllocationExpandRow(expanded: Boolean, hidden: Int, onToggle: () -> Unit) {
-    val bt = BtTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(BtShapes.card)
-            .clickable(onClick = onToggle)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = if (expanded) {
-                stringResource(R.string.bt_overview_alloc_less)
-            } else {
-                stringResource(R.string.bt_overview_alloc_see_all_count, hidden)
-            },
-            style = MaterialTheme.typography.labelLarge,
-            color = bt.goldInk,
-        )
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-            contentDescription = null,
-            tint = bt.goldInk,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-/**
- * The slim stacked bar.
- *
- * Weighted rather than measured: the slices are proportions of a total that is
- * already known, so laying them out with `weight` keeps them exact at any width
- * without a single pixel calculation. The 2dp gaps are what make adjacent slices
- * of similar colour readable as two things; without them a stacked bar of a
- * six-colour palette turns into a gradient at small sizes.
- */
-@Composable
-private fun AllocationBar(segments: List<DonutSegment>, total: Double) {
-    val cd = stringResource(R.string.bt_overview_alloc_bar_cd)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(10.dp)
-            .semantics { contentDescription = cd },
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        segments.forEach { segment ->
-            val share = (segment.value / total).toFloat()
-            if (share > 0f) {
-                Box(
-                    Modifier
-                        .weight(share)
-                        .fillMaxHeight()
-                        .background(segment.color, BtShapes.pill),
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun HoldingRow(
     holding: HoldingEntity,
-    weightOfPortfolioPct: Double?,
     locale: Locale,
     noLivePrices: Boolean,
     onClick: () -> Unit,
@@ -1663,7 +1633,7 @@ private fun HoldingRow(
         // states it precisely. Colour is never the only carrier (§4.4).
         BtRailedRow(rail = rangeRail(holding.unrealizedPnlPct ?: holding.unrealizedPnlEur)) {
             Row(
-                modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -1674,13 +1644,9 @@ private fun HoldingRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(2.dp))
-                    val amount = "${formatQuantity(holding.quantity, locale)} ${holding.assetSymbol}"
-                    val weight = weightOfPortfolioPct?.let {
-                        " · " + formatWeight(it, locale)
-                    } ?: ""
+                    Spacer(Modifier.height(1.dp))
                     Text(
-                        text = amount + weight,
+                        text = formatHoldingQuantity(holding.quantity, locale),
                         style = BtTheme.type.numberCaption,
                         color = bt.textMuted,
                         maxLines = 1,
@@ -1689,11 +1655,18 @@ private fun HoldingRow(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    if (holding.marketValueEur != null) {
-                        MoneyText(value = holding.marketValueEur, style = BtTheme.type.moneySmall)
+                    val plEur = holding.unrealizedPnlEur
+                    val plPct = holding.unrealizedPnlPct
+                    if (plEur != null) {
+                        MoneyText(
+                            value = plEur,
+                            style = BtTheme.type.moneySmall,
+                            color = deltaColor(plEur),
+                            showSign = true,
+                        )
                     } else {
-                        // W6: a dash says "nothing here". In Drive mode the truth is
-                        // "no price yet", which is a different and fixable statement.
+                        // W6: a dash says "nothing here". In Drive mode the truth
+                        // is "no price yet", which is different and fixable.
                         Text(
                             text = stringResource(
                                 if (noLivePrices) R.string.bt_price_none else R.string.bt_switcher_value_pending,
@@ -1706,20 +1679,12 @@ private fun HoldingRow(
                             color = bt.textMuted,
                         )
                     }
-                    Spacer(Modifier.height(2.dp))
-                    val plPct = holding.unrealizedPnlPct
-                    val plEur = holding.unrealizedPnlEur
-                    when {
-                        plPct != null -> Text(
+                    if (plPct != null) {
+                        Spacer(Modifier.height(1.dp))
+                        Text(
                             text = formatPercent(plPct, locale),
                             style = BtTheme.type.numberCaption,
                             color = deltaColor(plPct),
-                        )
-
-                        plEur != null -> Text(
-                            text = formatEur(plEur, locale, showSign = true),
-                            style = BtTheme.type.numberCaption,
-                            color = deltaColor(plEur),
                         )
                     }
                 }
@@ -1814,48 +1779,6 @@ private fun NoPortfolioState(
             },
             onDismiss = { createOpen = false },
         )
-    }
-}
-
-// ── Display mapping (proportions of server values only) ────────────────────
-
-/**
- * Build the donut segments from server values: top slices by weight in fixed
- * palette-slot order, tail folded into "Other", cash always its own quiet
- * slice. Percentages are proportions of the server-provided EUR values — the
- * same display mapping the reference web app renders.
- */
-private fun allocationSegments(
-    holdings: List<HoldingEntity>,
-    cashEur: Double,
-    byCategory: Boolean,
-    otherLabel: String,
-    cashLabel: String,
-    categoryLabel: (String) -> String,
-    palette: BtColors,
-): List<DonutSegment> {
-    data class Part(val label: String, val value: Double)
-
-    val parts: List<Part> = if (byCategory) {
-        holdings
-            .groupBy { it.assetType }
-            .map { (type, rows) -> Part(categoryLabel(type), rows.sumOf { it.marketValueEur ?: 0.0 }) }
-    } else {
-        holdings.map { Part(it.assetSymbol, it.marketValueEur ?: 0.0) }
-    }
-        .filter { it.value > 0.0 }
-        .sortedByDescending { it.value }
-
-    val maxSlots = palette.chartSeries.size
-    val top = parts.take(maxSlots)
-    val rest = parts.drop(maxSlots).sumOf { it.value }
-
-    return buildList {
-        top.forEachIndexed { i, part ->
-            add(DonutSegment(part.label, part.value, palette.chartSeries[i]))
-        }
-        if (rest > 0.0) add(DonutSegment(otherLabel, rest, palette.chartRest))
-        if (cashEur > 0.0) add(DonutSegment(cashLabel, cashEur, palette.chartCash))
     }
 }
 

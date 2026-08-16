@@ -218,8 +218,14 @@ class StringParityTest {
     fun `every chart window says its year in the reader's language`() {
         val en = strings("")
         val de = strings("-de")
-        val enWindows = en.keys.filter { it.startsWith("bt_range_") }.toSet()
-        val deWindows = de.keys.filter { it.startsWith("bt_range_") }.toSet()
+        // `bt_range_word_*` is a SECOND family under the same prefix — the prose
+        // form of a window for the hero's delta line ("past month"), added by the
+        // owner UI batch 2026-08-16. It is policed by its own test below; this one
+        // is about the CHIP labels, whose whole subject is that they are two or
+        // three characters long. Counting the words here would only make the
+        // fixed-size assertion below drift every time a window gains prose.
+        val enWindows = en.keys.filter { it.startsWith("bt_range_") && !it.startsWith(RANGE_WORD) }.toSet()
+        val deWindows = de.keys.filter { it.startsWith("bt_range_") && !it.startsWith(RANGE_WORD) }.toSet()
         assertEquals(enWindows, deWindows)
         // 1D 1W 1M 3M 6M 1Y 3Y 5Y Max — every window any of the three charts
         // serves. A new one arriving without a translation fails here.
@@ -238,6 +244,39 @@ class StringParityTest {
         assertTrue("German windows still printing an English year: $anglicised", anglicised.isEmpty())
     }
 
+    /**
+     * The chart window in PROSE (`bt_range_word_*`), owner UI batch 2026-08-16:
+     * the portfolio hero's delta line reads *"+120 € (2,1 %) · letzter Monat"*,
+     * so the window has to arrive as a word rather than as the picker's `1M`.
+     *
+     * Two things can silently break that and neither is caught elsewhere. A word
+     * added on one side only would land the reader on a crash-free `1M` in the
+     * middle of a German sentence — the generic parity test does catch a missing
+     * key, but nothing pins that this family stays COMPLETE against the windows
+     * the app actually serves, which is what the count below is for. And a word
+     * pasted across untranslated ("past month" in the German file) is under the
+     * 12-character floor the `german strings are actually translated` test uses,
+     * so it would sail through; hence the explicit inequality.
+     */
+    @Test
+    fun `every chart window has a translated prose form`() {
+        val en = strings("")
+        val de = strings("-de")
+        val enWords = en.keys.filter { it.startsWith(RANGE_WORD) }.toSet()
+        val deWords = de.keys.filter { it.startsWith(RANGE_WORD) }.toSet()
+        assertEquals(enWords, deWords)
+        // 1D 1W 1M 6M 1Y Max — every window `HistoryRange` carries. The delta
+        // line's `when` is exhaustive over that enum, so a window added there
+        // without a word fails to compile; this is the same rule for the file.
+        assertEquals(6, enWords.size)
+        // A word is prose, not a chip: no `1M`-style shorthand may hide in here.
+        val shorthand = enWords.filter { en.getValue(it).trim().length <= 3 }.sorted()
+        assertTrue("prose windows that are still shorthand: $shorthand", shorthand.isEmpty())
+        // And the German ones are actually German.
+        val untranslated = enWords.filter { en.getValue(it).trim() == de.getValue(it).trim() }.sorted()
+        assertTrue("prose windows not translated to German: $untranslated", untranslated.isEmpty())
+    }
+
     @Test
     fun `german strings are actually translated`() {
         val en = strings("")
@@ -252,5 +291,14 @@ class StringParityTest {
                 v == de.getValue(key).trim()
         }.sorted()
         assertTrue("DE value identical to EN (untranslated?): $untranslated", untranslated.isEmpty())
+    }
+
+    private companion object {
+        /**
+         * The prose-window family's prefix. Named once because two tests key off
+         * it in opposite directions — the chip test excludes it, the prose test
+         * selects it — and a typo in either would silently switch a guard off.
+         */
+        const val RANGE_WORD = "bt_range_word_"
     }
 }

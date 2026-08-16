@@ -109,8 +109,16 @@ class PortfolioOverviewViewModel(
 
     fun setChartMode(mode: BtChartMode) = devicePrefs.setChartMode(mode)
 
+    /**
+     * The holdings the overview may SHOW — [visibleHoldings] applied at the one
+     * place this screen reads the table, so the list, its coverage banner, the
+     * empty state and the FAB gate all agree that a sold-out position is not on
+     * the page (owner UI batch 2026-08-16). A display filter only: totals stay
+     * the server's (§7.1), and the position's history stays in the ledger.
+     */
     val holdings: StateFlow<List<HoldingEntity>> = selected
         .flatMapLatest { p -> if (p == null) flowOf(emptyList()) else repo.holdings(p.id) }
+        .map { visibleHoldings(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val history: StateFlow<PortfolioHistory?> =

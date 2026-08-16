@@ -16,8 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.dto.CashBudgetProgressDto
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtInlineEmpty
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.theme.BtShapes
@@ -75,6 +75,16 @@ private fun displayMonth(month: YearMonth, locale: Locale): String =
 
 /** `YYYY-MM` for the wire. */
 fun wireMonth(month: YearMonth): String = month.format(WireMonth)
+
+/**
+ * The budgets month, kept out of the future (owner order 2026-08-16: *"the
+ * budget month selector must NOT allow navigating into future months"*). A
+ * budget is an evaluation of booked movements; a future month has none, so a
+ * step past [now] lands ON [now] rather than in an empty tomorrow. Backwards
+ * stays unlimited — history is real. Pure, so the rule is a unit test.
+ */
+fun clampedBudgetMonth(candidate: YearMonth, now: YearMonth): YearMonth =
+    if (candidate.isAfter(now)) now else candidate
 
 /**
  * Fraction of the target consumed, clamped to `0f..1f` for the bar's width.
@@ -139,40 +149,29 @@ fun CashBudgetRow(
                 Spacer(Modifier.width(6.dp))
             }
             if (onEdit != null || onDelete != null) {
-                Box {
-                    IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            Icons.Outlined.MoreVert,
-                            contentDescription = stringResource(R.string.bt_budgets_actions_cd),
-                            tint = bt.textMuted,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                        containerColor = bt.surfaceHigh,
-                    ) {
-                        onEdit?.let { edit ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.bt_budgets_edit_title)) },
-                                onClick = { menuOpen = false; edit() },
-                            )
-                        }
-                        onDelete?.let { del ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(R.string.bt_budgets_delete_action),
-                                        color = bt.loss,
-                                    )
-                                },
-                                onClick = { menuOpen = false; del() },
-                            )
-                        }
-                    }
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = stringResource(R.string.bt_budgets_actions_cd),
+                        tint = bt.textMuted,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
             }
+        }
+        if (menuOpen) {
+            val editLabel = stringResource(R.string.bt_budgets_edit_title)
+            val deleteLabel = stringResource(R.string.bt_budgets_delete_action)
+            BtActionSheet(
+                title = budget.tagName,
+                actions = buildList {
+                    onEdit?.let { edit -> add(BtSheetAction(label = editLabel, onClick = edit)) }
+                    onDelete?.let { del ->
+                        add(BtSheetAction(label = deleteLabel, destructive = true, onClick = del))
+                    }
+                },
+                onDismiss = { menuOpen = false },
+            )
         }
 
         Spacer(Modifier.height(6.dp))
@@ -243,6 +242,13 @@ fun CashMonthStepper(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * False at the current month (owner order 2026-08-16): the future has no
+     * booked movements to budget against, so the arrow visibly stands down
+     * instead of stepping into an empty month. [clampedBudgetMonth] is the
+     * model-side guarantee behind the disabled control.
+     */
+    nextEnabled: Boolean = true,
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
@@ -261,24 +267,71 @@ fun CashMonthStepper(
             color = bt.textSecondary,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
-        IconButton(onClick = onNext, modifier = Modifier.size(28.dp)) {
+        IconButton(onClick = onNext, enabled = nextEnabled, modifier = Modifier.size(28.dp)) {
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = stringResource(R.string.bt_budgets_next_month_cd),
-                tint = bt.textSecondary,
+                tint = if (nextEnabled) bt.textSecondary else bt.border,
                 modifier = Modifier.size(20.dp),
             )
         }
     }
 }
 
-/** Loading placeholder that matches the real row's geometry (no layout jump). */
+/**
+ * The overview's BRIEF budget line (owner order 2026-08-16: *"one compact
+ * used-up bar per budget, nothing more"*): tag dot + name + the bar. No
+ * figures, no recurring badge, no menu — all of that lives on the budgets
+ * subpage this block links to. The bar keeps the full row's colour rule
+ * (gold, loss the moment `exceeded` flips) so the glance still carries the
+ * one fact that matters.
+ */
 @Composable
-fun CashBudgetSkeletonRow(modifier: Modifier = Modifier) {
+fun CashBudgetBriefRow(
+    budget: CashBudgetProgressDto,
+    modifier: Modifier = Modifier,
+) {
+    val bt = BtTheme.colors
+    val fill = if (budget.exceeded) bt.loss else bt.gold
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(parseTagColor(budget.tagColor, bt.tagFallback)),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = budget.tagName,
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(5.dp))
+        BudgetBar(fraction = budgetFraction(budget.spent, budget.amount), fill = fill)
+    }
+}
+
+/**
+ * Loading placeholder that matches the real row's geometry (no layout jump).
+ *
+ * [brief] picks WHICH real row: the overview's [CashBudgetBriefRow] is a name
+ * and a bar, the subpage's [CashBudgetRow] adds the remaining-or-over figure
+ * underneath. A skeleton is only worth drawing if the content lands in the shape
+ * it promised — a three-line placeholder in front of a two-line row would make
+ * the overview jump on every load, which is the exact defect skeletons exist to
+ * prevent.
+ */
+@Composable
+fun CashBudgetSkeletonRow(modifier: Modifier = Modifier, brief: Boolean = false) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BtSkeleton(Modifier.width(120.dp).height(14.dp))
         BtSkeleton(Modifier.fillMaxWidth().height(6.dp))
-        BtSkeleton(Modifier.width(160.dp).height(11.dp))
+        if (!brief) BtSkeleton(Modifier.width(160.dp).height(11.dp))
     }
 }
 

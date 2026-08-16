@@ -779,7 +779,16 @@ private fun HomeUnpricedBlock(
     }
 }
 
-/** One portfolio: name, value, today's change. */
+/**
+ * One portfolio (owner batch 2026-08-16): the same two tight two-line stacks the
+ * holdings rows wear, so the two lists read as one system.
+ *
+ *  · LEFT — the NAME, prominent, over the portfolio's current value in the
+ *    smaller muted figure.
+ *  · RIGHT — the TOTAL gain/loss in € (emerald/red by sign, explicit `+`/`−`)
+ *    over the total %. Total, not today's: the server's `unrealizedPnl` pair,
+ *    rendered verbatim (§7.1).
+ */
 @Composable
 private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
     val bt = BtTheme.colors
@@ -787,22 +796,42 @@ private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
     val totals = portfolio.totals
     BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = portfolio.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = bt.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = portfolio.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = bt.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(1.dp))
+                if (totals != null) {
+                    MoneyText(
+                        value = totals.totalValueEur,
+                        style = BtTheme.type.numberCaption,
+                        color = bt.textMuted,
+                    )
+                } else {
+                    // Not "0,00 €": this portfolio's detail has not landed yet,
+                    // and the hero above already says the sum is partial. The
+                    // skeleton is the same statement at row scale.
+                    BtSkeleton(Modifier.width(72.dp).height(12.dp))
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {
                 if (totals != null) {
-                    MoneyText(value = totals.totalValueEur, style = BtTheme.type.moneySmall)
-                    totals.dayChangePct?.let { pct ->
+                    MoneyText(
+                        value = totals.unrealizedPnlEur,
+                        style = BtTheme.type.moneySmall,
+                        color = deltaColor(totals.unrealizedPnlEur),
+                        showSign = true,
+                    )
+                    totals.unrealizedPnlPct?.let { pct ->
+                        Spacer(Modifier.height(1.dp))
                         Text(
                             text = formatPercent(pct, locale),
                             style = BtTheme.type.numberCaption,
@@ -810,9 +839,6 @@ private fun HomePortfolioRow(portfolio: PortfolioEntity, onClick: () -> Unit) {
                         )
                     }
                 } else {
-                    // Not "0,00 €": this portfolio's detail has not landed yet,
-                    // and the hero above already says the sum is partial. The
-                    // skeleton is the same statement at row scale.
                     BtSkeleton(Modifier.width(72.dp).height(16.dp))
                 }
             }

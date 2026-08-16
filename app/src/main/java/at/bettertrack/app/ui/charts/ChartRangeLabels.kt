@@ -83,8 +83,29 @@ internal fun rangeLabelRes(range: BacktestRange): Int = when (range) {
     BacktestRange.MAX -> R.string.bt_range_max
 }
 
+/**
+ * The window as a WORD, for prose ("+120 € (2,1 %) · letzter Monat") — owner
+ * UI batch 2026-08-16: the hero's delta line must read as a sentence, so it
+ * never borrows the picker's `1M` shorthand. 6M has no word because the
+ * portfolio picker no longer serves it (same batch); if it ever returns it
+ * fails to compile here until it is given one, which is the point of the
+ * exhaustive `when`.
+ */
+@StringRes
+internal fun rangeWordRes(range: HistoryRange): Int = when (range) {
+    HistoryRange.D1 -> R.string.bt_range_word_1d
+    HistoryRange.W1 -> R.string.bt_range_word_1w
+    HistoryRange.M1 -> R.string.bt_range_word_1m
+    HistoryRange.M6 -> R.string.bt_range_word_6m
+    HistoryRange.Y1 -> R.string.bt_range_word_1y
+    HistoryRange.MAX -> R.string.bt_range_word_max
+}
+
 @Composable
 internal fun rangeLabel(range: HistoryRange): String = stringResource(rangeLabelRes(range))
+
+@Composable
+internal fun rangeWord(range: HistoryRange): String = stringResource(rangeWordRes(range))
 
 @Composable
 internal fun rangeLabel(range: AssetRange): String = stringResource(rangeLabelRes(range))

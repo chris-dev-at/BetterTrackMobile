@@ -32,8 +32,6 @@ import androidx.compose.material.icons.outlined.SouthWest
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +84,7 @@ import at.bettertrack.app.data.standingorders.StandingOrderStatus
 import at.bettertrack.app.data.standingorders.buildStandingOrderPatch
 import at.bettertrack.app.data.standingorders.validateStandingOrder
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -97,6 +96,7 @@ import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
@@ -791,6 +791,9 @@ private fun StandingOrderRow(
     var menuOpen by remember { mutableStateOf(false) }
     val kind = StandingOrderKind.fromWire(order.kind)
     val active = StandingOrderStatus.fromWire(order.status) == StandingOrderStatus.Active
+    // One headline, two consumers: the row itself and the action sheet's title —
+    // the sheet has no anchor geometry, so it names the order it acts on.
+    val rowTitle = standingOrderTitle(order, kind)
 
     // A paused order reads quieter across the board: muted title, no gold badge,
     // and a de-coloured amount — it isn't going to happen, so it shouldn't shout.
@@ -814,7 +817,7 @@ private fun StandingOrderRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = standingOrderTitle(order, kind),
+                        text = rowTitle,
                         style = MaterialTheme.typography.titleSmall,
                         color = titleColor,
                         maxLines = 1,
@@ -848,45 +851,34 @@ private fun StandingOrderRow(
             }
             Spacer(Modifier.width(8.dp))
             StandingOrderAmount(order = order, kind = kind, locale = locale, active = active)
-            Box {
-                IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled && !busy) {
-                    Icon(
-                        Icons.Outlined.MoreVert,
-                        contentDescription = stringResource(R.string.bt_so_actions_cd),
-                        tint = if (actionsEnabled && !busy) bt.textSecondary else bt.border,
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surfaceHigh,
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = stringResource(
-                                    if (active) R.string.bt_so_pause else R.string.bt_so_resume,
-                                ),
-                                color = bt.textPrimary,
-                            )
-                        },
-                        onClick = {
-                            menuOpen = false
-                            onPauseResume()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(stringResource(R.string.bt_so_delete_action), color = bt.loss)
-                        },
-                        onClick = {
-                            menuOpen = false
-                            onDelete()
-                        },
-                    )
-                }
+            IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled && !busy) {
+                Icon(
+                    Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(R.string.bt_so_actions_cd),
+                    tint = if (actionsEnabled && !busy) bt.textSecondary else bt.border,
+                )
             }
         }
+    }
+
+    if (menuOpen) {
+        BtActionSheet(
+            title = rowTitle,
+            actions = listOf(
+                BtSheetAction(
+                    label = stringResource(
+                        if (active) R.string.bt_so_pause else R.string.bt_so_resume,
+                    ),
+                    onClick = onPauseResume,
+                ),
+                BtSheetAction(
+                    label = stringResource(R.string.bt_so_delete_action),
+                    destructive = true,
+                    onClick = onDelete,
+                ),
+            ),
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 

@@ -22,13 +22,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.EventRepeat
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NorthEast
 import androidx.compose.material.icons.outlined.Savings
@@ -37,10 +41,10 @@ import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.SouthWest
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,7 +67,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -97,22 +104,23 @@ import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.SyncEngine
 import at.bettertrack.app.sync.SyncScheduler
+import at.bettertrack.app.ui.components.BtActionSheet
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
+import at.bettertrack.app.ui.components.BtPickerRow
+import at.bettertrack.app.ui.components.BtPickerSheet
+import at.bettertrack.app.ui.components.BtSheetAction
+import at.bettertrack.app.ui.components.btPressScale
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtDateField
 import at.bettertrack.app.ui.components.BtDatePickerDialog
-import at.bettertrack.app.ui.components.BtEmptyState
-import at.bettertrack.app.ui.components.BtErrorState
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtInlineError
-import at.bettertrack.app.ui.components.BtListSurface
-import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSectionHeader
@@ -125,7 +133,6 @@ import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.rememberParkReason
-import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.format.isBadgeWorthy
 import at.bettertrack.app.ui.format.parseRowSource
@@ -248,8 +255,9 @@ private sealed interface CashSheet {
     /** Create (or edit a queued) deposit / withdrawal / fee. */
     data class Entry(val kind: CashKind, val editOpId: Long? = null) : CashSheet
     data class Transfer(val editOpId: Long? = null) : CashSheet
-    /** Edit an already-SYNCED movement via the v5 correction endpoints. */
-    data class EditSynced(val movementId: String) : CashSheet
+    // EditSynced left with the movement stream (owner batch 2026-08-16): the
+    // correction sheet now opens from the ledger subpage, which holds its own
+    // target state. See CashLedgerScreen.
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -267,6 +275,12 @@ class CashViewModel(
      * storage-mode seam that [repo] goes through.
      */
     private val classification: CashClassificationRepository,
+    /**
+     * The source the screen opens narrowed to (owner batch 2026-08-16): the
+     * ledger subpage inherits the overview switcher's selection through its
+     * route, so the list the user lands on is the one they were looking at.
+     */
+    initialSourceId: String? = null,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
@@ -306,8 +320,8 @@ class CashViewModel(
         .onEach { _sourcesLoaded.value = true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Movement-list source filter; null = all sources. */
-    private val _sourceFilter = MutableStateFlow<String?>(null)
+    /** Movement-list / hero source filter; null = all sources. */
+    private val _sourceFilter = MutableStateFlow<String?>(initialSourceId)
     val sourceFilter: StateFlow<String?> = _sourceFilter.asStateFlow()
 
     val movements: StateFlow<List<CashMovementEntity>> = combine(
@@ -397,8 +411,14 @@ class CashViewModel(
         }
     }
 
+    /**
+     * Absolute selection, not the old tap-again-to-clear toggle: both consumers
+     * are now proper switchers (the overview's source switcher sheet and the
+     * ledger's filter chips), and each carries its own explicit "All sources"
+     * entry — a hidden second meaning on re-tapping a row would fight it.
+     */
     fun setSourceFilter(sourceId: String?) {
-        _sourceFilter.value = if (_sourceFilter.value == sourceId) null else sourceId
+        _sourceFilter.value = sourceId
     }
 
     fun clearSheetError() {
@@ -535,7 +555,13 @@ class CashViewModel(
     private var budgetJob: Job? = null
 
     fun stepBudgetMonth(delta: Long) {
-        _budgetMonth.value = _budgetMonth.value.plusMonths(delta)
+        // Clamped at the CURRENT month (owner order 2026-08-16): a budget is an
+        // evaluation of booked movements, and a future month has none — the
+        // stepper's next arrow is disabled at the boundary and this clamp is
+        // the model-side guarantee behind it.
+        val next = clampedBudgetMonth(_budgetMonth.value.plusMonths(delta), YearMonth.now())
+        if (next == _budgetMonth.value) return
+        _budgetMonth.value = next
         loadBudgets()
         loadSummary()
     }
@@ -822,6 +848,10 @@ fun CashScreen(
     onOpenTags: () -> Unit = {},
     onOpenRules: () -> Unit = {},
     onOpenStandingOrders: () -> Unit = {},
+    /** The ledger subpage door — (portfolioId, sourceFilter to open on). */
+    onOpenLedger: (String?, String?) -> Unit = { _, _ -> },
+    /** The budgets subpage door. */
+    onOpenBudgets: (String?) -> Unit = {},
 ) {
     val vm: CashViewModel = viewModel {
         CashViewModel(
@@ -843,45 +873,30 @@ fun CashScreen(
     val totalCashEur by vm.totalCashEur.collectAsStateWithLifecycle()
     val sources by vm.sources.collectAsStateWithLifecycle()
     val sourceFilter by vm.sourceFilter.collectAsStateWithLifecycle()
-    val movements by vm.movements.collectAsStateWithLifecycle()
     val pendingRows by vm.pendingRows.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
-    val sourcesLoaded by vm.sourcesLoaded.collectAsStateWithLifecycle()
-    val ledgerError by vm.ledgerError.collectAsStateWithLifecycle()
-    val ledgerLoaded by vm.ledgerLoaded.collectAsStateWithLifecycle()
     val manageBusy by vm.manageBusy.collectAsStateWithLifecycle()
     val manageError by vm.manageError.collectAsStateWithLifecycle()
     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
         .collectAsStateWithLifecycle(initialValue = null)
 
     var sheet by remember { mutableStateOf<CashSheet?>(null) }
+    var switcherOpen by rememberSaveable { mutableStateOf(false) }
     var newSourceOpen by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<CashSourceEntity?>(null) }
     var archiveTarget by remember { mutableStateOf<CashSourceEntity?>(null) }
     /** Prefill when editing a queued op. */
     var editPrefill by remember { mutableStateOf<PendingCashRow?>(null) }
-    /** The synced movement awaiting delete confirmation. */
-    var deleteTarget by remember { mutableStateOf<CashMovementEntity?>(null) }
-    val correctionBusy by vm.correctionBusy.collectAsStateWithLifecycle()
-    val correctionNotice by vm.correctionNotice.collectAsStateWithLifecycle()
-    val tagsById by vm.tagsById.collectAsStateWithLifecycle()
-    /** The synced movement whose tag set is being edited. */
-    var tagTarget by remember { mutableStateOf<CashMovementEntity?>(null) }
     val budgets by vm.budgets.collectAsStateWithLifecycle()
-    val budgetMonth by vm.budgetMonth.collectAsStateWithLifecycle()
-    var newBudgetOpen by remember { mutableStateOf(false) }
-    var budgetTarget by remember { mutableStateOf<CashBudgetProgressDto?>(null) }
-    val summary by vm.summary.collectAsStateWithLifecycle()
     val trends by vm.trends.collectAsStateWithLifecycle()
 
-    // The budgets block is a network read keyed on (portfolio, month), so it
-    // reloads when the resolved portfolio arrives or changes — not just once.
-    // The summary and trend analytics are the same kind of read and load with it.
+    // The brief budgets block is a network read keyed on (portfolio, month) —
+    // always the CURRENT month here, the stepper lives on the budgets subpage.
+    // The trend chart is the same kind of read and loads with it.
     val resolvedPid by vm.portfolioId.collectAsStateWithLifecycle()
     LaunchedEffect(resolvedPid) {
         if (resolvedPid != null) {
             vm.loadBudgets()
-            vm.loadSummary()
             vm.loadTrends()
         }
     }
@@ -889,20 +904,6 @@ fun CashScreen(
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
     val sourceNames = sources.associate { it.id to it.name }
-
-    // A source filter can empty the visible list all by itself, and a failed
-    // fetch must not be blamed for a view the user narrowed on purpose.
-    val ledgerFailure = ledgerError.takeIf { sourceFilter == null }
-    val ledgerSurface = resolveListSurface(
-        hasContent = movements.isNotEmpty() || pendingRows.isNotEmpty(),
-        firstLoadPending = cashLedgerPending(
-            loaded = ledgerLoaded,
-            hasPortfolio = resolvedPid != null,
-            sourcesSeen = sourcesLoaded,
-        ),
-        failed = ledgerFailure != null,
-        isOnline = isOnline,
-    )
 
     // Entry via the pending screen's "Edit & retry" (deep-linked edit).
     LaunchedEffect(editOpId) {
@@ -988,46 +989,60 @@ fun CashScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // Total cash (server roll-up of all sources, §7.1).
+                    // The hero (server values only, §7.1): the total across all
+                    // sources, or — when the switcher below has narrowed the
+                    // screen — the selected source's own balance, labelled with
+                    // its name so the number can never be misread as the total.
                     item(key = "hero") {
+                        val selectedSource = sourceFilter?.let { f -> active.firstOrNull { it.id == f } }
                         Column {
                             Text(
-                                text = stringResource(R.string.bt_cash_total),
+                                text = selectedSource?.name ?: stringResource(R.string.bt_cash_total),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = bt.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Spacer(Modifier.height(2.dp))
-                            if (totalCashEur != null) {
-                                MoneyText(value = totalCashEur!!, style = BtTheme.type.moneyLarge)
-                            } else {
-                                BtSkeleton(Modifier.width(180.dp).height(36.dp))
+                            when {
+                                selectedSource != null -> MoneyText(
+                                    value = selectedSource.balanceEur,
+                                    style = BtTheme.type.moneyLarge,
+                                )
+
+                                totalCashEur != null -> MoneyText(
+                                    value = totalCashEur!!,
+                                    style = BtTheme.type.moneyLarge,
+                                )
+
+                                else -> BtSkeleton(Modifier.width(180.dp).height(36.dp))
                             }
                         }
                     }
 
-                    // Deposit · Withdraw / Fee · Transfer (§6.3 + v5 fee).
-                    // Two rows rather than one row of four: at four-up the labels
-                    // ellipsize on a narrow phone, and pairing them keeps the two
-                    // money-in/out actions visually apart from the two "other" ones.
-                    //
-                    // S6 P1-15: the four used to be four IDENTICAL outlined buttons,
-                    // which is the design saying "these are equally likely" about a
-                    // set where they plainly are not. Deposit is the action people
-                    // come to this screen for, so it is the one filled primary; the
-                    // other three stay outlined secondaries.
+                    // Add money (GREEN) · Spend (RED) · Transfer (owner order
+                    // 2026-08-16). The two money verbs wear their direction as
+                    // colour — in is emerald, out is red, the same pair every
+                    // gain/loss figure in the app already means — and "Spend"
+                    // replaced "Withdraw", which read as fetching physical cash
+                    // at a bank. Fee stays a PROPERTY of an outflow (the
+                    // Holding-cost tick inside the spend sheet, web parity
+                    // 2026-08-07); transfer stays the quiet third action.
                     item(key = "actions") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                BtPrimaryButton(
+                                CashToneButton(
                                     text = stringResource(R.string.bt_cash_deposit),
+                                    container = bt.gain,
                                     onClick = {
                                         editPrefill = null
                                         sheet = CashSheet.Entry(CashKind.DEPOSIT)
                                     },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
-                                BtSecondaryButton(
+                                CashToneButton(
                                     text = stringResource(R.string.bt_cash_withdraw),
+                                    container = bt.loss,
                                     onClick = {
                                         editPrefill = null
                                         sheet = CashSheet.Entry(CashKind.WITHDRAWAL)
@@ -1035,12 +1050,6 @@ fun CashScreen(
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
                             }
-                            // No Fee button any more (web parity, owner
-                            // 2026-08-07). A fee is not a third destination, it
-                            // is a PROPERTY of an outflow — "was this spent on
-                            // investing?" — so it is now the Holding-cost tick
-                            // inside the withdraw sheet, exactly as on the web.
-                            // See [cashEntryKind].
                             BtSecondaryButton(
                                 text = stringResource(R.string.bt_cash_transfer),
                                 onClick = {
@@ -1053,137 +1062,80 @@ fun CashScreen(
                         }
                     }
 
-                    // Sources (Main first), tap = filter movements.
-                    // V5 S2c budgets: month stepper + one bar per budgeted tag.
-                    // Placed above Sources because it answers "how am I doing
-                    // this month", which is the question the hero total raises.
-                    item(key = "budgets") {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                    // The source switcher (owner order 2026-08-16): the one row
+                    // that says which source the hero is about, and the door to
+                    // every other one. Source MANAGEMENT lives inside the sheet
+                    // it opens — the overview itself stays one row.
+                    item(key = "source-switcher") {
+                        val switcherCd = stringResource(R.string.bt_cash_source_switcher_cd)
+                        BtCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = switcherCd },
+                            onClick = { switcherOpen = true },
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Outlined.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = bt.textMuted,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = stringResource(R.string.bt_budgets_section),
+                                    text = sourceFilter?.let { f -> sourceNames[f] }
+                                        ?: stringResource(R.string.bt_cash_all_sources),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = bt.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
-                                CashMonthStepper(
-                                    month = budgetMonth,
-                                    onPrev = { vm.stepBudgetMonth(-1) },
-                                    onNext = { vm.stepBudgetMonth(1) },
+                                Icon(
+                                    Icons.Outlined.ExpandMore,
+                                    contentDescription = null,
+                                    tint = bt.textMuted,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            when (val b = budgets) {
-                                is BudgetsUi.Loading -> Column(
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    CashBudgetSkeletonRow()
-                                    CashBudgetSkeletonRow()
-                                }
-
-                                is BudgetsUi.Failed -> BtInlineError(
-                                    message = b.message,
-                                    onRetry = { vm.loadBudgets() },
-                                )
-
-                                is BudgetsUi.Ready -> if (b.rows.isEmpty()) {
-                                    CashBudgetsEmpty()
-                                } else {
-                                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                        b.rows.forEach { row ->
-                                            CashBudgetRow(
-                                                budget = row,
-                                                locale = locale,
-                                                onEdit = { budgetTarget = row },
-                                                onDelete = { vm.deleteBudget(row.id) },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            BtSecondaryButton(
-                                text = stringResource(R.string.bt_budgets_new),
-                                onClick = { newBudgetOpen = true },
-                                enabled = isOnline,
-                            )
-                        }
-                    }
-
-                    // The month summary deliberately carries NO stepper of its
-                    // own: it reads the same month as the budgets block directly
-                    // above, and a second month control on one screen would be
-                    // two sources of truth for one question.
-                    item(key = "cash-summary") {
-                        Column {
-                            Text(
-                                text = stringResource(R.string.bt_cash_summary_section),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = bt.textPrimary,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            when (val s = summary) {
-                                is CashSummaryUi.Loading -> CashSummarySkeleton()
-                                is CashSummaryUi.Failed -> BtInlineError(
-                                    message = s.message,
-                                    onRetry = { vm.loadSummary() },
-                                )
-
-                                is CashSummaryUi.Ready -> CashSummaryBlock(s.summary, locale)
                             }
                         }
                     }
 
-                    item(key = "cash-trends") {
-                        Column {
-                            Text(
-                                text = stringResource(R.string.bt_cash_trends_section),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = bt.textPrimary,
+                    // The two subpage doors (owner order 2026-08-16): the
+                    // movement stream and the full budgets block each moved to
+                    // a page of their own — the same doorway vocabulary the
+                    // manage group at the foot already uses.
+                    item(key = "subpage-doors") {
+                        BtGroup {
+                            BtGroupRow(
+                                icon = Icons.AutoMirrored.Outlined.ReceiptLong,
+                                title = stringResource(R.string.bt_tx_title),
+                                subtitle = stringResource(R.string.bt_cash_transactions_row_sub),
+                                onClick = { onOpenLedger(resolvedPid, sourceFilter) },
                             )
-                            Spacer(Modifier.height(8.dp))
-                            when (val t = trends) {
-                                is CashTrendsUi.Loading -> CashTrendsSkeleton()
-                                is CashTrendsUi.Failed -> BtInlineError(
-                                    message = t.message,
-                                    onRetry = { vm.loadTrends() },
-                                )
-
-                                is CashTrendsUi.Ready -> CashTrendsBlock(t.points, locale)
-                            }
-                        }
-                    }
-
-                    item(key = "sources-header") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.bt_cash_sources_section),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = bt.textPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            BtChip(
-                                text = stringResource(R.string.bt_cash_new_source),
-                                enabled = isOnline && !manageBusy,
-                                onClick = { newSourceOpen = true },
+                            BtGroupRow(
+                                icon = Icons.Outlined.Savings,
+                                title = stringResource(R.string.bt_budgets_section),
+                                subtitle = stringResource(R.string.bt_budgets_row_sub),
+                                onClick = { onOpenBudgets(resolvedPid) },
                             )
                         }
                     }
+
+                    // Source-management refusals surface here, right under the
+                    // switcher whose sheet issued the write. See the retry note
+                    // on the handler.
                     manageError?.let { message ->
                         item(key = "manage-error") {
-                            // Retry re-READS the sources rather than replaying the
-                            // write: which write failed is not held here, and
-                            // re-sending a create or an archive on a tap labelled
-                            // "Try again" could book a second one. What the user
-                            // actually needs after a refused management call is the
-                            // server's own answer about what the list now is — and
-                            // it clears a line that otherwise had NO way to
-                            // disappear at all after a failed archive or restore
-                            // (the only clear ran on a dialog's dismiss, and those
-                            // two actions have no dialog).
+                            // Retry re-READS the sources rather than replaying
+                            // the write: which write failed is not held here,
+                            // and re-sending a create or an archive on a tap
+                            // labelled "Try again" could book a second one.
                             BtInlineError(
                                 message = message,
                                 onRetry = {
@@ -1193,65 +1145,10 @@ fun CashScreen(
                             )
                         }
                     }
-                    // Only while the flow has genuinely not answered yet — see
-                    // CashViewModel.sourcesLoaded. An empty list AFTER the first
-                    // emission is an answer, not a wait.
-                    if (sources.isEmpty() && !sourcesLoaded) {
-                        item(key = "sources-skeleton") {
-                            BtSkeleton(Modifier.fillMaxWidth().height(64.dp))
-                        }
-                    }
-                    items(count = active.size, key = { active[it].id }) { i ->
-                        val s = active[i]
-                        SourceRow(
-                            source = s,
-                            selected = sourceFilter == s.id,
-                            actionsEnabled = isOnline && !manageBusy,
-                            onClick = { vm.setSourceFilter(s.id) },
-                            onRename = { renameTarget = s },
-                            onArchive = { archiveTarget = s },
-                        )
-                    }
-                    if (archived.isNotEmpty()) {
-                        item(key = "archived-header") {
-                            Text(
-                                text = stringResource(R.string.bt_switcher_archived_section),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                        items(count = archived.size, key = { "arch-" + archived[it].id }) { i ->
-                            val s = archived[i]
-                            BtCard(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = s.name,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = bt.textMuted,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    TextButton(
-                                        onClick = { vm.restoreSource(s.id) { } },
-                                        enabled = isOnline && !manageBusy,
-                                    ) {
-                                        Text(
-                                            stringResource(R.string.bt_switcher_restore),
-                                            color = if (isOnline) bt.goldEmphasis else bt.textMuted,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
 
-                    // Queued cash ops (§7.4) — clearly-pending rows, tap to edit.
+                    // Queued cash ops (§7.4) — clearly-pending rows, tap to
+                    // edit. They stay ON the overview: a queued entry is not a
+                    // transaction yet, and the sheets that edit one live here.
                     if (pendingRows.isNotEmpty()) {
                         item(key = "pending-header") {
                             Text(
@@ -1284,82 +1181,80 @@ fun CashScreen(
                         }
                     }
 
-                    // Movement stream (filtered per source when selected).
-                    item(key = "movements-header") {
-                        Text(
-                            text = if (sourceFilter == null) {
-                                stringResource(R.string.bt_cash_movements_section)
-                            } else {
-                                stringResource(
-                                    R.string.bt_cash_movements_for,
-                                    sourceNames[sourceFilter] ?: "",
+                    // The cash-flow chart (owner order 2026-08-16): the one
+                    // analytic that stays on the overview — inflow vs outflow
+                    // over the last months, the picture the hero total raises.
+                    item(key = "cash-trends") {
+                        Column(Modifier.padding(top = 6.dp)) {
+                            Text(
+                                text = stringResource(R.string.bt_cash_trends_section),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = bt.textPrimary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            when (val t = trends) {
+                                is CashTrendsUi.Loading -> CashTrendsSkeleton()
+                                is CashTrendsUi.Failed -> BtInlineError(
+                                    message = t.message,
+                                    onRetry = { vm.loadTrends() },
                                 )
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = bt.textPrimary,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                    when (ledgerSurface) {
-                        // The items() below are the CONTENT branch.
-                        BtListSurface.CONTENT -> Unit
 
-                        BtListSurface.SKELETON -> item(key = "movements-loading") {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                repeat(3) { BtSkeleton(Modifier.fillMaxWidth().height(64.dp)) }
+                                is CashTrendsUi.Ready -> CashTrendsBlock(t.points, locale)
                             }
                         }
-
-                        BtListSurface.EMPTY -> item(key = "movements-empty") {
-                            BtEmptyState(
-                                icon = Icons.Outlined.AccountBalanceWallet,
-                                title = stringResource(R.string.bt_cash_empty_title),
-                                message = stringResource(R.string.bt_cash_empty_message),
-                            )
-                        }
-
-                        BtListSurface.OFFLINE -> item(key = "movements-offline") {
-                            BtOfflineState(
-                                message = stringResource(R.string.bt_cash_requires_connection),
-                                onRetry = { vm.refresh() },
-                            )
-                        }
-
-                        BtListSurface.ERROR -> item(key = "movements-error") {
-                            BtErrorState(
-                                title = stringResource(R.string.bt_cash_movements_error_title),
-                                message = ledgerFailure ?: BtMessage.generic,
-                                onRetry = { vm.refresh() },
-                            )
-                        }
                     }
-                    items(count = movements.size, key = { movements[it].id }) { i ->
-                        val m = movements[i]
-                        // Corrections are online-only and exist only for the three
-                        // hand-typed kinds — a derived row gets no menu at all
-                        // rather than a menu that is certain to be refused.
-                        val correctable = isEditableCashKind(m.kind) && isOnline
-                        MovementRow(
-                            movement = m,
-                            sourceNames = sourceNames,
-                            locale = locale,
-                            tagsById = tagsById,
-                            onEdit = if (correctable) {
-                                { sheet = CashSheet.EditSynced(m.id) }
-                            } else {
-                                null
-                            },
-                            onEditTags = if (isOnline) {
-                                { tagTarget = m }
-                            } else {
-                                null
-                            },
-                            onDelete = if (correctable) {
-                                { deleteTarget = m }
-                            } else {
-                                null
-                            },
-                        )
+
+                    // The BRIEF budgets overview (owner order 2026-08-16: the
+                    // full block "is crowded"): one compact used-up bar per
+                    // budget, nothing more — always the CURRENT month. Editing,
+                    // creation, the stepper and the figures live one tap away
+                    // behind the Budgets door above.
+                    item(key = "budgets-brief") {
+                        Column(Modifier.padding(top = 6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.bt_budgets_section),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = bt.textPrimary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = stringResource(R.string.bt_budgets_all),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = bt.goldInk,
+                                    modifier = Modifier
+                                        .clip(BtShapes.pill)
+                                        .clickable { onOpenBudgets(resolvedPid) }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            when (val b = budgets) {
+                                is BudgetsUi.Loading -> Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    CashBudgetSkeletonRow(brief = true)
+                                    CashBudgetSkeletonRow(brief = true)
+                                }
+
+                                is BudgetsUi.Failed -> BtInlineError(
+                                    message = b.message,
+                                    onRetry = { vm.loadBudgets() },
+                                )
+
+                                is BudgetsUi.Ready -> if (b.rows.isEmpty()) {
+                                    BtInlineEmpty(
+                                        text = stringResource(R.string.bt_budgets_empty_title),
+                                    )
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        b.rows.forEach { row ->
+                                            CashBudgetBriefRow(budget = row)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // ── The three management screens, as doors ───────────────
@@ -1432,123 +1327,26 @@ fun CashScreen(
             },
         )
 
-        is CashSheet.EditSynced -> {
-            val target = movements.firstOrNull { it.id == s.movementId }
-            if (target == null) {
-                // The row vanished under us (a refresh landed while the sheet was
-                // opening). Close rather than show an editor for nothing.
-                sheet = null
-            } else {
-                CashCorrectionSheet(
-                    vm = vm,
-                    movement = target,
-                    sources = active,
-                    locale = locale,
-                    onDismiss = {
-                        sheet = null
-                        vm.clearCorrectionNotice()
-                    },
-                )
-            }
-        }
-
         null -> Unit
     }
 
-    tagTarget?.let { target ->
-        CashMovementTagsSheet(
-            vm = vm,
-            movement = target,
-            allTags = tagsById,
-            onDismiss = { tagTarget = null },
-        )
-    }
-
-    if (newBudgetOpen) {
-        CashBudgetSheet(
-            vm = vm,
-            existing = null,
-            allTags = tagsById,
-            // One budget per (portfolio, tag, period) — offering a tag that is
-            // already budgeted this month would only earn a 409, so filter them
-            // out of the picker instead of letting the user hit the wall.
-            takenTagIds = (budgets as? BudgetsUi.Ready)?.rows?.map { it.tagId }?.toSet().orEmpty(),
+    if (switcherOpen) {
+        CashSourceSwitcherSheet(
+            active = active,
+            archived = archived,
+            selectedId = sourceFilter,
+            totalCashEur = totalCashEur,
+            actionsEnabled = isOnline && !manageBusy,
             locale = locale,
-            onDismiss = { newBudgetOpen = false },
-        )
-    }
-
-    budgetTarget?.let { target ->
-        CashBudgetSheet(
-            vm = vm,
-            existing = target,
-            allTags = tagsById,
-            takenTagIds = emptySet(),
-            locale = locale,
-            onDismiss = { budgetTarget = null },
-        )
-    }
-
-    deleteTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { if (!correctionBusy) deleteTarget = null },
-            containerColor = bt.surfaceHigh,
-            title = { Text(stringResource(R.string.bt_cash_delete_title), color = bt.textPrimary) },
-            text = {
-                Text(stringResource(R.string.bt_cash_delete_message), color = bt.textSecondary)
+            onSelect = { id ->
+                vm.setSourceFilter(id)
+                switcherOpen = false
             },
-            confirmButton = {
-                TextButton(
-                    enabled = !correctionBusy,
-                    onClick = {
-                        vm.deleteCorrection(target.id) { ok -> if (ok) deleteTarget = null }
-                    },
-                ) {
-                    Text(stringResource(R.string.bt_cash_delete_action), color = bt.loss)
-                }
-            },
-            dismissButton = {
-                TextButton(enabled = !correctionBusy, onClick = { deleteTarget = null }) {
-                    Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
-                }
-            },
-        )
-    }
-
-    // A refusal the user cannot fix by retrying gets its own designed state, not
-    // a red line under a form field.
-    correctionNotice?.let { notice ->
-        AlertDialog(
-            onDismissRequest = { vm.clearCorrectionNotice() },
-            containerColor = bt.surfaceHigh,
-            title = {
-                Text(
-                    text = stringResource(
-                        if (notice.notEditable) {
-                            R.string.bt_cash_not_editable_title
-                        } else {
-                            R.string.bt_cash_correction_failed_title
-                        },
-                    ),
-                    color = bt.textPrimary,
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (notice.notEditable) {
-                        Text(
-                            text = stringResource(R.string.bt_cash_not_editable_hint),
-                            color = bt.textSecondary,
-                        )
-                    }
-                    Text(text = notice.message.resolveWithDiagnostic(), color = bt.textMuted)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { vm.clearCorrectionNotice() }) {
-                    Text(stringResource(R.string.bt_action_done), color = bt.goldInk)
-                }
-            },
+            onNewSource = { newSourceOpen = true },
+            onRename = { renameTarget = it },
+            onArchive = { archiveTarget = it },
+            onRestore = { vm.restoreSource(it.id) { } },
+            onDismiss = { switcherOpen = false },
         )
     }
 
@@ -1611,81 +1409,187 @@ fun CashScreen(
     }
 }
 
-// ── Rows ─────────────────────────────────────────────────────────────────────
 
+/**
+ * A money-direction button (owner order 2026-08-16): the deposit/spend pair
+ * wears its direction as a FILL — emerald in, red out — the same verdict pair
+ * every gain/loss figure in the app already speaks.
+ *
+ * The ink is the page ground ([at.bettertrack.app.ui.theme.BtColors.bg]),
+ * because it is the one token guaranteed to invert with the theme: near-black
+ * under the dark ramp's light emerald (#34D399), white under light's deepened
+ * green (#0F7853) — both well past the AA text floor without inventing a new
+ * "on-gain" token for one screen. Shape, press-scale and the confirm haptic
+ * match [BtPrimaryButton], so the pair feels like the primary actions they are.
+ */
 @Composable
-private fun SourceRow(
-    source: CashSourceEntity,
-    selected: Boolean,
-    actionsEnabled: Boolean,
+private fun CashToneButton(
+    text: String,
+    container: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit,
-    onRename: () -> Unit,
-    onArchive: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bt = BtTheme.colors
-    var menuOpen by remember { mutableStateOf(false) }
-    BtCard(modifier = Modifier.fillMaxWidth(), selected = selected, onClick = onClick) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = source.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = bt.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (source.isMain) {
-                        Spacer(Modifier.width(8.dp))
-                        BtBadge(
-                            text = stringResource(R.string.bt_cash_primary_badge),
-                            kind = BtBadgeKind.Gold,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = sourceTypeLabel(source.kind),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
+    val interaction = remember { MutableInteractionSource() }
+    val haptics = rememberBtHaptics()
+    Button(
+        onClick = {
+            haptics.confirm()
+            onClick()
+        },
+        modifier = modifier.btPressScale(interaction),
+        shape = BtShapes.control,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = container,
+            contentColor = bt.bg,
+            disabledContainerColor = bt.border,
+            disabledContentColor = bt.textMuted,
+        ),
+        elevation = null,
+        interactionSource = interaction,
+    ) {
+        Text(text)
+    }
+}
+
+// ── The source switcher sheet (owner order 2026-08-16) ──────────────────────
+
+/**
+ * The cash-source switcher: what the overview's one source row opens.
+ *
+ * Modelled on the portfolio switcher — one sheet that both SELECTS (tap a row,
+ * the screen narrows to that source) and MANAGES (per-row overflow → rename /
+ * archive, an archived section with restore, a create row at the foot). The
+ * old overview carried all of this as a permanent mid-page list; the sheet
+ * gives the same reach for one row of standing chrome, which is most of the
+ * owner's "overcrowded" fixed.
+ *
+ * Selection semantics are the picker family's: picking IS the action and the
+ * caller closes the sheet. Management actions are online-only (§7.2), gated by
+ * [actionsEnabled] exactly as the old rows were.
+ */
+@Composable
+private fun CashSourceSwitcherSheet(
+    active: List<CashSourceEntity>,
+    archived: List<CashSourceEntity>,
+    selectedId: String?,
+    totalCashEur: Double?,
+    actionsEnabled: Boolean,
+    locale: Locale,
+    onSelect: (String?) -> Unit,
+    onNewSource: () -> Unit,
+    onRename: (CashSourceEntity) -> Unit,
+    onArchive: (CashSourceEntity) -> Unit,
+    onRestore: (CashSourceEntity) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    var actionTarget by remember { mutableStateOf<CashSourceEntity?>(null) }
+    BtPickerSheet(
+        title = stringResource(R.string.bt_cash_sources_section),
+        onDismiss = onDismiss,
+    ) {
+        BtPickerRow(
+            label = stringResource(R.string.bt_cash_all_sources),
+            selected = selectedId == null,
+            // formatEur masks in discreet mode, so the sheet leaks nothing the
+            // hero would not.
+            supporting = totalCashEur?.let { formatEur(it, locale) },
+            onClick = { onSelect(null) },
+        )
+        active.forEach { source ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BtPickerRow(
+                    label = source.name,
+                    selected = selectedId == source.id,
+                    supporting = sourceTypeLabel(source.kind) + " · " + formatEur(source.balanceEur, locale),
+                    onClick = { onSelect(source.id) },
+                    modifier = Modifier.weight(1f),
                 )
-            }
-            MoneyText(value = source.balanceEur, style = BtTheme.type.moneySmall)
-            Box {
-                IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled) {
+                IconButton(onClick = { actionTarget = source }, enabled = actionsEnabled) {
                     Icon(
                         Icons.Outlined.MoreVert,
                         contentDescription = stringResource(R.string.bt_cash_source_actions_cd),
                         tint = if (actionsEnabled) bt.textSecondary else bt.border,
                     )
                 }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surfaceHigh,
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bt_switcher_rename), color = bt.textPrimary) },
-                        onClick = {
-                            menuOpen = false
-                            onRename()
-                        },
+            }
+        }
+        if (archived.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.bt_switcher_archived_section),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+            )
+            archived.forEach { source ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = source.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = bt.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 14.dp),
                     )
-                    if (!source.isMain) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bt_switcher_archive), color = bt.loss) },
-                            onClick = {
-                                menuOpen = false
-                                onArchive()
-                            },
+                    TextButton(onClick = { onRestore(source) }, enabled = actionsEnabled) {
+                        Text(
+                            stringResource(R.string.bt_switcher_restore),
+                            color = if (actionsEnabled) bt.goldEmphasis else bt.textMuted,
                         )
                     }
                 }
             }
         }
+        // The create row, at the foot like the portfolio switcher's.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(BtShapes.card)
+                .clickable(enabled = actionsEnabled, onClick = onNewSource)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Add,
+                contentDescription = null,
+                tint = if (actionsEnabled) bt.goldInk else bt.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = stringResource(R.string.bt_cash_new_source),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (actionsEnabled) bt.goldInk else bt.textMuted,
+            )
+        }
+    }
+
+    actionTarget?.let { source ->
+        val renameLabel = stringResource(R.string.bt_switcher_rename)
+        val archiveLabel = stringResource(R.string.bt_switcher_archive)
+        BtActionSheet(
+            title = source.name,
+            subtitle = sourceTypeLabel(source.kind),
+            actions = buildList {
+                add(
+                    BtSheetAction(
+                        label = renameLabel,
+                        onClick = { onRename(source) },
+                    ),
+                )
+                if (!source.isMain) {
+                    add(
+                        BtSheetAction(
+                            label = archiveLabel,
+                            destructive = true,
+                            onClick = { onArchive(source) },
+                        ),
+                    )
+                }
+            },
+            onDismiss = { actionTarget = null },
+        )
     }
 }
 
@@ -1698,7 +1602,7 @@ private fun SourceRow(
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CashBudgetSheet(
+internal fun CashBudgetSheet(
     vm: CashViewModel,
     existing: CashBudgetProgressDto?,
     allTags: Map<String, CashTagEntity>,
@@ -1861,7 +1765,7 @@ private fun CashBudgetSheet(
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CashMovementTagsSheet(
+internal fun CashMovementTagsSheet(
     vm: CashViewModel,
     movement: CashMovementEntity,
     allTags: Map<String, CashTagEntity>,
@@ -1953,7 +1857,7 @@ private fun CashMovementTagsSheet(
 }
 
 @Composable
-private fun MovementRow(
+internal fun MovementRow(
     movement: CashMovementEntity,
     sourceNames: Map<String, String>,
     locale: Locale,
@@ -2044,43 +1948,33 @@ private fun MovementRow(
                         tint = bt.textSecondary,
                     )
                 }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    containerColor = bt.surfaceHigh,
-                ) {
-                    onEditTags?.let { editTags ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(R.string.bt_cash_tags_edit),
-                                    color = bt.textPrimary,
-                                )
-                            },
-                            onClick = { menuOpen = false; editTags() },
-                        )
-                    }
-                    if (correctable) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(stringResource(R.string.bt_cash_edit), color = bt.textPrimary)
-                            },
-                            onClick = {
-                                menuOpen = false
-                                onEdit?.invoke()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bt_cash_delete), color = bt.loss) },
-                            onClick = {
-                                menuOpen = false
-                                onDelete?.invoke()
-                            },
-                        )
-                    }
-                }
             }
         }
+    }
+    if (menuOpen) {
+        val tagsLabel = stringResource(R.string.bt_cash_tags_edit)
+        val editLabel = stringResource(R.string.bt_cash_edit)
+        val deleteLabel = stringResource(R.string.bt_cash_delete)
+        BtActionSheet(
+            title = movementLabel(movement, sourceNames),
+            subtitle = formatTxDate(movement.executedAtMs, locale),
+            actions = buildList {
+                onEditTags?.let { editTags ->
+                    add(BtSheetAction(label = tagsLabel, onClick = editTags))
+                }
+                if (correctable) {
+                    add(BtSheetAction(label = editLabel, onClick = { onEdit?.invoke() }))
+                    add(
+                        BtSheetAction(
+                            label = deleteLabel,
+                            destructive = true,
+                            onClick = { onDelete?.invoke() },
+                        ),
+                    )
+                }
+            },
+            onDismiss = { menuOpen = false },
+        )
     }
 }
 
@@ -2152,7 +2046,7 @@ private fun PendingCashRowCard(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CashCorrectionSheet(
+internal fun CashCorrectionSheet(
     vm: CashViewModel,
     movement: CashMovementEntity,
     sources: List<CashSourceEntity>,

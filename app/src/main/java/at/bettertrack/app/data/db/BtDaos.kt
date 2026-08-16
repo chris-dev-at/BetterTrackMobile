@@ -143,6 +143,27 @@ interface CashDao {
     @Query("SELECT * FROM cash_movements WHERE portfolioId = :portfolioId ORDER BY executedAtMs DESC")
     fun observeMovements(portfolioId: String): Flow<List<CashMovementEntity>>
 
+    /**
+     * The cash legs booked BY one ledger transaction — the `buy` /
+     * `sell_proceeds` rows the server writes when a trade is paid from (or
+     * settled into) a wallet.
+     *
+     * This is how the app learns a transaction is cash-linked. The read model
+     * carries no such field — `transactionSchema` has no cash property, so
+     * *no* client can tell from the transaction alone — and until now the app
+     * only found out by submitting an edit and being refused with a 400. The
+     * link is discoverable from the other side of the join, which the app
+     * already caches, so the question is answerable locally and BEFORE the
+     * user presses save.
+     *
+     * Deliberately not filtered by kind here: the caller classifies (a `buy`
+     * leg means the trade was paid from cash, a `sell_proceeds` leg means the
+     * proceeds landed in one), and a row of any other kind pointing at a
+     * transaction is something this app should see rather than silently drop.
+     */
+    @Query("SELECT * FROM cash_movements WHERE transactionId = :transactionId ORDER BY executedAtMs ASC")
+    suspend fun movementsForTransaction(transactionId: String): List<CashMovementEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSources(sources: List<CashSourceEntity>)
 

@@ -81,6 +81,8 @@ import at.bettertrack.app.navigation.AppLockSetupRoute
 import at.bettertrack.app.navigation.AssetPageRoute
 import at.bettertrack.app.navigation.AuthorizedAppsRoute
 import at.bettertrack.app.navigation.BtTab
+import at.bettertrack.app.navigation.CashBudgetsRoute
+import at.bettertrack.app.navigation.CashLedgerRoute
 import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.CashRulesRoute
 import at.bettertrack.app.navigation.CashTagsRoute
@@ -103,6 +105,7 @@ import at.bettertrack.app.navigation.IdeaDetailRoute
 import at.bettertrack.app.navigation.MarketIntelRoute
 import at.bettertrack.app.navigation.NotificationsInboxRoute
 import at.bettertrack.app.navigation.PendingSyncRoute
+import at.bettertrack.app.navigation.PortfolioInsightsRoute
 import at.bettertrack.app.navigation.PortfolioSettingsRoute
 import at.bettertrack.app.navigation.PortfolioTaxRoute
 import at.bettertrack.app.navigation.SearchRoute
@@ -940,6 +943,11 @@ private fun BtTabContent(
                     onOpenPortfolioSettings = { portfolioId ->
                         navController.navigate(PortfolioSettingsRoute(portfolioId))
                     },
+                    // The overview's "More insights" row — allocation and its
+                    // future siblings live one page deep (owner batch 2026-08-16).
+                    onOpenInsights = { portfolioId ->
+                        navController.navigate(PortfolioInsightsRoute(portfolioId))
+                    },
                 )
             }
 
@@ -1472,6 +1480,35 @@ private fun BtSheetHost(
                     onOpenStandingOrders = {
                         navController.navigate(StandingOrdersRoute(route.portfolioId))
                     },
+                    // The decrowded overview's two subpage doors (owner batch
+                    // 2026-08-16). The ledger door carries the source filter so
+                    // the list opens on what the switcher was showing.
+                    onOpenLedger = { portfolioId, sourceId ->
+                        navController.navigate(CashLedgerRoute(portfolioId, sourceId))
+                    },
+                    onOpenBudgets = { portfolioId ->
+                        navController.navigate(CashBudgetsRoute(portfolioId))
+                    },
+                )
+            }
+        }
+        btSheet<CashLedgerRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<CashLedgerRoute>()
+                at.bettertrack.app.ui.cash.CashLedgerScreen(
+                    routePortfolioId = route.portfolioId,
+                    initialSourceId = route.sourceId,
+                    onBack = back,
+                    onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
+                )
+            }
+        }
+        btSheet<CashBudgetsRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<CashBudgetsRoute>()
+                at.bettertrack.app.ui.cash.CashBudgetsScreen(
+                    routePortfolioId = route.portfolioId,
+                    onBack = back,
                 )
             }
         }
@@ -1704,6 +1741,16 @@ private fun BtSheetHost(
                     onOpenFriendGroups = { navController.navigate(FriendGroupsRoute) },
                     // A deleted portfolio has no settings screen to return to.
                     onDeleted = back,
+                )
+            }
+        }
+
+        btSheet<PortfolioInsightsRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<PortfolioInsightsRoute>()
+                at.bettertrack.app.ui.portfolio.PortfolioInsightsScreen(
+                    portfolioId = route.portfolioId,
+                    onBack = back,
                 )
             }
         }

@@ -93,6 +93,24 @@ import kotlinx.serialization.Serializable
 )
 
 /**
+ * The cash ledger subpage (owner UI batch 2026-08-16): the movement stream
+ * moved OFF the cash overview onto its own page. [sourceId] carries the
+ * overview's source-switcher selection through, so the list opens already
+ * narrowed to what the user was looking at.
+ */
+@Serializable data class CashLedgerRoute(
+    val portfolioId: String? = null,
+    val sourceId: String? = null,
+)
+
+/**
+ * The budgets subpage (same batch): the full budget management block — month
+ * stepper, per-budget bars with edit/delete, creation — plus the month summary
+ * that shares its stepper. The overview keeps only a brief per-budget bar list.
+ */
+@Serializable data class CashBudgetsRoute(val portfolioId: String? = null)
+
+/**
  * V5 S2c cash-classification surfaces, reached from the cash screen's overflow.
  * Tags and rules are per USER, not per portfolio (a label means the same thing
  * in every ledger the account owns), so neither route carries a portfolio id.
@@ -225,6 +243,12 @@ import kotlinx.serialization.Serializable
 
 /** One portfolio's settings: name, sharing, taxes, group, archive/delete. */
 @Serializable data class PortfolioSettingsRoute(val portfolioId: String)
+
+/**
+ * One portfolio's insights subpage (owner UI batch 2026-08-16): the allocation
+ * section that left the overview, plus whatever insight modules come later.
+ */
+@Serializable data class PortfolioInsightsRoute(val portfolioId: String)
 
 /** One portfolio's tax override, rendered through the effective/override cascade. */
 @Serializable data class PortfolioTaxRoute(val portfolioId: String)

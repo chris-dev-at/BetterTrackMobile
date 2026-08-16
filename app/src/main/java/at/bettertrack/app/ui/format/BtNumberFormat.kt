@@ -200,6 +200,55 @@ internal fun btFormatQuantityCore(value: Double?, locale: Locale): String {
     return btNumberFormat(locale, NfShape.QUANTITY).format(bd)
 }
 
+/**
+ * Rule 3b — holding-ROW quantity: a glanceable magnitude, not a ledger figure
+ * (owner UI batch 2026-08-16: `0.0424512` → `0.042`, `11.66666667` → `11.6`).
+ *
+ * The rule, in one sentence: **a three-digit precision budget, spent on the
+ * integer part first, truncated (never rounded up), trailing zeros dropped —
+ * except that the full integer part always shows, and a sub-`0.001` fraction
+ * keeps its first two significant digits instead of collapsing to zero.**
+ *
+ *  · `11.66666667` → integer takes 2 of the 3 digits → 1 decimal → `11.6`
+ *  · `0.0424512`   → integer takes 0 → 3 decimals → `0.042`
+ *  · `4.0`         → `4` (trailing zeros dropped)
+ *  · `123.456`     → `123` (budget exhausted by the integer part)
+ *  · `1234.5`      → `1234` (the integer part is never cut)
+ *  · `0.00012345`  → `0.00012` (dust keeps two significant digits, capped at
+ *    rule 3's 8-decimal ceiling)
+ *
+ * TRUNCATED rather than rounded because a rounded-up quantity claims the user
+ * owns more than they do — `0.0426` shown as `0.043` is a small lie in the
+ * direction small lies are worst. The full figure stays one tap away on the
+ * holding's detail screen (rule 3).
+ *
+ * Like rule 3, deliberately NOT masked in discreet mode: a bare quantity is not
+ * money and reveals nothing without the price beside it, which IS masked.
+ */
+internal fun btFormatHoldingQuantityCore(value: Double?, locale: Locale): String {
+    if (!isFinite(value)) return BT_EM_DASH
+    val bd = BigDecimal.valueOf(withoutNegativeZero(value!!))
+    val abs = bd.abs()
+    val intDigits = if (abs < BigDecimal.ONE) 0 else abs.toBigInteger().toString().length
+    val scale = (HOLDING_QTY_PRECISION - intDigits).coerceAtLeast(0)
+    var cut = bd.setScale(scale, RoundingMode.DOWN)
+    if (cut.signum() == 0 && bd.signum() != 0) {
+        // Sub-0.001 dust: the first three decimals are all zero. Extend to the
+        // first two significant digits so a real position never renders as "0".
+        val stripped = abs.stripTrailingZeros()
+        val leadingZeros = stripped.scale() - stripped.precision()
+        val dustScale = (leadingZeros + HOLDING_QTY_DUST_SIGNIFICANT).coerceAtMost(8)
+        cut = bd.setScale(dustScale, RoundingMode.DOWN)
+    }
+    return btNumberFormat(locale, NfShape.QUANTITY).format(cut.stripTrailingZeros())
+}
+
+/** Rule 3b's total digit budget — see [btFormatHoldingQuantityCore]. */
+private const val HOLDING_QTY_PRECISION = 3
+
+/** How many significant digits a sub-0.001 quantity keeps. */
+private const val HOLDING_QTY_DUST_SIGNIFICANT = 2
+
 // ── Rule 7: compact magnitudes (fundamentals, board #76 arc f) ──────────────
 //
 // Corporate statement figures are 6 to 12 digits long. Rule 1 renders Apple's

@@ -24,6 +24,30 @@ enum class OpType(val wire: String) {
     /** Atomic source-to-source transfer (real endpoint since Step 9). */
     CASH_TRANSFER("cash_transfer"),
     CUSTOM_ASSET_VALUE_POINT("custom_asset_value_point"),
+
+    /**
+     * Re-book a CASH-LINKED transaction (owner order 2026-08-16: *"i want this
+     * to just work"*).
+     *
+     * The one compound op in the queue, and it is compound because the platform
+     * leaves no alternative: a trade coupled to a wallet cannot have its
+     * economics PATCHed (`TRANSACTION_CASH_LINKED`), and the update contract has
+     * no cash fields to preserve the coupling with. The server's own correction
+     * path deletes the row and re-creates it with the intent re-applied; this op
+     * is that pair, made durable.
+     *
+     * Durability is the whole point of it being an OP rather than two calls in a
+     * view model. The two legs are not atomic on the server and cannot be made
+     * so, so the failure that matters is a crash (or a kill, or a dead network)
+     * between them, which would leave the user's transaction simply DELETED.
+     * Enqueuing writes the complete re-create payload to disk BEFORE the delete
+     * is attempted, so that window is recoverable by construction: the op
+     * survives, the drain resumes, and the transaction comes back.
+     *
+     * Each leg carries its OWN derived idempotency key ([rebookLegKey]) so the
+     * exactly-once guarantee applies to them separately.
+     */
+    TX_REBOOK("tx_rebook"),
     ;
 
     companion object {
@@ -126,6 +150,15 @@ data class TxOpPayload(
     val payFromCash: Boolean? = null,
     val addProceedsToCash: Boolean? = null,
     /**
+     * WHICH wallet the coupled leg uses. Only the re-book path sets it, and it
+     * has to: a re-created trade with no wallet named lands on Main, so a
+     * position funded from a savings account would quietly change wallets as a
+     * side effect of the user fixing its price. The ordinary create flow leaves
+     * it null and takes the server's Main default, which is the behaviour it
+     * has always had.
+     */
+    val cashSourceId: String? = null,
+    /**
      * Backdated pay-from-cash settlement (platform #378). On a `payFromCash` BUY
      * whose cash was short AS OF the (backdated) `executedAt`, the server keeps the
      * stock trade on its past date but dates the linked cash-withdrawal leg TODAY —
@@ -158,6 +191,50 @@ data class TxOpPayload(
     /** Native currency code (e.g. "USD") for pending-row / edit price labels. */
     val assetCurrency: String? = null,
 )
+
+/**
+ * The re-book of a cash-linked transaction: which row to remove, and the exact
+ * trade to put in its place.
+ *
+ * [replacement] is a full [TxOpPayload] rather than a delta on purpose. The
+ * second leg is a CREATE, so it needs every field anyway, and a payload that
+ * described only the changes would have to re-read the original transaction at
+ * drain time — from a row this op has by then deleted.
+ *
+ * @param txId the synced transaction being replaced. After a successful drain
+ *   this id no longer exists: the re-created trade is a new row with a new id,
+ *   the same way the server's own correction path works. Anything holding the
+ *   old id must re-read rather than assume.
+ */
+@Serializable
+data class TxRebookOpPayload(
+    val txId: String,
+    val replacement: TxOpPayload,
+)
+
+/**
+ * The idempotency key for one LEG of a re-book.
+ *
+ * The op's own `clientId` cannot be sent twice. It is the server's
+ * `Idempotency-Key`, and the server stores key → response: reusing it for the
+ * create would replay the DELETE's stored 2xx and the trade would never come
+ * back — a silent data-loss bug that only appears on a retry, which is exactly
+ * when nobody is watching.
+ *
+ * So each leg gets its own key, DERIVED from the op's: name-based (RFC 4122
+ * §4.3 style, via [java.util.UUID.nameUUIDFromBytes]) so it is a syntactically
+ * valid UUID — the server rejects anything else — and, crucially,
+ * DETERMINISTIC. A replay of this op after a crash re-derives the same two keys
+ * and therefore replays each leg exactly once. A random key per attempt would
+ * make every retry a fresh mutation, which is how you get two of somebody's
+ * trade.
+ */
+fun rebookLegKey(clientId: String, leg: String): String =
+    java.util.UUID.nameUUIDFromBytes("$clientId:$leg".toByteArray(Charsets.UTF_8)).toString()
+
+/** The two legs' names — one place, so the two call sites cannot drift apart. */
+const val REBOOK_LEG_DELETE = "delete"
+const val REBOOK_LEG_CREATE = "create"
 
 /** Cash deposit / withdrawal (§6.3). */
 @Serializable

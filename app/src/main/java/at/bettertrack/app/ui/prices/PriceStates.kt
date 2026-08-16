@@ -65,11 +65,18 @@ data class PriceCoverage(
  * number on the way to Room. It is therefore the one signal that survives the
  * whole projection intact, which is why the coverage is derived from it rather
  * than from anything about the price cache.
+ *
+ * Sold-out positions (`quantity == 0.0`) are excluded BEFORE counting (owner
+ * UI batch 2026-08-16): a closed position is worth zero whatever its price, so
+ * it can neither be covered nor uncovered — counting it made the "excludes N
+ * holdings with no price" caveat warn about money that is not there. The same
+ * exact-zero rule as `visibleHoldings`; dust positions still count.
  */
 fun priceCoverage(holdings: List<HoldingEntity>): PriceCoverage {
-    if (holdings.isEmpty()) return PriceCoverage.EMPTY
-    val priced = holdings.count { it.marketValueEur != null }
-    return PriceCoverage(priced = priced, unpriced = holdings.size - priced)
+    val open = holdings.filter { it.quantity != 0.0 }
+    if (open.isEmpty()) return PriceCoverage.EMPTY
+    val priced = open.count { it.marketValueEur != null }
+    return PriceCoverage(priced = priced, unpriced = open.size - priced)
 }
 
 // ── What the hero may claim ──────────────────────────────────────────────────

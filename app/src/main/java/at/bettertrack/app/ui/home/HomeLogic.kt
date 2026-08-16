@@ -371,7 +371,10 @@ fun homeUnpriced(
     previewLimit: Int = HOME_UNPRICED_PREVIEW,
 ): HomeUnpriced? {
     if (!manualEntryAvailable(mode)) return null
-    val unpriced = holdings.filter { it.marketValueEur == null }
+    // Sold-out positions are excluded like everywhere else (owner UI batch
+    // 2026-08-16): a closed position needs no price, so naming it here would
+    // ask the user to fix a number that changes nothing.
+    val unpriced = holdings.filter { it.marketValueEur == null && it.quantity != 0.0 }
     if (unpriced.isEmpty()) return null
     return HomeUnpriced(
         total = unpriced.size,

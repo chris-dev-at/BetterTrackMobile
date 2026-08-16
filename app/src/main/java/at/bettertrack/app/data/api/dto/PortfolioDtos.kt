@@ -190,6 +190,22 @@ data class CreateTransactionRequest(
     val payFromCash: Boolean? = null,
     val addProceedsToCash: Boolean? = null,
     /**
+     * WHICH wallet the coupled leg uses (`transactionInputSchema`: uuid,
+     * optional, meaningful only together with one of the two flags above; the
+     * server defaults to the Main source when it is omitted).
+     *
+     * Added 2026-08-16 for the cash-linked EDIT path. A re-book has to restore
+     * the transaction's original wallet, and without this field every re-booked
+     * trade would silently land on Main — so a position funded from "Savings
+     * account" would quietly move its money to a different wallet as a side
+     * effect of the user correcting a typo in the price. That is a worse defect
+     * than the one the edit path exists to fix.
+     *
+     * Left null by the ordinary create flow, which has no wallet picker and is
+     * happy with the server's Main default.
+     */
+    val cashSourceId: String? = null,
+    /**
      * Backdated pay-from-cash settlement (contract #378): keep the stock trade on
      * its past [executedAt] but date the linked cash-withdrawal leg TODAY when the
      * Main wallet was short as of that date. Server ignores it when cash sufficed
