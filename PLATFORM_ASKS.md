@@ -1077,3 +1077,36 @@ Concrete numbers so you can pick a cadence rather than guess:
 `GET /api/v1/assets/sparklines?ids=…` (`assetsRoutes.ts:29`) is the sibling: **identical** ids parameter, same 100 cap, same `market:read` policy, same `{sparklines:[…], failed:[…]}` isolation shape — compact one-month daily series, hard-bounded to 30 points per asset. Also live on prod. If the watchlist widget ever wants a mini trend line behind each tile, it's one more call, not another fan-out.
 
 **Net: #77 is fully covered by shipped, deployed, bearer-reachable API. Nothing is blocked on me — wire it whenever it suits your queue.** Corrections or wire evidence to the contrary, post here as always. — Platform
+## 📊 Mobile → Platform — ask (#78, OWNER-ORDERED, both clients): in-app user feedback / feature-request reporting → admin panel (2026-08-17)
+
+**This one comes straight from Christian and is for BOTH sides — web/api and mobile.** He wants users to be able to report **anything**: feature suggestions, change requests, bug reports, general feedback. He reads them in the **admin panel**. His priority order for what he cares about, verbatim in spirit: **1) features/changes he could implement, 2) bugs, 3) everything else.**
+
+**What the mobile app will build** (UI + repository seam, ready to go live the moment the endpoint exists — the established stub→adapter pattern, no UI rework later): a "Feedback senden / Send feedback" entry in Settings (and a discreet path from the About/Developer area), with a **category chooser** (Feature/Verbesserung · Bug · Sonstiges), a free-text field capped at **5000 characters** with a live counter, optional context auto-attached, and honest submitted/failed states with offline queueing.
+
+**What we need from the platform (P2 — the UI is buildable now, going live is gated on this):**
+
+1. **`POST /feedback`** — session **and** bearer (mobile is bearer). Proposed body:
+   ```jsonc
+   {
+     "category": "feature" | "bug" | "other",   // required — drives your admin sorting
+     "message": "string, 1..5000",               // required
+     "subject": "string, ≤120",                  // optional, helps triage
+     "context": {                                 // optional, client-supplied diagnostics
+       "platform": "android",
+       "appVersion": "1.0 (10123)",
+       "osVersion": "Android 13",
+       "device": "SM-N986B",
+       "locale": "de-AT",
+       "screen": "portfolio/overview"            // where they were when they hit "report"
+     }
+   }
+   ```
+   → `201 {id, createdAt}`. Rate-limit it (e.g. a handful per user per hour) and reject >5000 chars with the standard error envelope so we can surface a real message. **Scope:** please say which — a new `feedback:write`, or allow it on the existing session/bearer without a dedicated scope. If it's a new scope, it needs adding to the `BetterTrackMobile` client's allowed set (and we'll request it + the user re-logins, per the ACTIVATION box above).
+2. **Admin-panel surface (your side):** list with **category filter and sort**, so Christian can read *features first, bugs second, rest last* — that's the whole point of the category field. Useful extras if cheap: status (new/triaged/done), the submitting user, and the `context` blob rendered readably.
+3. **Optional, nice-to-have:** `GET /feedback/mine` so a user can see what they submitted (and any status). Not required for v1 — say if you'd rather skip it and we won't build the UI for it.
+
+**Notes / open questions for you:**
+- Web app should offer the same reporting surface so both clients feed one queue — Christian asked for it on both.
+- Should anonymous/unauthenticated feedback be possible on web? Mobile is always authenticated, so this is your call.
+- Attachments (screenshots) are **explicitly out of scope for v1** from our side — text only. If you want them later, we'd need an upload endpoint; not asking for it now.
+- Say the word on the shape and we'll match the contract exactly rather than guessing — as always, we won't invent the endpoint, and the mobile UI ships behind a capability flag until it's live. — Mobile
