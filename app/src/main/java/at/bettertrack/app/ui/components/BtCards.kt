@@ -48,17 +48,47 @@ import at.bettertrack.app.ui.theme.BtTheme
  * `goldSurfaceStrong` edge in BOTH modes, because that stroke is not separating
  * the card from the page — it is saying *this one is chosen*, which tone alone
  * has never said here and which must survive in dark.
+ *
+ * ## `quiet` — a card that stands down (owner, 2026-08-17)
+ *
+ * *"die holdings einfach weniger prominentere hintergrund farbe. **nicht gleich
+ * die hintergrund farbe entfernen. sondern nur leichter machen.**"*
+ *
+ * That sentence is the whole specification, and the emphasis is his. A first
+ * pass answered "make the holdings less important" by deleting the container
+ * outright — transparent fill, no hairline, a plain list on the page — and he
+ * rejected it before it shipped. A `quiet` card is therefore still a **card**:
+ * it keeps its fill, its [BtColors.groupBorder] hairline, its shape, its inset,
+ * its press feedback and its touch target. The only thing that changes is WHICH
+ * fill, [BtColors.surfaceQuiet] instead of [BtColors.surface] — roughly half a
+ * normal card's lift off the page in dark, and identical to a normal card in
+ * light, where there is no tonal room to spend and the hairline was always the
+ * separator.
+ *
+ * Rank is bought here and only here. Sizes are what the owner has already
+ * corrected twice, so a quiet card is deliberately not a small card: a `quiet`
+ * row and a normal row set the same words at the same size, and only the
+ * surface under them ranks the two.
+ *
+ * `selected` still wins — a chosen card must look chosen even in a quiet list.
  */
 @Composable
 fun BtCard(
     modifier: Modifier = Modifier,
     shape: Shape = BtShapes.card,
     selected: Boolean = false,
+    quiet: Boolean = false,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val bt = BtTheme.colors
-    val container = if (selected) bt.goldSurface else bt.surface
+    val container = when {
+        selected -> bt.goldSurface
+        quiet -> bt.surfaceQuiet
+        else -> bt.surface
+    }
+    // Note there is no `quiet` arm: a quiet card keeps the hairline. It is the
+    // fill that ranks the card, and in light it is the ONLY separator there is.
     val border = BorderStroke(1.dp, if (selected) bt.goldSurfaceStrong else bt.groupBorder)
     if (onClick != null) {
         val interaction = remember { MutableInteractionSource() }

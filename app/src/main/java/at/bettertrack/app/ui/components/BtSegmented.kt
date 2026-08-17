@@ -65,6 +65,19 @@ import at.bettertrack.app.ui.theme.BtTheme
  * as two nested objects, and the wash already carries the state — this is also
  * why the track, not the segment, owns the edge.
  *
+ * ## The track is not optional (owner, 2026-08-17)
+ *
+ * A pass at making the portfolio's holdings section recede dropped this track on
+ * the holdings sort toggle — no fill, no hairline, just the gold pill floating in
+ * the header line. The owner then specified the method himself, and it was not
+ * that: *"die holdings einfach weniger prominentere hintergrund farbe. nicht
+ * gleich die hintergrund farbe entfernen. sondern nur leichter machen."*
+ * Ranking on this page is done by **weakening a fill**
+ * ([at.bettertrack.app.ui.theme.BtColors.surfaceQuiet]), never by deleting
+ * chrome and never by shrinking type. So there is no `quiet` variant here: a
+ * segmented control that has lost its groove has lost the container that is the
+ * entire argument for the component, and the page had a cheaper lever available.
+ *
  * ## Sizing
  *
  * Segments size to their own content by default. That is right for word labels

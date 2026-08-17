@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.theme
 
+import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -317,6 +318,54 @@ class BtThemeDisciplineTest {
     }
 
     // ── True black ──────────────────────────────────────────────────────────
+
+    /**
+     * `surfaceQuiet` is a demoted CARD, and the whole reason it is not simply
+     * `surfaceLow` is what true black does to a well.
+     *
+     * `asTrueBlack()` sinks `surfaceLow` to `#050608` so a recess still reads as
+     * a hole on an AMOLED page. Correct for a well; fatal for a card, which
+     * would sit ~1.6 L* above pure black and disappear. So this pins the two
+     * facts the token exists for: it is strictly between the page and a full
+     * card in dark, and true black leaves it alone.
+     */
+    @Test
+    fun `a quiet card sits between the page and a full card, and true black lets it be`() {
+        fun lstar(c: Color): Double {
+            fun ch(v: Float) = if (v <= 0.04045f) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+            val y = ch(c.red) * 0.2126 + ch(c.green) * 0.7152 + ch(c.blue) * 0.0722
+            return if (y > 0.008856) 116 * Math.cbrt(y) - 16 else 903.3 * y
+        }
+
+        val dark = BtDarkColors
+        assertTrue(
+            "a quiet card must be lighter than the dark page it sits on",
+            lstar(dark.surfaceQuiet) > lstar(dark.bg),
+        )
+        assertTrue(
+            "a quiet card must be DARKER than a full card, or it is not quiet",
+            lstar(dark.surfaceQuiet) < lstar(dark.surface),
+        )
+
+        // The one that actually shipped to the owner's phone.
+        val tb = BtDarkColors.asTrueBlack()
+        assertEquals(
+            "true black must NOT sink a quiet card the way it sinks a well — that is " +
+                "the entire reason this token is not `surfaceLow`",
+            BtDarkColors.surfaceQuiet,
+            tb.surfaceQuiet,
+        )
+        assertTrue(
+            "on pure black a quiet card must still read as a card: it is at " +
+                "%.1f L*, and a NORMAL card clears a NORMAL dark page by 5.9 L*"
+                .format(lstar(tb.surfaceQuiet)),
+            lstar(tb.surfaceQuiet) - lstar(tb.bg) >= 5.0,
+        )
+
+        // Light has no room and must not invent any: page, quiet card and card
+        // are one white, and the hairline is what separates them.
+        assertEquals(BtLightColors.surface, BtLightColors.surfaceQuiet)
+    }
 
     @Test
     fun `true black overrides exactly two neutrals and nothing else`() {

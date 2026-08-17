@@ -65,6 +65,13 @@ class BtContrastTest {
     private fun BtColors.opaqueSurfaces(): List<Pair<String, Color>> = listOf(
         "bg" to bg,
         "surfaceLow" to surfaceLow,
+        // A demoted card is still a card people read money off, so it is held to
+        // the same floor as every other substrate rather than excused for being
+        // quiet. It is darker than `surface` in dark and identical to it in
+        // light, so it can only ever be easier than the card it weakens — the
+        // point of listing it is that a future retune cannot change that
+        // silently.
+        "surfaceQuiet" to surfaceQuiet,
         "surface" to surface,
         "surfaceHigh" to surfaceHigh,
         "surfaceHighest" to surfaceHighest,

@@ -39,9 +39,11 @@ fun visibleHoldings(holdings: List<HoldingEntity>): List<HoldingEntity> =
  * The name answers *what is this*; the symbol answers *which listing exactly* —
  * two Bayers on two exchanges are one name and two tickers, and the row was
  * showing only the ambiguous half. It is an annotation, never a second title:
- * the row styles it muted, lighter and a size down, and the NAME is what
- * ellipsizes when the pair does not fit, because a truncated name is still
- * recognisable while a truncated ticker identifies nothing.
+ * the row prints it at the NAME's size (owner, 2026-08-17) and keeps it
+ * secondary by ink and weight alone — muted and Normal against the name's
+ * SemiBold — and the NAME is what ellipsizes when the pair does not fit,
+ * because a truncated name is still recognisable while a truncated ticker
+ * identifies nothing.
  *
  * Returns null when:
  *  - there is no symbol at all (a custom asset the user typed a name for);

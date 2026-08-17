@@ -53,6 +53,20 @@ class RowAnatomyDisciplineTest {
      * `indexOf` would read the rail's mention as the row's first slot.
      */
     private fun columns(source: String, function: String): String {
+        val body = bodyOf(source, function)
+        val left = body.indexOf("Column(Modifier.weight(1f))")
+        require(left >= 0) { "$function no longer opens with a weighted left column" }
+        return body.substring(left)
+    }
+
+    /**
+     * [function]'s whole body, by brace matching from its signature.
+     *
+     * [columns] trims this to the content stacks, which is right for the
+     * arrangement assertions and wrong for the chrome ones: the container a row
+     * is wrapped in is the first thing [columns] throws away.
+     */
+    private fun bodyOf(source: String, function: String): String {
         val start = source.indexOf(function)
         require(start >= 0) { "$function not found — was it renamed?" }
         val open = source.indexOf('{', start)
@@ -60,15 +74,32 @@ class RowAnatomyDisciplineTest {
         for (i in open until source.length) {
             when (source[i]) {
                 '{' -> depth++
-                '}' -> if (--depth == 0) {
-                    val body = source.substring(open, i + 1)
-                    val left = body.indexOf("Column(Modifier.weight(1f))")
-                    require(left >= 0) { "$function no longer opens with a weighted left column" }
-                    return body.substring(left)
-                }
+                '}' -> if (--depth == 0) return source.substring(open, i + 1)
             }
         }
         error("unbalanced braces after $function")
+    }
+
+    /**
+     * The argument list of the first [call] in [body], parens included.
+     *
+     * Distinct from [restOfCall], which starts *inside* a call at one of its
+     * arguments: this one starts at the call itself, so [call] is expected to
+     * end in `(` and the nested `fillMaxWidth()`-style parens are matched rather
+     * than tripped over.
+     */
+    private fun argsOf(body: String, call: String): String {
+        val at = body.indexOf(call)
+        require(at >= 0) { "$call not found — was it renamed?" }
+        val open = at + call.length - 1
+        var depth = 0
+        for (i in open until body.length) {
+            when (body[i]) {
+                '(' -> depth++
+                ')' -> if (--depth == 0) return body.substring(open, i + 1)
+            }
+        }
+        error("unbalanced parens in $call")
     }
 
     /**
@@ -108,10 +139,9 @@ class RowAnatomyDisciplineTest {
     private fun portfolioRow() =
         columns(source("at/bettertrack/app/ui/home/HomeScreen.kt"), "private fun HomePortfolioRow(")
 
-    private fun holdingRow() = columns(
-        source("at/bettertrack/app/ui/portfolio/PortfolioOverviewScreen.kt"),
-        "private fun HoldingRow(",
-    )
+    private fun holdingRow() = columns(source(OVERVIEW), "private fun HoldingRow(")
+
+    private fun holdingRowBody() = bodyOf(source(OVERVIEW), "private fun HoldingRow(")
 
     @Test
     fun `the portfolio row reads name, percent, value, euro`() {
@@ -197,16 +227,167 @@ class RowAnatomyDisciplineTest {
     }
 
     /**
+     * The ticker annotation is the NAME'S SIZE, and stays secondary on the two
+     * axes that cost no size (owner, 2026-08-17: *"on the holdings in the
+     * portfolio also make the text for the short names (NVDA or BAYN.DE) be the
+     * same size as the text next to it"*).
+     *
+     * The token is compared to whatever the NAME uses rather than pinned to the
+     * literal `titleSmall`, because "the same size as the text next to it" is a
+     * relationship, not a value: if the name's type is ever retuned again, this
+     * fails unless the annotation is retuned with it — which is the whole
+     * instruction.
+     */
+    @Test
+    fun `the holding row's ticker matches the name's size and stays muted and lighter`() {
+        val row = holdingRow()
+        val name = restOfCall(row, "text = holding.assetName,")
+        val ticker = restOfCall(row, "text = ticker,")
+        val token = Regex("""MaterialTheme\.typography\.(\w+)""")
+
+        val nameToken = token.find(name)?.groupValues?.get(1)
+        assertTrue("the holding name no longer names a Material type token: $name", nameToken != null)
+        val tickerToken = token.find(ticker)?.groupValues?.get(1)
+        assertTrue(
+            "the ticker must wear the NAME's type token ($nameToken), not $tickerToken — " +
+                "\"the same size as the text next to it\"",
+            tickerToken == nameToken,
+        )
+        // Same size ⇒ colour and weight are the ONLY things left to make it
+        // read as an annotation. Losing either turns it into a second title.
+        assertTrue("the ticker lost its muted ink: $ticker", ticker.contains("bt.textMuted"))
+        assertTrue(
+            "the ticker must stay lighter than the name's SemiBold: $ticker",
+            ticker.contains("FontWeight.Normal"),
+        )
+        assertTrue("the name lost its primary ink: $name", name.contains("bt.textPrimary"))
+    }
+
+    /**
+     * …and the pair still truncates the right way round now that the ticker is
+     * wider: the NAME takes the leftover width and ellipsizes, the ticker is
+     * unweighted so it claims its intrinsic width first and stays whole. A
+     * truncated name is still recognisable; a truncated ticker identifies
+     * nothing.
+     */
+    @Test
+    fun `the holding row ellipsizes the name and never the ticker`() {
+        val row = holdingRow()
+        val name = restOfCall(row, "text = holding.assetName,")
+        val ticker = restOfCall(row, "text = ticker,")
+
+        assertTrue("the name must ellipsize: $name", name.contains("TextOverflow.Ellipsis"))
+        assertTrue(
+            "the name must take the LEFTOVER width (weight(1f, fill = false)): $name",
+            name.contains("weight(1f, fill = false)"),
+        )
+        assertTrue(
+            "the ticker must stay unweighted so it is measured at its intrinsic width: $ticker",
+            !ticker.contains(".weight("),
+        )
+        assertTrue(
+            "the ticker must not ellipsize — a cut ticker identifies nothing: $ticker",
+            !ticker.contains("TextOverflow.Ellipsis"),
+        )
+    }
+
+    /**
      * The quantity left the holdings row on the owner's instruction (*"remove
      * the (23.12 NVIDIA)"*). The RULE that formatted it is deliberately kept —
      * he has specified it twice — so this pins that the row does not quietly
      * grow it back without a new instruction.
      */
+    /**
+     * The overview's rank, and the two moves that buy it (owner, 2026-08-17):
+     *
+     * *"cash und transaktionen können ja mehr weißlich statt grau werden und die
+     * holdings einfach weniger prominentere hintergrund farbe. **nicht gleich die
+     * hintergrund farbe entfernen. sondern nur leichter machen.**"*
+     *
+     * Both halves are pinned here because each one alone is a no-op: a weaker
+     * holdings fill with grey quick-link labels leaves nothing leading, and
+     * brighter labels over an equally loud list is the layout he started from.
+     *
+     * The failure modes this guards are not hypothetical — they are the three
+     * corrections he has already issued on this row. It was made **smaller**
+     * (twice: "why did the holdings text increase insanely … just leave it like
+     * it was in v0.120", then the tightening pass), and it was made
+     * **card-less** (transparent fill, no hairline — the reading of "less
+     * important" he explicitly headed off with *"nicht gleich die hintergrund
+     * farbe entfernen"*). So this asserts the fill is WEAKENED and, separately,
+     * that it still EXISTS; and it asserts no size anywhere, because size is
+     * never the lever on this page.
+     */
+    @Test
+    fun `the holdings row stands down by fill, not by deletion`() {
+        val card = argsOf(holdingRowBody(), "BtCard(")
+        assertTrue(
+            "the holdings row must stay `quiet = true` — the weakened fill is the " +
+                "only thing letting the quick links out-rank a list this long: $card",
+            card.contains("quiet = true"),
+        )
+    }
+
+    /**
+     * …and `quiet` has to keep meaning *weaker*, not *gone*. Asserted at the
+     * component, because that is where the deletion was and where a future
+     * "simplify" pass would put it back.
+     */
+    @Test
+    fun `a quiet card is still a card`() {
+        val card = bodyOf(source("at/bettertrack/app/ui/components/BtCards.kt"), "fun BtCard(")
+        assertTrue(
+            "a quiet card must be painted `surfaceQuiet` — a weaker fill, not no fill. " +
+                "The owner rejected the transparent version: \"nicht gleich die " +
+                "hintergrund farbe entfernen. sondern nur leichter machen.\"",
+            card.contains("quiet -> bt.surfaceQuiet"),
+        )
+        assertTrue(
+            "a quiet card must keep its hairline — in light it is the ONLY separator " +
+                "there is, because page and card are both #FFFFFF",
+            !card.contains("quiet -> null") && !card.contains("Color.Transparent"),
+        )
+    }
+
+    /**
+     * The louder half. The chip's own chrome is deliberately NOT asserted beyond
+     * existing: an earlier pass grew this chip and he reversed it, so the licence
+     * here is exactly one property — the label's ink.
+     */
+    @Test
+    fun `the quick-link chips lead with a near-white label on the card they kept`() {
+        val chip = bodyOf(source(OVERVIEW), "private fun QuickStatChip(")
+        val surface = argsOf(chip, "Surface(")
+        assertTrue(
+            "the quick-link chip lost its filled surface: $surface",
+            surface.contains("color = bt.surface"),
+        )
+        assertTrue(
+            "the quick-link chip lost its hairline: $surface",
+            surface.contains("border = BorderStroke(1.dp, bt.border)"),
+        )
+        assertTrue(
+            "the quick-link chip must not stand down too — then nothing out-ranks " +
+                "anything and the note is unanswered: $surface",
+            !surface.contains("quiet"),
+        )
+        val label = restOfCall(chip, "text = label,")
+        assertTrue(
+            "the quick-link label must be near-white, not grey — \"cash und " +
+                "transaktionen können ja mehr weißlich statt grau werden\": $label",
+            label.contains("color = bt.textPrimary"),
+        )
+    }
+
     @Test
     fun `the holding row carries no quantity`() {
         val row = holdingRow()
         listOf("formatHoldingQuantity(", "formatHoldingSubline(", "holding.quantity").forEach { gone ->
             assertTrue("the holding row grew `$gone` back", !row.contains(gone))
         }
+    }
+
+    private companion object {
+        const val OVERVIEW = "at/bettertrack/app/ui/portfolio/PortfolioOverviewScreen.kt"
     }
 }

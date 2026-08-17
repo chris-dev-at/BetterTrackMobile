@@ -836,6 +836,12 @@ private fun OverviewContent(
         item(key = "holdings-header", contentType = "section-header") {
             Column(inset.padding(top = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Deliberately NOT quietened. A pass at demoting this section
+                    // shrank this header to `titleSmall`/`textSecondary`; the
+                    // owner then specified the method (2026-08-17) and it was
+                    // "weaken the holdings' background colour", not "shrink the
+                    // header". The whole demotion is spent on [HoldingRow]'s
+                    // surface, so nothing here has to move.
                     Text(
                         text = stringResource(R.string.bt_overview_holdings_section),
                         style = MaterialTheme.typography.titleMedium,
@@ -1513,6 +1519,14 @@ private fun ChartModeLabel(mode: BtChartMode) {
  * A chip with no number (Transactions) is still a chip rather than a plain link:
  * the pair reads as one control group, and making them different shapes would
  * say they lead somewhere different in kind, which they do not.
+ *
+ * ## Deliberately untouched (owner, 2026-08-17)
+ *
+ * The first reading of *"make sure that the quick links … get more attention then
+ * the holdings"* was to grow this chip. He corrected it: *"my idea was to make the
+ * holdings less important and keep the 2 quick links as it is."* So the pair's
+ * rank is bought entirely by [HoldingRow] and the holdings header standing DOWN —
+ * nothing here moved. Do not "restore" a louder chip.
  */
 @Composable
 private fun QuickStatChip(
@@ -1555,7 +1569,18 @@ private fun QuickStatChip(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = bt.textMuted,
+                    // The louder half of the page's new ranking, and the owner's
+                    // own words for it: *"cash und transaktionen können ja mehr
+                    // weißlich statt grau werden"*. `textMuted` is what made
+                    // "Bargeld" and "Transaktionen" read grey; these two are the
+                    // page's only quick links, and a link the eye has to hunt for
+                    // is not a quick one.
+                    //
+                    // ONLY the word moves. The chip's geometry, surface, hairline,
+                    // icon tint and the cash figure below are all untouched — an
+                    // earlier pass grew this chip and he reversed it, so brightness
+                    // is the entire licence here.
+                    color = bt.textPrimary,
                 )
                 if (value != null) {
                     MoneyText(value = value, style = BtTheme.type.moneySmall)
@@ -1660,8 +1685,27 @@ private fun SecondaryRow(
  * ## …and the name now carries its ticker
  *
  * *"add the short (BAYN.DE for Bayer for example) to the end of the name … like
- * grayish and thin"*. See [holdingTicker] for when it is suppressed and why the
- * NAME is the half that ellipsizes.
+ * grayish and thin"*, and then *"make the text for the short names (NVDA or
+ * BAYN.DE) be the same size as the text next to it"* — so "grayish and thin"
+ * turned out to mean grayish and thin, not small: the annotation carries the
+ * name's own `titleSmall`, and only colour and weight separate them. See
+ * [holdingTicker] for when it is suppressed and why the NAME is the half that
+ * ellipsizes.
+ *
+ * ## …and the row stands down so the quick links can be read first
+ *
+ * *"cash und transaktionen können ja mehr weißlich statt grau werden und die
+ * holdings einfach weniger prominentere hintergrund farbe. nicht gleich die
+ * hintergrund farbe entfernen. sondern nur leichter machen."* (owner,
+ * 2026-08-17.)
+ *
+ * The diagnosis behind it is arithmetic. This row and [QuickStatChip] were both
+ * painted `surface` — the same `#161B22` — so on his true-black page a list of
+ * ten cards and a pair of two sat at an identical 9.4 L\* off the ground, and
+ * the list won on sheer count. Two moves, both contrast, neither one a size:
+ * the row drops to `quiet` (`surfaceQuiet`, ~6.1 L\*) and the chips' labels go
+ * from `textMuted` to `textPrimary`. Nothing here is deleted and nothing is
+ * shrunk — he has now corrected a shrink twice and a deletion once.
  */
 @Composable
 private fun HoldingRow(
@@ -1671,7 +1715,10 @@ private fun HoldingRow(
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    BtCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+    // `quiet` = the same card on a weaker fill (`surfaceQuiet`). Not a smaller
+    // card, not a card-less row — see [BtCard]'s KDoc and the section below.
+    // Everything else about this row is v0.120's, untouched.
+    BtCard(modifier = Modifier.fillMaxWidth(), quiet = true, onClick = onClick) {
         // The rail states this holding's verdict at a glance; the P/L text below
         // states it precisely. Colour is never the only carrier (§4.4).
         BtRailedRow(rail = rangeRail(holding.unrealizedPnlPct ?: holding.unrealizedPnlEur)) {
@@ -1699,11 +1746,17 @@ private fun HoldingRow(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 text = ticker,
-                                // An annotation, three ways at once: a size
-                                // down, the muted ink, and Normal weight
-                                // against the name's SemiBold. Any one of the
-                                // three alone still reads as a second title.
-                                style = MaterialTheme.typography.labelSmall.copy(
+                                // The NAME'S OWN TYPE — same size, same
+                                // line-height — so the two halves of the line
+                                // read as one label. Owner, 2026-08-17: *"make
+                                // the text for the short names … be the same
+                                // size as the text next to it"*. It stays the
+                                // secondary half on the two axes that cost no
+                                // size: the muted ink and Normal weight against
+                                // the name's SemiBold. Equal line-heights also
+                                // make the row's Bottom alignment an exact
+                                // baseline match.
+                                style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Normal,
                                     fontFeatureSettings = FONT_FEATURE_TABULAR,
                                 ),

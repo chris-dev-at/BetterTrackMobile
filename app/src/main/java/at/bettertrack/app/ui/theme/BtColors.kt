@@ -111,6 +111,44 @@ data class BtColors(
     val scrim: Color,
     /** Inset wells, recessed rows, skeleton base. */
     val surfaceLow: Color,
+    /**
+     * A card that has been told to stand down — [surface]'s quieter twin.
+     *
+     * Owner, 2026-08-17, on the portfolio overview: *"die holdings einfach
+     * weniger prominentere hintergrund farbe. nicht gleich die hintergrund farbe
+     * entfernen. sondern nur leichter machen."* A long list of cards and a pair
+     * of quick links were both painted [surface], so nothing on the page
+     * out-ranked anything; the fix is a weaker fill for the list, not a stripped
+     * one, and not smaller type.
+     *
+     * **Why this is not just [surfaceLow].** It would be, but for true black.
+     * `asTrueBlack()` drops [surfaceLow] to `#050608` so a *well* punched into a
+     * card still reads as a hole on an AMOLED page — correct for a recess and
+     * fatal for a card, which would sit ~1.6 L\* above a pure-black page and
+     * vanish. This token is deliberately left OUT of that override, which is the
+     * whole reason it exists as its own name.
+     *
+     * The value it lands on is worth stating, because it is the design:
+     *
+     * | table | page | quiet card | full card |
+     * |---|---|---|---|
+     * | dark | 3.5 L\* | **6.1 L\*** | 9.4 L\* |
+     * | dark + true black | 0 L\* | **6.1 L\*** | 9.4 L\* |
+     * | light | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` |
+     *
+     * So in dark a quiet card keeps ~45% of a full card's lift off the page, and
+     * on true black it is separated from its page by 6.1 L\* — almost exactly the
+     * 5.9 L\* that separates a NORMAL card from a NORMAL dark page. It reads as a
+     * card there by the same margin the app already ships everywhere else.
+     *
+     * **Light has no tonal room and does not pretend to.** Page, card and quiet
+     * card are all `#FFFFFF` — light's separation was never tone (3.9 L\* across
+     * the whole ramp), it is the [groupBorder] hairline, which a quiet card keeps.
+     * A quiet card in light is therefore identical to a full one, and that is the
+     * honest outcome rather than a bug: there is nothing between white and white
+     * to spend.
+     */
+    val surfaceQuiet: Color,
     /** Cards, groups. */
     val surface: Color,
     /** Sheets, dialogs, nav bar. */
@@ -495,6 +533,10 @@ val BtDarkColors = BtColors(
     bgAlt = Color(0xFF06080C),
     scrim = Color(0xFF06080C), // byte-identical to the bgAlt it replaces
     surfaceLow = Color(0xFF10141A),
+    // Byte-identical to `surfaceLow` HERE and nowhere else: the two tokens mean
+    // different things and part company under true black, where a well keeps
+    // sinking and a quiet card must not. See the property's KDoc.
+    surfaceQuiet = Color(0xFF10141A),
     surface = Color(0xFF161B22),
     surfaceHigh = Color(0xFF1C222B),
     surfaceHighest = Color(0xFF232A34),
@@ -645,6 +687,9 @@ val BtLightColors = BtColors(
     // which over a white page gives a real dim instead of the 3% `bgAlt` gave.
     scrim = LightHairlineInk,
     surfaceLow = Color(0xFFFFFFFF),
+    // White, like the page it would have to be quieter than. Light spends its
+    // separation on the hairline, and a quiet card keeps that.
+    surfaceQuiet = Color(0xFFFFFFFF),
     surface = Color(0xFFFFFFFF),
     surfaceHigh = Color(0xFFFFFFFF),
     // The ONE surviving tint. See the KDoc: it is the pressed/skeleton tone, it
