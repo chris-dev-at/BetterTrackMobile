@@ -1264,7 +1264,6 @@
     <string name="bt_notif_type_digest_sub">Your daily or weekly summary</string>
 
     <!-- V5 delivery: digest cadence + quiet hours (outbound channels only) -->
-    <string name="bt_notif_delivery_section">Delivery</string>
     <string name="bt_notif_quiet_title">Quiet hours</string>
     <string name="bt_notif_quiet_subtitle">Hold outgoing notifications during a window you choose</string>
     <string name="bt_notif_quiet_start">Start</string>
@@ -2497,15 +2496,9 @@
     <string name="bt_notif_quiet_timezone_use_detected">Use my timezone (%1$s)</string>
     <string name="bt_notif_quiet_inbox_hint">Urgent account and security alerts always get through, and the in-app bell stays instant.</string>
     <!-- Hand-off to the web app -->
-    <string name="bt_notif_web_digest_title">Delivery frequency</string>
-    <string name="bt_notif_web_digest_sub">Instant, daily digest or weekly digest — per notification type</string>
-    <string name="bt_notif_web_routing_title">Routing</string>
-    <string name="bt_notif_web_routing_sub">Which notification type reaches which channel</string>
-    <string name="bt_notif_web_channels_title">Telegram and Discord</string>
-    <string name="bt_notif_web_channels_sub">Connect a chat account and pick what gets sent there</string>
     <string name="bt_notif_web_browserpush_title">Browser push</string>
     <string name="bt_notif_web_browserpush_sub">Notifications on a computer, set up per browser</string>
-    <string name="bt_notif_web_explainer">These open the web app\'s notification settings, where each of them lives. Everything else on this screen is set here, on the phone.</string>
+    <string name="bt_notif_web_explainer">Turning a browser on has to happen in that browser. What gets sent to it is the Browser-push column above, set here.</string>
     <!-- ==== /STREAM-NOTIF (EN) ==== -->
 
     <!-- ==== STREAM-SETTINGS (EN) ==== -->
@@ -2871,4 +2864,177 @@
     <string name="bt_widgets_no_budgets">No budgets yet — create one on the Cash screen first.</string>
     <string name="bt_widgets_no_assets">Nothing to pick yet — add holdings or watchlist entries first.</string>
     <string name="bt_widgets_resize_hint">Widgets adapt when you resize them on the home screen.</string>
+
+    <!-- ==== NOTIFICATION ROUTING MATRIX (EN) ==== -->
+    <!-- Full parity with the web's /control/notifications panel: 26 types in 8
+         categories × 6 channels, per-type cadence, per-type mute. The type labels
+         are a SEPARATE family from the bt_notif_type_* ones above: those name the
+         app's inbox presentation kinds, these name the platform's wire types, and
+         the two sets neither match one-to-one nor have to. -->
+    <string name="bt_notif_general_section">General</string>
+    <string name="bt_notif_routing_section">Routing</string>
+    <string name="bt_notif_routing_hint">Which notification type reaches which channel — the same grid as the web app.</string>
+    <string name="bt_notif_timing_section">Timing</string>
+
+    <!-- Categories, in the platform's own display order. -->
+    <string name="bt_ncat_social">Friends</string>
+    <string name="bt_ncat_sharing">Sharing &amp; activity</string>
+    <string name="bt_ncat_chat">Chat</string>
+    <string name="bt_ncat_alerts">Price alerts</string>
+    <string name="bt_ncat_budgets">Budgets</string>
+    <string name="bt_ncat_markets">Markets</string>
+    <string name="bt_ncat_mirrorchain">Group portfolios</string>
+    <string name="bt_ncat_account">Account</string>
+
+    <!-- The six channel columns, in the platform's display order. -->
+    <string name="bt_nch_inapp">In-app</string>
+    <string name="bt_nch_email">Email</string>
+    <string name="bt_nch_telegram">Telegram</string>
+    <string name="bt_nch_discord">Discord</string>
+    <string name="bt_nch_push">Phone push</string>
+    <string name="bt_nch_webpush">Browser push</string>
+
+    <!-- The 26 wire types. -->
+    <string name="bt_ntype_friend_request">Friend requests</string>
+    <string name="bt_ntype_friend_accepted">Accepted friend requests</string>
+    <string name="bt_ntype_portfolio_shared">Shared portfolios</string>
+    <string name="bt_ntype_watchlist_shared">Shared watchlists</string>
+    <string name="bt_ntype_conglomerate_shared">Shared conglomerates</string>
+    <string name="bt_ntype_friend_activity">Friend activity</string>
+    <string name="bt_ntype_follow_published">New from people you follow</string>
+    <string name="bt_ntype_follow_alert_created">New alerts from people you follow</string>
+    <string name="bt_ntype_follow_alert_fired">Fired alerts from people you follow</string>
+    <string name="bt_ntype_chat_message">Chat messages</string>
+    <string name="bt_ntype_alert_triggered">Price alerts</string>
+    <string name="bt_ntype_standing_order_skipped">Standing order problems</string>
+    <string name="bt_ntype_budget_exceeded">Budget alerts</string>
+    <string name="bt_ntype_earnings_reminder">Earnings reminders</string>
+    <string name="bt_ntype_dividend_event">Dividend reminders</string>
+    <string name="bt_ntype_mirror_invite">Group portfolio invites</string>
+    <string name="bt_ntype_mirror_member_joined">Member joined</string>
+    <string name="bt_ntype_mirror_member_left">Member left</string>
+    <string name="bt_ntype_mirror_member_removed">Member removed</string>
+    <string name="bt_ntype_mirror_removed">Removed from a group portfolio</string>
+    <string name="bt_ntype_mirror_ownership_transferred">Ownership transferred</string>
+    <string name="bt_ntype_mirror_chain_dissolved">Group portfolio dissolved</string>
+    <string name="bt_ntype_mirror_sync_stalled">Sync problems</string>
+    <string name="bt_ntype_account_invite">Account invites</string>
+    <string name="bt_ntype_account_temp_password">Temporary passwords</string>
+    <string name="bt_ntype_account_data_export">Data exports</string>
+
+    <!-- The collapsed mirrorchain row: eight wire types, one switch per channel. -->
+    <string name="bt_notif_mirror_group">Group portfolio activity</string>
+    <string name="bt_notif_mirror_group_hint">Invites, membership changes, ownership, dissolution and sync notices — all in one setting.</string>
+
+    <!-- Locked-row notes. Only these two types get one. -->
+    <string name="bt_notif_lock_invite">Invite emails go to people without an account yet, so there is nothing to route here.</string>
+    <string name="bt_notif_lock_temp_password">The email with the temporary password is always sent — it carries your credentials.</string>
+    <string name="bt_notif_locked_badge">Fixed</string>
+
+    <!-- Row summaries. -->
+    <string name="bt_notif_row_muted">Muted</string>
+    <string name="bt_notif_row_mixed">Mixed</string>
+    <string name="bt_notif_cat_summary">%1$d of %2$d on</string>
+    <string name="bt_notif_cat_toggle_cd">Toggle every notification under %1$s</string>
+    <string name="bt_notif_cell_cd">%1$s via %2$s</string>
+    <string name="bt_notif_expand_cd">Show the types in %1$s</string>
+    <string name="bt_notif_collapse_cd">Hide the types in %1$s</string>
+
+    <!-- The per-type sheet. -->
+    <string name="bt_notif_type_channels">Channels</string>
+    <string name="bt_notif_mute_type">Mute this type</string>
+    <string name="bt_notif_mute_type_sub">Turns every channel off. Unmuting brings your previous choice back.</string>
+    <string name="bt_notif_all_off">Nothing is delivered for this type right now.</string>
+    <string name="bt_notif_no_channels">This deployment has no delivery channels configured.</string>
+
+    <!-- Per-type digest cadence. -->
+    <string name="bt_notif_cadence_title">Delivery frequency</string>
+    <string name="bt_notif_cadence_sub">Group email and push into a daily or weekly summary. The in-app bell always stays instant.</string>
+    <string name="bt_notif_cadence_instant">Instant</string>
+    <string name="bt_notif_cadence_daily">Daily</string>
+    <string name="bt_notif_cadence_weekly">Weekly</string>
+    <string name="bt_notif_cadence_all_instant">Everything instant</string>
+    <string name="bt_notif_cadence_mixed">Set per type</string>
+    <string name="bt_notif_cadence_cd">Delivery frequency for %1$s</string>
+
+    <string name="bt_notif_routing_unavailable">The routing grid could not be loaded, so it is not shown here. Your settings are unchanged.</string>
+
+    <!-- ==== IN-APP FEEDBACK (EN) ==== -->
+    <!-- POST /feedback (platform #1315/#1316/#1317). The CATEGORY labels below are
+         display copy only — the wire values stay feature|bug|other in every
+         language. -->
+    <string name="bt_dest_feedback">Send feedback</string>
+    <string name="bt_settings_feedback_sub">Report a bug or suggest an improvement</string>
+    <string name="bt_about_feedback_sub">Tell the developer what to fix next</string>
+    <string name="bt_feedback_intro">Say what is broken or what is missing. This goes straight to the developer.</string>
+    <string name="bt_feedback_category_header">What is this about?</string>
+    <string name="bt_feedback_cat_feature">Feature or improvement</string>
+    <string name="bt_feedback_cat_feature_sub">Something the app should be able to do</string>
+    <string name="bt_feedback_cat_bug">Bug</string>
+    <string name="bt_feedback_cat_bug_sub">Something is broken, wrong, or shows the wrong number</string>
+    <string name="bt_feedback_cat_other">Other</string>
+    <string name="bt_feedback_cat_other_sub">Anything that is neither of the above</string>
+    <string name="bt_feedback_message_header">Your message</string>
+    <string name="bt_feedback_subject_label">Subject (optional)</string>
+    <string name="bt_feedback_message_label">What happened, or what would help?</string>
+    <string name="bt_feedback_counter">%1$d / %2$d</string>
+    <string name="bt_feedback_counter_cd">Message length: %1$d of %2$d</string>
+    <string name="bt_feedback_send">Send feedback</string>
+    <string name="bt_feedback_context_header">Sent with your message</string>
+    <string name="bt_feedback_context_hint">So a bug can be reproduced on the right build. Nothing about your account, portfolios or figures is attached.</string>
+    <string name="bt_feedback_context_platform">Platform</string>
+    <string name="bt_feedback_context_app">App version</string>
+    <string name="bt_feedback_context_os">Android version</string>
+    <string name="bt_feedback_context_device">Device</string>
+    <string name="bt_feedback_context_locale">Language</string>
+    <string name="bt_feedback_context_screen">Opened from</string>
+    <string name="bt_feedback_sent_title">Message sent</string>
+    <string name="bt_feedback_sent_body">Thanks. There is no reply thread in the app, so any follow-up question comes by email.</string>
+    <string name="bt_feedback_sent_again">Write another</string>
+    <string name="bt_feedback_offline">No connection. Feedback is sent as you press the button, so this needs to wait — your text stays here.</string>
+    <string name="bt_feedback_signed_out">Sign in to send feedback.</string>
+
+    <!-- ==== TELEGRAM + DISCORD CHANNEL SETUP (EN) ==== -->
+    <string name="bt_notif_tg_dc_section">Channels</string>
+
+    <string name="bt_notif_tg_title">Telegram</string>
+    <string name="bt_notif_tg_hint">Get notifications as a chat message from the BetterTrack bot.</string>
+    <string name="bt_notif_tg_start">Start Telegram link</string>
+    <string name="bt_notif_tg_start_error">Couldn\'t start the Telegram link. Please try again.</string>
+    <string name="bt_notif_tg_pending_title">Waiting for the bot</string>
+    <string name="bt_notif_tg_open">Open Telegram</string>
+    <string name="bt_notif_tg_code_hint">Send /start %1$s to the bot to finish linking.</string>
+    <string name="bt_notif_tg_copy_code">Copy code</string>
+    <string name="bt_notif_tg_code_copied">Link code copied.</string>
+    <string name="bt_notif_tg_confirm">I\'ve started the bot</string>
+    <string name="bt_notif_tg_confirming">Checking…</string>
+    <string name="bt_notif_tg_confirm_error">Couldn\'t confirm the Telegram link yet. Try again once you\'ve hit Start in the chat.</string>
+    <string name="bt_notif_tg_expired">This link code has expired. Start a new one to carry on.</string>
+    <string name="bt_notif_tg_code_lost">The link code is shown once and this screen no longer has it. Start a new link to get a fresh one.</string>
+    <string name="bt_notif_tg_start_again">Start a new link</string>
+    <string name="bt_notif_tg_linked">Linked to chat %1$s</string>
+    <string name="bt_notif_tg_unlink">Unlink Telegram</string>
+    <string name="bt_notif_tg_unlink_error">Couldn\'t unlink Telegram. Please try again.</string>
+    <string name="bt_notif_tg_unlink_confirm_title">Unlink Telegram?</string>
+    <string name="bt_notif_tg_unlink_confirm_body">Notifications routed to Telegram stop arriving. You can link the chat again whenever you want.</string>
+    <string name="bt_notif_tg_no_app">Nothing on this phone could open the Telegram link. Send the code to the bot by hand instead.</string>
+
+    <string name="bt_notif_dc_title">Discord</string>
+    <string name="bt_notif_dc_hint">Receive notifications through a per-user Discord webhook. The URL is encrypted at rest and never shown back.</string>
+    <string name="bt_notif_dc_url_label">Webhook URL</string>
+    <string name="bt_notif_dc_save">Save webhook</string>
+    <string name="bt_notif_dc_saving">Saving…</string>
+    <string name="bt_notif_dc_saved">Webhook saved (%1$s)</string>
+    <string name="bt_notif_dc_test">Send test message</string>
+    <string name="bt_notif_dc_testing">Sending…</string>
+    <string name="bt_notif_dc_test_ok">Test message delivered.</string>
+    <string name="bt_notif_dc_remove">Remove webhook</string>
+    <string name="bt_notif_dc_removing">Removing…</string>
+    <string name="bt_notif_dc_remove_confirm_title">Remove webhook?</string>
+    <string name="bt_notif_dc_remove_confirm_body">Notifications routed to Discord stop arriving. The URL is not stored anywhere you can read it back, so you would have to paste it again.</string>
+    <string name="bt_notif_dc_err_invalid_webhook">Discord rejected this webhook — is it still valid?</string>
+    <string name="bt_notif_dc_err_send_failed">Discord could not accept the test message. Please try again.</string>
+    <string name="bt_notif_dc_err_not_webhook">This does not look like a Discord webhook URL.</string>
+    <string name="bt_notif_dc_err_test_failed">Discord rejected the test message. Check the webhook URL and try again.</string>
+    <string name="bt_notif_dc_err_remove">Couldn\'t remove the webhook. Please try again.</string>
 </resources>

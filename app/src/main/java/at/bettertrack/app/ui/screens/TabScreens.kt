@@ -230,20 +230,29 @@ private fun SearchBarButton(onClick: () -> Unit) {
 /**
  * The **Workbench** tab (mandate §2 renamed it from Workboard).
  *
- * Conglomerates · ideas · alerts behind the segmented host. The rename is a
+ * Alerts · ideas · conglomerates behind the segmented host. The rename is a
  * label change only: the surface constant stays `BtSurface.CONGLOMERATES`
  * because that name mirrors the storage plan's §4.5 table, and drifting the app
  * from the document it implements would cost more than it buys.
+ *
+ * Pure pass-through, including [onOpenIdea]: an idea's detail is a route
+ * ([at.bettertrack.app.navigation.IdeaDetailRoute]) and this file owns no
+ * `NavController`, so the host asks and the shell answers. The alternative — the
+ * ideas section navigating for itself — is what would make it un-previewable and
+ * un-reusable, and the social side already opens the same route from its own
+ * screen.
  */
 @Composable
 fun WorkbenchTabScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
 ) {
     at.bettertrack.app.ui.workboard.WorkboardScreen(
         onOpenConglomerate = onOpenConglomerate,
         onCreateConglomerate = onCreateConglomerate,
         onOpenAsset = onOpenAsset,
+        onOpenIdea = onOpenIdea,
     )
 }

@@ -30,9 +30,9 @@ class DeliverySettingsTest {
         explicitNulls = false
     }
 
-    /** The 25 v5 types, all `instant` — the shape a fresh v5 account returns. */
+    /** Every type, all `instant` — the shape a fresh account returns. */
     private val allInstant: Map<String, String> =
-        (DeliveryTypes.digestible + DeliveryTypes.alwaysInstant).associateWith { "instant" }
+        NotifCatalog.allTypes.associateWith { "instant" }
 
     private val serverQuietHours = QuietHours(
         enabled = false,
@@ -65,7 +65,7 @@ class DeliverySettingsTest {
         val state = DeliveryState(resp.cadence, resp.quietHours?.toQuietHours())
 
         // Neither user action can produce a patch against a server that modelled nothing.
-        assertNull(cadencePatch(state.cadence, DigestCadence.Daily))
+        assertNull(typeCadencePatch(state.cadence, "friend.request", DigestCadence.Daily))
         assertNull(state.quietHours)
 
         // The matrix patch the screen still sends must carry ONLY `matrix`.
@@ -107,74 +107,90 @@ class DeliverySettingsTest {
 
     // ── Cadence patches ─────────────────────────────────────────────────────────
 
+    // Cadence is PER TYPE since the 2026-08-17 parity rebuild. The retired group
+    // chooser patched 18 keys at once from an editorial "digestible" list the
+    // server never agreed with; these pin the single-key shape that replaced it.
+
     @Test
-    fun `picking Daily patches exactly the digestible group and no urgent type`() {
-        val patch = cadencePatch(allInstant, DigestCadence.Daily).orFail("cadence patch")
-        assertEquals(DeliveryTypes.digestible.toSet(), patch.keys)
-        assertTrue(patch.values.all { it == "daily" })
-        DeliveryTypes.alwaysInstant.forEach { assertFalse("$it must never be batched", it in patch.keys) }
+    fun `a cadence pick sends exactly one type key and nothing else`() {
+        val patch = typeCadencePatch(allInstant, "portfolio.shared", DigestCadence.Daily)
+            .orFail("cadence patch")
+        assertEquals(mapOf("portfolio.shared" to "daily"), patch)
 
         val body = json.encodeToString(UpdateNotificationSettingsRequest(cadence = patch))
-        assertTrue(body.startsWith("""{"cadence":{"""))
+        assertEquals("""{"cadence":{"portfolio.shared":"daily"}}""", body)
         assertFalse(body.contains("matrix"))
         assertFalse(body.contains("quietHours"))
-        assertFalse(body.contains("alert.triggered"))
-        assertFalse(body.contains("account.temp_password"))
-        assertFalse(body.contains("chat.message"))
-    }
-
-    @Test
-    fun `a cadence change sends only the changed type key`() {
-        // Everything digestible is already daily except one type.
-        val server = allInstant.toMutableMap()
-        DeliveryTypes.digestible.forEach { server[it] = "daily" }
-        server["portfolio.shared"] = "weekly"
-
-        val patch = cadencePatch(server, DigestCadence.Daily).orFail("cadence patch")
-        assertEquals(mapOf("portfolio.shared" to "daily"), patch)
-        assertEquals(
-            """{"cadence":{"portfolio.shared":"daily"}}""",
-            json.encodeToString(UpdateNotificationSettingsRequest(cadence = patch)),
-        )
+        assertFalse(body.contains("muted"))
     }
 
     @Test
     fun `a no-op cadence pick produces no patch at all`() {
         // An empty `{}` body is itself a 400 — the app must not send anything.
-        assertNull(cadencePatch(allInstant, DigestCadence.Instant))
+        assertNull(typeCadencePatch(allInstant, "friend.request", DigestCadence.Instant))
     }
 
     @Test
-    fun `cadence only ever names types the GET actually carried`() {
-        val partial = mapOf("friend.request" to "instant", "alert.triggered" to "instant")
-        val patch = cadencePatch(partial, DigestCadence.Weekly).orFail("cadence patch")
-        assertEquals(mapOf("friend.request" to "weekly"), patch)
-    }
-
-    @Test
-    fun `the group cadence reads back what the server holds and reports mixed`() {
-        assertEquals(DigestCadence.Instant, groupCadence(allInstant))
-        assertEquals(DigestCadence.Daily, groupCadence(allInstant + cadencePatch(allInstant, DigestCadence.Daily)!!))
-        // Mixed group ⇒ no segment is selected.
-        assertNull(groupCadence(allInstant + mapOf("friend.request" to "weekly")))
-        // Pre-v5 ⇒ nothing to show.
-        assertNull(groupCadence(null))
-    }
-
-    @Test
-    fun `every one of the 25 v5 types is classified exactly once`() {
-        val all = listOf(
-            "friend.request", "friend.accepted", "portfolio.shared", "watchlist.shared",
-            "conglomerate.shared", "friend.activity", "follow.published", "follow.alert.created",
-            "follow.alert.fired", "account.invite", "account.temp_password", "account.data_export",
-            "alert.triggered", "earnings.reminder", "chat.message", "dividend.event",
-            "budget.exceeded", "mirror.invite", "mirror.member_joined", "mirror.member_left",
-            "mirror.member_removed", "mirror.removed", "mirror.ownership_transferred",
-            "mirror.chain_dissolved", "mirror.sync_stalled",
+    fun `cadence only ever names a type the GET actually carried`() {
+        val partial = mapOf("friend.request" to "instant")
+        assertEquals(
+            mapOf("friend.request" to "weekly"),
+            typeCadencePatch(partial, "friend.request", DigestCadence.Weekly),
         )
-        assertEquals(25, all.size)
-        assertEquals(all.toSet(), DeliveryTypes.digestible.toSet() + DeliveryTypes.alwaysInstant)
-        assertTrue(DeliveryTypes.digestible.none { it in DeliveryTypes.alwaysInstant })
+        // The server never sent this one, so there is no stored value to change and
+        // naming it in a strict-map PATCH would be inventing state.
+        assertNull(typeCadencePatch(partial, "alert.triggered", DigestCadence.Weekly))
+    }
+
+    @Test
+    fun `account invite is never given a cadence`() {
+        // The web filters it out client-side (no per-user routing ⇒ no meaningful
+        // cadence) even though the server would accept one. Same rule here.
+        assertFalse(NotifCatalog.ACCOUNT_INVITE in NotifCatalog.cadenceTypes)
+        assertNull(typeCadencePatch(allInstant, NotifCatalog.ACCOUNT_INVITE, DigestCadence.Daily))
+    }
+
+    @Test
+    fun `every type the platform batches can be given all three cadences`() {
+        // The whole point of the rebuild: no type is silently denied a control the
+        // account genuinely has. 26 types minus account.invite.
+        assertEquals(25, NotifCatalog.cadenceTypes.size)
+        for (type in NotifCatalog.cadenceTypes) {
+            for (choice in listOf(DigestCadence.Daily, DigestCadence.Weekly)) {
+                assertEquals(
+                    "$type must be settable to ${choice.wire}",
+                    mapOf(type to choice.wire),
+                    typeCadencePatch(allInstant, type, choice),
+                )
+            }
+        }
+        // Including the seven the old editorial split refused to offer at all.
+        listOf(
+            "alert.triggered", "account.temp_password", "account.data_export",
+            "chat.message", "mirror.invite", "mirror.sync_stalled",
+        ).forEach {
+            assertTrue("$it lost its cadence control", it in NotifCatalog.cadenceTypes)
+        }
+    }
+
+    @Test
+    fun `the timing summary reads back a shared cadence and reports mixed otherwise`() {
+        val types = NotifCatalog.allTypes
+        assertEquals(DigestCadence.Instant, sharedCadence(allInstant, types))
+        assertEquals(
+            DigestCadence.Daily,
+            sharedCadence(allInstant.mapValues { "daily" }, types),
+        )
+        // One type differs ⇒ "Set per type", not a lie about which value is active.
+        assertNull(sharedCadence(allInstant + mapOf("friend.request" to "weekly"), types))
+        // Pre-v5 ⇒ nothing to show.
+        assertNull(sharedCadence(null, types))
+        // account.invite is excluded from the summary too, so a stray value on it
+        // cannot make an otherwise-uniform account read as mixed.
+        assertEquals(
+            DigestCadence.Instant,
+            sharedCadence(allInstant + mapOf(NotifCatalog.ACCOUNT_INVITE to "weekly"), types),
+        )
     }
 
     // ── Quiet-hours patches (the one field-partial object in the schema) ─────────

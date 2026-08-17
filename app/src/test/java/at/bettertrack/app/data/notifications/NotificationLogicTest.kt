@@ -181,9 +181,23 @@ class NotificationLogicTest {
         assertEquals(true, p.set(NotifChannel.Email, true).email)
     }
 
-    @Test fun `NotifMatrix returns defaults for an absent kind`() {
+    @Test fun `NotifMatrix returns defaults for an absent type`() {
         val matrix = NotifMatrix(emptyMap())
-        assertEquals(TypePrefs(), matrix.prefs(NotifKind.FriendRequest))
+        assertEquals(TypePrefs(), matrix.prefs("friend.request"))
+    }
+
+    @Test fun `the matrix honours EVERY wire type, not just the seven with display kinds`() {
+        // The regression this pins: while the matrix was keyed by `NotifKind`, any
+        // type outside the app's seven presentation kinds fell through to
+        // all-defaults, so the app showed a push for `dividend.event` and
+        // `budget.exceeded` no matter what the account said. Keying by the wire
+        // string is what makes the server's routing authoritative for all of them.
+        val silenced = TypePrefs(inApp = false, email = false, push = false, webpush = false)
+        val matrix = NotifMatrix(
+            mapOf("dividend.event" to silenced, "budget.exceeded" to silenced),
+        )
+        assertTrue(decideDelivery(matrix.prefs("dividend.event")).suppressedEntirely)
+        assertTrue(decideDelivery(matrix.prefs("budget.exceeded")).suppressedEntirely)
     }
 
     // ── Shipped-flag tripwire (Notifications-v2 go-live) ────────────────────

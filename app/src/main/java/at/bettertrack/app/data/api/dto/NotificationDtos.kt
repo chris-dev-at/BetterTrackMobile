@@ -125,6 +125,89 @@ data class NotificationChannelsDto(
 )
 
 /**
+ * The deployment kill-switch for the two optional channels. Absent (or both false)
+ * ⇒ the app renders no Telegram/Discord setup at all, because the routes 404.
+ */
+@Serializable
+data class NotificationChannelsConfigurableDto(
+    val telegram: Boolean? = null,
+    val discord: Boolean? = null,
+)
+
+// ── Telegram linking (`/settings/telegram*`, scope social:read | social:write) ──
+
+/**
+ * `GET|POST /settings/telegram…` state.
+ *
+ * ⚠️ [pendingCode] is populated on the `/link` response and **nowhere else** — a
+ * plain GET always returns `null` for it (the server does not re-issue a code it
+ * already handed out). The deep link `https://t.me/{botUsername}?start={code}`
+ * therefore cannot be rebuilt from a refetch: the app has to hold the code from the
+ * POST in memory for the ten minutes it lives.
+ */
+@Serializable
+data class TelegramSettingsDto(
+    /** Deployment: the kill-switch is on AND a bot token is configured. */
+    val available: Boolean = false,
+    val linked: Boolean = false,
+    /** An unexpired link code exists for this user. */
+    val pending: Boolean = false,
+    /** `…1234` — the server masks it to the last four characters. Never the raw id. */
+    val chatIdMasked: String? = null,
+    val botUsername: String? = null,
+    /** ≤24 chars, 10-minute TTL. Only ever non-null on the `/link` response. */
+    val pendingCode: String? = null,
+    val pendingExpiresAt: String? = null,
+)
+
+/**
+ * `POST /settings/telegram/confirm`.
+ *
+ * Confirm is an on-demand POLL: the server asks the Bot API for updates and looks
+ * for the `/start <code>` message. A miss is **not an error** — it is
+ * `200 { linked: false }`, meaning "not yet, press it again once you've hit Start".
+ * Treating that as a failure is the single easiest way to get this flow wrong.
+ */
+@Serializable
+data class TelegramConfirmResponse(
+    val linked: Boolean = false,
+    val settings: TelegramSettingsDto? = null,
+)
+
+// ── Discord webhook (`/settings/discord*`, scope social:read | social:write) ────
+
+/**
+ * `GET|POST|DELETE /settings/discord…` state. The webhook URL is encrypted at rest
+ * and **never** read back — [webhookIdMasked] (`…abcd`, the last four characters of
+ * the webhook snowflake) is all the server will ever return.
+ */
+@Serializable
+data class DiscordSettingsDto(
+    /** True whenever the deployment kill-switch is on. */
+    val available: Boolean = false,
+    /** Per user: a webhook row exists. */
+    val linked: Boolean = false,
+    val webhookIdMasked: String? = null,
+    val configuredAt: String? = null,
+)
+
+/**
+ * `POST /settings/discord/webhook` — `{ url }`, 1..2048 chars.
+ *
+ * The server validates in two layers and the second one matters: after the schema
+ * check (https, a discord.com-family host, a `/api/webhooks/` path) it **actually
+ * posts a test message to the candidate URL** and only persists it if Discord
+ * accepts. So a 400 here can mean "that is not a webhook URL" or "Discord rejected
+ * a URL that looks fine", and the two get different copy.
+ */
+@Serializable
+data class DiscordWebhookRequest(val url: String)
+
+/** `POST /settings/discord/test` → `{ ok: true }`. */
+@Serializable
+data class DiscordTestResponse(val ok: Boolean = false)
+
+/**
  * Quiet hours as the v5 GET returns them (`quietHoursSchema`): an outbound-only
  * delivery window.
  *
@@ -203,6 +286,32 @@ data class NotificationSettingsResponse(
     /** v5-only outbound quiet window. `null` ⇒ pre-v5. */
     val quietHours: QuietHoursDto? = null,
     val channels: NotificationChannelsDto? = null,
+    /**
+     * The DEPLOYMENT kill-switch for the two optional channels
+     * (`BT_TELEGRAM_DISCORD_ENABLED`, default **off**). Distinct from [channels] in
+     * a way that is load-bearing and easy to get wrong:
+     *
+     *  - [channels] `telegram`/`discord` are **per user** — true only once this user
+     *    has actually confirmed a chat / saved a webhook. They gate the matrix
+     *    COLUMN, because an unlinked channel cannot deliver anything.
+     *  - [channelsConfigurable] is the deployment switch. It gates whether the
+     *    SETUP UI exists at all.
+     *
+     * Gating setup on [channels] would be a chicken-and-egg: the card that links
+     * Telegram would only appear once Telegram was already linked. The web gates
+     * its Channels group on this field, and so does the app. When the switch is
+     * off, every route under `/settings/telegram` and `/settings/discord` answers
+     * a bare 404, so an app that showed the cards anyway would be offering
+     * controls that cannot work.
+     */
+    val channelsConfigurable: NotificationChannelsConfigurableDto? = null,
+    /**
+     * VAPID key for BROWSER push. Modelled only so its presence can be read; the
+     * app never subscribes (that needs a service worker and a `PushManager`, i.e. a
+     * browser). Android's push channel is `push` (FCM), registered through
+     * `POST /notifications/devices`.
+     */
+    val webPushPublicKey: String? = null,
     /**
      * The ACCOUNT-WIDE mute — the web's single "silence everything" switch. It has
      * always been in the live GET body; the app used to read past it because it had

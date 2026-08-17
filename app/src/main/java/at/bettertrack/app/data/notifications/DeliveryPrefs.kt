@@ -38,53 +38,21 @@ enum class DigestCadence(val wire: String) {
     }
 }
 
-/**
- * Which of the 25 platform notification types may be batched into a digest.
- *
- * The split is editorial, not server-driven: batching only makes sense for
- * non-urgent, informational events. Anything the user is expected to ACT on, or
- * that is time-critical or security-relevant, stays on `instant` and is never
- * offered a cadence — the settings copy says so out loud rather than quietly
- * delaying a security code.
- */
-object DeliveryTypes {
-
-    /** Urgent / transactional / actionable — never batched, never offered a cadence. */
-    val alwaysInstant: Set<String> = setOf(
-        "alert.triggered",          // your own price alert fired — time-critical
-        "account.temp_password",    // security code
-        "account.invite",           // actionable invitation
-        "account.data_export",      // one-off, user-initiated, expires
-        "chat.message",             // a conversation, not a report
-        "mirror.invite",            // actionable invitation
-        "mirror.sync_stalled",      // something is broken and needs attention
-    )
-
-    /**
-     * The digestible group, in wire order. A cadence change PATCHes exactly these
-     * keys — intersected with the types the last GET actually carried.
-     */
-    val digestible: List<String> = listOf(
-        "friend.request",
-        "friend.accepted",
-        "portfolio.shared",
-        "watchlist.shared",
-        "conglomerate.shared",
-        "friend.activity",
-        "follow.published",
-        "follow.alert.created",
-        "follow.alert.fired",
-        "earnings.reminder",
-        "dividend.event",
-        "budget.exceeded",
-        "mirror.member_joined",
-        "mirror.member_left",
-        "mirror.member_removed",
-        "mirror.removed",
-        "mirror.ownership_transferred",
-        "mirror.chain_dissolved",
-    )
-}
+// ── Where the digestible-type list went ────────────────────────────────────────
+//
+// There used to be a `DeliveryTypes` object here splitting the platform's types
+// into an editorial `digestible` group of 18 and an `alwaysInstant` group of 7,
+// with ONE cadence chooser governing the whole digestible group.
+//
+// It was wrong on both halves. The split was an app opinion the server does not
+// share — the API accepts and returns a cadence for every type — so seven types
+// silently lost a control the account genuinely has. And a single group chooser
+// cannot express per-type state: an account configured on the web rendered as
+// "mixed" and the control gave up.
+//
+// Cadence is now per type, for all 25 the web offers (everything but
+// `account.invite`). The list lives in `NotifCatalog.cadenceTypes` alongside the
+// rest of the taxonomy, and the PATCH builder is `typeCadencePatch`.
 
 /** Server default: 22:00 → 07:00, an overnight window. */
 const val QUIET_HOURS_DEFAULT_START = 1320
@@ -146,34 +114,6 @@ fun QuietHoursDto.toQuietHours(): QuietHours = QuietHours(
     endMinute = endMinute ?: QUIET_HOURS_DEFAULT_END,
     timezone = timezone,
 )
-
-/**
- * The cadence shown on the segmented chooser: the single value shared by every
- * digestible type the server carried, or `null` when the group is MIXED (the web
- * can set types individually) or when the server modelled no cadence at all. A
- * `null` renders as "mixed" rather than a lie about which segment is active.
- */
-fun groupCadence(serverCadence: Map<String, String>?): DigestCadence? {
-    if (serverCadence == null) return null
-    val values = DeliveryTypes.digestible.mapNotNull { serverCadence[it] }.distinct()
-    return if (values.size == 1) DigestCadence.fromWire(values.single()) else null
-}
-
-/**
- * The `cadence` map for a group cadence change: every digestible type the last GET
- * carried whose value actually differs. Returns `null` when nothing changes (an
- * empty `{}` PATCH body is a 400) or when the server modelled no cadence.
- *
- * Types outside [DeliveryTypes.digestible] are never touched, so the urgent ones
- * keep whatever the server has (they ship `instant`).
- */
-fun cadencePatch(serverCadence: Map<String, String>?, choice: DigestCadence): Map<String, String>? {
-    if (serverCadence == null) return null
-    val changed = DeliveryTypes.digestible
-        .filter { serverCadence.containsKey(it) && serverCadence[it] != choice.wire }
-        .associateWith { choice.wire }
-    return changed.ifEmpty { null }
-}
 
 /**
  * The field-partial `quietHours` object for a change: ONLY the fields that differ.

@@ -129,7 +129,10 @@ class OAuthScopeTest {
         // about the effective API origin (prod, the dev stack, a LAN box) can
         // change it. ALERTS_SCOPES_ENABLED is a const, so this still needs no
         // OAuthConfig init (which would read BuildConfig).
-        val scopes = requestedScopes(alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED)
+        val scopes = requestedScopes(
+            alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
+            feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+        )
             .split(" ")
             .toSet()
         assertEquals(
@@ -148,5 +151,42 @@ class OAuthScopeTest {
             ),
             scopes,
         )
+    }
+
+    // ── feedback:write (platform #1315/#1316/#1317) ──────────────────────────
+    // The scope is PREPARED but must stay out of the authorize request until the
+    // platform confirms the seed. This is the same class of tripwire the alerts
+    // scopes needed, and for the same reason: an un-seeded scope does not get
+    // dropped, it hard-rejects the whole login.
+
+    @Test
+    fun `feedback write is NOT requested while the platform seed is unconfirmed`() {
+        // THE guard. If this fails, sign-in is at risk for every user.
+        assertFalse(OAuthConfig.FEEDBACK_SCOPE_ENABLED)
+        assertFalse(
+            requestedScopes(
+                alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
+                feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+            ).contains("feedback:"),
+        )
+    }
+
+    @Test
+    fun `omitting the feedback argument cannot widen the request by accident`() {
+        // The parameter defaults to false, so every pre-existing call site — and
+        // any future one that forgets it — keeps the proven 19.
+        assertFalse(requestedScopes(alertsScopesEnabled = true).contains("feedback:"))
+    }
+
+    @Test
+    fun `flipping the feedback flag appends exactly one scope and keeps the rest`() {
+        val scopes = requestedScopes(alertsScopesEnabled = true, feedbackScopeEnabled = true)
+            .split(" ")
+        assertTrue(scopes.contains("feedback:write"))
+        assertEquals(20, scopes.size)
+        assertEquals(20, scopes.toSet().size)
+        assertTrue(scopes.contains("portfolio:read"))
+        assertTrue(scopes.contains("vault:sync"))
+        assertEquals(listOf("feedback:write"), scopes.filter { it.startsWith("feedback:") })
     }
 }

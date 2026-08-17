@@ -189,6 +189,23 @@ import kotlinx.serialization.Serializable
 @Serializable data object SettingsNotificationsRoute
 @Serializable data object SettingsLanguageRoute
 @Serializable data object SettingsAboutRoute
+
+/**
+ * The in-app feedback composer (platform #1315/#1316/#1317).
+ *
+ * [origin] is only ever `settings` or `about` and rides straight into the
+ * submission's `context.screen`, so a report can be traced to where it was written
+ * from. It is a route parameter rather than a constant because the two entry points
+ * are genuinely different populations — a bug reported from About is usually about
+ * the build, one from Settings usually about a setting.
+ *
+ * Registered unconditionally; the ENTRY POINTS are what
+ * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] gates. A route with no row
+ * pointing at it is unreachable, and keeping it registered means turning the
+ * feature on is one flag rather than a re-wire.
+ */
+@Serializable data class SettingsFeedbackRoute(val origin: String)
+
 /**
  * The in-app widget builder (widget redesign 2026-08-16): preview every
  * home-screen widget with sample data, configure the configurable ones, and

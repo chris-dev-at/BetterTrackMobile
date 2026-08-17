@@ -965,6 +965,11 @@ private fun BtTabContent(
                 onOpenConglomerate = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
                 onCreateConglomerate = { navController.navigate(ConglomerateBuilderRoute()) },
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+                // The SAME route the cloned-idea path below uses (see the
+                // FriendOverviewRoute entry): an idea is owner-only, so there is
+                // one detail destination and both doors open it. This one is the
+                // door that makes an idea reachable more than once.
+                onOpenIdea = { ideaId -> navController.navigate(IdeaDetailRoute(ideaId)) },
             )
 
         BtTab.People ->
@@ -1703,6 +1708,13 @@ private fun BtSheetHost(
                 onOpenWidgets = { navController.navigate(SettingsWidgetsRoute) },
                 onOpenTaxSettings = { navController.navigate(TaxSettingsRoute) },
                 onOpenAbout = { navController.navigate(SettingsAboutRoute) },
+                onOpenFeedback = {
+                    navController.navigate(
+                        at.bettertrack.app.navigation.SettingsFeedbackRoute(
+                            at.bettertrack.app.data.repo.FeedbackOrigin.SETTINGS,
+                        ),
+                    )
+                },
                 onOpenDeleteAccount = { navController.navigate(DeleteAccountRoute) },
                 onOpenDataHome = { navController.navigate(StorageHomeRoute) },
                 onOpenGallery = { navController.navigate(GalleryRoute) },
@@ -1830,7 +1842,21 @@ private fun BtSheetHost(
             at.bettertrack.app.ui.settings.WidgetsScreen(onBack = back)
         }
         btSheet<SettingsAboutRoute> {
-            AboutScreen(onBack = back, onOpenChangelog = { navController.navigate(ChangelogRoute) })
+            AboutScreen(
+                onBack = back,
+                onOpenChangelog = { navController.navigate(ChangelogRoute) },
+                onOpenFeedback = {
+                    navController.navigate(
+                        at.bettertrack.app.navigation.SettingsFeedbackRoute(
+                            at.bettertrack.app.data.repo.FeedbackOrigin.ABOUT,
+                        ),
+                    )
+                },
+            )
+        }
+        btSheet<at.bettertrack.app.navigation.SettingsFeedbackRoute> { entry ->
+            val route = entry.toRoute<at.bettertrack.app.navigation.SettingsFeedbackRoute>()
+            at.bettertrack.app.ui.feedback.FeedbackScreen(onBack = back, origin = route.origin)
         }
         // Connections & authorized apps, native (owner order 2026-08-08). Drive
         // is NOT reimplemented here — the Connections screen hands off in-app to

@@ -29,6 +29,25 @@ object OAuthConfig {
     const val ALERTS_SCOPES_ENABLED: Boolean = true
 
     /**
+     * Whether to request `feedback:write` (in-app feedback, platform #1315/#1316/
+     * #1317). **HELD `false` DELIBERATELY — do not flip this on a hunch.**
+     *
+     * The platform is seeding the scope to the BetterTrackMobile client but has not
+     * ticked it done. Requesting a scope the serving OAuth client row does not allow
+     * does NOT quietly drop that scope: the authorize endpoint hard-rejects the
+     * WHOLE login with "This app's authorization request is invalid", which is
+     * exactly how the alerts scopes locked users out once (see
+     * [ALERTS_SCOPES_ENABLED]). So an un-seeded `feedback:write` here would cost
+     * sign-in for everybody, to buy a form nobody can reach yet.
+     *
+     * FLIP WHEN: the platform confirms the seed on #1317. Then also flip
+     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] to `true`, rebuild, and
+     * re-login once — a token minted before this flag was on carries no
+     * `feedback:write` and the POST 403s INSUFFICIENT_SCOPE regardless.
+     */
+    const val FEEDBACK_SCOPE_ENABLED: Boolean = false
+
+    /**
      * Space-separated coarse module scopes the app requests — the FULL allowed
      * set for the BetterTrackMobile client (PLATFORM_ASKS ⚡ ACTIVATION blesses
      * requesting the full set so future grants need no app change). A token
@@ -51,7 +70,10 @@ object OAuthConfig {
      * `/account/paranoid/…` transition deliberately stay session-only) are
      * requested on EVERY backend, production included — see [V5_SCOPES].
      */
-    val SCOPES: String = requestedScopes(alertsScopesEnabled = ALERTS_SCOPES_ENABLED)
+    val SCOPES: String = requestedScopes(
+        alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
+        feedbackScopeEnabled = FEEDBACK_SCOPE_ENABLED,
+    )
 
     /**
      * The authorize URL opened in a Custom Tab on the WEB origin:
@@ -113,13 +135,29 @@ private const val V5_SCOPES =
     "cash:read cash:write mirrorchain:read mirrorchain:write vault:sync"
 
 /**
+ * In-app feedback (`POST /feedback`). Prepared but INERT — appended to the request
+ * only when [OAuthConfig.FEEDBACK_SCOPE_ENABLED], which is `false` until the
+ * platform ticks the seed on #1317. `OAuthScopeTest` pins that the shipped scope
+ * string does not contain it.
+ */
+private const val FEEDBACK_SCOPE = "feedback:write"
+
+/**
  * The scope string the app requests: the client's full allowed set, with alerts:*
  * appended only when [alertsScopesEnabled]. Kept a pure top-level function so the
  * behaviour is unit-testable without initializing [OAuthConfig] (which reads
  * BuildConfig).
  */
-internal fun requestedScopes(alertsScopesEnabled: Boolean): String = buildString {
+internal fun requestedScopes(
+    alertsScopesEnabled: Boolean,
+    feedbackScopeEnabled: Boolean = false,
+): String = buildString {
     append(BASE_SCOPES)
     if (alertsScopesEnabled) append(' ').append(ALERTS_SCOPES)
     append(' ').append(V5_SCOPES)
+    // Appended ONLY once the platform has seeded it — see
+    // [OAuthConfig.FEEDBACK_SCOPE_ENABLED]. The default is `false` at every call
+    // site that does not say otherwise, so forgetting the argument can never widen
+    // the authorize request by accident.
+    if (feedbackScopeEnabled) append(' ').append(FEEDBACK_SCOPE)
 }

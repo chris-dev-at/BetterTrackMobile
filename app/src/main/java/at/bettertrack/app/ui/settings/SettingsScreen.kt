@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Link
@@ -200,6 +201,8 @@ fun SettingsScreen(
     onOpenWidgets: () -> Unit = {},
     onOpenTaxSettings: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
+    /** The feedback composer. Only ever reached when `FeedbackFlags.enabled`. */
+    onOpenFeedback: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     // `onOpenChangelog` was removed 2026-08-09: it went vestigial in a1e7882 when
     // the About block left Settings for `AboutScreen`, which took the "What's new"
@@ -777,6 +780,18 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.bt_settings_about_sub),
                     onClick = onOpenAbout,
                 )
+                // The feedback composer's primary entry point. Held behind the
+                // capability flag — the route exists, but a row that opens a form
+                // whose POST can only 403 is worse than no row. See
+                // `FeedbackFlags.enabled` for the two-step unlock.
+                if (at.bettertrack.app.data.repo.FeedbackFlags.enabled) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Feedback,
+                        title = stringResource(R.string.bt_dest_feedback),
+                        subtitle = stringResource(R.string.bt_settings_feedback_sub),
+                        onClick = onOpenFeedback,
+                    )
+                }
             }
 
             // ── DEVELOPER (hidden; debug + multi-tap) ────────────────────────

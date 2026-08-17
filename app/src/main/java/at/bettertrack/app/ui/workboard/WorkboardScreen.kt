@@ -113,7 +113,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
-// ── Workboard host: Alerts · Conglomerates ──────────────────────────────────
+// ── Workboard host: Alerts · Ideas · Conglomerates ──────────────────────────
 
 /**
  * The Workbench's segments, in segment order — Alerts first (owner order,
@@ -126,18 +126,33 @@ import kotlinx.coroutines.launch
  * news. Opening on Conglomerates meant the tab's own badge could be lit while the
  * thing it was lit about sat one tap away behind a pill.
  *
- * ## Why Ideas is not here any more (owner: "scrim the useless part")
+ * ## Ideas: removed 2026-08-07, restored 2026-08-17
  *
- * Ideas left the SURFACE, not the codebase. `IdeasSection`, `IdeasViewModel` and
- * the whole `ui/ideas` package are untouched and still compile, and
- * [at.bettertrack.app.navigation.IdeaDetailRoute] still resolves — a shared idea
- * arriving from a friend, or a notification deep link, opens exactly as before.
- * What is gone is the third pill: a list the owner does not use, spending a third
- * of the segment row and a third of this tab's first impression. Deleting the
- * feature would have broken the social side that hands ideas to it; hiding the
- * entry point costs nothing and is reversible in one line.
+ * The third pill was dropped on the owner's *"scrim the useless part"* — a list
+ * he did not use, spending a third of the segment row and a third of this tab's
+ * first impression. The argument at the time was that Ideas left the SURFACE and
+ * not the codebase: the package still compiled and
+ * [at.bettertrack.app.navigation.IdeaDetailRoute] still resolved, so nothing was
+ * really lost.
+ *
+ * That argument was wrong, and wrong in a way no diff shows. Removing the pill
+ * left the idea-detail route with exactly ONE navigator in the whole app — the
+ * clone-a-friend's-idea path in
+ * [at.bettertrack.app.ui.social.FriendOverviewScreen], which fires once, right
+ * after the clone. So an idea you OWN was viewable exactly once and then never
+ * again: no list, no search, no deep link, and the create sheet behind the "New
+ * idea" FAB had no caller at all. Losing your own saved work is not what
+ * "useless" meant, so the owner reversed the removal.
+ *
+ * **Ideas sits second, between Alerts and Conglomerates.** Alerts keeps the lead
+ * and the default for the reason above. Ideas goes next because
+ * [WorkbenchNeedsYou] — the block directly above these pills — lists *unfinished
+ * ideas*, and the pill holding the full list should be adjacent to the rows that
+ * point into it rather than separated from them by a third segment. Appending it
+ * last would also have made the restoration read as a bolt-on rather than as the
+ * segment coming back.
  */
-private enum class WorkboardSection { Alerts, Conglomerates }
+private enum class WorkboardSection { Alerts, Ideas, Conglomerates }
 
 /**
  * The **Workbench** tab — R2's §3 rebuild of the Workboard host.
@@ -177,6 +192,7 @@ fun WorkboardScreen(
     onOpenConglomerate: (String) -> Unit,
     onCreateConglomerate: () -> Unit,
     onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(WorkboardSection.Alerts) }
 
@@ -191,6 +207,26 @@ fun WorkboardScreen(
     val triggeredAlerts = (alertsState as? AlertsState.Loaded)
         ?.items.orEmpty()
         .filter { it.status == AlertStatus.Triggered }
+
+    // Hoisted for the same reason [alertsVm] is, and [IdeasSection]'s own KDoc
+    // asks for it: the "Needs you" block reads ideas whichever segment is
+    // selected, and it must read the SAME ones the Ideas list shows. A second
+    // `viewModel { }` inside the section would mean two fetches and two copies of
+    // the list that drift the moment one of them reloads.
+    val ideasVm: IdeasViewModel = viewModel {
+        IdeasViewModel(
+            AppGraph.ideasRepository,
+            AppGraph.conglomerateRepository,
+            AppGraph.marketRepository,
+        )
+    }
+    val ideasState by ideasVm.state.collectAsStateWithLifecycle()
+    // `isNullOrBlank`, not `== null`: a thesis of spaces is not a thesis, and it
+    // is exactly what [IdeaRow] already refuses to print. The two must agree, or
+    // the block sends you to a detail page that looks finished.
+    val unfinishedIdeas = (ideasState as? IdeasUiState.Loaded)
+        ?.ideas.orEmpty()
+        .filter { it.thesis.isNullOrBlank() }
 
     // Deep-link entry from the notifications inbox ("Manage alerts" on an alert
     // row): open on the Alerts segment, once.
@@ -213,15 +249,10 @@ fun WorkboardScreen(
             .nestedScroll(LocalBtTabChrome.current.headerScroll),
     ) {
         WorkbenchNeedsYou(
-            // No ideas rows any more (owner de-bloat, 2026-08-07). The block is
-            // about what is WAITING on you, and with the Ideas segment gone from
-            // this tab an "unfinished idea" row would be the only thing left
-            // pointing at a list the user can no longer browse. [needsYouPlan]
-            // keeps its ideas arithmetic and its tests, so restoring the rows is
-            // this one argument.
             triggered = triggeredAlerts,
-            unfinished = emptyList(),
+            unfinished = unfinishedIdeas,
             onOpenAsset = onOpenAsset,
+            onOpenIdea = onOpenIdea,
         )
         SegmentedTabs(
             selected = section,
@@ -230,6 +261,7 @@ fun WorkboardScreen(
         )
         when (section) {
             WorkboardSection.Alerts -> AlertsSection(vm = alertsVm, onOpenAsset = onOpenAsset)
+            WorkboardSection.Ideas -> IdeasSection(onOpenIdea = onOpenIdea, vm = ideasVm)
             WorkboardSection.Conglomerates -> ConglomerateListScreen(
                 onOpen = onOpenConglomerate,
                 onCreate = onCreateConglomerate,
@@ -252,6 +284,7 @@ private fun WorkbenchNeedsYou(
     triggered: List<PriceAlert>,
     unfinished: List<Idea>,
     onOpenAsset: (String) -> Unit,
+    onOpenIdea: (String) -> Unit,
 ) {
     val bt = BtTheme.colors
     // The ordering and cap arithmetic live in `needsYouPlan`, where they are unit
@@ -259,6 +292,7 @@ private fun WorkbenchNeedsYou(
     val plan = needsYouPlan(triggered, unfinished, NEEDS_YOU_MAX)
     if (plan.isEmpty) return
     val shownAlerts = plan.alerts
+    val shownIdeas = plan.ideas
     val hidden = plan.hidden
 
     BtNeedsYouGroup(
@@ -278,6 +312,20 @@ private fun WorkbenchNeedsYou(
                         kind = BtBadgeKind.Gold,
                     )
                 },
+            )
+        }
+        // The ideas half, back with the segment (2026-08-17). No trailing badge:
+        // the alert rows carry one because "Triggered" is a STATUS the server
+        // sent, and there is no equivalent for an idea — `bt_ideas_no_thesis` is
+        // the whole story, and it is the same sentence the detail screen prints
+        // in the empty thesis slot, so the row and its destination agree.
+        shownIdeas.forEach { idea ->
+            BtGroupRow(
+                title = idea.name,
+                subtitle = stringResource(R.string.bt_ideas_no_thesis),
+                icon = Icons.Outlined.Lightbulb,
+                iconTint = bt.goldEmphasis,
+                onClick = { onOpenIdea(idea.id) },
             )
         }
         if (hidden > 0) {
@@ -311,6 +359,11 @@ private fun SegmentedTabs(
             badge = triggeredAlerts,
             modifier = Modifier.weight(1f),
         ) { onSelect(WorkboardSection.Alerts) }
+        Segment(
+            label = stringResource(R.string.bt_ideas_segment),
+            selected = selected == WorkboardSection.Ideas,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(WorkboardSection.Ideas) }
         Segment(
             label = stringResource(R.string.bt_workboard_seg_conglomerates),
             selected = selected == WorkboardSection.Conglomerates,

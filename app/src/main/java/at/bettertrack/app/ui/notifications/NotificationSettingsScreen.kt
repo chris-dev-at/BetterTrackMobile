@@ -23,11 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DesktopWindows
-import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,9 +33,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +54,8 @@ import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
+import at.bettertrack.app.data.notifications.DigestCadence
+import at.bettertrack.app.data.notifications.sharedCadence
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtFormError
@@ -68,101 +68,52 @@ import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Notification settings.
+ * Notification settings — the full account surface, natively.
  *
- * ## What this screen is, after the web-parity ruling (2026-08-08)
+ * ## History, because this screen has swung twice and the reasons matter
  *
- * It used to be a per-type × per-channel matrix: seven type cards, five channel
- * chips each, a per-type mute switch, and a digest-cadence chooser above them.
- * Under the owner's rule for anything the web already owns — *match it exactly or
- * link to the web* — most of that had to go, and the honest reason is not
- * "duplication" but that the app's version was never the same control:
+ * It began as a partial matrix: seven of the platform's twenty-six types, five of
+ * its six channels, one cadence for a whole invented "digestible" group, and an
+ * app-local per-type mute that never reached the server. In 2026-08 that was
+ * judged against the rule *match the web exactly or link to the web* and, being a
+ * lossy paraphrase on every axis, was replaced by four labelled links to
+ * `/control/notifications`.
  *
- *  - the **per-type mute** had no web analogue at all. It was a device-only
- *    invention that never left SharedPreferences, so a type muted on the phone
- *    still emailed you and still showed up on the web with every channel green.
- *  - the **cadence** chooser set one value for a whole group of types because a
- *    25-row grid does not fit a phone. The web sets it per type, so the app could
- *    not even display the state it was editing — it rendered "mixed" and gave up.
- *  - the **matrix** itself is 7 × 5 toggles the web renders as a table. Five
- *    channel chips wrapped under a heading is the same data in a shape that is
- *    slower to read and easy to mis-tap.
+ * The owner overruled that on 2026-08-17: *"ich will die selben
+ * einstellungsmöglichkeiten wie in der web Version haben und nicht weniger."* The
+ * governing principle he stated with it is the one this screen is now built on —
+ * the API is the shared control layer, the phone and the web are two **visual**
+ * front-ends onto the same account, and everything the server stores as account
+ * state must be readable and writable on the phone at least as granularly as on
+ * the web. Parity is not a reason to remove a control; it is an instruction to
+ * match the option set.
  *
- * So the matrix and cadence moved to the web, and what remains natively is
- * deliberately not a stub of the old screen. It is the set of things that are
- * either **device-only** or **genuinely identical on both sides**:
+ * So the links are gone and the controls are here. What was wrong the first time
+ * was never that the app had a matrix — it was that the matrix was a subset
+ * pretending to be the whole. The fix is to carry all of it:
  *
- *  1. the **system permission** card — Android's, nothing to do with the web;
- *  2. the **account-wide mute** — the web's single "silence everything" switch,
- *     the same `muted` flag on the same PATCH;
- *  3. **quiet hours** — one window, one zone, account-wide on both sides.
+ *  - **Routing**: 26 types in 8 categories × 6 channels, with the web's category
+ *    masters, its locked cells, and its collapsed mirrorchain tri-state row.
+ *  - **Delivery frequency**: per type, all 25 the web offers, three values.
+ *  - **Per-type mute**: back, and server-backed this time — the platform contract
+ *    defines a muted type as all-channels-false, so it now means the same thing on
+ *    both surfaces.
+ *  - **Telegram + Discord**: linked, tested and unlinked here, gated on the
+ *    deployment's own `channelsConfigurable` exactly as the web gates them.
+ *  - **Quiet hours** and the **account-wide mute**: unchanged, they always matched.
  *
- * The matrix is still fetched and still HONOURED (it gates whether an arriving
- * push is shown; see `decideDelivery`). "The app does not edit it" and "the app
- * ignores it" are very different statements and only the first one is true.
+ * ## The one thing still on the web, and why
  *
- * ## What the mute greys out
- *
- * The web dims the routing grid to `0.6` and disables it while `settings.muted`
- * (`NotificationsPanel.tsx`, `gridDisabled = busy || settings.muted`). The app
- * has no routing grid left to dim, so that treatment lands on the nearest thing
- * the mute actually overrides: **quiet hours**, a window that decides WHEN things
- * are held back and says nothing when nothing is sent at all. The permission card
- * does NOT dim (an OS grant is not an account flag's business) and neither does
- * the web row (a hand-off is not a setting a mute can silence).
- *
- * One deliberate deviation, stated plainly: the web leaves ITS quiet-hours fold
- * live under a mute. Copying that literally would leave the app's mute switch as
- * the only control on the screen with no visible consequence at all, since the
- * one thing the web dims is the one thing the app no longer has.
- *
- * Nothing is cleared, and the mute row's own subtitle is the web's sentence for
- * saying so — the difference between "muted" and "wiped".
- *
- * ## Why the web hand-off is FOUR named rows and not one (owner, 2026-08-09)
- *
- * *"if you have a feature that's only on web version link for it. don't just say
- * all settings unless it's really nested."*
- *
- * The 2026-08-08 ruling was right about where these features live and wrong about
- * how to say it. One row reading "All settings on the web" is not a link, it is a
- * shrug: it names no feature, so the only way to find out whether the thing you
- * want is over there is to go and look. The owner's own example is the giveaway —
- * he had to describe the digest by function ("digestion button") because the app
- * never gave it a name.
- *
- * So the section now carries one row per web-only feature family, each named the
- * way the web names it, and between them they are **exhaustive**. The web panel
- * (`NotificationsPanel.tsx:1181-1228`) is exactly four `PanelGroup`s:
- *
- *  - *General* — account mute (native here) + **browser push** (web-only);
- *  - *Channels* — **Telegram + Discord** (web-only, and gated: see below);
- *  - *Routing* — **the 25 × 6 type/channel matrix** (web-only);
- *  - *Timing* — **delivery frequency / the digest** (web-only) + quiet hours
- *    (native here).
- *
- * Every web-only item in that list has its own row, so there is nothing left for
- * a catch-all row to stand for and none is drawn. That is the test for whether a
- * blanket row is honest, and here it fails.
- *
- * ## Why all four rows open the same URL
- *
- * Because that is the only URL there is, and the alternative was to invent ones
- * that 404. The Control Center matches `^/control(?:/([^/]+))?/?$`
- * (`ControlCenterOverlay.tsx:278-284`) — **at most one** path segment — so
- * `/control/notifications/digest` falls through to the web's own not-found page.
- * There is no tab state, no `?tab=` parameter, and no hash handling anywhere in
- * the panel; the ⌘K palette's "digest" and "quiet hours" entries are search
- * KEYWORDS pointing at the same root path, not destinations.
- *
- * A row that names its feature and lands on the page containing it is still doing
- * the job the owner asked for: it answers *"is this a thing, and where?"* before
- * the tap rather than after. Two of the four (digest, quiet hours) additionally
- * arrive inside a `<details>` fold that is collapsed by default, which is why no
- * subtitle here promises to open anything "directly".
+ * **Browser push.** Not a settings gap — a capability one. Subscribing needs a
+ * service worker and a `PushManager`, which exist in a browser and nowhere else;
+ * the phone's equivalent is the FCM registration it already does silently. The
+ * `webpush` COLUMN is present in the routing grid, so what gets pushed to a desktop
+ * browser is fully controllable from here. Only "turn this browser on" is not, and
+ * a phone cannot do it for a browser it is not.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,11 +124,12 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val repo = AppGraph.notificationRepository
     val scope = rememberCoroutineScope()
 
+    val matrix by store.matrix.collectAsStateWithLifecycle()
+    val serverTypes by store.serverTypes.collectAsStateWithLifecycle()
+    val availability by store.availability.collectAsStateWithLifecycle()
+    val configurable by store.configurable.collectAsStateWithLifecycle()
     val delivery by store.delivery.collectAsStateWithLifecycle()
     val accountMuted by store.accountMuted.collectAsStateWithLifecycle()
-    // Which optional channels this deployment can deliver on — gates the
-    // Telegram/Discord row below, exactly as it gates the web's own group.
-    val channels by store.availability.collectAsStateWithLifecycle()
 
     // Pull the account settings on open. The result is STATE, not a fire-and-forget
     // call: while it is in flight the cached values are placeholders, not settings,
@@ -185,15 +137,18 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     // copy as though it were confirmed.
     var loadFailure by remember { mutableStateOf<BtMessage?>(null) }
     var loaded by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
         loaded = true
     }
-    // Write failures get their own slot next to the control that failed. Both writes
-    // roll the store back on refusal, so without a message the control would simply
-    // spring back to its old position and look broken.
+    // Write failures get their own slot next to the control that failed. Every
+    // write rolls the store back on refusal, so without a message the control would
+    // simply spring back to its old position and look broken.
     var muteFailure by remember { mutableStateOf<BtMessage?>(null) }
     var quietFailure by remember { mutableStateOf<BtMessage?>(null) }
+    var routingFailure by remember { mutableStateOf<BtMessage?>(null) }
+    var cadenceFailure by remember { mutableStateOf<BtMessage?>(null) }
+    var cadenceOpen by remember { mutableStateOf(false) }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     var permissionGranted by remember {
@@ -208,10 +163,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     ) { granted -> permissionGranted = granted }
 
     val quietHours = delivery.quietHours
-    // Whether the account block has anything in it at all. Gated so the section
-    // header can never stand over nothing — a pre-v5 server models neither, and an
-    // empty "Delivery" heading would read as a section that failed to load.
     val hasAccountSettings = accountMuted != null || quietHours != null
+    // The web disables its whole routing grid while the account is muted. So does
+    // this one — see [NotificationRoutingSection]'s KDoc.
+    val gridEnabled = accountMuted != true
 
     val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
@@ -223,7 +178,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.bt_action_back))
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = stringResource(R.string.bt_action_back),
+                        )
                     }
                 },
             )
@@ -258,141 +216,154 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 },
             )
 
-            // ── THIS ACCOUNT ─────────────────────────────────────────────────
-            when {
+            if (!loaded) {
                 // Placeholders rather than a cached copy dressed as confirmed state.
-                !loaded -> {
-                    BtSectionHeader(stringResource(R.string.bt_notif_delivery_section))
-                    BtSkeleton(Modifier.fillMaxWidth().height(72.dp), shape = BtShapes.group)
-                    BtSkeleton(Modifier.fillMaxWidth().height(96.dp), shape = BtShapes.card)
-                }
+                BtSectionHeader(stringResource(R.string.bt_notif_general_section))
+                BtSkeleton(Modifier.fillMaxWidth().height(72.dp), shape = BtShapes.group)
+                BtSkeleton(Modifier.fillMaxWidth().height(160.dp), shape = BtShapes.card)
+                return@Column
+            }
 
-                hasAccountSettings || loadFailure != null -> {
-                    BtSectionHeader(stringResource(R.string.bt_notif_delivery_section))
+            // ── GENERAL ──────────────────────────────────────────────────────
+            if (hasAccountSettings || loadFailure != null) {
+                BtSectionHeader(stringResource(R.string.bt_notif_general_section))
 
-                    // The GET failed. Anything shown below it is the ON-DEVICE copy,
-                    // which is real — it is the last thing the server actually said —
-                    // it is just not confirmed right now. So it stays, with the error
-                    // above the controls it qualifies, exactly as this screen has
-                    // always handled it. Note there is no fabricated fallback to fear:
-                    // with no cached GET the flags are `null` and nothing renders at
-                    // all, which is the branch the sentence below covers.
-                    loadFailure?.let { failure ->
-                        BtInlineError(
-                            message = failure,
-                            onRetry = {
-                                scope.launch {
-                                    loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
-                                }
-                            },
-                        )
-                        if (!hasAccountSettings) {
-                            Text(
-                                stringResource(R.string.bt_notif_account_unavailable),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = bt.textMuted,
-                            )
-                        }
-                    }
-
-                    accountMuted?.let { muted ->
-                        BtGroup {
-                            BtGroupRow(
-                                icon = if (muted) Icons.Outlined.NotificationsOff else Icons.Outlined.NotificationsActive,
-                                iconTint = if (muted) bt.goldEmphasis else null,
-                                title = stringResource(R.string.bt_notif_mute_all_title),
-                                subtitle = stringResource(R.string.bt_notif_mute_all_sub),
-                                onClick = { toggleMute(scope, repo, !muted) { muteFailure = it } },
-                                trailing = {
-                                    Switch(
-                                        checked = muted,
-                                        onCheckedChange = { on -> toggleMute(scope, repo, on) { muteFailure = it } },
-                                        colors = SwitchDefaults.colors(
-                                            checkedThumbColor = bt.onGold,
-                                            checkedTrackColor = bt.gold,
-                                            checkedBorderColor = bt.gold,
-                                            uncheckedThumbColor = bt.textMuted,
-                                            uncheckedTrackColor = bt.surface,
-                                            uncheckedBorderColor = bt.borderStrong,
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                        muteFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
-                    }
-
-                    // Quiet hours stays LIVE and editable under a full mute
-                    // (coordinator ruling 2026-08-08). That is the web's
-                    // semantics: mute stops DELIVERY, it does not take the
-                    // schedule away from you — `gridDisabled` there covers the
-                    // routing grid only and the quiet-hours fold is untouched.
-                    // With the grid gone from this screen there is nothing left
-                    // that the mute should grey, and dimming quiet hours instead
-                    // would invent a third behaviour neither surface has.
-                    NotificationDeliverySection(
-                        quietHours = quietHours,
-                        enabled = true,
-                        onQuietHours = { next ->
-                            quietFailure = null
+                // The GET failed. Anything shown below it is the ON-DEVICE copy,
+                // which is real — it is the last thing the server actually said —
+                // it is just not confirmed right now. So it stays, with the error
+                // above the controls it qualifies.
+                loadFailure?.let { failure ->
+                    BtInlineError(
+                        message = failure,
+                        onRetry = {
                             scope.launch {
-                                val r = repo.setQuietHours(next)
-                                if (r is BtResult.Err) quietFailure = r.error.asMessage()
+                                loadFailure = (repo.loadServerSettings() as? BtResult.Err)?.asMessage()
                             }
                         },
                     )
-                    quietFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
-
-                    // The web's quiet-hours description, second sentence — the one
-                    // thing a user must not have to guess. Shown whenever quiet
-                    // hours exists: it describes what the schedule does, which is
-                    // true whether or not a mute is also in force.
-                    if (quietHours != null) {
+                    if (!hasAccountSettings) {
                         Text(
-                            stringResource(R.string.bt_notif_quiet_inbox_hint),
+                            stringResource(R.string.bt_notif_account_unavailable),
                             style = MaterialTheme.typography.bodySmall,
                             color = bt.textMuted,
                         )
                     }
                 }
 
-                // Loaded fine, but this deployment models neither a mute nor quiet
-                // hours (pre-v5). Nothing is drawn — not even a heading. The web row
-                // below is then the whole truth of the section, which is honest.
-                else -> Unit
+                accountMuted?.let { muted ->
+                    BtGroup {
+                        BtGroupRow(
+                            icon = if (muted) Icons.Outlined.NotificationsOff else Icons.Outlined.NotificationsActive,
+                            iconTint = if (muted) bt.goldEmphasis else null,
+                            title = stringResource(R.string.bt_notif_mute_all_title),
+                            subtitle = stringResource(R.string.bt_notif_mute_all_sub),
+                            onClick = { write(scope, { repo.setAccountMuted(!muted) }) { muteFailure = it } },
+                            trailing = {
+                                Switch(
+                                    checked = muted,
+                                    onCheckedChange = { on ->
+                                        write(scope, { repo.setAccountMuted(on) }) { muteFailure = it }
+                                    },
+                                    colors = btSwitchColors(),
+                                )
+                            },
+                        )
+                    }
+                    muteFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
+                }
+            }
+
+            // ── CHANNELS (Telegram + Discord) ────────────────────────────────
+            // Gated on the DEPLOYMENT kill-switch, never on whether the user has
+            // already linked something. Draws nothing at all when the switch is
+            // off — which is the default, and is the correct behaviour rather than
+            // a missing feature: with it off, every /settings/telegram and
+            // /settings/discord route answers a bare 404.
+            NotificationChannelsSection(
+                telegramConfigurable = configurable.telegram,
+                discordConfigurable = configurable.discord,
+            )
+
+            // ── ROUTING ──────────────────────────────────────────────────────
+            if (serverTypes.isNotEmpty()) {
+                NotificationRoutingSection(
+                    matrix = matrix,
+                    serverTypes = serverTypes,
+                    availability = availability,
+                    enabled = gridEnabled,
+                    failure = routingFailure,
+                    onCell = { type, channel, on ->
+                        write(scope, { repo.setCell(type, channel, on) }) { routingFailure = it }
+                    },
+                    onMirrorChannel = { channel, on ->
+                        write(scope, { repo.setMirrorChannel(channel, on) }) { routingFailure = it }
+                    },
+                    onCategory = { category, on ->
+                        write(scope, { repo.setCategory(category, on) }) { routingFailure = it }
+                    },
+                    onMute = { type, muted ->
+                        write(scope, { repo.setTypeMuted(type, muted) }) { routingFailure = it }
+                    },
+                )
+            } else if (loadFailure != null) {
+                Text(
+                    stringResource(R.string.bt_notif_routing_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
+
+            // ── TIMING ───────────────────────────────────────────────────────
+            if (delivery.cadence != null || quietHours != null) {
+                BtSectionHeader(stringResource(R.string.bt_notif_timing_section))
+
+                delivery.cadence?.let { cadence ->
+                    val shared = sharedCadence(cadence, serverTypes)
+                    BtGroup {
+                        BtGroupRow(
+                            icon = Icons.Outlined.Schedule,
+                            title = stringResource(R.string.bt_notif_cadence_title),
+                            subtitle = when (shared) {
+                                DigestCadence.Instant -> stringResource(R.string.bt_notif_cadence_all_instant)
+                                null -> stringResource(R.string.bt_notif_cadence_mixed)
+                                else -> stringResource(notifCadenceLabelRes(shared))
+                            },
+                            onClick = { cadenceOpen = true },
+                        )
+                    }
+                }
+
+                // Quiet hours stays LIVE under an account mute — that is the web's
+                // semantics (its `gridDisabled` covers the routing grid only). With
+                // the grid back on this screen, the mute finally has its real
+                // target again and quiet hours no longer has to stand in for it.
+                NotificationDeliverySection(
+                    quietHours = quietHours,
+                    enabled = true,
+                    onQuietHours = { next ->
+                        write(scope, { repo.setQuietHours(next) }) { quietFailure = it }
+                    },
+                )
+                quietFailure?.let { BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp)) }
+
+                if (quietHours != null) {
+                    Text(
+                        stringResource(R.string.bt_notif_quiet_inbox_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                    )
+                }
             }
 
             // ── ON THE WEB ───────────────────────────────────────────────────
-            // One NAMED row per web-only feature family — see this screen's KDoc
-            // for why the single "All settings on the web" row it replaces was
-            // the wrong shape.
+            // Exactly one row now, and it names a capability rather than a
+            // settings group: enabling push for a BROWSER needs a service worker
+            // and a PushManager, which a phone does not have and cannot stand in
+            // for. What gets sent to a browser is set in the grid above, in the
+            // Browser-push column — this row is only the "turn this browser on"
+            // half.
             BtSectionHeader(stringResource(R.string.bt_notif_web_section))
             BtGroup {
-                BtWebLinkRow(
-                    title = stringResource(R.string.bt_notif_web_digest_title),
-                    subtitle = stringResource(R.string.bt_notif_web_digest_sub),
-                    icon = Icons.Outlined.Schedule,
-                    path = WEB_NOTIFICATION_SETTINGS_PATH,
-                )
-                BtWebLinkRow(
-                    title = stringResource(R.string.bt_notif_web_routing_title),
-                    subtitle = stringResource(R.string.bt_notif_web_routing_sub),
-                    icon = Icons.Outlined.Tune,
-                    path = WEB_NOTIFICATION_SETTINGS_PATH,
-                )
-                // Only when the deployment can actually deliver on them. The
-                // server's `channels` object is the same gate the web uses to
-                // decide whether its Channels group exists at all, so a build
-                // without BT_TELEGRAM_DISCORD_ENABLED does not advertise a
-                // section its own web app is not rendering.
-                if (channels.telegram || channels.discord) {
-                    BtWebLinkRow(
-                        title = stringResource(R.string.bt_notif_web_channels_title),
-                        subtitle = stringResource(R.string.bt_notif_web_channels_sub),
-                        icon = Icons.Outlined.Forum,
-                        path = WEB_NOTIFICATION_SETTINGS_PATH,
-                    )
-                }
                 BtWebLinkRow(
                     title = stringResource(R.string.bt_notif_web_browserpush_title),
                     subtitle = stringResource(R.string.bt_notif_web_browserpush_sub),
@@ -409,29 +380,43 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(8.dp))
         }
     }
+
+    if (cadenceOpen) {
+        NotificationCadenceSheet(
+            cadence = delivery.cadence.orEmpty(),
+            serverTypes = serverTypes,
+            failure = cadenceFailure,
+            onDismiss = { cadenceOpen = false; cadenceFailure = null },
+            onPick = { type, choice ->
+                write(scope, { repo.setTypeCadence(type, choice) }) { cadenceFailure = it }
+            },
+        )
+    }
 }
 
 /**
- * Where the per-type matrix and the digest cadence live. Joined to the EFFECTIVE
- * origin by `BtWebLinkRow` — never hardcode a host here, or a self-hosted user is
- * sent to somebody else's server to change their settings.
+ * Where browser push is enabled. Joined to the EFFECTIVE origin by [BtWebLinkRow] —
+ * never hardcode a host here, or a self-hosted user is sent to somebody else's
+ * server to change their settings.
  */
 private const val WEB_NOTIFICATION_SETTINGS_PATH = "/control/notifications"
 
 /**
- * Flip the account mute. The switch reads its position from the store, so a
- * server refusal (which rolls the store back) visibly returns it — and the error
- * says why, because a control that springs back in silence looks broken.
+ * Run a settings write and route its refusal to one error slot.
+ *
+ * Every control on this screen reads its position from the store and every write
+ * rolls the store back on refusal, so the switch visibly returns by itself. The
+ * message is what stops that looking like a bug: a control that springs back in
+ * silence is indistinguishable from one that is broken.
  */
-private fun toggleMute(
-    scope: kotlinx.coroutines.CoroutineScope,
-    repo: at.bettertrack.app.data.notifications.NotificationRepository,
-    on: Boolean,
+private fun write(
+    scope: CoroutineScope,
+    call: suspend () -> BtResult<Unit>,
     onFailure: (BtMessage?) -> Unit,
 ) {
     onFailure(null)
     scope.launch {
-        val r = repo.setAccountMuted(on)
+        val r = call()
         if (r is BtResult.Err) onFailure(r.error.asMessage())
     }
 }

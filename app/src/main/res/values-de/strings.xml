@@ -1186,7 +1186,6 @@
     <string name="bt_notif_type_digest_sub">Deine tägliche oder wöchentliche Übersicht</string>
 
     <!-- V5 Zustellung: Sammel-Rhythmus + Ruhezeiten (nur ausgehende Kanäle) -->
-    <string name="bt_notif_delivery_section">Zustellung</string>
     <string name="bt_notif_quiet_title">Ruhezeiten</string>
     <string name="bt_notif_quiet_subtitle">Ausgehende Mitteilungen in einem selbst gewählten Zeitfenster zurückhalten</string>
     <string name="bt_notif_quiet_start">Beginn</string>
@@ -2379,15 +2378,9 @@
     <string name="bt_notif_quiet_timezone_use_detected">Meine Zeitzone verwenden (%1$s)</string>
     <string name="bt_notif_quiet_inbox_hint">Dringende Konto- und Sicherheitshinweise kommen immer durch, und die Glocke in der App bleibt sofort.</string>
     <!-- Übergabe an die Web-App -->
-    <string name="bt_notif_web_digest_title">Zustellhäufigkeit</string>
-    <string name="bt_notif_web_digest_sub">Sofort, tägliche oder wöchentliche Zusammenfassung — je Mitteilungstyp</string>
-    <string name="bt_notif_web_routing_title">Zuordnung</string>
-    <string name="bt_notif_web_routing_sub">Welcher Mitteilungstyp welchen Kanal erreicht</string>
-    <string name="bt_notif_web_channels_title">Telegram und Discord</string>
-    <string name="bt_notif_web_channels_sub">Chat-Konto verbinden und festlegen, was dorthin geht</string>
     <string name="bt_notif_web_browserpush_title">Browser-Push</string>
     <string name="bt_notif_web_browserpush_sub">Mitteilungen am Computer, je Browser eingerichtet</string>
-    <string name="bt_notif_web_explainer">Diese Punkte öffnen die Mitteilungs-Einstellungen der Web-App, wo sie jeweils liegen. Alles andere auf diesem Bildschirm wird hier am Telefon eingestellt.</string>
+    <string name="bt_notif_web_explainer">Einen Browser einschalten geht nur in diesem Browser. Was dorthin geht, steuert die Spalte „Browser-Push“ oben — hier eingestellt.</string>
     <!-- ==== /STREAM-NOTIF (DE) ==== -->
 
     <!-- ==== STREAM-SETTINGS (DE) ==== -->
@@ -2710,4 +2703,163 @@
     <string name="bt_widgets_no_budgets">Noch keine Budgets — lege zuerst eins auf dem Cash-Bildschirm an.</string>
     <string name="bt_widgets_no_assets">Noch nichts zur Auswahl — füge zuerst Positionen oder Watchlist-Einträge hinzu.</string>
     <string name="bt_widgets_resize_hint">Widgets passen sich an, wenn du sie auf dem Startbildschirm vergrößerst.</string>
+
+    <!-- ==== BENACHRICHTIGUNGS-ZUORDNUNG (DE) ==== -->
+    <string name="bt_notif_general_section">Allgemein</string>
+    <string name="bt_notif_routing_section">Zuordnung</string>
+    <string name="bt_notif_routing_hint">Welche Art von Benachrichtigung über welchen Kanal kommt — dieselbe Tabelle wie in der Web-App.</string>
+    <string name="bt_notif_timing_section">Zeitsteuerung</string>
+
+    <string name="bt_ncat_social">Freunde</string>
+    <string name="bt_ncat_sharing">Teilen &amp; Aktivität</string>
+    <string name="bt_ncat_chat">Chat</string>
+    <string name="bt_ncat_alerts">Preisalarme</string>
+    <string name="bt_ncat_budgets">Budgets</string>
+    <string name="bt_ncat_markets">Märkte</string>
+    <string name="bt_ncat_mirrorchain">Gruppen-Portfolios</string>
+    <string name="bt_ncat_account">Konto</string>
+
+    <string name="bt_nch_inapp">In der App</string>
+    <string name="bt_nch_email">E-Mail</string>
+    <string name="bt_nch_telegram">Telegram</string>
+    <string name="bt_nch_discord">Discord</string>
+    <string name="bt_nch_push">Handy-Push</string>
+    <string name="bt_nch_webpush">Browser-Push</string>
+
+    <string name="bt_ntype_friend_request">Freundschaftsanfragen</string>
+    <string name="bt_ntype_friend_accepted">Angenommene Freundschaftsanfragen</string>
+    <string name="bt_ntype_portfolio_shared">Geteilte Portfolios</string>
+    <string name="bt_ntype_watchlist_shared">Geteilte Watchlists</string>
+    <string name="bt_ntype_conglomerate_shared">Geteilte Konglomerate</string>
+    <string name="bt_ntype_friend_activity">Aktivität von Freunden</string>
+    <string name="bt_ntype_follow_published">Neues von Personen, denen du folgst</string>
+    <string name="bt_ntype_follow_alert_created">Neue Alarme von Personen, denen du folgst</string>
+    <string name="bt_ntype_follow_alert_fired">Ausgelöste Alarme von Personen, denen du folgst</string>
+    <string name="bt_ntype_chat_message">Chat-Nachrichten</string>
+    <string name="bt_ntype_alert_triggered">Preisalarme</string>
+    <string name="bt_ntype_standing_order_skipped">Probleme mit Daueraufträgen</string>
+    <string name="bt_ntype_budget_exceeded">Budget-Warnungen</string>
+    <string name="bt_ntype_earnings_reminder">Erinnerungen an Quartalszahlen</string>
+    <string name="bt_ntype_dividend_event">Dividenden-Erinnerungen</string>
+    <string name="bt_ntype_mirror_invite">Einladungen zu Gruppen-Portfolios</string>
+    <string name="bt_ntype_mirror_member_joined">Mitglied beigetreten</string>
+    <string name="bt_ntype_mirror_member_left">Mitglied ausgetreten</string>
+    <string name="bt_ntype_mirror_member_removed">Mitglied entfernt</string>
+    <string name="bt_ntype_mirror_removed">Aus einem Gruppen-Portfolio entfernt</string>
+    <string name="bt_ntype_mirror_ownership_transferred">Eigentümerschaft übertragen</string>
+    <string name="bt_ntype_mirror_chain_dissolved">Gruppen-Portfolio aufgelöst</string>
+    <string name="bt_ntype_mirror_sync_stalled">Synchronisierungsprobleme</string>
+    <string name="bt_ntype_account_invite">Konto-Einladungen</string>
+    <string name="bt_ntype_account_temp_password">Temporäre Passwörter</string>
+    <string name="bt_ntype_account_data_export">Datenexporte</string>
+
+    <string name="bt_notif_mirror_group">Aktivität im Gruppen-Portfolio</string>
+    <string name="bt_notif_mirror_group_hint">Einladungen, Mitgliederänderungen, Eigentümer, Auflösung und Sync-Hinweise — alles in einer Einstellung.</string>
+
+    <string name="bt_notif_lock_invite">Einladungs-E-Mails gehen an Personen ohne Konto — hier gibt es nichts zu steuern.</string>
+    <string name="bt_notif_lock_temp_password">Die E-Mail mit dem temporären Passwort wird immer gesendet — sie enthält deine Zugangsdaten.</string>
+    <string name="bt_notif_locked_badge">Fix</string>
+
+    <string name="bt_notif_row_muted">Stumm</string>
+    <string name="bt_notif_row_mixed">Gemischt</string>
+    <string name="bt_notif_cat_summary">%1$d von %2$d aktiv</string>
+    <string name="bt_notif_cat_toggle_cd">Alle Benachrichtigungen unter %1$s umschalten</string>
+    <string name="bt_notif_cell_cd">%1$s per %2$s</string>
+    <string name="bt_notif_expand_cd">Arten in %1$s anzeigen</string>
+    <string name="bt_notif_collapse_cd">Arten in %1$s ausblenden</string>
+
+    <string name="bt_notif_type_channels">Kanäle</string>
+    <string name="bt_notif_mute_type">Diese Art stummschalten</string>
+    <string name="bt_notif_mute_type_sub">Schaltet jeden Kanal ab. Beim Aufheben kommt deine vorherige Auswahl zurück.</string>
+    <string name="bt_notif_all_off">Für diese Art wird derzeit nichts zugestellt.</string>
+    <string name="bt_notif_no_channels">Auf dieser Installation ist kein Zustellkanal eingerichtet.</string>
+
+    <string name="bt_notif_cadence_title">Zustellhäufigkeit</string>
+    <string name="bt_notif_cadence_sub">Fasse E-Mail und Push zu einer täglichen oder wöchentlichen Zusammenfassung zusammen. Die Glocke in der App bleibt immer sofort.</string>
+    <string name="bt_notif_cadence_instant">Sofort</string>
+    <string name="bt_notif_cadence_daily">Täglich</string>
+    <string name="bt_notif_cadence_weekly">Wöchentlich</string>
+    <string name="bt_notif_cadence_all_instant">Alles sofort</string>
+    <string name="bt_notif_cadence_mixed">Pro Art eingestellt</string>
+    <string name="bt_notif_cadence_cd">Zustellhäufigkeit für %1$s</string>
+
+    <string name="bt_notif_routing_unavailable">Die Zuordnungstabelle konnte nicht geladen werden und wird daher nicht angezeigt. Deine Einstellungen sind unverändert.</string>
+
+    <!-- ==== IN-APP-FEEDBACK (DE) ==== -->
+    <!-- Die Kategorie-Labels sind reine Anzeigetexte — auf der Leitung bleiben es
+         in jeder Sprache feature|bug|other. -->
+    <string name="bt_dest_feedback">Feedback senden</string>
+    <string name="bt_settings_feedback_sub">Fehler melden oder eine Verbesserung vorschlagen</string>
+    <string name="bt_about_feedback_sub">Sag dem Entwickler, was als Nächstes drankommt</string>
+    <string name="bt_feedback_intro">Schreib, was kaputt ist oder was fehlt. Das geht direkt an den Entwickler.</string>
+    <string name="bt_feedback_category_header">Worum geht es?</string>
+    <string name="bt_feedback_cat_feature">Feature/Verbesserung</string>
+    <string name="bt_feedback_cat_feature_sub">Etwas, das die App können sollte</string>
+    <string name="bt_feedback_cat_bug">Bug</string>
+    <string name="bt_feedback_cat_bug_sub">Etwas ist kaputt, falsch oder zeigt die falsche Zahl</string>
+    <string name="bt_feedback_cat_other">Sonstiges</string>
+    <string name="bt_feedback_cat_other_sub">Alles, was keines von beiden ist</string>
+    <string name="bt_feedback_message_header">Deine Nachricht</string>
+    <string name="bt_feedback_subject_label">Betreff (optional)</string>
+    <string name="bt_feedback_message_label">Was ist passiert, oder was würde helfen?</string>
+    <string name="bt_feedback_counter">%1$d / %2$d</string>
+    <string name="bt_feedback_counter_cd">Nachrichtenlänge: %1$d von %2$d</string>
+    <string name="bt_feedback_send">Feedback senden</string>
+    <string name="bt_feedback_context_header">Wird mitgeschickt</string>
+    <string name="bt_feedback_context_hint">Damit sich ein Fehler auf dem richtigen Build nachstellen lässt. Nichts über dein Konto, deine Portfolios oder deine Zahlen wird angehängt.</string>
+    <string name="bt_feedback_context_platform">Plattform</string>
+    <string name="bt_feedback_context_app">App-Version</string>
+    <string name="bt_feedback_context_os">Android-Version</string>
+    <string name="bt_feedback_context_device">Gerät</string>
+    <string name="bt_feedback_context_locale">Sprache</string>
+    <string name="bt_feedback_context_screen">Geöffnet über</string>
+    <string name="bt_feedback_sent_title">Nachricht gesendet</string>
+    <string name="bt_feedback_sent_body">Danke. In der App gibt es keinen Antwort-Verlauf — Rückfragen kommen per E-Mail.</string>
+    <string name="bt_feedback_sent_again">Noch etwas schreiben</string>
+    <string name="bt_feedback_offline">Keine Verbindung. Feedback geht sofort beim Tippen raus, das muss also warten — dein Text bleibt hier stehen.</string>
+    <string name="bt_feedback_signed_out">Melde dich an, um Feedback zu senden.</string>
+
+    <!-- ==== TELEGRAM + DISCORD CHANNEL SETUP (DE) ==== -->
+    <string name="bt_notif_tg_dc_section">Kanäle</string>
+
+    <string name="bt_notif_tg_title">Telegram</string>
+    <string name="bt_notif_tg_hint">Benachrichtigungen als Chat-Nachricht vom BetterTrack-Bot erhalten.</string>
+    <string name="bt_notif_tg_start">Telegram-Verknüpfung starten</string>
+    <string name="bt_notif_tg_start_error">Telegram-Verknüpfung konnte nicht gestartet werden. Bitte versuche es erneut.</string>
+    <string name="bt_notif_tg_pending_title">Warten auf den Bot</string>
+    <string name="bt_notif_tg_open">Telegram öffnen</string>
+    <string name="bt_notif_tg_code_hint">Sende /start %1$s an den Bot, um die Verknüpfung abzuschließen.</string>
+    <string name="bt_notif_tg_copy_code">Code kopieren</string>
+    <string name="bt_notif_tg_code_copied">Verknüpfungscode kopiert.</string>
+    <string name="bt_notif_tg_confirm">Ich habe den Bot gestartet</string>
+    <string name="bt_notif_tg_confirming">Wird geprüft…</string>
+    <string name="bt_notif_tg_confirm_error">Verknüpfung konnte noch nicht bestätigt werden. Versuche es erneut, sobald du im Chat auf Start gedrückt hast.</string>
+    <string name="bt_notif_tg_expired">Dieser Verknüpfungscode ist abgelaufen. Starte einen neuen, um weiterzumachen.</string>
+    <string name="bt_notif_tg_code_lost">Der Verknüpfungscode wird nur einmal angezeigt und dieser Bildschirm hat ihn nicht mehr. Starte eine neue Verknüpfung für einen frischen Code.</string>
+    <string name="bt_notif_tg_start_again">Neue Verknüpfung starten</string>
+    <string name="bt_notif_tg_linked">Verknüpft mit Chat %1$s</string>
+    <string name="bt_notif_tg_unlink">Telegram trennen</string>
+    <string name="bt_notif_tg_unlink_error">Telegram konnte nicht getrennt werden. Bitte versuche es erneut.</string>
+    <string name="bt_notif_tg_unlink_confirm_title">Telegram trennen?</string>
+    <string name="bt_notif_tg_unlink_confirm_body">An Telegram gesendete Benachrichtigungen kommen dann nicht mehr an. Du kannst den Chat jederzeit wieder verknüpfen.</string>
+    <string name="bt_notif_tg_no_app">Auf diesem Telefon konnte keine App den Telegram-Link öffnen. Sende den Code stattdessen von Hand an den Bot.</string>
+
+    <string name="bt_notif_dc_title">Discord</string>
+    <string name="bt_notif_dc_hint">Empfange Benachrichtigungen über einen benutzerspezifischen Discord-Webhook. Die URL wird verschlüsselt gespeichert und nie zurückgezeigt.</string>
+    <string name="bt_notif_dc_url_label">Webhook-URL</string>
+    <string name="bt_notif_dc_save">Webhook speichern</string>
+    <string name="bt_notif_dc_saving">Wird gespeichert…</string>
+    <string name="bt_notif_dc_saved">Webhook gespeichert (%1$s)</string>
+    <string name="bt_notif_dc_test">Testnachricht senden</string>
+    <string name="bt_notif_dc_testing">Wird gesendet…</string>
+    <string name="bt_notif_dc_test_ok">Testnachricht zugestellt.</string>
+    <string name="bt_notif_dc_remove">Webhook entfernen</string>
+    <string name="bt_notif_dc_removing">Wird entfernt…</string>
+    <string name="bt_notif_dc_remove_confirm_title">Webhook entfernen?</string>
+    <string name="bt_notif_dc_remove_confirm_body">An Discord gesendete Benachrichtigungen kommen dann nicht mehr an. Die URL lässt sich nirgends wieder auslesen — du müsstest sie also erneut einfügen.</string>
+    <string name="bt_notif_dc_err_invalid_webhook">Discord hat diesen Webhook abgelehnt — ist er noch gültig?</string>
+    <string name="bt_notif_dc_err_send_failed">Discord konnte die Testnachricht nicht annehmen. Bitte versuche es erneut.</string>
+    <string name="bt_notif_dc_err_not_webhook">Das sieht nicht wie eine Discord-Webhook-URL aus.</string>
+    <string name="bt_notif_dc_err_test_failed">Discord hat die Testnachricht abgelehnt. Prüfe die Webhook-URL und versuche es erneut.</string>
+    <string name="bt_notif_dc_err_remove">Der Webhook konnte nicht entfernt werden. Bitte versuche es erneut.</string>
 </resources>

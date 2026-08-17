@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.NotificationsPaused
@@ -102,6 +103,12 @@ import java.util.Locale
 fun AboutScreen(
     onBack: () -> Unit,
     onOpenChangelog: () -> Unit,
+    /**
+     * The feedback composer, reached from here as the discreet second entry point
+     * (the primary one is a Settings row). Only ever wired when
+     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
+     */
+    onOpenFeedback: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -320,6 +327,20 @@ fun AboutScreen(
                     subtitle = UpdateChecker.RELEASES_PAGE_LABEL,
                     onClick = { onOpenUrl(UpdateChecker.RELEASES_PAGE_URL) },
                 )
+                // The discreet second door to the feedback composer. It belongs at
+                // the bottom of THIS group because that is where somebody already
+                // is when they have just read the version number and want to say
+                // something about it — and unlike every other row here it stays in
+                // the app instead of opening the browser. Gated on the same flag as
+                // the primary Settings row; see `FeedbackFlags.enabled`.
+                if (at.bettertrack.app.data.repo.FeedbackFlags.enabled) {
+                    BtGroupRow(
+                        icon = Icons.Outlined.Feedback,
+                        title = stringResource(R.string.bt_dest_feedback),
+                        subtitle = stringResource(R.string.bt_about_feedback_sub),
+                        onClick = onOpenFeedback,
+                    )
+                }
             }
 
             Spacer(Modifier.height(4.dp))

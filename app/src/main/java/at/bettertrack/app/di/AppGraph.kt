@@ -533,6 +533,31 @@ object AppGraph {
     }
 
     /**
+     * Telegram + Discord channel setup. A singleton because the Telegram link code
+     * exists ONLY in memory — the server hands it out once on `POST /link` and a
+     * later GET cannot re-issue it — so the state has to outlive the composable
+     * that started the link, or leaving the screen for ten seconds would destroy
+     * the only copy of a live code.
+     *
+     * Reaches nothing until a screen touches it, and on a deployment with
+     * `BT_TELEGRAM_DISCORD_ENABLED` off the first call 404s and the UI hides
+     * itself, so this costs an unconfigured account nothing beyond one GET.
+     */
+    val channelSetupRepository: at.bettertrack.app.data.notifications.ChannelSetupRepository by lazy {
+        at.bettertrack.app.data.notifications.DefaultChannelSetupRepository(api = btApi, json = json)
+    }
+
+    /**
+     * In-app feedback (platform #1315/#1316/#1317). Constructed lazily like every
+     * other repository; nothing reaches it while
+     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] is `false`, so on a
+     * shipped build this object is never created.
+     */
+    val feedbackRepository: at.bettertrack.app.data.repo.FeedbackRepository by lazy {
+        at.bettertrack.app.data.repo.DefaultFeedbackRepository(api = btApi, json = json)
+    }
+
+    /**
      * v5 discreet mode. Constructed eagerly on first UI touch so the cached flag
      * is applied to the renderer before any amount is drawn.
      */

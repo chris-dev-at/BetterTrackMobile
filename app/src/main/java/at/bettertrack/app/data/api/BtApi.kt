@@ -28,6 +28,7 @@ import at.bettertrack.app.data.api.dto.CreateStandingOrderRequest
 import at.bettertrack.app.data.api.dto.SetCashMovementTagsRequest
 import at.bettertrack.app.data.api.dto.StandingOrderDto
 import at.bettertrack.app.data.api.dto.StandingOrderListResponse
+import at.bettertrack.app.data.api.dto.SubmitFeedbackRequest
 import at.bettertrack.app.data.api.dto.UpdateCashBudgetRequest
 import at.bettertrack.app.data.api.dto.UpdateCashRuleRequest
 import at.bettertrack.app.data.api.dto.UpdateCashTagRequest
@@ -71,6 +72,12 @@ import at.bettertrack.app.data.api.dto.DividendProjectionResponse
 import at.bettertrack.app.data.api.dto.DividendsResponse
 import at.bettertrack.app.data.api.dto.EarningsCalendarResponse
 import at.bettertrack.app.data.api.dto.EarningsResponse
+import at.bettertrack.app.data.api.dto.DiscordSettingsDto
+import at.bettertrack.app.data.api.dto.DiscordTestResponse
+import at.bettertrack.app.data.api.dto.DiscordWebhookRequest
+import at.bettertrack.app.data.api.dto.FeedbackCreatedResponse
+import at.bettertrack.app.data.api.dto.TelegramConfirmResponse
+import at.bettertrack.app.data.api.dto.TelegramSettingsDto
 import at.bettertrack.app.data.api.dto.FriendGroupDto
 import at.bettertrack.app.data.api.dto.FriendGroupListResponse
 import at.bettertrack.app.data.api.dto.FriendGroupNameRequest
@@ -1337,6 +1344,68 @@ interface BtApi {
         @Body body: UpdateNotificationSettingsRequest,
     ): Response<NotificationSettingsResponse>
 
+    // ── Optional delivery channels: Telegram + Discord ───────────────────────
+    //
+    // ⚠️ SCOPE TRAP: these are the ONLY notification-settings routes that do NOT
+    // ride `notifications:*`. `/settings/notifications*` has an explicit rule in
+    // the bearer middleware; everything else under `/settings` falls through to
+    // the module table's `/settings` catch-all, which is
+    // `social:read` / `social:write`. Both are in the app's granted 19, so these
+    // are reachable — but a future scope trim that drops social:write would take
+    // Telegram and Discord down with it, and the reason would be very unobvious.
+    //
+    // ⚠️ 404 TRAP: the deployment kill-switch (BT_TELEGRAM_DISCORD_ENABLED,
+    // default OFF) short-circuits ALL eight routes to a bare 404 before any
+    // handler runs. That is why the UI is gated on the GET's
+    // `channelsConfigurable`, never on probing these endpoints.
+
+    /** Telegram link state for this user. [social:read] */
+    @GET("settings/telegram")
+    suspend fun telegramSettings(): Response<TelegramSettingsDto>
+
+    /**
+     * Start a Telegram link. No body. The response is the ONLY place `pendingCode`
+     * is ever populated — hold it, a refetch loses it. [social:write]
+     */
+    @POST("settings/telegram/link")
+    suspend fun startTelegramLink(): Response<TelegramSettingsDto>
+
+    /**
+     * Poll for the `/start <code>` message. `200 { linked: false }` means "not
+     * yet", not a failure. No body. [social:write]
+     */
+    @POST("settings/telegram/confirm")
+    suspend fun confirmTelegramLink(): Response<TelegramConfirmResponse>
+
+    /** Unlink Telegram. [social:write] */
+    @DELETE("settings/telegram")
+    suspend fun unlinkTelegram(): Response<TelegramSettingsDto>
+
+    /** Discord webhook state for this user. [social:read] */
+    @GET("settings/discord")
+    suspend fun discordSettings(): Response<DiscordSettingsDto>
+
+    /**
+     * Save a webhook URL. The server posts a real test message to it before
+     * persisting, so a 400 can be either "malformed" or "Discord refused it".
+     * [social:write]
+     */
+    @Headers("Content-Type: application/json")
+    @POST("settings/discord/webhook")
+    suspend fun saveDiscordWebhook(@Body body: DiscordWebhookRequest): Response<DiscordSettingsDto>
+
+    /**
+     * Send a test message through the saved webhook. Note the path: it is
+     * `discord/test`, NOT `discord/webhook/test` (which does not exist).
+     * [social:write]
+     */
+    @POST("settings/discord/test")
+    suspend fun testDiscordWebhook(): Response<DiscordTestResponse>
+
+    /** Remove the saved webhook. `DELETE settings/discord`, not `…/webhook`. [social:write] */
+    @DELETE("settings/discord")
+    suspend fun deleteDiscordWebhook(): Response<DiscordSettingsDto>
+
     // ── Step 15: friend chat (§6.10 — LIVE on #349 + #386) ───────────────────
     // 1:1 friend-only conversations (one per pair). Gate on chat:read (GET) /
     // chat:write (POST) — granted, need the ACTIVATION re-login. Non-friend /
@@ -1583,4 +1652,25 @@ interface BtApi {
      */
     @GET("version")
     suspend fun version(): Response<VersionResponse>
+
+    /**
+     * Submit in-app feedback (platform #1315/#1316/#1317, contract locked
+     * 2026-08-17). `201 { id, createdAt }`; over-length / bad category return the
+     * standard validation envelope, and the route is rate-limited to roughly
+     * 5 submissions per user per hour (429).
+     *
+     * Session-cookie AND bearer reachable; the bearer path needs `feedback:write`,
+     * which is NOT in the app's requested scope set yet — see
+     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED]. Until that
+     * flips, every call from this app would 403 INSUFFICIENT_SCOPE, which is exactly
+     * why the composer ships dark behind
+     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
+     *
+     * `GET /feedback/mine` is intentionally absent: skipped for v1.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("feedback")
+    suspend fun submitFeedback(
+        @Body body: SubmitFeedbackRequest,
+    ): Response<FeedbackCreatedResponse>
 }
