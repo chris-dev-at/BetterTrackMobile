@@ -160,8 +160,14 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     // cash entry lives on the Portfolio tab's Cash sheet, and search is the
     // Markets tab's own first control.
     NotifDeepLink.AddTransaction -> BtTab.Portfolio
-    NotifDeepLink.AddCashEntry -> BtTab.Portfolio
+    is NotifDeepLink.AddCashEntry -> BtTab.Portfolio
     NotifDeepLink.MarketSearch -> BtTab.Markets
+
+    // Quick Links widget (2026-08-17): the watchlist is a PANEL inside the
+    // Markets tab, so the tab that renders it is the tab that owns it — see
+    // [NotifDeepLink.Watchlist] for why it is its own target and not an alias
+    // of MarketSearch.
+    NotifDeepLink.Watchlist -> BtTab.Markets
 
     // Account-level: owned by no tab, pushed over the current one — see the KDoc.
     // The inbox belongs here for the same reason and one of its own: it is now

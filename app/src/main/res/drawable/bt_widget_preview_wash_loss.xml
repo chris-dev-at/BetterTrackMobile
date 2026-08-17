@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The preview twin of a money-OUT action button (BtGlanceColor.LossWash). The
+  wash tokens are pre-flattened opaque values, not alpha, for the same reason
+  the live ones are: a widget background composites over the wallpaper.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_loss_wash" />
+    <corners android:radius="10dp" />
+</shape>

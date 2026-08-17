@@ -216,6 +216,16 @@ class BtPortfolioWidget : GlanceAppWidget() {
         // the chart. ROW3 (a 4x3 resize) spends its extra height on the plot.
         val hero = wide && rows >= BtWidgetSizeClass.ROW4
 
+        // ONE-ROW placements are their own hierarchy, not this one shortened.
+        // A 120dp row cannot hold a subject line, a 24sp figure, a pill AND a
+        // plot: the height budget below would come out negative and the
+        // `coerceAtLeast(40f)` floor would push the curve off the card bottom.
+        // So the strip drops the stacked layout entirely — see [Strip].
+        if (rows <= BtWidgetSizeClass.ROW1) {
+            Strip(local, snapshot, portfolio, range, chartValues, colors, night)
+            return
+        }
+
         BtSubjectRow(portfolio.name, colors) {
             // The CONFIGURED span, stated as a quiet chip — the owner's ruling
             // removed the in-widget range switcher: "it should be configurable
@@ -412,6 +422,145 @@ class BtPortfolioWidget : GlanceAppWidget() {
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Spacer(GlanceModifier.height(2.dp))
                 BtWidgetAsOf(local, snapshot.netWorthAsOfMs, colors, locale)
+            }
+        }
+    }
+
+    /**
+     * The ONE-ROW renditions (owner ruling 2026-08-16: charts must be allowed
+     * narrower than full width, properly composed).
+     *
+     *  * **2x1** — subject, value, delta pill. No plot: at ~96dp of content
+     *    height, a curve under a hero figure would be a 20dp smear, and a
+     *    smear is not a chart. The card still answers its one question.
+     *  * **4x1** — the same metric block on the left with the series as a real
+     *    sparkline on the right, painted at exactly the dp it occupies. This is
+     *    the asset widget's own 4x1 language, which the owner already approved,
+     *    reused rather than reinvented.
+     *
+     * The range chip is dropped here on purpose: at one row the subject line
+     * shares its width with the figure, and the span is stated by the pill's
+     * own delta being a RANGE delta. It returns the moment there are two rows.
+     */
+    @Composable
+    private fun ColumnScope.Strip(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        portfolio: PortfolioEntity,
+        range: HistoryRange,
+        chartValues: List<Double>,
+        colors: BtGlanceColors,
+        night: Boolean,
+    ) {
+        val totals = portfolio.totals ?: return
+        val locale = btWidgetLocale(local)
+        val size = LocalSize.current
+        val wide = btWidgetIsWide(size.width.value)
+        val delta = btWidgetSeriesDelta(chartValues)
+        val contentH = size.height.value - 2 * BT_WIDGET_PADDING.value
+        val chart = chartValues.takeIf { wide && it.size >= 2 }
+
+        val heroText = btWidgetHeroMoney(
+            totals.totalValueEur,
+            BT_WIDGET_QUOTE_CURRENCY,
+            snapshot.discreet,
+            locale,
+        )
+        val pill: @Composable () -> Unit = {
+            if (delta != null) {
+                BtDeltaPill(
+                    // PERCENT, not BOTH, at every strip width. The full
+                    // "↗ +3.077,29 € · +17,71 %" pill is ~150dp and left the
+                    // figure beside it too little to print — and a truncated
+                    // money hero is the one thing this family may never show.
+                    text = btWidgetDeltaText(
+                        eur = null,
+                        pct = delta.pct,
+                        discreet = snapshot.discreet,
+                        locale = locale,
+                        style = BtWidgetDeltaStyle.PERCENT,
+                    ),
+                    tone = btWidgetTone(delta.eur),
+                    colors = colors,
+                )
+            }
+        }
+
+        // NARROW one-row (2x1): the pill goes UNDER the figure, not beside it.
+        // Side by side, "20.447,94 €" plus a pill needs ~170dp of a 163dp card
+        // and the launcher printed "20.447,…" (device QA 2026-08-17). Stacked,
+        // subject + figure + pill is 62dp of the 96dp available.
+        if (!wide) {
+            Column(
+                modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BtSubjectRow(portfolio.name, colors)
+                Text(
+                    text = heroText,
+                    style = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+                Spacer(GlanceModifier.height(3.dp))
+                pill()
+            }
+            return
+        }
+
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = GlanceModifier.defaultWeight()) {
+                BtSubjectRow(portfolio.name, colors) {
+                    // The span still earns its chip where a sparkline is
+                    // showing — it says what the curve covers.
+                    if (chart != null) BtContextChip(rangeLabel(local, range), colors)
+                }
+                Text(
+                    text = heroText,
+                    style = TextStyle(
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+            }
+            if (chart != null) {
+                Spacer(GlanceModifier.width(8.dp))
+                val density = local.resources.displayMetrics.density
+                // A third of the card, and a band rather than the full height:
+                // a sparkline taller than the figure beside it stops reading as
+                // context and starts competing with it.
+                val chartWDp = (size.width.value - 2 * BT_WIDGET_PADDING.value) * 0.34f
+                val chartHDp = (contentH - 8f).coerceIn(24f, 52f)
+                val (wPx, hPx) = btWidgetBitmapSize(chartWDp, chartHDp, density)
+                Image(
+                    provider = ImageProvider(
+                        btWidgetLineBitmap(
+                            normalized = btWidgetSparkNormalize(
+                                btWidgetSparkThin(chart, BT_WIDGET_SPARK_MAX_POINTS),
+                            ),
+                            widthPx = wPx,
+                            heightPx = hPx,
+                            lineColor = BtGlanceChartPalette.portfolioLine(night),
+                            density = density,
+                            endpointRingColor = BtGlanceChartPalette.surface(night),
+                        ),
+                    ),
+                    contentDescription = portfolio.name,
+                    modifier = GlanceModifier.width(chartWDp.dp).height(chartHDp.dp),
+                    contentScale = ContentScale.FillBounds,
+                )
+            }
+            if (delta != null) {
+                Spacer(GlanceModifier.width(8.dp))
+                pill()
             }
         }
     }

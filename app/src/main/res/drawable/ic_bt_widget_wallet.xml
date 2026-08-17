@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick-Links pictogram: cash sources and balances — a wallet outline with its
+  clasp dot. Traced from the study's `#i-wallet`; the clasp is the one FILLED
+  element, so it carries fillColor rather than a stroke.
+  White strokes, tinted at render time — see ic_bt_widget_overview.xml.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/bt_widget_gold">
+    <path
+        android:pathData="M4,7.2 h13.6 A2.4,2.4 0 0 1 20,9.6 v8.1 a2.3,2.3 0 0 1 -2.3,2.3 H5.5 A2.5,2.5 0 0 1 3,17.5 v-11 A2.5,2.5 0 0 1 5.5,4 H17"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15.5,11 h5 v5 h-5 a2.5,2.5 0 0 1 0,-5 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15.95,13.5 a0.45,0.45 0 1 0 0.9,0 a0.45,0.45 0 1 0 -0.9,0 z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

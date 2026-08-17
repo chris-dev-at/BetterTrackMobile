@@ -2680,14 +2680,51 @@
     <string name="bt_widget_preview_flow_out">−2.864,73 €</string>
     <string name="bt_widget_preview_flow_net">+1.415,27 €</string>
     <string name="bt_widget_preview_flow_window">+6.842,19 €</string>
-    <string name="bt_widget_actions_title">Schnellaktionen</string>
-    <string name="bt_widget_actions_description">Ein Tipp: neue Transaktion, Cash-Buchung, Märkte.</string>
+    <string name="bt_widget_actions_title">Schnelllinks</string>
+    <string name="bt_widget_actions_description">Symbol-Verknüpfungen überallhin — du wählst, welche.</string>
     <string name="bt_widget_action_trade">Neue Transaktion</string>
     <string name="bt_widget_action_trade_short">Transaktion</string>
     <string name="bt_widget_action_cash">Cash-Buchung</string>
     <string name="bt_widget_action_market">Märkte</string>
     <string name="bt_widget_preview_plus" translatable="false">+</string>
     <string name="bt_widget_preview_euro" translatable="false">€</string>
+
+    <!-- ==== QUICK LINKS (DE) ==== -->
+    <string name="bt_ql_overview">Übersicht</string>
+    <string name="bt_ql_portfolio">Depot</string>
+    <string name="bt_ql_markets">Märkte</string>
+    <string name="bt_ql_chat">Chat</string>
+    <string name="bt_ql_social">Social</string>
+    <string name="bt_ql_watchlist">Watchlist</string>
+    <string name="bt_ql_cash">Cash</string>
+    <string name="bt_ql_add_transaction">Transaktion hinzufügen</string>
+    <string name="bt_ql_add_cash">Cash-Eintrag hinzufügen</string>
+    <string name="bt_ql_empty">Noch keine Links gewählt — Widget gedrückt halten zum Einrichten.</string>
+    <string name="bt_ql_config_title">Schnelllinks</string>
+    <string name="bt_ql_config_captions">Beschriftung</string>
+    <string name="bt_ql_config_chosen">Gewählt (%1$d von %2$d)</string>
+    <string name="bt_ql_config_add">Link hinzufügen</string>
+    <string name="bt_ql_config_all_added">Alle Ziele sind bereits auf dem Widget.</string>
+    <string name="bt_ql_config_full">Das ist das Maximum von %1$d — entferne eines, um ein anderes hinzuzufügen.</string>
+    <string name="bt_ql_config_move_up">Nach oben</string>
+    <string name="bt_ql_config_move_down">Nach unten</string>
+    <string name="bt_ql_config_remove">Entfernen</string>
+
+    <!-- ==== CASH WALLET WIDGET (DE) ==== -->
+    <string name="bt_widget_cash_title">Geldbörse</string>
+    <string name="bt_widget_cash_description">Eine Geldquelle, ihr Stand und Bezahlt / Erhalten mit einem Tipp.</string>
+    <string name="bt_widget_cash_empty">Noch keine Geldquelle — leg eine im Bargeld-Bereich an.</string>
+    <string name="bt_widget_cash_missing">Diese Geldquelle gibt es nicht mehr — Widget gedrückt halten und neu wählen.</string>
+    <string name="bt_widget_cash_photo">Foto-Buchung</string>
+    <string name="bt_widget_cash_soon">Bald</string>
+    <string name="bt_widget_cash_photo_short">Foto</string>
+    <string name="bt_widget_cash_photo_cd">%1$s, bald verfügbar</string>
+    <string name="bt_widget_cash_config_title">Geldquelle wählen</string>
+    <string name="bt_widget_cash_config_movements">Letzte Bewegungen</string>
+    <string name="bt_widgets_pick_cash_label">Geldquelle</string>
+    <string name="bt_widgets_no_cash">Noch keine Geldquellen — leg zuerst eine im Bargeld-Bereich an.</string>
+    <string name="bt_widget_preview_cash_source" translatable="false">Alltagskasse</string>
+    <string name="bt_widget_preview_cash_balance" translatable="false">428,60 €</string>
     <!-- ==== IN-APP-WIDGET-BAUKASTEN (DE) ==== -->
     <string name="bt_dest_widgets">Widgets</string>
     <string name="bt_settings_widgets_sub">Startbildschirm-Widgets ansehen, einrichten und hinzufügen</string>

@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,10 +61,16 @@ import at.bettertrack.app.ui.components.BtPickerSheet
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.widget.BT_QUICK_LINKS_DEFAULT
 import at.bettertrack.app.widget.BT_WIDGET_ROWS_MOVERS_DEFAULTS
 import at.bettertrack.app.widget.BT_WIDGET_ROWS_WATCHLIST_DEFAULTS
 import at.bettertrack.app.widget.BtAllocationWidgetReceiver
 import at.bettertrack.app.widget.BtAssetWidgetReceiver
+import at.bettertrack.app.widget.BtQuickLinksConfig
+import at.bettertrack.app.widget.BtQuickLinksEditor
+import at.bettertrack.app.widget.BtQuickLinksPreview
+import at.bettertrack.app.widget.BtWidgetAssetPicker
+import at.bettertrack.app.widget.BtWidgetCashConfig
 import at.bettertrack.app.widget.BtBudgetWidgetReceiver
 import at.bettertrack.app.widget.BtMoversWidgetReceiver
 import at.bettertrack.app.widget.BtNetWorthWidgetReceiver
@@ -164,6 +171,18 @@ fun WidgetsScreen(onBack: () -> Unit) {
     // Flow knobs.
     var flowMode by remember { mutableStateOf(BtWidgetFlowMode.DONUT) }
 
+    // Quick Links (round 3): the ordered tile set, edited live.
+    var linksCfg by remember { mutableStateOf(BtQuickLinksConfig(BT_QUICK_LINKS_DEFAULT)) }
+
+    // Cash Wallet (round 3): which wallet, and the 4x2 movements list.
+    var cashChoices by remember {
+        mutableStateOf<List<at.bettertrack.app.data.db.CashSourceEntity>>(emptyList())
+    }
+    var selectedCash by remember {
+        mutableStateOf<at.bettertrack.app.data.db.CashSourceEntity?>(null)
+    }
+    var cashMovements by remember { mutableStateOf(true) }
+
     LaunchedEffect(Unit) {
         try {
             val db = AppGraph.database
@@ -173,17 +192,55 @@ fun WidgetsScreen(onBack: () -> Unit) {
             assetChoices = btWidgetAssetChoices(holdings, items)
             selectedAsset = assetChoices.firstOrNull()
             portfolioChoices = btWidgetPortfolioChoices(db.portfolioDao().getAll())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Leaving the screen cancels this scope, and a cancellation is not
+            // a load failure — swallowing it logged "Choice lists failed to
+            // load" every time the user simply pressed back (device QA
+            // 2026-08-17), which is the house rule these blocks already state
+            // elsewhere: never catch Exception without letting cancellation by.
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("WidgetsScreen", "Choice lists failed to load.", e)
         }
+        // Both of the lists below need a network top-up, and BOTH read their
+        // cache first. Awaiting the fetch ahead of the read left the widget's
+        // own config Activity a black void for a full 20 s network timeout on
+        // 2026-08-17; this screen would have shown the same empty knobs. A slow
+        // network may only ever ADD rows to a list already on screen.
         try {
-            // Budgets live in the widget's own cache; top it up so the picker is
-            // not empty before the first background pass.
-            BtWidgetRepository.warmBudgetsForPicker()
             budgetChoices = BtWidgetBudgetStore.read(AppGraph.database, AppGraph.json).budgets
             selectedBudget = budgetChoices.firstOrNull()
+            BtWidgetRepository.warmBudgetsForPicker()
+            BtWidgetBudgetStore.read(AppGraph.database, AppGraph.json).budgets
+                .takeIf { it.isNotEmpty() }
+                ?.let {
+                    budgetChoices = it
+                    if (selectedBudget == null) selectedBudget = it.firstOrNull()
+                }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("WidgetsScreen", "Budget list failed to load.", e)
+        }
+        try {
+            // Cash sources reach Room only when something fetches them, so the
+            // wallet picker tops up the same way the budget picker does.
+            val pid = AppGraph.portfolioRepository.defaultSelection()?.id
+            suspend fun fromRoom() =
+                pid?.let { BtWidgetRepository.loadCashSources(it) }.orEmpty()
+            cashChoices = fromRoom()
+            selectedCash = cashChoices.firstOrNull { it.isMain } ?: cashChoices.firstOrNull()
+            BtWidgetRepository.warmCashForPicker(pid)
+            fromRoom().takeIf { it.isNotEmpty() }?.let {
+                cashChoices = it
+                if (selectedCash == null) {
+                    selectedCash = it.firstOrNull { s -> s.isMain } ?: it.firstOrNull()
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("WidgetsScreen", "Cash source list failed to load.", e)
         }
     }
 
@@ -349,29 +406,28 @@ fun WidgetsScreen(onBack: () -> Unit) {
                     description = stringResource(R.string.bt_widget_asset_description),
                     preview = { AssetMock(selectedAsset) },
                     config = {
-                        if (assetChoices.isEmpty()) {
-                            EmptyHint(stringResource(R.string.bt_widgets_no_assets))
-                        } else {
-                            SelectorRow(
-                                label = stringResource(R.string.bt_widgets_pick_asset_label),
-                                value = selectedAsset?.symbol.orEmpty(),
-                                selected = selectedAsset,
-                                options = assetChoices,
-                                optionLabel = { "${it.symbol} — ${it.name}" },
-                                onSelect = { selectedAsset = it },
-                            )
-                            ChipRow(
-                                label = stringResource(R.string.bt_widget_config_sparkline),
-                                options = listOf(true, false),
-                                selected = assetSpark,
-                                optionLabel = {
-                                    stringResource(
-                                        if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
-                                    )
-                                },
-                                onSelect = { assetSpark = it },
-                            )
-                        }
+                        // One row, one sheet — and the sheet now SEARCHES.
+                        // It used to be a fixed list of held ∪ watched, which
+                        // could not answer the owner's ask (put a stock on the
+                        // home screen that is neither). The local list is still
+                        // what the sheet opens on, so the common pick costs no
+                        // round trip; typing reaches everything else.
+                        AssetSearchRow(
+                            localChoices = assetChoices,
+                            selected = selectedAsset,
+                            onPick = { selectedAsset = it },
+                        )
+                        ChipRow(
+                            label = stringResource(R.string.bt_widget_config_sparkline),
+                            options = listOf(true, false),
+                            selected = assetSpark,
+                            optionLabel = {
+                                stringResource(
+                                    if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                                )
+                            },
+                            onSelect = { assetSpark = it },
+                        )
                     },
                     addEnabled = selectedAsset != null,
                     onAdd = {
@@ -574,17 +630,93 @@ fun WidgetsScreen(onBack: () -> Unit) {
                 )
             }
 
-            // ── Quick actions ────────────────────────────────────────────────
+            // ── Quick links ──────────────────────────────────────────────────
             item {
                 WidgetCard(
                     title = stringResource(R.string.bt_widget_actions_title),
                     description = stringResource(R.string.bt_widget_actions_description),
-                    preview = { QuickActionsMock() },
-                    onAdd = {
-                        pin(
-                            at.bettertrack.app.widget.BtQuickActionsWidgetReceiver::class.java,
-                            stash = null,
+                    // The preview IS the editor's preview — one component, so
+                    // the builder and the config Activity cannot drift about
+                    // what the grid looks like.
+                    preview = { BtQuickLinksPreview(linksCfg) },
+                    config = {
+                        ChipRow(
+                            label = stringResource(R.string.bt_ql_config_captions),
+                            options = listOf(false, true),
+                            selected = linksCfg.captions,
+                            optionLabel = {
+                                stringResource(
+                                    if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                                )
+                            },
+                            onSelect = { linksCfg = linksCfg.copy(captions = it) },
                         )
+                        BtQuickLinksEditor(
+                            config = linksCfg,
+                            portfolios = portfolioChoices,
+                        ) { linksCfg = it }
+                    },
+                    onAdd = {
+                        pin(at.bettertrack.app.widget.BtQuickActionsWidgetReceiver::class.java) {
+                            btWidgetStashPin(
+                                context,
+                                BtWidgetPinKind.LINKS,
+                                btWidgetPinPayload(linksCfg),
+                            )
+                        }
+                    },
+                )
+            }
+
+            // ── Cash wallet ──────────────────────────────────────────────────
+            item {
+                WidgetCard(
+                    title = stringResource(R.string.bt_widget_cash_title),
+                    description = stringResource(R.string.bt_widget_cash_description),
+                    preview = { CashWalletMock(selectedCash?.name) },
+                    config = {
+                        if (cashChoices.isEmpty()) {
+                            EmptyHint(stringResource(R.string.bt_widgets_no_cash))
+                        } else {
+                            SelectorRow(
+                                label = stringResource(R.string.bt_widgets_pick_cash_label),
+                                value = selectedCash?.name.orEmpty(),
+                                options = cashChoices,
+                                selected = selectedCash,
+                                optionLabel = { it.name },
+                                onSelect = { selectedCash = it },
+                            )
+                        }
+                        ChipRow(
+                            label = stringResource(R.string.bt_widget_cash_config_movements),
+                            options = listOf(true, false),
+                            selected = cashMovements,
+                            optionLabel = {
+                                stringResource(
+                                    if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                                )
+                            },
+                            onSelect = { cashMovements = it },
+                        )
+                    },
+                    addEnabled = selectedCash != null,
+                    onAdd = {
+                        pin(at.bettertrack.app.widget.BtCashWalletWidgetReceiver::class.java) {
+                            selectedCash?.let { source ->
+                                btWidgetStashPin(
+                                    context,
+                                    BtWidgetPinKind.CASH,
+                                    btWidgetPinPayload(
+                                        BtWidgetCashConfig(
+                                            sourceId = source.id,
+                                            sourceName = source.name,
+                                            portfolioId = source.portfolioId,
+                                            movements = cashMovements,
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
                     },
                 )
             }
@@ -1488,31 +1620,158 @@ private fun FlowMock(mode: BtWidgetFlowMode) {
     }
 }
 
+/**
+ * The Cash Wallet mock: the 2x1 rendition on SAMPLE money, with the user's own
+ * wallet NAME when they have picked one — the same rule every other mock here
+ * follows (sample figures, real names, because naming the choice is what makes
+ * the preview legible).
+ */
 @Composable
-private fun QuickActionsMock() {
+private fun CashWalletMock(sourceName: String?) {
     val bt = BtTheme.colors
-    Row(Modifier.fillMaxWidth()) {
-        listOf(
-            "+" to stringResource(R.string.bt_widget_action_trade),
-            "€" to stringResource(R.string.bt_widget_action_cash),
-        ).forEachIndexed { i, (glyph, label) ->
-            if (i > 0) Spacer(Modifier.width(8.dp))
-            Row(
-                Modifier
-                    .weight(1f)
-                    .background(bt.surfaceHigh, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(glyph, color = bt.goldInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(7.dp))
-                Text(
-                    label,
-                    color = bt.textPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                )
+    Column(Modifier.fillMaxWidth()) {
+        MockSubjectRow(
+            subject = sourceName ?: stringResource(R.string.bt_widget_preview_cash_source),
+        )
+        Text(
+            stringResource(R.string.bt_widget_preview_cash_balance),
+            color = bt.textPrimary,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth()) {
+            // Bezahlt first, Erhalten second — the owner's fixed order, and the
+            // only two colours this family is allowed to spend.
+            MockCashAction(
+                label = stringResource(R.string.bt_cash_withdraw),
+                icon = R.drawable.ic_bt_widget_paid,
+                ink = bt.loss,
+                wash = bt.lossWash,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(6.dp))
+            MockCashAction(
+                label = stringResource(R.string.bt_cash_deposit),
+                icon = R.drawable.ic_bt_widget_received,
+                ink = bt.gain,
+                wash = bt.gainWash,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        // The reserved third slot, shown as it ships: present, understandable,
+        // and labelled as not live yet.
+        MockCashAction(
+            label = stringResource(R.string.bt_widget_cash_photo),
+            icon = R.drawable.ic_bt_widget_camera,
+            ink = bt.goldInk,
+            wash = bt.goldWash,
+            badge = stringResource(R.string.bt_widget_cash_soon),
+            fullWidth = true,
+        )
+    }
+}
+
+/** One mock action button: glyph + verb on the direction's own wash. */
+@Composable
+private fun MockCashAction(
+    label: String,
+    icon: Int,
+    ink: androidx.compose.ui.graphics.Color,
+    wash: androidx.compose.ui.graphics.Color,
+    badge: String? = null,
+    fullWidth: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val bt = BtTheme.colors
+    Row(
+        modifier
+            .then(if (fullWidth) Modifier.fillMaxWidth() else Modifier)
+            .background(wash, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = ink,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(
+            label,
+            color = ink,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = if (badge != null) Modifier.weight(1f) else Modifier,
+        )
+        if (badge != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                badge,
+                color = bt.onGold,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(bt.gold, RoundedCornerShape(5.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The builder's asset row: shows the chosen symbol, opens the SEARCHING picker.
+ *
+ * Same sheet family as [SelectorRow] (owner order: everything user-facing pops
+ * from the bottom) but hosting [BtWidgetAssetPicker], so the builder and the
+ * widget's own config Activity offer the identical universe of assets.
+ */
+@Composable
+private fun AssetSearchRow(
+    localChoices: List<BtWidgetAssetConfig>,
+    selected: BtWidgetAssetConfig?,
+    onPick: (BtWidgetAssetConfig) -> Unit,
+) {
+    val bt = BtTheme.colors
+    var open by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { open = true }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.bt_widgets_pick_asset_label),
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            selected?.symbol.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = bt.textPrimary,
+            fontWeight = FontWeight.Medium,
+        )
+        Icon(
+            Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = bt.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+    if (open) {
+        BtPickerSheet(
+            title = stringResource(R.string.bt_widget_config_pick_asset),
+            onDismiss = { open = false },
+        ) {
+            BtWidgetAssetPicker(localChoices = localChoices) { picked ->
+                onPick(picked)
+                open = false
             }
         }
     }

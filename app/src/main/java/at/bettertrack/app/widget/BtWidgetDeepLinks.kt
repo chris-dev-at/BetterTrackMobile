@@ -62,6 +62,37 @@ const val BT_WIDGET_TARGET_ADD_CASH: String = "add_cash"
 /** Quick actions: the Markets tab (global search). */
 const val BT_WIDGET_TARGET_SEARCH: String = "search"
 
+// ── Quick Links catalog (2026-08-17) ─────────────────────────────────────────
+//
+// The round-3 study's nine pictograms need nine destinations. Six of them
+// already existed for the widgets above; these three are what the icon grid
+// added, and every one of them resolves to a screen the app genuinely has.
+
+/** Quick Links: the chat list. */
+const val BT_WIDGET_TARGET_CHAT: String = "chat"
+
+/** Quick Links: the social feed. */
+const val BT_WIDGET_TARGET_SOCIAL: String = "social"
+
+/** Quick Links: the watchlist — a panel on the Markets tab, see [NotifDeepLink.Watchlist]. */
+const val BT_WIDGET_TARGET_WATCHLIST: String = "watchlist"
+
+/**
+ * Cash Wallet: a new entry against a NAMED source, in a named direction.
+ *
+ * Distinct from [BT_WIDGET_TARGET_ADD_CASH] on purpose. That target is the
+ * generic "open the cash screen" shortcut and stays parameterless; this one
+ * always carries a source and a direction, and a tap that lost either would
+ * book against the wrong wallet or with the wrong sign.
+ */
+const val BT_WIDGET_TARGET_CASH_ENTRY: String = "cash_entry"
+
+/** Intent extra carrying the cash source a wallet action books against. */
+const val BT_WIDGET_EXTRA_SOURCE_ID: String = "bt_widget_source_id"
+
+/** Intent extra carrying the wallet action's direction ("1" in, "0" out). */
+const val BT_WIDGET_EXTRA_INFLOW: String = "bt_widget_inflow"
+
 /**
  * Resolve widget extras to a target. Pure and null-safe, in the same shape as
  * `resolveDeepLink`, so the mapping can be pinned on the JVM.
@@ -77,6 +108,8 @@ fun btWidgetDeepLink(
     target: String?,
     assetId: String?,
     portfolioId: String? = null,
+    sourceId: String? = null,
+    inflow: Boolean? = null,
 ): NotifDeepLink? = when (target) {
     BT_WIDGET_TARGET_OVERVIEW -> NotifDeepLink.Overview
     BT_WIDGET_TARGET_ASSET ->
@@ -91,8 +124,33 @@ fun btWidgetDeepLink(
             ?: NotifDeepLink.Overview
     // The Quick-actions tiles (2026-08-16): id-less, one destination each.
     BT_WIDGET_TARGET_ADD_TRANSACTION -> NotifDeepLink.AddTransaction
-    BT_WIDGET_TARGET_ADD_CASH -> NotifDeepLink.AddCashEntry
+    BT_WIDGET_TARGET_ADD_CASH -> NotifDeepLink.AddCashEntry()
     BT_WIDGET_TARGET_SEARCH -> NotifDeepLink.MarketSearch
+    // The Quick Links catalog's three additions (2026-08-17). Chat takes the
+    // nullable conversation id its target already carries — a launcher tile
+    // opens the LIST, never someone's thread.
+    BT_WIDGET_TARGET_CHAT -> NotifDeepLink.Chat(null)
+    BT_WIDGET_TARGET_SOCIAL -> NotifDeepLink.Social
+    BT_WIDGET_TARGET_WATCHLIST -> NotifDeepLink.Watchlist
+    /*
+     * A Cash Wallet posting button. The direction is REQUIRED: without it the
+     * tap would land on a blank sheet, which is the "never a dead tap" rule's
+     * money-shaped cousin — a button labelled "Bezahlt" that opens something
+     * neutral has lied about what it does. So an unknown direction degrades to
+     * the plain Cash screen for that portfolio rather than to a half-preselected
+     * entry sheet. A blank source is tolerated: the sheet's own primary-source
+     * default is a correct answer, just not a preselected one.
+     */
+    BT_WIDGET_TARGET_CASH_ENTRY ->
+        if (inflow == null) {
+            NotifDeepLink.Cash(portfolioId?.takeIf { it.isNotBlank() })
+        } else {
+            NotifDeepLink.AddCashEntry(
+                portfolioId = portfolioId?.takeIf { it.isNotBlank() },
+                sourceId = sourceId?.takeIf { it.isNotBlank() },
+                inflow = inflow,
+            )
+        }
     else -> null
 }
 
@@ -109,19 +167,46 @@ fun btWidgetIntent(
     target: String,
     assetId: String? = null,
     portfolioId: String? = null,
+    sourceId: String? = null,
+    inflow: Boolean? = null,
 ): Intent =
     Intent(context, MainActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        action = btWidgetIntentAction(target, assetId ?: portfolioId)
+        action = btWidgetIntentAction(
+            target,
+            assetId ?: portfolioId,
+            // Bezahlt and Erhalten differ ONLY in these two, and PendingIntent
+            // equality ignores extras — without them in the action string the
+            // launcher would collapse both buttons onto whichever was
+            // registered first, and every "Erhalten" tap would book an outflow.
+            // This is the same collapse the per-row asset id prevents above,
+            // with money on the line instead of a wrong asset page.
+            qualifier = listOfNotNull(
+                sourceId?.takeIf { it.isNotBlank() },
+                inflow?.let { if (it) "in" else "out" },
+            ).takeIf { it.isNotEmpty() }?.joinToString("."),
+        )
         putExtra(BT_WIDGET_EXTRA_TARGET, target)
         if (assetId != null) putExtra(BT_WIDGET_EXTRA_ASSET_ID, assetId)
         if (portfolioId != null) putExtra(BT_WIDGET_EXTRA_PORTFOLIO_ID, portfolioId)
+        if (sourceId != null) putExtra(BT_WIDGET_EXTRA_SOURCE_ID, sourceId)
+        if (inflow != null) putExtra(BT_WIDGET_EXTRA_INFLOW, if (inflow) "1" else "0")
     }
 
 /**
  * Pure, so the uniqueness property can be asserted without an Android context.
  * [discriminator] is the per-row id (an asset, or a portfolio) that makes two
- * otherwise-identical targets distinct PendingIntents.
+ * otherwise-identical targets distinct PendingIntents; [qualifier] carries the
+ * rest of what distinguishes one tile from another that shares both (a cash
+ * source and a money direction).
  */
-fun btWidgetIntentAction(target: String, discriminator: String?): String =
-    if (discriminator == null) "bt.widget.open.$target" else "bt.widget.open.$target.$discriminator"
+fun btWidgetIntentAction(
+    target: String,
+    discriminator: String?,
+    qualifier: String? = null,
+): String = buildString {
+    append("bt.widget.open.")
+    append(target)
+    discriminator?.let { append('.').append(it) }
+    qualifier?.let { append('.').append(it) }
+}

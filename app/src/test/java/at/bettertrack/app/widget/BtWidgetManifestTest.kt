@@ -70,11 +70,13 @@ class BtWidgetManifestTest {
         // outcome this file could have.
         assertTrue("expected some <receiver> entries, found none", receivers().isNotEmpty())
         assertEquals(
-            "expected the nine widget receivers of the 2026-08-16 redesign " +
-                "(pulse/net worth, performance/portfolio, asset, watchlist, " +
-                "movers, budget, monthly flow, allocation, quick actions), " +
-                "found " + widgetReceivers().map { it.first },
-            9,
+            "expected the ten widget receivers (pulse/net worth, " +
+                "performance/portfolio, asset, watchlist, movers, budget, " +
+                "monthly flow, allocation, quick LINKS \u2014 which keeps the " +
+                "historical BtQuickActionsWidgetReceiver name so placed " +
+                "instances survive \u2014 and cash wallet), found " +
+                widgetReceivers().map { it.first },
+            10,
             widgetReceivers().size,
         )
     }
@@ -267,8 +269,8 @@ class BtWidgetManifestTest {
             .filter { it.isFile && it.readText().contains("<appwidget-provider") }
         assertTrue("no appwidget-provider XML found", providers.isNotEmpty())
         assertEquals(
-            "expected the nine providers of the widget set, found " + providers.map { it.name },
-            9,
+            "expected the ten providers of the widget set, found " + providers.map { it.name },
+            10,
             providers.size,
         )
 

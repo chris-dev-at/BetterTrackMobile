@@ -27,6 +27,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * ## The set (redesign 2026-08-16, restyled to the Codex study in round 2)
  *
+ * Round 3 (2026-08-17) adds Cash Wallet and turns the text-tile Quick actions
+ * into the Quick Links icon grid, in place — see [BtQuickActionsWidgetReceiver]
+ * for why that receiver kept its name.
+ *
  * Eight pickers over seven FAMILIES: Portfolio pulse (net worth / one depot),
  * Asset focus, Budget meter (ring/bar/number), Portfolio performance (live
  * range chips, 4x4 events hero), Allocation (reinstated by owner ruling),
@@ -59,7 +63,8 @@ object BtWidgets {
             BtBudgetWidget().updateAll(context)
             BtSpendingWidget().updateAll(context)
             BtAllocationWidget().updateAll(context)
-            BtQuickActionsWidget().updateAll(context)
+            BtQuickLinksWidget().updateAll(context)
+            BtCashWalletWidget().updateAll(context)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -88,6 +93,7 @@ object BtWidgets {
         BtSpendingWidgetReceiver::class.java,
         BtAllocationWidgetReceiver::class.java,
         BtQuickActionsWidgetReceiver::class.java,
+        BtCashWalletWidgetReceiver::class.java,
     )
 
     private fun placedCount(context: Context, receiver: Class<*>): Int = try {
@@ -310,6 +316,21 @@ class BtAllocationWidgetReceiver : BtWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget get() = BtAllocationWidget()
 }
 
+/**
+ * Quick Links — and it keeps the OLD class name on purpose.
+ *
+ * The framework addresses a placed widget by ComponentName. Renaming this
+ * receiver to match its new implementation would make every already-placed
+ * Quick-actions widget point at a provider that no longer exists, which the
+ * launcher renders as a dead grey placeholder the user has to find and delete.
+ * The Glance class behind it is free to change, and it did: an existing
+ * placement simply repaints as the icon grid on its next frame, with the
+ * default action set, because it never had a config to lose.
+ */
 class BtQuickActionsWidgetReceiver : BtWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget get() = BtQuickActionsWidget()
+    override val glanceAppWidget: GlanceAppWidget get() = BtQuickLinksWidget()
+}
+
+class BtCashWalletWidgetReceiver : BtWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget get() = BtCashWalletWidget()
 }

@@ -254,8 +254,16 @@ fun cashLedgerPending(loaded: Boolean, hasPortfolio: Boolean, sourcesSeen: Boole
     !loaded && (hasPortfolio || !sourcesSeen)
 
 private sealed interface CashSheet {
-    /** Create (or edit a queued) deposit / withdrawal / fee. */
-    data class Entry(val kind: CashKind, val editOpId: Long? = null) : CashSheet
+    /**
+     * Create (or edit a queued) deposit / withdrawal / fee. [sourceId] is the
+     * Cash Wallet widget's preselected wallet; null keeps the sheet's own
+     * primary-source default, which is what every in-app entry point passes.
+     */
+    data class Entry(
+        val kind: CashKind,
+        val editOpId: Long? = null,
+        val sourceId: String? = null,
+    ) : CashSheet
     data class Transfer(val editOpId: Long? = null) : CashSheet
     // EditSynced left with the movement stream (owner batch 2026-08-16): the
     // correction sheet now opens from the ledger subpage, which holds its own
@@ -845,6 +853,16 @@ private fun SyncOpEntity.rejectionMessage(): BtMessage = BtMessage(
 fun CashScreen(
     routePortfolioId: String?,
     editOpId: Long?,
+    /**
+     * The Cash Wallet widget's wallet, preselected in the entry sheet. Null =
+     * the sheet's own primary-source default.
+     */
+    initialSourceId: String? = null,
+    /**
+     * The Cash Wallet widget's direction: true opens `Erhalten`, false opens
+     * `Bezahlt`, null opens no sheet at all (every non-widget entry).
+     */
+    initialInflow: Boolean? = null,
     onBack: () -> Unit,
     onOpenPendingSync: () -> Unit,
     onOpenTags: () -> Unit = {},
@@ -906,6 +924,20 @@ fun CashScreen(
     val active = activeSources(sources)
     val archived = sources.filter { it.archivedAt != null }
     val sourceNames = sources.associate { it.id to it.name }
+
+    // Entry via the Cash Wallet widget: it named a direction, so open that
+    // sheet on the wallet it named. Keyed on the pair rather than Unit so a
+    // second tap on the OTHER button while the screen is already up still
+    // swaps the sheet; guarded on `editOpId == null` because a queued-op edit
+    // is a stronger claim on the same sheet slot and must win.
+    LaunchedEffect(initialInflow, initialSourceId) {
+        if (editOpId == null && initialInflow != null) {
+            sheet = CashSheet.Entry(
+                kind = if (initialInflow) CashKind.DEPOSIT else CashKind.WITHDRAWAL,
+                sourceId = initialSourceId,
+            )
+        }
+    }
 
     // Entry via the pending screen's "Edit & retry" (deep-linked edit).
     LaunchedEffect(editOpId) {
@@ -1313,6 +1345,7 @@ fun CashScreen(
             sources = active,
             prefill = editPrefill,
             editOpId = s.editOpId,
+            initialSourceId = s.sourceId,
             locale = locale,
             onDismiss = {
                 sheet = null
@@ -2214,6 +2247,8 @@ private fun CashEntrySheet(
     sources: List<CashSourceEntity>,
     prefill: PendingCashRow?,
     editOpId: Long?,
+    /** The Cash Wallet widget's wallet; null = the primary-source default. */
+    initialSourceId: String? = null,
     locale: Locale,
     onDismiss: () -> Unit,
 ) {
@@ -2232,7 +2267,16 @@ private fun CashEntrySheet(
     var amountText by rememberSaveable { mutableStateOf(prefill?.amountEur?.let { trimNumber(it) } ?: "") }
     var noteText by rememberSaveable { mutableStateOf(prefill?.note ?: "") }
     var sourceId by rememberSaveable {
-        mutableStateOf(prefill?.sourceId ?: sources.firstOrNull { it.isMain }?.id)
+        // Precedence: a queued op's own source (an edit must not move money),
+        // then the widget's named wallet, then the primary. Only a source that
+        // still EXISTS and is active is honoured — an archived or deleted
+        // wallet on a stale widget config falls through to the default rather
+        // than seeding an unselectable id.
+        mutableStateOf(
+            prefill?.sourceId
+                ?: initialSourceId?.takeIf { id -> sources.any { it.id == id } }
+                ?: sources.firstOrNull { it.isMain }?.id,
+        )
     }
     // Movement date — defaults to today; a queued backdated entry restores its day.
     val initialDate = remember(prefill) {

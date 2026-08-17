@@ -2840,8 +2840,8 @@
     <string name="bt_widget_preview_flow_net">+€1,415.27</string>
     <string name="bt_widget_preview_flow_window">+€6,842.19</string>
     <!-- Quick-actions widget (owner order 2026-08-16). -->
-    <string name="bt_widget_actions_title">Quick actions</string>
-    <string name="bt_widget_actions_description">One-tap shortcuts: new trade, cash entry, markets.</string>
+    <string name="bt_widget_actions_title">Quick links</string>
+    <string name="bt_widget_actions_description">Icon shortcuts to anywhere in the app — you choose which.</string>
     <string name="bt_widget_action_trade">New trade</string>
     <!-- The 4x1 strip cell's label: three tiles share one row, so the trade tile drops the adjective (device QA 2026-08-16). -->
     <string name="bt_widget_action_trade_short">Trade</string>
@@ -2849,6 +2849,49 @@
     <string name="bt_widget_action_market">Markets</string>
     <string name="bt_widget_preview_plus" translatable="false">+</string>
     <string name="bt_widget_preview_euro" translatable="false">€</string>
+
+    <!-- ==== QUICK LINKS (EN) ==== -->
+    <!-- Tile names. Each is BOTH the optional caption and the icon-only tile's
+         content description, so it has to read as a destination on its own. -->
+    <string name="bt_ql_overview">Overview</string>
+    <string name="bt_ql_portfolio">Portfolio</string>
+    <string name="bt_ql_markets">Markets</string>
+    <string name="bt_ql_chat">Chat</string>
+    <string name="bt_ql_social">Social</string>
+    <string name="bt_ql_watchlist">Watchlist</string>
+    <string name="bt_ql_cash">Cash</string>
+    <string name="bt_ql_add_transaction">Add transaction</string>
+    <string name="bt_ql_add_cash">Add cash entry</string>
+    <string name="bt_ql_empty">No links chosen yet — hold the widget to set it up.</string>
+    <string name="bt_ql_config_title">Quick links</string>
+    <string name="bt_ql_config_captions">Labels</string>
+    <string name="bt_ql_config_chosen">Chosen (%1$d of %2$d)</string>
+    <string name="bt_ql_config_add">Add a link</string>
+    <string name="bt_ql_config_all_added">Every destination is already on the widget.</string>
+    <string name="bt_ql_config_full">That\'s the maximum of %1$d — remove one to add another.</string>
+    <string name="bt_ql_config_move_up">Move up</string>
+    <string name="bt_ql_config_move_down">Move down</string>
+    <string name="bt_ql_config_remove">Remove</string>
+
+    <!-- ==== CASH WALLET WIDGET (EN) ==== -->
+    <string name="bt_widget_cash_title">Cash wallet</string>
+    <string name="bt_widget_cash_description">One cash source, its balance, and one-tap paid / received.</string>
+    <string name="bt_widget_cash_empty">No cash source yet — add one on the Cash screen.</string>
+    <string name="bt_widget_cash_missing">This cash source is gone — hold the widget to pick another.</string>
+    <!-- The reserved receipt-capture control. The badge says it is not live yet. -->
+    <string name="bt_widget_cash_photo">Photo entry</string>
+    <string name="bt_widget_cash_soon">Soon</string>
+    <!-- The 4x1 strip cell: twelve characters do not fit a 72dp control. -->
+    <string name="bt_widget_cash_photo_short">Photo</string>
+    <!-- Spoken name for the reserved control: the badge is visual, and a screen
+         reader has to be told the same thing. %1$s is the control's own label. -->
+    <string name="bt_widget_cash_photo_cd">%1$s, coming soon</string>
+    <string name="bt_widget_cash_config_title">Choose a cash source</string>
+    <string name="bt_widget_cash_config_movements">Recent movements</string>
+    <string name="bt_widgets_pick_cash_label">Cash source</string>
+    <string name="bt_widgets_no_cash">No cash sources yet — add one on the Cash screen first.</string>
+    <string name="bt_widget_preview_cash_source" translatable="false">Alltagskasse</string>
+    <string name="bt_widget_preview_cash_balance" translatable="false">428,60 €</string>
     <!-- ==== IN-APP WIDGET BUILDER (EN) ==== -->
     <string name="bt_dest_widgets">Widgets</string>
     <string name="bt_settings_widgets_sub">Preview, set up and add home-screen widgets</string>

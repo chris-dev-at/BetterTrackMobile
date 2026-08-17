@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The preview twin of a Quick-Links launcher tile: the neutral chip fill at the
+  study's launcher-icon corner radius. Kept separate from
+  bt_widget_preview_chip.xml because that one is a 6dp context badge and this is
+  a 12dp squircle — same fill, different shape, and previously conflating them
+  would make one of the two wrong the next time either is retuned.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_chip" />
+    <corners android:radius="12dp" />
+</shape>

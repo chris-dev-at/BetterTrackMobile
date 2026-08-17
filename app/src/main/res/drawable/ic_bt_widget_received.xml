@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cash-Wallet action glyph: "Erhalten" — money arriving, an arrow descending
+  INTO the baseline. Traced from the study's `#i-received`.
+
+  White strokes, tinted at render time with the GAIN tone — emerald is reserved
+  for incoming money and nothing else.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/bt_widget_gain">
+    <path
+        android:pathData="M17.5,6.5 L6.5,17.5 M6.5,10 v7.5 H14"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M5,20 h14"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

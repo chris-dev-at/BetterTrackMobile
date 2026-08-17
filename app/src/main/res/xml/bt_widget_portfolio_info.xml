@@ -7,15 +7,31 @@
   real figures on the first draw. "reconfigurable" offers the picker on
   long-press to PIN the card to one portfolio. Same initialLayout /
   updatePeriodMillis / preview reasoning as bt_widget_net_worth_info.xml.
+
+  WIDTH (owner ruling 2026-08-16, late): this used to be pinned to 250dp — four
+  columns — because the conformance round could only draw the wide layout and a
+  narrower placement squashed it. The owner's answer was that charts must be
+  allowed narrower than full width, properly COMPOSED rather than squeezed. So
+  the minimum comes down to two columns (140dp) and BtPortfolioWidget grows a
+  narrow rendition of its own: subject + figure + percent pill over a shorter
+  curve, with the Tief/Hoch footer and the 4x4 hero band dropped rather than
+  crammed. Each size is still its own hierarchy — nothing is scaled down.
+
+  HEIGHT is 40dp for the same reason, and it is not cosmetic: One UI floors a
+  widget's resize at ceil(minHeight / usable-cell-height) ROWS, and with 110dp
+  it refused to go below two rows at all — the one-row rendition this widget
+  now has could never be reached on the owner's launcher (device QA
+  2026-08-17). 40dp is what every other strip-capable provider here declares
+  (net worth, asset, cash wallet), and those do resize to a single row.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="at.bettertrack.app.widget.BtPortfolioWidgetConfigActivity"
     android:description="@string/bt_widget_portfolio_pick_description"
     android:initialLayout="@layout/bt_widget_loading"
-    android:minHeight="110dp"
-    android:minResizeHeight="110dp"
-    android:minResizeWidth="250dp"
-    android:minWidth="250dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
     android:previewImage="@drawable/bt_widget_preview_img_portfolio"
     android:previewLayout="@layout/bt_widget_preview_portfolio"
     android:resizeMode="horizontal|vertical"

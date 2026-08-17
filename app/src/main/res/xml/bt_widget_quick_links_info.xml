@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick Links (at.bettertrack.app.widget.BtQuickLinksWidget, behind the
+  historical BtQuickActionsWidgetReceiver — see that receiver's KDoc for why the
+  name did not change).
+
+  Replaces the round-1 quick-ACTIONS provider: same receiver, same placed
+  instances, a new look and a configurable action set. This file is the old
+  bt_widget_actions_info.xml rewritten and renamed; the resource name is
+  resolved at build time, so the rename cannot orphan a placement.
+
+  configuration_optional (API 28+): the DEFAULT action set is a complete,
+  useful widget, so a drop from the picker never blocks on the editor.
+  "reconfigurable" is what makes the tile set editable on long-press later —
+  which is the owner's whole ask, so it is not optional here.
+
+  minWidth 110dp / minHeight 40dp: three icon tiles fit a 2x1 strip, and the
+  grid recomposes from the measured width rather than from a size bucket. Same
+  initialLayout / updatePeriodMillis / preview reasoning as
+  bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtQuickLinksWidgetConfigActivity"
+    android:description="@string/bt_widget_actions_description"
+    android:initialLayout="@layout/bt_widget_loading"
+    android:maxResizeHeight="260dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:previewImage="@drawable/bt_widget_preview_img_actions"
+    android:previewLayout="@layout/bt_widget_preview_actions"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="1"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

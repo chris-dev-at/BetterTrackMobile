@@ -86,10 +86,18 @@ import kotlinx.serialization.Serializable
 /**
  * Cash screen (Step 9, §6.3). [editOpId] deep-links straight into editing a
  * queued cash op (pending-sync "Edit & retry" for deposits/withdrawals/transfers).
+ *
+ * [initialSourceId] / [initialInflow] are the Cash Wallet widget's entry point
+ * (2026-08-17): its `Bezahlt` / `Erhalten` buttons name a wallet and a
+ * direction, so the screen opens the entry sheet already on both rather than
+ * making the user re-pick what the widget already knew. Both default to null,
+ * which is the pre-existing behaviour — no sheet, primary source.
  */
 @Serializable data class CashRoute(
     val portfolioId: String? = null,
     val editOpId: Long? = null,
+    val initialSourceId: String? = null,
+    val initialInflow: Boolean? = null,
 )
 
 /**

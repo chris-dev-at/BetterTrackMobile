@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cash Wallet widget (at.bettertrack.app.widget.BtCashWalletWidget).
+
+  configuration_optional: an unconfigured instance FOLLOWS the governing
+  portfolio's primary cash source — a real wallet with a real balance on frame
+  one — so placement never blocks on the picker, exactly as the portfolio
+  widget's follow mode does. "reconfigurable" pins it to a specific wallet.
+
+  targetCellWidth 2 / Height 1: the 2x1 (source, balance, Bezahlt + Erhalten)
+  is the smallest honest rendition and the one most people will keep. It
+  stretches to the 4x1 action strip, the 2x2 hero and the 4x2 with its
+  movements list. Same initialLayout / updatePeriodMillis / preview reasoning
+  as bt_widget_net_worth_info.xml.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="at.bettertrack.app.widget.BtCashWalletWidgetConfigActivity"
+    android:description="@string/bt_widget_cash_description"
+    android:initialLayout="@layout/bt_widget_loading"
+    android:maxResizeHeight="260dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="140dp"
+    android:previewImage="@drawable/bt_widget_preview_img_cash"
+    android:previewLayout="@layout/bt_widget_preview_cash"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="1"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

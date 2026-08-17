@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick-Links pictogram: create a portfolio transaction — a receipt outline
+  with an integral plus. The receipt (not a wallet) is what separates a
+  securities trade from a cash-ledger entry. Traced from `#i-transaction-add`.
+  White strokes, tinted at render time — see ic_bt_widget_overview.xml.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/bt_widget_gold">
+    <path
+        android:pathData="M6,3.5 h9.5 l2.5,2.7 V20 l-2,-1.3 -2,1.3 -2,-1.3 -2,1.3 -2,-1.3 L6,20 V3.5 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9,8 h6 M12,11 v6 M9,14 h6"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

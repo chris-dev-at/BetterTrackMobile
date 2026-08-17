@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick-Links pictogram: create a cash-ledger entry — the wallet with a corner
+  plus. The plus separates it from the plain Cash destination; the wallet
+  separates it from a securities transaction. Traced from `#i-cash-add`.
+  White strokes, tinted at render time — see ic_bt_widget_overview.xml.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/bt_widget_gold">
+    <path
+        android:pathData="M3.5,8 h12 A2.5,2.5 0 0 1 18,10.5 V19 H6 a2.5,2.5 0 0 1 -2.5,-2.5 V8 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M14,12 h5 v4 h-5 a2,2 0 0 1 0,-4 Z M17.5,3 v5 M15,5.5 h5"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

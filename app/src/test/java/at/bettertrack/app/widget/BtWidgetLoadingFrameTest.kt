@@ -177,8 +177,11 @@ class BtWidgetLoadingFrameTest {
     @Test
     fun `the scan can see the widget classes it is checking`() {
         assertEquals(
-            "expected the nine Glance widgets, found " + widgetClasses().map { it.first },
-            9,
+            // Ten since round 3 (2026-08-17): Cash Wallet joined, and the
+            // text-tile Quick actions became the Quick Links icon grid in
+            // place — same receiver, new Glance class.
+            "expected the ten Glance widgets, found " + widgetClasses().map { it.first },
+            10,
             widgetClasses().size,
         )
     }

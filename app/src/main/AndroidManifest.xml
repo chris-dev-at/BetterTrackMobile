@@ -228,6 +228,13 @@
                 android:resource="@xml/bt_widget_spending_info" />
         </receiver>
 
+        <!--
+          Quick Links. The receiver keeps its round-1 name because the framework
+          addresses placed instances by ComponentName — renaming it would turn
+          every existing Quick-actions placement into a dead launcher
+          placeholder. Only the label, the provider XML and the Glance class
+          behind it changed. See BtQuickActionsWidgetReceiver's KDoc.
+        -->
         <receiver
             android:name=".widget.BtQuickActionsWidgetReceiver"
             android:exported="true"
@@ -237,7 +244,19 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/bt_widget_actions_info" />
+                android:resource="@xml/bt_widget_quick_links_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.BtCashWalletWidgetReceiver"
+            android:exported="true"
+            android:label="@string/bt_widget_cash_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bt_widget_cash_info" />
         </receiver>
 
         <receiver
@@ -335,6 +354,26 @@
 
         <activity
             android:name=".widget.BtSpendingWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtQuickLinksWidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.BetterTrack">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.BtCashWalletWidgetConfigActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@style/Theme.BetterTrack">

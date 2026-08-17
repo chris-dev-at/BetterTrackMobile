@@ -7,6 +7,7 @@ import at.bettertrack.app.navigation.owningTab
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -86,8 +87,91 @@ class BtWidgetDeepLinkTest {
             NotifDeepLink.AddTransaction,
             btWidgetDeepLink(BT_WIDGET_TARGET_ADD_TRANSACTION, null),
         )
-        assertEquals(NotifDeepLink.AddCashEntry, btWidgetDeepLink(BT_WIDGET_TARGET_ADD_CASH, null))
+        // The generic cash tile stays parameterless: it means "open cash", not
+        // "book something", so it must NOT preselect a direction.
+        assertEquals(
+            NotifDeepLink.AddCashEntry(),
+            btWidgetDeepLink(BT_WIDGET_TARGET_ADD_CASH, null),
+        )
         assertEquals(NotifDeepLink.MarketSearch, btWidgetDeepLink(BT_WIDGET_TARGET_SEARCH, null))
+    }
+
+    @Test
+    fun `the quick-links catalog resolves its three additions`() {
+        // A launcher tile opens the chat LIST, never someone's thread.
+        assertEquals(NotifDeepLink.Chat(null), btWidgetDeepLink(BT_WIDGET_TARGET_CHAT, null))
+        assertEquals(NotifDeepLink.Social, btWidgetDeepLink(BT_WIDGET_TARGET_SOCIAL, null))
+        assertEquals(NotifDeepLink.Watchlist, btWidgetDeepLink(BT_WIDGET_TARGET_WATCHLIST, null))
+    }
+
+    @Test
+    fun `every quick-links catalog entry has a resolvable target`() {
+        // The catalog's whole promise is that a tile cannot point at a screen
+        // the app does not have. That promise is only true if EVERY entry
+        // resolves — a new catalog row whose target string was never added to
+        // btWidgetDeepLink would render a perfectly good icon that does nothing.
+        BtQuickLink.entries.forEach { link ->
+            assertNotNull(
+                "${link.key} resolves to no deep link",
+                btWidgetDeepLink(link.target, assetId = null, portfolioId = "pf-1"),
+            )
+        }
+    }
+
+    @Test
+    fun `a wallet posting carries its source and its direction`() {
+        assertEquals(
+            NotifDeepLink.AddCashEntry(portfolioId = "pf-1", sourceId = "src-1", inflow = false),
+            btWidgetDeepLink(
+                BT_WIDGET_TARGET_CASH_ENTRY,
+                assetId = null,
+                portfolioId = "pf-1",
+                sourceId = "src-1",
+                inflow = false,
+            ),
+        )
+        assertEquals(
+            NotifDeepLink.AddCashEntry(portfolioId = "pf-1", sourceId = "src-1", inflow = true),
+            btWidgetDeepLink(
+                BT_WIDGET_TARGET_CASH_ENTRY,
+                assetId = null,
+                portfolioId = "pf-1",
+                sourceId = "src-1",
+                inflow = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `a wallet posting with no direction opens cash rather than a blank sheet`() {
+        // A button labelled "Bezahlt" that opened something neutral would have
+        // lied about what it does; the honest degradation is the wallet's own
+        // screen. A blank SOURCE is fine — the sheet's primary-source default is
+        // a correct answer, just not a preselected one.
+        assertEquals(
+            NotifDeepLink.Cash("pf-1"),
+            btWidgetDeepLink(BT_WIDGET_TARGET_CASH_ENTRY, null, "pf-1", "src-1", inflow = null),
+        )
+        assertEquals(
+            NotifDeepLink.AddCashEntry(portfolioId = "pf-1", sourceId = null, inflow = true),
+            btWidgetDeepLink(BT_WIDGET_TARGET_CASH_ENTRY, null, "pf-1", "   ", inflow = true),
+        )
+    }
+
+    @Test
+    fun `the two posting buttons are distinct PendingIntents`() {
+        // PendingIntent equality ignores extras, so without the direction in the
+        // ACTION string the launcher collapses Bezahlt and Erhalten onto
+        // whichever was registered first — and every "Erhalten" tap books an
+        // outflow. This is the money-shaped version of the per-row asset rule.
+        val paid = btWidgetIntentAction(BT_WIDGET_TARGET_CASH_ENTRY, "pf-1", "src-1.out")
+        val received = btWidgetIntentAction(BT_WIDGET_TARGET_CASH_ENTRY, "pf-1", "src-1.in")
+        assertNotEquals(paid, received)
+        // …and two wallets' same-direction buttons are distinct too.
+        assertNotEquals(
+            btWidgetIntentAction(BT_WIDGET_TARGET_CASH_ENTRY, "pf-1", "src-1.out"),
+            btWidgetIntentAction(BT_WIDGET_TARGET_CASH_ENTRY, "pf-1", "src-2.out"),
+        )
     }
 
     @Test
@@ -100,8 +184,9 @@ class BtWidgetDeepLinkTest {
                 assertFalse(
                     "$type must not resolve to a widget-only quick action",
                     resolved == NotifDeepLink.AddTransaction ||
-                        resolved == NotifDeepLink.AddCashEntry ||
-                        resolved == NotifDeepLink.MarketSearch,
+                        resolved is NotifDeepLink.AddCashEntry ||
+                        resolved == NotifDeepLink.MarketSearch ||
+                        resolved == NotifDeepLink.Watchlist,
                 )
             }
     }

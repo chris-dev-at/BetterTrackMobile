@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The preview twin of a money-IN action button (BtGlanceColor.GainWash). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_gain_wash" />
+    <corners android:radius="10dp" />
+</shape>

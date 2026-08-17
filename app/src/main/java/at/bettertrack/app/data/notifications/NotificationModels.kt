@@ -269,17 +269,65 @@ sealed interface NotifDeepLink {
 
     /**
      * The Cash screen, poised for a new entry. Same widget-only contract as
-     * [AddTransaction]. Deliberately the SCREEN, not a hypothetical add-sheet
-     * route: the add affordance is the screen's first control, and inventing a
-     * new nav parameter for one shortcut would be config for config's sake.
+     * [AddTransaction].
+     *
+     * ## Why it now carries parameters (Cash Wallet widget, 2026-08-17)
+     *
+     * It shipped as a bare `data object`, and that KDoc argued the point
+     * honestly: "the add affordance is the screen's first control, and inventing
+     * a new nav parameter for one shortcut would be config for config's sake."
+     * That held while the only caller was a generic "Cash-Buchung" tile with
+     * nothing to say about WHICH wallet or WHICH direction.
+     *
+     * The Cash Wallet widget is the case that overturns it. Its whole pitch is a
+     * named source with a `Bezahlt` and an `Erhalten` button — a tap that landed
+     * on a blank sheet defaulted to the *primary* source would silently book
+     * against the wrong wallet for anyone whose widget shows a second one, which
+     * is the one mistake a money shortcut may not make. So the parameters are
+     * not config for config's sake any more; they are what makes the tap honest.
+     *
+     * All three stay nullable, so the old bare call — now `AddCashEntry()` — is
+     * unchanged in behaviour: the screen resolves the selected portfolio, the
+     * sheet defaults to the primary source, and no sheet opens on its own.
+     *
+     * @param portfolioId which ledger, or null to let `CashScreen` resolve the
+     *   selected one (exactly as [Cash] does).
+     * @param sourceId which cash source the entry sheet opens on, or null for
+     *   the sheet's own primary-source default.
+     * @param inflow true opens the sheet on `Erhalten` (deposit), false on
+     *   `Bezahlt` (withdrawal), null opens the screen with no sheet at all.
      */
-    data object AddCashEntry : NotifDeepLink
+    data class AddCashEntry(
+        val portfolioId: String? = null,
+        val sourceId: String? = null,
+        val inflow: Boolean? = null,
+    ) : NotifDeepLink
 
     /**
      * The Markets tab, where global search lives. Widget-only, a pure tab
      * switch — the search field is that tab's first control.
      */
     data object MarketSearch : NotifDeepLink
+
+    /**
+     * The watchlist. Widget-only, added for the Quick Links widget's star tile
+     * (2026-08-17).
+     *
+     * ## Why it lands on the Markets tab and pushes nothing
+     *
+     * `WatchlistRoute` does not exist: S6 P2-19 deleted it because watchlists
+     * are a PANEL inside the Markets tab (`WatchlistPanel`), never a destination
+     * of their own. So "open the watchlist" genuinely IS "go to the Markets
+     * tab", and this resolves to exactly that — no invented route, no dead tap.
+     *
+     * That makes its landing identical to [MarketSearch] today, and it is still
+     * its own member rather than an alias for two reasons. A Quick Links tile
+     * must be able to NAME what it opens (the star's content description is
+     * "Watchlist öffnen", not "Märkte öffnen"), and if the watchlist ever earns
+     * a destination again, exactly one branch of the shell changes instead of
+     * every call site that had been spelling it "MarketSearch".
+     */
+    data object Watchlist : NotifDeepLink
 
     /** Account settings (invites). */
     data object Settings : NotifDeepLink

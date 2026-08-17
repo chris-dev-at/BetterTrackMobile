@@ -159,10 +159,52 @@ fun btWidgetPinPayload(mode: BtWidgetFlowMode): Map<String, String> = mapOf("mod
 fun btWidgetPinFlow(payload: Map<String, String>): BtWidgetFlowMode =
     btWidgetFlowMode(payload["mode"])
 
+// Round-3 shapes (2026-08-17).
+
+/**
+ * Quick Links. The ordered tile list rides as ONE field, through the codec that
+ * already exists for the Glance state — a stash is a different transport for
+ * the same value, and giving it a second encoding would be a second thing to
+ * keep in step.
+ */
+fun btWidgetPinPayload(config: BtQuickLinksConfig): Map<String, String> = mapOf(
+    "links" to btQuickLinksEncode(config.actions),
+    "captions" to if (config.captions) "1" else "0",
+)
+
+fun btWidgetPinQuickLinks(payload: Map<String, String>): BtQuickLinksConfig? {
+    val actions = btQuickLinksDecode(payload["links"])
+    // An empty list is not a configuration — the widget's own default set is
+    // strictly better than a blank grid, so let the caller fall through to it.
+    if (actions.isEmpty()) return null
+    return BtQuickLinksConfig(actions = actions, captions = payload["captions"] == "1")
+}
+
+fun btWidgetPinPayload(config: BtWidgetCashConfig): Map<String, String> = mapOf(
+    "sourceId" to config.sourceId,
+    "sourceName" to config.sourceName,
+    "portfolioId" to config.portfolioId,
+    "movements" to if (config.movements) "1" else "0",
+)
+
+fun btWidgetPinCash(payload: Map<String, String>): BtWidgetCashConfig? {
+    // Same rule as Quick Links: a stash with no wallet in it says nothing the
+    // widget's own follow mode does not already say better.
+    val sourceId = payload["sourceId"]?.takeIf { it.isNotBlank() } ?: return null
+    return BtWidgetCashConfig(
+        sourceId = sourceId,
+        sourceName = payload["sourceName"].orEmpty(),
+        portfolioId = payload["portfolioId"].orEmpty(),
+        movements = payload["movements"] != "0",
+    )
+}
+
 // ── The stash ────────────────────────────────────────────────────────────────
 
 /** One stash slot per configurable widget KIND — pinning two kinds at once keeps both. */
-enum class BtWidgetPinKind { ASSET, PORTFOLIO, BUDGET, PULSE, ALLOCATION, WATCHLIST, MOVERS, FLOW }
+enum class BtWidgetPinKind {
+    ASSET, PORTFOLIO, BUDGET, PULSE, ALLOCATION, WATCHLIST, MOVERS, FLOW, LINKS, CASH,
+}
 
 private const val PIN_PREFS = "bt_widget_pin"
 private const val TAG = "BtWidgetPin"
@@ -302,6 +344,30 @@ suspend fun btWidgetClaimPinnedRows(
         config
     } catch (e: Exception) {
         Log.w(TAG, "Claimed rows pin could not be persisted.", e)
+        config
+    }
+}
+
+suspend fun btWidgetClaimPinnedQuickLinks(context: Context, id: GlanceId): BtQuickLinksConfig? {
+    val config = btWidgetTakePin(context, BtWidgetPinKind.LINKS)?.let(::btWidgetPinQuickLinks)
+        ?: return null
+    return try {
+        updateAppWidgetState(context, id) { prefs -> btQuickLinksPutConfig(prefs, config) }
+        config
+    } catch (e: Exception) {
+        Log.w(TAG, "Claimed quick-links pin could not be persisted.", e)
+        config
+    }
+}
+
+suspend fun btWidgetClaimPinnedCash(context: Context, id: GlanceId): BtWidgetCashConfig? {
+    val config = btWidgetTakePin(context, BtWidgetPinKind.CASH)?.let(::btWidgetPinCash)
+        ?: return null
+    return try {
+        updateAppWidgetState(context, id) { prefs -> btWidgetPutCashConfig(prefs, config) }
+        config
+    } catch (e: Exception) {
+        Log.w(TAG, "Claimed cash-wallet pin could not be persisted.", e)
         config
     }
 }

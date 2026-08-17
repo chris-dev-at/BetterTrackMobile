@@ -74,6 +74,32 @@ class DeepLinkTabsTest {
     // ── Cash ──────────────────────────────────────────────────────────────────
 
     @Test
+    fun `a parameterised cash entry still belongs to the Portfolio tab`() {
+        // The Cash Wallet widget's posting buttons carry a wallet and a
+        // direction (2026-08-17). Ownership must not depend on them: a tap that
+        // named a source is still a Portfolio-tab landing, and a `when` branch
+        // that matched only the bare instance would silently unown every real
+        // widget tap while the tests kept passing on `AddCashEntry()`.
+        assertEquals(BtTab.Portfolio, owningTab(NotifDeepLink.AddCashEntry()))
+        assertEquals(
+            BtTab.Portfolio,
+            owningTab(NotifDeepLink.AddCashEntry("pf-1", "src-1", inflow = true)),
+        )
+        assertEquals(
+            BtTab.Portfolio,
+            owningTab(NotifDeepLink.AddCashEntry("pf-1", "src-1", inflow = false)),
+        )
+    }
+
+    @Test
+    fun `the watchlist belongs to the Markets tab that renders its panel`() {
+        // S6 P2-19 deleted WatchlistRoute — watchlists are a PANEL inside the
+        // Markets tab. "Open the watchlist" therefore IS "go to Markets", which
+        // is what the Quick Links star tile resolves to.
+        assertEquals(BtTab.Markets, owningTab(NotifDeepLink.Watchlist))
+    }
+
+    @Test
     fun `cash belongs to the Portfolio tab that hosts its ledger`() {
         // Added for the home-screen budget widget. Cash is portfolio-scoped data
         // reached from the Portfolio overview, so it names Portfolio and the shell
@@ -166,13 +192,20 @@ class DeepLinkTabsTest {
             // The Quick-actions widget's three (2026-08-16): the blank trade
             // form, the cash screen, and the Markets tab's search.
             NotifDeepLink.AddTransaction,
-            NotifDeepLink.AddCashEntry,
+            // AddCashEntry became a data class on 2026-08-17 so the Cash Wallet
+            // widget's Bezahlt / Erhalten buttons can name a wallet AND a
+            // direction; the bare `AddCashEntry()` is its old behaviour exactly.
+            NotifDeepLink.AddCashEntry(),
             NotifDeepLink.MarketSearch,
+            // The Quick Links widget's star tile (2026-08-17). The watchlist is
+            // a panel on the Markets tab, so it lands there — see the target's
+            // KDoc for why it is its own member rather than a MarketSearch alias.
+            NotifDeepLink.Watchlist,
         ) + accountLevel
         // If a future link type is added, `owningTab`'s exhaustive `when` fails to
         // compile — this list keeps the runtime side honest for the cases that
         // exist today.
-        assertEquals("all nineteen deep-link targets are covered", 19, all.size)
+        assertEquals("all twenty deep-link targets are covered", 20, all.size)
         val (unowned, owned) = all.partition { it in accountLevel }
         assertTrue("no non-account link may be unowned", owned.all { owningTab(it) in BtTab.entries })
         assertTrue("account-level links are unowned", unowned.all { owningTab(it) == null })

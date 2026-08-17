@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -183,6 +185,72 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
     }
 
     /**
+     * A SCROLLING body with no list scaffold (round 3).
+     *
+     * [ConfigList] models exactly three states — not-loaded, empty, and a
+     * LazyColumn of choices — which is right for a fixed offline list and wrong
+     * for a searched one: that has a typed-but-no-matches state, an offline
+     * state that still shows a local fallback, and a search field that has to
+     * stay above all of them. Rather than grow four more parameters onto the
+     * list scaffold, the searching pickers get a plain scroll and compose their
+     * own body.
+     *
+     * A verticalScroll, not a LazyColumn: the content is a handful of rows plus
+     * a text field, and a lazy list nested in a scrollable parent is the classic
+     * way to get an unbounded-height crash.
+     */
+    @Composable
+    protected fun ConfigScroll(titleRes: Int, content: @Composable () -> Unit) {
+        Surface(color = BtTheme.colors.bg, modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+            ) {
+                Text(
+                    text = stringResource(titleRes),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = BtTheme.colors.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+                content()
+            }
+        }
+    }
+
+    /**
+     * [ConfigPanel]'s scrolling twin, for a panel whose body is taller than a
+     * few chip rows (the Quick-Links editor is a list of up to eight tiles plus
+     * the whole catalog). The Save row rides at the END of the scroll rather
+     * than pinned to the bottom: pinning it would cover the last catalog row on
+     * a short screen, and this body is finite.
+     */
+    @Composable
+    protected fun ConfigPanelScroll(
+        titleRes: Int,
+        onSave: () -> Unit,
+        content: @Composable () -> Unit,
+    ) {
+        ConfigScroll(titleRes) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                content()
+            }
+            Text(
+                text = stringResource(R.string.bt_widget_config_save),
+                style = MaterialTheme.typography.titleMedium,
+                color = BtTheme.colors.goldInk,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSave)
+                    .padding(vertical = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+
+    /**
      * The knob-panel scaffold (round 2): a stack of labelled chip rows and a
      * gold Save row — for the families whose config is knobs, not a pick-one
      * list. Same theme, same cancel-by-default contract as [ConfigList].
@@ -276,12 +344,20 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
     }
 }
 
-/** Pick the asset a [BtAssetWidget] instance shows: held ∪ watched, offline. */
+/**
+ * Pick the asset a [BtAssetWidget] instance shows.
+ *
+ * Held ∪ watched is the instant default, and typing searches EVERY asset —
+ * owner ask 2026-08-17: it must be possible to put a stock on the home screen
+ * that is neither held nor watched. See [BtWidgetAssetPicker] for how that
+ * degrades offline, and why the "offline by construction" rule this screen used
+ * to state had to give way.
+ */
 class BtAssetWidgetConfigActivity : BtWidgetConfigActivity() {
 
     @Composable
     override fun Content() {
-        var choices by remember { mutableStateOf<List<BtWidgetAssetConfig>?>(null) }
+        var choices by remember { mutableStateOf<List<BtWidgetAssetConfig>>(emptyList()) }
         LaunchedEffect(Unit) {
             choices = try {
                 val db = AppGraph.database
@@ -295,29 +371,159 @@ class BtAssetWidgetConfigActivity : BtWidgetConfigActivity() {
             }
         }
         var spark by remember { mutableStateOf(true) }
+        // ConfigScroll, not ConfigList: a searched list has two states that
+        // scaffold cannot model (typed-but-no-matches, and offline-with-a-local
+        // fallback), and the search field has to sit above whatever is showing.
+        ConfigScroll(titleRes = R.string.bt_widget_config_pick_asset) {
+            ChipsRow(
+                label = stringResource(R.string.bt_widget_config_sparkline),
+                options = listOf(true, false),
+                selected = spark,
+                optionLabel = {
+                    stringResource(
+                        if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                    )
+                },
+                onSelect = { spark = it },
+            )
+            BtWidgetAssetPicker(localChoices = choices) { picked ->
+                confirm { prefs -> btWidgetPutAssetConfig(prefs, picked.copy(sparkline = spark)) }
+            }
+        }
+    }
+
+    override suspend fun redraw(glanceId: GlanceId) {
+        BtAssetWidget().update(this, glanceId)
+    }
+}
+
+/**
+ * Configure a [BtQuickLinksWidget] instance: which destinations, in which
+ * order, and whether the tiles carry captions.
+ *
+ * Knob panel + Save rather than pick-one-and-close, because the whole
+ * configuration is a LIST — every tap on the editor is an edit, not a choice,
+ * and there is always a valid configuration to save (the default set).
+ */
+class BtQuickLinksWidgetConfigActivity : BtWidgetConfigActivity() {
+
+    @Composable
+    override fun Content() {
+        var config by remember { mutableStateOf(BtQuickLinksConfig(BT_QUICK_LINKS_DEFAULT)) }
+        var portfolios by remember {
+            mutableStateOf<List<at.bettertrack.app.data.db.PortfolioEntity>>(emptyList())
+        }
+        LaunchedEffect(Unit) {
+            portfolios = try {
+                AppGraph.database.portfolioDao().getAll()
+            } catch (e: Exception) {
+                android.util.Log.w("BtWidgetConfig", "Portfolio choices failed to load.", e)
+                emptyList()
+            }
+        }
+        ConfigPanelScroll(
+            titleRes = R.string.bt_ql_config_title,
+            onSave = { confirm { prefs -> btQuickLinksPutConfig(prefs, config) } },
+        ) {
+            ChipsRow(
+                label = stringResource(R.string.bt_ql_config_captions),
+                options = listOf(false, true),
+                selected = config.captions,
+                optionLabel = {
+                    stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
+                },
+                onSelect = { config = config.copy(captions = it) },
+            )
+            BtQuickLinksEditor(config = config, portfolios = portfolios) { config = it }
+        }
+    }
+
+    override suspend fun redraw(glanceId: GlanceId) {
+        BtQuickLinksWidget().update(this, glanceId)
+    }
+}
+
+/**
+ * Configure a [BtCashWalletWidget] instance: which wallet, and whether the 4x2
+ * lists recent movements.
+ *
+ * The list is topped up by ONE user-initiated fetch, for the same reason the
+ * budget picker is: cash sources only reach Room when something fetches them,
+ * and a picker showing nothing would read as "you have no wallets".
+ */
+class BtCashWalletWidgetConfigActivity : BtWidgetConfigActivity() {
+
+    @Composable
+    override fun Content() {
+        var choices by remember {
+            mutableStateOf<List<at.bettertrack.app.data.db.CashSourceEntity>?>(null)
+        }
+        var portfolioId by remember { mutableStateOf<String?>(null) }
+        var movements by remember { mutableStateOf(true) }
+        // ROOM FIRST, network second — and never the other way round.
+        //
+        // The first cut awaited warmCashForPicker() before reading Room, and on
+        // 2026-08-17 the production API was returning Cloudflare 522s after a
+        // ~20 s timeout. The picker rendered a BLACK VOID for the whole of it,
+        // on the placement path, which is precisely the defect the white-void
+        // round was fought over. A slow network must only ever ADD rows to a
+        // list the user can already see.
+        LaunchedEffect(Unit) {
+            val pid = try {
+                AppGraph.portfolioRepository.defaultSelection()?.id
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("BtWidgetConfig", "Portfolio resolution failed.", e)
+                null
+            }
+            portfolioId = pid
+            suspend fun fromRoom() = try {
+                pid?.let { BtWidgetRepository.loadCashSources(it) }.orEmpty()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("BtWidgetConfig", "Cash sources failed to load.", e)
+                emptyList()
+            }
+            // Whatever Room has, on the first frame — including nothing, which
+            // renders the honest empty state rather than a void.
+            choices = fromRoom()
+            BtWidgetRepository.warmCashForPicker(pid)
+            val warmed = fromRoom()
+            if (warmed.isNotEmpty()) choices = warmed
+        }
         ConfigList(
-            titleRes = R.string.bt_widget_config_pick_asset,
+            titleRes = R.string.bt_widget_cash_config_title,
             choices = choices,
             header = {
                 ChipsRow(
-                    label = stringResource(R.string.bt_widget_config_sparkline),
+                    label = stringResource(R.string.bt_widget_cash_config_movements),
                     options = listOf(true, false),
-                    selected = spark,
+                    selected = movements,
                     optionLabel = {
                         stringResource(
                             if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
                         )
                     },
-                    onSelect = { spark = it },
+                    onSelect = { movements = it },
                 )
             },
-        ) { choice ->
+        ) { source ->
             ConfigRow(
-                title = choice.symbol,
-                subtitle = choice.name,
+                title = source.name,
+                subtitle = if (source.isMain) stringResource(R.string.bt_cash_primary_badge) else null,
                 onClick = {
                     confirm { prefs ->
-                        btWidgetPutAssetConfig(prefs, choice.copy(sparkline = spark))
+                        btWidgetPutCashConfig(
+                            prefs,
+                            BtWidgetCashConfig(
+                                sourceId = source.id,
+                                sourceName = source.name,
+                                portfolioId = source.portfolioId,
+                                movements = movements,
+                            ),
+                        )
                     }
                 },
             )
@@ -325,7 +531,7 @@ class BtAssetWidgetConfigActivity : BtWidgetConfigActivity() {
     }
 
     override suspend fun redraw(glanceId: GlanceId) {
-        BtAssetWidget().update(this, glanceId)
+        BtCashWalletWidget().update(this, glanceId)
     }
 }
 
@@ -418,17 +624,25 @@ class BtBudgetWidgetConfigActivity : BtWidgetConfigActivity() {
         var choices by remember { mutableStateOf<List<Choice>?>(null) }
         var style by remember { mutableStateOf(BtWidgetBudgetStyle.RING) }
         var emphasis by remember { mutableStateOf(BtWidgetBudgetEmphasis.REMAINING) }
+        // Room first, network second — same rule and same reason as the cash
+        // picker below it: awaiting the top-up before the first read left this
+        // screen blank for the whole of a 20 s network timeout.
         LaunchedEffect(Unit) {
-            choices = try {
-                // Top up the cache first — before the first worker pass it is
-                // empty, and an empty picker reads as "you have no budgets".
-                BtWidgetRepository.warmBudgetsForPicker()
+            suspend fun fromCache() = try {
                 val cache = BtWidgetBudgetStore.read(AppGraph.database, AppGraph.json)
                 listOf(Choice(null)) + cache.budgets.map { Choice(it) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w("BtWidgetConfig", "Budget choices failed to load.", e)
                 emptyList()
             }
+            // The all-budgets row alone is already a usable picker, so this is
+            // never an empty screen even before the cache has anything in it.
+            choices = fromCache()
+            BtWidgetRepository.warmBudgetsForPicker()
+            val warmed = fromCache()
+            if (warmed.size > 1) choices = warmed
         }
         ConfigList(
             titleRes = R.string.bt_widget_config_pick_budget,

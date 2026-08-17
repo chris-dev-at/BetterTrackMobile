@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Quick-actions widget: two shortcut tiles.
+  Quick Links widget: four launcher tiles.
   Pre-API-31 picker preview image (SAMPLE rendering; API 31+ uses the matching
-  res/layout preview with real text). Sizes are dp at 1x.
+  res/layout preview, which draws the real pictograms). Sizes are dp at 1x.
+
+  Rewritten for the round-3 icon grid — it used to show the two text tiles of
+  the Quick-actions design. A layer-list cannot host a vector, so each tile is
+  the squircle with a gold mark centred in it; the layout preview above carries
+  the actual glyphs.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
@@ -14,41 +19,85 @@
                 android:height="50dp" />
         </shape>
     </item>
+    <!-- Tile 1 -->
     <item
         android:left="10dp"
-        android:top="12dp"
-        android:right="84dp"
-        android:bottom="12dp">
+        android:top="7dp"
+        android:right="124dp"
+        android:bottom="7dp">
         <shape android:shape="rectangle">
             <solid android:color="@color/bt_widget_chip" />
             <corners android:radius="10dp" />
         </shape>
     </item>
     <item
-        android:left="86dp"
-        android:top="12dp"
-        android:right="10dp"
-        android:bottom="12dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/bt_widget_chip" />
-            <corners android:radius="10dp" />
-        </shape>
-    </item>
-    <item
-        android:left="18dp"
-        android:top="21dp"
-        android:right="118dp"
-        android:bottom="21dp">
+        android:left="19dp"
+        android:top="16dp"
+        android:right="133dp"
+        android:bottom="16dp">
         <shape android:shape="rectangle">
             <solid android:color="@color/bt_widget_gold" />
             <corners android:radius="2dp" />
         </shape>
     </item>
+    <!-- Tile 2 -->
     <item
-        android:left="94dp"
-        android:top="21dp"
-        android:right="42dp"
-        android:bottom="21dp">
+        android:left="48dp"
+        android:top="7dp"
+        android:right="86dp"
+        android:bottom="7dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_chip" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item
+        android:left="57dp"
+        android:top="16dp"
+        android:right="95dp"
+        android:bottom="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_gold" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+    <!-- Tile 3 -->
+    <item
+        android:left="86dp"
+        android:top="7dp"
+        android:right="48dp"
+        android:bottom="7dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_chip" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item
+        android:left="95dp"
+        android:top="16dp"
+        android:right="57dp"
+        android:bottom="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_gold" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+    <!-- Tile 4 -->
+    <item
+        android:left="124dp"
+        android:top="7dp"
+        android:right="10dp"
+        android:bottom="7dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bt_widget_chip" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item
+        android:left="133dp"
+        android:top="16dp"
+        android:right="19dp"
+        android:bottom="16dp">
         <shape android:shape="rectangle">
             <solid android:color="@color/bt_widget_gold" />
             <corners android:radius="2dp" />

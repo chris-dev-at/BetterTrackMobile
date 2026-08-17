@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick-Links pictogram: saved symbols and monitored assets — the outlined
+  five-point star. Traced from the study's `#i-watchlist`.
+  White strokes, tinted at render time — see ic_bt_widget_overview.xml.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/bt_widget_gold">
+    <path
+        android:pathData="M12,3.4 l2.7,5.45 6.02,0.88 -4.36,4.24 1.03,6 -5.39,-2.83 -5.39,2.83 1.03,-6 -4.36,-4.24 6.02,-0.88 L12,3.4 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

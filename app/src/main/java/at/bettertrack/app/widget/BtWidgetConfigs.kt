@@ -402,6 +402,37 @@ suspend fun btWidgetConfiguredAssets(context: Context): List<BtWidgetAssetConfig
 }
 
 /**
+ * Every portfolio a placed Cash Wallet reads a ledger from — the cash warm's
+ * shopping list.
+ *
+ * A blank entry means "the governing portfolio", which the caller resolves
+ * once; a wallet pinned to another portfolio names it, because that ledger will
+ * never be refreshed by the app's own Cash-screen visits if the user does not
+ * open that portfolio. Same failure policy as every other enumerator here: a
+ * host that cannot be asked is a pass with nothing extra to fetch.
+ */
+suspend fun btWidgetCashPortfolios(context: Context): List<String?> = try {
+    GlanceAppWidgetManager(context).getGlanceIds(BtCashWalletWidget::class.java).map { id ->
+        btWidgetCashConfig(getAppWidgetState(context, PreferencesGlanceStateDefinition, id))
+            .portfolioId
+            .takeIf { it.isNotBlank() }
+    }.distinct()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.w(TAG, "Could not enumerate cash-wallet widgets.", e)
+    emptyList()
+}
+
+/**
+ * How many cash ledgers one warm pass refreshes. Two is already an unusual home
+ * screen (a wallet from each of two portfolios); the cap exists for the same
+ * reason every other one in this file does — an unattended job's fan-out is
+ * bounded by design, not by how many widgets a user can place.
+ */
+const val BT_WIDGET_CASH_WARM_LIMIT: Int = 2
+
+/**
  * One history series a placed widget will actually chart: the portfolio (null =
  * the governing one, resolved by the caller) and the range its instance shows.
  */

@@ -579,10 +579,27 @@ fun BtApp() {
             // screen — the shortcut's worth is being INSIDE in one tap.
             NotifDeepLink.AddTransaction ->
                 open(link) { navController.navigate(TransactionFormRoute()) }
-            NotifDeepLink.AddCashEntry ->
-                open(link) { navController.navigate(CashRoute()) }
+            // The Cash Wallet widget's Bezahlt / Erhalten buttons carry the
+            // wallet AND the direction, so the sheet opens on the right source
+            // with the right sign — a money shortcut that guessed the wallet
+            // would be worse than no shortcut. All three are nullable, so the
+            // plain Quick-Links cash tile still lands on the bare screen.
+            is NotifDeepLink.AddCashEntry ->
+                open(link) {
+                    navController.navigate(
+                        CashRoute(
+                            portfolioId = link.portfolioId,
+                            initialSourceId = link.sourceId,
+                            initialInflow = link.inflow,
+                        ),
+                    )
+                }
             // Search is the Markets tab's own first control — a pure switch.
             NotifDeepLink.MarketSearch -> open(link)
+            // The watchlist is a panel on that same tab (S6 P2-19 deleted
+            // WatchlistRoute), so this is a pure switch too — see the target's
+            // KDoc for why it exists separately.
+            NotifDeepLink.Watchlist -> open(link)
             NotifDeepLink.Settings -> open(link) { navController.navigate(SettingsRoute) }
             NotifDeepLink.Security -> open(link) { navController.navigate(SettingsSecurityRoute) }
             NotifDeepLink.NotificationSettings ->
@@ -1478,6 +1495,10 @@ private fun BtSheetHost(
                 CashScreen(
                     routePortfolioId = route.portfolioId,
                     editOpId = route.editOpId,
+                    // The Cash Wallet widget's preselection; null on every
+                    // other entry into this sheet.
+                    initialSourceId = route.initialSourceId,
+                    initialInflow = route.initialInflow,
                     onBack = back,
                     onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
                     onOpenTags = { navController.navigate(CashTagsRoute) },

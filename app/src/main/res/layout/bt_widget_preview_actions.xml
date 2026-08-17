@@ -1,69 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Picker preview (API 31+) for the quick-actions widget — the two add tiles.
+  Picker preview (API 31+) for the Quick Links widget: four launcher tiles with
+  the real pictograms, tinted with the same gold the placed widget uses.
+
+  The ImageViews carry no android:tint of their own — each vector already
+  declares `android:tint="@color/bt_widget_gold"`, which the LAUNCHER resolves
+  against its own configuration, so the preview follows day/night for free.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bt_widget_preview_bg"
-    android:gravity="center_vertical"
+    android:gravity="center"
     android:orientation="horizontal"
     android:padding="10dp">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="46dp"
         android:layout_weight="1"
-        android:background="@drawable/bt_widget_preview_chip"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="9dp">
+        android:background="@drawable/bt_widget_preview_tile">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bt_widget_preview_plus"
-            android:textColor="@color/bt_widget_gold"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/bt_ql_overview"
+            android:src="@drawable/ic_bt_widget_overview" />
+    </FrameLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:maxLines="1"
-            android:text="@string/bt_widget_action_trade"
-            android:textColor="@color/bt_widget_text_primary"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
+    <FrameLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_height="46dp"
+        android:layout_marginStart="6dp"
         android:layout_weight="1"
-        android:background="@drawable/bt_widget_preview_chip"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="9dp">
+        android:background="@drawable/bt_widget_preview_tile">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bt_widget_preview_euro"
-            android:textColor="@color/bt_widget_gold"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/bt_ql_markets"
+            android:src="@drawable/ic_bt_widget_markets" />
+    </FrameLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:maxLines="1"
-            android:text="@string/bt_widget_action_cash"
-            android:textColor="@color/bt_widget_text_primary"
-            android:textSize="11sp" />
-    </LinearLayout>
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="46dp"
+        android:layout_marginStart="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bt_widget_preview_tile">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/bt_ql_add_transaction"
+            android:src="@drawable/ic_bt_widget_transaction_add" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="46dp"
+        android:layout_marginStart="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bt_widget_preview_tile">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/bt_ql_cash"
+            android:src="@drawable/ic_bt_widget_wallet" />
+    </FrameLayout>
 </LinearLayout>

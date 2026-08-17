@@ -16,6 +16,7 @@ import at.bettertrack.app.data.storage.effective
 import at.bettertrack.app.data.storage.holdsVault
 import at.bettertrack.app.data.storage.writesToServer
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.cash.activeSources
 import at.bettertrack.app.ui.home.homeActivePortfolios
 import at.bettertrack.app.ui.home.homeNetWorth
 import at.bettertrack.app.ui.portfolio.switcherPrefetchIds
@@ -158,6 +159,26 @@ object BtWidgetRepository {
     }
 
     /**
+     * The ACTIVE cash sources of one portfolio — the Cash Wallet widget's own
+     * read. Room-only and safe-wrapped like [load].
+     *
+     * Archived sources are filtered here rather than in the widget because the
+     * app filters them here too ([activeSources] is the Cash screen's own
+     * helper): one definition of "a wallet you can still post to", shared by
+     * the screen, the entry sheet and the launcher.
+     */
+    suspend fun loadCashSources(
+        portfolioId: String,
+    ): List<at.bettertrack.app.data.db.CashSourceEntity> = try {
+        activeSources(AppGraph.database.cashDao().observeSources(portfolioId).first())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Cash sources load failed for $portfolioId; the wallet shows its empty state.", e)
+        emptyList()
+    }
+
+    /**
      * One portfolio's parsed 1M history from the cache — the chart widgets' own
      * read. Room-only and safe-wrapped like [load]: a corrupt blob or an unbuilt
      * graph is "no chart yet", never a launcher error view.
@@ -219,6 +240,66 @@ object BtWidgetRepository {
         warmHistory(context)
         warmTrends(context, nowMs)
         warmAssetHistory(context, nowMs)
+        warmCash(context)
+    }
+
+    /**
+     * Refresh the Cash Wallet widgets' ledgers through the app's own
+     * [at.bettertrack.app.data.repo.PortfolioRepository.refreshCash] — the same
+     * call the Cash screen makes, writing the same Room rows the widget reads.
+     *
+     * This one is load-bearing rather than a nicety: cash sources only reach
+     * Room when something fetches them, and nothing else in the warm pass does.
+     * Without it a freshly installed (or freshly logged-in) account would show
+     * an empty wallet card until the user happened to open the Cash screen —
+     * a widget waiting on a screen visit, which is the opposite of the point.
+     *
+     * Failures are per-portfolio and swallowed: the card keeps its last-known
+     * balance and lets the "as of" note age, exactly as the budget warm does.
+     */
+    private suspend fun warmCash(context: Context) {
+        try {
+            if (!BtWidgets.placed(context, BtCashWalletWidgetReceiver::class.java)) return
+            val repo = AppGraph.portfolioRepository
+            val wants = btWidgetCashPortfolios(context)
+            if (wants.isEmpty()) return
+            val governing = if (wants.any { it == null }) repo.defaultSelection()?.id else null
+            wants.mapNotNull { it ?: governing }
+                .distinct()
+                .take(BT_WIDGET_CASH_WARM_LIMIT)
+                .forEach { pid ->
+                    try {
+                        repo.refreshCash(pid)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Cash warm-up failed for $pid; the wallet keeps its last balance.", e)
+                    }
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Cash warm-up failed; wallets keep their last balances.", e)
+        }
+    }
+
+    /**
+     * Refresh ONE portfolio's cash now, for the screens that let the user pick
+     * a wallet (the widget's config Activity, the in-app builder). Same
+     * reasoning as [warmBudgetsForPicker]: before any Cash-screen visit the
+     * table is empty, and an empty picker would read as "you have no wallets".
+     */
+    suspend fun warmCashForPicker(portfolioId: String?) {
+        if (!hasSession()) return
+        if (!AppGraph.connectivityMonitor.isOnline.value) return
+        try {
+            val pid = portfolioId ?: AppGraph.portfolioRepository.defaultSelection()?.id ?: return
+            AppGraph.portfolioRepository.refreshCash(pid)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Cash picker warm-up failed; the list shows what Room has.", e)
+        }
     }
 
     /**
