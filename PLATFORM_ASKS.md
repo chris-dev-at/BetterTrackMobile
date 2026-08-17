@@ -1207,3 +1207,70 @@ We ran a full audit of platform account state vs. Android coverage (bearer answe
 - `BtApi.kt` still carried a comment claiming MIRRORCHAIN administration refuses bearer; board #67 widened it (rename/invite/revoke/role/transfer/kick/dissolve are all allowlisted and live). Ours to fix, noted here so nobody re-litigates it.
 
 No urgency on any of these — nothing is broken, they are coverage gaps. Tick them here as you go and we will wire each one as a thin adapter with no UI rework. — Mobile
+
+## 🔐 Platform → Mobile — #79 ANSWERED: all eight accepted, five issues filed, ZERO new scopes and NO re-login (2026-08-17)
+
+**Christian's ruling is now the platform's default answer, so none of these were a negotiation** — we spent the audit working out the safe *shape*, not the yes. Every bearer answer below was read out of `apps/api/src/http/middleware/bearerAuth.ts` and the route files themselves, not from openapi metadata.
+
+**The headline, because it saves you a release:** all eight items land on scopes that already exist, are already in the `BetterTrackMobile` client ceiling, and that your `OAuthConfig.BASE_SCOPES` + v5 block already request. **No new scope, no seeding migration, no re-authorize, no re-login.** Your `account:security` and `vault:sync` grants cover the lot. The standing rule still holds for the future: **never add a scope to your authorize request until we tick it seeded here** — that is what hard-rejected the whole authorize during the alerts rollout — but for #79 there is nothing to wait for.
+
+### Verdicts
+
+| # | Surface | Verdict | Scope | Issue |
+| --- | --- | --- | --- | --- |
+| 1 | `GET /auth/passkeys`, `PATCH`/`DELETE /auth/passkeys/{id}` | **accepted** | `account:security` | **#1324** |
+| 2 | `GET`/`DELETE /settings/oauth-grants[/{id}]` | **accepted with condition** — first-party clients only | `account:security` + first-party | **#1325** |
+| 3 | `POST /account/paranoid/enable`\|`disable` | **accepted with condition** — step-up re-auth in the request | `account:security` + step-up | **#1326** |
+| 4 | `PATCH /vault/media` + retired-purge pair | **accepted** | `vault:sync` | **#1326** |
+| 5 | `GET /settings/taxes/years`, `POST …/{year}/unlock`\|`relock` | **accepted** | `account:security` | **#1324** |
+| 6 | `POST`/`DELETE /auth/remembered-device` | **needs design** — the literal allowlist does not work, see below | `account:security` | **#1327** |
+| 7 | Bearer-completable Google **link** | **needs design** — the only item needing a new flow | `account:security` | **#1328** |
+| 8 | `POST /auth/first-run/complete` | **accepted** | `account:security` | **#1324** |
+
+Two notes on the scope column. Item 5 maps to `account:security` rather than `portfolio:*` — the unlock ritual is a password-re-auth account act, and that is how `/account/*` is mapped everywhere else; shout if you disagree, but we will not mint a new scope to settle it. Item 8 also rides `account:security` for the same "no new scope" reason, even though first-run is hardly a security act.
+
+### #75 is resolved: first-party-only, and it lights up for you
+
+**Yes to `/settings/oauth-grants` — with the gate on the CLIENT, not the scope.** Allowlisting it on `account:security` alone would let *any* third-party OAuth app holding that scope enumerate and revoke the user's **other** connected apps. That is a cross-third-party privacy leak and a mutual-eviction primitive, and it would be a strictly worse boundary than the one we have today. So: first-party OAuth clients get list/delete, third-party bearers stay refused, and personal `btk_…` keys stay refused too (a personal key managing other credentials is the escalation the original rule closed).
+
+Good news for you: the first-party marker already exists end to end — `oauth_clients.is_first_party`, `FIRST_PARTY_CLIENTS` in code as the source of truth, and you already see it as `client.firstParty` on the consent contract. `btc_IbT1mzw_7kBiPHPkGfaE0Q` is first-party, so **your Authorized-Apps screen lights up with no release from you**, exactly as you designed it. The only new work is carrying the flag onto the request principal, which costs no extra query. #75 is hereby closed as resolved-by-#1325.
+
+### Paranoid mode: accepted, but it grows a step-up — and so does the web
+
+**Condition: enable and disable will require a step-up credential in the request body** (password, or a fresh TOTP code, or a recovery code), verified server-side inside the same account lock as the transition. Enable is a one-way destructive purge of every cleartext row and every share in both directions; a V5 review found bugs there that permanently destroyed user data. A stolen phone token must not be an account-erasure primitive, and a valid bearer on its own would be exactly that.
+
+**A correction to our own earlier framing, in your favour:** there was nothing to "mirror" from the web. `POST /account/paranoid/enable` requires **no password and no PIN today** — its only gates are the owning browser session, the vault rate limit, and the `normalDataRevision` CAS token. So the step-up is new work on **both** paths and the web wizard gains it in the same PR. We are not shipping you a bearer path that is stricter than the browser's.
+
+Practical consequence for your UI: budget for a credential prompt in front of the paranoid toggle, shaped like your account-deletion and passkey-revoke prompts (same field set: password / code / recoveryCode, at least one). `POST /auth/reauth` is **not** reusable as a pre-step — by design it answers 204 and mints nothing, so there is no artifact you could carry into a second request.
+
+We are **not** taking you up on the mobile-attested alternative. The in-request step-up is cheaper, testable, and identical on both clients.
+
+### Item 4 has a one-way door we need you to rule on
+
+`PATCH /vault/media` itself is fine on `vault:sync` — retiring `server` moves ciphertext into the retired set rather than deleting it, and the purge pair is separately gated by a server challenge plus an **Ed25519 signature made with the private key inside the decrypted vault**, which a stolen token cannot produce. That ceremony is a stronger step-up than a password, so we are not bolting a password check onto it.
+
+**But:** adding `server` as a medium requires a `server-candidate` verification bound to a *staged* candidate, and the staging route `PUT /vault/media/server-candidate` is not in #79 and stays session-only. As filed, the phone could retire `server` and toggle `drive` but could **never move back to server media**. Tell us which you want: widen `PUT /vault/media/server-candidate` (+ the candidate GET) as an amendment to #1326, or have the app refuse the server-add edge. We will not guess — this is on the issue as a blocking question for the media half.
+
+### Item 6: your premise is wrong, and the mechanism is the reason
+
+Item 6 was filed as a mechanical allowlist alongside 1/4/5/8. It is not, and we pulled it into its own issue rather than shipping something that looks fixed and is not:
+
+- `POST /auth/remembered-device` delivers the device id **only** as the signed httpOnly `bt_rdid` cookie. Called with a bearer, that `Set-Cookie` lands on your OkHttp client — **not** on the Chrome Custom Tab that runs the OAuth login leg, which is the sole consumer via `POST /auth/pin/quick-auth`. You would be minting orphaned Redis state no login can ever use.
+- `DELETE /auth/remembered-device` is **already public** — no auth at all — because it reads the device id exclusively from that signed cookie, never the body (deliberate: the client controls its display record, not which account it is). A bearer call carries no cookie, so it would forget nothing and answer `{ok: true}`. A silently-lying success is worse than the 403 you get today.
+
+What Christian's ruling does entitle you to is **management** of that state, and the server already keeps a per-user reverse index precisely so every live binding is enumerable for deletion. So #1327 builds bearer-callable **list / revoke-one / revoke-all** over remembered devices, on `account:security`, with the raw device id never leaving the server (it is a bearer-equivalent secret). The minting route stays browser-only, and your Custom Tab can already hit it during the OAuth leg — that part is app-side, not a missing endpoint. Design goes on #1327 and gets ticked here before you wire anything.
+
+### Item 7: confirmed as the only real design item
+
+You are right on all three facts: `link-status` and `unlink` already take a bearer on `account:security`, `start` is a cookie-bound redirect, and the callback bounces into the web SPA with no mobile target. One detail you could not see from the outside: `start` also **hard-demotes a bearer caller to anonymous sign-in** (`linkUserId = req.authUser && !req.apiKey ? … : null`), so allowlisting it would never have expressed "link to my account" even if we flipped the policy. Both of your suggestions are live candidates on #1328 — a bearer-minted single-use link ticket with a registered mobile deep-link target, or device-code style. Note the ticket has to replace the signed state cookie as the CSRF defence, at equal strength, so this one gets a design tick here before build. **Link only** — the bearer path will never mint a session.
+
+### Your two corrections — both acknowledged
+
+- **Openapi/middleware agreement: confirmed, retire the old warning for good.** The generator derives each route's `security` from the same `resolvePolicy` core the middleware enforces, so the spec cannot drift. One naming nit for your notes: the generator calls the **template-aware** twin `openApiPathTemplateAcceptsBearer()`, not `pathAcceptsBearer()` — the latter is the live-request entry point and deliberately refuses literal `{param}` segments. Same policy, two doors. Every one of the five issues carries an acceptance criterion that the spec must need **no hand-editing**.
+- **MIRRORCHAIN administration: your `BtApi.kt` comment is indeed stale.** Board #67's widening is live — create, convert, rename, invite, revoke, role change, kick, transfer and dissolve are all in the bearer allowlist. Ours confirmed, yours to delete.
+
+And a third for the record, since you flagged it: **`GET /vault/media` already accepting a bearer is correct** (it has been in the `vault:sync` allowlist since #1043), which is exactly why item 4 reads as "can see, cannot move".
+
+### What happens next
+
+#1324 is the quick one and needs no design round. #1325 and #1326 build against the conditions above. #1327 and #1328 post a design here first. **Do not change your authorize request for any of this** — nothing new to request. We tick each issue here as it merges; that tick is your go-live signal per item, and your capability probes can stay exactly as they are. — Platform
