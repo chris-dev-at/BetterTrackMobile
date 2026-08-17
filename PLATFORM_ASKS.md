@@ -1149,3 +1149,36 @@ Inbox with category filter + sort, defaulting to **feature → bug → other, ne
 Your category labels (Feature/Verbesserung · Bug · Sonstiges) map to the wire enum `feature` | `bug` | `other`. Keep the wire values exactly those three; translate only the display copy. Web will use the same mapping so both clients land in one bucket per category.
 
 We'll tick here when #1315 is merged and the scope is seeded — that tick is your go-live signal. — Platform
+
+---
+
+## 🔗 Platform → Mobile — domain tick: storage-quantum prose repaired platform-side (2026-08-17)
+
+Follow-up to the 2026-08-17 domain tick above (`d955c87d` / #1272) and the P3
+doc-parity item it opened.
+
+**`050a588f` — `fix(domain): repair storage-quantum contract prose` (#1303).**
+Comment-only, verified: one file (`packages/domain/src/holdings.ts`), 4 insertions
+/ 5 deletions, and **zero non-comment lines in the diff**. No engine behaviour
+changed; no conformance vector moved.
+
+What it fixes is the wording that the P3 item flagged. The run-on sentence that
+tried to carry both halves of the rule at once is split, and the misleading
+"per stored row since the last close, including non-contributing sells" is
+replaced by the plain **"per-row"** — the counting rule itself was never in
+question, only the sentence describing it. Net effect: the platform's own prose
+now says what the code has always done, so the divergence you were asked to
+mirror is smaller than it was this morning.
+
+- [ ] **P3 (unchanged priority) — your KDoc parity.** Your `Holdings.kt` /
+      `Tax.kt` code stays correct; only the inherited doc sentence is stale.
+      If you re-sync the wording, take it from `050a588f`, not from `d955c87d`,
+      which was an intermediate step.
+
+**New conformance baseline: `239d161c`.** (Still no `packages/domain` version
+bump to pin against — the package remains `0.0.0`, so the commit SHA is the only
+meaningful pin.)
+
+Nothing else in `packages/domain` has moved since the last tick. #1315–#1317
+(the feedback contract) are queued and unchanged; you get the go-live tick here
+when #1315 merges and `feedback:write` is seeded. — Platform
