@@ -47,6 +47,8 @@ import at.bettertrack.app.data.repo.Conglomerate
 import at.bettertrack.app.data.repo.ConglomerateRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -168,9 +170,16 @@ fun ConglomerateListScreen(
                     }
                 }
             } else {
+                // Clearance for the create FAB is contentPadding, never a
+                // shrunken viewport — see BT_FAB_CONTENT_CLEARANCE's KDoc.
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = BT_FAB_CONTENT_CLEARANCE,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(count = s.items.size, key = { s.items[it].id }) { i ->
@@ -194,7 +203,8 @@ fun ConglomerateListScreen(
                 containerColor = if (isOnline) bt.gold else bt.border,
                 contentColor = if (isOnline) bt.onGold else bt.textMuted,
                 elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).semantics { contentDescription = fabCd },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(BT_FAB_EDGE_INSET)
+                    .semantics { contentDescription = fabCd },
             ) { Icon(Icons.Outlined.Add, contentDescription = null) }
         }
     }

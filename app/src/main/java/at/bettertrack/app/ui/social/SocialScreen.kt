@@ -94,6 +94,8 @@ import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.data.repo.groupByPerson
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
@@ -346,6 +348,17 @@ fun SocialScreen(
         }.collect { atTop -> if (atTop) fabVisibility.show() }
     }
     val addFriendCd = stringResource(R.string.bt_social_add_friend)
+    // …and it stands down entirely on an empty friends list, where the empty
+    // state carries the single "Add a friend" CTA ([fabVisibleForList]).
+    // `empty` is the same three-way test the empty state itself uses: an
+    // outgoing request you sent is a friends list that is doing something.
+    //
+    // Hoisted above the Box because the FAB is rendered as the Box's last
+    // child, outside the `when` that picks the section.
+    val friendsFabVisible = fabVisibleForList(
+        resolved = !ui.loading,
+        empty = ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty(),
+    )
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -433,19 +446,12 @@ fun SocialScreen(
         // about. As a FAB it is always reachable, gets out of the way on scroll,
         // and stops competing with the requests for the lead.
         //
-        // …and it stands down entirely on an empty friends list, where the empty
-        // state carries the single "Add a friend" CTA ([fabVisibleForList]).
-        // `empty` is the same three-way test the empty state itself uses: an
-        // outgoing request you sent is a friends list that is doing something.
-        val friendsFabVisible = fabVisibleForList(
-            resolved = !ui.loading,
-            empty = ui.friends.isEmpty() && ui.incoming.isEmpty() && ui.outgoing.isEmpty(),
-        )
+        // The stand-down rule and `friendsFabVisible` itself live above the Box.
         if (section == SocialSection.Friends && friendsFabVisible) {
             fabVisibility.Content(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(20.dp),
+                    .padding(BT_FAB_EDGE_INSET),
             ) {
                 FloatingActionButton(
                     onClick = { showAdd = true },
@@ -649,8 +655,15 @@ private fun FriendsSection(
 ) {
     LazyColumn(
         state = listState,
+        // Clearance for the add-friend FAB is contentPadding, never a shrunken
+        // viewport — see BT_FAB_CONTENT_CLEARANCE's KDoc.
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            bottom = BT_FAB_CONTENT_CLEARANCE,
+            top = 4.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // V5 S2c: a group-portfolio (mirrorchain) invitation is the one thing on
@@ -877,7 +890,11 @@ private fun SharedWithMeSection(shared: SharedWithMe?, onOpenPerson: (String, St
     val people = remember(shared) { shared.groupByPerson() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
+        // No FAB on this section (the add-friend button is Friends-only), so no
+        // FAB clearance to reserve — just an ordinary bottom gap. The 96dp this
+        // used to carry was the FAB convention copied onto a list nothing
+        // floats over.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item { BtSectionHeader(stringResource(R.string.bt_social_people_sharing), count = people.size) }
@@ -947,7 +964,9 @@ private fun MySharesSection(mine: MyShared?, onShare: (MySharedItem) -> Unit) {
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 4.dp),
+        // Same as shared-with-me: nothing floats over this section, so it keeps
+        // an ordinary bottom gap rather than a FAB clearance.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp, top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {

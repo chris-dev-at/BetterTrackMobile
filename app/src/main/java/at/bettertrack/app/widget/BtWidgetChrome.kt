@@ -99,6 +99,26 @@ internal fun BtWidgetCard(
 }
 
 /**
+ * The whole card as one state message, with NO click target.
+ *
+ * This is what [btProvideContent] publishes as its first frame, before the load
+ * has returned. It is the Glance twin of `@layout/bt_widget_loading` — same
+ * surface, same corner behaviour, same gold-dot-over-one-line affordance — so
+ * the hand-off from the launcher's inflated XML to the first real frame is a
+ * content swap the eye does not catch.
+ *
+ * Deliberately not clickable: nothing has been resolved yet, so there is no
+ * honest destination to send a tap to, and a card that opens the wrong screen
+ * is worse than one that waits a moment.
+ */
+@Composable
+internal fun BtWidgetStatusCard(colors: BtGlanceColors, text: String) {
+    Column(modifier = btWidgetCardModifier(colors).padding(BT_WIDGET_PADDING)) {
+        BtWidgetMessage(text, colors)
+    }
+}
+
+/**
  * A tiny DATA line — a portfolio's name, an asset's symbol.
  *
  * This is what replaced `BtWidgetLabel`, the gold section header every card

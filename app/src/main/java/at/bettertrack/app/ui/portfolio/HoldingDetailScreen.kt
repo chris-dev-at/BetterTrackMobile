@@ -68,6 +68,8 @@ import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
@@ -424,7 +426,7 @@ fun HoldingDetailScreen(
                         elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(20.dp)
+                            .padding(BT_FAB_EDGE_INSET)
                             .semantics { contentDescription = fabCd },
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = null)
@@ -474,10 +476,17 @@ private fun HoldingContent(
 ) {
     val bt = BtTheme.colors
     LazyColumn(
+        // Clearance for the buy/sell FAB is contentPadding, never a shrunken
+        // viewport: content scrolls freely under the floating button and the
+        // last row is never clipped through the middle. See
+        // BT_FAB_CONTENT_CLEARANCE's KDoc.
         modifier = Modifier.fillMaxSize(),
-        // bottom clears the buy/sell FAB (56dp + 20dp inset + margin) so the last
-        // transaction row scrolls fully into view instead of under it.
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = BT_FAB_CONTENT_CLEARANCE,
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Position hero (server-computed market value + day change).

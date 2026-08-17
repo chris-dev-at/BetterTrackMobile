@@ -86,6 +86,28 @@ import kotlin.math.roundToInt
  * this app does not invent money. Uniform spacing is what makes snapping feel
  * smooth; interpolation would have made it feel smooth by lying.
  *
+ * ## The DRAWN curve is smoothed — amended 2026-08-17, and bounded
+ *
+ * The paragraph above used to end the argument, and it was read as banning
+ * smoothing outright. The owner has since asked for some:
+ *
+ * > *"weniger random spitzen und ein bisschen mehr smoothing … vielleicht
+ * > weniger datenpunkte"*
+ *
+ * The amendment is narrow and the distinction it turns on is the one the
+ * paragraph above was always really making: **nothing may invent a number a
+ * reader can take away.** A curve between two vertices is not such a number —
+ * no readout comes off it, the scrub snaps to real observations, and the
+ * Tief/Hoch footer and the range delta are computed from the raw series. So the
+ * *drawing* may be smoothed; the *data* may not.
+ *
+ * It is bounded so that even the picture cannot lie: the drawn vertices are a
+ * subset of the real observations (never averages, never invented), the true
+ * high and low are pinned into that subset, and the interpolation is monotone
+ * cubic, which provably cannot bulge past the values it passes through. See
+ * [chartRenderIndices] and [chartCurveTangents] — and `ChartCurveTest`, which
+ * asserts both.
+ *
  * ## Scrubbing does not recompose per frame any more
  *
  * The scrub callback used to fire from inside the `DrawScope`, on every frame of
@@ -347,57 +369,52 @@ fun BtAreaChart(
             drawPath(path = linePath, brush = lineBrush, style = lineStroke)
         }
 
+        // One budget for both branches, so the morph frame and the settled frame
+        // are drawn at the SAME vertex density and the transition does not change
+        // the curve's character halfway through (owner 2026-08-17: the loading
+        // frame was the one he liked, and it was only ever different by accident).
+        val vertexBudget = chartVertexBudget(plotW, CHART_VERTEX_PITCH.toPx())
+
         if (morphing) {
             // Range transition (≤320 ms): both series are resampled onto one
             // index grid and lerped, so the morph is deliberately drawn as a
             // single continuous stroke — it is an animation BETWEEN two truths,
             // not a claim about the data. The settled frame below is segmented.
-            val linePath = Path()
             val oldScale = yScale(previousPoints, zeroAnchored = baseline)
-            val samples = 120
-            for (i in 0..samples) {
-                val frac = i / samples.toFloat()
+            val xs = FloatArray(vertexBudget + 1)
+            val ys = FloatArray(vertexBudget + 1)
+            for (i in 0..vertexBudget) {
+                val frac = i / vertexBudget.toFloat()
                 val oldY = normalizedAtFraction(previousPoints, frac, oldScale)
                 val newY = normalizedAtFraction(series, frac, scale)
                 val yNorm = oldY + (newY - oldY) * progress.value
-                val x = plotW * frac
-                val y = plotH * (1f - yNorm)
-                if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
+                xs[i] = plotW * frac
+                ys[i] = plotH * (1f - yNorm)
             }
-            drawSegment(linePath)
+            drawSegment(Path().apply { chartCurveThrough(xs, ys) })
         } else {
             fun px(i: Int) = seriesX(i, plotW, series.size)
             fun py(p: HistoryPoint) = plotH * (1f - scale.normalize(p.valueEur))
 
-            // Never stroke finer than the stroke is wide (owner 2026-08-17 —
-            // see [chartRenderIndices] for the measurement that explains why the
-            // settled chart looked heavier and spikier than the frame he liked).
+            // Fewer drawn vertices than the series has observations, then a
+            // bounded smooth between them (owner 2026-08-17 — see [ChartCurve]).
             // x still comes from the ORIGINAL index, so the reduced curve sits
             // exactly where the full one did and stays aligned with the scrub.
-            val visitable = chartRenderIndices(
-                series.map { it.valueEur },
-                columns = (plotW / lineStroke.width).toInt(),
-            ).toHashSet()
-
+            //
             // The chart draws every connected run [chartSegments] hands it.
             //
             // OWNER OVERRIDE 2026-08-06: that is now always exactly ONE run over
             // the whole series. The loop simply draws what it is given, and would
             // still draw several runs correctly if the call were ever reversed.
             chartSegments(series.map { it.epochMillis }).forEach { range ->
-                val linePath = Path()
-                var started = false
-                for (i in range) {
-                    if (i !in visitable) continue
-                    val p = series[i]
-                    if (!started) {
-                        linePath.moveTo(px(i), py(p))
-                        started = true
-                    } else {
-                        linePath.lineTo(px(i), py(p))
-                    }
-                }
-                if (started) drawSegment(linePath)
+                val drawn = chartRenderIndices(
+                    range.map { series[it].valueEur },
+                    vertices = vertexBudget,
+                ).map { range.first + it }
+                if (drawn.size < 2) return@forEach
+                val xs = FloatArray(drawn.size) { px(drawn[it]) }
+                val ys = FloatArray(drawn.size) { py(series[drawn[it]]) }
+                drawSegment(Path().apply { chartCurveThrough(xs, ys) })
             }
 
             // The zero line itself, so "am I up or down" has a mark to read

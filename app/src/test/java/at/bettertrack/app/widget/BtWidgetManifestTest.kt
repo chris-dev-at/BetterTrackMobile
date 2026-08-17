@@ -243,6 +243,58 @@ class BtWidgetManifestTest {
         assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
     }
 
+    /**
+     * The white-void guard (owner defect, 2026-08-17).
+     *
+     * `android:initialLayout` is the ONLY thing a launcher can draw between
+     * placement and Glance's first published frame — and Glance publishes
+     * nothing until `provideContent` is reached, so an instance that dies or
+     * stalls before then keeps that layout forever. glance-appwidget's own
+     * `glance_default_loading_layout` paints `?android:attr/colorBackground`
+     * resolved in the HOST's theme, which on a light launcher is pure white.
+     * That is exactly what the owner's "Essen" budget widget rendered: a large
+     * empty white rectangle, permanently.
+     *
+     * So no provider may point at it, and every provider must point at
+     * `@layout/bt_widget_loading` — the BetterTrack card that
+     * [BtWidgetLoadingFrameTest] pins the colours and content of.
+     */
+    @Test
+    fun `no provider falls back to Glance's white loading layout`() {
+        val xmlDir = projectFile("src/main/res/xml")
+        val layoutDir = projectFile("src/main/res/layout")
+        val providers = xmlDir.listFiles().orEmpty()
+            .filter { it.isFile && it.readText().contains("<appwidget-provider") }
+        assertTrue("no appwidget-provider XML found", providers.isNotEmpty())
+        assertEquals(
+            "expected the nine providers of the widget set, found " + providers.map { it.name },
+            9,
+            providers.size,
+        )
+
+        val attr = Regex("""android:initialLayout\s*=\s*"@layout/([A-Za-z0-9_]+)"""")
+        val offenders = providers.flatMap { file ->
+            val layout = attr.find(file.readText())?.groupValues?.get(1)
+            buildList {
+                when {
+                    layout == null -> add("${file.name}: no initialLayout")
+                    layout == "glance_default_loading_layout" -> add(
+                        "${file.name}: initialLayout is Glance's default again — that paints " +
+                            "?android:attr/colorBackground from the LAUNCHER's theme (white on " +
+                            "a light launcher) and never repaints if provideContent is not reached",
+                    )
+
+                    layout != BT_WIDGET_LOADING_LAYOUT ->
+                        add("${file.name}: initialLayout is @layout/$layout, not the house one")
+
+                    !File(layoutDir, "$layout.xml").isFile ->
+                        add("${file.name}: @layout/$layout does not exist")
+                }
+            }
+        }
+        assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
+    }
+
     @Test
     fun `optional configuration always names a configure activity`() {
         // configuration_optional without android:configure is a contradiction

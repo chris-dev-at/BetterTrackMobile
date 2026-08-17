@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+ twin of @drawable/bt_widget_loading_bg: same BetterTrack surface, but
+  the launcher's OWN corner radius rather than an approximation — the same
+  system dimension btWidgetCardModifier applies to the live card, so the
+  hand-off from this inflated XML to the first Glance frame is invisible.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_surface" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

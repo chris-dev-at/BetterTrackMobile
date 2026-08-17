@@ -2,10 +2,14 @@
 <!--
   Net-worth widget (at.bettertrack.app.widget.BtNetWorthWidget).
 
-  initialLayout is Glance's own loading layout — the view for the instant
-  between placement and the first `provideGlance` pass. previewLayout (API 31+)
-  and previewImage (older pickers) are SAMPLE renderings with dummy data, so the
-  picker shows what the widget looks like instead of a spinner.
+  initialLayout is @layout/bt_widget_loading — OUR painted card, not Glance's
+  glance_default_loading_layout. That default's background is
+  `?android:attr/colorBackground` resolved in the LAUNCHER's theme, so an
+  instance that never reached provideContent showed a white void forever
+  (2026-08-17 defect). Every provider in this directory points at ours;
+  BtWidgetManifestTest pins that. previewLayout (API 31+) and previewImage
+  (older pickers) are SAMPLE renderings with dummy data, so the picker shows
+  what the widget looks like instead of a spinner.
 
   updatePeriodMillis is 0 ON PURPOSE: BtWidgetScheduler's connectivity-
   constrained WorkManager job owns the cadence (the platform alarm wakes the
@@ -17,7 +21,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="at.bettertrack.app.widget.BtNetWorthWidgetConfigActivity"
     android:description="@string/bt_widget_net_worth_description"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:initialLayout="@layout/bt_widget_loading"
     android:maxResizeHeight="150dp"
     android:minHeight="40dp"
     android:minResizeHeight="40dp"

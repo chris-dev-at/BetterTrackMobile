@@ -64,6 +64,8 @@ import at.bettertrack.app.data.db.CustomAssetEntity
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.sync.ConnectivityMonitor
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
@@ -198,6 +200,9 @@ fun CustomAssetsScreen(
             )
         },
     ) { innerPadding ->
+        // Hoisted because the FAB is rendered further down, outside the branch
+        // that decides whether this screen has any rows at all.
+        val fabVisible = fabVisibleForList(resolved = firstLoadDone, empty = assets.isEmpty())
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             Column(Modifier.fillMaxSize()) {
                 if (!isOnline) OfflineBanner(asOfMs = dataAgeMs)
@@ -246,9 +251,16 @@ fun CustomAssetsScreen(
                         }
                     }
                 } else {
+                    // Clearance for the create FAB is contentPadding, never a
+                    // shrunken viewport — see BT_FAB_CONTENT_CLEARANCE's KDoc.
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 8.dp,
+                            bottom = BT_FAB_CONTENT_CLEARANCE,
+                        ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(count = assets.size, key = { assets[it].id }) { i ->
@@ -263,7 +275,7 @@ fun CustomAssetsScreen(
             // "Create custom asset" CTA inside the empty state AND this FAB, one
             // above the other, doing the same thing.
             val fabCd = stringResource(R.string.bt_custom_create)
-            if (fabVisibleForList(resolved = firstLoadDone, empty = assets.isEmpty())) {
+            if (fabVisible) {
                 FloatingActionButton(
                     onClick = { createOpen = true },
                     containerColor = if (isOnline) bt.gold else bt.border,
@@ -271,7 +283,7 @@ fun CustomAssetsScreen(
                     elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(20.dp)
+                        .padding(BT_FAB_EDGE_INSET)
                         .semantics { contentDescription = fabCd },
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)

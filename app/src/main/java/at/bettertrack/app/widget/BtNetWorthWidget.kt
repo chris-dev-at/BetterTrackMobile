@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -12,7 +13,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -63,39 +63,63 @@ class BtNetWorthWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val config: BtWidgetPulseConfig,
+        val pinned: at.bettertrack.app.data.db.PortfolioEntity?,
+        val sparkValues: List<Double>,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
-        val config = if (state[BT_WIDGET_PREF_PULSE_STYLE] == null) {
-            btWidgetClaimPinnedPulse(context, id) ?: btWidgetPulseConfig(state)
-        } else {
-            btWidgetPulseConfig(state)
-        }
-        val pinned = config.portfolioId
-            ?.let { pid -> snapshot.portfolios.firstOrNull { it.id == pid } }
-        // The pinned reading's optional 1M trace, from the same history cache
-        // the app charts. All-account instances never load one (no such series).
-        val sparkValues = if (config.portfolioId != null && config.sparkline) {
-            pinned?.let { BtWidgetRepository.loadHistory(it.id) }
-                ?.points?.map { it.valueEur }
-                .orEmpty()
-        } else {
-            emptyList()
-        }
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val mode = btWidgetThemeMode()
+                val snapshot = BtWidgetRepository.load(context)
+                val config = btWidgetConfigOrNull("pulse") {
+                    val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+                    if (state[BT_WIDGET_PREF_PULSE_STYLE] == null) {
+                        btWidgetClaimPinnedPulse(context, id) ?: btWidgetPulseConfig(state)
+                    } else {
+                        btWidgetPulseConfig(state)
+                    }
+                } ?: btWidgetPulseConfig(emptyPreferences())
+                val pinned = config.portfolioId
+                    ?.let { pid -> snapshot.portfolios.firstOrNull { it.id == pid } }
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = snapshot,
+                    colors = btGlanceColors(mode),
+                    night = btWidgetIsNight(context, mode),
+                    config = config,
+                    pinned = pinned,
+                    // The pinned reading's optional 1M trace, from the same
+                    // history cache the app charts. All-account instances never
+                    // load one (no such series).
+                    sparkValues = if (config.portfolioId != null && config.sparkline) {
+                        pinned?.let { BtWidgetRepository.loadHistory(it.id) }
+                            ?.points?.map { it.valueEur }
+                            .orEmpty()
+                    } else {
+                        emptyList()
+                    },
+                )
+            },
+        ) { data ->
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(
-                    if (config.portfolioId == null) {
+                    if (data.config.portfolioId == null) {
                         btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)
                     } else {
                         btWidgetIntent(
                             context,
                             BT_WIDGET_TARGET_PORTFOLIO,
-                            portfolioId = config.portfolioId,
+                            portfolioId = data.config.portfolioId,
                         )
                     },
                 ),
@@ -105,7 +129,10 @@ class BtNetWorthWidget : GlanceAppWidget() {
                     BT_WIDGET_PADDING
                 },
             ) {
-                Content(local, snapshot, config, pinned, sparkValues, colors, night)
+                Content(
+                    data.local, data.snapshot, data.config, data.pinned,
+                    data.sparkValues, data.colors, data.night,
+                )
             }
         }
     }

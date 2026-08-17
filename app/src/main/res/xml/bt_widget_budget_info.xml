@@ -12,7 +12,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="at.bettertrack.app.widget.BtBudgetWidgetConfigActivity"
     android:description="@string/bt_widget_budget_description"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:initialLayout="@layout/bt_widget_loading"
     android:maxResizeHeight="260dp"
     android:minHeight="110dp"
     android:minResizeHeight="40dp"

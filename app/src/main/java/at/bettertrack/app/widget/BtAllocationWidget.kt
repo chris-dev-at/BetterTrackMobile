@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -13,7 +14,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -65,23 +65,42 @@ class BtAllocationWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val config: BtWidgetAllocationConfig,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
-        val config = if (state[BT_WIDGET_PREF_ALLOC_GROUP] == null) {
-            btWidgetClaimPinnedAllocation(context, id) ?: btWidgetAllocationConfig(state)
-        } else {
-            btWidgetAllocationConfig(state)
-        }
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val mode = btWidgetThemeMode()
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = BtWidgetRepository.load(context),
+                    colors = btGlanceColors(mode),
+                    night = btWidgetIsNight(context, mode),
+                    config = btWidgetConfigOrNull("allocation") {
+                        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+                        if (state[BT_WIDGET_PREF_ALLOC_GROUP] == null) {
+                            btWidgetClaimPinnedAllocation(context, id)
+                                ?: btWidgetAllocationConfig(state)
+                        } else {
+                            btWidgetAllocationConfig(state)
+                        }
+                    } ?: btWidgetAllocationConfig(emptyPreferences()),
+                )
+            },
+        ) { data ->
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
             ) {
-                Content(local, snapshot, config, colors, night)
+                Content(data.local, data.snapshot, data.config, data.colors, data.night)
             }
         }
     }

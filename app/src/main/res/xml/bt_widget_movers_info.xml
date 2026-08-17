@@ -9,7 +9,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="at.bettertrack.app.widget.BtMoversWidgetConfigActivity"
     android:description="@string/bt_widget_movers_description"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:initialLayout="@layout/bt_widget_loading"
     android:minHeight="110dp"
     android:minResizeHeight="110dp"
     android:minResizeWidth="140dp"

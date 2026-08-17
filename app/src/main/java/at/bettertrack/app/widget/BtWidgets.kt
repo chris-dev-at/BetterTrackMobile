@@ -4,12 +4,19 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
+import at.bettertrack.app.R
 import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.di.AppGraph
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The app's handle on its home-screen widgets: repaint them, and know whether any
@@ -104,6 +111,135 @@ internal fun btWidgetThemeMode(): BtThemeMode = try {
     AppGraph.devicePrefs.themeModeNow()
 } catch (e: Exception) {
     BtThemeMode.System
+}
+
+private const val TAG_FRAME = "BtWidgetFrame"
+
+/**
+ * How long [btProvideContent] lets the load try to beat the first frame.
+ *
+ * An upper BOUND on how long a widget can go without publishing anything, so it
+ * has to stay small: this number is the difference between "the card appears a
+ * blink late" and the 2026-08-17 white-void defect. Long enough that a warm
+ * Room read finishes inside it (no loading flash on a routine refresh), short
+ * enough that nobody watching the home screen could call it a hang.
+ */
+internal const val BT_WIDGET_FIRST_FRAME_GRACE_MS: Long = 300
+
+/** What [btProvideContent] has for the composition on any given pass. */
+private sealed interface BtWidgetLoad<out T> {
+    data object Pending : BtWidgetLoad<Nothing>
+    data object Failed : BtWidgetLoad<Nothing>
+    class Ready<T>(val value: T) : BtWidgetLoad<T>
+}
+
+/**
+ * **Publish a painted frame FIRST; load after.** Every widget's `provideGlance`
+ * goes through here.
+ *
+ * ## The defect this exists to prevent
+ *
+ * A launcher shows `android:initialLayout` from the moment an instance is
+ * placed until Glance publishes its first `RemoteViews`, and Glance publishes
+ * nothing until `provideContent` is reached. Every widget in this package used
+ * to do ALL of its work — `BtWidgetRepository.load` (which forces the whole
+ * `AppGraph`: Room, tokens, vault), `getAppWidgetState`, a pinning claim —
+ * BEFORE that call. A slow cold start, a process kill mid-load, or a throw on
+ * any of those lines meant the first frame never happened and the instance kept
+ * the host's inflated placeholder **forever**. With Glance's own placeholder
+ * that placeholder was a white rectangle, which is exactly what the owner saw
+ * on his "Essen" budget widget (2026-08-17).
+ *
+ * Two fixes, and both are needed: `@layout/bt_widget_loading` makes the
+ * pre-first-frame view a real BetterTrack card, and this makes the first frame
+ * arrive immediately instead of after the I/O.
+ *
+ * ## How
+ *
+ * The load runs in a sibling coroutine and drops its result into a snapshot
+ * state. Glance's session runs a global snapshot monitor, so a write from
+ * outside the composition invalidates it and republishes — the card swaps from
+ * the loading affordance to real content with no second `provideGlance` pass.
+ * One load per instance, shared by every size box `SizeMode.Exact` composes.
+ *
+ * The loading frame is painted with [BtThemeMode.System] rather than the app's
+ * stored theme ON PURPOSE: reading the stored theme means touching `AppGraph`,
+ * which is the very thing that can be slow here. `System` is a day/night pair
+ * the host resolves itself, so it costs nothing and it matches what the static
+ * initialLayout above it just drew — the same one-frame compromise, documented
+ * in that file.
+ *
+ * A `load` that throws degrades to the syncing card, never to no frame at all.
+ *
+ * ## Why the load gets a head start ([BT_WIDGET_FIRST_FRAME_GRACE_MS])
+ *
+ * `provideGlance` also runs on every ROUTINE refresh of a widget that already
+ * has content on the launcher. Publishing a loading card unconditionally would
+ * blink "Wird geladen…" over the user's figures several times a day — trading
+ * one permanent defect for a constant small one. So the load is given a few
+ * hundred milliseconds to win outright before the composition starts: on a warm
+ * process it always does, and the launcher goes straight from the old frame to
+ * the new one with no loading state at all. A cold start or a stalled load
+ * exceeds the grace, and then the painted card goes up — which is the case this
+ * whole mechanism exists for. The bound is deliberately far below anything a
+ * user reads as "stuck", and it is what keeps the guarantee honest: whatever
+ * the load does, `provideContent` is reached within the grace.
+ */
+internal suspend fun <T> GlanceAppWidget.btProvideContent(
+    context: Context,
+    load: suspend () -> T,
+    content: @Composable (T) -> Unit,
+): Nothing = coroutineScope {
+    // SharedPreferences only (LocaleManager.wrap), no AppGraph — cheap enough
+    // to sit on the path to the first frame, and it makes the loading card
+    // speak the user's chosen language rather than the phone's.
+    val local = btWidgetContext(context)
+    val chrome = btGlanceColors(BtThemeMode.System)
+    val slot = mutableStateOf<BtWidgetLoad<T>>(BtWidgetLoad.Pending)
+    val loading = launch {
+        slot.value = try {
+            BtWidgetLoad.Ready(load())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG_FRAME, "Widget load failed; the card stays on its syncing state.", e)
+            BtWidgetLoad.Failed
+        }
+    }
+    withTimeoutOrNull(BT_WIDGET_FIRST_FRAME_GRACE_MS) { loading.join() }
+    provideContent {
+        when (val state = slot.value) {
+            is BtWidgetLoad.Ready -> content(state.value)
+            BtWidgetLoad.Pending ->
+                BtWidgetStatusCard(chrome, local.getString(R.string.bt_widget_loading))
+
+            BtWidgetLoad.Failed ->
+                BtWidgetStatusCard(chrome, local.getString(R.string.bt_widget_syncing))
+        }
+    }
+}
+
+/**
+ * A widget's CONFIG read, made unable to cost the card its frame.
+ *
+ * `getAppWidgetState` deserializes a per-instance Preferences file and the
+ * pinning claims write one back; both can throw (a corrupt or half-written
+ * file, a datastore the process cannot open). On the old shape that throw
+ * escaped `provideGlance` before `provideContent`, so the instance kept the
+ * host's placeholder forever. Falling back to `null` instead means the widget
+ * renders its UNCONFIGURED reading — every config-optional family has an
+ * honest one — which is a card the user can long-press to fix.
+ *
+ * Not `runCatching`: that swallows `CancellationException` too, which would
+ * leave the load coroutine running after Glance tore its session down.
+ */
+internal suspend fun <T> btWidgetConfigOrNull(tag: String, read: suspend () -> T): T? = try {
+    read()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.w(TAG_FRAME, "$tag config read failed; falling back to the unconfigured reading.", e)
+    null
 }
 
 /**

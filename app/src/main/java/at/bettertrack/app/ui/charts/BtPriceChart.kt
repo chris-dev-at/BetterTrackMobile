@@ -203,34 +203,31 @@ fun BtPriceChart(
             }
 
             val linePath = Path()
+            // One chart language: the asset chart reduces and smooths exactly as
+            // the portfolio chart does (owner 2026-08-17, see [ChartCurve]). An
+            // intraday price series is the densest thing the app draws, and its
+            // plot is the narrowest, so this is the surface that needed it most.
+            val vertexBudget = chartVertexBudget(plotW, CHART_VERTEX_PITCH.toPx())
             if (morphing) {
                 val oldScale = priceScale(previousPoints)
-                val samples = 120
-                for (i in 0..samples) {
-                    val frac = i / samples.toFloat()
+                val xs = FloatArray(vertexBudget + 1)
+                val ys = FloatArray(vertexBudget + 1)
+                for (i in 0..vertexBudget) {
+                    val frac = i / vertexBudget.toFloat()
                     val oldY = normalizedAtIndex(previousPoints, frac, oldScale)
                     val newY = normalizedAtIndex(series, frac, scale)
                     val yNorm = oldY + (newY - oldY) * progress.value
-                    val x = plotW * frac
-                    val y = plotH * (1f - yNorm)
-                    if (i == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
+                    xs[i] = plotW * frac
+                    ys[i] = plotH * (1f - yNorm)
                 }
+                linePath.chartCurveThrough(xs, ys)
             } else {
-                // One chart language: the asset chart reduces to its own stroke
-                // width exactly as the portfolio chart does (owner 2026-08-17,
-                // see [chartRenderIndices]). An intraday price series is the
-                // densest thing the app draws, so this is the surface that
-                // needed it most.
-                val visitable = chartRenderIndices(
-                    series.map { it.close },
-                    columns = (plotW / bt.chartLineWidth.toPx()).toInt(),
-                )
-                visitable.forEachIndexed { drawn, i ->
-                    val p = series[i]
-                    val x = seriesX(i, plotW, series.size)
-                    val y = plotH * (1f - scale.normalize(p.close))
-                    if (drawn == 0) linePath.moveTo(x, y) else linePath.lineTo(x, y)
+                val drawn = chartRenderIndices(series.map { it.close }, vertices = vertexBudget)
+                val xs = FloatArray(drawn.size) { seriesX(drawn[it], plotW, series.size) }
+                val ys = FloatArray(drawn.size) {
+                    plotH * (1f - scale.normalize(series[drawn[it]].close))
                 }
+                linePath.chartCurveThrough(xs, ys)
             }
             val fillPath = Path().apply {
                 addPath(linePath)

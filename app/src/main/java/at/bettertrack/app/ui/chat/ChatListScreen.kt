@@ -55,6 +55,7 @@ import at.bettertrack.app.data.repo.Conversation
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
@@ -234,9 +235,18 @@ fun ChatListScreen(
                         modifier = Modifier.padding(24.dp),
                     )
                 }
+                // Scaffold's innerPadding reserves nothing for a
+                // floatingActionButton, so the button floats over this list.
+                // Clearance is contentPadding — content scrolls freely under
+                // the FAB and no row is ever clipped by a shrunken viewport.
                 BtListSurface.CONTENT -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = BT_FAB_CONTENT_CLEARANCE,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(conversations, key = { it.id }) { c ->

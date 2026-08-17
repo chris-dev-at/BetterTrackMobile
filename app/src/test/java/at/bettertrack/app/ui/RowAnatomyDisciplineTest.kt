@@ -168,11 +168,31 @@ class RowAnatomyDisciplineTest {
         // The hierarchy is the other half of the spec: swapping the two slots
         // must not also swap their weights, or the row starts shouting its
         // delta and whispering its value.
-        listOf("portfolio row" to portfolioRow(), "holding row" to holdingRow()).forEach { (label, row) ->
-            val top = row.indexOf("BtTheme.type.moneySmall")
+        //
+        // Both rows name the SAME money token, and that is now a pinned fact
+        // rather than a coincidence. On 2026-08-17 the holdings row was sent up
+        // the ramp to `titleMedium`/`moneyMedium` on the reading that *"make it
+        // normal again"* meant bigger; he looked at it and said *"why did the
+        // holdings text increase insanely. just leave it like it was in v0.120
+        // … the sizing and looks take from 0.120"*. v0.120 is `db3a049`, and its
+        // row is exactly `titleSmall` / `moneySmall` / `numberCaption` with
+        // 12dp vertical padding and 2dp stack gaps — which is what ships. The
+        // ARRANGEMENT and the ticker stay today's; only the type came back.
+        listOf(
+            Triple("portfolio row", portfolioRow(), "BtTheme.type.moneySmall"),
+            Triple("holding row", holdingRow(), "BtTheme.type.moneySmall"),
+        ).forEach { (label, row, prominent) ->
+            val top = row.indexOf(prominent)
             val bottom = row.lastIndexOf("BtTheme.type.numberCaption")
-            assertTrue("$label: the value lost its prominent style", top >= 0)
+            assertTrue("$label: the value lost its prominent style ($prominent)", top >= 0)
             assertTrue("$label: the bottom line lost its caption style", bottom > top)
+            // And the prominent slot must still out-rank the caption slot: a row
+            // that printed its delta in the money style and its value in the
+            // caption style would pass the ordering check above by accident.
+            assertTrue(
+                "$label: the value slot must not use the caption style",
+                !row.substring(top, minOf(top + 120, row.length)).contains("numberCaption"),
+            )
         }
     }
 

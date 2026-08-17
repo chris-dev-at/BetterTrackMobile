@@ -12,7 +12,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -73,46 +72,81 @@ class BtPortfolioWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val config: BtWidgetPortfolioConfig?,
+        val portfolio: PortfolioEntity?,
+        val pinnedGone: Boolean,
+        val range: HistoryRange,
+        val values: List<Double>,
+        val movements: List<CashMovementEntity>,
+    )
+
+    // This is the heaviest loader in the family (snapshot + history + the cash
+    // ledger), which is exactly why none of it may sit ahead of the first
+    // frame — see [btProvideContent].
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
-        // Stored choice, else a just-pinned one from the in-app builder, else
-        // follow mode (null) — see BtWidgetPinning for the hand-off.
-        val config = btWidgetPortfolioConfig(state)
-            ?: btWidgetClaimPinnedPortfolio(context, id)
-        val range = btWidgetPerfRange(state[BT_WIDGET_PREF_PERF_RANGE])
-        val pinnedGone: Boolean
-        val portfolio: PortfolioEntity?
-        if (config == null) {
-            portfolio = PortfolioRepository.resolveSelection(
-                snapshot.portfolios,
-                snapshot.selectedPortfolioId,
-            )
-            pinnedGone = false
-        } else {
-            portfolio = snapshot.portfolios.firstOrNull { it.id == config.portfolioId }
-            pinnedGone = portfolio == null
-        }
-        val history = portfolio?.let { BtWidgetRepository.loadHistory(it.id, range) }
-        val values = history?.points?.map { it.valueEur }.orEmpty()
-        val movements = portfolio?.let { BtWidgetRepository.loadRecentMovements(it.id) }.orEmpty()
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val mode = btWidgetThemeMode()
+                val snapshot = BtWidgetRepository.load(context)
+                // Stored choice, else a just-pinned one from the in-app
+                // builder, else follow mode (null) — see BtWidgetPinning for
+                // the hand-off. A failed read degrades to follow mode.
+                val state = btWidgetConfigOrNull("portfolio state") {
+                    getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+                }
+                val config = state?.let { prefs ->
+                    btWidgetConfigOrNull("portfolio") {
+                        btWidgetPortfolioConfig(prefs) ?: btWidgetClaimPinnedPortfolio(context, id)
+                    }
+                }
+                val range = btWidgetPerfRange(state?.get(BT_WIDGET_PREF_PERF_RANGE))
+                val portfolio = if (config == null) {
+                    PortfolioRepository.resolveSelection(
+                        snapshot.portfolios,
+                        snapshot.selectedPortfolioId,
+                    )
+                } else {
+                    snapshot.portfolios.firstOrNull { it.id == config.portfolioId }
+                }
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = snapshot,
+                    colors = btGlanceColors(mode),
+                    night = btWidgetIsNight(context, mode),
+                    config = config,
+                    portfolio = portfolio,
+                    pinnedGone = config != null && portfolio == null,
+                    range = range,
+                    values = portfolio
+                        ?.let { BtWidgetRepository.loadHistory(it.id, range) }
+                        ?.points?.map { it.valueEur }
+                        .orEmpty(),
+                    movements = portfolio
+                        ?.let { BtWidgetRepository.loadRecentMovements(it.id) }
+                        .orEmpty(),
+                )
+            },
+        ) { data ->
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(
                     btWidgetIntent(
                         context,
                         BT_WIDGET_TARGET_PORTFOLIO,
-                        portfolioId = portfolio?.id ?: config?.portfolioId,
+                        portfolioId = data.portfolio?.id ?: data.config?.portfolioId,
                     ),
                 ),
             ) {
                 Content(
-                    local, snapshot, config, portfolio, pinnedGone,
-                    range, values, movements, colors, night,
+                    data.local, data.snapshot, data.config, data.portfolio, data.pinnedGone,
+                    data.range, data.values, data.movements, data.colors, data.night,
                 )
             }
         }

@@ -382,6 +382,35 @@ fun btWidgetBudgetFraction(spent: Double, amount: Double): Float =
 fun btWidgetBudgetPercent(spent: Double, amount: Double): Double? =
     if (amount <= 0.0) null else spent / amount * 100.0
 
+/**
+ * The text every budget geometry puts where its percentage goes.
+ *
+ * [btWidgetBudgetPercent] returns null for a budget with no positive limit, and
+ * every caller used to render that null as `""` — a ring with an EMPTY hole and
+ * an untinted grey track, i.e. a working state that looks like a broken widget
+ * (2026-08-17 review, alongside the white-void defect). There is no percentage
+ * to show, so the card says so in words instead: the caller passes the
+ * localised `bt_widget_budget_no_limit`.
+ *
+ * Pure string assembly over an already-computed percent — no money arithmetic,
+ * per this file's one rule.
+ */
+fun btWidgetBudgetPercentLabel(
+    spent: Double,
+    amount: Double,
+    locale: Locale,
+    noLimit: String,
+): String = btWidgetBudgetPercent(spent, amount)
+    ?.let { formatPercent(it, locale, showSign = false) }
+    ?: noLimit
+
+/**
+ * Does this budget carry a real limit? False means the ring/bar has nothing to
+ * fill and the card must fall back to its "no limit" reading rather than
+ * painting an empty geometry.
+ */
+fun btWidgetBudgetHasLimit(amount: Double): Boolean = amount > 0.0
+
 // ── Round-2 presentation helpers (the Codex study's language) ────────────────
 
 /** How a delta renders: amount and percent, amount only, or percent only. */

@@ -2512,12 +2512,15 @@
     <string name="bt_widget_spending_description">Eingang, Ausgang und Netto — als Monatsbilanz, 6-Monats-Balken oder Ausgaben-Ring.</string>
     <string name="bt_widget_signed_out">Bei BetterTrack anmelden</string>
     <string name="bt_widget_syncing">Wird synchronisiert…</string>
+    <string name="bt_widget_loading">Wird geladen…</string>
     <string name="bt_widget_no_portfolios">Noch keine Portfolios</string>
     <string name="bt_widget_watchlist_empty">Werte zur Watchlist hinzufügen</string>
     <string name="bt_widget_movers_empty">Heute keine Bewegung</string>
     <string name="bt_widget_budget_empty">Noch keine Budgets</string>
     <string name="bt_widget_budget_unavailable">In diesem Modus nicht verfügbar</string>
     <string name="bt_widget_budget_missing">Dieses Budget gibt es nicht mehr</string>
+    <string name="bt_widget_budget_missing_hint">Lange tippen und neu wählen</string>
+    <string name="bt_widget_budget_no_limit">Kein Limit</string>
     <string name="bt_widget_budget_spent_of">%1$s / %2$s</string>
     <string name="bt_widget_budget_of">von %1$s</string>
     <string name="bt_widget_stat_pnl">G/V</string>

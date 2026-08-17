@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE "never a white void" GUARANTEE.
+
+  android:initialLayout is the only thing a launcher can draw for an app-widget
+  instance before Glance publishes its first RemoteViews. Every BetterTrack
+  provider used to point at @layout/glance_default_loading_layout, whose
+  background is `?android:attr/colorBackground` resolved in the HOST's theme —
+  white on a light launcher. An instance that never reached provideContent (a
+  cold start, a process kill, a throw while reading its config) therefore sat
+  as a large empty WHITE rectangle on the home screen, forever. That is the
+  owner's 2026-08-17 "Essen" budget-widget defect.
+
+  So this is a real BetterTrack card: our surface, the launcher's own corner
+  radius, and the house loading affordance — the gold dot over one muted line,
+  the same shape BtWidgetMessage draws in Glance (dot 10sp gold, 6dp gap, text
+  12sp muted at weight 500). The hand-off to the first Glance frame is then a
+  content swap, not a repaint.
+
+  PALETTE CAVEAT, deliberate: the live widgets take their colours from the
+  APP's stored theme (btWidgetThemeMode() -> DevicePrefs.themeModeNow()). A
+  static XML cannot read that — it only has resource qualifiers, i.e. the
+  SYSTEM night mode — so an app forced to Dark on a light phone gets a light
+  loading card for the fraction of a second before Glance publishes. That is
+  correct for the pre-first-frame moment: it is strictly better than white, it
+  matches what the host would resolve anyway, and it is replaced the instant
+  real content exists.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bt_widget_loading_bg"
+    android:clipToOutline="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/bt_widget_preview_dot"
+        android:textColor="@color/bt_widget_gold"
+        android:textSize="10sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:text="@string/bt_widget_loading"
+        android:textColor="@color/bt_widget_text_muted"
+        android:textFontWeight="500"
+        android:textSize="12sp" />
+</LinearLayout>

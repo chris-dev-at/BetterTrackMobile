@@ -78,6 +78,8 @@ import at.bettertrack.app.data.repo.IdeasRepository
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
@@ -285,9 +287,16 @@ internal fun IdeasSection(
                     )
                 }
             } else {
+                // Clearance for the create FAB is contentPadding, never a
+                // shrunken viewport — see BT_FAB_CONTENT_CLEARANCE's KDoc.
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = BT_FAB_CONTENT_CLEARANCE,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(count = s.ideas.size, key = { s.ideas[it].id }) { i ->
@@ -315,7 +324,7 @@ internal fun IdeasSection(
                 elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(20.dp)
+                    .padding(BT_FAB_EDGE_INSET)
                     .semantics { contentDescription = fabCd },
             ) { Icon(Icons.Outlined.Add, contentDescription = null) }
         }

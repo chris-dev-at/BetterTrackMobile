@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.portfolio
 
 import at.bettertrack.app.data.db.HoldingEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -121,5 +122,40 @@ class HoldingsDisplayTest {
             HOLDINGS_SORTS.size,
             HOLDINGS_SORTS.map { holdingsSortLabel(it) }.toSet().size,
         )
+    }
+
+
+    // ── The ticker annotation (owner order 2026-08-17) ──────────────────────
+
+    @Test
+    fun `the ticker is appended to a real name`() {
+        // His own example. "Bayer" alone does not say which listing.
+        assertEquals("BAYN.DE", holdingTicker("Bayer", "BAYN.DE"))
+        assertEquals("AAPL", holdingTicker("Apple Inc.", "AAPL"))
+    }
+
+    @Test
+    fun `a name that already IS the symbol prints it once`() {
+        // Otherwise the row reads "BTC-USD  BTC-USD", which looks like a bug
+        // rather than like detail.
+        assertNull(holdingTicker("BTC-USD", "BTC-USD"))
+        assertNull(holdingTicker("btc-usd", "BTC-USD"))
+        assertNull(holdingTicker("  BTC-USD  ", "BTC-USD"))
+    }
+
+    @Test
+    fun `a name that already ends with the symbol does not repeat it`() {
+        // Some server names arrive pre-annotated.
+        assertNull(holdingTicker("Bayer AG BAYN.DE", "BAYN.DE"))
+        // …but a name that merely CONTAINS the letters keeps its ticker: the
+        // annotation belongs at the end, and "SAP SE" is not "SAP.DE".
+        assertEquals("SAP.DE", holdingTicker("SAP SE", "SAP.DE"))
+    }
+
+    @Test
+    fun `an asset with no symbol shows no ticker`() {
+        // A custom asset the user typed a name for — there is nothing to add.
+        assertNull(holdingTicker("Omas Goldmuenzen", ""))
+        assertNull(holdingTicker("Omas Goldmuenzen", "   "))
     }
 }

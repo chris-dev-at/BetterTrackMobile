@@ -184,9 +184,8 @@ data class BtColors(
      * hue** — that is the whole trade, and it is why this is not simply a
      * regression to the pre-split state:
      *
-     *  - chart lines draw at [chartLineWidth], which is 2.5dp in light against
-     *    dark's 2dp, so the curve reads by mass rather than by darkness (it was
-     *    3dp until 2026-08-17 — see that token for why it came down);
+     *  - chart lines draw at [chartLineWidth], which is 3dp in light against
+     *    dark's 2dp, so the curve reads by mass rather than by darkness;
      *  - the area gradient under them is stronger in light ([chartAreaTopAlpha]);
      *  - every `edge(gold, …)` hairline doubles its alpha in light, which
      *    reproduces the retired `goldGraphic`'s exact luminance (see [edge]).
@@ -287,19 +286,21 @@ data class BtColors(
      * not a dark one. Dark keeps its 2dp, where a bright gold on near-black
      * never needed the help.
      *
-     * **Light was retuned 3dp → 2.5dp on 2026-08-17** (owner: *"they look kinda
-     * weird since a couple of versions… like thinner maybe? or less spikey?"*).
-     * 3dp is 8.2 px on his phone, and the settled 1M curve puts its vertices
-     * 3.5 px apart — the stroke was 2.4× wider than its own sampling pitch, so
-     * round caps piled on top of each other and every small wiggle read as a
-     * lump. The compensation was real but it had been sized against a sparse
-     * curve and the series got denser underneath it.
+     * **Light went 3dp → 2.5dp and back to 3dp, both on 2026-08-17.** The
+     * detour is worth recording because it is a whole class of mistake: the
+     * curve was lumpy, the stroke was the most obvious thing making it lumpy,
+     * so the stroke came down. The owner's verdict on the result was
+     * *"der chart wieder bissl dicker wie vorher"* — thinning had cost the
+     * light-mode legibility the 2026-08-07 retune bought and had not actually
+     * removed the lumps, because their cause was never the width on its own.
      *
-     * The mass is not simply given back: the pile-up itself is fixed properly by
-     * [at.bettertrack.app.ui.charts.chartRenderIndices], which stops the stroke
-     * being asked to draw detail finer than its own width. 2.5dp keeps most of
-     * the luminance compensation the bright-yellow retune needs while bringing
-     * the stroke back inside the design language's weight.
+     * It was the RATIO. 3dp is 7.9 px on his phone and the settled 1M curve put
+     * its vertices 3.5 px apart, so a round-capped stroke was drawing on top of
+     * itself 2.3 deep. The fix belongs on the other side of that ratio and now
+     * lives there: [at.bettertrack.app.ui.charts.chartVertexBudget] draws the
+     * curve through vertices 2 stroke-widths apart, whatever the stroke is.
+     * The stroke is therefore free to be as heavy as legibility wants — which
+     * on white, against a 1.78:1 brand yellow, is 3dp.
      *
      * The crosshair dot and its halo are sized off this too, so dark stays
      * byte-identical (2dp → 4dp dot, 6dp halo — exactly the previous constants)
@@ -539,8 +540,16 @@ val BtDarkColors = BtColors(
     chartAreaTopAlpha = 0.24f,
     chartAreaZeroAlpha = 0.02f,
     chartFutureScrimAlpha = 0.68f,
-    // Bright gold on near-black never needed the help light needs.
-    chartLineWidth = 2.dp,
+    // 2dp → 2.5dp, 2026-08-17. Bright gold on near-black never needed light's
+    // luminance compensation, and it still does not — this is the owner's
+    // *"der chart wieder bissl dicker"*, which he sent while looking at a DARK
+    // true-black screen, so the ask lands here and not only on the light table.
+    // The curve had gone thin and nervous: 2dp is 5.25px on his phone against a
+    // 1J series of ~300 points on a 1080px plot, i.e. a hairline scribbling
+    // through vertices 3.5px apart. `chartVertexBudget` fixes the density half;
+    // this half gives the line back the mass that makes it read as a line.
+    // Still under light's 3dp, which is the invariant `BtContrastTest` pins.
+    chartLineWidth = 2.5.dp,
     // `CATEGORICAL_SERIES` verbatim. Re-validated against THIS ramp's card
     // (#161B22, lighter than the #10151b the web checked): all six checks pass,
     // worst adjacent CVD pair yellow↔green ΔE 8.4 (protan).
@@ -701,7 +710,7 @@ val BtLightColors = BtColors(
     chartAreaTopAlpha = 0.26f,
     chartAreaZeroAlpha = 0.015f,
     chartFutureScrimAlpha = 0.74f,
-    chartLineWidth = 2.5.dp,
+    chartLineWidth = 3.dp,
     // Same-hue darkened counterparts of the dark ramp, because the platform
     // validated `CATEGORICAL_SERIES` against a dark canvas ONLY — the dark inks
     // sit at ~2.5:1 on white. Six of the ten already had web light counterparts

@@ -15,7 +15,6 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -65,28 +64,49 @@ class BtBudgetWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val config: BtWidgetBudgetConfig?,
+    )
+
+    // The load runs inside the composition's lifetime, not ahead of it — see
+    // [btProvideContent] for why (this widget is the one that showed the owner
+    // a white void on 2026-08-17).
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val config = btWidgetBudgetConfig(
-            getAppWidgetState(context, PreferencesGlanceStateDefinition, id),
-        ) ?: btWidgetClaimPinnedBudget(context, id)
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val mode = btWidgetThemeMode()
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = BtWidgetRepository.load(context),
+                    colors = btGlanceColors(mode),
+                    night = btWidgetIsNight(context, mode),
+                    config = btWidgetConfigOrNull("budget") {
+                        btWidgetBudgetConfig(
+                            getAppWidgetState(context, PreferencesGlanceStateDefinition, id),
+                        ) ?: btWidgetClaimPinnedBudget(context, id)
+                    },
+                )
+            },
+        ) { data ->
             val strip = btWidgetRowClass(LocalSize.current.height.value) == BtWidgetSizeClass.STRIP
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(
                     btWidgetIntent(
                         context,
                         BT_WIDGET_TARGET_CASH,
-                        portfolioId = snapshot.budget.portfolioId,
+                        portfolioId = data.snapshot.budget.portfolioId,
                     ),
                 ),
                 padding = if (strip) 10.dp else BT_WIDGET_PADDING,
             ) {
-                Content(local, snapshot, config, colors, night, strip)
+                Content(data.local, data.snapshot, data.config, data.colors, data.night, strip)
             }
         }
     }
@@ -159,7 +179,10 @@ class BtBudgetWidget : GlanceAppWidget() {
             trackColor = BtGlanceChartPalette.track(night),
             strokeFraction = 0.14f,
         )
-        val pct = btWidgetBudgetPercent(budget.spent, budget.amount)
+        // A budget with no positive limit has no percentage — the hole says so
+        // in words rather than rendering "" inside an untinted circle, which is
+        // a working state that looks like a broken widget (2026-08-17 review).
+        val hasLimit = btWidgetBudgetHasLimit(budget.amount)
         Box(
             modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
             contentAlignment = Alignment.Center,
@@ -170,14 +193,25 @@ class BtBudgetWidget : GlanceAppWidget() {
                 modifier = GlanceModifier.size(ringDp.dp),
             )
             Text(
-                text = if (pct == null) "" else formatPercent(pct, locale, showSign = false),
+                text = btWidgetBudgetPercentLabel(
+                    budget.spent,
+                    budget.amount,
+                    locale,
+                    local.getString(R.string.bt_widget_budget_no_limit),
+                ),
                 style = TextStyle(
-                    color = if (budget.exceeded) colors.loss else colors.textPrimary,
-                    fontSize = 11.sp,
+                    color = when {
+                        !hasLimit -> colors.textMuted
+                        budget.exceeded -> colors.loss
+                        else -> colors.textPrimary
+                    },
+                    fontSize = if (hasLimit) 11.sp else 8.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 ),
-                maxLines = 1,
+                // Two lines only for the wordy no-limit reading; a percent is
+                // one line by construction.
+                maxLines = if (hasLimit) 1 else 2,
                 modifier = GlanceModifier.width((ringDp * 0.66f).dp),
             )
         }
@@ -196,8 +230,27 @@ class BtBudgetWidget : GlanceAppWidget() {
     ) {
         val budget = btWidgetResolveBudget(config, snapshot.budget.budgets)
         if (budget == null) {
-            BtWidgetTag(config.tagName, colors)
+            // A DESIGNED dead end (2026-08-17 review), not a bare line: the
+            // house subject row still names the budget this instance was
+            // pinned to, the centred message says it is gone, and the footer
+            // says what fixes it — the same three zones every other reading of
+            // this card has.
+            if (!strip) BtSubjectRow(config.tagName, colors) else BtWidgetTag(config.tagName, colors)
             BtWidgetMessage(local.getString(R.string.bt_widget_budget_missing), colors)
+            if (!strip) {
+                BtWidgetDivider(colors)
+                Spacer(GlanceModifier.height(5.dp))
+                Text(
+                    text = local.getString(R.string.bt_widget_budget_missing_hint),
+                    style = TextStyle(
+                        color = colors.textMuted,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 1,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                )
+            }
             return
         }
         val locale = btWidgetLocale(local)
@@ -244,6 +297,28 @@ class BtBudgetWidget : GlanceAppWidget() {
     private fun fillColor(budget: BtWidgetBudget, colors: BtGlanceColors) =
         if (budget.exceeded) colors.loss else colors.gold
 
+    /**
+     * The "spent of limit" pairing — or, when there is NO limit, just what was
+     * spent. "50,00 € von 0,00 €" is a sentence about nothing.
+     */
+    private fun pairText(
+        local: Context,
+        budget: BtWidgetBudget,
+        discreet: Boolean,
+        locale: Locale,
+    ): String {
+        val spent = btWidgetMoney(budget.spent, budget.currency, discreet, locale)
+        return if (!btWidgetBudgetHasLimit(budget.amount)) {
+            spent
+        } else {
+            local.getString(
+                R.string.bt_widget_budget_of_pair,
+                spent,
+                btWidgetMoney(budget.amount, budget.currency, discreet, locale),
+            )
+        }
+    }
+
     /** Remaining = limit − spent; the display strings for both directions. */
     private fun remainingText(
         local: Context,
@@ -251,6 +326,11 @@ class BtBudgetWidget : GlanceAppWidget() {
         discreet: Boolean,
         locale: Locale,
     ): Pair<String, Boolean> {
+        // Nothing to remain from, and nothing to be "over" by — a no-limit
+        // budget leads with the one figure it does have.
+        if (!btWidgetBudgetHasLimit(budget.amount)) {
+            return btWidgetMoney(budget.spent, budget.currency, discreet, locale) to false
+        }
         val remaining = budget.amount - budget.spent
         return if (remaining >= 0.0) {
             local.getString(
@@ -377,31 +457,31 @@ class BtBudgetWidget : GlanceAppWidget() {
             trackColor = BtGlanceChartPalette.track(night),
             strokeFraction = 0.14f,
         )
-        val pct = btWidgetBudgetPercent(budget.spent, budget.amount)
-        val (leadText, over) = if (config.emphasis == BtWidgetBudgetEmphasis.SPENT) {
-            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale) to budget.exceeded
+        // Without a limit there is no "remaining" to emphasise — the card leads
+        // with spent whatever the knob says, and its labels follow.
+        val leadIsSpent = config.emphasis == BtWidgetBudgetEmphasis.SPENT ||
+            !btWidgetBudgetHasLimit(budget.amount)
+        val (leadText, over) = if (leadIsSpent) {
+            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale) to
+                budget.exceeded
         } else {
             remainingText(local, budget, snapshot.discreet, locale)
         }
         val leadLabel = local.getString(
-            if (config.emphasis == BtWidgetBudgetEmphasis.SPENT) {
+            if (leadIsSpent) {
                 R.string.bt_widget_budget_spent_label
             } else {
                 R.string.bt_widget_budget_remaining_label
             },
         )
-        val pairText = local.getString(
-            R.string.bt_widget_budget_of_pair,
-            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale),
-            btWidgetMoney(budget.amount, budget.currency, snapshot.discreet, locale),
-        )
+        val pairText = pairText(local, budget, snapshot.discreet, locale)
 
         if (sideBySide) {
             Row(
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RingImage(local, bitmap, budget, ringDp, pct, colors, locale)
+                RingImage(local, bitmap, budget, ringDp, colors, locale)
                 Spacer(GlanceModifier.width(12.dp))
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     BtMicroLabel(leadLabel, colors)
@@ -429,7 +509,7 @@ class BtBudgetWidget : GlanceAppWidget() {
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    RingImage(local, bitmap, budget, ringDp, pct, colors, locale)
+                    RingImage(local, bitmap, budget, ringDp, colors, locale)
                     Spacer(GlanceModifier.height(6.dp))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
@@ -458,17 +538,24 @@ class BtBudgetWidget : GlanceAppWidget() {
         }
     }
 
-    /** The ring bitmap with its hole caption — the TRUE percent over GENUTZT. */
+    /**
+     * The ring bitmap with its hole caption — the TRUE percent over GENUTZT.
+     *
+     * A budget with no positive limit has no percent, so the hole carries the
+     * "Kein Limit" reading instead and drops the GENUTZT caption: "genutzt" of
+     * nothing is not a statement, and an empty hole in an untinted circle is
+     * the near-blank card this state used to render (2026-08-17 review).
+     */
     @Composable
     private fun RingImage(
         local: Context,
         bitmap: android.graphics.Bitmap,
         budget: BtWidgetBudget,
         ringDp: Float,
-        pct: Double?,
         colors: BtGlanceColors,
         locale: Locale,
     ) {
+        val hasLimit = btWidgetBudgetHasLimit(budget.amount)
         Box(contentAlignment = Alignment.Center) {
             Image(
                 provider = ImageProvider(bitmap),
@@ -478,21 +565,32 @@ class BtBudgetWidget : GlanceAppWidget() {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     // The TRUE percent, unclamped — a 130 % month says 130 %.
-                    text = if (pct == null) "" else formatPercent(pct, locale, showSign = false),
+                    text = btWidgetBudgetPercentLabel(
+                        budget.spent,
+                        budget.amount,
+                        locale,
+                        local.getString(R.string.bt_widget_budget_no_limit),
+                    ),
                     style = TextStyle(
-                        color = if (budget.exceeded) colors.loss else colors.textPrimary,
-                        fontSize = 15.sp,
+                        color = when {
+                            !hasLimit -> colors.textMuted
+                            budget.exceeded -> colors.loss
+                            else -> colors.textPrimary
+                        },
+                        fontSize = if (hasLimit) 15.sp else 11.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                     ),
-                    maxLines = 1,
+                    maxLines = if (hasLimit) 1 else 2,
                     modifier = GlanceModifier.width((ringDp * 0.66f).dp),
                 )
                 // The mockup's hole caption: "62 %" over a tiny GENUTZT.
-                BtMicroLabel(
-                    local.getString(R.string.bt_widget_budget_spent_label),
-                    colors,
-                )
+                if (hasLimit) {
+                    BtMicroLabel(
+                        local.getString(R.string.bt_widget_budget_spent_label),
+                        colors,
+                    )
+                }
             }
         }
     }
@@ -506,7 +604,7 @@ class BtBudgetWidget : GlanceAppWidget() {
         locale: Locale,
         strip: Boolean,
     ) {
-        val pct = btWidgetBudgetPercent(budget.spent, budget.amount)
+        val hasLimit = btWidgetBudgetHasLimit(budget.amount)
         val (remainText, over) = remainingText(local, budget, snapshot.discreet, locale)
         Box(
             modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
@@ -537,10 +635,21 @@ class BtBudgetWidget : GlanceAppWidget() {
                         }
                     }
                     Text(
-                        text = if (pct == null) "" else formatPercent(pct, locale, showSign = false),
+                        // Never "" — a no-limit budget says "Kein Limit" here
+                        // rather than leaving the row's right half blank.
+                        text = btWidgetBudgetPercentLabel(
+                            budget.spent,
+                            budget.amount,
+                            locale,
+                            local.getString(R.string.bt_widget_budget_no_limit),
+                        ),
                         style = TextStyle(
-                            color = if (budget.exceeded) colors.loss else colors.textSecondary,
-                            fontSize = 12.sp,
+                            color = when {
+                                !hasLimit -> colors.textMuted
+                                budget.exceeded -> colors.loss
+                                else -> colors.textSecondary
+                            },
+                            fontSize = if (hasLimit) 12.sp else 10.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.End,
                         ),
@@ -561,25 +670,25 @@ class BtBudgetWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = local.getString(
-                                R.string.bt_widget_budget_of_pair,
-                                btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale),
-                                btWidgetMoney(budget.amount, budget.currency, snapshot.discreet, locale),
-                            ),
+                            text = pairText(local, budget, snapshot.discreet, locale),
                             style = TextStyle(color = colors.textMuted, fontSize = 10.sp),
                             maxLines = 1,
                             modifier = GlanceModifier.defaultWeight(),
                         )
-                        Text(
-                            text = remainText,
-                            style = TextStyle(
-                                color = if (over) colors.loss else colors.gold,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.End,
-                            ),
-                            maxLines = 1,
-                        )
+                        // With no limit the lead figure IS the spent amount the
+                        // pairing already shows; repeating it would be noise.
+                        if (hasLimit) {
+                            Text(
+                                text = remainText,
+                                style = TextStyle(
+                                    color = if (over) colors.loss else colors.gold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.End,
+                                ),
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
@@ -596,8 +705,13 @@ class BtBudgetWidget : GlanceAppWidget() {
         locale: Locale,
         strip: Boolean,
     ) {
-        val (leadText, over) = if (config.emphasis == BtWidgetBudgetEmphasis.SPENT) {
-            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale) to budget.exceeded
+        // Same rule as the ring: without a limit there is no "remaining", so
+        // the big figure is what was spent whatever the emphasis knob says.
+        val leadIsSpent = config.emphasis == BtWidgetBudgetEmphasis.SPENT ||
+            !btWidgetBudgetHasLimit(budget.amount)
+        val (leadText, over) = if (leadIsSpent) {
+            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale) to
+                budget.exceeded
         } else {
             remainingText(local, budget, snapshot.discreet, locale)
         }
@@ -619,11 +733,13 @@ class BtBudgetWidget : GlanceAppWidget() {
                 if (!strip) {
                     Spacer(GlanceModifier.height(2.dp))
                     Text(
-                        text = local.getString(
-                            R.string.bt_widget_budget_of_pair,
-                            btWidgetMoney(budget.spent, budget.currency, snapshot.discreet, locale),
-                            btWidgetMoney(budget.amount, budget.currency, snapshot.discreet, locale),
-                        ),
+                        // "Kein Limit" rather than the spent figure repeated:
+                        // the pairing has nothing to pair against.
+                        text = if (btWidgetBudgetHasLimit(budget.amount)) {
+                            pairText(local, budget, snapshot.discreet, locale)
+                        } else {
+                            local.getString(R.string.bt_widget_budget_no_limit)
+                        },
                         style = TextStyle(color = colors.textMuted, fontSize = 10.sp),
                         maxLines = 1,
                     )
@@ -664,7 +780,7 @@ class BtBudgetWidget : GlanceAppWidget() {
         locale: Locale,
         colors: BtGlanceColors,
     ) {
-        val pct = btWidgetBudgetPercent(budget.spent, budget.amount)
+        val hasLimit = btWidgetBudgetHasLimit(budget.amount)
 
         Column(
             modifier = GlanceModifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -685,22 +801,28 @@ class BtBudgetWidget : GlanceAppWidget() {
                 )
                 if (wide) {
                     Text(
-                        text = local.getString(
-                            R.string.bt_widget_budget_of_pair,
-                            btWidgetMoney(budget.spent, budget.currency, discreet, locale),
-                            btWidgetMoney(budget.amount, budget.currency, discreet, locale),
-                        ),
+                        text = pairText(local, budget, discreet, locale),
                         style = TextStyle(color = colors.textMuted, fontSize = 10.sp),
                         maxLines = 1,
                     )
                     Spacer(GlanceModifier.width(8.dp))
                 }
                 Text(
-                    // Spent-of-limit percent — not a signed change, so no leading +.
-                    text = if (pct == null) "" else formatPercent(pct, locale, showSign = false),
+                    // Spent-of-limit percent — not a signed change, so no
+                    // leading +. A limitless row says so instead of "".
+                    text = btWidgetBudgetPercentLabel(
+                        budget.spent,
+                        budget.amount,
+                        locale,
+                        local.getString(R.string.bt_widget_budget_no_limit),
+                    ),
                     style = TextStyle(
-                        color = if (budget.exceeded) colors.loss else colors.textSecondary,
-                        fontSize = 12.sp,
+                        color = when {
+                            !hasLimit -> colors.textMuted
+                            budget.exceeded -> colors.loss
+                            else -> colors.textSecondary
+                        },
+                        fontSize = if (hasLimit) 12.sp else 10.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.End,
                     ),

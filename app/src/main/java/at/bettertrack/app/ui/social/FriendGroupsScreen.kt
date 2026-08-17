@@ -377,7 +377,11 @@ fun FriendGroupsScreen(onBack: () -> Unit) {
 
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(pad),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+                // No FAB on this screen (its "New group" action is an ordinary
+                // button in the list), so no FAB clearance to reserve — just an
+                // ordinary bottom gap. The 96dp this used to carry was the FAB
+                // convention copied onto a list nothing floats over.
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item {

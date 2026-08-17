@@ -7,6 +7,7 @@ import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.WatchlistEntity
 import at.bettertrack.app.data.db.WatchlistItemEntity
 import at.bettertrack.app.ui.components.formatMoney
+import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.format.BT_EM_DASH
 import at.bettertrack.app.ui.format.btMaskedMoney
 import at.bettertrack.app.ui.home.HomeHeroState
@@ -470,6 +471,48 @@ class BtWidgetLogicTest {
     fun `budget math is safe against a non-positive limit`() {
         assertEquals(0f, btWidgetBudgetFraction(10.0, 0.0))
         assertNull(btWidgetBudgetPercent(10.0, 0.0))
+        assertFalse(btWidgetBudgetHasLimit(0.0))
+        assertFalse(btWidgetBudgetHasLimit(-25.0))
+        assertTrue(btWidgetBudgetHasLimit(0.01))
+    }
+
+    /**
+     * The percent slot is a LABEL, never an empty string.
+     *
+     * Every budget geometry — the 1x1 micro ring's hole, the single ring's hole,
+     * the bar's right-hand figure, each row of the all-budgets list — used to
+     * render `btWidgetBudgetPercent`'s null as `""`. A budget with no positive
+     * limit therefore drew an untinted circle with nothing in it: a working
+     * state that reads as a broken widget, which is what the 2026-08-17 review
+     * caught alongside the white-void defect. The label helper is the one place
+     * that decision now lives, so all four call sites cannot drift apart again.
+     */
+    @Test
+    fun `the percent label never comes back empty`() {
+        val de = Locale.GERMAN
+        // With a limit it is exactly what the app's own percent rule prints —
+        // unclamped and unsigned, same as every call site rendered before.
+        assertEquals(
+            formatPercent(50.0, de, showSign = false),
+            btWidgetBudgetPercentLabel(50.0, 100.0, de, "Kein Limit"),
+        )
+        assertEquals(
+            formatPercent(130.0, de, showSign = false),
+            btWidgetBudgetPercentLabel(130.0, 100.0, de, "Kein Limit"),
+        )
+        // Without one it is the caller's copy — in whichever language the
+        // widget's wrapped context resolved.
+        assertEquals("Kein Limit", btWidgetBudgetPercentLabel(10.0, 0.0, de, "Kein Limit"))
+        assertEquals("No limit", btWidgetBudgetPercentLabel(10.0, 0.0, Locale.ENGLISH, "No limit"))
+        assertEquals("Kein Limit", btWidgetBudgetPercentLabel(0.0, -1.0, de, "Kein Limit"))
+        // The property the four call sites actually depend on.
+        listOf(0.0 to 0.0, 10.0 to 0.0, 10.0 to -5.0, 0.0 to 100.0, 130.0 to 100.0)
+            .forEach { (spent, amount) ->
+                assertTrue(
+                    "empty percent slot for spent=$spent amount=$amount",
+                    btWidgetBudgetPercentLabel(spent, amount, de, "Kein Limit").isNotBlank(),
+                )
+            }
     }
 
     // ── Budget cache build ──────────────────────────────────────────────────────

@@ -188,6 +188,46 @@ fun rememberBtFabVisibility(): BtFabVisibility = remember { BtFabVisibility() }
 /** The resting FAB — Material's standard size, and the app's tap-target floor. */
 val BT_FAB_SIZE: Dp = 56.dp
 
+/** How far a FAB sits from the page's bottom-right corner. */
+val BT_FAB_EDGE_INSET: Dp = 20.dp
+
+/**
+ * The bottom `contentPadding` every FAB screen's scrolling list carries, so its
+ * LAST item can always be scrolled clear of the button.
+ *
+ * ## The experiment this token is the result of (2026-08-17)
+ *
+ * The owner reported *"the + FAB covers the second holding row's right-hand
+ * figures"*, and the obvious reading was that 96dp of `contentPadding` had
+ * never been the right tool: it pads content inside a viewport that still runs
+ * under the button, so it only ever guaranteed the LAST item could be scrolled
+ * clear — never a row sitting in the bottom-right corner at the list's resting
+ * offset, which on Portfolio overview is holding row 2.
+ *
+ * So the round tried the structural fix: take the FAB's 76dp strip out of the
+ * **viewport** with a real `Modifier.padding(bottom = …)`, so that no row could
+ * ever be laid out under the button at any offset. It works exactly as
+ * designed, and **he rejected it on sight**:
+ *
+ * > *"what the fuck. why does the plus button have his own background now."*
+ *
+ * Two things were worse than the problem. A shrunken viewport clips its last
+ * visible row through the middle — he saw `+34,43 €` sliced in half with black
+ * underneath, which is the "no half-clipped rows" rule he has stated before.
+ * And the FAB, no longer overlapping anything, sat alone in an empty band that
+ * reads as a bar the button owns rather than as a button floating over content.
+ *
+ * **So the ruling is: a floating FAB is allowed to overlap list content.** That
+ * is what floating means, it is what the shrink-on-scroll behaviour
+ * ([BtFabVisibility.ShrinkingContent]) exists to mitigate, and the alternative
+ * costs more than it buys. Clearance is `contentPadding` and nothing else; no
+ * screen may shrink a scroll viewport to dodge its own FAB.
+ *
+ * `FabClearanceDisciplineTest` pins both halves — the token, and the absence of
+ * the rejected lane.
+ */
+val BT_FAB_CONTENT_CLEARANCE: Dp = BT_FAB_SIZE + BT_FAB_EDGE_INSET * 2
+
 /**
  * The scrolling FAB. Material's own mini-FAB size, which is also exactly the
  * smallest thing this app is willing to ask a thumb to hit.

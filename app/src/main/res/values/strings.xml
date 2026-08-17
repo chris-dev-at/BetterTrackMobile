@@ -2653,6 +2653,9 @@
     <!-- Shared widget states. -->
     <string name="bt_widget_signed_out">Sign in to BetterTrack</string>
     <string name="bt_widget_syncing">Syncing…</string>
+    <!-- The pre-data frame: the host's initialLayout (@layout/bt_widget_loading)
+         and the first Glance frame both say this, so the hand-off is invisible. -->
+    <string name="bt_widget_loading">Loading…</string>
     <string name="bt_widget_no_portfolios">No portfolios yet</string>
     <string name="bt_widget_watchlist_empty">Add assets to your watchlist</string>
     <string name="bt_widget_movers_empty">No moves today</string>
@@ -2660,6 +2663,11 @@
     <string name="bt_widget_budget_unavailable">Not available in this mode</string>
     <!-- A configured budget whose tag no longer has one. -->
     <string name="bt_widget_budget_missing">This budget is gone</string>
+    <!-- The missing-budget card's second line: what to do about it. -->
+    <string name="bt_widget_budget_missing_hint">Long-press to pick another</string>
+    <!-- A budget with no positive limit: the ring has no percentage to show,
+         so it shows this instead of an empty hole. -->
+    <string name="bt_widget_budget_no_limit">No limit</string>
     <!-- Spent of limit under a budget bar: "spent / limit". Symbols only, no noun. -->
     <string name="bt_widget_budget_spent_of">%1$s / %2$s</string>
     <!-- The number style\'s limit line: big spent amount, then "of €300". -->

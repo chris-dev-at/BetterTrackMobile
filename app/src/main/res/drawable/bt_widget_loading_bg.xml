@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The card behind @layout/bt_widget_loading — the frame the LAUNCHER inflates
+  before a single Glance frame exists.
+
+  This replaces glance-appwidget's own glance_loading_layout_background, whose
+  solid is `?android:attr/colorBackground`. That attribute resolves in the
+  HOST's theme, not ours, so on a light launcher it painted pure WHITE — and
+  any instance whose provideGlance never reached provideContent stayed on that
+  white void forever (owner's "Essen" budget widget, 2026-08-17).
+
+  @color/bt_widget_surface is the widget's own card colour with a values-night
+  twin, so this paints the BetterTrack surface on both sides instead.
+
+  20dp approximates the launcher's system radius the way
+  @drawable/bt_widget_preview_bg does; the -v31 variant takes the exact system
+  dimension, and the live card takes it at runtime (btWidgetCardModifier).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bt_widget_surface" />
+    <corners android:radius="20dp" />
+</shape>

@@ -12,7 +12,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -66,17 +65,39 @@ class BtAssetWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val config: BtWidgetAssetConfig?,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val config = btWidgetAssetConfig(
-            getAppWidgetState(context, PreferencesGlanceStateDefinition, id),
-        ) ?: btWidgetClaimPinnedAsset(context, id)
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val mode = btWidgetThemeMode()
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = BtWidgetRepository.load(context),
+                    colors = btGlanceColors(mode),
+                    night = btWidgetIsNight(context, mode),
+                    // A failed read lands on the same "tap to choose an asset"
+                    // doorway an unconfigured instance shows — which is the one
+                    // card that can actually fix the state.
+                    config = btWidgetConfigOrNull("asset") {
+                        btWidgetAssetConfig(
+                            getAppWidgetState(context, PreferencesGlanceStateDefinition, id),
+                        ) ?: btWidgetClaimPinnedAsset(context, id)
+                    },
+                )
+            },
+        ) { data ->
+            val config = data.config
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = if (config == null) {
                     // The whole card is the "set me up" button.
                     btWidgetConfigureAction(
@@ -94,7 +115,7 @@ class BtAssetWidget : GlanceAppWidget() {
                     BT_WIDGET_PADDING
                 },
             ) {
-                Content(local, snapshot, config, colors, night)
+                Content(data.local, data.snapshot, config, data.colors, data.night)
             }
         }
     }

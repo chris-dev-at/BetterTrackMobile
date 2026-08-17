@@ -76,6 +76,9 @@ import at.bettertrack.app.ui.charts.BtAreaChart
 import at.bettertrack.app.ui.charts.rangeWord
 import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.shell.BtTabSelector
+import at.bettertrack.app.ui.theme.FONT_FEATURE_TABULAR
+import at.bettertrack.app.ui.components.BT_FAB_EDGE_INSET
+import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
@@ -348,6 +351,19 @@ fun PortfolioOverviewScreen(
                     /* onOpenPortfolioView = */ { vm.leaveOverview() },
                 )
             } else {
+                // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
+                // this FAB opens the buy/sell form directly. It stays the screen's ONLY
+                // creation entry; the header deliberately carries no `+`.
+                // The app-wide empty-state rule ([fabVisibleForList]): a portfolio
+                // with no holdings shows the "record your first buy" empty state,
+                // and that state carries the CTA — so the FAB stands down until
+                // there is a list to add to. `resolved` is deliberately not just
+                // `true`: before the first sync lands, "no holdings" is a thing we
+                // have not looked up yet, not an answer.
+                val holdingsFabVisible = fabVisibleForList(
+                    resolved = hasEverSynced || holdings.isNotEmpty(),
+                    empty = holdings.isEmpty(),
+                )
                 PullToRefreshBox(
                     isRefreshing = refreshing,
                     onRefresh = { vm.refresh() },
@@ -402,25 +418,12 @@ fun PortfolioOverviewScreen(
                     }
                 }
 
-                // Step 8 (§6.2): recording a transaction is ≤2 taps from the overview —
-                // this FAB opens the buy/sell form directly. It stays the screen's ONLY
-                // creation entry; the header deliberately carries no `+`.
-                // The app-wide empty-state rule ([fabVisibleForList]): a portfolio
-                // with no holdings shows the "record your first buy" empty state,
-                // and that state carries the CTA — so the FAB stands down until
-                // there is a list to add to. `resolved` is deliberately not just
-                // `true`: before the first sync lands, "no holdings" is a thing we
-                // have not looked up yet, not an answer.
-                val holdingsFabVisible = fabVisibleForList(
-                    resolved = hasEverSynced || holdings.isNotEmpty(),
-                    empty = holdings.isEmpty(),
-                )
                 selected?.takeIf { holdingsFabVisible }?.let { p ->
                     val fabCd = stringResource(R.string.bt_overview_fab_cd)
                     // Shrinks while scrolling; never leaves. See
                     // [BtFabVisibility.ShrinkingContent] for the ruling.
                     fabVisibility.ShrinkingContent(
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(BT_FAB_EDGE_INSET),
                     ) { size ->
                         FloatingActionButton(
                             onClick = { onNewTransaction(p.id) },
@@ -551,11 +554,12 @@ private fun OverviewContent(
         state = listState,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             top = 8.dp,
-            // Clear the buy/sell FAB (56dp + 20dp inset + margin) so the last
-            // holding row scrolls fully into view instead of under it. Kept even
-            // though the FAB now hides on scroll (S6 P1-7): it comes back the
-            // moment the user scrolls up, and the last row must still clear it.
-            bottom = 96.dp,
+            // Clear the buy/sell FAB so the LAST holding row scrolls fully into
+            // view instead of stopping under it. Deliberately `contentPadding`
+            // and not a viewport inset — see [BT_FAB_CONTENT_CLEARANCE] for the
+            // 2026-08-17 experiment that proved the inset worse than the
+            // overlap it removed.
+            bottom = BT_FAB_CONTENT_CLEARANCE,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1036,6 +1040,9 @@ private fun PendingStrip(pendingTx: List<PendingTxRow>, onClick: () -> Unit) {
  * ## The controls sit BELOW the canvas, side by side (owner order 2026-08-16)
  *
  * *"Move the €/% toggle and the range selector side-by-side, below the chart."*
+ * Their order was reversed to range-left on 2026-08-17 and reverted the same
+ * evening (*"timespans is back on the right it looked better"*), so it is mode
+ * left, range right — as originally shipped.
  * What made that impossible on 2026-08-08 — nine segments of fixed geometry
  * against 328dp of content width — is not the situation any more: 6M left the
  * range set (same batch), and the mode picker gives up its content-sized 46dp
@@ -1185,6 +1192,11 @@ private fun ChartControls(
                 horizontalArrangement = Arrangement.spacedBy(CHART_CONTROLS_GAP),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Mode LEFT, range RIGHT. Swapped to range-left on 2026-08-17
+                // on his instruction and swapped straight back the same evening
+                // — *"swap the €% € % with the timespans again. so timespans is
+                // back on the right it looked better."* Recorded rather than
+                // silently reverted so the next person does not re-propose it.
                 ChartModePicker(
                     mode = mode,
                     onMode = onMode,
@@ -1206,7 +1218,8 @@ private fun ChartControls(
             }
         } else {
             // The accessibility fallback: same controls, stacked — never
-            // squeezed labels, never a scrolling range row.
+            // squeezed labels, never a scrolling range row. Same reading order
+            // as the row above: mode first, range second.
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChartModePicker(
                     mode = mode,
@@ -1627,9 +1640,28 @@ private fun SecondaryRow(
  * it. In Drive mode that is a fixable fact, which is why it reads differently
  * there (W6).
  *
- * The intra-stack gap is 1dp against the old 2dp and the row's vertical inset
- * 10dp against 12dp — the owner's "they all seem a little disconnected", fixed
- * by making each pair visibly one unit and the rows sit closer to their list.
+ * ## The sizing is v0.120's, verbatim (owner, 2026-08-17)
+ *
+ * *"i dont like that its that smaller now make it normal again"* was read as
+ * "bigger", and the row went to `titleMedium`/`moneyMedium`. His verdict on
+ * that: *"why did the holdings text increase insanely. just leave it like it
+ * was in v0.120 … the other stuff like the positioning and content with the new
+ * arrangement keep it like it is. but the sizing and looks take from 0.120."*
+ *
+ * So the row's **metrics are lifted from `db3a049` (v0.120) property by
+ * property** — `titleSmall` name, `moneySmall` value, `numberCaption` deltas,
+ * 14dp/12dp row inset, 2dp stack gaps, 12dp column gap — and its **anatomy is
+ * today's**: the 4-slot arrangement, the ticker annotation, the content. "Make
+ * it normal again" meant *back to the size it was*, and the tightening pass
+ * (10dp inset, 1dp gaps) is part of what he was calling smaller, so it goes
+ * back too. Two separate decisions had been bundled; this un-bundles them by
+ * taking a real commit's values instead of a judgement about them.
+ *
+ * ## …and the name now carries its ticker
+ *
+ * *"add the short (BAYN.DE for Bayer for example) to the end of the name … like
+ * grayish and thin"*. See [holdingTicker] for when it is suppressed and why the
+ * NAME is the half that ellipsizes.
  */
 @Composable
 private fun HoldingRow(
@@ -1644,19 +1676,44 @@ private fun HoldingRow(
         // states it precisely. Colour is never the only carrier (§4.4).
         BtRailedRow(rail = rangeRail(holding.unrealizedPnlPct ?: holding.unrealizedPnlEur)) {
             Row(
-                modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 10.dp),
+                modifier = Modifier.weight(1f).padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = holding.assetName,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = bt.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // Name + ticker on ONE line, and the split of the remaining
+                    // width between them is the whole point: the ticker takes
+                    // its intrinsic width first (unweighted), the name takes
+                    // what is left (weighted) and ellipsizes into it. So a very
+                    // long name loses its tail, never the four characters that
+                    // say WHICH listing this is. See [holdingTicker].
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = holding.assetName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = bt.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        holdingTicker(holding.assetName, holding.assetSymbol)?.let { ticker ->
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = ticker,
+                                // An annotation, three ways at once: a size
+                                // down, the muted ink, and Normal weight
+                                // against the name's SemiBold. Any one of the
+                                // three alone still reads as a second title.
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Normal,
+                                    fontFeatureSettings = FONT_FEATURE_TABULAR,
+                                ),
+                                color = bt.textMuted,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                     holding.unrealizedPnlPct?.let { plPct ->
-                        Spacer(Modifier.height(1.dp))
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = formatPercent(plPct, locale),
                             style = BtTheme.type.numberCaption,
@@ -1689,7 +1746,7 @@ private fun HoldingRow(
                         )
                     }
                     holding.unrealizedPnlEur?.let { plEur ->
-                        Spacer(Modifier.height(1.dp))
+                        Spacer(Modifier.height(2.dp))
                         MoneyText(
                             value = plEur,
                             style = BtTheme.type.numberCaption,

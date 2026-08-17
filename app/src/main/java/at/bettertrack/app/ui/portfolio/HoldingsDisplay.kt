@@ -30,6 +30,38 @@ import at.bettertrack.app.data.db.HoldingEntity
 fun visibleHoldings(holdings: List<HoldingEntity>): List<HoldingEntity> =
     holdings.filter { it.quantity != 0.0 }
 
+/**
+ * The ticker annotation that follows an asset's name on a holdings row, or null
+ * when there is nothing worth adding (owner order 2026-08-17: *"add the short
+ * (BAYN.DE for Bayer for example) to the end of the name … like grayish and
+ * thin"*).
+ *
+ * The name answers *what is this*; the symbol answers *which listing exactly* —
+ * two Bayers on two exchanges are one name and two tickers, and the row was
+ * showing only the ambiguous half. It is an annotation, never a second title:
+ * the row styles it muted, lighter and a size down, and the NAME is what
+ * ellipsizes when the pair does not fit, because a truncated name is still
+ * recognisable while a truncated ticker identifies nothing.
+ *
+ * Returns null when:
+ *  - there is no symbol at all (a custom asset the user typed a name for);
+ *  - the name simply IS the symbol — `BTC-USD` / `BTC-USD` would print the same
+ *    string twice, which reads as a rendering bug rather than as detail;
+ *  - the name already ENDS with the symbol (some server names arrive as
+ *    "Bayer AG BAYN.DE"), for the same reason.
+ *
+ * Case- and whitespace-insensitive, because those are formatting differences
+ * between two server fields rather than a real distinction.
+ */
+fun holdingTicker(assetName: String, assetSymbol: String): String? {
+    val symbol = assetSymbol.trim()
+    if (symbol.isEmpty()) return null
+    val name = assetName.trim()
+    if (name.equals(symbol, ignoreCase = true)) return null
+    if (name.endsWith(symbol, ignoreCase = true)) return null
+    return symbol
+}
+
 /** The two orders the holdings list can be read in. */
 enum class HoldingsSort { ALLOCATION, PROFIT }
 

@@ -7,7 +7,6 @@ import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 
@@ -22,24 +21,40 @@ class BtMoversWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val config: BtWidgetRowsConfig,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
-        val config = if (state[BT_WIDGET_PREF_ROWS_SOURCE] == null) {
-            btWidgetClaimPinnedRows(
-                context, id, BtWidgetPinKind.MOVERS, BT_WIDGET_ROWS_MOVERS_DEFAULTS,
-            ) ?: btWidgetRowsConfig(state, BT_WIDGET_ROWS_MOVERS_DEFAULTS)
-        } else {
-            btWidgetRowsConfig(state, BT_WIDGET_ROWS_MOVERS_DEFAULTS)
-        }
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = BtWidgetRepository.load(context),
+                    colors = btGlanceColors(btWidgetThemeMode()),
+                    config = btWidgetConfigOrNull("movers") {
+                        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+                        if (state[BT_WIDGET_PREF_ROWS_SOURCE] == null) {
+                            btWidgetClaimPinnedRows(
+                                context, id, BtWidgetPinKind.MOVERS, BT_WIDGET_ROWS_MOVERS_DEFAULTS,
+                            ) ?: btWidgetRowsConfig(state, BT_WIDGET_ROWS_MOVERS_DEFAULTS)
+                        } else {
+                            btWidgetRowsConfig(state, BT_WIDGET_ROWS_MOVERS_DEFAULTS)
+                        }
+                    } ?: BT_WIDGET_ROWS_MOVERS_DEFAULTS,
+                )
+            },
+        ) { data ->
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
             ) {
-                BtRowFamilyContent(context, local, snapshot, config, colors)
+                BtRowFamilyContent(context, data.local, data.snapshot, data.config, data.colors)
             }
         }
     }

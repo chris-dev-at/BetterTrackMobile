@@ -13,7 +13,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -66,31 +65,49 @@ class BtSpendingWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** Everything the card needs, resolved OFF the path to the first frame. */
+    private class Loaded(
+        val local: Context,
+        val snapshot: BtWidgetSnapshot,
+        val colors: BtGlanceColors,
+        val night: Boolean,
+        val mode: BtWidgetFlowMode,
+    )
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val local = btWidgetContext(context)
-        val snapshot = BtWidgetRepository.load(context)
-        val colors = btGlanceColors(btWidgetThemeMode())
-        val night = btWidgetIsNight(context, btWidgetThemeMode())
-        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
-        val mode = if (state[BT_WIDGET_PREF_FLOW_MODE] == null) {
-            btWidgetClaimPinnedFlow(context, id) ?: btWidgetFlowMode(null)
-        } else {
-            btWidgetFlowMode(state[BT_WIDGET_PREF_FLOW_MODE])
-        }
-        provideContent {
+        btProvideContent(
+            context = context,
+            load = {
+                val theme = btWidgetThemeMode()
+                Loaded(
+                    local = btWidgetContext(context),
+                    snapshot = BtWidgetRepository.load(context),
+                    colors = btGlanceColors(theme),
+                    night = btWidgetIsNight(context, theme),
+                    mode = btWidgetConfigOrNull("monthly flow") {
+                        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+                        if (state[BT_WIDGET_PREF_FLOW_MODE] == null) {
+                            btWidgetClaimPinnedFlow(context, id) ?: btWidgetFlowMode(null)
+                        } else {
+                            btWidgetFlowMode(state[BT_WIDGET_PREF_FLOW_MODE])
+                        }
+                    } ?: btWidgetFlowMode(null),
+                )
+            },
+        ) { data ->
             val strip = btWidgetRowClass(LocalSize.current.height.value) == BtWidgetSizeClass.STRIP
             BtWidgetCard(
-                colors = colors,
+                colors = data.colors,
                 action = actionStartActivity(
                     btWidgetIntent(
                         context,
                         BT_WIDGET_TARGET_CASH,
-                        portfolioId = snapshot.budget.portfolioId,
+                        portfolioId = data.snapshot.budget.portfolioId,
                     ),
                 ),
                 padding = if (strip) 10.dp else BT_WIDGET_PADDING,
             ) {
-                Content(local, snapshot, mode, colors, night, strip)
+                Content(data.local, data.snapshot, data.mode, data.colors, data.night, strip)
             }
         }
     }
