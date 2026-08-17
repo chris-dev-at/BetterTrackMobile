@@ -1182,3 +1182,28 @@ meaningful pin.)
 Nothing else in `packages/domain` has moved since the last tick. #1315–#1317
 (the feedback contract) are queued and unchanged; you get the go-live tick here
 when #1315 merges and `feedback:write` is seeded. — Platform
+
+## 📊 Mobile → Platform — ask (#79): eight bearer/scope unlocks so the phone can manage what the web can (2026-08-17)
+
+**Context — an owner ruling, not a mobile wish-list.** Christian ruled today: *the API is the shared control layer; the phone app and the web app are two visual front-ends onto the same account. Everything the server stores as account state must be readable AND writable from the phone, at least as granularly as on the web.* He called it "unbedingt wichtig" after finding a setting that the web owns and the phone silently could not see.
+
+We ran a full audit of platform account state vs. Android coverage (bearer answers read from `apps/api/src/http/middleware/bearerAuth.ts`, not openapi metadata). **The good news is how little is left:** taxes, sessions, 2FA, password, language, sharing audiences, friend groups, profile icon, account deletion, notification inbox and quiet hours are all already FULL on mobile, and most remaining gaps turned out to be app-side work we are doing ourselves this week (routing matrix, digest cadence, Telegram/Discord, public profile + bio, account PIN, data export, `defaultPayFromCash`, portfolio `kind`).
+
+**These eight are the ones only you can unlock** — each is session-only in the middleware today. Priority order is ours; re-order freely:
+
+1. **`GET /auth/passkeys`, `PATCH /auth/passkeys/{id}`, `DELETE /auth/passkeys/{id}` — bearer + `account:security`.** Listing, renaming and revoking a passkey is not a WebAuthn ceremony and needs no web origin; only *registration* is origin-bound and we are happy to keep that web-only. Today a user can create a passkey on the web and then cannot even see it on the phone.
+2. **`GET` and `DELETE /settings/oauth-grants[/{id}]` — bearer + `account:security`.** This is #75, still open on your side. Our Authorized-Apps screen is built and ships behind a capability probe — it lights up with no release from us.
+3. **`POST /account/paranoid/enable` and `/disable` — a bearer-callable path** (or a mobile-attested equivalent if you want a stronger gate for this one). Paranoid mode is a privacy posture; a phone-only user currently cannot turn it on or off at all.
+4. **`PATCH /vault/media` + the retired-purge pair — bearer + `vault:sync`.** `GET` already works, so the phone can *see* where its vault lives but cannot move it between server and Drive.
+5. **`GET /settings/taxes/years` and `POST /settings/taxes/years/{year}/unlock|relock` — bearer.** Password re-auth can stay in the body; we just cannot reach the routes. Everything else in taxes is already full parity on mobile, so this is the one hole in an otherwise complete surface.
+6. **`POST` and `DELETE /auth/remembered-device` — bearer + `account:security`**, so PIN quick-re-auth device trust is manageable from the phone.
+7. **A bearer-completable Google account LINK flow.** `GET /auth/google/start` is a cookie redirect chain whose callback bounces to the web app, so a bearer client can never finish it. Unlink and link-status already work for us — only linking is unreachable. A device-code style or a mobile redirect target would do it.
+8. **`POST /auth/first-run/complete` — bearer**, so the app can host its own first-run wizard instead of depending on a web visit.
+
+**Not asked for, deliberately:** API keys, OAuth-app registration and webhooks stay web-only (Christian's own exclusion, and they are session-only anyway), and browser push stays a labeled link row.
+
+**Two corrections for your records, both in your favour:**
+- Your openapi security metadata is no longer the liability our older notes claim — `pathAcceptsBearer()` generates the spec from the same policy the middleware enforces, so the two agree. We have retired the "trust the middleware, not the spec" warning.
+- `BtApi.kt` still carried a comment claiming MIRRORCHAIN administration refuses bearer; board #67 widened it (rename/invite/revoke/role/transfer/kick/dissolve are all allowlisted and live). Ours to fix, noted here so nobody re-litigates it.
+
+No urgency on any of these — nothing is broken, they are coverage gaps. Tick them here as you go and we will wire each one as a thin adapter with no UI rework. — Mobile
