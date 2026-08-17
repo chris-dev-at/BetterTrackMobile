@@ -1512,6 +1512,11 @@ private fun BtSheetHost(
                     onOpenLedger = { portfolioId, sourceId ->
                         navController.navigate(CashLedgerRoute(portfolioId, sourceId))
                     },
+                    // The cash-flow chart's selected month, straight into the
+                    // ledger's date facet (owner ask 2026-08-17).
+                    onOpenLedgerMonth = { portfolioId, month ->
+                        navController.navigate(CashLedgerRoute(portfolioId, null, month))
+                    },
                     onOpenBudgets = { portfolioId ->
                         navController.navigate(CashBudgetsRoute(portfolioId))
                     },
@@ -1524,6 +1529,7 @@ private fun BtSheetHost(
                 at.bettertrack.app.ui.cash.CashLedgerScreen(
                     routePortfolioId = route.portfolioId,
                     initialSourceId = route.sourceId,
+                    initialMonth = route.month,
                     onBack = back,
                     onOpenPendingSync = { navController.navigate(PendingSyncRoute) },
                 )

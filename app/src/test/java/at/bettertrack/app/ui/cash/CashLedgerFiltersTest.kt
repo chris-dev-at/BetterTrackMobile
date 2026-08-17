@@ -105,7 +105,7 @@ class CashLedgerFiltersTest {
             movement("a", 5.0, sourceId = "main"),
             movement("b", 5.0, sourceId = "savings"),
         )
-        val kept = filterCashMovements(rows, CashLedgerSelection(sourceId = "savings"), nowMs, zone)
+        val kept = filterCashMovements(rows, CashLedgerSelection(sourceIds = setOf("savings")), nowMs, zone)
         assertEquals(listOf("b"), kept.map { it.id })
     }
 
@@ -159,7 +159,7 @@ class CashLedgerFiltersTest {
         val kept = filterCashMovements(
             listOf(target, wrongSource, wrongTag, tooOld),
             CashLedgerSelection(
-                sourceId = "savings",
+                sourceIds = setOf("savings"),
                 tagIds = setOf("t-food"),
                 window = CashLedgerWindow.DAYS_30,
             ),
@@ -178,7 +178,7 @@ class CashLedgerFiltersTest {
 
     @Test
     fun `any one filter makes the selection active`() {
-        assertTrue(CashLedgerSelection(sourceId = "main").isActive)
+        assertTrue(CashLedgerSelection(sourceIds = setOf("main")).isActive)
         assertTrue(CashLedgerSelection(tagIds = setOf("t")).isActive)
         assertTrue(CashLedgerSelection(window = CashLedgerWindow.DAYS_90).isActive)
     }

@@ -1,6 +1,9 @@
 package at.bettertrack.app.ui.cash
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +20,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +44,7 @@ import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.dto.CashSummaryResponse
 import at.bettertrack.app.data.api.dto.CashTagSummaryDto
 import at.bettertrack.app.data.api.dto.CashTrendPointDto
+import at.bettertrack.app.ui.charts.rememberBtScrubTicker
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.formatEur
@@ -43,6 +54,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -335,18 +347,45 @@ private fun SummaryTagRow(
 
 /**
  * A compact paired-bar chart: one green inflow bar and one red outflow bar per
- * month, oldest → newest, on a single shared scale.
+ * month, oldest → newest, on a single shared scale — **selectable**.
  *
  * Hand-drawn from boxes rather than a chart library because it is six pairs of
  * rectangles and the app already owns its chart language; a Canvas would buy
  * nothing here and cost the automatic discreet-mode masking that the labels get
  * from [formatEur].
+ *
+ * ## The selection (owner ask 2026-08-16, restated 2026-08-17)
+ *
+ * *"auch im cash sollte man beim cashflow diagram draufdrücken können und sehen
+ * wie viel die jeweiligen balken im diagramm representieren … also so dass man
+ * einen monat selektieren kann"*.
+ *
+ * Four decisions follow from that sentence and none of them is negotiable:
+ *
+ *  - **The numbers land in a fixed readout above the chart, never in a floating
+ *    tooltip.** A tooltip over a 6-column chart on a phone is under the thumb
+ *    that summoned it. The readout row is composed unconditionally so selecting
+ *    and clearing never changes the block's height.
+ *  - **The selection is STICKY.** *Selektieren* is a state, not a hover. Lifting
+ *    the finger keeps the month; tapping it again (or the reset control) returns
+ *    to the whole-window totals, which is the default.
+ *  - **Gold marks the selection, emerald/red keep meaning money direction.** The
+ *    bars never change colour — a selected column gets a gold wash behind it, a
+ *    gold rule under it and gold ink on its axis label.
+ *  - **Dragging is the portfolio chart's gesture, not a second one.** Same
+ *    [BtScrubTicker], so the haptic detent per bar crossed has the identical
+ *    cadence; the only difference is that this chart keeps what the drag left.
+ *
+ * @param onOpenMonth given, the readout offers a door into the ledger narrowed
+ *   to the selected month. Null hides the affordance rather than showing a dead
+ *   one.
  */
 @Composable
 fun CashTrendsBlock(
     points: List<CashTrendPointDto>,
     locale: Locale,
     modifier: Modifier = Modifier,
+    onOpenMonth: ((String) -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     if (points.isEmpty()) {
@@ -357,39 +396,134 @@ fun CashTrendsBlock(
         return
     }
     val peak = trendPeak(points)
+    val ticker = rememberBtScrubTicker()
+
+    // The month key, not the index — see `CashTrendSelection.kt`. Saveable so a
+    // rotation does not silently throw the user's selection away.
+    var selectedMonth by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = resolveTrendSelection(points, selectedMonth)
+    // A refresh that slid the window past the selected month leaves a stale key
+    // behind; drop it so the reset control cannot offer to clear nothing.
+    if (selectedMonth != null && selected == null) selectedMonth = null
+
+    val readout = selected ?: trendTotals(points)
+    val monthsLabel = pluralStringResource(
+        R.plurals.bt_cash_trends_months,
+        points.size,
+        points.size,
+    )
 
     Column(modifier.fillMaxWidth()) {
+        TrendReadout(
+            title = selected?.let { trendMonthTitle(it.month, locale) } ?: monthsLabel,
+            point = readout,
+            locale = locale,
+            selectedMonth = selected?.month,
+            onClear = { selectedMonth = null },
+            onOpenMonth = onOpenMonth,
+        )
+        Spacer(Modifier.height(10.dp))
         Row(
-            modifier = Modifier.fillMaxWidth().height(84.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(84.dp)
+                // ONE gesture region across the whole chart, so a narrow bar is
+                // still selectable: the hit test is nearest-column over the full
+                // width and full height (see [trendIndexAt]), which at six months
+                // on a 412dp handset is a ~60dp target per month.
+                .pointerInput(points) {
+                    val report: (Float) -> Unit = { x ->
+                        val i = trendIndexAt(x, size.width.toFloat(), points.size)
+                        if (i >= 0 && points[i].month != selectedMonth) {
+                            selectedMonth = points[i].month
+                            ticker.crossed(i, x)
+                        }
+                    }
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startX = down.position.x
+                        var dragged = false
+                        // The DOWN does not select: a tap must be able to toggle
+                        // the bar it lands on OFF, and a down-select would have
+                        // already turned it on before the up arrived.
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUpIgnoreConsumed()) {
+                                change.consume()
+                                if (!dragged) {
+                                    val i = trendIndexAt(startX, size.width.toFloat(), points.size)
+                                    if (i >= 0) {
+                                        selectedMonth = toggleTrendMonth(selectedMonth, points[i].month)
+                                        ticker.crossed(i, startX)
+                                    }
+                                }
+                                break
+                            }
+                            if (!change.isConsumed) {
+                                val dx = change.position.x - startX
+                                if (!dragged && abs(dx) > viewConfiguration.touchSlop) {
+                                    dragged = true
+                                    ticker.end()
+                                }
+                                if (dragged) {
+                                    // Consuming is load-bearing: it keeps the page's
+                                    // LazyColumn and the shell's tab pager from
+                                    // stealing a horizontal scrub.
+                                    change.consume()
+                                    report(change.position.x)
+                                }
+                            }
+                        }
+                        ticker.end()
+                    }
+                },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             points.forEach { p ->
+                val isSelected = p.month == selected?.month
                 // The whole column is one accessibility node: twelve unlabelled
-                // rectangles would otherwise be twelve meaningless stops.
+                // rectangles would otherwise be twelve meaningless stops. It
+                // carries the month's actual figures, because "August" alone is
+                // exactly the tooltip-less state a screen reader was already in.
+                val cd = trendColumnDescription(p, locale, isSelected)
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) bt.goldWash else Color.Transparent)
                         .semantics {
-                            contentDescription = trendMonthLabel(p.month, locale)
+                            contentDescription = cd
+                            this.selected = isSelected
                         },
                     verticalArrangement = Arrangement.Bottom,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Row(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         TrendBar(trendBarFraction(p.inflow, peak), bt.gain, Modifier.weight(1f))
                         TrendBar(trendBarFraction(p.outflow, peak), bt.loss, Modifier.weight(1f))
                     }
-                    Spacer(Modifier.height(4.dp))
+                    // The gold rule under the selected column. Always composed,
+                    // transparent when unselected, so selecting cannot shift the
+                    // bars by 2dp.
+                    Spacer(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(if (isSelected) bt.goldEmphasis else Color.Transparent),
+                    )
+                    Spacer(Modifier.height(3.dp))
                     Text(
                         text = trendMonthLabel(p.month, locale),
                         style = MaterialTheme.typography.labelSmall,
-                        color = bt.textMuted,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) bt.goldEmphasis else bt.textMuted,
                         maxLines = 1,
                         modifier = Modifier.clearAndSetSemantics { },
                     )
@@ -401,7 +535,128 @@ fun CashTrendsBlock(
             TrendLegend(bt.gain, stringResource(R.string.bt_cash_summary_in))
             Spacer(Modifier.width(14.dp))
             TrendLegend(bt.loss, stringResource(R.string.bt_cash_summary_out))
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = stringResource(R.string.bt_cash_trends_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = bt.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+    }
+}
+
+/**
+ * The stable figures row above the chart: what the bars under it are worth.
+ *
+ * Composed in both states with the same geometry, so the readout is a place the
+ * eye can return to rather than something that appears and shoves the chart
+ * down. When a month is selected the heading names it and gains two gold
+ * affordances — clear, and (when the caller offers one) the ledger door.
+ */
+@Composable
+private fun TrendReadout(
+    title: String,
+    point: CashTrendPointDto,
+    locale: Locale,
+    selectedMonth: String?,
+    onClear: () -> Unit,
+    onOpenMonth: ((String) -> Unit)?,
+) {
+    val bt = BtTheme.colors
+    Column(Modifier.fillMaxWidth()) {
+        // Fixed height, because the selected state adds two tappable
+        // affordances whose padding made this row 12dp taller — which pushed
+        // the chart down on the frame the user tapped a bar, i.e. exactly when
+        // they were looking at it. The row is sized for the taller state and
+        // the idle one centres inside it.
+        Row(
+            modifier = Modifier.fillMaxWidth().height(34.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selectedMonth != null) bt.goldEmphasis else bt.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (selectedMonth != null) {
+                if (onOpenMonth != null) {
+                    Text(
+                        text = stringResource(R.string.bt_cash_trends_open_month),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = bt.goldInk,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(BtShapes.pill)
+                            .clickable { onOpenMonth(selectedMonth) }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    text = stringResource(R.string.bt_cash_trends_clear),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = bt.textSecondary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(BtShapes.pill)
+                        .clickable(onClick = onClear)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth()) {
+            val net = trendNet(point)
+            SummaryTotal(
+                label = stringResource(R.string.bt_cash_summary_in),
+                amount = formatEur(point.inflow, locale),
+                tint = bt.gain,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTotal(
+                label = stringResource(R.string.bt_cash_summary_out),
+                amount = formatEur(point.outflow, locale),
+                tint = bt.loss,
+                modifier = Modifier.weight(1f),
+            )
+            SummaryTotal(
+                label = stringResource(R.string.bt_cash_summary_net),
+                amount = formatEur(net, locale, showSign = true),
+                tint = when {
+                    net > 0.0 -> bt.gain
+                    net < 0.0 -> bt.loss
+                    else -> bt.textPrimary
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** The spoken form of one month column: name, both magnitudes, and its state. */
+@Composable
+private fun trendColumnDescription(
+    point: CashTrendPointDto,
+    locale: Locale,
+    isSelected: Boolean,
+): String {
+    val body = stringResource(
+        R.string.bt_cash_trends_bar_cd,
+        trendMonthTitle(point.month, locale),
+        formatEur(point.inflow, locale),
+        formatEur(point.outflow, locale),
+        formatEur(trendNet(point), locale, showSign = true),
+    )
+    return if (isSelected) {
+        body + ", " + stringResource(R.string.bt_cash_trends_selected_cd)
+    } else {
+        body
     }
 }
 

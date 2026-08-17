@@ -140,6 +140,7 @@ fun BtPickerSheet(
     searchQuery: String? = null,
     searchLabel: String? = null,
     onSearchQueryChange: ((String) -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     PickerSheetScaffold(
@@ -153,6 +154,7 @@ fun BtPickerSheet(
         searchQuery = searchQuery,
         searchLabel = searchLabel,
         onSearchQueryChange = onSearchQueryChange,
+        footer = footer,
     ) { bodyModifier ->
         Column(
             modifier = bodyModifier.verticalScroll(rememberScrollState()),
@@ -189,6 +191,7 @@ fun BtLazyPickerSheet(
     searchQuery: String? = null,
     searchLabel: String? = null,
     onSearchQueryChange: ((String) -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null,
     state: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
@@ -203,6 +206,7 @@ fun BtLazyPickerSheet(
         searchQuery = searchQuery,
         searchLabel = searchLabel,
         onSearchQueryChange = onSearchQueryChange,
+        footer = footer,
     ) { bodyModifier ->
         LazyColumn(
             modifier = bodyModifier,
@@ -237,6 +241,7 @@ private fun PickerSheetScaffold(
     searchQuery: String?,
     searchLabel: String?,
     onSearchQueryChange: ((String) -> Unit)?,
+    footer: (@Composable () -> Unit)?,
     body: @Composable (Modifier) -> Unit,
 ) {
     val bt = BtTheme.colors
@@ -321,6 +326,16 @@ private fun PickerSheetScaffold(
                     .fillMaxWidth()
                     .heightIn(max = maxBodyHeight),
             )
+            // OUTSIDE the scrolling body on purpose. A sheet that stages a
+            // multi-select needs its commit action reachable at every scroll
+            // position — a twenty-tag list that scrolls its own "show 34
+            // movements" button past the fold has hidden the one control it
+            // exists to offer, and the button also previews the result count,
+            // which is only useful while the user is still ticking rows.
+            if (footer != null) {
+                Spacer(Modifier.height(14.dp))
+                footer()
+            }
             if (message != null) {
                 Spacer(Modifier.height(12.dp))
                 BtFormError(message)

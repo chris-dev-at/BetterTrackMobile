@@ -2,17 +2,19 @@
 <!--
   Paths the app is willing to hand out through a content:// URI.
 
-  Exactly ONE entry, and it is deliberately narrow: the tax-report CSV export
-  writes into `cacheDir/tax/` and shares the file from there. A FileProvider
-  grants read access to everything under a declared path, so declaring the whole
-  cache (let alone files/) would make every future cached artefact shareable by
-  any app that ever received one of our URIs. The export is the only feature that
-  needs this, so the subdirectory is the whole grant.
+  TWO entries, each deliberately narrow, one per feature that exports a file:
+  the tax-report CSV writes into `cacheDir/tax/` and the cash-ledger export
+  (CSV + PDF, owner ask 2026-08-17) into `cacheDir/cash/`. A FileProvider grants
+  read access to everything under a declared path, so declaring the whole cache
+  (let alone files/) would make every future cached artefact shareable by any app
+  that ever received one of our URIs. Two subdirectories are the whole grant, and
+  a third feature gets a third line rather than a widened one.
 
   The cache is also the right medium rather than files/: an exported report is a
-  disposable copy of data the server can regenerate, and the OS is welcome to
+  disposable copy of data the app can regenerate, and the OS is welcome to
   reclaim it the moment the share sheet is done with it.
 -->
 <paths>
     <cache-path name="tax-exports" path="tax/" />
+    <cache-path name="cash-exports" path="cash/" />
 </paths>

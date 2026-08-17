@@ -870,6 +870,13 @@ fun CashScreen(
     onOpenStandingOrders: () -> Unit = {},
     /** The ledger subpage door — (portfolioId, sourceFilter to open on). */
     onOpenLedger: (String?, String?) -> Unit = { _, _ -> },
+    /**
+     * The same door, opened on one MONTH of the cash-flow chart — (portfolioId,
+     * `YYYY-MM`). Owner ask 2026-08-17: selecting a bar and then having to
+     * rebuild that month by hand in the ledger's filters is the tap the chart
+     * was supposed to save.
+     */
+    onOpenLedgerMonth: (String?, String) -> Unit = { _, _ -> },
     /** The budgets subpage door. */
     onOpenBudgets: (String?) -> Unit = {},
 ) {
@@ -1238,7 +1245,11 @@ fun CashScreen(
                                     onRetry = { vm.loadTrends() },
                                 )
 
-                                is CashTrendsUi.Ready -> CashTrendsBlock(t.points, locale)
+                                is CashTrendsUi.Ready -> CashTrendsBlock(
+                                    points = t.points,
+                                    locale = locale,
+                                    onOpenMonth = { month -> onOpenLedgerMonth(resolvedPid, month) },
+                                )
                             }
                         }
                     }

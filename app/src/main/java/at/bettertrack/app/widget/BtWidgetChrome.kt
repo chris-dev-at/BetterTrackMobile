@@ -28,6 +28,7 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.i18n.LocaleManager
+import at.bettertrack.app.ui.format.btFormatLocale
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -355,13 +356,17 @@ internal fun btWidgetTextDp(sp: Float, fontScale: Float): Float = sp * fontScale
 internal fun btWidgetContext(context: Context): Context = LocaleManager.wrap(context)
 
 /**
- * The widget's formatting locale, with ONE normalization: any German variant
- * formats as plain German. CLDR gives de-AT a narrow-space thousands separator,
- * which put "21 052" on the owner's launcher while every app screen reads
- * "21.052" — a split no user should ever see (device review 2026-08-16). One
- * convention per language; strings still resolve through the wrapped context.
+ * The widget's formatting locale.
+ *
+ * The normalization it used to perform inline — any German variant formats as
+ * plain German, because CLDR gives de-AT a narrow-space thousands separator —
+ * now lives in [btFormatLocale], next to the formatter factory it governs.
+ *
+ * That move is the actual fix. Normalizing here fixed the launcher and left the
+ * app screens on U+202F, so the owner's phone showed `3.112,08 €` on a widget
+ * and `5 712,08 €` in Cash (device review 2026-08-17) — the same split, moved.
+ * One rule, one place, both surfaces; this function is now only "which locale
+ * is this widget's context in".
  */
-internal fun btWidgetLocale(context: Context): Locale {
-    val raw = context.resources.configuration.locales[0] ?: Locale.getDefault()
-    return if (raw.language == "de") Locale.GERMAN else raw
-}
+internal fun btWidgetLocale(context: Context): Locale =
+    btFormatLocale(context.resources.configuration.locales[0] ?: Locale.getDefault())

@@ -350,7 +350,7 @@
          SELECTION on purpose — the platform's cash aggregates are month-scoped,
          so these sums describe exactly the rows on screen and nothing wider. -->
     <string name="bt_ledger_all_tags">All tags</string>
-    <string name="bt_ledger_window_all">Any time</string>
+    <string name="bt_ledger_window_all">All</string>
     <string name="bt_ledger_window_30d">30 days</string>
     <string name="bt_ledger_window_90d">90 days</string>
     <string name="bt_ledger_window_1y">1 year</string>
@@ -361,6 +361,99 @@
     <string name="bt_ledger_reset_filters">Reset filters</string>
     <string name="bt_ledger_no_match_title">Nothing matches these filters</string>
     <string name="bt_ledger_no_match_message">No movement fits the source, tags and period you picked. Widen one of them to see more.</string>
+    <!-- Owner ask 2026-08-17 ("the current filters are too basic"): ledger
+         filters v2 per the commissioned study DESIGN_NOTES_LEDGER.md — one
+         pinned rail of facet tokens, bottom sheets that stage a multi-select,
+         an explicit custom date range, deeper selection statistics, and export. -->
+    <string name="bt_ledger_facet_date">Date range</string>
+    <string name="bt_ledger_facet_sources">Sources</string>
+    <string name="bt_ledger_facet_tags">Tags</string>
+    <string name="bt_ledger_facet_reset">Reset</string>
+    <string name="bt_ledger_facet_clear">Clear selection</string>
+    <string name="bt_ledger_facet_counts_hint">Counts reflect the other filters</string>
+    <string name="bt_ledger_facet_selected">Selected</string>
+    <string name="bt_ledger_facet_unselected">Not selected</string>
+    <string name="bt_ledger_reset_all">Reset all</string>
+    <string name="bt_ledger_remove_date">Remove date-range filter</string>
+    <string name="bt_ledger_remove_sources">Remove source filter</string>
+    <string name="bt_ledger_remove_tags">Remove tag filter</string>
+    <string name="bt_ledger_window_custom">Custom</string>
+    <string name="bt_ledger_date_quick">Quick selection</string>
+    <string name="bt_ledger_date_inclusive">The start and end dates are included in the filter</string>
+    <string name="bt_ledger_date_start">Start date</string>
+    <string name="bt_ledger_date_end">End date</string>
+    <string name="bt_ledger_date_incomplete">Pick a start and an end date.</string>
+    <string name="bt_ledger_date_invalid">The end date must be on or after the start date.</string>
+    <string name="bt_ledger_search_sources">Search sources</string>
+    <string name="bt_ledger_search_tags">Search tags</string>
+    <string name="bt_ledger_no_sources_found">No sources found</string>
+    <string name="bt_ledger_no_tags_found">No tags found</string>
+    <string name="bt_ledger_stats_avg">Avg. amount</string>
+    <string name="bt_ledger_stats_largest">Largest transaction</string>
+    <string name="bt_ledger_stats_largest_named">Largest \u00b7 %1$s</string>
+    <string name="bt_ledger_stats_transfers">Transfers</string>
+    <string name="bt_ledger_stats_show">Show details</string>
+    <string name="bt_ledger_stats_hide">Hide details</string>
+    <string name="bt_ledger_stats_out_by_tag">Money out by tag</string>
+    <string name="bt_ledger_stats_other">Other</string>
+    <string name="bt_ledger_stats_tag_count_note">Counted, not split: a movement can carry several tags, so the counts can add up to more than the selection.</string>
+    <!-- Export. The file always contains REAL values, in every mode: discreet
+         mode hides money from someone looking at your screen, and masking a file
+         the user asked for would protect nobody. See CashExport.kt. -->
+    <string name="bt_ledger_export_title">Export selection</string>
+    <string name="bt_ledger_export_disabled_cd">No transactions in this selection</string>
+    <string name="bt_ledger_export_applied">Applied filters</string>
+    <string name="bt_ledger_export_csv_why">CSV is ideal for spreadsheets and accounting.</string>
+    <string name="bt_ledger_export_pdf_why">PDF is a readable report for sharing or filing.</string>
+    <string name="bt_ledger_export_pdf_too_big">PDF is not available for a selection this large. Use CSV instead.</string>
+    <string name="bt_ledger_export_include_desc">Include descriptions</string>
+    <string name="bt_ledger_export_privacy">The selection is frozen when generation starts and processed locally on this device.</string>
+    <string name="bt_ledger_export_create_csv">Create CSV</string>
+    <string name="bt_ledger_export_create_pdf">Create PDF</string>
+    <string name="bt_ledger_export_working">Creating export</string>
+    <string name="bt_ledger_export_frozen">The selection has been safely frozen.</string>
+    <string name="bt_ledger_export_ready">Your file is ready</string>
+    <string name="bt_ledger_export_local">Created locally on this device</string>
+    <string name="bt_ledger_export_share">Share</string>
+    <string name="bt_ledger_export_save">Save to Files</string>
+    <string name="bt_ledger_export_failed">Export failed</string>
+    <string name="bt_ledger_export_retry">Try again</string>
+    <string name="bt_ledger_export_fallback_csv">Export as CSV</string>
+    <string name="bt_ledger_export_no_space">Not enough storage. Free up some space and try again.</string>
+    <string name="bt_ledger_export_generic">The file could not be created. Please try again.</string>
+    <string name="bt_ledger_export_save_failed">The file could not be saved. Choose another location or share the file directly.</string>
+    <string name="bt_ledger_export_no_app">No compatible app found. Save the file to Files instead.</string>
+    <string name="bt_ledger_export_file_stem">BetterTrack_Transactions</string>
+    <string name="bt_ledger_range_joiner">to</string>
+    <string name="bt_ledger_csv_exported_at">Exported at</string>
+    <string name="bt_ledger_csv_filter_from">Filter from</string>
+    <string name="bt_ledger_csv_filter_to">Filter to</string>
+    <string name="bt_ledger_csv_filter_sources">Filter sources</string>
+    <string name="bt_ledger_csv_filter_tags">Filter tags</string>
+    <string name="bt_ledger_csv_tag_rule">Tag matching</string>
+    <string name="bt_ledger_csv_tag_rule_value">At least one selected tag</string>
+    <string name="bt_ledger_csv_id">Transaction ID</string>
+    <string name="bt_ledger_csv_date">Date</string>
+    <string name="bt_ledger_csv_time">Time</string>
+    <string name="bt_ledger_csv_source">Source</string>
+    <string name="bt_ledger_csv_type">Type</string>
+    <string name="bt_ledger_csv_description">Description</string>
+    <string name="bt_ledger_csv_counterparty">Counterparty</string>
+    <string name="bt_ledger_csv_tags">Tags</string>
+    <string name="bt_ledger_csv_amount">Amount</string>
+    <string name="bt_ledger_csv_currency">Currency</string>
+    <string name="bt_ledger_csv_origin">Origin</string>
+    <string name="bt_ledger_csv_created_at">Created at</string>
+    <string name="bt_ledger_csv_kind_transfer">Transfer</string>
+    <string name="bt_ledger_pdf_page">Page %1$d of %2$d</string>
+    <string name="bt_ledger_pdf_footer">Private financial data \u00b7 Created with BetterTrack</string>
+    <!-- Owner ask 2026-08-16, repeated 2026-08-17: the cash-flow chart's bars
+         are selectable and report what they represent. -->
+    <string name="bt_cash_trends_hint">Tap a bar</string>
+    <string name="bt_cash_trends_open_month">Show transactions</string>
+    <string name="bt_cash_trends_clear">Reset</string>
+    <string name="bt_cash_trends_bar_cd">%1$s: in %2$s, out %3$s, net %4$s</string>
+    <string name="bt_cash_trends_selected_cd">selected</string>
     <string name="bt_cash_rename_source_title">Edit cash source</string>
     <!-- S6 P1-15: was "Main", which collided with the portfolio named "Main" and
          the source named "Main" on the very same screen ("Main / Main / Main").
@@ -1384,6 +1477,34 @@
     <plurals name="bt_cash_summary_movements">
         <item quantity="one">%1$d movement</item>
         <item quantity="other">%1$d movements</item>
+    </plurals>
+    <plurals name="bt_cash_trends_months">
+        <item quantity="one">Last %1$d month</item>
+        <item quantity="other">Last %1$d months</item>
+    </plurals>
+    <plurals name="bt_ledger_filters_active">
+        <item quantity="one">%1$d filter active</item>
+        <item quantity="other">%1$d filters active</item>
+    </plurals>
+    <plurals name="bt_ledger_show_movements">
+        <item quantity="one">Show %1$d movement</item>
+        <item quantity="other">Show %1$d movements</item>
+    </plurals>
+    <plurals name="bt_ledger_date_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="bt_ledger_token_sources">
+        <item quantity="one">%1$d source</item>
+        <item quantity="other">%1$d sources</item>
+    </plurals>
+    <plurals name="bt_ledger_token_tags">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+    <plurals name="bt_ledger_export_estimate">
+        <item quantity="one">%1$d movement \u00b7 approx. %2$s</item>
+        <item quantity="other">%1$d movements \u00b7 approx. %2$s</item>
     </plurals>
     <string name="bt_cash_trends_section">Cash flow</string>
     <string name="bt_cash_trends_empty">No cash history yet.</string>

@@ -98,8 +98,36 @@ private enum class NfShape {
 private val btNumberFormats: ThreadLocal<MutableMap<Pair<Locale, NfShape>, NumberFormat>> =
     ThreadLocal.withInitial { HashMap() }
 
-private fun btNumberFormat(locale: Locale, shape: NfShape): NumberFormat =
-    btNumberFormats.get()!!.getOrPut(locale to shape) {
+/**
+ * The locale a NUMBER is formatted with — every German variant normalizes to
+ * plain German.
+ *
+ * ## The split this closes (device review 2026-08-16 / 2026-08-17)
+ *
+ * CLDR gives `de-AT` a NARROW NO-BREAK SPACE (U+202F) as its grouping
+ * separator, where `de-DE` uses a full stop. On the owner's phone — locale
+ * de-AT — that put `5 712,08 €` on the cash screen while the launcher widgets,
+ * which had already been normalized, read `3.112,08 €`. One app, two thousands
+ * separators, and no user on earth should ever see that.
+ *
+ * The widget fix landed first ([at.bettertrack.app.widget.btWidgetLocale]) and
+ * fixed only the widgets, which is what created the split rather than closing
+ * it. This is the same rule applied at the app's one formatter factory, so
+ * every number the product renders — screen, widget, notification — now comes
+ * out of the identical `DecimalFormat` configuration.
+ *
+ * **Only the number's separators are normalized.** Strings, dates, currency
+ * symbols and the app's language all keep the user's real locale; this function
+ * is reached exclusively from [btNumberFormat]. And it is deliberately keyed on
+ * the LANGUAGE, not on a de-AT allowlist: `de-CH` uses an apostrophe group
+ * separator and would have been the next report.
+ */
+internal fun btFormatLocale(locale: Locale): Locale =
+    if (locale.language == "de") Locale.GERMAN else locale
+
+private fun btNumberFormat(rawLocale: Locale, shape: NfShape): NumberFormat {
+    val locale = btFormatLocale(rawLocale)
+    return btNumberFormats.get()!!.getOrPut(locale to shape) {
         NumberFormat.getNumberInstance(locale).apply {
             isGroupingUsed = true
             when (shape) {
@@ -127,6 +155,7 @@ private fun btNumberFormat(locale: Locale, shape: NfShape): NumberFormat =
             }
         }
     }
+}
 
 /**
  * Rule 1 — fiat money, symbol-last, exactly 2 decimals, half-away-from-zero.
@@ -142,16 +171,49 @@ internal fun btFormatMoneyCore(
     currencyCode: String,
     locale: Locale,
     showSign: Boolean,
+    /**
+     * Whether discreet mode applies. Defaults to the live mode, which is what
+     * makes masking automatic for every screen. **The only legitimate caller
+     * that passes `false` is [btFormatMoneyExport]** — and
+     * `DiscreetExportRulingTest` enforces exactly that, so this parameter cannot
+     * quietly become a way for a screen to opt out.
+     */
+    masked: Boolean = BtDiscreetMode.masking,
 ): String {
     if (!isFinite(value)) return BT_EM_DASH
     // Discreet mode is enforced HERE, at the one function every money label in
     // the app funnels through, so no screen can opt out by accident.
-    if (BtDiscreetMode.masking) return btMaskedMoney(currencyCode, locale)
+    if (masked) return btMaskedMoney(currencyCode, locale)
     val bd = BigDecimal.valueOf(withoutNegativeZero(value!!)).setScale(2, RoundingMode.HALF_UP)
     val num = btNumberFormat(locale, NfShape.FIXED_2).format(bd)
     val signed = if (showSign && bd.signum() > 0) "+$num" else num
     return "$signed ${btMoneySymbol(currencyCode, locale)}"
 }
+
+/**
+ * Rule 1 for a **file the user explicitly asked to export** — identical
+ * formatting, discreet masking deliberately bypassed.
+ *
+ * ## The ruling (owner, 2026-08-17)
+ *
+ * Discreet mode exists to defend against the person standing behind you: it
+ * blanks absolute money **on screen**. An export is a file the user asked for,
+ * generated on their own device, for their own accounting. Writing `•••• €`
+ * into it would protect them from nobody and hand them a worthless artefact —
+ * and would do it silently, since a user in discreet mode has no reason to
+ * suspect the file differs from the one they would have got an hour earlier.
+ *
+ * So the exported document contains real values in every mode. This function is
+ * the single, named, greppable door for that, rather than a boolean sprinkled
+ * through the export code; `DiscreetExportRulingTest` asserts it stays the only
+ * one.
+ */
+fun btFormatMoneyExport(
+    value: Double?,
+    currencyCode: String,
+    locale: Locale,
+    showSign: Boolean,
+): String = btFormatMoneyCore(value, currencyCode, locale, showSign, masked = false)
 
 /**
  * Rule 4 — unit price. 0 < |x| < 0.01 renders up to 6 SIGNIFICANT decimals with

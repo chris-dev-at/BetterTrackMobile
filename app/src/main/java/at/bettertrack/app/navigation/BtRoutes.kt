@@ -105,10 +105,16 @@ import kotlinx.serialization.Serializable
  * moved OFF the cash overview onto its own page. [sourceId] carries the
  * overview's source-switcher selection through, so the list opens already
  * narrowed to what the user was looking at.
+ *
+ * [month] (`YYYY-MM`) is the same idea for the cash-flow chart's selected bar
+ * (owner ask 2026-08-17): tapping a month's readout opens this list already
+ * narrowed to that month's date range, so the bar and the rows behind it are
+ * one tap apart instead of a filter the user has to rebuild by hand.
  */
 @Serializable data class CashLedgerRoute(
     val portfolioId: String? = null,
     val sourceId: String? = null,
+    val month: String? = null,
 )
 
 /**

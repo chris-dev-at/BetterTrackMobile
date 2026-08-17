@@ -77,6 +77,16 @@ fun BtDateField(
  * No-future date picker (selectable up to end of today, UTC-keyed) styled to the
  * brand. Shared by every dated form so the "can't pick the future" rule and OK/
  * Cancel affordances live in exactly one place.
+ *
+ * @param maxDate the last selectable day. Defaults to today, which is the rule
+ *   every dated *entry* form wants: you cannot have paid for something tomorrow.
+ *   A FILTER is the one caller that legitimately needs to go further — a
+ *   standing order or an import can leave a row booked in the future, and a
+ *   range that cannot reach a row the user can see in the list would be the app
+ *   calling its own data impossible. Callers pass the newest booked date then.
+ * @param minDate the first selectable day, for the end-date half of a range:
+ *   an end that precedes its start is not a validation message worth showing if
+ *   the calendar can simply refuse to offer it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,16 +94,23 @@ fun BtDatePickerDialog(
     initial: LocalDate,
     onPick: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
+    maxDate: LocalDate? = null,
+    minDate: LocalDate? = null,
 ) {
     val bt = BtTheme.colors
     val zone = remember { ZoneId.systemDefault() }
-    val todayEndUtc = remember {
-        LocalDate.now(zone).plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli() - 1
+    val todayEndUtc = remember(maxDate) {
+        (maxDate ?: LocalDate.now(zone))
+            .plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli() - 1
+    }
+    val floorUtc = remember(minDate) {
+        minDate?.atStartOfDay(ZoneId.of("UTC"))?.toInstant()?.toEpochMilli() ?: Long.MIN_VALUE
     }
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
         selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= todayEndUtc
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                utcTimeMillis <= todayEndUtc && utcTimeMillis >= floorUtc
         },
     )
     DatePickerDialog(

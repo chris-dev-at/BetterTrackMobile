@@ -7,9 +7,12 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import at.bettertrack.app.data.push.PushChannels
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.widget.BtWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -89,6 +92,36 @@ class BetterTrackApplication : Application() {
                     // torn down, WM not yet initialised) and a failure here must
                     // not end the collector — the next reconnect retries.
                     startupStep("scheduleDrain(reconnect)") { AppGraph.syncScheduler.scheduleDrain() }
+                }
+        }
+
+        // Placed widgets follow the app's theme (device review 2026-08-17: the
+        // owner switched the app to Dark and his home screen stayed light until
+        // something else happened to refresh it).
+        //
+        // Observed here rather than hooked into the two settings controls, for
+        // one reason that matters: this catches EVERY writer, including the
+        // pre-login settings sheet and whatever adds a third one later. A widget
+        // reads the theme at paint time, so the only thing missing was a reason
+        // to repaint.
+        //
+        // `drop(1)` skips the value the flow replays on subscription — that is
+        // the current theme, not a change, and repainting every widget on every
+        // cold start would be work nobody asked for.
+        appScope.launch {
+            combine(
+                AppGraph.devicePrefs.themeMode,
+                AppGraph.devicePrefs.trueBlack,
+            ) { mode, black -> mode to black }
+                .drop(1)
+                .distinctUntilChanged()
+                .collect {
+                    // A widget update is IPC and can fail while the launcher is
+                    // restarting; `updateAll` already swallows and logs, and the
+                    // wrapper covers the scheduling call itself.
+                    startupStep("widgetRepaint(theme)") {
+                        appScope.launch { BtWidgets.updateAll(this@BetterTrackApplication) }
+                    }
                 }
         }
 
