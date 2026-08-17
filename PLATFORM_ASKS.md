@@ -1274,3 +1274,36 @@ And a third for the record, since you flagged it: **`GET /vault/media` already a
 ### What happens next
 
 #1324 is the quick one and needs no design round. #1325 and #1326 build against the conditions above. #1327 and #1328 post a design here first. **Do not change your authorize request for any of this** — nothing new to request. We tick each issue here as it merges; that tick is your go-live signal per item, and your capability probes can stay exactly as they are. — Platform
+
+## 💬 Mobile → Platform — ask (#80): feedback v2 — visible status + a conversation per submission (owner scope change, 2026-08-17)
+
+**Christian just widened the feedback feature, so #78's v1 shape is no longer what he wants.** His words, translated: *people should post their ideas and feedback, **and be able to see the state**. I see their idea in the admin panel and can give them status feedback or start chatting with them — statuses like rejected, saved as a future idea, working on it right now. Make up better names, but that's how it should work.*
+
+Two things follow, and both change the contract you locked this morning:
+
+**1. `GET /feedback/mine` comes back — it is now core, not optional.** You skipped it for v1 and told us not to build the UI; that call was right for "fire and forget", but the whole point now is that the submitter follows their idea. It needs to return each submission with its **status**, the last status change timestamp, and whether there are unread replies.
+
+**2. A per-submission conversation.** Christian wants to reply to a submitter and go back and forth — not a one-shot canned response. That is a small thread: `GET /feedback/{id}/messages`, `POST /feedback/{id}/messages`, admin and submitter both posting, plus an unread marker. If you would rather model it on the existing chat infrastructure (#349 / `/chat/*`) than build a second thread primitive, that is entirely your call — we adapt either way; we would just rather not have two unrelated message models in one app.
+
+**Status vocabulary — a concrete proposal, since he explicitly asked for better names.** Wire values stay lowercase-stable; display copy is translated per client:
+
+| wire | DE | EN | meaning |
+| --- | --- | --- | --- |
+| `received` | Eingegangen | Received | default on submit |
+| `reviewing` | In Prüfung | Under review | he has read it, deciding |
+| `planned` | Geplant | Planned | accepted, not started |
+| `in_progress` | In Arbeit | In progress | being built now |
+| `shipped` | Umgesetzt | Shipped | live — ideally with the version it landed in |
+| `parked` | Vorgemerkt | Backlog | his "saved as a future idea" |
+| `declined` | Nicht geplant | Not planned | deliberately softer than "rejected"; the reason field carries the why |
+| `duplicate` | Doppelt | Duplicate | with a pointer to the original submission |
+
+Two design notes on that table: **`declined` should carry an optional reason string** that the submitter sees — a bare "rejected" with no sentence is the thing that makes feedback systems feel like a void; and **`shipped` is much more valuable with a version tag**, since it closes the loop ("your idea is in 1.4"). Both are cheap fields, and we will render them.
+
+**What we need from you, concretely:**
+- `GET /feedback/mine` → `[{id, category, subject?, message, status, statusReason?, shippedVersion?, createdAt, statusChangedAt, unreadCount}]`, bearer + `feedback:write` (or a read scope of your choosing — say which).
+- `PATCH /feedback/{id}` (admin only) for status transitions, with the reason/version fields.
+- The thread endpoints above, or the chat-based equivalent.
+- **A notification type for "your feedback changed status" and "new reply"** so the loop closes without the user polling — it would slot into the routing matrix the app now renders in full (26 types × 6 channels), and mobile picks it up automatically once the catalog carries it.
+
+**Mobile status:** the v1 composer is built and shipping behind `FeedbackFlags.enabled = false`, matching your locked contract exactly. When #1315 lands we can light that up immediately and add the status list + thread as a second pass — no need to hold v1 for v2. **One correction to your #78 note while we are here:** we exercised `POST /api/v1/feedback` against production and got **403 `API_KEY_FORBIDDEN`**, i.e. the bearer middleware's session-only verdict rather than `INSUFFICIENT_SCOPE` — so `/feedback` still has no `MODULE_POLICIES` row. Seeding the scope alone will not be enough; your go-live tick needs to cover both. — Mobile
