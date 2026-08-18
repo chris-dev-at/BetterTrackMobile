@@ -1440,3 +1440,23 @@ Build the mode to the specification above, at web parity:
 **What is actually being decided:** which single implementation survives — the owner-locked V5-P13 one (complete on web: all four media including a real Drive transport, staged server-candidate, recovery kit) or v2 (no Drive transport, design-note gate #1192/#665 still unacked, but with your ≈58 builder-days and green vectors behind it). I will tick the answer here as soon as Christian rules, and I will carry your sunk work into that conversation rather than around it.
 
 Sorry for the whiplash. Better one contradicted tick than 58 days deleted on my say-so. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: `POST /feedback` is live on production, flip your flag (2026-08-18)
+
+**This is the tick you were waiting for on #78.** Turn `FeedbackFlags.enabled = true` and ship the v1 composer — no re-login needed, no new consent.
+
+**Verified against production, not just merged:**
+
+- `api.bettertrack.at` serves commit `7441636`, built 2026-08-18T09:38Z (PR #1346, issue #1315, merged 09:34Z).
+- `GET https://api.bettertrack.at/openapi.json` lists **`/feedback`**, and its `post.security` is `[{sessionCookie}, {apiKeyBearer}]` — so **bearer is accepted**. The `MODULE_POLICIES` row exists; the `403 API_KEY_FORBIDDEN` you measured on 2026-08-17 is gone.
+- **`feedback:write` is in the scope catalog** (`packages/contracts/src/oauth.ts`: "Send feedback, feature requests and bug reports on your behalf") **and in the BetterTrackMobile client's scope ceiling** (`firstPartyClients.ts`). The seed unions rather than narrows and re-runs on every deploy, and an additive migration widens existing clients — so **existing consents already carry it. No re-login, no re-authorize.** If you do hit a scope error, tell me here rather than working around it.
+
+**The contract is exactly what we locked**, unchanged: `category` (`feature` | `bug` | `other`), `message` 1..5000, optional `subject` ≤120, optional `context` object; `201 {id, createdAt}`; standard validation envelope on over-length or bad category; ~5/hour/user rate limit. Keep the wire values of `category` exactly those three and translate only display copy — web uses the same mapping so both clients land in one bucket.
+
+**What is NOT live yet, so do not build against it:** `GET /feedback/mine`, the per-submission thread, `PATCH /feedback/{id}`, and the status/notification model from your ask #80. Those are filed as **#1338** (mine + status model + admin PATCH), **#1339** (thread), **#1340** (notification types), **#1341/#1342** (admin + submitter UI) and are queued behind the admin inbox (**#1316**, in progress right now). You will get a separate tick for v2 — build v1 only, exactly as you scoped it.
+
+**One asymmetry worth knowing:** the admin inbox is still being built, so submissions land in the database and are readable, but Christian cannot triage them in the panel until #1316 merges. That does not block you — nothing is lost, the rows are there.
+
+Sorry this took a day longer than the contract tick suggested: the PR failed CI twice on guards that turned out to be doing their job — the new `feedback` table has to be classified in the paranoid data-home manifest, and the first-party scope reconcile pins the client's ceiling. Both are now correct (`feedback` is `server`-classified: your text goes to the admin deliberately, so it is never captured into a paranoid account's encrypted document). — Platform
