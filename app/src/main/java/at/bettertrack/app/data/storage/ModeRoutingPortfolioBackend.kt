@@ -203,4 +203,16 @@ class ModeRoutingMarketDataSource(
 
     override suspend fun quote(assetId: String): BtResult<at.bettertrack.app.data.repo.AssetSnapshot> =
         active().quote(assetId)
+
+    /**
+     * Forwarded explicitly, and it has to be.
+     *
+     * [MarketDataSource.quotes] has a default body that loops [quote]. Inheriting
+     * it here would route every row individually through this class and never
+     * reach [ApiMarketDataSource]'s real batch call — the N+1 would survive the
+     * fix while looking fixed from the outside.
+     */
+    override suspend fun quotes(
+        assetIds: List<String>,
+    ): BtResult<at.bettertrack.app.data.repo.BatchQuotes> = active().quotes(assetIds)
 }

@@ -87,6 +87,10 @@ import at.bettertrack.app.navigation.CashRoute
 import at.bettertrack.app.navigation.CashRulesRoute
 import at.bettertrack.app.navigation.CashTagsRoute
 import at.bettertrack.app.navigation.ChainManageRoute
+import at.bettertrack.app.navigation.AccountPinRoute
+import at.bettertrack.app.navigation.HeatmapRoute
+import at.bettertrack.app.navigation.PublicProfileRoute
+import at.bettertrack.app.navigation.DataExportRoute
 import at.bettertrack.app.navigation.ChangePasswordRoute
 import at.bettertrack.app.navigation.ChangelogRoute
 import at.bettertrack.app.navigation.ChatListRoute
@@ -975,6 +979,7 @@ private fun BtTabContent(
                 onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
                 onAddToWatchlist = { navController.navigate(SearchRoute) },
                 onOpenMarketIntel = { navController.navigate(MarketIntelRoute) },
+                onOpenHeatmap = { navController.navigate(HeatmapRoute) },
             )
 
         BtTab.Workbench ->
@@ -1728,6 +1733,8 @@ private fun BtSheetHost(
         btSheet<SettingsRoute> {
             SettingsScreen(
                 onBack = back,
+                onOpenPublicProfile = { navController.navigate(PublicProfileRoute) },
+                onOpenDataExport = { navController.navigate(DataExportRoute) },
                 onOpenSecurity = { navController.navigate(SettingsSecurityRoute) },
                 onOpenNotifications = { navController.navigate(SettingsNotificationsRoute) },
                 onOpenChangePassword = { navController.navigate(ChangePasswordRoute) },
@@ -1857,7 +1864,23 @@ private fun BtSheetHost(
                 onChangePin = { navController.navigate(AppLockSetupRoute(change = true)) },
                 onOpenTwoFactor = { navController.navigate(TwoFactorRoute) },
                 onOpenSessions = { navController.navigate(ActiveSessionsRoute) },
+                onOpenAccountPin = { navController.navigate(AccountPinRoute) },
             )
+        }
+        btSheet<HeatmapRoute> {
+            at.bettertrack.app.ui.market.HeatmapScreen(
+                onBack = back,
+                onOpenAsset = { assetId -> navController.navigate(AssetPageRoute(assetId)) },
+            )
+        }
+        btSheet<AccountPinRoute> {
+            at.bettertrack.app.ui.settings.AccountPinScreen(onBack = back)
+        }
+        btSheet<PublicProfileRoute> {
+            at.bettertrack.app.ui.settings.PublicProfileScreen(onBack = back)
+        }
+        btSheet<DataExportRoute> {
+            at.bettertrack.app.ui.settings.DataExportScreen(onBack = back)
         }
         btSheet<AppLockSetupRoute> { entry ->
             val route = entry.toRoute<AppLockSetupRoute>()

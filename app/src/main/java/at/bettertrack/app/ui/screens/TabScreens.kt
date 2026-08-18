@@ -2,6 +2,7 @@ package at.bettertrack.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.EventNote
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -80,6 +82,7 @@ fun MarketsTabScreen(
     onOpenAsset: (String) -> Unit = {},
     onAddToWatchlist: () -> Unit = {},
     onOpenMarketIntel: () -> Unit = {},
+    onOpenHeatmap: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
         // The bar this tab used to draw lives in the shell now (hoist
@@ -110,26 +113,53 @@ fun MarketsTabScreen(
                 onOpenAsset = onOpenAsset,
                 onAddAsset = { onAddToWatchlist() },
                 modifier = Modifier.weight(1f),
-                footer = { MarketIntelEntryRow(onClick = onOpenMarketIntel) },
+                footer = {
+                    // Two doorways, ranked: the heatmap is a view OF the rows
+                    // just above it, so it comes first; market intel is a
+                    // separate page and keeps its §3 place at the very end.
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MarketDoorwayRow(
+                            icon = Icons.Outlined.GridView,
+                            title = stringResource(R.string.bt_viz_form_heatmap),
+                            subtitle = stringResource(R.string.bt_heatmap_row_sub),
+                            onClick = onOpenHeatmap,
+                        )
+                        MarketDoorwayRow(
+                            icon = Icons.Outlined.EventNote,
+                            title = stringResource(R.string.bt_assets_intel_row_title),
+                            subtitle = stringResource(R.string.bt_assets_intel_row_subtitle),
+                            onClick = onOpenMarketIntel,
+                        )
+                    }
+                },
             )
         }
     }
 }
 
 /**
- * The Markets tab's entry into the portfolio-wide market intel screen.
+ * One of the Markets tab's doorways out of the watchlist.
  *
- * A single row rather than a card: it is a doorway, and the tab's content is the
- * watchlists it now sits *below* (R2, §3 — it used to sit above them, ahead of
- * the rows the user actually came for). The chevron and the button role carry
- * the affordance; nothing here previews the data, because every block behind it
- * is availability-gated and a preview that renders "—" would be worse than none.
+ * A row rather than a card: these are doorways, and the tab's content is the
+ * watchlists they sit *below* (R2, §3 — market intel used to sit above them,
+ * ahead of the rows the user actually came for). The chevron and the button role
+ * carry the affordance; nothing here previews the data, because what is behind
+ * each door is availability-gated and a preview that renders "—" would be worse
+ * than none.
+ *
+ * Parameterised in the heatmap round rather than copied: two doorways that look
+ * alike must BE alike, or the second one drifts a padding at a time.
  */
 @Composable
-private fun MarketIntelEntryRow(onClick: () -> Unit) {
+private fun MarketDoorwayRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
     val bt = BtTheme.colors
     val interaction = remember { MutableInteractionSource() }
-    val label = stringResource(R.string.bt_assets_intel_row_title)
+    val label = title
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -149,7 +179,7 @@ private fun MarketIntelEntryRow(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Outlined.EventNote,
+                imageVector = icon,
                 contentDescription = null,
                 tint = bt.goldEmphasis,
                 modifier = Modifier.size(20.dp),
@@ -162,7 +192,7 @@ private fun MarketIntelEntryRow(onClick: () -> Unit) {
                     color = bt.textPrimary,
                 )
                 Text(
-                    text = stringResource(R.string.bt_assets_intel_row_subtitle),
+                    text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
                     color = bt.textMuted,
                 )

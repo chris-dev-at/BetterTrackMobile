@@ -509,6 +509,16 @@ data class BtWidgetHeatTile(
     val weight: Double,
     val changePct: Double?,
     val hiddenCount: Int = 0,
+    /**
+     * The asset this tile stands for, when it stands for exactly one.
+     *
+     * Empty on the folded `Andere` cell, which is several assets and therefore
+     * navigates nowhere. A widget bitmap has no use for this — the whole widget
+     * is one tap target — but the in-app heatmap opens the asset page from it,
+     * and deriving it a second time there would be the duplication this shared
+     * function exists to prevent.
+     */
+    val assetId: String = "",
 )
 
 /**
@@ -553,6 +563,10 @@ fun btWidgetHeatTiles(
                 } else {
                     quoted.sumOf { (it.dayChangePct ?: 0.0) * (it.marketValueEur ?: 0.0) } / quotedValue
                 },
+                // Rows merged by symbol are the same asset, so any row's id is
+                // the id; `first()` is safe because `groupBy` never yields an
+                // empty group.
+                assetId = rows.first().assetId,
             )
         }
         .sortedByDescending { it.weight }

@@ -65,6 +65,43 @@ data class AssetSnapshot(
 fun eurDisplayPrice(eurPrice: Double?, nativePrice: Double?, quoteCurrency: String): Double? =
     eurPrice ?: nativePrice?.takeIf { quoteCurrency.equals("EUR", ignoreCase = true) }
 
+/**
+ * One row of a batch quote read — a price WITHOUT an asset identity.
+ *
+ * Deliberately not an [AssetSnapshot]: the batch endpoint answers with
+ * `assetId` and a quote, and nothing else. Reusing [AssetSnapshot] would mean
+ * inventing a [MarketAsset] out of blanks, and a half-filled identity object is
+ * exactly the kind of thing a later screen reads as fact.
+ *
+ * [eurPrice] follows the same identity rule as everywhere else ([eurDisplayPrice])
+ * and is therefore **null for every quote not already denominated in euros** —
+ * the batch response has no converted figure at any level. That is not a defect
+ * to paper over: the caller either has a use for the native price and currency,
+ * or it re-reads that one row through the per-asset call that does convert.
+ */
+data class QuoteSnapshot(
+    val assetId: String,
+    val nativePrice: Double?,
+    val quoteCurrency: String,
+    val dayChangePct: Double?,
+    val prevClose: Double?,
+    val eurPrice: Double?,
+    val asOf: String?,
+    val stale: Boolean,
+)
+
+/**
+ * The outcome of one batch quote read.
+ *
+ * [failed] is a per-row outcome, not an error: the server resolves what it can
+ * and names the rest. An id that appears in neither map nor set was simply not
+ * answered for, and callers should treat it exactly like a failed one.
+ */
+data class BatchQuotes(
+    val quotes: Map<String, QuoteSnapshot>,
+    val failed: Set<String>,
+)
+
 /** One close observation of a price series (x is epoch-ms so intraday works). */
 data class PricePoint(val timeMs: Long, val close: Double)
 
@@ -146,6 +183,16 @@ class MarketRepository(
 
     /** Latest quote for one asset (watchlist rows, §6.6). */
     suspend fun quote(assetId: String): BtResult<AssetSnapshot> = data.quote(assetId)
+
+    /**
+     * Latest quotes for many assets at once — one call where a list surface used
+     * to make one per row.
+     *
+     * Read [QuoteSnapshot.eurPrice]'s contract before using this on a
+     * money-rendering surface: it is null for non-EUR quotes, because the batch
+     * endpoint converts nothing.
+     */
+    suspend fun quotes(assetIds: List<String>): BtResult<BatchQuotes> = data.quotes(assetIds)
 
     // ── Workboard watchlist mutations (§6.6, online-only) ────────────────────
 

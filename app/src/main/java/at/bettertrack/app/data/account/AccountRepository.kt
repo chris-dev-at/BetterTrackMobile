@@ -4,6 +4,14 @@ import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
+import at.bettertrack.app.data.api.parseApiError
+import at.bettertrack.app.data.api.transportErr
+import at.bettertrack.app.data.api.dto.ExportDownloadRequest
+import at.bettertrack.app.data.api.dto.ExportRequest
+import at.bettertrack.app.data.api.dto.ExportRequestResponse
+import at.bettertrack.app.data.api.dto.ExportStatusResponse
+import at.bettertrack.app.data.api.dto.SetAccountPinRequest
+import at.bettertrack.app.data.api.dto.SetPinIdleTimeoutRequest
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
@@ -11,6 +19,10 @@ import at.bettertrack.app.data.api.dto.ProfileSettingsResponse
 import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
 import at.bettertrack.app.data.api.dto.TwoFactorDisableRequest
 import at.bettertrack.app.data.api.dto.UpdateAccountSettingsRequest
+import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -231,7 +243,160 @@ class AccountRepository(
         }
     }
 
+    // ── Public profile: the visibility flag and the bio ──────────────────────
+
+    /**
+     * Turn the public profile on or off and/or rewrite the bio.
+     *
+     * Built by hand for the same two reasons as [updateProfileIcon], plus a
+     * third that only applies here:
+     *
+     *  - the route is a PUT, so every field the caller is not changing must be
+     *    echoed at its current value — hence [current];
+     *  - `bio` distinguishes omitted from null, and `explicitNulls = false`
+     *    would drop a null and turn "clear my bio" into a silent no-op;
+     *  - **`acknowledgePublic` must be `true` on every call that leaves the
+     *    profile public**, not merely on the off→on transition. The server
+     *    re-checks it each time and answers `400 PUBLIC_PROFILE_ACK_REQUIRED`
+     *    otherwise, so editing the bio of an already-public profile has to carry
+     *    it too. The UI still only ASKS on the transition — that is the friction
+     *    ladder's job — but the wire always states it.
+     *
+     * `profileIcon` is deliberately omitted so a bio edit cannot disturb it.
+     */
+    suspend fun updateProfileVisibility(
+        current: ProfileSettingsResponse,
+        isPublic: Boolean,
+        bio: String?,
+    ): BtResult<ProfileSettingsResponse> {
+        val trimmed = bio?.trim()?.takeIf { it.isNotEmpty() }
+        val body = buildJsonObject {
+            put("isPublic", JsonPrimitive(isPublic))
+            put("bio", trimmed?.let { JsonPrimitive(it) } ?: JsonNull)
+            if (isPublic) put("acknowledgePublic", JsonPrimitive(true))
+        }
+        return apiCall(json) { api.updateSocialProfile(body) }
+    }
+
+    // ── Account PIN (NOT the device app lock) ────────────────────────────────
+
+    /**
+     * The account's PIN state, read from the authoritative `GET /auth/me`.
+     *
+     * `GET /auth/pin/status` answers the narrower question "is a PIN set" and is
+     * already used by the app-lock option; it does not carry the idle timeout,
+     * so this screen reads `me` instead of making two calls.
+     */
+    suspend fun accountPinState(): BtResult<AccountPinState> =
+        when (val r = apiCall(json) { api.me() }) {
+            is BtResult.Ok -> BtResult.Ok(
+                AccountPinState(
+                    pinSet = r.value.pinEnabled,
+                    idleMinutes = r.value.pinLockIdleMinutes,
+                ),
+            )
+
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Set or change the account PIN. Exactly four digits; the server rejects
+     * anything else with `400 VALIDATION_ERROR`.
+     *
+     * The PIN is passed straight to the wire and never stored, logged or echoed
+     * back into any state the app keeps.
+     */
+    suspend fun setAccountPin(pin: String): BtResult<AccountPinState> =
+        when (val r = apiCall(json) { api.setAccountPin(SetAccountPinRequest(pin)) }) {
+            is BtResult.Ok -> BtResult.Ok(
+                AccountPinState(r.value.pinEnabled, r.value.pinLockIdleMinutes),
+            )
+
+            is BtResult.Err -> r
+        }
+
+    /** Turn the account PIN off. */
+    suspend fun disableAccountPin(): BtResult<AccountPinState> =
+        when (val r = apiCall(json) { api.disableAccountPin() }) {
+            is BtResult.Ok -> BtResult.Ok(
+                AccountPinState(r.value.pinEnabled, r.value.pinLockIdleMinutes),
+            )
+
+            is BtResult.Err -> r
+        }
+
+    /** The account-wide idle timeout before the PIN is asked again, in minutes. */
+    suspend fun setPinIdleTimeout(minutes: Int): BtResult<AccountPinState> =
+        when (val r = apiCall(json) { api.setPinIdleTimeout(SetPinIdleTimeoutRequest(minutes)) }) {
+            is BtResult.Ok -> BtResult.Ok(
+                AccountPinState(r.value.pinEnabled, r.value.pinLockIdleMinutes),
+            )
+
+            is BtResult.Err -> r
+        }
+
+    // ── Data export ──────────────────────────────────────────────────────────
+
+    /**
+     * Ask the server to build an export. Re-auth gated on [password].
+     *
+     * One per day per account; a second inside the window is
+     * `429 EXPORT_RATE_LIMITED`. The returned token is the only copy that will
+     * ever exist — the caller holds it in memory and nowhere else.
+     */
+    suspend fun requestExport(password: String): BtResult<ExportRequestResponse> =
+        apiCall(json) { api.requestExport(ExportRequest(password = password)) }
+
+    /** Poll the export job. An all-null response means none has been requested. */
+    suspend fun exportStatus(): BtResult<ExportStatusResponse> =
+        apiCall(json) { api.exportStatus() }
+
+    /**
+     * Download the ready export into [target].
+     *
+     * Streamed to disk rather than buffered: the zip is a file with a
+     * destination, and holding an account's whole history in memory to write it
+     * out again would be pointless at best. A failure deletes the partial file
+     * so a half-written zip can never be shared as if it were complete.
+     */
+    suspend fun downloadExport(token: String, target: File): BtResult<File> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.downloadExport(ExportDownloadRequest(token))
+                val body = response.body()
+                if (!response.isSuccessful || body == null) {
+                    return@withContext BtResult.Err(
+                        parseApiError(json, response.code(), response.errorBody()),
+                    )
+                }
+                target.parentFile?.let { if (!it.exists()) it.mkdirs() }
+                body.byteStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                BtResult.Ok(target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A partial zip is worse than none: it would share and open as a
+                // corrupt archive that looks like a complete export.
+                target.delete()
+                transportErr(e)
+            }
+        }
+
     /** Map a call whose body is ignored: 2xx → Ok(Unit), else the parsed error. */
     private suspend fun <T> emptyCall(call: suspend () -> Response<T>): BtResult<Unit> =
         at.bettertrack.app.data.api.unitApiCall(json, call)
 }
+
+/**
+ * The account PIN as the server reports it.
+ *
+ * [idleMinutes] is null when the account has never chosen one, which means the
+ * server's own default applies — not "no timeout". Surfaces must say so rather
+ * than render an empty value.
+ */
+data class AccountPinState(
+    val pinSet: Boolean,
+    val idleMinutes: Int?,
+)

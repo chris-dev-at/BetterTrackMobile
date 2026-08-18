@@ -8,6 +8,7 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AlertDto
 import at.bettertrack.app.data.api.dto.CreateAlertRequest
 import at.bettertrack.app.data.api.dto.UpdateAlertRequest
+import at.bettertrack.app.data.api.dto.UpdateAlertSharingRequest
 import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.shows
@@ -167,6 +168,37 @@ class AlertsRepository(
 
     suspend fun rearm(id: String): BtResult<PriceAlert> =
         apiCall(json) { api.rearmAlert(id) }.toDomain()
+
+    // ── Sharing: are my alerts visible to my followers? (#455) ───────────────
+
+    /** Whether followers can see this account's alerts. Off unless turned on. */
+    suspend fun sharing(): BtResult<Boolean> =
+        when (val r = apiCall(json) { api.alertSharing() }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.visibleToFollowers)
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Turn follower visibility on or off.
+     *
+     * The acknowledgement is sent on every enabling call, not only the first:
+     * the server re-checks it each time and refuses with
+     * `400 ALERT_SHARING_ACK_REQUIRED` if it is missing. Turning sharing OFF
+     * carries no acknowledgement, because removing access needs no ceremony.
+     *
+     * The caller is responsible for having ASKED before passing `true` — this
+     * function states the acknowledgement, it does not obtain it.
+     */
+    suspend fun setSharing(visibleToFollowers: Boolean): BtResult<Boolean> {
+        val body = UpdateAlertSharingRequest(
+            visibleToFollowers = visibleToFollowers,
+            acknowledgeFollowers = if (visibleToFollowers) true else null,
+        )
+        return when (val r = apiCall(json) { api.updateAlertSharing(body) }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.visibleToFollowers)
+            is BtResult.Err -> r
+        }
+    }
 
     private fun BtResult<AlertDto>.toDomain(): BtResult<PriceAlert> = when (this) {
         is BtResult.Ok -> value.toDomainOrNull()

@@ -214,3 +214,116 @@ val BT_PROFILE_ICONS: List<String> = listOf(
     "astronaut", "fox", "panda", "robot", "star", "wave", "mountain", "leaf",
     "flame", "bolt", "moon", "planet", "ghost", "crown", "compass", "anchor",
 )
+
+// ── PUT /auth/pin — set OR change the ACCOUNT PIN ────────────────────────────
+/**
+ * The account PIN write.
+ *
+ * Three properties of this route surprise people, and all three are the
+ * platform's deliberate design rather than an oversight to compensate for:
+ *
+ *  - **One route does both set and change.** There is no separate "change"
+ *    endpoint and no `currentPin` field — the new value simply replaces the old.
+ *  - **No re-authentication.** Neither the current PIN nor the account password
+ *    is required; the bearer is the authority. The PIN is a privacy curtain over
+ *    an already-authenticated session, not a second factor, and the platform's
+ *    own web UI changes it with no credential either.
+ *  - **Exactly four digits.** `^\d{4}$`, enforced server-side. Verification
+ *    tolerates 4–10 for PINs set before that rule, but nothing may write one.
+ *
+ * The response is the full refreshed [MeResponse].
+ */
+@Serializable
+data class SetAccountPinRequest(
+    /** Exactly 4 digits. Never logged, never persisted. */
+    val pin: String,
+)
+
+// ── PUT /auth/pin/idle-timeout ───────────────────────────────────────────────
+/**
+ * How long the account may sit idle before the PIN is asked again.
+ *
+ * This is an ACCOUNT preference that travels to every front-end — it is NOT the
+ * device app-lock's AFK threshold, which is local to this phone and lives in
+ * [at.bettertrack.app.data.applock.AfkThreshold]. The two are deliberately
+ * separate settings on separate screens and must never be merged: one decides
+ * when the web asks for the PIN again, the other when this handset does.
+ *
+ * Server range is 1–1440 minutes, or `null` for "use the default" (10). The app
+ * only ever writes the presets the web offers, so it never needs to send null —
+ * which matters, because `explicitNulls = false` would drop the key and the
+ * server would read that as "leave unchanged" rather than "clear".
+ */
+@Serializable
+data class SetPinIdleTimeoutRequest(
+    val idleMinutes: Int,
+)
+
+/** The idle-timeout presets the web offers, in minutes. Order is display order. */
+val BT_PIN_IDLE_PRESETS: List<Int> = listOf(1, 5, 10, 15, 30, 60)
+
+/** What the server uses when the account has never chosen an idle timeout. */
+const val BT_PIN_IDLE_DEFAULT: Int = 10
+
+/** Exactly the digit count the server accepts for a NEW account PIN. */
+const val BT_ACCOUNT_PIN_LENGTH: Int = 4
+
+// ── Account data export (POST/GET /account/export, POST /account/export/download)
+
+/**
+ * The re-auth gate on `POST /account/export`.
+ *
+ * At least one of the three must be present. `explicitNulls = false` drops the
+ * unset ones, which is exactly the wire shape the server's `.refine()` wants.
+ */
+@Serializable
+data class ExportRequest(
+    val password: String? = null,
+    /** A fresh TOTP code — 2FA-enrolled accounts may use this instead. */
+    val code: String? = null,
+    /** An unused recovery code. Consumed even on a failed match. */
+    val recoveryCode: String? = null,
+)
+
+/**
+ * The answer to a fresh export request.
+ *
+ * [downloadToken] is shown EXACTLY ONCE — the server persists only its hash, and
+ * the download consumes it. It must be held in memory for the life of the
+ * screen and never written to disk, a log, or a saved instance state.
+ */
+@Serializable
+data class ExportRequestResponse(
+    val jobId: String,
+    val status: String,
+    val downloadToken: String,
+)
+
+/**
+ * `GET /account/export` — the poll.
+ *
+ * Every field is nullable, and all-null is the honest answer for an account that
+ * has never requested an export. [status] is `pending | ready | failed | expired`.
+ */
+@Serializable
+data class ExportStatusResponse(
+    val status: String? = null,
+    val jobId: String? = null,
+    val requestedAt: String? = null,
+    /** When a ready file stops being downloadable. */
+    val expiresAt: String? = null,
+    val sizeBytes: Long? = null,
+)
+
+@Serializable
+data class ExportDownloadRequest(
+    val token: String,
+)
+
+/** Lifecycle states of an export job, as the server names them. */
+object BtExportStatus {
+    const val PENDING = "pending"
+    const val READY = "ready"
+    const val FAILED = "failed"
+    const val EXPIRED = "expired"
+}

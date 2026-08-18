@@ -73,6 +73,60 @@ data class QuoteResponse(
     val asOf: String? = null,
 )
 
+// ── GET /assets/quotes?ids=<uuid>,<uuid>,… ───────────────────────────────────
+
+/**
+ * Batch quotes — up to [BT_BATCH_QUOTES_MAX] assets in ONE call.
+ *
+ * Three parts of this contract bite if you guess at them:
+ *  - `ids` is **one comma-separated string**, not repeated query params;
+ *  - the query object is `.strict()` server-side, so ANY extra parameter (a
+ *    cache-buster, `_t=`) is a `400`, not an ignored key;
+ *  - duplicates are de-duped server-side, and every id that could not be
+ *    resolved comes back in [failed] rather than as an error on the whole call.
+ *
+ * **This response carries no `eurPrice`.** The per-asset `GET /assets/{id}`
+ * response has a server-converted euro figure; this one does not, at any level.
+ * A caller that needs euros for a non-EUR quote therefore cannot get them here —
+ * see [at.bettertrack.app.data.repo.eurDisplayPrice] for the identity read that
+ * covers quotes already denominated in euros, and the watchlist fetch for the
+ * per-row fallback that covers the rest. Never convert client-side.
+ */
+@Serializable
+data class BatchQuotesResponse(
+    val quotes: List<BatchQuoteRowDto> = emptyList(),
+    /** Asset ids the server could not quote. Not an error — a per-row outcome. */
+    val failed: List<String> = emptyList(),
+)
+
+@Serializable
+data class BatchQuoteRowDto(
+    val assetId: String,
+    val quote: BatchQuoteDto? = null,
+    val stale: Boolean = false,
+    val asOf: String? = null,
+)
+
+/**
+ * The batch response's inner quote. Same shape as [QuoteDto] plus [marketState],
+ * and deliberately declared separately: these are two endpoints' contracts, and
+ * silently sharing one class is how a field added to one starts being assumed of
+ * the other.
+ */
+@Serializable
+data class BatchQuoteDto(
+    val price: Double,
+    val currency: String,
+    val prevClose: Double? = null,
+    val dayChangePct: Double? = null,
+    /** "open" | "closed" | "pre" | "post". */
+    val marketState: String? = null,
+    val asOf: String? = null,
+)
+
+/** Server cap on `ids` per batch-quote call; over it the server answers `400`. */
+const val BT_BATCH_QUOTES_MAX: Int = 100
+
 // ── GET /assets/{id}/history?range= ──────────────────────────────────────────
 @Serializable
 data class AssetHistoryResponse(

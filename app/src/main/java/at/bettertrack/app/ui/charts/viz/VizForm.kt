@@ -55,6 +55,26 @@ enum class BtVizForm {
      * and it is offered ONLY on the full in-app card — the canvas where it can
      * be both attractive and self-identifying. It is never the default: area is
      * harder to compare than length, and a long tail turns into confetti.
+     *
+     * ## Why there is no widget rendition (measured 2026-08-18, do not re-try blind)
+     *
+     * A bitmap painter was investigated and rejected on evidence, not taste. The
+     * real [packedBubbles] output was rendered at the launcher's true cell sizes
+     * (density 3, the measured 160×190dp and 330×190dp cells):
+     *
+     *  - **2×2 with 3 bubbles** reads well — three large, all labelled.
+     *  - **2×2 with 5 bubbles** already produces one anonymous blob: the
+     *    smallest lands at ~29dp across, under the ~34dp a ticker needs.
+     *  - **Any WIDE cell fails outright.** The packing scales its cluster to the
+     *    LIMITING dimension, so on a 330×120dp chart area the cluster is a
+     *    ~120dp circle centred in a 330dp canvas — roughly 60 % of the widget is
+     *    empty black. With 8 items, four are additionally unlabelled.
+     *
+     * Making the cluster fill a wide canvas would mean changing [packedBubbles]
+     * itself, and that geometry is shared with the in-app card the owner already
+     * approved — so the fix for the widget would be a regression on the surface
+     * that works. Forking the packing was explicitly ruled out (it must be shared,
+     * not duplicated). Bubbles therefore stay an APP_FULL form.
      */
     BUBBLES,
 

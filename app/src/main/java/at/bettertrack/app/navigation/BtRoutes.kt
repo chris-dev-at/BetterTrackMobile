@@ -226,6 +226,24 @@ import kotlinx.serialization.Serializable
  * pin them to the launcher pre-configured via `requestPinAppWidget`.
  */
 @Serializable data object SettingsWidgetsRoute
+/**
+ * Settings → Security → Account PIN (the ACCOUNT credential).
+ *
+ * Deliberately a separate route from [AppLockSetupRoute]: that one sets the PIN
+ * that guards THIS PHONE, this one the PIN the account carries everywhere. The
+ * two screens must never be reachable from the same row.
+ */
+@Serializable data object AccountPinRoute
+/**
+ * The in-app heatmap (owner ask 2026-08-18): the account's own universes drawn
+ * as area + direction. Named for what it shows, never "Markt" — the platform has
+ * no market-wide endpoint to justify that word.
+ */
+@Serializable data object HeatmapRoute
+/** Settings → Account → Public profile: the public opt-in and the bio. */
+@Serializable data object PublicProfileRoute
+/** Settings → Privacy → Export my data: request, poll, download. */
+@Serializable data object DataExportRoute
 /** Step 18: change the account password (current + new + confirm). */
 @Serializable data object ChangePasswordRoute
 /** Step 18: 2FA management (TOTP enroll/QR, email codes, recovery codes, disable). */

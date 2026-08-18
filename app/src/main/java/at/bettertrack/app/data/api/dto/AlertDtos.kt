@@ -61,3 +61,30 @@ data class UpdateAlertRequest(
     val threshold: Double? = null,
     val repeat: Boolean? = null,
 )
+
+// ── GET/PUT /alerts/sharing (#455) ───────────────────────────────────────────
+
+/**
+ * Whether the account's price alerts are visible to its followers.
+ *
+ * One flag over the whole alert list, OFF by default. Followers are not friends
+ * — anyone may follow — so this deliberately does not use the friend-scoped
+ * audience rungs that portfolios and watchlists get.
+ */
+@Serializable
+data class AlertSharingResponse(
+    val visibleToFollowers: Boolean = false,
+)
+
+/**
+ * The sharing write.
+ *
+ * [acknowledgeFollowers] must be `true` whenever [visibleToFollowers] is `true`
+ * — the §16 friction ladder, enforced server-side on every enabling call and not
+ * merely on the off→on transition. Turning sharing OFF needs no acknowledgement.
+ */
+@Serializable
+data class UpdateAlertSharingRequest(
+    val visibleToFollowers: Boolean,
+    val acknowledgeFollowers: Boolean? = null,
+)

@@ -3268,4 +3268,102 @@
         <item quantity="one">Remaining · %1$d category</item>
         <item quantity="other">Remaining · %1$d categories</item>
     </plurals>
+
+    <!-- ── Account PIN (the ACCOUNT credential, not the device app lock) ── -->
+    <string name="bt_accountpin_section">Account PIN</string>
+    <string name="bt_accountpin_title">Account PIN</string>
+    <string name="bt_accountpin_row_sub_off">Not set — your account never asks for a PIN</string>
+    <string name="bt_accountpin_row_sub_on">On · asks again after %1$s idle</string>
+    <string name="bt_accountpin_intro">A 4-digit PIN re-confirms it\'s you after your account has been left idle. It\'s a privacy curtain over your session, not a second factor.</string>
+    <string name="bt_accountpin_applock_note">This is your BetterTrack account PIN and applies wherever you sign in. App lock is a separate setting that guards this phone only.</string>
+    <string name="bt_accountpin_enter">Choose a PIN</string>
+    <string name="bt_accountpin_confirm">Repeat the PIN</string>
+    <string name="bt_accountpin_hint">Exactly 4 digits.</string>
+    <string name="bt_accountpin_mismatch">The PINs do not match.</string>
+    <string name="bt_accountpin_saved">Your account PIN has been saved.</string>
+    <string name="bt_accountpin_set">Set a PIN</string>
+    <string name="bt_accountpin_set_sub">Turn the account PIN on</string>
+    <string name="bt_accountpin_change">Change PIN</string>
+    <string name="bt_accountpin_change_sub">Replace it with a new 4-digit PIN</string>
+    <string name="bt_accountpin_disable">Turn off account PIN</string>
+    <string name="bt_accountpin_disable_sub">Your account will stop asking for a PIN</string>
+    <string name="bt_accountpin_disable_title">Turn off the account PIN?</string>
+    <string name="bt_accountpin_disable_message">Your account will stop asking for a PIN everywhere you sign in, including the web. You can turn it back on at any time.</string>
+    <string name="bt_accountpin_disable_confirm">Turn off</string>
+    <string name="bt_accountpin_disabled">Your account PIN has been turned off.</string>
+    <string name="bt_accountpin_idle">Ask again after</string>
+    <string name="bt_accountpin_idle_sub">While you are using BetterTrack it stays unlocked. The PIN is asked again only after this long with no activity.</string>
+    <string name="bt_accountpin_idle_default">%1$s (default)</string>
+    <string name="bt_accountpin_1m">1 minute</string>
+    <string name="bt_accountpin_5m">5 minutes</string>
+    <string name="bt_accountpin_10m">10 minutes</string>
+    <string name="bt_accountpin_15m">15 minutes</string>
+    <string name="bt_accountpin_30m">30 minutes</string>
+    <string name="bt_accountpin_60m">1 hour</string>
+
+    <!-- ── Public profile ── -->
+    <string name="bt_profile_dest">Public profile</string>
+    <plurals name="bt_profile_row_sub_on">
+        <item quantity="one">Public · %1$d item visible</item>
+        <item quantity="other">Public · %1$d items visible</item>
+    </plurals>
+    <string name="bt_profile_row_sub_off">Private</string>
+    <string name="bt_profile_toggle">Make my profile public</string>
+    <string name="bt_profile_warning_title">This makes a public page</string>
+    <string name="bt_profile_warning_body">Anyone with your profile link — even people who aren\'t your friends — can see the items you\'ve made public, including holdings and net worth. You can turn this off any time.</string>
+    <string name="bt_profile_acknowledge">I understand and want a public profile.</string>
+    <string name="bt_profile_bio">About you</string>
+    <string name="bt_profile_bio_placeholder">A short line about you (optional).</string>
+    <string name="bt_profile_save">Save profile</string>
+    <string name="bt_profile_saved">Profile saved.</string>
+    <string name="bt_profile_live">Your profile is live</string>
+    <plurals name="bt_profile_public_items">
+        <item quantity="one">%1$d of your items is currently public.</item>
+        <item quantity="other">%1$d of your items are currently public.</item>
+    </plurals>
+    <string name="bt_profile_off_hint">Your profile is private. Only what you share directly stays visible.</string>
+
+    <!-- ── Alerts visible to followers ── -->
+    <string name="bt_alert_sharing_title">Share my alerts with followers</string>
+    <string name="bt_alert_sharing_off">Your alerts are private. Followers cannot see them or be notified about them.</string>
+    <string name="bt_alert_sharing_on">Followers who opted in are notified when you create an alert or one of your alerts fires.</string>
+    <string name="bt_alert_sharing_confirm_title">Share your alerts with all followers?</string>
+    <string name="bt_alert_sharing_confirm_warning">This shows every follower which assets you watch and your price targets — anyone can follow you. Followers who opted in will be notified when you create an alert or one of your alerts fires. You can turn this off at any time.</string>
+    <string name="bt_alert_sharing_confirm_enable">I understand — share my alerts</string>
+    <string name="bt_alert_sharing_enabled">Alert sharing turned on.</string>
+    <string name="bt_alert_sharing_disabled">Alert sharing turned off.</string>
+
+    <!-- ── Account data export ── -->
+    <string name="bt_export_dest">Export my data</string>
+    <string name="bt_export_row_sub">One export per day</string>
+    <string name="bt_export_intro">The server builds a zip with everything in your account. One export per day; the download link expires after 24 hours.</string>
+    <string name="bt_export_password">Confirm your password</string>
+    <string name="bt_export_password_hint">Sent once to authorise the export. It is never stored on this phone.</string>
+    <string name="bt_export_request">Request export</string>
+    <string name="bt_export_request_again">Request a new export</string>
+    <string name="bt_export_requesting">Requesting…</string>
+    <string name="bt_export_pending">Your export is being prepared. This can take a moment.</string>
+    <string name="bt_export_ready">Your export is ready.</string>
+    <string name="bt_export_ready_until">Ready to download until %1$s.</string>
+    <string name="bt_export_size">Size: %1$s</string>
+    <string name="bt_export_download">Download export</string>
+    <string name="bt_export_downloading">Downloading…</string>
+    <string name="bt_export_save">Save a copy…</string>
+    <string name="bt_export_share">Share</string>
+    <string name="bt_export_saved">Export saved.</string>
+    <string name="bt_export_download_failed">Could not download your export. The one-time link may have expired or already been used.</string>
+    <string name="bt_export_expired">Your last export has expired. Request a new one to download your data.</string>
+    <string name="bt_export_failed_status">The last export could not be built. Please request a new one.</string>
+    <string name="bt_export_token_gone">Your export is ready, but this app no longer holds its one-time download link. Request a new export to download it.</string>
+    <string name="bt_export_none">You have not requested an export yet.</string>
+
+
+    <!-- ── In-app heatmap (positions / watchlist — never "the market") ── -->
+    <string name="bt_heatmap_scope_positions">My positions</string>
+    <string name="bt_heatmap_scope_watchlist">My watchlist</string>
+    <string name="bt_heatmap_legend_positions">Tile size = position value · colour = today\'s move. Tap a tile to open the asset.</string>
+    <string name="bt_heatmap_legend_watchlist">Equal tiles — a watchlist has no position size. Colour = today\'s move. Tap a tile to open the asset.</string>
+    <string name="bt_heatmap_empty_positions">No positions with a value yet.</string>
+    <string name="bt_heatmap_empty_watchlist">Nothing on your watchlist yet.</string>
+    <string name="bt_heatmap_row_sub">Your positions and watchlist by today\'s move</string>
 </resources>

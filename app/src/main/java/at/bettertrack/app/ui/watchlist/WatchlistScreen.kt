@@ -67,8 +67,10 @@ import at.bettertrack.app.ui.shell.RefreshNoticeState
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
 import java.util.Locale
+import at.bettertrack.app.data.storage.MARKET_QUOTE_FANOUT
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -80,8 +82,20 @@ import at.bettertrack.app.ui.components.BtRailedRow
 import at.bettertrack.app.ui.portfolio.rangeRail
 import at.bettertrack.app.ui.portfolio.deltaColor
 
-/** A watchlist row's quote (§6.6 — price + day change). */
-data class WatchQuote(val eurPrice: Double?, val dayChangePct: Double?)
+/**
+ * A watchlist row's quote (§6.6 — price + day change).
+ *
+ * [stale] is the server's own word for "this is the last price I have, not
+ * necessarily today's". It is carried because the batch read reports it per row
+ * and dropping a fact at the door is how it stops being available later; it is
+ * not painted on the row, because a closed market makes nearly every row stale
+ * and a marker that is almost always on says nothing.
+ */
+data class WatchQuote(
+    val eurPrice: Double?,
+    val dayChangePct: Double?,
+    val stale: Boolean = false,
+)
 
 @Suppress("OPT_IN_USAGE")
 class WatchlistViewModel(
@@ -153,20 +167,67 @@ class WatchlistViewModel(
         }
     }
 
+    /**
+     * Quote every visible row — one batch call, plus a per-row fallback for the
+     * rows the batch cannot price in euros.
+     *
+     * ## Why this is a hybrid rather than a clean swap
+     *
+     * `GET /assets/quotes` answers for up to a hundred assets at once and used to
+     * be N separate `GET /assets/{id}` calls here, with no concurrency cap. But
+     * the batch response carries **no server-converted euro price** — only the
+     * native price and its currency. For a EUR-denominated quote that is the same
+     * number ([eurDisplayPrice]'s identity read) and the batch is enough. For
+     * anything priced in dollars it is not, and the alternatives were both
+     * unacceptable: showing "—" beside a live percentage is the exact regression
+     * device QA caught on 2026-08-16, and converting with a rate of our own
+     * violates the rule that the server is the only calculator.
+     *
+     * So those rows — and only those — are re-read through the per-asset call
+     * that does convert. An all-EUR watchlist costs one request; a mixed one
+     * costs one plus the non-EUR rows, still strictly fewer than before, and the
+     * fallback is now bounded where the old fan-out was not.
+     *
+     * If the batch call fails outright the whole list falls back to the old path,
+     * so a server that does not serve this route yet behaves exactly as before.
+     */
     private suspend fun fetchQuotes(list: List<WatchlistItemEntity>) {
         if (list.isEmpty()) return
-        val results = viewModelScope.async {
-            list.map { item ->
-                async {
-                    when (val r = market.quote(item.assetId)) {
-                        is BtResult.Ok -> item.assetId to WatchQuote(r.value.eurPrice, r.value.dayChangePct)
-                        is BtResult.Err -> null
-                    }
+        val ids = list.map { it.assetId }.distinct()
+        val resolved = LinkedHashMap<String, WatchQuote>()
+        val perRow = mutableListOf<String>()
+
+        when (val batch = market.quotes(ids)) {
+            is BtResult.Ok -> ids.forEach { id ->
+                val row = batch.value.quotes[id]
+                when {
+                    // Unanswered or explicitly failed: the per-asset call is the
+                    // second opinion, and it is the one that used to be asked.
+                    row == null -> perRow += id
+                    // A price we cannot state in euros is not a price this row can
+                    // print. Ask the endpoint that converts.
+                    row.eurPrice == null -> perRow += id
+                    else -> resolved[id] = WatchQuote(row.eurPrice, row.dayChangePct, row.stale)
                 }
-            }.awaitAll()
-        }.await()
-        val ok = results.filterNotNull()
-        _quotes.value = _quotes.value + ok.toMap()
+            }
+
+            is BtResult.Err -> perRow += ids
+        }
+
+        if (perRow.isNotEmpty()) {
+            val answered = coroutineScope {
+                perRow.chunked(MARKET_QUOTE_FANOUT).flatMap { chunk ->
+                    chunk.map { id -> async { id to market.quote(id) } }.awaitAll()
+                }
+            }
+            answered.forEach { (id, r) ->
+                if (r is BtResult.Ok) {
+                    resolved[id] = WatchQuote(r.value.eurPrice, r.value.dayChangePct, r.value.stale)
+                }
+            }
+        }
+
+        _quotes.value = _quotes.value + resolved
         // W6: in a mode with no live prices, a failed quote is not a refresh
         // problem — it is the mode working as designed. Raising "couldn't
         // refresh" on every row every time would make a permanent banner out of
@@ -176,7 +237,7 @@ class WatchlistViewModel(
         if (noLivePrices()) return
         // Any row that failed to quote makes the panel's prices partly stale —
         // one honest notice beats a silently frozen number on a live-looking row.
-        _refreshNotice.value = if (ok.size == results.size) {
+        _refreshNotice.value = if (resolved.size == ids.size) {
             _refreshNotice.value.onSuccess()
         } else {
             _refreshNotice.value.onFailure()

@@ -125,6 +125,15 @@ import at.bettertrack.app.data.api.dto.AllocateRequest
 import at.bettertrack.app.data.api.dto.AllocateResponse
 import at.bettertrack.app.data.api.dto.AssetDetailResponse
 import at.bettertrack.app.data.api.dto.BacktestPreviewRequest
+import at.bettertrack.app.data.api.dto.BatchQuotesResponse
+import at.bettertrack.app.data.api.dto.AlertSharingResponse
+import at.bettertrack.app.data.api.dto.UpdateAlertSharingRequest
+import at.bettertrack.app.data.api.dto.SetAccountPinRequest
+import at.bettertrack.app.data.api.dto.SetPinIdleTimeoutRequest
+import at.bettertrack.app.data.api.dto.ExportRequest
+import at.bettertrack.app.data.api.dto.ExportRequestResponse
+import at.bettertrack.app.data.api.dto.ExportStatusResponse
+import at.bettertrack.app.data.api.dto.ExportDownloadRequest
 import at.bettertrack.app.data.api.dto.BacktestResponse
 import at.bettertrack.app.data.api.dto.ConglomerateDetailResponse
 import at.bettertrack.app.data.api.dto.CreateConglomerateRequest
@@ -240,6 +249,29 @@ interface BtApi {
     @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
     @POST("auth/pin/verify")
     suspend fun pinVerify(@Body body: PinVerifyRequest): Response<PinVerifyResponse>
+
+    /**
+     * Set or change the ACCOUNT PIN. `[account:security]`
+     *
+     * Not the device app lock — this is the PIN the account itself carries, the
+     * same one the web asks for. Requires no current PIN and no password; see
+     * [SetAccountPinRequest] for why that is the platform's design.
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("auth/pin")
+    suspend fun setAccountPin(@Body body: SetAccountPinRequest): Response<MeResponse>
+
+    /** Turn the account PIN off entirely. No body, no credential. `[account:security]` */
+    @DELETE("auth/pin")
+    suspend fun disableAccountPin(): Response<MeResponse>
+
+    /**
+     * The account-wide idle timeout before the PIN is asked again.
+     * `[account:security]`
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("auth/pin/idle-timeout")
+    suspend fun setPinIdleTimeout(@Body body: SetPinIdleTimeoutRequest): Response<MeResponse>
 
     /**
      * Apps the user has authorized — the **Authorized apps** screen's whole read,
@@ -368,6 +400,23 @@ interface BtApi {
     /** Latest quote only (lighter than the full detail). */
     @GET("assets/{id}/quote")
     suspend fun assetQuote(@Path("id") id: String): Response<QuoteResponse>
+
+    /**
+     * Latest quotes for MANY assets in one call — the N+1 killer for list
+     * surfaces (watchlist rows).
+     *
+     * [ids] is a single comma-separated string of at most
+     * [at.bettertrack.app.data.api.dto.BT_BATCH_QUOTES_MAX] ids; repeated `ids=`
+     * params are NOT the contract. The server's query object is `.strict()`, so
+     * adding any other parameter — a cache-buster especially — turns this into a
+     * `400`. Duplicates are de-duped server-side, and unresolvable ids come back
+     * in `failed[]` instead of failing the call.
+     *
+     * Carries no EUR conversion (see [BatchQuotesResponse]); a caller that needs
+     * euros for a non-EUR quote must still use [assetDetail] for that row.
+     */
+    @GET("assets/quotes")
+    suspend fun assetQuotes(@Query("ids") ids: String): Response<BatchQuotesResponse>
 
     /** Close-price series; ranges 1D|1W|1M|3M|6M|1Y|5Y|MAX (server picks interval). */
     @GET("assets/{id}/history")
@@ -513,6 +562,22 @@ interface BtApi {
     /** Re-arm a fired one-shot alert back to active. */
     @POST("alerts/{id}/rearm")
     suspend fun rearmAlert(@Path("id") id: String): Response<AlertDto>
+
+    /** Whether the caller's alerts are visible to their followers. `[alerts:read]` */
+    @GET("alerts/sharing")
+    suspend fun alertSharing(): Response<AlertSharingResponse>
+
+    /**
+     * Expose or hide the caller's alerts to followers. `[alerts:write]`
+     *
+     * Enabling requires `acknowledgeFollowers = true`; the server refuses with
+     * `400 ALERT_SHARING_ACK_REQUIRED` otherwise.
+     */
+    @Headers("Content-Type: application/json")
+    @PUT("alerts/sharing")
+    suspend fun updateAlertSharing(
+        @Body body: UpdateAlertSharingRequest,
+    ): Response<AlertSharingResponse>
 
     @GET("conglomerates")
     suspend fun conglomerates(): Response<ConglomerateListResponse>
@@ -1635,6 +1700,42 @@ interface BtApi {
         @Path("year") year: Int,
         @Query("locale") locale: String? = null,
     ): Response<ResponseBody>
+
+    // ── Account data export (V4-P6a, #494) ───────────────────────────────────
+
+    /**
+     * Ask the server to build a full data export. `[account:security]`
+     *
+     * Re-auth gated: the body must carry the account password, or a TOTP code, or
+     * a recovery code. **Rate-limited to one per day per account** — a second
+     * request inside 24h is `429 EXPORT_RATE_LIMITED` with `retryAfter` seconds
+     * in the error details.
+     *
+     * The response's `downloadToken` is the only time that token is ever sent.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("account/export")
+    suspend fun requestExport(@Body body: ExportRequest): Response<ExportRequestResponse>
+
+    /** Poll the current export job. All-null means "never requested one". `[account:security]` */
+    @GET("account/export")
+    suspend fun exportStatus(): Response<ExportStatusResponse>
+
+    /**
+     * Download the finished export. `[account:security]`
+     *
+     * A POST because the one-time token travels in the body rather than a URL
+     * that would land in logs and history. The response is the raw zip, so
+     * `@Streaming` for the same reason as the tax CSV above: this is a file, not
+     * a model, and buffering it whole before writing it would be the wrong shape.
+     *
+     * The token is CONSUMED here — a replay, an expired job and someone else's
+     * job are all one indistinguishable `404 EXPORT_NOT_FOUND`.
+     */
+    @Streaming
+    @Headers("Content-Type: application/json")
+    @POST("account/export/download")
+    suspend fun downloadExport(@Body body: ExportDownloadRequest): Response<ResponseBody>
 
     /**
      * Hard-delete the account (#362, spec §6.12; a Play publishing requirement).

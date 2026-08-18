@@ -44,6 +44,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
+import androidx.compose.material.icons.outlined.Password
+import androidx.compose.runtime.LaunchedEffect
+import at.bettertrack.app.data.account.AccountPinState
+import at.bettertrack.app.data.api.BtResult
+import at.bettertrack.app.data.api.dto.BT_PIN_IDLE_DEFAULT
 import at.bettertrack.app.data.applock.AfkThreshold
 import at.bettertrack.app.data.applock.PinSource
 import at.bettertrack.app.di.AppGraph
@@ -83,6 +88,7 @@ fun SecurityScreen(
     onChangePin: () -> Unit,
     onOpenTwoFactor: () -> Unit = {},
     onOpenSessions: () -> Unit = {},
+    onOpenAccountPin: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val controller = AppGraph.appLockController
@@ -90,6 +96,15 @@ fun SecurityScreen(
 
     var showDisableConfirm by remember { mutableStateOf(false) }
     var showThresholdPicker by remember { mutableStateOf(false) }
+
+    // The account PIN's state, for the row's subtitle only. A failed read leaves
+    // it null and the row says nothing about the state rather than guessing —
+    // "Off" on a network error would be a lie about a security setting, and the
+    // screen behind the row reports the failure properly.
+    var accountPin by remember { mutableStateOf<AccountPinState?>(null) }
+    LaunchedEffect(Unit) {
+        accountPin = (AppGraph.accountRepository.accountPinState() as? BtResult.Ok)?.value
+    }
 
     val lockOn = config.enabled && config.hasPin
 
@@ -145,6 +160,23 @@ fun SecurityScreen(
                     title = stringResource(R.string.bt_settings_passkeys),
                     subtitle = stringResource(R.string.bt_settings_managed_on_web),
                     path = "/control/sign-in",
+                )
+                // The ACCOUNT PIN — the credential the account itself carries,
+                // asked for wherever the user signs in. It belongs in this group
+                // for the same reason as two-factor and passkeys: this is the
+                // "how you prove you are you" block. The app-lock section below
+                // is a different subject, and the two must stay legible as two —
+                // hence a distinct title, a distinct icon, its own screen and its
+                // own `bt_accountpin_*` string namespace.
+                //
+                // Until the platform's bearer allowlist reached PUT/DELETE
+                // /auth/pin, this was a "change it on the web" note. It is not
+                // one any more.
+                BtGroupRow(
+                    icon = Icons.Outlined.Password,
+                    title = stringResource(R.string.bt_accountpin_title),
+                    subtitle = accountPinSubtitle(accountPin),
+                    onClick = onOpenAccountPin,
                 )
                 BtGroupRow(
                     icon = Icons.Outlined.Devices,
@@ -272,6 +304,33 @@ fun SecurityScreen(
             onDismiss = { showThresholdPicker = false },
         )
     }
+}
+
+/**
+ * The account-PIN row's subtitle.
+ *
+ * Null state (the read failed or has not landed) falls back to the generic
+ * one-line description rather than claiming the PIN is off.
+ */
+@Composable
+private fun accountPinSubtitle(state: AccountPinState?): String = when {
+    state == null -> stringResource(R.string.bt_accountpin_intro)
+    !state.pinSet -> stringResource(R.string.bt_accountpin_row_sub_off)
+    else -> stringResource(
+        R.string.bt_accountpin_row_sub_on,
+        accountPinIdleText(state.idleMinutes ?: BT_PIN_IDLE_DEFAULT),
+    )
+}
+
+@Composable
+private fun accountPinIdleText(minutes: Int): String = when (minutes) {
+    1 -> stringResource(R.string.bt_accountpin_1m)
+    5 -> stringResource(R.string.bt_accountpin_5m)
+    10 -> stringResource(R.string.bt_accountpin_10m)
+    15 -> stringResource(R.string.bt_accountpin_15m)
+    30 -> stringResource(R.string.bt_accountpin_30m)
+    60 -> stringResource(R.string.bt_accountpin_60m)
+    else -> "$minutes min"
 }
 
 @Composable

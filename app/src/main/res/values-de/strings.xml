@@ -3078,4 +3078,102 @@
         <item quantity="one">Weitere · %1$d Kategorie</item>
         <item quantity="other">Weitere · %1$d Kategorien</item>
     </plurals>
+
+    <!-- ── Konto-PIN (die KONTO-Anmeldung, nicht die App-Sperre) ── -->
+    <string name="bt_accountpin_section">Konto-PIN</string>
+    <string name="bt_accountpin_title">Konto-PIN</string>
+    <string name="bt_accountpin_row_sub_off">Nicht festgelegt — dein Konto fragt nie nach einer PIN</string>
+    <string name="bt_accountpin_row_sub_on">Aktiv · fragt nach %1$s Inaktivität erneut</string>
+    <string name="bt_accountpin_intro">Eine 4-stellige PIN bestätigt erneut, dass du es bist, nachdem dein Konto eine Weile inaktiv war. Sie ist ein Sichtschutz über deiner Sitzung, kein zweiter Faktor.</string>
+    <string name="bt_accountpin_applock_note">Das ist deine BetterTrack-Konto-PIN und gilt überall, wo du dich anmeldest. Die App-Sperre ist eine eigene Einstellung und schützt nur dieses Telefon.</string>
+    <string name="bt_accountpin_enter">PIN wählen</string>
+    <string name="bt_accountpin_confirm">PIN wiederholen</string>
+    <string name="bt_accountpin_hint">Genau 4 Ziffern.</string>
+    <string name="bt_accountpin_mismatch">Die PINs stimmen nicht überein.</string>
+    <string name="bt_accountpin_saved">Deine Konto-PIN wurde gespeichert.</string>
+    <string name="bt_accountpin_set">PIN festlegen</string>
+    <string name="bt_accountpin_set_sub">Die Konto-PIN aktivieren</string>
+    <string name="bt_accountpin_change">PIN ändern</string>
+    <string name="bt_accountpin_change_sub">Durch eine neue 4-stellige PIN ersetzen</string>
+    <string name="bt_accountpin_disable">Konto-PIN deaktivieren</string>
+    <string name="bt_accountpin_disable_sub">Dein Konto fragt dann nicht mehr nach einer PIN</string>
+    <string name="bt_accountpin_disable_title">Konto-PIN deaktivieren?</string>
+    <string name="bt_accountpin_disable_message">Dein Konto fragt dann überall, wo du dich anmeldest, nicht mehr nach einer PIN — auch nicht im Web. Du kannst sie jederzeit wieder aktivieren.</string>
+    <string name="bt_accountpin_disable_confirm">Deaktivieren</string>
+    <string name="bt_accountpin_disabled">Deine Konto-PIN wurde deaktiviert.</string>
+    <string name="bt_accountpin_idle">Erneut fragen nach</string>
+    <string name="bt_accountpin_idle_sub">Solange du BetterTrack nutzt, bleibt es entsperrt. Die PIN wird erst nach dieser Zeit ohne Aktivität wieder abgefragt.</string>
+    <string name="bt_accountpin_idle_default">%1$s (Standard)</string>
+    <string name="bt_accountpin_1m">1 Minute</string>
+    <string name="bt_accountpin_5m">5 Minuten</string>
+    <string name="bt_accountpin_10m">10 Minuten</string>
+    <string name="bt_accountpin_15m">15 Minuten</string>
+    <string name="bt_accountpin_30m">30 Minuten</string>
+    <string name="bt_accountpin_60m">1 Stunde</string>
+
+    <!-- ── Öffentliches Profil ── -->
+    <string name="bt_profile_dest">Öffentliches Profil</string>
+    <plurals name="bt_profile_row_sub_on">
+        <item quantity="one">Öffentlich · %1$d Element sichtbar</item>
+        <item quantity="other">Öffentlich · %1$d Elemente sichtbar</item>
+    </plurals>
+    <string name="bt_profile_row_sub_off">Privat</string>
+    <string name="bt_profile_toggle">Mein Profil öffentlich machen</string>
+    <string name="bt_profile_warning_title">Das erstellt eine öffentliche Seite</string>
+    <string name="bt_profile_warning_body">Jeder mit deinem Profil-Link — auch Personen, die nicht deine Freunde sind — kann die von dir öffentlich gemachten Elemente sehen, einschließlich Bestände und Nettovermögen. Du kannst das jederzeit deaktivieren.</string>
+    <string name="bt_profile_acknowledge">Ich verstehe das und möchte ein öffentliches Profil.</string>
+    <string name="bt_profile_bio">Über dich</string>
+    <string name="bt_profile_bio_placeholder">Eine kurze Zeile über dich (optional).</string>
+    <string name="bt_profile_save">Profil speichern</string>
+    <string name="bt_profile_saved">Profil gespeichert.</string>
+    <string name="bt_profile_live">Dein Profil ist online</string>
+    <plurals name="bt_profile_public_items">
+        <item quantity="one">%1$d deiner Elemente ist derzeit öffentlich.</item>
+        <item quantity="other">%1$d deiner Elemente sind derzeit öffentlich.</item>
+    </plurals>
+    <string name="bt_profile_off_hint">Dein Profil ist privat. Nur was du direkt teilst, bleibt sichtbar.</string>
+
+    <!-- ── Alarme für Follower sichtbar ── -->
+    <string name="bt_alert_sharing_title">Meine Alarme mit Followern teilen</string>
+    <string name="bt_alert_sharing_off">Deine Alarme sind privat. Follower können sie weder sehen noch darüber benachrichtigt werden.</string>
+    <string name="bt_alert_sharing_on">Follower, die es aktiviert haben, werden benachrichtigt, wenn du einen Alarm erstellst oder einer deiner Alarme auslöst.</string>
+    <string name="bt_alert_sharing_confirm_title">Deine Alarme mit allen Followern teilen?</string>
+    <string name="bt_alert_sharing_confirm_warning">Damit sieht jeder Follower, welche Anlagen du beobachtest und welche Kursziele du hast — jeder kann dir folgen. Follower, die es aktiviert haben, werden benachrichtigt, wenn du einen Alarm erstellst oder einer deiner Alarme auslöst. Du kannst das jederzeit wieder ausschalten.</string>
+    <string name="bt_alert_sharing_confirm_enable">Ich verstehe — Alarme teilen</string>
+    <string name="bt_alert_sharing_enabled">Alarmfreigabe aktiviert.</string>
+    <string name="bt_alert_sharing_disabled">Alarmfreigabe deaktiviert.</string>
+
+    <!-- ── Datenexport des Kontos ── -->
+    <string name="bt_export_dest">Meine Daten exportieren</string>
+    <string name="bt_export_row_sub">Ein Export pro Tag</string>
+    <string name="bt_export_intro">Der Server erstellt ein ZIP mit allem aus deinem Konto. Ein Export pro Tag; der Download-Link läuft nach 24 Stunden ab.</string>
+    <string name="bt_export_password">Passwort bestätigen</string>
+    <string name="bt_export_password_hint">Wird einmal gesendet, um den Export zu autorisieren. Es wird nie auf diesem Telefon gespeichert.</string>
+    <string name="bt_export_request">Export anfordern</string>
+    <string name="bt_export_request_again">Neuen Export anfordern</string>
+    <string name="bt_export_requesting">Wird angefordert…</string>
+    <string name="bt_export_pending">Dein Export wird vorbereitet. Das kann einen Moment dauern.</string>
+    <string name="bt_export_ready">Dein Export ist fertig.</string>
+    <string name="bt_export_ready_until">Zum Download bereit bis %1$s.</string>
+    <string name="bt_export_size">Größe: %1$s</string>
+    <string name="bt_export_download">Export herunterladen</string>
+    <string name="bt_export_downloading">Wird heruntergeladen…</string>
+    <string name="bt_export_save">Kopie speichern…</string>
+    <string name="bt_export_share">Teilen</string>
+    <string name="bt_export_saved">Export gespeichert.</string>
+    <string name="bt_export_download_failed">Dein Export konnte nicht heruntergeladen werden. Der einmalige Link ist möglicherweise abgelaufen oder wurde bereits verwendet.</string>
+    <string name="bt_export_expired">Dein letzter Export ist abgelaufen. Fordere einen neuen an, um deine Daten herunterzuladen.</string>
+    <string name="bt_export_failed_status">Der letzte Export konnte nicht erstellt werden. Bitte fordere einen neuen an.</string>
+    <string name="bt_export_token_gone">Dein Export ist fertig, aber diese App hat den einmaligen Download-Link nicht mehr. Fordere einen neuen Export an, um ihn herunterzuladen.</string>
+    <string name="bt_export_none">Du hast noch keinen Export angefordert.</string>
+
+
+    <!-- ── In-App-Heatmap (Positionen / Watchlist — nie "der Markt") ── -->
+    <string name="bt_heatmap_scope_positions">Meine Positionen</string>
+    <string name="bt_heatmap_scope_watchlist">Meine Watchlist</string>
+    <string name="bt_heatmap_legend_positions">Kachelgröße = Positionswert · Farbe = heutige Bewegung. Tippe eine Kachel an, um die Anlage zu öffnen.</string>
+    <string name="bt_heatmap_legend_watchlist">Gleich große Kacheln — eine Watchlist hat keine Positionsgröße. Farbe = heutige Bewegung. Tippe eine Kachel an, um die Anlage zu öffnen.</string>
+    <string name="bt_heatmap_empty_positions">Noch keine Positionen mit einem Wert.</string>
+    <string name="bt_heatmap_empty_watchlist">Noch nichts auf deiner Watchlist.</string>
+    <string name="bt_heatmap_row_sub">Deine Positionen und Watchlist nach heutiger Bewegung</string>
 </resources>

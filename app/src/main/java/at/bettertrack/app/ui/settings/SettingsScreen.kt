@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Contrast
@@ -69,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -215,6 +217,8 @@ fun SettingsScreen(
     onOpenServer: () -> Unit = {},
     onOpenConnections: () -> Unit = {},
     onOpenAuthorizedApps: () -> Unit = {},
+    onOpenPublicProfile: () -> Unit = {},
+    onOpenDataExport: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val snackbar = LocalBtSnackbar.current
@@ -229,6 +233,20 @@ fun SettingsScreen(
     val storageMode = AppGraph.gatedStorageMode(storedMode)
     val hasAccount = storageMode.shows(BtSurface.ACCOUNT_SETTINGS)
     val hasNotifications = storageMode.shows(BtSurface.ALERTS_NOTIFICATIONS)
+
+    // Alerts-visible-to-followers (#455). Null until the read lands, which is
+    // what keeps the switch disabled rather than showing a confident "off" for a
+    // flag nobody has asked the server about yet.
+    var alertSharing by remember { mutableStateOf<Boolean?>(null) }
+    var alertSharingBusy by remember { mutableStateOf(false) }
+    var alertSharingError by remember { mutableStateOf<BtMessage?>(null) }
+    var alertSharingConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(hasAccount, hasNotifications) {
+        // Drive-only installs have no alert engine at all, so there is nothing to
+        // share and nothing to ask about.
+        if (!hasAccount || !hasNotifications) return@LaunchedEffect
+        alertSharing = (AppGraph.alertsRepository.sharing() as? BtResult.Ok)?.value
+    }
     val user: SessionUser? = when (val s = authState) {
         is AuthState.LoggedIn -> s.user
         is AuthState.PasswordChangeRequired -> s.user
@@ -441,26 +459,27 @@ fun SettingsScreen(
                         onClick = { picker = SettingsPicker.Currency },
                         trailing = { SettingsValue(accountPrefs?.baseCurrency) },
                     )
-                    // ADDITIVE, not a replacement: the icon is the one profile
-                    // field the platform lets a client write, and it keeps its
-                    // native picker directly above. Everything else on a profile
-                    // is the web's, so this row hands over rather than growing a
-                    // second, thinner profile editor here.
-                    BtWebLinkRow(
+                    // The public opt-in and the bio are NATIVE now (owner
+                    // doctrine: anything the server stores must be editable on
+                    // the phone too, at least as granularly as on the web). The
+                    // app already read both fields and echoed them back on every
+                    // icon change; it simply never let the user change them.
+                    BtGroupRow(
                         icon = Icons.Outlined.Person,
-                        title = stringResource(R.string.bt_settings_profile_web),
-                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
-                        path = "/control/profile",
+                        title = stringResource(R.string.bt_profile_dest),
+                        subtitle = profileVisibilitySubtitle(profile),
+                        onClick = onOpenPublicProfile,
                     )
-                    // Parity ruling 2026-08-08: the export is a long-running job
-                    // that mails a link and offers several formats — the web owns
-                    // it end to end, and a half-mirror in the app would be a
-                    // second place for it to go wrong.
-                    BtWebLinkRow(
+                    // The account-wide export is native too. The 2026-08-08 ruling
+                    // that deferred it assumed a mail-a-link job with several
+                    // formats; the real contract is a re-auth'd request, a poll
+                    // and a one-time download of a single zip, which is a flow the
+                    // phone can own honestly.
+                    BtGroupRow(
                         icon = Icons.Outlined.Download,
-                        title = stringResource(R.string.bt_settings_data_export),
-                        subtitle = stringResource(R.string.bt_settings_managed_on_web),
-                        path = "/control/account",
+                        title = stringResource(R.string.bt_export_dest),
+                        subtitle = stringResource(R.string.bt_export_row_sub),
+                        onClick = onOpenDataExport,
                     )
                 }
                 accountPrefsError?.let {
@@ -686,8 +705,53 @@ fun SettingsScreen(
                     }
                 },
             )
+
+            // Alerts visible to followers (#455). A privacy question about the
+            // account, so it lives beside discreet mode rather than on the
+            // Workboard where the alerts themselves are managed: this decides who
+            // may see them, not what they are.
+            //
+            // Unlike discreet mode this one is NOT optimistic. Turning it on
+            // exposes every asset the user watches to anyone who follows them, so
+            // the switch waits for the confirmation and then for the server —
+            // flipping first and rolling back would show "shared" for a moment on
+            // a decision that had not been made.
+            SettingsToggleRow(
+                icon = Icons.Outlined.Campaign,
+                title = stringResource(R.string.bt_alert_sharing_title),
+                subtitle = stringResource(
+                    if (alertSharing == true) R.string.bt_alert_sharing_on
+                    else R.string.bt_alert_sharing_off,
+                ),
+                checked = alertSharing == true,
+                enabled = alertSharing != null && !alertSharingBusy,
+                onCheckedChange = { wanted ->
+                    alertSharingError = null
+                    if (wanted) {
+                        // The §16 rung. Asking is the UI's job; stating the
+                        // acknowledgement on the wire is the repository's.
+                        alertSharingConfirm = true
+                    } else {
+                        alertSharingBusy = true
+                        scope.launch {
+                            when (val r = AppGraph.alertsRepository.setSharing(false)) {
+                                is BtResult.Ok -> {
+                                    alertSharing = r.value
+                                    snackbar.show(R.string.bt_alert_sharing_disabled)
+                                }
+
+                                is BtResult.Err -> alertSharingError = r.error.asMessage()
+                            }
+                            alertSharingBusy = false
+                        }
+                    }
+                },
+            )
             }
             discreetError?.let {
+                BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
+            }
+            alertSharingError?.let {
                 BtFormError(it, modifier = Modifier.padding(horizontal = 4.dp))
             }
             }
@@ -852,6 +916,50 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+
+    // The §16 rung for exposing alerts to followers. A dialog rather than an
+    // inline checkbox because the web uses one, and because the confirming BUTTON
+    // carrying the words "I understand" is the acknowledgement — there is no
+    // second control to forget to tick.
+    if (alertSharingConfirm) {
+        val sharingScope = rememberCoroutineScope()
+        AlertDialog(
+            onDismissRequest = { if (!alertSharingBusy) alertSharingConfirm = false },
+            containerColor = bt.surfaceHigh,
+            titleContentColor = bt.textPrimary,
+            textContentColor = bt.textSecondary,
+            title = { Text(stringResource(R.string.bt_alert_sharing_confirm_title)) },
+            text = { Text(stringResource(R.string.bt_alert_sharing_confirm_warning)) },
+            confirmButton = {
+                TextButton(
+                    enabled = !alertSharingBusy,
+                    onClick = {
+                        alertSharingBusy = true
+                        sharingScope.launch {
+                            when (val r = AppGraph.alertsRepository.setSharing(true)) {
+                                is BtResult.Ok -> {
+                                    alertSharing = r.value
+                                    snackbar.show(R.string.bt_alert_sharing_enabled)
+                                }
+
+                                is BtResult.Err -> alertSharingError = r.error.asMessage()
+                            }
+                            alertSharingBusy = false
+                            alertSharingConfirm = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.bt_alert_sharing_confirm_enable), color = bt.goldInk)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !alertSharingBusy,
+                    onClick = { alertSharingConfirm = false },
+                ) { Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary) }
+            },
+        )
     }
 
     if (showLogoutConfirm) {
@@ -1200,6 +1308,24 @@ private fun currentLanguageLabel(): String = when (LocaleManager.current(LocalCo
  * making the label work is the difference between a settings list you can use
  * one-handed and one you have to aim at.
  */
+/**
+ * The public-profile row's subtitle: what the profile currently IS, not what the
+ * row does.
+ *
+ * Null (the profile read has not landed, or failed) falls back to the neutral
+ * private-state wording rather than claiming a state we have not confirmed.
+ */
+@Composable
+private fun profileVisibilitySubtitle(profile: ProfileSettingsResponse?): String = when {
+    profile == null -> stringResource(R.string.bt_settings_profile_icon_sub)
+    !profile.isPublic -> stringResource(R.string.bt_profile_row_sub_off)
+    else -> pluralStringResource(
+        R.plurals.bt_profile_row_sub_on,
+        profile.publicItemCount,
+        profile.publicItemCount,
+    )
+}
+
 @Composable
 private fun SettingsToggleRow(
     icon: ImageVector,

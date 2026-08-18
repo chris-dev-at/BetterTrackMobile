@@ -124,6 +124,45 @@ class BtWidgetHeatmapTest {
     // ── Intensity ───────────────────────────────────────────────────────────
 
     @Test
+    fun `a tile carries the asset it stands for so the in-app map can open it`() {
+        // The widget never needs this — a widget is one tap target — but the
+        // in-app heatmap navigates from it, and deriving the id a second time
+        // there is the duplication this shared function exists to prevent.
+        val tiles = btWidgetHeatTiles(
+            listOf(holding("AAPL", 100.0, 1.0), holding("MSFT", 50.0, -1.0)),
+            maxTiles = 0,
+        )
+        assertEquals("AAPL-p1", tiles.first { it.symbol == "AAPL" }.assetId)
+        assertEquals("MSFT-p1", tiles.first { it.symbol == "MSFT" }.assetId)
+    }
+
+    @Test
+    fun `one ticker in two portfolios keeps a single asset id`() {
+        val tiles = btWidgetHeatTiles(
+            listOf(
+                holding("AAPL", 100.0, 2.0, portfolioId = "p1"),
+                holding("AAPL", 100.0, 4.0, portfolioId = "p2"),
+            ),
+            maxTiles = 0,
+        )
+        assertEquals(1, tiles.size)
+        // Whichever row won, it must be a real id and not an empty string — an
+        // empty id is the folded-bucket signal and would make the tile inert.
+        assertTrue("was '${tiles[0].assetId}'", tiles[0].assetId.startsWith("AAPL-p"))
+    }
+
+    @Test
+    fun `the folded bucket names no asset, because it is several`() {
+        val tiles = btWidgetHeatTiles(
+            (1..6).map { holding("S$it", (10 - it).toDouble(), 1.0) },
+            maxTiles = 3,
+        )
+        val bucket = tiles.last()
+        assertEquals("", bucket.symbol)
+        assertEquals("a multi-asset cell must not navigate anywhere", "", bucket.assetId)
+    }
+
+    @Test
     fun `the strongest move is fully saturated and the rest scale under it`() {
         assertEquals(1f, btWidgetHeatIntensity(5.0, 5.0), 0.0001f)
         assertEquals(1f, btWidgetHeatIntensity(-5.0, 5.0), 0.0001f)
