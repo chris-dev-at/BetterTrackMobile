@@ -191,7 +191,7 @@ class DeepLinkTabsTest {
             NotifDeepLink.Portfolio("p"),
             // The Quick-actions widget's three (2026-08-16): the blank trade
             // form, the cash screen, and the Markets tab's search.
-            NotifDeepLink.AddTransaction,
+            NotifDeepLink.AddTransaction(),
             // AddCashEntry became a data class on 2026-08-17 so the Cash Wallet
             // widget's Bezahlt / Erhalten buttons can name a wallet AND a
             // direction; the bare `AddCashEntry()` is its old behaviour exactly.

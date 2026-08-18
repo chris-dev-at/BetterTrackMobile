@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.People
@@ -38,7 +40,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -214,6 +219,14 @@ fun HomeScreen(
         )
     }
 
+    // The account-wealth sheet's visibility. Held here rather than in a view
+    // model because it is screen state, and `rememberSaveable` so a rotation with
+    // the graph open does not close it.
+    var showAccountWealth by rememberSaveable { mutableStateOf(false) }
+    if (showAccountWealth) {
+        AccountWealthSheet(hero = hero, onDismiss = { showAccountWealth = false })
+    }
+
     val pullState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -247,6 +260,27 @@ fun HomeScreen(
                     onCreatePortfolio = onCreatePortfolio,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
+            }
+
+            // The door to the account-wealth graph (owner item 11, 2026-08-18).
+            //
+            // Directly under the figure it is about, and nowhere else: the
+            // question "and what has it been doing?" is one you have while
+            // looking at the number, so the answer has to be within a thumb of
+            // it. A row rather than a hidden tap on the hero because the hero
+            // already owns a gesture (press-and-hold to peek in discreet mode)
+            // and because an affordance nobody can see is not reachability.
+            //
+            // Gated on there being an active portfolio: with none, the hero above
+            // is already an invitation to create one, and a link to an empty graph
+            // under it would answer a question the user has not got yet.
+            if (active.isNotEmpty()) {
+                item(key = "account-wealth") {
+                    AccountWealthRow(
+                        onClick = { showAccountWealth = true },
+                        modifier = Modifier.padding(top = 10.dp, start = 20.dp, end = 20.dp),
+                    )
+                }
             }
 
             // Movers: absent, never an empty card. With no priced day-change
@@ -548,6 +582,51 @@ private fun HomeHero(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The one-line door to [AccountWealthSheet].
+ *
+ * Styled as a quiet inline action, not a card: it belongs to the hero above it
+ * rather than being the screen's second section, and the movers strip — which IS
+ * the second section — must keep that weight. The chevron points up because the
+ * surface it opens comes up from the bottom, which is how every other user-facing
+ * surface in this app arrives.
+ */
+@Composable
+private fun AccountWealthRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val bt = BtTheme.colors
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        contentColor = bt.textSecondary,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ShowChart,
+                contentDescription = null,
+                tint = bt.gold,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = stringResource(R.string.bt_account_wealth_row),
+                style = MaterialTheme.typography.bodyMedium,
+                color = bt.textSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowUp,
+                contentDescription = null,
+                tint = bt.textMuted,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

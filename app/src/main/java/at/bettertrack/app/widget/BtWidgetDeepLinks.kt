@@ -115,16 +115,33 @@ fun btWidgetDeepLink(
     BT_WIDGET_TARGET_ASSET ->
         assetId?.takeIf { it.isNotBlank() }?.let { NotifDeepLink.Asset(it) }
             ?: NotifDeepLink.Overview
-    BT_WIDGET_TARGET_CASH -> NotifDeepLink.Cash(portfolioId?.takeIf { it.isNotBlank() })
+    // A Quick-Links tile may aim this at ONE wallet (owner 2026-08-18: "3
+    // buttons that each bring me to the overview of another cash source"), and
+    // the Cash screen scopes itself to it. Both stay blank-tolerant, so the
+    // budget widget's parameterless Cash tap is unchanged.
+    BT_WIDGET_TARGET_CASH -> NotifDeepLink.Cash(
+        portfolioId = portfolioId?.takeIf { it.isNotBlank() },
+        sourceId = sourceId?.takeIf { it.isNotBlank() },
+    )
     // A portfolio target with no usable id falls back to the Overview — the one
     // place every portfolio is visible — by the same never-a-dead-tap rule the
     // asset target follows above.
     BT_WIDGET_TARGET_PORTFOLIO ->
         portfolioId?.takeIf { it.isNotBlank() }?.let { NotifDeepLink.Portfolio(it) }
             ?: NotifDeepLink.Overview
-    // The Quick-actions tiles (2026-08-16): id-less, one destination each.
-    BT_WIDGET_TARGET_ADD_TRANSACTION -> NotifDeepLink.AddTransaction
-    BT_WIDGET_TARGET_ADD_CASH -> NotifDeepLink.AddCashEntry()
+    // The Quick-actions tiles (2026-08-16). Both now carry the tile's optional
+    // aim (2026-08-18) — "add transaction, but where to?" — and both degrade to
+    // exactly their old parameterless behaviour when the tile names nothing.
+    //
+    // Note ADD_CASH deliberately passes NO direction: it opens the ledger entry
+    // on the named wallet with no sign preselected, unlike the Cash Wallet
+    // widget's Bezahlt/Erhalten buttons below, which always carry one.
+    BT_WIDGET_TARGET_ADD_TRANSACTION ->
+        NotifDeepLink.AddTransaction(portfolioId?.takeIf { it.isNotBlank() })
+    BT_WIDGET_TARGET_ADD_CASH -> NotifDeepLink.AddCashEntry(
+        portfolioId = portfolioId?.takeIf { it.isNotBlank() },
+        sourceId = sourceId?.takeIf { it.isNotBlank() },
+    )
     BT_WIDGET_TARGET_SEARCH -> NotifDeepLink.MarketSearch
     // The Quick Links catalog's three additions (2026-08-17). Chat takes the
     // nullable conversation id its target already carries — a launcher tile
@@ -155,7 +172,66 @@ fun btWidgetDeepLink(
 }
 
 /**
- * The intent a widget click launches.
+ * The slug for the target-less "just open the app" tap.
+ *
+ * Deliberately NOT one of the `BT_WIDGET_TARGET_*` constants above and
+ * deliberately never written into [BT_WIDGET_EXTRA_TARGET]: those name a
+ * DESTINATION, and this one exists precisely to say there is no destination.
+ * It lives here only so [BT_WIDGET_LAUNCH_ACTION] is built out of the same
+ * vocabulary as every other widget action string, which is what keeps the
+ * uniqueness property one function's business.
+ *
+ * [btWidgetDeepLink] therefore returns `null` for it — pinned by
+ * `BtWidgetLaunchIntentTest` — so even if it ever leaked into an extra, the
+ * tap would open the app on no page rather than somewhere invented.
+ */
+const val BT_WIDGET_LAUNCH_SLUG: String = "launch"
+
+/**
+ * The action on the plain-launch intent.
+ *
+ * A distinct action for the same reason every targeted intent has one:
+ * `PendingIntent` equality is `Intent.filterEquals`, which ignores extras. All
+ * ten widgets share this one string on purpose — every plain launch does the
+ * identical thing, so collapsing them onto one `PendingIntent` is correct — but
+ * it can never collapse into a TARGETED intent, because no
+ * `btWidgetIntentAction(target, …)` over the `BT_WIDGET_TARGET_*` vocabulary
+ * can produce it.
+ */
+val BT_WIDGET_LAUNCH_ACTION: String = btWidgetIntentAction(BT_WIDGET_LAUNCH_SLUG, null)
+
+/**
+ * **Just open the app.** The whole-card tap of a widget that is not pointing at
+ * one specific thing (owner ruling 2026-08-18: *"the default thing if you click
+ * any widget should be not the overview but just open the app. on no specific
+ * page. because always getting set to overview is annoying when you click the
+ * edge of a widget."*).
+ *
+ * What makes it a no-op navigationally is what it does NOT carry: no
+ * [BT_WIDGET_EXTRA_TARGET], so `MainActivity.handleWidgetIntent` returns on its
+ * first line, nothing is parked on `AppGraph.pendingDeepLink`, and `AppShell`
+ * runs none of its landing discipline. The app simply comes forward on whatever
+ * screen it was left on.
+ *
+ * `FLAG_ACTIVITY_CLEAR_TOP` is absent for the same reason, and that absence is
+ * the load-bearing difference from [btWidgetIntent]: CLEAR_TOP tears the task
+ * back down to this activity, which is the opposite of "wherever you left it".
+ * `FLAG_ACTIVITY_NEW_TASK` is required because the caller is the launcher's
+ * process, not an activity of ours. `CATEGORY_LAUNCHER` states what this start
+ * is — the same thing tapping the app icon does — even though the explicit
+ * component means nothing has to resolve it.
+ */
+fun btWidgetLaunchIntent(context: Context): Intent =
+    Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        action = BT_WIDGET_LAUNCH_ACTION
+        addCategory(Intent.CATEGORY_LAUNCHER)
+    }
+
+/**
+ * The intent a widget click launches — the TARGETED one. See
+ * [btWidgetLaunchIntent] for the whole-card default, which carries no target at
+ * all.
  *
  * The unique [Intent.setAction] is load-bearing, and for the same reason
  * `BtMessagingService` sets one: `PendingIntent` equality ignores extras, so

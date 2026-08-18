@@ -108,6 +108,7 @@ import at.bettertrack.app.widget.BtWidgetRowDirection
 import at.bettertrack.app.widget.BtWidgetRowSort
 import at.bettertrack.app.widget.BtWidgetRowSource
 import at.bettertrack.app.widget.BtWidgetRowsConfig
+import at.bettertrack.app.widget.btWidgetAllCashSources
 import at.bettertrack.app.widget.btWidgetAllocFormLabel
 import at.bettertrack.app.widget.btWidgetAllocGroupLabel
 import at.bettertrack.app.widget.btWidgetAssetChoices
@@ -121,6 +122,7 @@ import at.bettertrack.app.widget.btWidgetPortfolioChoices
 import at.bettertrack.app.widget.btWidgetRequestPin
 import at.bettertrack.app.widget.btWidgetStashPin
 import at.bettertrack.app.widget.btWidgetStyleLabel
+import at.bettertrack.app.widget.btWidgetWarmCashSources
 import kotlinx.coroutines.flow.first
 
 /**
@@ -239,13 +241,15 @@ fun WidgetsScreen(onBack: () -> Unit) {
         try {
             // Cash sources reach Room only when something fetches them, so the
             // wallet picker tops up the same way the budget picker does.
-            val pid = AppGraph.portfolioRepository.defaultSelection()?.id
-            suspend fun fromRoom() =
-                pid?.let { BtWidgetRepository.loadCashSources(it) }.orEmpty()
-            cashChoices = fromRoom()
+            //
+            // EVERY portfolio's wallets, not just the governing one's (owner
+            // 2026-08-18): a Quick-Links tile aimed at "main cash in my savings
+            // portfolio" cannot be built from a list that only ever contained
+            // the selected portfolio's sources.
+            cashChoices = btWidgetAllCashSources(portfolioChoices)
             selectedCash = cashChoices.firstOrNull { it.isMain } ?: cashChoices.firstOrNull()
-            BtWidgetRepository.warmCashForPicker(pid)
-            fromRoom().takeIf { it.isNotEmpty() }?.let {
+            btWidgetWarmCashSources(portfolioChoices)
+            btWidgetAllCashSources(portfolioChoices).takeIf { it.isNotEmpty() }?.let {
                 cashChoices = it
                 if (selectedCash == null) {
                     selectedCash = it.firstOrNull { s -> s.isMain } ?: it.firstOrNull()
@@ -684,6 +688,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                         BtQuickLinksEditor(
                             config = linksCfg,
                             portfolios = portfolioChoices,
+                            sources = cashChoices,
                         ) { linksCfg = it }
                     },
                     onAdd = {

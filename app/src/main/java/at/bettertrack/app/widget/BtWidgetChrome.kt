@@ -102,11 +102,17 @@ internal fun BtWidgetCard(
 /**
  * The whole card as one state message, with NO click target.
  *
- * This is what [btProvideContent] publishes as its first frame, before the load
- * has returned. It is the Glance twin of `@layout/bt_widget_loading` — same
- * surface, same corner behaviour, same gold-dot-over-one-line affordance — so
- * the hand-off from the launcher's inflated XML to the first real frame is a
- * content swap the eye does not catch.
+ * This is what [btProvideContent] publishes as the first frame of an instance
+ * that has never painted, when the load loses its short grace. It is the Glance
+ * twin of `@layout/bt_widget_loading` — same surface, same corner behaviour,
+ * same gold-dot-over-one-line affordance — so the hand-off from the launcher's
+ * inflated XML to the first real frame is a content swap the eye does not catch.
+ *
+ * It is deliberately NOT reachable on a refresh of a card that already has
+ * content: covering good figures with "Wird geladen…" is the 2026-08-18 "it
+ * doesn't update and takes long" defect. See [btProvideContent]'s two-case
+ * policy. The syncing variant still is — a load that fails or times out has to
+ * say so.
  *
  * Deliberately not clickable: nothing has been resolved yet, so there is no
  * honest destination to send a tap to, and a card that opens the wrong screen

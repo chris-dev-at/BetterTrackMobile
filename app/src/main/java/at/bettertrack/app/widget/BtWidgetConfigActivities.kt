@@ -2,6 +2,7 @@ package at.bettertrack.app.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.glance.GlanceId
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
@@ -41,12 +46,17 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.lifecycle.lifecycleScope
 import at.bettertrack.app.R
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtPickerRow
+import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.theme.BetterTrackTheme
 import at.bettertrack.app.ui.theme.BtTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -116,20 +126,54 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
         Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
 
     /**
-     * Write the choice via [write], redraw this instance, queue a warm pass,
-     * finish OK. The redraw happens BEFORE `RESULT_OK` on purpose — it is the
-     * whole fix for "configured it, still said nothing selected": the host must
-     * never reveal a frame older than the choice.
+     * Commit the edit: write the choice via [write], then close. The repaint and
+     * the warm pass are handed to the process scope and are NOT waited for.
+     *
+     * ## Why the redraw is no longer awaited (owner defect, 2026-08-18)
+     *
+     * *"ich ändere zb das portfolio und nichts passiert sondern ich muss warten"*
+     * — the config screen used to `await` [redraw] before `RESULT_OK`, and a
+     * redraw runs the widget's whole loader (for the performance card: snapshot
+     * + history + the cash ledger). So the editor sat there, still on screen,
+     * for the length of an I/O pass that had nothing to do with saving.
+     *
+     * The DURABLE half is `updateAppWidgetState`, and that is still awaited —
+     * once the choice is on disk every subsequent `provideGlance` reads it,
+     * including the `APPWIDGET_UPDATE` the host broadcasts when it sees
+     * `RESULT_OK`. So the old "the host must never reveal a frame older than the
+     * choice" guarantee is carried by the WRITE, not by the redraw; the explicit
+     * redraw is only there to make the repaint immediate rather than waiting on
+     * the host's own broadcast.
+     *
+     * [AppGraph.appScope], not [lifecycleScope]: this Activity is about to
+     * finish, and a redraw launched on a scope that dies with it would be
+     * cancelled halfway — which is the same "config applied but the card did not
+     * change" symptom in a new costume.
+     *
+     * The repaint itself paints from CACHE ([BtWidgetRepository.load] never
+     * touches the network) and only then is a warm pass queued, so a config
+     * change never waits on connectivity.
      */
-    protected fun confirm(write: suspend (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+    protected fun confirm(write: suspend (MutablePreferences) -> Unit) {
         lifecycleScope.launch {
             try {
                 val glanceId = GlanceAppWidgetManager(this@BtWidgetConfigActivity)
                     .getGlanceIdBy(appWidgetId)
                 updateAppWidgetState(this@BtWidgetConfigActivity, glanceId) { prefs -> write(prefs) }
-                redraw(glanceId)
-                BtWidgetScheduler(this@BtWidgetConfigActivity).refreshNow()
                 setResult(RESULT_OK, resultIntent())
+                val app = applicationContext
+                AppGraph.appScope.launch {
+                    try {
+                        redraw(app, glanceId)
+                        BtWidgetScheduler(app).refreshNow()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // The choice is already on disk; the next provideGlance
+                        // pass picks it up regardless.
+                        android.util.Log.w("BtWidgetConfig", "Post-save repaint failed.", e)
+                    }
+                }
             } catch (e: Exception) {
                 // Leaving RESULT_CANCELED set: the host deletes the placement,
                 // which is strictly better than an instance whose state write
@@ -140,13 +184,94 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
         }
     }
 
-    protected abstract suspend fun redraw(glanceId: GlanceId)
+    protected abstract suspend fun redraw(context: Context, glanceId: GlanceId)
 
-    /** The shared scaffold: title, an optional header slot, list, honest empty state. */
+    /**
+     * THIS instance's persisted Glance state, or null when it cannot be read.
+     *
+     * The read is the whole of the owner's second defect: *"lade die
+     * einstellungen vom jeweiligen widget. weil wenn ich zb einstellung x als
+     * standard habe und jetzt einstellung y einstelle und dann das menu neu
+     * öffne und dann wieder x ausgewählt ist stört das."* Every editor here used
+     * to open on `remember { mutableStateOf(DEFAULT) }` — a fresh set of
+     * defaults, with the instance's actual saved settings never read at all. So
+     * reconfiguring a widget silently showed the wrong answers, and saving wrote
+     * those wrong answers back over the user's real ones.
+     *
+     * A failed read degrades to `null`, which [InstanceConfig] turns into empty
+     * preferences and therefore into each decoder's documented defaults — the
+     * same reading an unconfigured instance gets, which is the only honest
+     * fallback when the stored state cannot be opened.
+     */
+    protected suspend fun readInstanceState(): Preferences? = try {
+        val glanceId = GlanceAppWidgetManager(this).getGlanceIdBy(appWidgetId)
+        getAppWidgetState(this, PreferencesGlanceStateDefinition, glanceId)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.w("BtWidgetConfig", "Instance state read failed; editor opens on defaults.", e)
+        null
+    }
+
+    /**
+     * Hydrate this instance's saved settings, then compose the editor over a
+     * mutable DRAFT of them.
+     *
+     * Nothing is composed until the read returns, so the editor's FIRST paint
+     * already shows the instance's real settings — a chip row that rendered
+     * defaults and then flipped a frame later would be its own small lie, and on
+     * a slow read the user could tap before the correction landed.
+     *
+     * The draft is local until [confirm] is called, which is what makes
+     * dismissing the screen a true no-op.
+     */
     @Composable
-    protected fun <T> ConfigList(
+    protected fun <T> InstanceConfig(
+        decode: (Preferences) -> T,
+        content: @Composable (T, (T) -> Unit) -> Unit,
+    ) {
+        // A box, not a bare `T?`: T is itself nullable on the editors whose
+        // "nothing pinned" state IS null (follow-the-app, all-budgets), and a
+        // bare null could not tell "not read yet" from "read, and it is null".
+        var draft by remember(appWidgetId) { mutableStateOf<BtConfigDraft<T>?>(null) }
+        LaunchedEffect(appWidgetId) {
+            draft = BtConfigDraft(decode(readInstanceState() ?: emptyPreferences()))
+        }
+        val current = draft
+        if (current == null) {
+            // Never a raw void, even for the millisecond the state read takes.
+            // A config screen that renders NOTHING while it waits on I/O is the
+            // 2026-08-17 black-void defect in miniature, and this screen opens
+            // on a cold process more often than any other (the host launches it
+            // straight from a long-press).
+            Surface(color = BtTheme.colors.bg, modifier = Modifier.fillMaxSize()) {}
+            return
+        }
+        content(current.value) { draft = BtConfigDraft(it) }
+    }
+
+    /**
+     * The pick-one scaffold: title, an optional knob header, the list, an honest
+     * empty state, and a pinned **Save** button.
+     *
+     * ## Why a Save button and not commit-on-tap
+     *
+     * These four editors used to commit the instant a row was tapped and finish
+     * the Activity. Owner ruling 2026-08-18: *"mache überall speicher buttons
+     * darunter"*. Commit-on-tap also made the screen unable to be a real editor —
+     * there was nowhere to change a chip and a row in one visit, and no way to
+     * back out of a mis-tap, because the mis-tap had already been written.
+     *
+     * Selecting is now local to the draft; only Save writes. Dismissing the
+     * screen (back, or the host cancelling) changes nothing, which is the
+     * behaviour `RESULT_CANCELED`-by-default already promised.
+     */
+    @Composable
+    protected fun <T> ConfigPickPanel(
         titleRes: Int,
         choices: List<T>?,
+        onSave: () -> Unit,
+        saveEnabled: Boolean = true,
         header: (@Composable () -> Unit)? = null,
         row: @Composable (T) -> Unit,
     ) {
@@ -160,10 +285,12 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
                 )
                 header?.invoke()
                 when {
-                    choices == null -> Unit // one frame of nothing beats a spinner flash
+                    // One frame of nothing beats a spinner flash. `weight` and
+                    // not `fillMaxSize`, so the Save button below keeps its room.
+                    choices == null -> Box(modifier = Modifier.weight(1f)) {}
 
                     choices.isEmpty() -> Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -174,14 +301,34 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
                     }
 
                     else -> LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(top = 12.dp),
+                        modifier = Modifier.weight(1f).padding(top = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         items(choices) { choice -> row(choice) }
                     }
                 }
+                SaveButton(onSave, saveEnabled)
             }
         }
+    }
+
+    /**
+     * The one Save affordance every configuration surface ends with.
+     *
+     * A real filled button ([BtPrimaryButton]), not the gold text row the knob
+     * panels used to end with: the owner asked for *speicher buttons*, and a
+     * centred line of gold text on a screen full of tappable rows does not read
+     * as the commit control — which is exactly why the knob panels felt like
+     * they had no way to save either.
+     */
+    @Composable
+    protected fun SaveButton(onSave: () -> Unit, enabled: Boolean = true) {
+        BtPrimaryButton(
+            text = stringResource(R.string.bt_widget_config_save),
+            onClick = onSave,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        )
     }
 
     /**
@@ -236,17 +383,7 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
             Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 content()
             }
-            Text(
-                text = stringResource(R.string.bt_widget_config_save),
-                style = MaterialTheme.typography.titleMedium,
-                color = BtTheme.colors.goldInk,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSave)
-                    .padding(vertical = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            SaveButton(onSave)
         }
     }
 
@@ -272,19 +409,8 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
                     content()
                 }
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                    Text(
-                        text = stringResource(R.string.bt_widget_config_save),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = BtTheme.colors.goldInk,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onSave)
-                            .padding(vertical = 14.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                }
+                Box(modifier = Modifier.weight(1f)) {}
+                SaveButton(onSave)
             }
         }
     }
@@ -319,30 +445,36 @@ abstract class BtWidgetConfigActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * One choosable row. [BtPickerRow] rather than a bare clickable Column,
+     * because with Save-on-commit the row now has to SHOW which option is
+     * currently chosen — that is the whole point of hydrating the editor — and
+     * the house already has exactly one way a selected pick-row looks (gold
+     * wash, outlined, `Role.RadioButton` for the screen reader).
+     */
     @Composable
-    protected fun ConfigRow(title: String, subtitle: String?, onClick: () -> Unit) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(vertical = 10.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = BtTheme.colors.textPrimary,
-                fontWeight = FontWeight.Medium,
-            )
-            if (!subtitle.isNullOrEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BtTheme.colors.textSecondary,
-                )
-            }
-        }
+    protected fun ConfigRow(
+        title: String,
+        subtitle: String?,
+        selected: Boolean,
+        /** Null renders a STATEMENT row — selected-looking, but not a control. */
+        onClick: (() -> Unit)?,
+    ) {
+        BtPickerRow(
+            label = title,
+            selected = selected,
+            supporting = subtitle?.takeIf { it.isNotEmpty() },
+            onClick = onClick,
+        )
     }
 }
+
+/**
+ * A hydrated editor draft. Exists only so [BtWidgetConfigActivity.InstanceConfig]
+ * can distinguish "not read yet" from "read, and the value is null" — see its
+ * KDoc.
+ */
+private class BtConfigDraft<T>(val value: T)
 
 /**
  * Pick the asset a [BtAssetWidget] instance shows.
@@ -370,30 +502,61 @@ class BtAssetWidgetConfigActivity : BtWidgetConfigActivity() {
                 emptyList()
             }
         }
-        var spark by remember { mutableStateOf(true) }
-        // ConfigScroll, not ConfigList: a searched list has two states that
-        // scaffold cannot model (typed-but-no-matches, and offline-with-a-local
-        // fallback), and the search field has to sit above whatever is showing.
-        ConfigScroll(titleRes = R.string.bt_widget_config_pick_asset) {
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_sparkline),
-                options = listOf(true, false),
-                selected = spark,
-                optionLabel = {
-                    stringResource(
-                        if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
-                    )
-                },
-                onSelect = { spark = it },
-            )
-            BtWidgetAssetPicker(localChoices = choices) { picked ->
-                confirm { prefs -> btWidgetPutAssetConfig(prefs, picked.copy(sparkline = spark)) }
+        // The draft opens on the instance's OWN stored asset and sparkline —
+        // `sparkline = true` only when there is nothing stored at all.
+        InstanceConfig(decode = { prefs -> btWidgetAssetConfig(prefs) }) { stored, setDraft ->
+            val spark = stored?.sparkline ?: true
+            // ConfigScroll, not ConfigPickPanel: a searched list has two states
+            // that scaffold cannot model (typed-but-no-matches, and
+            // offline-with-a-local fallback), and the search field has to sit
+            // above whatever is showing.
+            ConfigScroll(titleRes = R.string.bt_widget_config_pick_asset) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_sparkline),
+                    options = listOf(true, false),
+                    selected = spark,
+                    optionLabel = {
+                        stringResource(
+                            if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                        )
+                    },
+                    // Toggling the sparkline before an asset is picked has
+                    // nothing to hang the flag on, so it seeds the draft only
+                    // once there IS one; the picker below carries it forward.
+                    onSelect = { on -> stored?.let { setDraft(it.copy(sparkline = on)) } },
+                )
+                // What this instance currently shows, named — without it the
+                // editor could not answer "which asset is this widget on?",
+                // which is the whole complaint the hydration fixes.
+                ConfigRow(
+                    title = stored?.let { "${it.symbol} · ${it.name}".trimEnd(' ', '·') }
+                        ?: stringResource(R.string.bt_widget_config_asset_none),
+                    subtitle = stringResource(R.string.bt_widget_config_current),
+                    selected = stored != null,
+                    // A statement, not a control: the picker below is what
+                    // changes it, so this row must not read as tappable.
+                    onClick = null,
+                )
+                BtWidgetAssetPicker(localChoices = choices) { picked ->
+                    setDraft(picked.copy(sparkline = spark))
+                }
+                SaveButton(
+                    onSave = {
+                        stored?.let { picked ->
+                            confirm { prefs -> btWidgetPutAssetConfig(prefs, picked) }
+                        }
+                    },
+                    // The asset widget's config is REQUIRED — there is no
+                    // honest unconfigured reading of "one asset", so saving
+                    // nothing must not be offered.
+                    enabled = stored != null,
+                )
             }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtAssetWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtAssetWidget().update(context, glanceId)
     }
 }
 
@@ -409,9 +572,11 @@ class BtQuickLinksWidgetConfigActivity : BtWidgetConfigActivity() {
 
     @Composable
     override fun Content() {
-        var config by remember { mutableStateOf(BtQuickLinksConfig(BT_QUICK_LINKS_DEFAULT)) }
         var portfolios by remember {
             mutableStateOf<List<at.bettertrack.app.data.db.PortfolioEntity>>(emptyList())
+        }
+        var sources by remember {
+            mutableStateOf<List<at.bettertrack.app.data.db.CashSourceEntity>>(emptyList())
         }
         LaunchedEffect(Unit) {
             portfolios = try {
@@ -420,26 +585,37 @@ class BtQuickLinksWidgetConfigActivity : BtWidgetConfigActivity() {
                 android.util.Log.w("BtWidgetConfig", "Portfolio choices failed to load.", e)
                 emptyList()
             }
+            sources = btWidgetAllCashSources(portfolios)
         }
-        ConfigPanelScroll(
-            titleRes = R.string.bt_ql_config_title,
-            onSave = { confirm { prefs -> btQuickLinksPutConfig(prefs, config) } },
-        ) {
-            ChipsRow(
-                label = stringResource(R.string.bt_ql_config_captions),
-                options = listOf(false, true),
-                selected = config.captions,
-                optionLabel = {
-                    stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
-                },
-                onSelect = { config = config.copy(captions = it) },
-            )
-            BtQuickLinksEditor(config = config, portfolios = portfolios) { config = it }
+        // btQuickLinksConfig already falls back to the default tile set when the
+        // instance has none stored, so this hydrates a placed widget with its
+        // OWN tiles and a fresh one with the defaults.
+        InstanceConfig(decode = { prefs -> btQuickLinksConfig(prefs) }) { config, setDraft ->
+            ConfigPanelScroll(
+                titleRes = R.string.bt_ql_config_title,
+                onSave = { confirm { prefs -> btQuickLinksPutConfig(prefs, config) } },
+            ) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_ql_config_captions),
+                    options = listOf(false, true),
+                    selected = config.captions,
+                    optionLabel = {
+                        stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
+                    },
+                    onSelect = { setDraft(config.copy(captions = it)) },
+                )
+                BtQuickLinksEditor(
+                    config = config,
+                    portfolios = portfolios,
+                    sources = sources,
+                    onChange = setDraft,
+                )
+            }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtQuickLinksWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtQuickLinksWidget().update(context, glanceId)
     }
 }
 
@@ -458,8 +634,7 @@ class BtCashWalletWidgetConfigActivity : BtWidgetConfigActivity() {
         var choices by remember {
             mutableStateOf<List<at.bettertrack.app.data.db.CashSourceEntity>?>(null)
         }
-        var portfolioId by remember { mutableStateOf<String?>(null) }
-        var movements by remember { mutableStateOf(true) }
+        var portfolioNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         // ROOM FIRST, network second — and never the other way round.
         //
         // The first cut awaited warmCashForPicker() before reading Room, and on
@@ -469,69 +644,69 @@ class BtCashWalletWidgetConfigActivity : BtWidgetConfigActivity() {
         // round was fought over. A slow network must only ever ADD rows to a
         // list the user can already see.
         LaunchedEffect(Unit) {
-            val pid = try {
-                AppGraph.portfolioRepository.defaultSelection()?.id
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            val portfolios = try {
+                btWidgetPortfolioChoices(AppGraph.database.portfolioDao().getAll())
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.w("BtWidgetConfig", "Portfolio resolution failed.", e)
-                null
-            }
-            portfolioId = pid
-            suspend fun fromRoom() = try {
-                pid?.let { BtWidgetRepository.loadCashSources(it) }.orEmpty()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.w("BtWidgetConfig", "Cash sources failed to load.", e)
+                android.util.Log.w("BtWidgetConfig", "Portfolio choices failed to load.", e)
                 emptyList()
             }
-            // Whatever Room has, on the first frame — including nothing, which
-            // renders the honest empty state rather than a void.
-            choices = fromRoom()
-            BtWidgetRepository.warmCashForPicker(pid)
-            val warmed = fromRoom()
+            portfolioNames = portfolios.associate { it.id to it.name }
+            // EVERY portfolio's wallets, not just the governing one's (owner
+            // 2026-08-18: "one button is for main cash in this portfolio the
+            // other one in my savings portfolio"). A wallet the user cannot
+            // reach from the picker is a wallet they cannot put on the home
+            // screen at all.
+            choices = btWidgetAllCashSources(portfolios)
+            btWidgetWarmCashSources(portfolios)
+            val warmed = btWidgetAllCashSources(portfolios)
             if (warmed.isNotEmpty()) choices = warmed
         }
-        ConfigList(
-            titleRes = R.string.bt_widget_cash_config_title,
-            choices = choices,
-            header = {
-                ChipsRow(
-                    label = stringResource(R.string.bt_widget_cash_config_movements),
-                    options = listOf(true, false),
-                    selected = movements,
-                    optionLabel = {
-                        stringResource(
-                            if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
-                        )
-                    },
-                    onSelect = { movements = it },
-                )
-            },
-        ) { source ->
-            ConfigRow(
-                title = source.name,
-                subtitle = if (source.isMain) stringResource(R.string.bt_cash_primary_badge) else null,
-                onClick = {
-                    confirm { prefs ->
-                        btWidgetPutCashConfig(
-                            prefs,
-                            BtWidgetCashConfig(
+        InstanceConfig(decode = { prefs -> btWidgetCashConfig(prefs) }) { draft, setDraft ->
+            ConfigPickPanel(
+                titleRes = R.string.bt_widget_cash_config_title,
+                choices = choices,
+                onSave = { confirm { prefs -> btWidgetPutCashConfig(prefs, draft) } },
+                header = {
+                    ChipsRow(
+                        label = stringResource(R.string.bt_widget_cash_config_movements),
+                        options = listOf(true, false),
+                        selected = draft.movements,
+                        optionLabel = {
+                            stringResource(
+                                if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off,
+                            )
+                        },
+                        onSelect = { setDraft(draft.copy(movements = it)) },
+                    )
+                },
+            ) { source ->
+                ConfigRow(
+                    title = source.name,
+                    // The portfolio name is what tells two wallets called
+                    // "Bank" in two portfolios apart.
+                    subtitle = listOfNotNull(
+                        portfolioNames[source.portfolioId],
+                        stringResource(R.string.bt_cash_primary_badge).takeIf { source.isMain },
+                    ).joinToString(" · "),
+                    selected = draft.sourceId == source.id,
+                    onClick = {
+                        setDraft(
+                            draft.copy(
                                 sourceId = source.id,
                                 sourceName = source.name,
                                 portfolioId = source.portfolioId,
-                                movements = movements,
                             ),
                         )
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtCashWalletWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtCashWalletWidget().update(context, glanceId)
     }
 }
 
@@ -545,10 +720,15 @@ class BtPortfolioWidgetConfigActivity : BtWidgetConfigActivity() {
     /** The list's row model: null = the follow-the-app option. */
     private data class Choice(val portfolio: at.bettertrack.app.data.db.PortfolioEntity?)
 
+    /** The whole editable state: which portfolio (null = follow), and the span. */
+    private data class Draft(
+        val config: BtWidgetPortfolioConfig?,
+        val range: at.bettertrack.app.data.repo.HistoryRange,
+    )
+
     @Composable
     override fun Content() {
         var choices by remember { mutableStateOf<List<Choice>?>(null) }
-        var range by remember { mutableStateOf(at.bettertrack.app.data.repo.HistoryRange.M1) }
         LaunchedEffect(Unit) {
             choices = try {
                 listOf(Choice(null)) +
@@ -559,53 +739,71 @@ class BtPortfolioWidgetConfigActivity : BtWidgetConfigActivity() {
                 emptyList()
             }
         }
-        ConfigList(
-            titleRes = R.string.bt_widget_config_pick_portfolio,
-            choices = choices,
-            header = {
-                // The chart span is CONFIG, not in-widget chrome (owner ruling):
-                // choose it here; the placed card just shows it.
-                ChipsRow(
-                    label = stringResource(R.string.bt_widget_config_range),
-                    options = BT_WIDGET_PERF_RANGES,
-                    selected = range,
-                    optionLabel = { stringResource(btWidgetRangeLabelRes(it)) },
-                    onSelect = { range = it },
+        InstanceConfig(
+            decode = { prefs ->
+                Draft(
+                    config = btWidgetPortfolioConfig(prefs),
+                    range = btWidgetPerfRange(prefs[BT_WIDGET_PREF_PERF_RANGE]),
                 )
             },
-        ) { choice ->
-            val portfolio = choice.portfolio
-            if (portfolio == null) {
-                ConfigRow(
-                    title = stringResource(R.string.bt_widget_config_follow),
-                    subtitle = stringResource(R.string.bt_widget_config_follow_sub),
-                    onClick = {
-                        confirm { prefs ->
+        ) { draft, setDraft ->
+            ConfigPickPanel(
+                titleRes = R.string.bt_widget_config_pick_portfolio,
+                choices = choices,
+                onSave = {
+                    confirm { prefs ->
+                        val pinned = draft.config
+                        if (pinned == null) {
                             btWidgetClearPortfolioConfig(prefs)
-                            prefs[BT_WIDGET_PREF_PERF_RANGE] = range.wire
+                        } else {
+                            btWidgetPutPortfolioConfig(prefs, pinned)
                         }
-                    },
-                )
-            } else {
-                ConfigRow(
-                    title = portfolio.name,
-                    subtitle = null,
-                    onClick = {
-                        confirm { prefs ->
-                            btWidgetPutPortfolioConfig(
-                                prefs,
-                                BtWidgetPortfolioConfig(portfolioId = portfolio.id, name = portfolio.name),
+                        prefs[BT_WIDGET_PREF_PERF_RANGE] = draft.range.wire
+                    }
+                },
+                header = {
+                    // The chart span is CONFIG, not in-widget chrome (owner
+                    // ruling): choose it here; the placed card just shows it.
+                    ChipsRow(
+                        label = stringResource(R.string.bt_widget_config_range),
+                        options = BT_WIDGET_PERF_RANGES,
+                        selected = draft.range,
+                        optionLabel = { stringResource(btWidgetRangeLabelRes(it)) },
+                        onSelect = { setDraft(draft.copy(range = it)) },
+                    )
+                },
+            ) { choice ->
+                val portfolio = choice.portfolio
+                if (portfolio == null) {
+                    ConfigRow(
+                        title = stringResource(R.string.bt_widget_config_follow),
+                        subtitle = stringResource(R.string.bt_widget_config_follow_sub),
+                        selected = draft.config == null,
+                        onClick = { setDraft(draft.copy(config = null)) },
+                    )
+                } else {
+                    ConfigRow(
+                        title = portfolio.name,
+                        subtitle = null,
+                        selected = draft.config?.portfolioId == portfolio.id,
+                        onClick = {
+                            setDraft(
+                                draft.copy(
+                                    config = BtWidgetPortfolioConfig(
+                                        portfolioId = portfolio.id,
+                                        name = portfolio.name,
+                                    ),
+                                ),
                             )
-                            prefs[BT_WIDGET_PREF_PERF_RANGE] = range.wire
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtPortfolioWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtPortfolioWidget().update(context, glanceId)
     }
 }
 
@@ -619,11 +817,16 @@ class BtBudgetWidgetConfigActivity : BtWidgetConfigActivity() {
     /** The list's row model: null = the all-budgets option. */
     private data class Choice(val budget: BtWidgetBudget?)
 
+    /** Which budget (null = the all-budgets list), plus how it is drawn. */
+    private data class Draft(
+        val config: BtWidgetBudgetConfig?,
+        val style: BtWidgetBudgetStyle,
+        val emphasis: BtWidgetBudgetEmphasis,
+    )
+
     @Composable
     override fun Content() {
         var choices by remember { mutableStateOf<List<Choice>?>(null) }
-        var style by remember { mutableStateOf(BtWidgetBudgetStyle.RING) }
-        var emphasis by remember { mutableStateOf(BtWidgetBudgetEmphasis.REMAINING) }
         // Room first, network second — same rule and same reason as the cash
         // picker below it: awaiting the top-up before the first read left this
         // screen blank for the whole of a 20 s network timeout.
@@ -631,7 +834,7 @@ class BtBudgetWidgetConfigActivity : BtWidgetConfigActivity() {
             suspend fun fromCache() = try {
                 val cache = BtWidgetBudgetStore.read(AppGraph.database, AppGraph.json)
                 listOf(Choice(null)) + cache.budgets.map { Choice(it) }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 android.util.Log.w("BtWidgetConfig", "Budget choices failed to load.", e)
@@ -644,57 +847,86 @@ class BtBudgetWidgetConfigActivity : BtWidgetConfigActivity() {
             val warmed = fromCache()
             if (warmed.size > 1) choices = warmed
         }
-        ConfigList(
-            titleRes = R.string.bt_widget_config_pick_budget,
-            choices = choices,
-            header = {
-                ChipsRow(
-                    label = stringResource(R.string.bt_widgets_pick_style_label),
-                    options = BtWidgetBudgetStyle.entries.toList(),
-                    selected = style,
-                    optionLabel = { stringResource(btWidgetStyleLabel(it)) },
-                    onSelect = { style = it },
-                )
-                ChipsRow(
-                    label = stringResource(R.string.bt_widget_config_emphasis),
-                    options = BtWidgetBudgetEmphasis.entries.toList(),
-                    selected = emphasis,
-                    optionLabel = { stringResource(btWidgetEmphasisLabel(it)) },
-                    onSelect = { emphasis = it },
+        InstanceConfig(
+            decode = { prefs ->
+                val stored = btWidgetBudgetConfig(prefs)
+                Draft(
+                    config = stored,
+                    // The style/emphasis keys survive a switch to the
+                    // all-budgets mode, so an editor reopened after that switch
+                    // still shows the style the user last chose rather than RING.
+                    style = stored?.style ?: btWidgetBudgetStyle(prefs[BT_WIDGET_PREF_BUDGET_STYLE]),
+                    emphasis = stored?.emphasis
+                        ?: btWidgetBudgetEmphasis(prefs[BT_WIDGET_PREF_BUDGET_EMPHASIS]),
                 )
             },
-        ) { choice ->
-            val budget = choice.budget
-            if (budget == null) {
-                ConfigRow(
-                    title = stringResource(R.string.bt_widget_config_all_budgets),
-                    subtitle = stringResource(R.string.bt_widget_config_all_budgets_sub),
-                    onClick = { confirm { prefs -> btWidgetClearBudgetConfig(prefs) } },
-                )
-            } else {
-                ConfigRow(
-                    title = budget.tagName,
-                    subtitle = null,
-                    onClick = {
-                        confirm { prefs ->
+        ) { draft, setDraft ->
+            ConfigPickPanel(
+                titleRes = R.string.bt_widget_config_pick_budget,
+                choices = choices,
+                onSave = {
+                    confirm { prefs ->
+                        val pinned = draft.config
+                        if (pinned == null) {
+                            btWidgetClearBudgetConfig(prefs)
+                        } else {
                             btWidgetPutBudgetConfig(
                                 prefs,
-                                BtWidgetBudgetConfig(
-                                    budgetId = budget.id,
-                                    tagName = budget.tagName,
-                                    style = style,
-                                    emphasis = emphasis,
-                                ),
+                                pinned.copy(style = draft.style, emphasis = draft.emphasis),
                             )
                         }
-                    },
-                )
+                    }
+                },
+                header = {
+                    ChipsRow(
+                        label = stringResource(R.string.bt_widgets_pick_style_label),
+                        options = BtWidgetBudgetStyle.entries.toList(),
+                        selected = draft.style,
+                        optionLabel = { stringResource(btWidgetStyleLabel(it)) },
+                        onSelect = { setDraft(draft.copy(style = it)) },
+                    )
+                    ChipsRow(
+                        label = stringResource(R.string.bt_widget_config_emphasis),
+                        options = BtWidgetBudgetEmphasis.entries.toList(),
+                        selected = draft.emphasis,
+                        optionLabel = { stringResource(btWidgetEmphasisLabel(it)) },
+                        onSelect = { setDraft(draft.copy(emphasis = it)) },
+                    )
+                },
+            ) { choice ->
+                val budget = choice.budget
+                if (budget == null) {
+                    ConfigRow(
+                        title = stringResource(R.string.bt_widget_config_all_budgets),
+                        subtitle = stringResource(R.string.bt_widget_config_all_budgets_sub),
+                        selected = draft.config == null,
+                        onClick = { setDraft(draft.copy(config = null)) },
+                    )
+                } else {
+                    ConfigRow(
+                        title = budget.tagName,
+                        subtitle = null,
+                        selected = draft.config?.budgetId == budget.id,
+                        onClick = {
+                            setDraft(
+                                draft.copy(
+                                    config = BtWidgetBudgetConfig(
+                                        budgetId = budget.id,
+                                        tagName = budget.tagName,
+                                        style = draft.style,
+                                        emphasis = draft.emphasis,
+                                    ),
+                                ),
+                            )
+                        },
+                    )
+                }
             }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtBudgetWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtBudgetWidget().update(context, glanceId)
     }
 }
 
@@ -710,11 +942,6 @@ class BtNetWorthWidgetConfigActivity : BtWidgetConfigActivity() {
         var portfolios by remember {
             mutableStateOf<List<at.bettertrack.app.data.db.PortfolioEntity>>(emptyList())
         }
-        var scope by remember {
-            mutableStateOf<at.bettertrack.app.data.db.PortfolioEntity?>(null)
-        }
-        var style by remember { mutableStateOf(BtWidgetDeltaStyle.BOTH) }
-        var spark by remember { mutableStateOf(true) }
         LaunchedEffect(Unit) {
             portfolios = try {
                 btWidgetPortfolioChoices(AppGraph.database.portfolioDao().getAll())
@@ -723,50 +950,51 @@ class BtNetWorthWidgetConfigActivity : BtWidgetConfigActivity() {
                 emptyList()
             }
         }
-        ConfigPanel(
-            titleRes = R.string.bt_widget_config_pulse,
-            onSave = {
-                confirm { prefs ->
-                    btWidgetPutPulseConfig(
-                        prefs,
-                        BtWidgetPulseConfig(
-                            portfolioId = scope?.id,
-                            portfolioName = scope?.name.orEmpty(),
-                            style = style,
-                            sparkline = spark,
-                        ),
-                    )
-                }
-            },
-        ) {
-            ChipsRow(
-                label = stringResource(R.string.bt_widgets_pick_portfolio_label),
-                options = listOf<at.bettertrack.app.data.db.PortfolioEntity?>(null) + portfolios,
-                selected = scope,
-                optionLabel = { it?.name ?: stringResource(R.string.bt_widget_pulse_all) },
-                onSelect = { scope = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_delta_style),
-                options = BtWidgetDeltaStyle.entries.toList(),
-                selected = style,
-                optionLabel = { stringResource(btWidgetDeltaStyleLabel(it)) },
-                onSelect = { style = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_sparkline),
-                options = listOf(true, false),
-                selected = spark,
-                optionLabel = {
-                    stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
-                },
-                onSelect = { spark = it },
-            )
+        InstanceConfig(decode = { prefs -> btWidgetPulseConfig(prefs) }) { draft, setDraft ->
+            ConfigPanel(
+                titleRes = R.string.bt_widget_config_pulse,
+                onSave = { confirm { prefs -> btWidgetPutPulseConfig(prefs, draft) } },
+            ) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_widgets_pick_portfolio_label),
+                    options = listOf<at.bettertrack.app.data.db.PortfolioEntity?>(null) + portfolios,
+                    // Compared by ID, not by identity: the chip options are
+                    // freshly read entities and the draft only stores an id, so
+                    // an `option == selected` test would never match and the
+                    // hydrated scope would render as "Alle Depots".
+                    selected = portfolios.firstOrNull { it.id == draft.portfolioId },
+                    optionLabel = { it?.name ?: stringResource(R.string.bt_widget_pulse_all) },
+                    onSelect = {
+                        setDraft(
+                            draft.copy(
+                                portfolioId = it?.id,
+                                portfolioName = it?.name.orEmpty(),
+                            ),
+                        )
+                    },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_delta_style),
+                    options = BtWidgetDeltaStyle.entries.toList(),
+                    selected = draft.style,
+                    optionLabel = { stringResource(btWidgetDeltaStyleLabel(it)) },
+                    onSelect = { setDraft(draft.copy(style = it)) },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_sparkline),
+                    options = listOf(true, false),
+                    selected = draft.sparkline,
+                    optionLabel = {
+                        stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
+                    },
+                    onSelect = { setDraft(draft.copy(sparkline = it)) },
+                )
+            }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtNetWorthWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtNetWorthWidget().update(context, glanceId)
     }
 }
 
@@ -775,67 +1003,58 @@ class BtAllocationWidgetConfigActivity : BtWidgetConfigActivity() {
 
     @Composable
     override fun Content() {
-        var group by remember { mutableStateOf(BtWidgetAllocationGroup.CLASS) }
-        var cash by remember { mutableStateOf(true) }
-        var center by remember { mutableStateOf(BtWidgetAllocationCenter.TOTAL) }
-        var form by remember { mutableStateOf(BtWidgetAllocationForm.DONUT) }
-        ConfigPanel(
-            titleRes = R.string.bt_widget_config_allocation,
-            onSave = {
-                confirm { prefs ->
-                    btWidgetPutAllocationConfig(
-                        prefs,
-                        BtWidgetAllocationConfig(group, cash, center, form),
+        InstanceConfig(decode = { prefs -> btWidgetAllocationConfig(prefs) }) { draft, setDraft ->
+            ConfigPanel(
+                titleRes = R.string.bt_widget_config_allocation,
+                onSave = { confirm { prefs -> btWidgetPutAllocationConfig(prefs, draft) } },
+            ) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_viz_title),
+                    options = BtWidgetAllocationForm.entries.toList(),
+                    selected = draft.form,
+                    optionLabel = { stringResource(btWidgetAllocFormLabel(it)) },
+                    onSelect = { setDraft(draft.copy(form = it)) },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_group_by),
+                    options = BtWidgetAllocationGroup.entries.toList(),
+                    selected = draft.group,
+                    optionLabel = { stringResource(btWidgetAllocGroupLabel(it)) },
+                    onSelect = { setDraft(draft.copy(group = it)) },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_allocation_cash),
+                    options = listOf(true, false),
+                    selected = draft.includeCash,
+                    optionLabel = {
+                        stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
+                    },
+                    onSelect = { setDraft(draft.copy(includeCash = it)) },
+                )
+                // The centre figure is a property of the RING's hole. Offering it
+                // beside a treemap would be a control with nothing to control.
+                if (draft.form == BtWidgetAllocationForm.DONUT) {
+                    ChipsRow(
+                        label = stringResource(R.string.bt_widget_config_center),
+                        options = BtWidgetAllocationCenter.entries.toList(),
+                        selected = draft.center,
+                        optionLabel = {
+                            stringResource(
+                                when (it) {
+                                    BtWidgetAllocationCenter.TOTAL -> R.string.bt_widget_config_center_total
+                                    BtWidgetAllocationCenter.TOP -> R.string.bt_widget_config_center_top
+                                },
+                            )
+                        },
+                        onSelect = { setDraft(draft.copy(center = it)) },
                     )
                 }
-            },
-        ) {
-            ChipsRow(
-                label = stringResource(R.string.bt_viz_title),
-                options = BtWidgetAllocationForm.entries.toList(),
-                selected = form,
-                optionLabel = { stringResource(btWidgetAllocFormLabel(it)) },
-                onSelect = { form = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_group_by),
-                options = BtWidgetAllocationGroup.entries.toList(),
-                selected = group,
-                optionLabel = { stringResource(btWidgetAllocGroupLabel(it)) },
-                onSelect = { group = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_allocation_cash),
-                options = listOf(true, false),
-                selected = cash,
-                optionLabel = {
-                    stringResource(if (it) R.string.bt_widget_config_on else R.string.bt_widget_config_off)
-                },
-                onSelect = { cash = it },
-            )
-            // The centre figure is a property of the RING's hole. Offering it
-            // beside a treemap would be a control with nothing to control.
-            if (form == BtWidgetAllocationForm.DONUT) {
-                ChipsRow(
-                    label = stringResource(R.string.bt_widget_config_center),
-                    options = BtWidgetAllocationCenter.entries.toList(),
-                    selected = center,
-                    optionLabel = {
-                        stringResource(
-                            when (it) {
-                                BtWidgetAllocationCenter.TOTAL -> R.string.bt_widget_config_center_total
-                                BtWidgetAllocationCenter.TOP -> R.string.bt_widget_config_center_top
-                            },
-                        )
-                    },
-                    onSelect = { center = it },
-                )
             }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtAllocationWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtAllocationWidget().update(context, glanceId)
     }
 }
 
@@ -846,75 +1065,72 @@ abstract class BtRowsConfigActivity(
 
     @Composable
     override fun Content() {
-        var source by remember { mutableStateOf(defaults.source) }
-        var sort by remember { mutableStateOf(defaults.sort) }
-        var direction by remember { mutableStateOf(defaults.direction) }
-        ConfigPanel(
-            titleRes = R.string.bt_widget_config_rows,
-            onSave = {
-                confirm { prefs ->
-                    btWidgetPutRowsConfig(prefs, BtWidgetRowsConfig(source, sort, direction))
-                }
-            },
-        ) {
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_source),
-                options = BtWidgetRowSource.entries.toList(),
-                selected = source,
-                optionLabel = {
-                    stringResource(
-                        when (it) {
-                            BtWidgetRowSource.WATCHLIST -> R.string.bt_widget_watchlist_title
-                            BtWidgetRowSource.HOLDINGS -> R.string.bt_widget_config_source_holdings
-                        },
-                    )
-                },
-                onSelect = { source = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_sort),
-                options = BtWidgetRowSort.entries.toList(),
-                selected = sort,
-                optionLabel = {
-                    stringResource(
-                        when (it) {
-                            BtWidgetRowSort.MOVEMENT -> R.string.bt_widget_config_sort_movement
-                            BtWidgetRowSort.VALUE -> R.string.bt_widget_config_sort_value
-                            BtWidgetRowSort.MANUAL -> R.string.bt_widget_config_sort_manual
-                        },
-                    )
-                },
-                onSelect = { sort = it },
-            )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_direction),
-                options = BtWidgetRowDirection.entries.toList(),
-                selected = direction,
-                optionLabel = {
-                    stringResource(
-                        when (it) {
-                            BtWidgetRowDirection.ALL -> R.string.bt_widget_config_dir_all
-                            BtWidgetRowDirection.WINNERS -> R.string.bt_widget_config_dir_winners
-                            BtWidgetRowDirection.LOSERS -> R.string.bt_widget_config_dir_losers
-                            BtWidgetRowDirection.SPLIT -> R.string.bt_widget_config_dir_split
-                        },
-                    )
-                },
-                onSelect = { direction = it },
-            )
+        // The preset defaults are the fallback for keys this instance has never
+        // written — btWidgetRowsConfig already takes them for exactly that.
+        InstanceConfig(decode = { prefs -> btWidgetRowsConfig(prefs, defaults) }) { draft, setDraft ->
+            ConfigPanel(
+                titleRes = R.string.bt_widget_config_rows,
+                onSave = { confirm { prefs -> btWidgetPutRowsConfig(prefs, draft) } },
+            ) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_source),
+                    options = BtWidgetRowSource.entries.toList(),
+                    selected = draft.source,
+                    optionLabel = {
+                        stringResource(
+                            when (it) {
+                                BtWidgetRowSource.WATCHLIST -> R.string.bt_widget_watchlist_title
+                                BtWidgetRowSource.HOLDINGS -> R.string.bt_widget_config_source_holdings
+                            },
+                        )
+                    },
+                    onSelect = { setDraft(draft.copy(source = it)) },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_sort),
+                    options = BtWidgetRowSort.entries.toList(),
+                    selected = draft.sort,
+                    optionLabel = {
+                        stringResource(
+                            when (it) {
+                                BtWidgetRowSort.MOVEMENT -> R.string.bt_widget_config_sort_movement
+                                BtWidgetRowSort.VALUE -> R.string.bt_widget_config_sort_value
+                                BtWidgetRowSort.MANUAL -> R.string.bt_widget_config_sort_manual
+                            },
+                        )
+                    },
+                    onSelect = { setDraft(draft.copy(sort = it)) },
+                )
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_direction),
+                    options = BtWidgetRowDirection.entries.toList(),
+                    selected = draft.direction,
+                    optionLabel = {
+                        stringResource(
+                            when (it) {
+                                BtWidgetRowDirection.ALL -> R.string.bt_widget_config_dir_all
+                                BtWidgetRowDirection.WINNERS -> R.string.bt_widget_config_dir_winners
+                                BtWidgetRowDirection.LOSERS -> R.string.bt_widget_config_dir_losers
+                                BtWidgetRowDirection.SPLIT -> R.string.bt_widget_config_dir_split
+                            },
+                        )
+                    },
+                    onSelect = { setDraft(draft.copy(direction = it)) },
+                )
+            }
         }
     }
 }
 
 class BtWatchlistWidgetConfigActivity : BtRowsConfigActivity(BT_WIDGET_ROWS_WATCHLIST_DEFAULTS) {
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtWatchlistWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtWatchlistWidget().update(context, glanceId)
     }
 }
 
 class BtMoversWidgetConfigActivity : BtRowsConfigActivity(BT_WIDGET_ROWS_MOVERS_DEFAULTS) {
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtMoversWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtMoversWidget().update(context, glanceId)
     }
 }
 
@@ -923,25 +1139,24 @@ class BtSpendingWidgetConfigActivity : BtWidgetConfigActivity() {
 
     @Composable
     override fun Content() {
-        var mode by remember { mutableStateOf(BtWidgetFlowMode.DONUT) }
-        ConfigPanel(
-            titleRes = R.string.bt_widget_config_flow,
-            onSave = {
-                confirm { prefs -> prefs[BT_WIDGET_PREF_FLOW_MODE] = mode.name }
-            },
-        ) {
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_flow_mode),
-                options = BtWidgetFlowMode.entries.toList(),
-                selected = mode,
-                optionLabel = { stringResource(btWidgetFlowModeLabel(it)) },
-                onSelect = { mode = it },
-            )
+        InstanceConfig(decode = { prefs -> btWidgetFlowMode(prefs[BT_WIDGET_PREF_FLOW_MODE]) }) { mode, setDraft ->
+            ConfigPanel(
+                titleRes = R.string.bt_widget_config_flow,
+                onSave = { confirm { prefs -> prefs[BT_WIDGET_PREF_FLOW_MODE] = mode.name } },
+            ) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_flow_mode),
+                    options = BtWidgetFlowMode.entries.toList(),
+                    selected = mode,
+                    optionLabel = { stringResource(btWidgetFlowModeLabel(it)) },
+                    onSelect = setDraft,
+                )
+            }
         }
     }
 
-    override suspend fun redraw(glanceId: GlanceId) {
-        BtSpendingWidget().update(this, glanceId)
+    override suspend fun redraw(context: Context, glanceId: GlanceId) {
+        BtSpendingWidget().update(context, glanceId)
     }
 }
 

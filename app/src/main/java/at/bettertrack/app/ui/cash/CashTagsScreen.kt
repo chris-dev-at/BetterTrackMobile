@@ -3,6 +3,8 @@ package at.bettertrack.app.ui.cash
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +65,7 @@ import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.CASH_TAG_NAME_MAX
+import at.bettertrack.app.data.api.dto.CashSystemTagKeys
 import at.bettertrack.app.data.cash.CashClassificationRepository
 import at.bettertrack.app.data.db.CashTagEntity
 import at.bettertrack.app.di.AppGraph
@@ -78,6 +82,7 @@ import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSheetAction
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -137,6 +142,98 @@ fun normalizeCashTagName(raw: String): String = raw.trim().take(CASH_TAG_NAME_MA
 /** True when the typed name is submittable (non-blank once trimmed). */
 fun isCashTagNameValid(raw: String): Boolean = normalizeCashTagName(raw).isNotEmpty()
 
+// ── Built-in tags: what they mean, and the way back ─────────────────────────
+
+/**
+ * The seeded display name of each built-in tag identity.
+ *
+ * Owner ask 2026-08-17: *"make a way to reset the built in stuff tags so you get
+ * the default back or you see at least what the default tag represents."*
+ *
+ * The platform has **no reset endpoint**, so the restore is client-side: it is
+ * an ordinary `PATCH /cash/tags/{id}` that writes the canonical name back. That
+ * is legitimate precisely because [CashTagEntity.systemKey] — not the name — is
+ * what identifies a built-in tag to the server's auto-tag engine, so a rename
+ * was only ever cosmetic and writing the name back cannot detach the tag from
+ * its meaning.
+ *
+ * **English, not localized, and that is deliberate.** These strings go over the
+ * wire as the tag's name and the web client shows the same row; a German-only
+ * "Verkaufserlös" written from this phone would follow the account everywhere.
+ * The seeded names are English, so restoring English is restoring. The
+ * *explanation* of each tag is localized — see [cashSystemTagDescriptionRes].
+ */
+private val CASH_SYSTEM_TAG_DEFAULT_NAMES: Map<String, String> = mapOf(
+    CashSystemTagKeys.INVESTMENT to "Investment",
+    CashSystemTagKeys.SALE_PROCEEDS to "Sale proceeds",
+    CashSystemTagKeys.DIVIDEND to "Dividend",
+    CashSystemTagKeys.INTEREST to "Interest",
+    CashSystemTagKeys.FEES to "Fees",
+    CashSystemTagKeys.TAX to "Tax",
+    CashSystemTagKeys.TRANSFER to "Transfer",
+    CashSystemTagKeys.DEPOSIT to "Deposit",
+    CashSystemTagKeys.WITHDRAWAL to "Withdrawal",
+)
+
+/**
+ * The default name for a [CashTagEntity.systemKey], or null when the key is not
+ * one this build knows.
+ *
+ * Null is a real branch, not a defensive shrug: [CashSystemTagKeys] is
+ * deliberately strings rather than an enum because the platform may seed a tenth
+ * identity, and an app that has never heard of it must show the row without
+ * offering to "restore" it to a name it invented.
+ */
+fun cashSystemTagDefaultName(systemKey: String?): String? =
+    systemKey?.let { CASH_SYSTEM_TAG_DEFAULT_NAMES[it] }
+
+/**
+ * The one-line explanation of a built-in tag, keyed off [systemKey] — never off
+ * the visible name, which the user may have renamed to anything at all. Null for
+ * a user tag or an unknown key.
+ */
+fun cashSystemTagDescriptionRes(systemKey: String?): Int? = when (systemKey) {
+    CashSystemTagKeys.INVESTMENT -> R.string.bt_tags_builtin_desc_investment
+    CashSystemTagKeys.SALE_PROCEEDS -> R.string.bt_tags_builtin_desc_sale_proceeds
+    CashSystemTagKeys.DIVIDEND -> R.string.bt_tags_builtin_desc_dividend
+    CashSystemTagKeys.INTEREST -> R.string.bt_tags_builtin_desc_interest
+    CashSystemTagKeys.FEES -> R.string.bt_tags_builtin_desc_fees
+    CashSystemTagKeys.TAX -> R.string.bt_tags_builtin_desc_tax
+    CashSystemTagKeys.TRANSFER -> R.string.bt_tags_builtin_desc_transfer
+    CashSystemTagKeys.DEPOSIT -> R.string.bt_tags_builtin_desc_deposit
+    CashSystemTagKeys.WITHDRAWAL -> R.string.bt_tags_builtin_desc_withdrawal
+    else -> null
+}
+
+/**
+ * True when a restore would change nothing — the tag already carries its
+ * canonical name, or it is not a built-in tag this build has a default for.
+ *
+ * Case-insensitive and trim-tolerant, because the server itself trims names and
+ * enforces uniqueness case-insensitively: "fees " is the default, spelled badly,
+ * and offering to "restore" it would be offering a no-op.
+ */
+fun cashSystemTagIsAtDefault(tag: CashTagEntity): Boolean {
+    val default = cashSystemTagDefaultName(tag.systemKey) ?: return true
+    return tag.name.trim().equals(default, ignoreCase = true)
+}
+
+/**
+ * The built-in tags a "restore all" would actually touch, paired with the name
+ * to write. Already-default rows and unknown keys are excluded, so the action
+ * never sends a PATCH that changes nothing.
+ */
+fun cashSystemTagsToRestore(tags: List<CashTagEntity>): List<Pair<CashTagEntity, String>> {
+    val out = mutableListOf<Pair<CashTagEntity, String>>()
+    for (tag in tags) {
+        if (!tag.system) continue
+        val default = cashSystemTagDefaultName(tag.systemKey) ?: continue
+        if (cashSystemTagIsAtDefault(tag)) continue
+        out += tag to default
+    }
+    return out
+}
+
 class CashTagsViewModel(
     private val repo: CashClassificationRepository,
 ) : ViewModel() {
@@ -183,6 +280,47 @@ class CashTagsViewModel(
     fun deleteTag(id: String, onDone: (Boolean) -> Unit) =
         write(onDone) { repo.deleteTag(id) }
 
+    /**
+     * Write the canonical built-in names back, one PATCH per tag.
+     *
+     * **No endpoint is invented.** There is no `/cash/tags/reset`; this is the
+     * ordinary rename the screen already performs, aimed at a name the app can
+     * derive from the server-owned `systemKey`. The COLOUR is deliberately not
+     * sent — the PATCH body is sparse (`explicitNulls = false`), so omitting it
+     * leaves whatever tint the tag currently wears untouched. The app cannot
+     * know the server's seeded colour, and guessing one would be a silent
+     * second edit the user never asked for; the confirmation copy says so.
+     *
+     * Sequential rather than parallel, and it STOPS at the first refusal: a
+     * half-applied restore the user can see the extent of beats nine racing
+     * writes whose partial failure is unreadable.
+     */
+    fun restoreDefaultNames(targets: List<Pair<String, String>>, onDone: (Boolean) -> Unit) {
+        if (_busy.value) return
+        if (targets.isEmpty()) {
+            onDone(true)
+            return
+        }
+        viewModelScope.launch {
+            _busy.value = true
+            _writeError.value = null
+            var ok = true
+            for ((id, name) in targets) {
+                val r = repo.updateTag(id, name = normalizeCashTagName(name), color = null)
+                if (r is BtResult.Err) {
+                    _writeError.value = CashTagFailure(
+                        systemProtected = r.error.isCashTagSystemProtected,
+                        message = r.error.asMessage(),
+                    )
+                    ok = false
+                    break
+                }
+            }
+            _busy.value = false
+            onDone(ok)
+        }
+    }
+
     private fun write(onDone: (Boolean) -> Unit, action: suspend () -> BtResult<*>) {
         if (_busy.value) return
         viewModelScope.launch {
@@ -209,6 +347,18 @@ private sealed interface CashTagSheetTarget {
     data class Edit(val tag: CashTagEntity) : CashTagSheetTarget
 }
 
+/** What a pending restore would rewrite — one built-in tag, or every renamed one. */
+private sealed interface CashTagRestoreTarget {
+    data class One(val tag: CashTagEntity, val defaultName: String) : CashTagRestoreTarget
+    data class All(val targets: List<Pair<CashTagEntity, String>>) : CashTagRestoreTarget
+
+    /** `(tagId, nameToWrite)` pairs for [CashTagsViewModel.restoreDefaultNames]. */
+    fun writes(): List<Pair<String, String>> = when (this) {
+        is One -> listOf(tag.id to defaultName)
+        is All -> targets.map { (tag, name) -> tag.id to name }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CashTagsScreen(onBack: () -> Unit) {
@@ -227,6 +377,7 @@ fun CashTagsScreen(onBack: () -> Unit) {
 
     var sheet by remember { mutableStateOf<CashTagSheetTarget?>(null) }
     var deleteTarget by remember { mutableStateOf<CashTagEntity?>(null) }
+    var restoreTarget by remember { mutableStateOf<CashTagRestoreTarget?>(null) }
 
     val (userTags, systemTags) = splitCashTags(tags)
 
@@ -333,25 +484,68 @@ fun CashTagsScreen(onBack: () -> Unit) {
                     }
 
                     if (systemTags.isNotEmpty()) {
+                        // Every renamed built-in tag, with the name to write back.
+                        // Empty when nothing was renamed — the section-level
+                        // restore then does not appear at all, rather than
+                        // offering to undo nothing.
+                        val restorable = cashSystemTagsToRestore(systemTags)
                         item(key = "builtin-header") {
                             Column {
                                 SectionHeading(stringResource(R.string.bt_tags_section_builtin))
                                 Spacer(Modifier.height(2.dp))
+                                // The hint explains the RULES (auto-assigned,
+                                // renameable, not deletable); the per-row lines
+                                // below explain what each one MEANS. Both are
+                                // needed — neither answers the other's question.
                                 Text(
                                     text = stringResource(R.string.bt_tags_builtin_hint),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = bt.textMuted,
                                 )
+                                if (restorable.isNotEmpty()) {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = stringResource(R.string.bt_tags_restore_all),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (busy) bt.textMuted else bt.goldInk,
+                                        modifier = Modifier
+                                            .clip(BtShapes.pill)
+                                            .clickable(enabled = !busy) {
+                                                restoreTarget = CashTagRestoreTarget.All(restorable)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    )
+                                }
                             }
                         }
                         items(count = systemTags.size, key = { systemTags[it].id }) { i ->
                             val tag = systemTags[i]
+                            val default = cashSystemTagDefaultName(tag.systemKey)
+                            val atDefault = cashSystemTagIsAtDefault(tag)
+                            // Nothing to restore on an untouched row, and nothing
+                            // this build could invent for a key it does not know.
+                            val restore: (() -> Unit)? = if (atDefault || default == null) {
+                                null
+                            } else {
+                                ({ restoreTarget = CashTagRestoreTarget.One(tag, default) })
+                            }
                             CashTagRow(
                                 tag = tag,
                                 actionsEnabled = !busy,
                                 onEdit = { sheet = CashTagSheetTarget.Edit(tag) },
                                 // App-owned: the delete item is ABSENT, not disabled.
                                 onDelete = null,
+                                description = cashSystemTagDescriptionRes(tag.systemKey)
+                                    ?.let { stringResource(it) },
+                                // Only a RENAMED row says what it used to be
+                                // called; on an untouched one that line would
+                                // just repeat the title.
+                                defaultNameHint = if (atDefault) {
+                                    null
+                                } else {
+                                    default?.let { stringResource(R.string.bt_tags_builtin_default_name, it) }
+                                },
+                                onRestore = restore,
                             )
                         }
                     }
@@ -396,6 +590,23 @@ fun CashTagsScreen(onBack: () -> Unit) {
         )
 
         null -> Unit
+    }
+
+    restoreTarget?.let { target ->
+        CashTagRestoreSheet(
+            target = target,
+            busy = busy,
+            failure = writeError,
+            onConfirm = {
+                vm.restoreDefaultNames(target.writes()) { ok -> if (ok) restoreTarget = null }
+            },
+            onDismiss = {
+                if (!busy) {
+                    restoreTarget = null
+                    vm.clearWriteError()
+                }
+            },
+        )
     }
 
     deleteTarget?.let { target ->
@@ -463,6 +674,13 @@ private fun SectionHeading(text: String) {
  * One catalog row: tint dot, name, the built-in marker, and the overflow.
  *
  * [onDelete] null means the row is app-owned — the menu then carries Edit alone.
+ *
+ * [description] is the built-in tag's meaning, resolved from its `systemKey`
+ * (owner ask 2026-08-17). It is the row's second line rather than a tooltip or a
+ * detail screen, because "what does this default tag represent" is a question
+ * the user has while LOOKING at the list. [defaultNameHint] appears only on a
+ * renamed built-in row — the third line that tells the user what they renamed —
+ * and [onRestore] is the way back, offered only when there is something to undo.
  */
 @Composable
 private fun CashTagRow(
@@ -470,6 +688,9 @@ private fun CashTagRow(
     actionsEnabled: Boolean,
     onEdit: () -> Unit,
     onDelete: (() -> Unit)?,
+    description: String? = null,
+    defaultNameHint: String? = null,
+    onRestore: (() -> Unit)? = null,
 ) {
     val bt = BtTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
@@ -487,21 +708,43 @@ private fun CashTagRow(
                     .background(parseTagColor(tag.color, bt.tagFallback)),
             )
             Spacer(Modifier.width(12.dp))
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = tag.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = bt.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (tag.system) {
-                    Spacer(Modifier.width(8.dp))
-                    BtBadge(text = stringResource(R.string.bt_tags_builtin_badge), kind = BtBadgeKind.Neutral)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = tag.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = bt.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (tag.system) {
+                        Spacer(Modifier.width(8.dp))
+                        BtBadge(
+                            text = stringResource(R.string.bt_tags_builtin_badge),
+                            kind = BtBadgeKind.Neutral,
+                        )
+                    }
+                }
+                if (description != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textMuted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (defaultNameHint != null) {
+                    Spacer(Modifier.height(1.dp))
+                    Text(
+                        text = defaultNameHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = bt.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             IconButton(onClick = { menuOpen = true }, enabled = actionsEnabled) {
@@ -517,10 +760,15 @@ private fun CashTagRow(
     if (menuOpen) {
         val editLabel = stringResource(R.string.bt_cash_edit)
         val deleteLabel = stringResource(R.string.bt_cash_delete)
+        val restoreLabel = stringResource(R.string.bt_tags_restore_action)
         BtActionSheet(
             title = tag.name,
+            subtitle = description,
             actions = buildList {
                 add(BtSheetAction(label = editLabel, onClick = onEdit))
+                if (onRestore != null) {
+                    add(BtSheetAction(label = restoreLabel, onClick = onRestore))
+                }
                 if (onDelete != null) {
                     add(BtSheetAction(label = deleteLabel, destructive = true, onClick = onDelete))
                 }
@@ -616,6 +864,110 @@ private fun CashTagSheet(
                     if (nameValid) onSubmit(name, color)
                 },
                 enabled = nameValid && !busy,
+                loading = busy,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Confirm a restore — the one write on this screen that overwrites something the
+ * user typed, so it asks first.
+ *
+ * A bottom sheet rather than an [AlertDialog]: it is the house transient surface
+ * (every picker, form and switcher in the app arrives this way), and it has room
+ * to show the two things this confirmation actually needs — the old name → new
+ * name pair, and the honest note that the COLOUR is not restored, because the
+ * app cannot know the server's seeded tint and will not silently invent one.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CashTagRestoreSheet(
+    target: CashTagRestoreTarget,
+    busy: Boolean,
+    failure: CashTagFailure?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = bt.surfaceHigh,
+        contentColor = bt.textPrimary,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                // Nine named pairs plus the note can outgrow a short phone at a
+                // large font scale, and a clipped confirmation is a confirmation
+                // the user cannot read before agreeing to it.
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    when (target) {
+                        is CashTagRestoreTarget.One -> R.string.bt_tags_restore_title
+                        is CashTagRestoreTarget.All -> R.string.bt_tags_restore_all_title
+                    },
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                color = bt.textPrimary,
+            )
+            when (target) {
+                is CashTagRestoreTarget.One -> Text(
+                    text = stringResource(
+                        R.string.bt_tags_restore_message,
+                        target.tag.name,
+                        target.defaultName,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = bt.textSecondary,
+                )
+
+                is CashTagRestoreTarget.All -> Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.bt_tags_restore_all_count,
+                            target.targets.size,
+                            target.targets.size,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = bt.textSecondary,
+                    )
+                    // Naming every row it touches, because "3 tags" is not
+                    // consent to overwrite three names the user cannot see.
+                    target.targets.forEach { (tag, default) ->
+                        Text(
+                            text = stringResource(R.string.bt_tags_restore_pair, tag.name, default),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = bt.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Text(
+                text = stringResource(R.string.bt_tags_restore_colour_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+            )
+
+            failure?.let { BtFormError(it.displayMessage()) }
+
+            BtPrimaryButton(
+                text = stringResource(R.string.bt_tags_restore_confirm),
+                onClick = onConfirm,
+                enabled = !busy,
                 loading = busy,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             )

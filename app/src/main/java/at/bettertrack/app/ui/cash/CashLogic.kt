@@ -87,6 +87,49 @@ fun validateTransfer(
 fun activeSources(sources: List<CashSourceEntity>): List<CashSourceEntity> =
     sources.filter { it.archivedAt == null }.sortedByDescending { it.isMain }
 
+// ── Which wallet an entry sheet opens on ────────────────────────────────────
+
+/**
+ * The source a deposit / withdrawal / transfer sheet should open on.
+ *
+ * One precedence chain, three callers (owner defect 2026-08-17: *the in-app
+ * Bezahlt / Erhalten buttons ignored the selected source while the Cash Wallet
+ * widget honoured it*). Highest wins:
+ *
+ *  1. [prefillSourceId] — a QUEUED op being edited. Editing must never move
+ *     money between wallets, so the op's own source outranks everything.
+ *  2. [requestedSourceId] — what the caller asked for: the widget's configured
+ *     wallet, or the Cash screen's current scope (`sourceFilter`). Honoured
+ *     only if a source with that id is present in [sources]; the callers pass
+ *     the ACTIVE list, so an archived or deleted wallet — a stale widget
+ *     config, or a source archived while the screen was scoped to it — falls
+ *     through instead of seeding an unselectable id.
+ *  3. The main wallet — the "alle Quellen" default.
+ *
+ * Null only when [sources] has no main wallet and nothing else matched.
+ */
+fun cashEntrySourcePreselection(
+    prefillSourceId: String?,
+    requestedSourceId: String?,
+    sources: List<CashSourceEntity>,
+): String? =
+    prefillSourceId
+        ?: requestedSourceId?.takeIf { id -> sources.any { it.id == id } }
+        ?: sources.firstOrNull { it.isMain }?.id
+
+/**
+ * The transfer sheet's TO side, given the resolved [fromId]. A queued op's own
+ * target wins; otherwise the first source that is not the FROM side, so the
+ * sheet never opens on the same-source state its own validation rejects.
+ */
+fun cashTransferToPreselection(
+    prefillToSourceId: String?,
+    fromId: String?,
+    sources: List<CashSourceEntity>,
+): String? =
+    prefillToSourceId
+        ?: sources.firstOrNull { it.id != fromId }?.id
+
 // ── Pending queued cash ops (§7.4) ──────────────────────────────────────────
 
 /** A queued cash op decoded for display alongside the movement stream. */

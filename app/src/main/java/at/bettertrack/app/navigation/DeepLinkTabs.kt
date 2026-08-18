@@ -159,7 +159,7 @@ fun owningTab(link: NotifDeepLink): BtTab? = when (link) {
     // Quick-actions widget (2026-08-16): a new trade is portfolio work, a new
     // cash entry lives on the Portfolio tab's Cash sheet, and search is the
     // Markets tab's own first control.
-    NotifDeepLink.AddTransaction -> BtTab.Portfolio
+    is NotifDeepLink.AddTransaction -> BtTab.Portfolio
     is NotifDeepLink.AddCashEntry -> BtTab.Portfolio
     NotifDeepLink.MarketSearch -> BtTab.Markets
 

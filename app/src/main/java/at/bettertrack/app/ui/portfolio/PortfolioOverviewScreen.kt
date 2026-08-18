@@ -2000,8 +2000,12 @@ private const val RAIL_ALPHA = 0.60f
  * Scrub readout stamp. Sub-daily series (V5 intraday 1D/1W/1M) add the
  * time-of-day, otherwise the day-granular wording is kept verbatim — scrubbing a
  * 1Y curve should not suddenly claim a meaningless "00:00".
+ *
+ * `internal` rather than private since 2026-08-18: the account-wealth sheet
+ * scrubs the same `/portfolios/{id}/history` series with the same gesture, and a
+ * second stamp formatter would be free to drift from this one.
  */
-private fun formatChartScrubDate(epochMillis: Long, subDaily: Boolean, locale: Locale): String =
+internal fun formatChartScrubDate(epochMillis: Long, subDaily: Boolean, locale: Locale): String =
     java.time.Instant.ofEpochMilli(epochMillis)
         .atZone(java.time.ZoneId.systemDefault())
         .format(scrubDateFormatter(locale, subDaily))

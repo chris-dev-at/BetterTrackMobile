@@ -3,15 +3,21 @@ package at.bettertrack.app.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.edit
+import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import at.bettertrack.app.R
 import at.bettertrack.app.data.prefs.BtThemeMode
+import at.bettertrack.app.data.prefs.DevicePrefs
+import at.bettertrack.app.data.prefs.themeModeFromName
 import at.bettertrack.app.di.AppGraph
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
@@ -107,16 +113,52 @@ object BtWidgets {
 }
 
 /**
- * The theme the widget should paint in.
+ * The APP's stored theme, read without forcing [AppGraph].
  *
- * Falls back to [BtThemeMode.System] when the graph cannot be read — which is
- * the right failure: `System` is the only value that is never *wrong*, because
- * it defers to the resource table the launcher is already resolving against.
+ * `DevicePrefs` is a thin wrapper over one plain `SharedPreferences` file, and
+ * the theme lives in it under a single string key. Reading that file directly
+ * is the same cost class as [btWidgetContext]'s `LocaleManager.wrap` — a
+ * `getSharedPreferences` + `getString`, both memory-mapped after the first
+ * touch — whereas `AppGraph.devicePrefs` is a lazy on the graph that drags Room,
+ * the token store and the vault in behind it. That difference is why the
+ * transient frame in [btProvideContent] uses THIS and not the graph.
+ *
+ * It reads the same bytes `DevicePrefs` seeds its `StateFlow` from and that
+ * `setThemeMode` writes, so the two can never disagree; `DevicePrefs.PREFS` /
+ * `KEY_THEME_MODE` are shared rather than re-declared here precisely so the
+ * "same bytes" claim cannot rot.
+ *
+ * [BtThemeMode.System] on any failure: it is the only value that is never
+ * *wrong*, because it hands the host a day/night pair to resolve itself.
  */
-internal fun btWidgetThemeMode(): BtThemeMode = try {
-    AppGraph.devicePrefs.themeModeNow()
+internal fun btWidgetStoredThemeMode(context: Context): BtThemeMode = try {
+    themeModeFromName(
+        context.applicationContext
+            .getSharedPreferences(DevicePrefs.PREFS, Context.MODE_PRIVATE)
+            .getString(DevicePrefs.KEY_THEME_MODE, null),
+    )
 } catch (e: Exception) {
     BtThemeMode.System
+}
+
+/**
+ * The theme the widget should paint in.
+ *
+ * The graph's live value when the graph is up (it is the one thing a
+ * `setThemeMode` in the same process updates synchronously), and the stored
+ * value straight off disk when it is not.
+ *
+ * The fallback used to be [BtThemeMode.System], and that was a bug of the same
+ * family as the 2026-08-17 flash: an app forced to Dark on a light phone would
+ * paint a LIGHT card the moment the graph was unavailable, because `System`
+ * resolves in the host's configuration and the host knows nothing about the
+ * app's preference. Disk is always a better answer than the system's, because
+ * disk is where the user's answer actually is.
+ */
+internal fun btWidgetThemeMode(context: Context): BtThemeMode = try {
+    AppGraph.devicePrefs.themeModeNow()
+} catch (e: Exception) {
+    btWidgetStoredThemeMode(context)
 }
 
 private const val TAG_FRAME = "BtWidgetFrame"
@@ -132,11 +174,134 @@ private const val TAG_FRAME = "BtWidgetFrame"
  */
 internal const val BT_WIDGET_FIRST_FRAME_GRACE_MS: Long = 300
 
+/**
+ * How long an instance that ALREADY has content waits for its load before it
+ * gives up and publishes the syncing card.
+ *
+ * There is no rush here — the launcher is showing the previous, correct frame
+ * for the whole window, so every millisecond spent waiting is a millisecond the
+ * user spends looking at real figures instead of "Wird geladen…". The bound
+ * exists only so a load that never returns cannot leave the card frozen on
+ * stale numbers forever.
+ *
+ * 6 s, not the 10 s the wait could theoretically stretch to:
+ * `GlanceAppWidgetReceiver` services the update broadcast under `goAsync()`, and
+ * a `BroadcastReceiver` that holds its async result past ~10 s is killed by the
+ * platform. Six leaves a comfortable margin under that ceiling for the
+ * composition and `RemoteViews` publish that still have to happen afterwards,
+ * while being twenty times the worst warm `BtWidgetRepository.load` measured on
+ * the heaviest widget (portfolio: snapshot + history + cash ledger).
+ */
+internal const val BT_WIDGET_REPAINT_TIMEOUT_MS: Long = 6_000
+
+/**
+ * **Would publishing a loading card here be an improvement or a regression?**
+ *
+ * The pure seam behind [btProvideContent]'s two-case wait, and the whole of the
+ * 2026-08-18 "I change the portfolio and nothing happens, I have to wait"
+ * defect in one line.
+ *
+ * A loading card is only ever an improvement over *nothing*. For an instance
+ * that has never painted, "nothing" is the host's `initialLayout` and the card
+ * is progress. For an instance that already has content, "nothing" is the
+ * user's own figures — replacing those with "Wird geladen…" throws away a good
+ * frame to announce that a better one is coming, which is exactly the flicker
+ * the owner reads as the widget being slow.
+ */
+internal fun btWidgetShouldPublishLoadingFrame(
+    hasPainted: Boolean,
+    loadFinished: Boolean,
+): Boolean = !loadFinished && !hasPainted
+
+/**
+ * How long [btProvideContent] may wait for the load before it composes.
+ *
+ * Split out as a pure function for the same reason
+ * [btWidgetShouldPublishLoadingFrame] is: the two-case policy is the behaviour
+ * under test, and neither case can be exercised through Glance on the JVM.
+ */
+internal fun btWidgetLoadWaitMs(hasPainted: Boolean): Long =
+    if (hasPainted) BT_WIDGET_REPAINT_TIMEOUT_MS else BT_WIDGET_FIRST_FRAME_GRACE_MS
+
 /** What [btProvideContent] has for the composition on any given pass. */
 private sealed interface BtWidgetLoad<out T> {
     data object Pending : BtWidgetLoad<Nothing>
     data object Failed : BtWidgetLoad<Nothing>
     class Ready<T>(val value: T) : BtWidgetLoad<T>
+}
+
+// ── "This instance already has content on the launcher" ──────────────────────
+
+/**
+ * The per-instance painted marker, in its own tiny `SharedPreferences` file.
+ *
+ * Not the Glance per-instance datastore: that is the CONFIG store, it is read
+ * asynchronously through `getAppWidgetState`, and every read of it in this
+ * package is already wrapped in [btWidgetConfigOrNull] because it can throw —
+ * none of which suits a flag that has to be answered synchronously on the path
+ * to the first frame. A separate file also means the marker cannot corrupt or
+ * be corrupted by a user's widget configuration.
+ *
+ * Not `DevicePrefs` either: this is per-appWidgetId bookkeeping with no user
+ * meaning, and it must not appear in a store whose whole contract is "settings
+ * the user chose".
+ */
+private const val BT_WIDGET_PAINTED_PREFS = "bt_widget_painted"
+
+private fun btWidgetPaintedPrefs(context: Context): SharedPreferences =
+    context.applicationContext.getSharedPreferences(BT_WIDGET_PAINTED_PREFS, Context.MODE_PRIVATE)
+
+/**
+ * The framework id behind a [GlanceId], or `null` when there is none.
+ *
+ * Keyed on the appWidgetId and NOT on `GlanceId.toString()`: the string form is
+ * a debug rendering of an internal type (`AppWidgetId(appWidgetId=42)` today),
+ * so keying on it would silently orphan every marker the first time Glance
+ * changed a `toString`. `getAppWidgetId` throws for a session-only id, which is
+ * why this is guarded rather than called bare.
+ */
+private fun btWidgetAppWidgetId(context: Context, id: GlanceId): Int? = try {
+    GlanceAppWidgetManager(context).getAppWidgetId(id)
+} catch (e: Exception) {
+    Log.w(TAG_FRAME, "No appWidgetId behind $id; treating it as never painted.", e)
+    null
+}
+
+/** True when this instance has published at least one real content frame. */
+private fun btWidgetHasPainted(context: Context, appWidgetId: Int?): Boolean =
+    appWidgetId != null && try {
+        btWidgetPaintedPrefs(context).getBoolean(appWidgetId.toString(), false)
+    } catch (e: Exception) {
+        Log.w(TAG_FRAME, "Painted-marker read failed for $appWidgetId.", e)
+        false
+    }
+
+private fun btWidgetMarkPainted(context: Context, appWidgetId: Int?) {
+    if (appWidgetId == null) return
+    try {
+        btWidgetPaintedPrefs(context).edit { putBoolean(appWidgetId.toString(), true) }
+    } catch (e: Exception) {
+        // A lost marker costs one avoidable loading blink, never a frame.
+        Log.w(TAG_FRAME, "Painted-marker write failed for $appWidgetId.", e)
+    }
+}
+
+/**
+ * Forget instances that are gone (deleted) or whose ids were remapped by a
+ * restore. Both matter: a marker that is wrongly TRUE would make a card with no
+ * frame at all sit on the host's `initialLayout` for the full
+ * [BT_WIDGET_REPAINT_TIMEOUT_MS] instead of the [BT_WIDGET_FIRST_FRAME_GRACE_MS]
+ * the never-a-white-void guarantee promises.
+ */
+private fun btWidgetForgetPainted(context: Context, appWidgetIds: IntArray) {
+    if (appWidgetIds.isEmpty()) return
+    try {
+        btWidgetPaintedPrefs(context).edit {
+            appWidgetIds.forEach { remove(it.toString()) }
+        }
+    } catch (e: Exception) {
+        Log.w(TAG_FRAME, "Painted-marker cleanup failed.", e)
+    }
 }
 
 /**
@@ -168,43 +333,86 @@ private sealed interface BtWidgetLoad<out T> {
  * the loading affordance to real content with no second `provideGlance` pass.
  * One load per instance, shared by every size box `SizeMode.Exact` composes.
  *
- * The loading frame is painted with [BtThemeMode.System] rather than the app's
- * stored theme ON PURPOSE: reading the stored theme means touching `AppGraph`,
- * which is the very thing that can be slow here. `System` is a day/night pair
- * the host resolves itself, so it costs nothing and it matches what the static
- * initialLayout above it just drew — the same one-frame compromise, documented
- * in that file.
- *
  * A `load` that throws degrades to the syncing card, never to no frame at all.
  *
- * ## Why the load gets a head start ([BT_WIDGET_FIRST_FRAME_GRACE_MS])
+ * ## The transient frame paints in the APP's theme
  *
- * `provideGlance` also runs on every ROUTINE refresh of a widget that already
- * has content on the launcher. Publishing a loading card unconditionally would
- * blink "Wird geladen…" over the user's figures several times a day — trading
- * one permanent defect for a constant small one. So the load is given a few
- * hundred milliseconds to win outright before the composition starts: on a warm
- * process it always does, and the launcher goes straight from the old frame to
- * the new one with no loading state at all. A cold start or a stalled load
- * exceeds the grace, and then the painted card goes up — which is the case this
- * whole mechanism exists for. The bound is deliberately far below anything a
- * user reads as "stuck", and it is what keeps the guarantee honest: whatever
- * the load does, `provideContent` is reached within the grace.
+ * It used to paint with [BtThemeMode.System], on the reasoning that reading the
+ * stored theme meant touching `AppGraph` — the very thing that can be slow here.
+ * That reasoning was wrong twice over and it produced the owner's 2026-08-18
+ * defect (*"wenn sich die widgets aktualisieren zeigen sie kurz schwarz an
+ * obwohl ich white mode angemacht habe"*).
+ *
+ * Wrong first because `System` is not neutral: it resolves in the LAUNCHER's
+ * configuration, i.e. the SYSTEM's night mode, while every content frame in this
+ * package resolves [btWidgetThemeMode] — the APP's persisted preference. On any
+ * phone where the two disagree (which is the owner's, always) each Pending or
+ * Failed frame published during a refresh painted in the opposite theme: a black
+ * flash on system-dark + app-light, a white one on the inverse. Same defect,
+ * either polarity.
+ *
+ * Wrong second because the value never needed the graph: it is one string in one
+ * `SharedPreferences` file, and [btWidgetStoredThemeMode] reads it in the same
+ * cost class as the [btWidgetContext] call on the line above.
+ *
+ * The static `@layout/bt_widget_loading` beneath all this still cannot honour the
+ * preference — an XML resource has only qualifiers — but it is reachable only
+ * BEFORE Glance ever publishes for an instance, never during a refresh of a card
+ * that already has content, so it is not part of this cycle.
+ *
+ * ## Two cases, because a loading card is only ever better than *nothing*
+ *
+ * `provideGlance` runs both for an instance that has never painted and on every
+ * routine refresh (and every reconfigure) of one that already has content on the
+ * launcher. Those two want opposite things, and treating them alike is what made
+ * a reconfigure feel slow.
+ *
+ * **Never painted** ⇒ unchanged: the load races
+ * [BT_WIDGET_FIRST_FRAME_GRACE_MS] and, if it loses, the painted loading card
+ * goes up. That is the never-a-white-void guarantee and it is not negotiable —
+ * whatever the load does, `provideContent` is reached inside the grace. A warm
+ * process wins the race outright, so the loading state is rare even here.
+ *
+ * **Already painted** ⇒ the load is waited for, up to
+ * [BT_WIDGET_REPAINT_TIMEOUT_MS], before the composition starts. The launcher
+ * keeps showing the previous frame for that whole window, so the card goes
+ * straight from the old figures to the new ones. It used to be given the same
+ * 300 ms, and the heaviest loads in the family routinely lost that race — so
+ * changing a widget's portfolio, budget or asset went good content → *"Wird
+ * geladen…"* → new content, which the owner reported as *"ich ändere das
+ * portfolio und nichts passiert sondern ich muss warten"*. Throwing away a
+ * correct frame to announce that a better one is coming is never worth it.
+ * Exceeding the bound, or a load that throws, still publishes the syncing card:
+ * a widget frozen forever is not acceptable either.
+ *
+ * The marker is per-appWidgetId and persisted (see [btWidgetForgetPainted] for
+ * how it is retired), because "has this card got content on it" has to survive
+ * the process death that happens between two refreshes.
  */
 internal suspend fun <T> GlanceAppWidget.btProvideContent(
     context: Context,
+    id: GlanceId,
     load: suspend () -> T,
     content: @Composable (T) -> Unit,
 ): Nothing = coroutineScope {
-    // SharedPreferences only (LocaleManager.wrap), no AppGraph — cheap enough
-    // to sit on the path to the first frame, and it makes the loading card
-    // speak the user's chosen language rather than the phone's.
+    // SharedPreferences only (LocaleManager.wrap / the theme key), no AppGraph —
+    // cheap enough to sit on the path to the first frame, and it makes the
+    // transient card speak the user's chosen language and wear the app's theme
+    // rather than the phone's.
     val local = btWidgetContext(context)
-    val chrome = btGlanceColors(BtThemeMode.System)
+    val chrome = btGlanceColors(btWidgetStoredThemeMode(context))
+    val appWidgetId = btWidgetAppWidgetId(context, id)
+    val hasPainted = btWidgetHasPainted(context, appWidgetId)
     val slot = mutableStateOf<BtWidgetLoad<T>>(BtWidgetLoad.Pending)
     val loading = launch {
         slot.value = try {
-            BtWidgetLoad.Ready(load())
+            val value = load()
+            // Marked on the LOAD, not inside the composition: the snapshot write
+            // below is what makes Glance republish, so a successful load is a
+            // content frame. Doing it in the composable would need a side effect
+            // in a Glance tree that may recompose once per size box.
+            btWidgetMarkPainted(context, appWidgetId)
+            BtWidgetLoad.Ready(value)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -212,12 +420,26 @@ internal suspend fun <T> GlanceAppWidget.btProvideContent(
             BtWidgetLoad.Failed
         }
     }
-    withTimeoutOrNull(BT_WIDGET_FIRST_FRAME_GRACE_MS) { loading.join() }
+    withTimeoutOrNull(btWidgetLoadWaitMs(hasPainted)) { loading.join() }
     provideContent {
         when (val state = slot.value) {
             is BtWidgetLoad.Ready -> content(state.value)
-            BtWidgetLoad.Pending ->
-                BtWidgetStatusCard(chrome, local.getString(R.string.bt_widget_loading))
+            BtWidgetLoad.Pending -> BtWidgetStatusCard(
+                chrome,
+                local.getString(
+                    // Still unfinished after the wait. For a card that never
+                    // painted that is the loading state, and saying so is
+                    // progress. For one that already had figures it is a
+                    // refresh that overran its bound, which is "syncing" — the
+                    // card HAD data, it is failing to get newer data, and
+                    // calling that "Loading…" would understate it.
+                    if (btWidgetShouldPublishLoadingFrame(hasPainted, loadFinished = false)) {
+                        R.string.bt_widget_loading
+                    } else {
+                        R.string.bt_widget_syncing
+                    },
+                ),
+            )
 
             BtWidgetLoad.Failed ->
                 BtWidgetStatusCard(chrome, local.getString(R.string.bt_widget_syncing))
@@ -276,6 +498,33 @@ abstract class BtWidgetReceiver : GlanceAppWidgetReceiver() {
     ) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
         BtWidgetScheduler(context).refreshNow()
+    }
+
+    /**
+     * Retire the deleted instances' painted markers.
+     *
+     * Housekeeping rather than correctness — an appWidgetId is not reused while
+     * a marker for it survives, so a leaked one is a few bytes and nothing else.
+     * It is cheap and it keeps the file from growing for the life of the install.
+     */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        btWidgetForgetPainted(context, appWidgetIds)
+    }
+
+    /**
+     * This one IS correctness. A restore hands the app a set of NEW ids for
+     * instances whose frames the launcher does not have, and the old ids may
+     * collide with them — a marker left saying "already painted" would make a
+     * genuinely blank card wait [BT_WIDGET_REPAINT_TIMEOUT_MS] on the host's
+     * `initialLayout` instead of the [BT_WIDGET_FIRST_FRAME_GRACE_MS] the
+     * never-a-white-void guarantee promises. Both sets are forgotten, so every
+     * restored instance is treated as never painted, which it is.
+     */
+    override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
+        super.onRestored(context, oldWidgetIds, newWidgetIds)
+        btWidgetForgetPainted(context, oldWidgetIds)
+        btWidgetForgetPainted(context, newWidgetIds)
     }
 
     override fun onDisabled(context: Context) {

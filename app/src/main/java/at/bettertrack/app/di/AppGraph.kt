@@ -216,7 +216,14 @@ object AppGraph {
      * backend those throws are the common case, so ambient work here degrades to
      * a log line and the UI keeps its own designed error states.
      */
-    private val appScope: CoroutineScope by lazy {
+    /*
+     * `internal` rather than private since 2026-08-18: a widget CONFIG Activity
+     * finishes the instant the user saves, and the repaint it hands off has to
+     * outlive it — see `BtWidgetConfigActivity.confirm`. That Activity's own
+     * `lifecycleScope` would cancel the repaint mid-flight, which shows up as
+     * "I saved it and the widget did not change".
+     */
+    internal val appScope: CoroutineScope by lazy {
         CoroutineScope(
             SupervisorJob() + Dispatchers.Default +
                 at.bettertrack.app.btBackgroundExceptionHandler("AppGraph.appScope"),

@@ -84,7 +84,7 @@ class BtWidgetDeepLinkTest {
     @Test
     fun `the quick-action tiles resolve to their forms`() {
         assertEquals(
-            NotifDeepLink.AddTransaction,
+            NotifDeepLink.AddTransaction(),
             btWidgetDeepLink(BT_WIDGET_TARGET_ADD_TRANSACTION, null),
         )
         // The generic cash tile stays parameterless: it means "open cash", not
@@ -183,7 +183,7 @@ class BtWidgetDeepLinkTest {
                 val resolved = resolveDeepLink(type, null)
                 assertFalse(
                     "$type must not resolve to a widget-only quick action",
-                    resolved == NotifDeepLink.AddTransaction ||
+                    resolved is NotifDeepLink.AddTransaction ||
                         resolved is NotifDeepLink.AddCashEntry ||
                         resolved == NotifDeepLink.MarketSearch ||
                         resolved == NotifDeepLink.Watchlist,

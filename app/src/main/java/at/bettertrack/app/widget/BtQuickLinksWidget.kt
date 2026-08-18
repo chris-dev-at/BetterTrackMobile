@@ -93,11 +93,12 @@ class BtQuickLinksWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = BtWidgetRepository.load(context),
-                    colors = btGlanceColors(btWidgetThemeMode()),
+                    colors = btGlanceColors(btWidgetThemeMode(context)),
                     // A failed read degrades to the DEFAULT set rather than to
                     // an empty card: this widget's unconfigured reading is a
                     // complete widget, which is the whole reason it can be
@@ -117,10 +118,12 @@ class BtQuickLinksWidget : GlanceAppWidget() {
         ) { data ->
             BtWidgetCard(
                 colors = data.colors,
-                // The tiles are the actions; this only catches the gaps between
-                // them, so it opens the app's front door rather than pretending
-                // to be one of the tiles.
-                action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
+                // The tiles are the actions; this only catches the GAPS between
+                // them. A gap tap is a near-miss, so it must not navigate at
+                // all — it just opens the app where the user left it, which is
+                // the least surprising thing a missed tap can do (owner ruling
+                // 2026-08-18; see btWidgetLaunchIntent).
+                action = actionStartActivity(btWidgetLaunchIntent(context)),
                 padding = CARD_PADDING,
             ) {
                 Content(context, data.local, data.snapshot, data.config, data.colors)
@@ -238,7 +241,15 @@ class BtQuickLinksWidget : GlanceAppWidget() {
                     btWidgetIntent(
                         context,
                         action.link.target,
+                        // The tile's AIM travels with the tap (owner
+                        // 2026-08-18). Both are blank-tolerant, so an
+                        // untargeted tile is byte-identical to the old
+                        // parameterless intent. The source also makes the
+                        // PendingIntent distinct, which is what lets three
+                        // Cash tiles be three different taps rather than
+                        // collapsing onto whichever was registered first.
                         portfolioId = action.portfolioId.takeIf { it.isNotBlank() },
+                        sourceId = action.sourceId.takeIf { it.isNotBlank() },
                     ),
                 ),
             )
@@ -258,9 +269,13 @@ class BtQuickLinksWidget : GlanceAppWidget() {
                 },
                 contentAlignment = Alignment.Center,
             ) {
-                if (action.link.isMonogram) {
+                // An AIMED tile paints its target's initial instead of the
+                // catalog pictogram — three Cash tiles have to be three
+                // different marks with captions off, which is the default.
+                val monogram = btQuickLinkTileMonogram(action)
+                if (monogram != null) {
                     Text(
-                        text = btQuickLinkMonogram(action.portfolioName, action.monogram),
+                        text = monogram,
                         style = TextStyle(
                             color = colors.gold,
                             fontSize = (tileDp * MONOGRAM_RATIO).coerceIn(14f, 26f).sp,
@@ -284,7 +299,9 @@ class BtQuickLinksWidget : GlanceAppWidget() {
             if (captions) {
                 Spacer(GlanceModifier.height(3.dp))
                 Text(
-                    text = label,
+                    // The TARGET when the tile has one: the caption's job is to
+                    // say what differs, and "Cash" three times says nothing.
+                    text = btQuickLinkCaption(action, label),
                     style = TextStyle(
                         color = colors.textMuted,
                         fontSize = 9.sp,

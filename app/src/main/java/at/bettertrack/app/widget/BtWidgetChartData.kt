@@ -474,6 +474,60 @@ fun btWidgetRowFillHeight(availableDp: Float, count: Int): Float {
 const val BT_WIDGET_BITMAP_MAX_EDGE_PX: Int = 1400
 
 /**
+ * The height a chart may take inside a card, or **null when it must not be
+ * drawn at all**.
+ *
+ * ## The defect this replaces (owner 2026-08-18: "some widget charts are cut off")
+ *
+ * Every chart family sized its plot by SUBTRACTION —
+ * `(cardHeight - padding - headerEstimate - footerEstimate).coerceAtLeast(40f)`
+ * — where the header and footer heights are *estimates* summed from text
+ * metrics. That shape has two failure modes and the floor turns both of them
+ * into a clipped chart rather than a smaller one:
+ *
+ *  * the estimate is SHORT (a label wraps, a font scale is larger than the one
+ *    the arithmetic assumed, an optional line appears) — the pieces then total
+ *    more than the card and the last child, the chart, is cut off by the card
+ *    bounds; and
+ *  * the remainder UNDERFLOWS the floor on a short card — `coerceAtLeast(40f)`
+ *    hands back 40dp of chart that there is demonstrably no room for, which
+ *    overflows by construction.
+ *
+ * The floor was the bug: it converted "there is not enough room" into "draw it
+ * anyway". A card that cannot fit a legible chart must show its numbers without
+ * one — the house rule is no half-clipped anything, and a chart sliced by the
+ * card edge misstates the series it is drawing, which is worse than no chart.
+ *
+ * @param cardHeightDp the card's full height.
+ * @param reservedDp everything else the column will draw (padding, header,
+ *   footer), as the caller's best estimate.
+ * @param minChartDp the smallest plot worth drawing.
+ * @param slackDp headroom held back against the estimate being short. Cheap
+ *   insurance: it costs a few dp of plot and removes the whole failure mode.
+ */
+fun btWidgetChartHeightDp(
+    cardHeightDp: Float,
+    reservedDp: Float,
+    minChartDp: Float = BT_WIDGET_MIN_CHART_DP,
+    slackDp: Float = BT_WIDGET_CHART_SLACK_DP,
+): Float? {
+    val available = cardHeightDp - reservedDp - slackDp
+    return if (available >= minChartDp) available else null
+}
+
+/**
+ * The smallest plot worth drawing. Below this a line is two pixels of slope and
+ * a donut is a smudge, so the card drops the chart and keeps its figures.
+ */
+const val BT_WIDGET_MIN_CHART_DP: Float = 40f
+
+/**
+ * Headroom withheld from every chart against a short header/footer estimate.
+ * One text line's worth of rounding error across a stack of estimated rows.
+ */
+const val BT_WIDGET_CHART_SLACK_DP: Float = 4f
+
+/**
  * Convert a dp box to a capped px box, preserving aspect. Never returns a
  * dimension below 1 — a degenerate size draws a blank pixel, not a crash.
  */

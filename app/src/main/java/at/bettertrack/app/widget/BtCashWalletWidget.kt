@@ -114,6 +114,7 @@ class BtCashWalletWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
                 val snapshot = BtWidgetRepository.load(context)
                 val state = btWidgetConfigOrNull("cash state") {
@@ -142,7 +143,7 @@ class BtCashWalletWidget : GlanceAppWidget() {
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = snapshot,
-                    colors = btGlanceColors(btWidgetThemeMode()),
+                    colors = btGlanceColors(btWidgetThemeMode(context)),
                     config = config,
                     portfolioId = portfolioId,
                     source = source,

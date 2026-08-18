@@ -2900,6 +2900,9 @@
     <string name="bt_widget_flow_elapsed">1–%1$d %2$s</string>
     <!-- Round-2 config panels. -->
     <string name="bt_widget_config_save">Save</string>
+    <string name="bt_widget_config_current">Currently shown</string>
+    <string name="bt_ql_config_target_any">Current selection</string>
+    <string name="bt_widget_config_asset_none">No asset chosen yet</string>
     <string name="bt_widget_config_pulse">Net worth widget</string>
     <string name="bt_widget_config_allocation">Allocation widget</string>
     <string name="bt_widget_config_rows">List widget</string>
@@ -3366,4 +3369,45 @@
     <string name="bt_heatmap_empty_positions">No positions with a value yet.</string>
     <string name="bt_heatmap_empty_watchlist">Nothing on your watchlist yet.</string>
     <string name="bt_heatmap_row_sub">Your positions and watchlist by today\'s move</string>
+
+    <!-- Ledger stats card — the scope marker that replaced the removed heading -->
+    <string name="bt_ledger_stats_scope">Selection</string>
+
+    <!-- Built-in cash tags: what each default represents (keyed off systemKey) -->
+    <string name="bt_tags_builtin_desc_investment">Cash spent buying an asset.</string>
+    <string name="bt_tags_builtin_desc_sale_proceeds">Cash received from selling an asset.</string>
+    <string name="bt_tags_builtin_desc_dividend">Dividends credited to a cash source.</string>
+    <string name="bt_tags_builtin_desc_interest">Interest credited to a cash source.</string>
+    <string name="bt_tags_builtin_desc_fees">Broker and account fees paid out of cash.</string>
+    <string name="bt_tags_builtin_desc_tax">Tax withheld or paid out of cash.</string>
+    <string name="bt_tags_builtin_desc_transfer">Money moved between your own cash sources.</string>
+    <string name="bt_tags_builtin_desc_deposit">Money you paid into a cash source.</string>
+    <string name="bt_tags_builtin_desc_withdrawal">Money you took out of a cash source.</string>
+
+    <!-- Built-in cash tags: restoring the default name -->
+    <string name="bt_tags_builtin_default_name">Default name: %1$s</string>
+    <string name="bt_tags_restore_action">Restore default name</string>
+    <string name="bt_tags_restore_all">Restore all built-in names</string>
+    <string name="bt_tags_restore_title">Restore default name</string>
+    <string name="bt_tags_restore_all_title">Restore built-in names</string>
+    <string name="bt_tags_restore_message">“%1$s” goes back to “%2$s”.</string>
+    <string name="bt_tags_restore_pair">%1$s → %2$s</string>
+    <string name="bt_tags_restore_colour_note">Only the name is restored — the colour stays exactly as you set it.</string>
+    <string name="bt_tags_restore_confirm">Restore</string>
+    <plurals name="bt_tags_restore_all_count">
+        <item quantity="one">%1$d renamed built-in tag gets its default name back.</item>
+        <item quantity="other">%1$d renamed built-in tags get their default names back.</item>
+    </plurals>
+
+    <!-- ── Account wealth over time (item 11) ── -->
+    <string name="bt_account_wealth_row">Wealth over time</string>
+    <string name="bt_account_wealth_title">Account wealth</string>
+    <string name="bt_account_wealth_chart_cd">Account wealth over time chart</string>
+    <string name="bt_account_wealth_series_cd">%1$s over time chart</string>
+    <string name="bt_account_wealth_series_failed">This curve could not be loaded.</string>
+    <string name="bt_account_wealth_multi_note">One combined curve across all portfolios is waiting on server support. Below is each portfolio\'s own curve.</string>
+    <plurals name="bt_account_wealth_not_charted">
+        <item quantity="one">%1$d further portfolio is not drawn here.</item>
+        <item quantity="other">%1$d further portfolios are not drawn here.</item>
+    </plurals>
 </resources>

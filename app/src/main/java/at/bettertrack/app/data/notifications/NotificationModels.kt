@@ -242,8 +242,21 @@ sealed interface NotifDeepLink {
      * [portfolioId] is nullable: the widget passes the ledger it budgeted, but a
      * null lets the Cash screen resolve the selected portfolio itself, exactly as
      * `CashRoute(portfolioId = null)` already does from the overview.
+     *
+     * ## Why it also carries a source (Quick Links targets, 2026-08-18)
+     *
+     * Owner: *"what if i want to have 3 buttons that each bring me to the
+     * overview of another cash source."* The Cash screen already scopes itself
+     * to one wallet — `CashViewModel(initialSourceId)` seeds its own source
+     * filter — so the capability existed and only the deep link could not
+     * express it. [sourceId] is that expression, and it stays nullable so the
+     * plain "open Cash" tap is unchanged: null means the screen's own
+     * all-sources scope, not an empty selection.
      */
-    data class Cash(val portfolioId: String?) : NotifDeepLink
+    data class Cash(
+        val portfolioId: String?,
+        val sourceId: String? = null,
+    ) : NotifDeepLink
 
     /**
      * A specific portfolio, SELECTED in the Portfolio tab.
@@ -264,8 +277,13 @@ sealed interface NotifDeepLink {
      * [resolveDeepLink] — no push means "start typing a trade". It exists for
      * the Quick-actions widget (owner order 2026-08-16): a launcher shortcut's
      * whole worth is landing INSIDE the form in one tap.
+     *
+     * [portfolioId] answers the owner's *"like where to?"* (2026-08-18) for this
+     * tile: a Quick-Links button may book into a NAMED portfolio rather than
+     * whichever one happens to be selected. Nullable, so the plain tile is
+     * unchanged and still opens the form against the current selection.
      */
-    data object AddTransaction : NotifDeepLink
+    data class AddTransaction(val portfolioId: String? = null) : NotifDeepLink
 
     /**
      * The Cash screen, poised for a new entry. Same widget-only contract as

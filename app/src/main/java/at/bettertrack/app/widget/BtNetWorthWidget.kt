@@ -77,8 +77,9 @@ class BtNetWorthWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
-                val mode = btWidgetThemeMode()
+                val mode = btWidgetThemeMode(context)
                 val snapshot = BtWidgetRepository.load(context)
                 val config = btWidgetConfigOrNull("pulse") {
                     val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
@@ -112,17 +113,18 @@ class BtNetWorthWidget : GlanceAppWidget() {
         ) { data ->
             BtWidgetCard(
                 colors = data.colors,
-                action = actionStartActivity(
-                    if (data.config.portfolioId == null) {
-                        btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)
-                    } else {
-                        btWidgetIntent(
-                            context,
-                            BT_WIDGET_TARGET_PORTFOLIO,
-                            portfolioId = data.config.portfolioId,
-                        )
-                    },
-                ),
+                // Just open the app, in BOTH configurations (owner ruling
+                // 2026-08-18 — see btWidgetLaunchIntent).
+                //
+                // The all-accounts reading used to force Overview, which is the
+                // navigation he named. The pinned-portfolio reading used to
+                // force that portfolio, and it drops the deep link with it: the
+                // two readings are the same card at the same size, so one tap
+                // yanking the app somewhere and the other not would be
+                // unpredictable — and the app already opens on a portfolio, so
+                // that deep link was overriding where the user was to land
+                // roughly where they already were.
+                action = actionStartActivity(btWidgetLaunchIntent(context)),
                 padding = if (btWidgetRowClass(LocalSize.current.height.value) == BtWidgetSizeClass.STRIP) {
                     10.dp
                 } else {
@@ -286,17 +288,25 @@ class BtNetWorthWidget : GlanceAppWidget() {
             PillRow(local, snapshot, config, reading, monthDelta, colors, locale)
             Spacer(GlanceModifier.height(6.dp))
             val fs = btWidgetFontScale(local)
-            val chartHDp = (size.height.value - 2 * BT_WIDGET_PADDING.value -
-                btWidgetTextDp(11f, fs) - btWidgetTextDp(figureSp, fs) -
-                btWidgetTextDp(11f, fs) - 8f - btWidgetTextDp(9f, fs) - 24f)
-                .coerceAtLeast(40f)
-            ExactTrace(
-                local, sparkValues,
-                widthDp = size.width.value - 2 * BT_WIDGET_PADDING.value,
-                heightDp = chartHDp,
-                night = night,
-                contentDescription = reading.subject,
+            // No floor — see btWidgetChartHeightDp. On a tall card with a large
+            // font scale the figure, pill row and range label can consume the
+            // whole budget, and the old floor drew a 40dp trace past the card's
+            // bottom edge instead of standing down.
+            val chartHDp = btWidgetChartHeightDp(
+                cardHeightDp = size.height.value,
+                reservedDp = 2 * BT_WIDGET_PADDING.value +
+                    btWidgetTextDp(11f, fs) + btWidgetTextDp(figureSp, fs) +
+                    btWidgetTextDp(11f, fs) + 8f + btWidgetTextDp(9f, fs) + 24f,
             )
+            if (chartHDp != null) {
+                ExactTrace(
+                    local, sparkValues,
+                    widthDp = size.width.value - 2 * BT_WIDGET_PADDING.value,
+                    heightDp = chartHDp,
+                    night = night,
+                    contentDescription = reading.subject,
+                )
+            }
             Spacer(GlanceModifier.defaultWeight())
             BtMicroLabel(local.getString(R.string.bt_widget_range_1m), colors)
             return

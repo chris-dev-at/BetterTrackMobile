@@ -256,15 +256,18 @@ fun cashLedgerPending(loaded: Boolean, hasPortfolio: Boolean, sourcesSeen: Boole
 private sealed interface CashSheet {
     /**
      * Create (or edit a queued) deposit / withdrawal / fee. [sourceId] is the
-     * Cash Wallet widget's preselected wallet; null keeps the sheet's own
-     * primary-source default, which is what every in-app entry point passes.
+     * wallet the sheet should open on — the Cash Wallet widget's configured
+     * wallet, or the screen's own scope (`sourceFilter`); null means "alle
+     * Quellen" and keeps the sheet's primary-source default.
      */
     data class Entry(
         val kind: CashKind,
         val editOpId: Long? = null,
         val sourceId: String? = null,
     ) : CashSheet
-    data class Transfer(val editOpId: Long? = null) : CashSheet
+
+    /** [sourceId] preseeds the FROM side, same scope rule as [Entry]. */
+    data class Transfer(val editOpId: Long? = null, val sourceId: String? = null) : CashSheet
     // EditSynced left with the movement stream (owner batch 2026-08-16): the
     // correction sheet now opens from the ledger subpage, which holds its own
     // target state. See CashLedgerScreen.
@@ -1082,7 +1085,7 @@ fun CashScreen(
                                     container = bt.loss,
                                     onClick = {
                                         editPrefill = null
-                                        sheet = CashSheet.Entry(CashKind.WITHDRAWAL)
+                                        sheet = CashSheet.Entry(CashKind.WITHDRAWAL, sourceId = sourceFilter)
                                     },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
@@ -1091,7 +1094,7 @@ fun CashScreen(
                                     container = bt.gain,
                                     onClick = {
                                         editPrefill = null
-                                        sheet = CashSheet.Entry(CashKind.DEPOSIT)
+                                        sheet = CashSheet.Entry(CashKind.DEPOSIT, sourceId = sourceFilter)
                                     },
                                     modifier = Modifier.weight(1f).height(44.dp),
                                 )
@@ -1100,7 +1103,13 @@ fun CashScreen(
                                 text = stringResource(R.string.bt_cash_transfer),
                                 onClick = {
                                     editPrefill = null
-                                    sheet = CashSheet.Transfer()
+                                    // The scoped source seeds the FROM side: a
+                                    // transfer started while the screen is
+                                    // narrowed to a wallet is a transfer OUT of
+                                    // that wallet. The TO side then picks the
+                                    // first source that is not it, so the sheet
+                                    // never opens same-source.
+                                    sheet = CashSheet.Transfer(sourceId = sourceFilter)
                                 },
                                 enabled = active.size >= 2,
                                 modifier = Modifier.fillMaxWidth().height(44.dp),
@@ -1370,6 +1379,7 @@ fun CashScreen(
             sources = active,
             prefill = editPrefill,
             editOpId = s.editOpId,
+            initialFromSourceId = s.sourceId,
             locale = locale,
             onDismiss = {
                 sheet = null
@@ -2258,7 +2268,11 @@ private fun CashEntrySheet(
     sources: List<CashSourceEntity>,
     prefill: PendingCashRow?,
     editOpId: Long?,
-    /** The Cash Wallet widget's wallet; null = the primary-source default. */
+    /**
+     * The wallet the sheet should open on — the Cash Wallet widget's configured
+     * wallet, or the Cash screen's current scope. Null = "alle Quellen", i.e.
+     * the primary-source default.
+     */
     initialSourceId: String? = null,
     locale: Locale,
     onDismiss: () -> Unit,
@@ -2278,16 +2292,9 @@ private fun CashEntrySheet(
     var amountText by rememberSaveable { mutableStateOf(prefill?.amountEur?.let { trimNumber(it) } ?: "") }
     var noteText by rememberSaveable { mutableStateOf(prefill?.note ?: "") }
     var sourceId by rememberSaveable {
-        // Precedence: a queued op's own source (an edit must not move money),
-        // then the widget's named wallet, then the primary. Only a source that
-        // still EXISTS and is active is honoured — an archived or deleted
-        // wallet on a stale widget config falls through to the default rather
-        // than seeding an unselectable id.
-        mutableStateOf(
-            prefill?.sourceId
-                ?: initialSourceId?.takeIf { id -> sources.any { it.id == id } }
-                ?: sources.firstOrNull { it.isMain }?.id,
-        )
+        // Precedence lives in cashEntrySourcePreselection (CashLogic.kt) so the
+        // widget, the in-app buttons and this sheet cannot drift apart again.
+        mutableStateOf(cashEntrySourcePreselection(prefill?.sourceId, initialSourceId, sources))
     }
     // Movement date — defaults to today; a queued backdated entry restores its day.
     val initialDate = remember(prefill) {
@@ -2550,6 +2557,8 @@ private fun TransferSheet(
     sources: List<CashSourceEntity>,
     prefill: PendingCashRow?,
     editOpId: Long?,
+    /** The scoped wallet the FROM side should open on; null = the primary. */
+    initialFromSourceId: String? = null,
     locale: Locale,
     onDismiss: () -> Unit,
 ) {
@@ -2560,11 +2569,10 @@ private fun TransferSheet(
 
     var amountText by rememberSaveable { mutableStateOf(prefill?.amountEur?.let { trimNumber(it) } ?: "") }
     var noteText by rememberSaveable { mutableStateOf(prefill?.note ?: "") }
-    var fromId by rememberSaveable {
-        mutableStateOf(prefill?.sourceId ?: sources.firstOrNull { it.isMain }?.id)
-    }
+    val initialFrom = cashEntrySourcePreselection(prefill?.sourceId, initialFromSourceId, sources)
+    var fromId by rememberSaveable { mutableStateOf(initialFrom) }
     var toId by rememberSaveable {
-        mutableStateOf(prefill?.toSourceId ?: sources.firstOrNull { !it.isMain }?.id)
+        mutableStateOf(cashTransferToPreselection(prefill?.toSourceId, initialFrom, sources))
     }
 
     val amount = parseLocalizedDecimal(amountText)

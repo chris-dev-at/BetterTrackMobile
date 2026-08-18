@@ -66,6 +66,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
+import at.bettertrack.app.ui.portfolio.displayNote
 import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtShapes
@@ -809,22 +810,32 @@ internal fun cashRangeToken(range: CashDateRange, locale: java.util.Locale): Str
  *
  * ## What it is allowed to claim
  *
- * Bookkeeping over exactly the rows drawn beneath it, and nothing else. The
- * heading says *for this selection* in both languages and the card carries the
- * count, because the one way a figure like this misleads is by being read as a
- * portfolio number — and the platform's own cash aggregates are month-scoped, so
- * there is no server total for an arbitrary source × tag × window slice to defer
- * to. Every addend is a server-recorded amount; nothing here is valuation math,
- * nothing here is a return, and nothing here touches the portfolio totals. The
- * study's own rule: *"no benchmark, return, percent change, market chart, or
- * trend arrow appears."*
+ * Bookkeeping over exactly the rows drawn beneath it, and nothing else. The card
+ * is marked as scope-limited and carries the count, because the one way a figure
+ * like this misleads is by being read as a portfolio number — and the platform's
+ * own cash aggregates are month-scoped, so there is no server total for an
+ * arbitrary source × tag × window slice to defer to. Every addend is a
+ * server-recorded amount; nothing here is valuation math, nothing here is a
+ * return, and nothing here touches the portfolio totals. The study's own rule:
+ * *"no benchmark, return, percent change, market chart, or trend arrow appears."*
  *
- * ## The hierarchy
+ * ## The hierarchy (owner restyle 2026-08-17)
  *
- * Netto is the headline, because "which way did it go" is what a selection
- * answers. Zufluss and Abfluss are equal supporting cells; average, largest and
- * transfers are compact facts; the per-tag breakdown is behind a disclosure
- * because it is the only part that is a list rather than a number.
+ * *"make the 'for this selection' stand out a bit more. like move the xx
+ * movements text below it and remove the for this selection up top and just put
+ * on the bottom corner selected or something."*
+ *
+ * So the card no longer spends its first line on a label. **Netto leads**, at
+ * hero weight, because "which way did it go" is what a selection answers and
+ * because that is the line the removed heading was standing in front of. Zufluss
+ * and Abfluss are equal supporting cells directly under it; the movement COUNT
+ * follows the figures instead of sharing the headline's row — it is the
+ * denominator, not a second headline — and it carries the reset affordance,
+ * since the count is precisely the number the filters narrowed. Average, largest
+ * and transfers are compact facts; the per-tag breakdown is behind a disclosure
+ * because it is the only part that is a list rather than a number. The honest
+ * scope survives as a small muted marker in the card's bottom corner
+ * ([R.string.bt_ledger_stats_scope]) — a marker, not a header.
  *
  * In and Out both print as POSITIVE magnitudes under their own labels and their
  * own inks — a `−60,00 €` beneath a heading that already says "out" states the
@@ -846,62 +857,25 @@ private fun CashLedgerStatsCard(
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.bt_ledger_stats_title),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = bt.textMuted,
-                    modifier = Modifier.weight(1f),
-                )
-                // The way out of a narrowed view, next to the thing that tells
-                // the user they are IN one. Absent when nothing is narrowed, so
-                // it never offers to undo a state that does not exist.
-                if (narrowed) {
-                    Text(
-                        text = stringResource(R.string.bt_ledger_reset_filters),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = bt.goldInk,
-                        modifier = Modifier
-                            .clip(BtShapes.pill)
-                            .clickable(onClick = onReset)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            // Netto leads and the count sits beside it: the primary figure and
-            // its denominator, together, which is the owner's standing rule
-            // about related values not feeling disconnected.
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.bt_ledger_stats_net),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = bt.textMuted,
-                    )
-                    MoneyText(
-                        value = stats.netEur,
-                        style = BtTheme.type.moneyMedium,
-                        color = when {
-                            stats.netEur > 0.0 -> bt.gain
-                            stats.netEur < 0.0 -> bt.loss
-                            else -> bt.textPrimary
-                        },
-                        showSign = true,
-                    )
-                }
-                Text(
-                    text = pluralStringResource(
-                        R.plurals.bt_cash_summary_movements,
-                        stats.count,
-                        stats.count,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                    modifier = Modifier.padding(bottom = 2.dp),
-                )
-            }
-            Spacer(Modifier.height(10.dp))
+            // The lead figure. It gets the whole card width — the reset pill was
+            // deliberately NOT parked here, because a 36sp signed amount and a
+            // "Filter zurücksetzen" pill cannot share 300dp.
+            Text(
+                text = stringResource(R.string.bt_ledger_stats_net),
+                style = MaterialTheme.typography.labelSmall,
+                color = bt.textMuted,
+            )
+            MoneyText(
+                value = stats.netEur,
+                style = BtTheme.type.moneyLarge,
+                color = when {
+                    stats.netEur > 0.0 -> bt.gain
+                    stats.netEur < 0.0 -> bt.loss
+                    else -> bt.textPrimary
+                },
+                showSign = true,
+            )
+            Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth()) {
                 StatCell(
                     label = stringResource(R.string.bt_ledger_stats_in),
@@ -915,6 +889,36 @@ private fun CashLedgerStatsCard(
                     color = bt.loss,
                     modifier = Modifier.weight(1f),
                 )
+            }
+            Spacer(Modifier.height(8.dp))
+            // The count, below the figures it counts (owner restyle), sharing its
+            // row with the way OUT of a narrowed view — the count is the number
+            // the filters changed, so the undo belongs beside it. Absent when
+            // nothing is narrowed, so it never offers to undo a state that does
+            // not exist.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.bt_cash_summary_movements,
+                        stats.count,
+                        stats.count,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    modifier = Modifier.weight(1f),
+                )
+                if (narrowed) {
+                    Text(
+                        text = stringResource(R.string.bt_ledger_reset_filters),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = bt.goldInk,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(BtShapes.pill)
+                            .clickable(onClick = onReset)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth()) {
@@ -1005,15 +1009,33 @@ private fun CashLedgerStatsCard(
             }
 
             Spacer(Modifier.height(10.dp))
-            Text(
-                text = stringResource(R.string.bt_ledger_export_title),
-                style = MaterialTheme.typography.labelLarge,
-                color = bt.goldInk,
-                modifier = Modifier
-                    .clip(BtShapes.pill)
-                    .clickable(onClick = onExport)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            )
+            // Bottom corner: the action on the left, and on the right the quiet
+            // scope marker that replaced the removed heading. It is the card's
+            // honesty rule in three syllables — everything above is about the
+            // selection, not the portfolio — and it is deliberately the smallest,
+            // dimmest thing in the card.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.bt_ledger_export_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = bt.goldInk,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(BtShapes.pill)
+                        .clickable(onClick = onExport)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = stringResource(R.string.bt_ledger_stats_scope),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = bt.textMuted,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -1094,7 +1116,13 @@ private fun StatCell(
  */
 @Composable
 private fun largestMovementLabel(movement: CashMovementEntity?): String? {
-    val note = movement?.note?.trim().orEmpty()
+    // `displayNote`, not the raw note: the sync queue's retired `[bt:<uuid>]`
+    // reconcile marker still sits in older rows, and on the owner's live ledger
+    // this cell printed "Größte · [bt:8d4f8ca4-bd33-4f8…" (device pass
+    // 2026-08-18). Every other surface that shows a note already strips it —
+    // the Cash Wallet widget's movement rows, the transactions list — so this
+    // was the one that had been missed, not a new rule.
+    val note = displayNote(movement?.note).orEmpty()
     if (note.isEmpty()) return null
     return stringResource(R.string.bt_ledger_stats_largest_named, note)
 }

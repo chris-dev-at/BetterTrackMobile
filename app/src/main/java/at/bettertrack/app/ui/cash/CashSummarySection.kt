@@ -20,8 +20,7 @@ import at.bettertrack.app.ui.charts.viz.vizFormHasOwnRows
 import at.bettertrack.app.ui.charts.viz.vizResolveForm
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -72,7 +70,6 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -391,9 +388,13 @@ private fun SummaryTagRow(
  *  - **Gold marks the selection, emerald/red keep meaning money direction.** The
  *    bars never change colour — a selected column gets a gold wash behind it, a
  *    gold rule under it and gold ink on its axis label.
- *  - **Dragging is the portfolio chart's gesture, not a second one.** Same
- *    [BtScrubTicker], so the haptic detent per bar crossed has the identical
- *    cadence; the only difference is that this chart keeps what the drag left.
+ *  - **Tap only — there is no drag-scrub.** An earlier round gave this chart the
+ *    portfolio chart's drag gesture. The owner reversed it on 2026-08-17: *"beim
+ *    cashflow diagramm soll ich nicht scrollen können (weil das stört das hoch
+ *    und runter scrollen) sondern ich soll einfach klicken können auf einen
+ *    monat"*. A scrub has to CONSUME horizontal moves to work, and consuming
+ *    them starved the page's vertical scroll of the same gesture stream. The
+ *    haptic detent survives on the tap; the drag path is gone. Do not re-add it.
  *
  * @param onOpenMonth given, the readout offers a door into the ledger narrowed
  *   to the selected month. Null hides the affordance rather than showing a dead
@@ -450,51 +451,21 @@ fun CashTrendsBlock(
                 // still selectable: the hit test is nearest-column over the full
                 // width and full height (see [trendIndexAt]), which at six months
                 // on a 412dp handset is a ~60dp target per month.
+                // TAP ONLY. `detectTapGestures` waits for the up and never
+                // consumes the drag stream, so a finger that starts on the chart
+                // and moves vertically is handed straight to the enclosing
+                // LazyColumn — which is the whole point of the owner ruling
+                // above. Nothing here reacts to the DOWN either: a tap has to be
+                // able to toggle the bar it lands on OFF, and a down-select would
+                // have turned it on before the up arrived.
                 .pointerInput(points) {
-                    val report: (Float) -> Unit = { x ->
-                        val i = trendIndexAt(x, size.width.toFloat(), points.size)
-                        if (i >= 0 && points[i].month != selectedMonth) {
-                            selectedMonth = points[i].month
-                            ticker.crossed(i, x)
+                    detectTapGestures { offset ->
+                        val i = trendIndexAt(offset.x, size.width.toFloat(), points.size)
+                        if (i >= 0) {
+                            selectedMonth = toggleTrendMonth(selectedMonth, points[i].month)
+                            ticker.crossed(i, offset.x)
+                            ticker.end()
                         }
-                    }
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val startX = down.position.x
-                        var dragged = false
-                        // The DOWN does not select: a tap must be able to toggle
-                        // the bar it lands on OFF, and a down-select would have
-                        // already turned it on before the up arrived.
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.changedToUpIgnoreConsumed()) {
-                                change.consume()
-                                if (!dragged) {
-                                    val i = trendIndexAt(startX, size.width.toFloat(), points.size)
-                                    if (i >= 0) {
-                                        selectedMonth = toggleTrendMonth(selectedMonth, points[i].month)
-                                        ticker.crossed(i, startX)
-                                    }
-                                }
-                                break
-                            }
-                            if (!change.isConsumed) {
-                                val dx = change.position.x - startX
-                                if (!dragged && abs(dx) > viewConfiguration.touchSlop) {
-                                    dragged = true
-                                    ticker.end()
-                                }
-                                if (dragged) {
-                                    // Consuming is load-bearing: it keeps the page's
-                                    // LazyColumn and the shell's tab pager from
-                                    // stealing a horizontal scrub.
-                                    change.consume()
-                                    report(change.position.x)
-                                }
-                            }
-                        }
-                        ticker.end()
                     }
                 },
             horizontalArrangement = Arrangement.spacedBy(6.dp),

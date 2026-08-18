@@ -92,8 +92,9 @@ class BtPortfolioWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
-                val mode = btWidgetThemeMode()
+                val mode = btWidgetThemeMode(context)
                 val snapshot = BtWidgetRepository.load(context)
                 // Stored choice, else a just-pinned one from the in-app
                 // builder, else follow mode (null) — see BtWidgetPinning for
@@ -136,13 +137,15 @@ class BtPortfolioWidget : GlanceAppWidget() {
         ) { data ->
             BtWidgetCard(
                 colors = data.colors,
-                action = actionStartActivity(
-                    btWidgetIntent(
-                        context,
-                        BT_WIDGET_TARGET_PORTFOLIO,
-                        portfolioId = data.portfolio?.id ?: data.config?.portfolioId,
-                    ),
-                ),
+                // Just open the app (owner ruling 2026-08-18 — see
+                // btWidgetLaunchIntent). This card has no sub-targets, so the
+                // whole surface is one big near-miss zone, and the destination
+                // it used to force was barely a destination: in follow mode the
+                // deep link resolved to the portfolio the app ALREADY has
+                // selected, so the tap's only real effect was to clear the
+                // user's sheets and switch their tab on the way to where they
+                // already were.
+                action = actionStartActivity(btWidgetLaunchIntent(context)),
             ) {
                 Content(
                     data.local, data.snapshot, data.config, data.portfolio, data.pinnedGone,
@@ -328,27 +331,37 @@ class BtPortfolioWidget : GlanceAppWidget() {
                 } else {
                     0f
                 }) + 6f // slack the elastic spacer re-absorbs
-            val chartHDp = (size.height.value - 2 * BT_WIDGET_PADDING.value - headerDp - footerDp)
-                .coerceAtLeast(40f)
-            val chartWDp = size.width.value - 2 * BT_WIDGET_PADDING.value
-            val density = local.resources.displayMetrics.density
-            val (wPx, hPx) = btWidgetBitmapSize(chartWDp, chartHDp, density)
-            val bitmap = btWidgetLineBitmap(
-                normalized = btWidgetSparkNormalize(
-                    btWidgetSparkThin(chartValues, BT_WIDGET_SPARK_MAX_POINTS),
-                ),
-                widthPx = wPx,
-                heightPx = hPx,
-                lineColor = BtGlanceChartPalette.portfolioLine(night),
-                density = density,
-                endpointRingColor = BtGlanceChartPalette.surface(night),
+            // No floor. `btWidgetChartHeightDp` returns null when the header and
+            // footer have already spent the card, and the plot is then OMITTED
+            // rather than drawn at a size that overflows — the owner's
+            // "some widget charts are cut off" (2026-08-18). The figures above
+            // are the card's actual subject; a curve sliced by the card edge
+            // misstates the series it is drawing.
+            val chartHDp = btWidgetChartHeightDp(
+                cardHeightDp = size.height.value,
+                reservedDp = 2 * BT_WIDGET_PADDING.value + headerDp + footerDp,
             )
-            Image(
-                provider = ImageProvider(bitmap),
-                contentDescription = portfolio.name,
-                modifier = GlanceModifier.width(chartWDp.dp).height(chartHDp.dp),
-                contentScale = ContentScale.FillBounds,
-            )
+            if (chartHDp != null) {
+                val chartWDp = size.width.value - 2 * BT_WIDGET_PADDING.value
+                val density = local.resources.displayMetrics.density
+                val (wPx, hPx) = btWidgetBitmapSize(chartWDp, chartHDp, density)
+                val bitmap = btWidgetLineBitmap(
+                    normalized = btWidgetSparkNormalize(
+                        btWidgetSparkThin(chartValues, BT_WIDGET_SPARK_MAX_POINTS),
+                    ),
+                    widthPx = wPx,
+                    heightPx = hPx,
+                    lineColor = BtGlanceChartPalette.portfolioLine(night),
+                    density = density,
+                    endpointRingColor = BtGlanceChartPalette.surface(night),
+                )
+                Image(
+                    provider = ImageProvider(bitmap),
+                    contentDescription = portfolio.name,
+                    modifier = GlanceModifier.width(chartWDp.dp).height(chartHDp.dp),
+                    contentScale = ContentScale.FillBounds,
+                )
+            }
         }
 
         // Footer: the range's Tief/Hoch — quiet, and only where it fits.

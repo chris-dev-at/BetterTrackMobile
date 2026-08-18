@@ -577,12 +577,23 @@ fun BtApp() {
             // The Budget widget: open the Cash sheet for the ledger it budgeted.
             // A null portfolioId lets CashScreen resolve the selected one, exactly
             // as the overview's own onOpenCash does.
+            // A Quick-Links tile may also name the WALLET (owner 2026-08-18,
+            // "3 buttons that each bring me to the overview of another cash
+            // source"); CashRoute's initialSourceId is the screen's own source
+            // filter, so a named wallet lands already scoped to it.
             is NotifDeepLink.Cash ->
-                open(link) { navController.navigate(CashRoute(portfolioId = link.portfolioId)) }
+                open(link) {
+                    navController.navigate(
+                        CashRoute(portfolioId = link.portfolioId, initialSourceId = link.sourceId),
+                    )
+                }
             // Quick-actions widget: straight into the blank buy form / the cash
-            // screen — the shortcut's worth is being INSIDE in one tap.
-            NotifDeepLink.AddTransaction ->
-                open(link) { navController.navigate(TransactionFormRoute()) }
+            // screen — the shortcut's worth is being INSIDE in one tap. The
+            // portfolio is nullable and overrides the switcher when set.
+            is NotifDeepLink.AddTransaction ->
+                open(link) {
+                    navController.navigate(TransactionFormRoute(portfolioId = link.portfolioId))
+                }
             // The Cash Wallet widget's Bezahlt / Erhalten buttons carry the
             // wallet AND the direction, so the sheet opens on the right source
             // with the right sign — a money shortcut that guessed the wallet

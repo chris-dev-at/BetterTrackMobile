@@ -77,8 +77,9 @@ class BtSpendingWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
-                val theme = btWidgetThemeMode()
+                val theme = btWidgetThemeMode(context)
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = BtWidgetRepository.load(context),
@@ -412,28 +413,38 @@ class BtSpendingWidget : GlanceAppWidget() {
                 // 40dp that FillBounds then stretched over (device QA
                 // 2026-08-16, the anti-squish rule).
                 val headerDp = btWidgetTextDp(9f, fs) + btWidgetTextDp(18f, fs) + 4f + 4f
-                val chartHDp = (size.height.value - 2 * BT_WIDGET_PADDING.value - headerDp)
-                    .coerceAtLeast(30f)
-                val chartWDp = size.width.value - 2 * BT_WIDGET_PADDING.value
-                val (wPx, hPx) = btWidgetBitmapSize(chartWDp, chartHDp, density)
-                val bitmap = btWidgetFlowBarsBitmap(
-                    bars = btWidgetCashflowBars(points),
-                    labels = points.map { btWidgetMonthShort(it.month, locale) },
-                    widthPx = wPx,
-                    heightPx = hPx,
-                    inflowColor = BtGlanceChartPalette.gain(night),
-                    outflowColor = BtGlanceChartPalette.loss(night),
-                    labelColor = BtGlanceChartPalette.textMuted(night),
-                    highlightColor = BtGlanceChartPalette.portfolioLine(night),
-                    baselineColor = BtGlanceChartPalette.track(night),
-                    density = density,
+                // No floor — see btWidgetChartHeightDp. The minimum is higher
+                // than the family default because this bitmap spends its own
+                // top slice on the month labels: below ~48dp the two halves of
+                // the column are a few pixels each and the axis is all there is
+                // to see.
+                val chartHDp = btWidgetChartHeightDp(
+                    cardHeightDp = size.height.value,
+                    reservedDp = 2 * BT_WIDGET_PADDING.value + headerDp,
+                    minChartDp = FLOW_BARS_MIN_DP,
                 )
-                Image(
-                    provider = ImageProvider(bitmap),
-                    contentDescription = local.getString(R.string.bt_widget_flow_net),
-                    modifier = GlanceModifier.width(chartWDp.dp).height(chartHDp.dp),
-                    contentScale = ContentScale.FillBounds,
-                )
+                if (chartHDp != null) {
+                    val chartWDp = size.width.value - 2 * BT_WIDGET_PADDING.value
+                    val (wPx, hPx) = btWidgetBitmapSize(chartWDp, chartHDp, density)
+                    val bitmap = btWidgetFlowBarsBitmap(
+                        bars = btWidgetCashflowBars(points),
+                        labels = points.map { btWidgetMonthShort(it.month, locale) },
+                        widthPx = wPx,
+                        heightPx = hPx,
+                        inflowColor = BtGlanceChartPalette.gain(night),
+                        outflowColor = BtGlanceChartPalette.loss(night),
+                        labelColor = BtGlanceChartPalette.textMuted(night),
+                        highlightColor = BtGlanceChartPalette.portfolioLine(night),
+                        baselineColor = BtGlanceChartPalette.track(night),
+                        density = density,
+                    )
+                    Image(
+                        provider = ImageProvider(bitmap),
+                        contentDescription = local.getString(R.string.bt_widget_flow_net),
+                        modifier = GlanceModifier.width(chartWDp.dp).height(chartHDp.dp),
+                        contentScale = ContentScale.FillBounds,
+                    )
+                }
                 Spacer(GlanceModifier.defaultWeight())
                 if (snapshot.cashflowStale && snapshot.cashflowAsOfMs != null) {
                     Spacer(GlanceModifier.height(2.dp))
@@ -607,4 +618,13 @@ class BtSpendingWidget : GlanceAppWidget() {
         }
     }
 
+    private companion object {
+        /**
+         * The smallest six-month column chart worth drawing. Higher than the
+         * shared [BT_WIDGET_MIN_CHART_DP] because this bitmap reserves its own
+         * bottom strip for the month labels (~1.6 × a 9sp line), so a 40dp box
+         * would be mostly axis.
+         */
+        const val FLOW_BARS_MIN_DP = 48f
+    }
 }

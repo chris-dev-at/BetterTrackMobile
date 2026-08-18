@@ -621,6 +621,54 @@ fun btWidgetPortfolioChoices(portfolios: List<PortfolioEntity>): List<PortfolioE
     portfolios.filter { it.archivedAt == null }.sortedBy { it.sortOrder }
 
 /**
+ * Every ACTIVE cash source across every ACTIVE portfolio, in portfolio order.
+ *
+ * ## Why the pickers stopped being single-portfolio
+ *
+ * Owner 2026-08-18: *"one button is for main cash in this portfolio the other
+ * one in my savings portfolio and then another one for my mains second bank
+ * cash source"*. Both cash pickers (the wallet widget's, and the Quick-Links
+ * target picker) previously offered only the GOVERNING portfolio's sources, so
+ * a wallet in any other portfolio simply could not be put on the home screen —
+ * not a preference, an impossibility.
+ *
+ * Room-only and failure-tolerant, in the same spirit as every other picker
+ * source here: a portfolio whose ledger has never been fetched contributes
+ * nothing rather than failing the whole list. [btWidgetWarmCashSources] is the
+ * separate, user-initiated top-up.
+ */
+suspend fun btWidgetAllCashSources(
+    portfolios: List<PortfolioEntity>,
+): List<at.bettertrack.app.data.db.CashSourceEntity> =
+    btWidgetPortfolioChoices(portfolios).flatMap { portfolio ->
+        try {
+            BtWidgetRepository.loadCashSources(portfolio.id).filter { it.archivedAt == null }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Cash sources failed to load for ${portfolio.id}.", e)
+            emptyList()
+        }
+    }
+
+/**
+ * Top up [btWidgetAllCashSources] from the network, one portfolio at a time.
+ *
+ * Bounded by [BT_WIDGET_CASH_PICKER_WARM_LIMIT] for the same reason every other
+ * fan-out in this file is bounded: an account with twenty portfolios must not
+ * turn opening a config screen into twenty round trips. The cap is on the WARM
+ * only — the Room read above still lists every portfolio's cached sources.
+ */
+suspend fun btWidgetWarmCashSources(portfolios: List<PortfolioEntity>) {
+    btWidgetPortfolioChoices(portfolios).take(BT_WIDGET_CASH_PICKER_WARM_LIMIT).forEach { portfolio ->
+        BtWidgetRepository.warmCashForPicker(portfolio.id)
+    }
+}
+
+/** How many portfolios' ledgers one picker visit will fetch. */
+const val BT_WIDGET_CASH_PICKER_WARM_LIMIT: Int = 6
+
+/**
  * The configured asset's display row — the same source precedence as
  * [btWidgetRows]: the widget-captured EUR quote wins, a held position's native
  * price is the offline fallback (never converted), and the stored identity

@@ -2730,6 +2730,9 @@
     <string name="bt_widget_flow_net_window">Netto · %1$d M</string>
     <string name="bt_widget_flow_elapsed">1.–%1$d. %2$s</string>
     <string name="bt_widget_config_save">Speichern</string>
+    <string name="bt_widget_config_current">Aktuell angezeigt</string>
+    <string name="bt_ql_config_target_any">Aktuelle Auswahl</string>
+    <string name="bt_widget_config_asset_none">Noch kein Wert gewählt</string>
     <string name="bt_widget_config_pulse">Vermögens-Widget</string>
     <string name="bt_widget_config_allocation">Allokations-Widget</string>
     <string name="bt_widget_config_rows">Listen-Widget</string>
@@ -3176,4 +3179,45 @@
     <string name="bt_heatmap_empty_positions">Noch keine Positionen mit einem Wert.</string>
     <string name="bt_heatmap_empty_watchlist">Noch nichts auf deiner Watchlist.</string>
     <string name="bt_heatmap_row_sub">Deine Positionen und Watchlist nach heutiger Bewegung</string>
+
+    <!-- Ledger-Statistikkarte — die Bereichsmarkierung statt der entfernten Überschrift -->
+    <string name="bt_ledger_stats_scope">Auswahl</string>
+
+    <!-- Vorgegebene Cash-Tags: wofür der jeweilige Standard steht (über systemKey) -->
+    <string name="bt_tags_builtin_desc_investment">Bargeld, das für den Kauf einer Anlage ausgegeben wird.</string>
+    <string name="bt_tags_builtin_desc_sale_proceeds">Bargeld, das aus dem Verkauf einer Anlage zufließt.</string>
+    <string name="bt_tags_builtin_desc_dividend">Dividenden, die einer Bargeldquelle gutgeschrieben werden.</string>
+    <string name="bt_tags_builtin_desc_interest">Zinsen, die einer Bargeldquelle gutgeschrieben werden.</string>
+    <string name="bt_tags_builtin_desc_fees">Broker- und Kontogebühren, die vom Bargeld abgehen.</string>
+    <string name="bt_tags_builtin_desc_tax">Steuern, die einbehalten oder vom Bargeld gezahlt werden.</string>
+    <string name="bt_tags_builtin_desc_transfer">Geld, das zwischen deinen eigenen Bargeldquellen bewegt wird.</string>
+    <string name="bt_tags_builtin_desc_deposit">Geld, das du auf eine Bargeldquelle eingezahlt hast.</string>
+    <string name="bt_tags_builtin_desc_withdrawal">Geld, das du von einer Bargeldquelle abgehoben hast.</string>
+
+    <!-- Vorgegebene Cash-Tags: Standardnamen wiederherstellen -->
+    <string name="bt_tags_builtin_default_name">Standardname: %1$s</string>
+    <string name="bt_tags_restore_action">Standardnamen wiederherstellen</string>
+    <string name="bt_tags_restore_all">Alle Standardnamen wiederherstellen</string>
+    <string name="bt_tags_restore_title">Standardnamen wiederherstellen</string>
+    <string name="bt_tags_restore_all_title">Standardnamen wiederherstellen</string>
+    <string name="bt_tags_restore_message">„%1$s“ heißt wieder „%2$s“.</string>
+    <string name="bt_tags_restore_pair">%1$s → %2$s</string>
+    <string name="bt_tags_restore_colour_note">Nur der Name wird zurückgesetzt — die Farbe bleibt genau so, wie du sie eingestellt hast.</string>
+    <string name="bt_tags_restore_confirm">Wiederherstellen</string>
+    <plurals name="bt_tags_restore_all_count">
+        <item quantity="one">%1$d umbenannter vorgegebener Tag erhält seinen Standardnamen zurück.</item>
+        <item quantity="other">%1$d umbenannte vorgegebene Tags erhalten ihre Standardnamen zurück.</item>
+    </plurals>
+
+    <!-- ── Vermögensverlauf des Kontos (Punkt 11) ── -->
+    <string name="bt_account_wealth_row">Vermögen im Zeitverlauf</string>
+    <string name="bt_account_wealth_title">Gesamtvermögen</string>
+    <string name="bt_account_wealth_chart_cd">Diagramm des Gesamtvermögens über die Zeit</string>
+    <string name="bt_account_wealth_series_cd">Diagramm von %1$s über die Zeit</string>
+    <string name="bt_account_wealth_series_failed">Diese Kurve konnte nicht geladen werden.</string>
+    <string name="bt_account_wealth_multi_note">Eine gemeinsame Kurve über alle Portfolios braucht noch Unterstützung vom Server. Unten steht die eigene Kurve jedes Portfolios.</string>
+    <plurals name="bt_account_wealth_not_charted">
+        <item quantity="one">%1$d weiteres Portfolio wird hier nicht gezeichnet.</item>
+        <item quantity="other">%1$d weitere Portfolios werden hier nicht gezeichnet.</item>
+    </plurals>
 </resources>

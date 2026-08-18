@@ -32,11 +32,12 @@ class BtMoversWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = BtWidgetRepository.load(context),
-                    colors = btGlanceColors(btWidgetThemeMode()),
+                    colors = btGlanceColors(btWidgetThemeMode(context)),
                     config = btWidgetConfigOrNull("movers") {
                         val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
                         if (state[BT_WIDGET_PREF_ROWS_SOURCE] == null) {
@@ -52,7 +53,10 @@ class BtMoversWidget : GlanceAppWidget() {
         ) { data ->
             BtWidgetCard(
                 colors = data.colors,
-                action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
+                // The ROWS carry the deep links (each opens its own asset); the
+                // card behind them has no single subject, so it just opens the
+                // app — see btWidgetLaunchIntent.
+                action = actionStartActivity(btWidgetLaunchIntent(context)),
             ) {
                 BtRowFamilyContent(context, data.local, data.snapshot, data.config, data.colors)
             }

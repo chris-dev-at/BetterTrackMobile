@@ -77,8 +77,9 @@ class BtAllocationWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
-                val mode = btWidgetThemeMode()
+                val mode = btWidgetThemeMode(context)
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = BtWidgetRepository.load(context),
@@ -98,7 +99,9 @@ class BtAllocationWidget : GlanceAppWidget() {
         ) { data ->
             BtWidgetCard(
                 colors = data.colors,
-                action = actionStartActivity(btWidgetIntent(context, BT_WIDGET_TARGET_OVERVIEW)),
+                // A breakdown of everything, not a pointer at one thing — so
+                // the card just opens the app (see btWidgetLaunchIntent).
+                action = actionStartActivity(btWidgetLaunchIntent(context)),
             ) {
                 Content(data.local, data.snapshot, data.config, data.colors, data.night)
             }

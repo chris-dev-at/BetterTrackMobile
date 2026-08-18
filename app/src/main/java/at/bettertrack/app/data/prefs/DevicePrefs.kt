@@ -290,7 +290,15 @@ class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
         _trueBlack.value = enabled
     }
 
-    private companion object {
+    /**
+     * `internal`, not `private`, since 2026-08-18: the widget package reads
+     * [KEY_THEME_MODE] out of [PREFS] DIRECTLY (see `btWidgetStoredThemeMode`).
+     * A widget's transient first frame must know the app's theme without
+     * touching `AppGraph` — forcing the graph is the slow thing on that path —
+     * and a second copy of these two strings in the widget package would be a
+     * silent-drift hazard the moment either one is renamed.
+     */
+    internal companion object {
         const val PREFS = "bt_device_prefs"
         const val KEY_ORIENTATION_LOCKED = "orientation_locked"
         const val DEFAULT_ORIENTATION_LOCKED = true

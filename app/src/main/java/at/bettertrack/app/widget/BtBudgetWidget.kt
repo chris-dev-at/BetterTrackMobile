@@ -79,8 +79,9 @@ class BtBudgetWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         btProvideContent(
             context = context,
+            id = id,
             load = {
-                val mode = btWidgetThemeMode()
+                val mode = btWidgetThemeMode(context)
                 Loaded(
                     local = btWidgetContext(context),
                     snapshot = BtWidgetRepository.load(context),
