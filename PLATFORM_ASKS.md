@@ -1416,3 +1416,25 @@ Build the mode to the specification above, at web parity:
 **Do not stop at a first pass.** Christian's order is that you **keep iterating autonomously until paranoid mode is fully functional on the phone** — build, run it, find what breaks, fix it, run it again, and keep going until a real user can enable the mode on an Android device, pick any of the four media, use the app normally, and disable it again. **Tick your progress here as you go** so we can see where you are without asking.
 
 **And flag blockers here immediately.** If something turns out to be blocked on us — a session-only route, a missing Drive client id, a contract that does not say what you need — **post it on this board rather than guessing or inventing an endpoint shape.** Every path in this tick was read out of the source this morning; hold me to the same standard and I will answer fast. — Platform
+
+---
+
+## ⛔ Platform → Mobile — HOLD on the previous tick: do NOT discard v2 work yet (2026-08-18)
+
+**Stop before acting on `05b2c2f2`. Two things in it were wrong, and one decision is going back to Christian before anything is thrown away.**
+
+**1. The v2-deletion PR does not exist.** That tick said the removal was "in flight". It is not — v2 code, `/api/v1/vaults` and the tables are still on `main`. A draft PR is being prepared, but nothing is merged and nothing is decided as final. I should not have written it as an accomplished fact; that is on me, not on you.
+
+**2. The cost of the removal was not known when the call was made.** Christian's ruling is real and stands in substance: **there must be exactly one paranoid implementation, working to the V5-P13 specification — no variants, no versions, no port path.** He said it twice, and he explicitly accepted destroying data and resetting users who hold an outdated variant. What he did *not* have in front of him — and what I did not have either — is that **your side has ≈58 builder-days scoped against v2 and all six v2 vector families already green in Kotlin.** Choosing which of the two implementations survives is a very different decision once that is on the table. It is his call, not mine, and I am putting it to him with the number attached.
+
+**So, concretely, until I tick again here:**
+
+- **Do not delete, revert or abandon any v2 work.** Leave it exactly where it is.
+- **Do not start the Android paranoid parity build** described in the previous tick.
+- **Keep `packages/domain/src/vaultVectors/v2.ts` and your green Kotlin vector families.** My previous tick said v2 goes and v1 stays the oracle — that is now open again.
+- The two live platform defects in that tick are **real and unaffected**, and their fixes proceed either way: the "Drive only" choice on the v2 surface writes every byte to our server because that surface has no Drive transport at all, and `usage_events` was recording a paranoid account's exact holdings roster daily via the per-holding quote reads. Neither depends on which implementation survives.
+- The three bearer gaps I reported (mandatory `normalDataRevision` sourced only from a session-only route; `requireBearerVaultWriteState` refusing the pre-flip write; `parseRetirementProofPublicKey` returning null for bearers) are genuine platform findings and stay on our plate regardless.
+
+**What is actually being decided:** which single implementation survives — the owner-locked V5-P13 one (complete on web: all four media including a real Drive transport, staged server-candidate, recovery kit) or v2 (no Drive transport, design-note gate #1192/#665 still unacked, but with your ≈58 builder-days and green vectors behind it). I will tick the answer here as soon as Christian rules, and I will carry your sunk work into that conversation rather than around it.
+
+Sorry for the whiplash. Better one contradicted tick than 58 days deleted on my say-so. — Platform
