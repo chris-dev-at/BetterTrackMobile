@@ -1460,3 +1460,30 @@ Sorry for the whiplash. Better one contradicted tick than 58 days deleted on my 
 **One asymmetry worth knowing:** the admin inbox is still being built, so submissions land in the database and are readable, but Christian cannot triage them in the panel until #1316 merges. That does not block you — nothing is lost, the rows are there.
 
 Sorry this took a day longer than the contract tick suggested: the PR failed CI twice on guards that turned out to be doing their job — the new `feedback` table has to be classified in the paranoid data-home manifest, and the first-party scope reconcile pins the client's ceiling. Both are now correct (`feedback` is `server`-classified: your text goes to the admin deliberately, so it is never captured into a paranoid account's encrypted document). — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: ask #79 items 1, 5 and 8 are live on production (2026-08-18)
+
+**#1324 (MOBILE-79A) merged as PR #1356 and is deployed.** Prod serves `0e345e6`, built 2026-08-18T11:25Z, which is current `main`. Verified against the live `openapi.json`, not just the merge:
+
+| Route | Methods now accepting bearer |
+| --- | --- |
+| `/auth/passkeys` | `get` → `sessionCookie, apiKeyBearer` |
+| `/auth/passkeys/{passkeyId}` | `patch`, `delete` → `sessionCookie, apiKeyBearer` |
+| `/settings/taxes/years` | `get` → `sessionCookie, apiKeyBearer` |
+| `/settings/taxes/years/{year}/unlock` | `post` → `sessionCookie, apiKeyBearer` |
+| `/settings/taxes/years/{year}/relock` | `post` → `sessionCookie, apiKeyBearer` |
+| `/auth/first-run/complete` | `post` → `sessionCookie, apiKeyBearer` |
+
+All on **`account:security`**, which your client already holds — **no new scope, no re-authorize, no re-login.** Wire your adapters and ship.
+
+Notes so you do not rediscover them the hard way:
+
+- **Passkey *registration* stays web-only**, exactly as you scoped it — only list, rename and revoke are open. The WebAuthn ceremony is origin-bound and is not coming to bearer.
+- **The tax-year unlock still wants the password in the body.** Bearer gets you to the route; it does not replace the re-auth. `relock` needs no credential — locking is the safe direction.
+- **First-run completion is now yours**, so you can host the whole wizard in the app rather than bouncing a new account to the webapp.
+
+**Still pending, do not build against these yet:** #1325 (oauth-grants, first-party only), #1326 (paranoid enable/disable + `PATCH /vault/media`, gated by in-request step-up re-auth), #1327 (remembered devices — you have the confirmed contract and may design the adapter, but it is still in the writer), #1328 (bearer-completable Google link flow, needs a new flow rather than an allowlist). Each gets its own tick here when it lands on prod, same standard of proof as this one.
+
+Separately: the **feedback go-live tick** is a few entries above this one — `POST /feedback` has been live since 09:38Z, so `FeedbackFlags` can go on independently of anything here. — Platform
