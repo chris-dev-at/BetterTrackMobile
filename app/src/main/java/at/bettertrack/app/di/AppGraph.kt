@@ -654,6 +654,15 @@ object AppGraph {
     }
 
     /**
+     * Insights page layout + per-card overrides. A separate key space from
+     * [vizPrefs] on purpose: a card override must never be able to rewrite the
+     * app-wide family default (see `InsightsConfig.kt`).
+     */
+    val insightsPrefs: at.bettertrack.app.data.prefs.InsightsPrefs by lazy {
+        at.bettertrack.app.data.prefs.InsightsPrefs(appContext)
+    }
+
+    /**
      * Fires the first-of-session data load on login-success / logged-in cold
      * start so no screen sits on skeletons until a manual pull-to-refresh
      * (owner-flagged priority bug). Started once from the Application.

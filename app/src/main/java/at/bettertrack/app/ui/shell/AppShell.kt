@@ -1805,8 +1805,27 @@ private fun BtSheetHost(
         btSheet<PortfolioInsightsRoute> { entry ->
             ParanoidGate(onBack = back) {
                 val route = entry.toRoute<PortfolioInsightsRoute>()
-                at.bettertrack.app.ui.portfolio.PortfolioInsightsScreen(
+                at.bettertrack.app.ui.insights.InsightsStudioScreen(
                     portfolioId = route.portfolioId,
+                    onBack = back,
+                    onOpenReport = { preselect ->
+                        navController.navigate(
+                            at.bettertrack.app.navigation.InsightsReportRoute(
+                                portfolioId = route.portfolioId,
+                                preselect = preselect,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+
+        btSheet<at.bettertrack.app.navigation.InsightsReportRoute> { entry ->
+            ParanoidGate(onBack = back) {
+                val route = entry.toRoute<at.bettertrack.app.navigation.InsightsReportRoute>()
+                at.bettertrack.app.ui.insights.InsightsReportScreen(
+                    portfolioId = route.portfolioId,
+                    preselect = route.preselect,
                     onBack = back,
                 )
             }

@@ -294,10 +294,23 @@ import kotlinx.serialization.Serializable
 @Serializable data class PortfolioSettingsRoute(val portfolioId: String)
 
 /**
- * One portfolio's insights subpage (owner UI batch 2026-08-16): the allocation
- * section that left the overview, plus whatever insight modules come later.
+ * The Insights Studio (owner UI batch 2026-08-16; grown into a studio by the
+ * 2026-08-18 ask). Seeded with the portfolio it was opened from — the page can
+ * widen its own scope to every portfolio, but it never silently retargets.
  */
 @Serializable data class PortfolioInsightsRoute(val portfolioId: String)
+
+/**
+ * The Insights report builder.
+ *
+ * [preselect] carries a `BtInsight` name when the user arrived through one
+ * card's `Als PDF exportieren`, so that card starts checked. Null means the
+ * builder opens on the recommended selection.
+ */
+@Serializable data class InsightsReportRoute(
+    val portfolioId: String,
+    val preselect: String? = null,
+)
 
 /** One portfolio's tax override, rendered through the effective/override cascade. */
 @Serializable data class PortfolioTaxRoute(val portfolioId: String)
