@@ -11,10 +11,12 @@ package at.bettertrack.app.data.repo
  * section, the labels and the helper copy all say "Icon". Rename the copy, never
  * the type or [wire] (that would need a migration).
  *
- * ⚠️ **CLIENT-ONLY, FOR NOW.** There is no `kind` field on the portfolio row and
- * no PATCH body field for it, on either client. See
- * [at.bettertrack.app.data.db.MetaEntity.KEY_PORTFOLIO_KINDS] for the storage and
- * the cross-client consequence.
+ * **Server-backed since 2026-08-18.** [wire] matches the platform's
+ * `portfolioKindSchema` tokens 1:1, and the value round-trips through
+ * `PATCH /portfolios/{id}.kind` like any other portfolio field. It was
+ * client-only before that, on the mistaken belief that the API had no field for
+ * it; see [at.bettertrack.app.data.db.MetaEntity.KEY_PORTFOLIO_KINDS] for the
+ * one-time migration that carries old local choices up.
  */
 enum class BtPortfolioKind(val wire: String) {
     Private("private"),

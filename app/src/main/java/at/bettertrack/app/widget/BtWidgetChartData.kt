@@ -493,3 +493,112 @@ fun btWidgetBitmapSize(
     }
     return w to h
 }
+
+// ── Heatmap tiles (owner ask 2026-08-18) ────────────────────────────────────
+
+/**
+ * One heatmap cell: a holding sized by what it is worth and coloured by what it
+ * did today.
+ *
+ * @param weight tile AREA — `marketValueEur`. Never a fabricated magnitude.
+ * @param changePct today's move, server-computed. Null means "no quote today",
+ *   which is drawn neutral rather than green.
+ */
+data class BtWidgetHeatTile(
+    val symbol: String,
+    val weight: Double,
+    val changePct: Double?,
+    val hiddenCount: Int = 0,
+)
+
+/**
+ * Holdings as heatmap tiles: descending by value, one row per ASSET, capped at
+ * [maxTiles] with the remainder folded into one `Andere` cell.
+ *
+ * ## Why this is holdings and not "the market"
+ *
+ * There is no market-universe endpoint on the platform — no screener, no index
+ * constituents, no gainers list. The honest universe this app can name is the
+ * one the account already defines, and of the two candidates only holdings
+ * carry BOTH a size and a change: `marketValueEur` and `dayChangePct`, both
+ * server-computed, both already in Room. A watchlist row carries neither, so a
+ * watchlist heatmap could only ever be equal-weight.
+ *
+ * Sizing by market cap was considered and rejected: it exists only on the
+ * per-asset fundamentals response (one call per asset) and is denominated in
+ * each company's reporting currency with no FX on the response — so tiles would
+ * be sized by mixed-currency numbers. That is not a magnitude, it is a
+ * coincidence.
+ *
+ * The same asset held in two portfolios is ONE tile: its value adds and its
+ * percentage change is value-weighted, because two rows of the same ticker are
+ * one position as far as today's move is concerned.
+ */
+fun btWidgetHeatTiles(
+    holdings: List<HoldingEntity>,
+    maxTiles: Int,
+): List<BtWidgetHeatTile> {
+    val merged = holdings
+        .filter { (it.marketValueEur ?: 0.0) > 0.0 }
+        .groupBy { it.assetSymbol }
+        .map { (symbol, rows) ->
+            val value = rows.sumOf { it.marketValueEur ?: 0.0 }
+            val quoted = rows.filter { it.dayChangePct != null && (it.marketValueEur ?: 0.0) > 0.0 }
+            val quotedValue = quoted.sumOf { it.marketValueEur ?: 0.0 }
+            BtWidgetHeatTile(
+                symbol = symbol,
+                weight = value,
+                changePct = if (quoted.isEmpty() || quotedValue <= 0.0) {
+                    null
+                } else {
+                    quoted.sumOf { (it.dayChangePct ?: 0.0) * (it.marketValueEur ?: 0.0) } / quotedValue
+                },
+            )
+        }
+        .sortedByDescending { it.weight }
+
+    if (maxTiles <= 0 || merged.size <= maxTiles) return merged
+    val kept = merged.take(maxTiles - 1)
+    val rest = merged.drop(maxTiles - 1)
+    // The fold keeps the total honest but drops the change: an aggregate of
+    // unlike movements has no single direction worth colouring.
+    return kept + BtWidgetHeatTile(
+        symbol = "",
+        weight = rest.sumOf { it.weight },
+        changePct = null,
+        hiddenCount = rest.size,
+    )
+}
+
+/**
+ * How saturated a tile should be for a move of [changePct].
+ *
+ * ## Why this is not simply "relative to the biggest move today"
+ *
+ * That was the first implementation and the device showed it lying. On a flat
+ * day the largest mover might be −0,18 %, and scaling to it painted that tile
+ * full-strength red — a portfolio that did nothing looked like a portfolio that
+ * crashed. Saturation is a magnitude channel, so it has to be anchored to a
+ * magnitude that means something.
+ *
+ * The anchor is therefore [BT_HEAT_REFERENCE] — a genuinely strong single-day
+ * move — and the day's own maximum only takes over when it EXCEEDS that. So a
+ * calm day reads calm, a violent day still uses the full range, and the two are
+ * distinguishable from each other rather than both looking maximal.
+ *
+ * The floor keeps the smallest mover on the right side of neutral; direction is
+ * additionally printed on the tile, so it never rests on hue alone.
+ */
+fun btWidgetHeatIntensity(changePct: Double?, maxAbs: Double): Float {
+    if (changePct == null || changePct == 0.0) return 0f
+    val reference = kotlin.math.max(maxAbs, BT_HEAT_REFERENCE)
+    if (reference <= 0.0) return 0f
+    val ratio = (kotlin.math.abs(changePct) / reference).coerceIn(0.0, 1.0)
+    return (BT_HEAT_FLOOR + (1f - BT_HEAT_FLOOR) * ratio.toFloat()).coerceIn(0f, 1f)
+}
+
+/** The palest a directional tile may get. Below this, green stops reading as green. */
+private const val BT_HEAT_FLOOR = 0.42f
+
+/** The day-move that counts as "full strength" when nothing bigger happened. */
+private const val BT_HEAT_REFERENCE = 3.0

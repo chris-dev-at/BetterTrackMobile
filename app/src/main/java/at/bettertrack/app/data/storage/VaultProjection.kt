@@ -431,6 +431,7 @@ private fun VaultEntity.toPortfolioRow(totals: PortfolioTotals?, syncedAtMs: Lon
     // sort order is what every screen means by it.
     isDefault = false,
     defaultPayFromCash = flag("defaultPayFromCash") == true,
+    kind = text("kind"),
     archivedAt = text("archivedAt"),
     baseCurrency = BASE_CURRENCY,
     totals = totals,

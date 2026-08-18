@@ -134,7 +134,25 @@ class BtAllocationWidget : GlanceAppWidget() {
                 if (slices.isEmpty()) {
                     BtWidgetMessage(local.getString(R.string.bt_widget_allocation_empty), colors)
                 } else {
-                    Donut(local, snapshot, config, slices, colors, night)
+                    val size = LocalSize.current
+                    // Resolve the saved form against the cell it actually got.
+                    // A widget the user shrank keeps its choice on disk and
+                    // simply draws the form that survives here.
+                    val form = btWidgetAllocationFormFor(
+                        config.form,
+                        size.width.value,
+                        size.height.value,
+                    )
+                    when (form) {
+                        BtWidgetAllocationForm.DONUT ->
+                            Donut(local, snapshot, config, slices, colors, night)
+
+                        BtWidgetAllocationForm.HEATMAP ->
+                            Heatmap(local, snapshot, colors, night)
+
+                        else ->
+                            AreaForm(local, snapshot, config, slices, colors, night, form)
+                    }
                 }
             }
         }
@@ -233,6 +251,170 @@ class BtAllocationWidget : GlanceAppWidget() {
                 )
             }
         }
+    }
+
+    /**
+     * Treemap / mosaic / 100-%-Balken: the same slices the donut would show,
+     * as areas or as one common-baseline bar.
+     */
+    @Composable
+    private fun ColumnScope.AreaForm(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        config: BtWidgetAllocationConfig,
+        slices: List<BtWidgetSlice>,
+        colors: BtGlanceColors,
+        night: Boolean,
+        form: BtWidgetAllocationForm,
+    ) {
+        val locale = btWidgetLocale(local)
+        val size = LocalSize.current
+        val density = local.resources.displayMetrics.density
+
+        BtSubjectRow(local.getString(R.string.bt_widget_pulse_all), colors) {
+            BtContextChip(groupLabel(local, config.group), colors)
+        }
+        Spacer(GlanceModifier.height(4.dp))
+
+        val bodyDp = (size.height.value - 2 * BT_WIDGET_PADDING.value - 26f).coerceAtLeast(40f)
+        val widthDp = (size.width.value - 2 * BT_WIDGET_PADDING.value).coerceAtLeast(40f)
+        // The bar is a strip, not a canvas: giving it the whole cell would make
+        // one 24dp-tall rule float in a sea of nothing.
+        val drawDp = if (form == BtWidgetAllocationForm.BAR) 26f else bodyDp
+        val (wPx, hPx) = btWidgetBitmapSize(widthDp, drawDp, density)
+
+        val tiles = slices.map { slice ->
+            val fill = BtGlanceChartPalette.slice(slice.colorIndex, night)
+            BtWidgetTile(
+                label = sliceLabel(local, config, slice),
+                weight = slice.value,
+                fill = fill,
+                value = formatPercent(
+                    btWidgetSliceFraction(slice, slices) * 100.0,
+                    locale,
+                    showSign = false,
+                ),
+                ink = BtGlanceChartPalette.inkOn(fill),
+            )
+        }
+
+        val bitmap = if (form == BtWidgetAllocationForm.BAR) {
+            btWidgetStackedBarBitmap(
+                tiles = tiles,
+                widthPx = wPx,
+                heightPx = hPx,
+                density = density,
+            )
+        } else {
+            btWidgetTilesBitmap(
+                tiles = tiles,
+                widthPx = wPx,
+                heightPx = hPx,
+                squarified = form == BtWidgetAllocationForm.TREEMAP,
+                borderColor = BtGlanceChartPalette.surface(night),
+                density = density,
+            )
+        }
+
+        Image(
+            provider = ImageProvider(bitmap),
+            contentDescription = tiles.joinToString(" · ") { "${it.label} ${it.value}" },
+            modifier = GlanceModifier.fillMaxWidth().height(drawDp.dp),
+        )
+
+        if (form == BtWidgetAllocationForm.BAR) {
+            Spacer(GlanceModifier.height(4.dp))
+            val sliceColors = slices.map { BtGlanceChartPalette.slice(it.colorIndex, night) }
+            slices.take(3).forEachIndexed { i, slice ->
+                LegendRow(
+                    local, snapshot, config, slice, slices, sliceColors[i], colors, locale,
+                    withValue = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * The signed heatmap: position value as area, today's move as hue.
+     *
+     * Reads holdings directly rather than the grouped slices — a heat cell is a
+     * POSITION, because "which of my holdings moved" is a question about
+     * tickers, and an asset class has no single day-change to colour.
+     */
+    @Composable
+    private fun ColumnScope.Heatmap(
+        local: Context,
+        snapshot: BtWidgetSnapshot,
+        colors: BtGlanceColors,
+        night: Boolean,
+    ) {
+        val locale = btWidgetLocale(local)
+        val size = LocalSize.current
+        val density = local.resources.displayMetrics.density
+        val widthDp = (size.width.value - 2 * BT_WIDGET_PADDING.value).coerceAtLeast(40f)
+        val bodyDp = (size.height.value - 2 * BT_WIDGET_PADDING.value - 26f).coerceAtLeast(40f)
+
+        val heat = btWidgetHeatTiles(
+            holdings = snapshot.holdings,
+            maxTiles = btWidgetTileCount(widthDp, bodyDp),
+        )
+        if (heat.isEmpty()) {
+            BtWidgetMessage(local.getString(R.string.bt_widget_allocation_empty), colors)
+            return
+        }
+
+        BtSubjectRow(local.getString(R.string.bt_widget_heatmap_scope), colors) {
+            BtContextChip(local.getString(R.string.bt_viz_today), colors)
+        }
+        Spacer(GlanceModifier.height(4.dp))
+
+        val maxAbs = heat.mapNotNull { it.changePct }.maxOfOrNull { kotlin.math.abs(it) } ?: 0.0
+        val ground = BtGlanceChartPalette.surface(night)
+        val restColor = BtGlanceChartPalette.slice(BT_SLICE_REST, night)
+        val tiles = heat.map { cell ->
+            val fill = when {
+                cell.symbol.isEmpty() || cell.changePct == null -> restColor
+                cell.changePct > 0.0 -> btWidgetBlendToward(
+                    BtGlanceChartPalette.gain(night),
+                    ground,
+                    btWidgetHeatIntensity(cell.changePct, maxAbs),
+                )
+
+                else -> btWidgetBlendToward(
+                    BtGlanceChartPalette.loss(night),
+                    ground,
+                    btWidgetHeatIntensity(cell.changePct, maxAbs),
+                )
+            }
+            BtWidgetTile(
+                label = cell.symbol.ifEmpty {
+                    local.getString(R.string.bt_widget_allocation_more, cell.hiddenCount)
+                },
+                weight = cell.weight,
+                fill = fill,
+                // The signed number is printed, so direction never rests on hue
+                // alone — the rule that lets this form use green and red at all.
+                value = cell.changePct?.let { formatPercent(it, locale, showSign = true) }.orEmpty(),
+                ink = BtGlanceChartPalette.inkOn(fill),
+            )
+        }
+
+        val (wPx, hPx) = btWidgetBitmapSize(widthDp, bodyDp, density)
+        val bitmap = btWidgetTilesBitmap(
+            tiles = tiles,
+            widthPx = wPx,
+            heightPx = hPx,
+            // The mosaic's stable reading order is the safer tiling on the small
+            // cell; the treemap's squarification pays off once there is room.
+            squarified = widthDp >= 240f && bodyDp >= 140f,
+            borderColor = BtGlanceChartPalette.surface(night),
+            density = density,
+        )
+        Image(
+            provider = ImageProvider(bitmap),
+            contentDescription = tiles.joinToString(" · ") { "${it.label} ${it.value}" },
+            modifier = GlanceModifier.fillMaxWidth().height(bodyDp.dp),
+        )
     }
 
     @Composable

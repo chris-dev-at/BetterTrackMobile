@@ -1146,22 +1146,25 @@ interface BtApi {
     @POST("mirrorchain/chains/{chainId}/leave")
     suspend fun leaveMirrorChain(@Path("chainId") chainId: String): Response<MirrorOkResponse>
 
-    // ── Chain ADMINISTRATION — session-only on the platform today ────────────
+    // ── Chain ADMINISTRATION — bearer-reachable since board #67 ──────────────
     //
-    // Every call below is refused for a bearer with `403 API_KEY_FORBIDDEN`, by
-    // a deliberate method-aware allowlist in the platform's `bearerAuth`
-    // middleware (and pinned there by a test, so it will not drift silently).
-    // The mobile client holds a bearer and nothing else, so today all of these
-    // fail — verified live, see the probe in [MirrorchainRepository].
+    // These used to be refused for a bearer with `403 API_KEY_FORBIDDEN`, and
+    // the comment that stood here said so. **That is no longer true.** The
+    // platform's `MIRRORCHAIN_BEARER_ROUTE_ALLOWLIST` now contains all eight
+    // admin routes below (rename, invite, revoke, role, transfer, kick,
+    // dissolve, convert) plus the participation routes, and
+    // `MIRRORCHAIN_SESSION_ONLY_ROUTES` has been emptied — the widening is
+    // attributed in their source to mobile board #67, the owner's
+    // phone-management mandate, approved 2026-08-07. Reads take
+    // `mirrorchain:read`, every write `mirrorchain:write`; ownership and role
+    // checks stay in the service layer exactly as they do for cookie sessions.
     //
-    // They are declared anyway, and that is a considered choice rather than
-    // dead code. The app now draws the admin surface in a designed
-    // "manage on the web" state and runs ONE capability probe per session; when
-    // the platform adds these routes to the allowlist, the probe stops seeing
-    // 403 and the same screens light up with no further app change. Declaring
-    // the calls is what makes that a config change on their side instead of a
-    // release on ours — and it keeps the exact request shapes reviewed against
-    // the contract now, while the contract is in front of us.
+    // Declaring the calls ahead of the widening is what made this a config
+    // change on their side instead of a release on ours: the capability probe in
+    // [MirrorchainRepository] stops seeing 403 and the admin screens light up
+    // with no further app change. The probe is deliberately KEPT rather than
+    // deleted — it is one request per session, and it is what makes the app
+    // degrade gracefully if a future policy narrows the allowlist again.
     //
     // Roles (§5): rename/invite/revoke/kick-member = owner or manager;
     // kick-manager/roles/transfer/dissolve = owner only.

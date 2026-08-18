@@ -75,6 +75,7 @@ class ServerPortfolioBackend(
                         sortOrder = p.sortOrder,
                         isDefault = p.isDefault,
                         defaultPayFromCash = p.defaultPayFromCash,
+                        kind = p.kind,
                         archivedAt = p.archivedAt,
                         baseCurrency = null,
                         totals = null,
@@ -530,6 +531,34 @@ class ServerPortfolioBackend(
             is BtResult.Err -> r
         }
 
+    override suspend fun setPortfolioKind(portfolioId: String, kind: String): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.updatePortfolio(portfolioId, UpdatePortfolioRequest(kind = kind))
+            }
+        ) {
+            is BtResult.Ok -> {
+                upsertFromDto(r.value.portfolio)
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> r
+        }
+
+    override suspend fun setDefaultPayFromCash(portfolioId: String, value: Boolean): BtResult<Unit> =
+        when (
+            val r = apiCall(json) {
+                api.updatePortfolio(portfolioId, UpdatePortfolioRequest(defaultPayFromCash = value))
+            }
+        ) {
+            is BtResult.Ok -> {
+                upsertFromDto(r.value.portfolio)
+                BtResult.Ok(Unit)
+            }
+
+            is BtResult.Err -> r
+        }
+
     override suspend fun archivePortfolio(portfolioId: String): BtResult<Unit> =
         when (val r = apiCall(json) { api.archivePortfolio(portfolioId) }) {
             is BtResult.Ok -> {
@@ -587,6 +616,7 @@ class ServerPortfolioBackend(
                     sortOrder = p.sortOrder,
                     isDefault = p.isDefault,
                     defaultPayFromCash = p.defaultPayFromCash,
+                    kind = p.kind,
                     archivedAt = p.archivedAt,
                     baseCurrency = old?.baseCurrency,
                     totals = old?.totals,

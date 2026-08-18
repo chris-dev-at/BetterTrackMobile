@@ -130,6 +130,8 @@ fun btWidgetPinPayload(config: BtWidgetAllocationConfig): Map<String, String> = 
     "group" to config.group.name,
     "cash" to if (config.includeCash) "1" else "0",
     "center" to config.center.name,
+    "form" to config.form.name,
+    "top" to config.topN.toString(),
 )
 
 fun btWidgetPinAllocation(payload: Map<String, String>): BtWidgetAllocationConfig =
@@ -137,6 +139,10 @@ fun btWidgetPinAllocation(payload: Map<String, String>): BtWidgetAllocationConfi
         group = btWidgetAllocationGroup(payload["group"]),
         includeCash = payload["cash"] != "0",
         center = btWidgetAllocationCenter(payload["center"]),
+        // An older stash has no "form" key and decodes to DONUT, which is what
+        // that instance was placed as — the absent key is the right answer.
+        form = btWidgetAllocationForm(payload["form"]),
+        topN = payload["top"]?.toIntOrNull() ?: 0,
     )
 
 fun btWidgetPinPayload(config: BtWidgetRowsConfig): Map<String, String> = mapOf(

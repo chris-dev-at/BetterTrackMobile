@@ -1,5 +1,23 @@
 package at.bettertrack.app.ui.cash
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.toArgb
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.charts.viz.BtVizCanvas
+import at.bettertrack.app.ui.charts.viz.BtVizChart
+import at.bettertrack.app.ui.charts.viz.BtVizDarstellungRow
+import at.bettertrack.app.ui.charts.viz.BtVizFamily
+import at.bettertrack.app.ui.charts.viz.BtVizFormat
+import at.bettertrack.app.ui.charts.viz.BtVizSelectedDetail
+import at.bettertrack.app.ui.charts.viz.BtVizSheet
+import at.bettertrack.app.ui.charts.viz.VizDatum
+import at.bettertrack.app.ui.charts.viz.rememberVizItems
+import at.bettertrack.app.ui.charts.viz.vizConfigDecode
+import at.bettertrack.app.ui.charts.viz.vizConfigEncode
+import at.bettertrack.app.ui.charts.viz.vizFormHasOwnRows
+import at.bettertrack.app.ui.charts.viz.vizResolveForm
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -231,6 +249,7 @@ fun CashSummaryBlock(
 
         if (summary.tags.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
+            SpendingDarstellung(tags = summary.tags, locale = locale)
             summary.tags.forEachIndexed { index, row ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
                 SummaryTagRow(row, summary.tags, locale)
@@ -721,3 +740,118 @@ fun CashTrendsSkeleton(modifier: Modifier = Modifier) {
 // on this screen were the last place in the app where a section failure could
 // not say what the server said. Both call sites now use the shared component
 // directly, with the message the VM stopped discarding.
+
+// ── Spending by tag: the round-5 study's set C (owner ask 2026-08-17/18) ─────
+
+/**
+ * The `Darstellung` control and picture for spending by tag.
+ *
+ * ## Why the rows below stay, always
+ *
+ * The study's part-to-whole forms are specified WITH attached rows — the mark
+ * shows proportion, the rows own the exact euro amounts. This section already
+ * had those rows, and they are better than anything a legend could be: they
+ * carry direction (an income-dominant tag reads emerald), which a share-of-whole
+ * chart structurally cannot. So the picture is added above them rather than
+ * replacing them.
+ *
+ * The corollary is that ranked bars draw **nothing** here: the rows already are
+ * ranked bars, with a name, a scaled bar and an exact amount on one line, so
+ * rendering the form again would print every figure twice. `Automatisch`
+ * resolves to exactly that, which means the default view of this section is
+ * unchanged — choosing any other form is what adds a shape.
+ *
+ * ## What the picture charts
+ *
+ * OUTFLOW per tag, which is this app's settled meaning of "spending by tag"
+ * (see `btWidgetSpendingSlices`). That carries a caveat the section already
+ * states in its own footnote: a movement with two tags counts fully in both, so
+ * these shares are a breakdown and can exceed the month's true outflow. The
+ * absolute total is never taken from this sum.
+ */
+@Composable
+private fun SpendingDarstellung(tags: List<CashTagSummaryDto>, locale: Locale) {
+    val bt = BtTheme.colors
+    val untagged = stringResource(R.string.bt_cash_summary_untagged)
+    val fallback = bt.tagFallback
+    val raw = remember(tags, untagged, fallback) {
+        tags.filter { it.outflow > 0.0 }
+            .sortedByDescending { it.outflow }
+            .map { row ->
+                VizDatum(
+                    key = row.tagId ?: "untagged",
+                    label = row.name ?: untagged,
+                    value = row.outflow,
+                    // The user painted this tag; a rank change must not repaint it.
+                    colorArgb = parseTagColor(row.color, fallback).toArgb(),
+                    hiddenCount = 1,
+                )
+            }
+    }
+    if (raw.isEmpty()) return
+
+    val family = BtVizFamily.SPENDING
+    val canvas = BtVizCanvas.APP_FULL
+    val configs by AppGraph.vizPrefs.configs.collectAsStateWithLifecycle()
+    val config = remember(configs) { vizConfigDecode(configs[family.name]) }
+    val resolved = vizResolveForm(config, family, canvas)
+    var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var sheetOpen by rememberSaveable { mutableStateOf(false) }
+
+    val items = rememberVizItems(
+        raw = raw,
+        form = resolved,
+        canvas = canvas,
+        config = config,
+        categories = true,
+    )
+    val total = items.sumOf { it.value }
+    val format = remember(locale, total) {
+        BtVizFormat(
+            amount = { value -> formatEur(value, locale) },
+            share = { fraction -> formatPercent(fraction * 100.0, locale, showSign = false) },
+        )
+    }
+
+    BtVizDarstellungRow(config = config, resolved = resolved, onClick = { sheetOpen = true })
+
+    if (!vizFormHasOwnRows(resolved)) {
+        Spacer(Modifier.height(6.dp))
+        BtVizChart(
+            items = items,
+            form = resolved,
+            canvas = canvas,
+            format = format,
+            emptyText = stringResource(R.string.bt_viz_empty_spending),
+            labels = config.labels,
+            selectedKey = selectedKey,
+            onSelect = { selectedKey = it },
+        )
+        val selected = items.firstOrNull { it.key == selectedKey }
+        if (selected != null) {
+            Spacer(Modifier.height(8.dp))
+            BtVizSelectedDetail(
+                label = selected.label,
+                value = "${format.amount(selected.value)} · " +
+                    format.share(if (total > 0.0) selected.value / total else 0.0),
+                onClear = { selectedKey = null },
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+
+    if (sheetOpen) {
+        BtVizSheet(
+            family = family,
+            canvas = canvas,
+            config = config,
+            rawItems = raw,
+            format = format,
+            signed = false,
+            categories = true,
+            emptyText = stringResource(R.string.bt_viz_empty_spending),
+            onConfig = { AppGraph.vizPrefs.setConfig(family.name, vizConfigEncode(it)) },
+            onDismiss = { sheetOpen = false },
+        )
+    }
+}

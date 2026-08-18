@@ -778,17 +778,25 @@ class BtAllocationWidgetConfigActivity : BtWidgetConfigActivity() {
         var group by remember { mutableStateOf(BtWidgetAllocationGroup.CLASS) }
         var cash by remember { mutableStateOf(true) }
         var center by remember { mutableStateOf(BtWidgetAllocationCenter.TOTAL) }
+        var form by remember { mutableStateOf(BtWidgetAllocationForm.DONUT) }
         ConfigPanel(
             titleRes = R.string.bt_widget_config_allocation,
             onSave = {
                 confirm { prefs ->
                     btWidgetPutAllocationConfig(
                         prefs,
-                        BtWidgetAllocationConfig(group, cash, center),
+                        BtWidgetAllocationConfig(group, cash, center, form),
                     )
                 }
             },
         ) {
+            ChipsRow(
+                label = stringResource(R.string.bt_viz_title),
+                options = BtWidgetAllocationForm.entries.toList(),
+                selected = form,
+                optionLabel = { stringResource(btWidgetAllocFormLabel(it)) },
+                onSelect = { form = it },
+            )
             ChipsRow(
                 label = stringResource(R.string.bt_widget_config_group_by),
                 options = BtWidgetAllocationGroup.entries.toList(),
@@ -805,20 +813,24 @@ class BtAllocationWidgetConfigActivity : BtWidgetConfigActivity() {
                 },
                 onSelect = { cash = it },
             )
-            ChipsRow(
-                label = stringResource(R.string.bt_widget_config_center),
-                options = BtWidgetAllocationCenter.entries.toList(),
-                selected = center,
-                optionLabel = {
-                    stringResource(
-                        when (it) {
-                            BtWidgetAllocationCenter.TOTAL -> R.string.bt_widget_config_center_total
-                            BtWidgetAllocationCenter.TOP -> R.string.bt_widget_config_center_top
-                        },
-                    )
-                },
-                onSelect = { center = it },
-            )
+            // The centre figure is a property of the RING's hole. Offering it
+            // beside a treemap would be a control with nothing to control.
+            if (form == BtWidgetAllocationForm.DONUT) {
+                ChipsRow(
+                    label = stringResource(R.string.bt_widget_config_center),
+                    options = BtWidgetAllocationCenter.entries.toList(),
+                    selected = center,
+                    optionLabel = {
+                        stringResource(
+                            when (it) {
+                                BtWidgetAllocationCenter.TOTAL -> R.string.bt_widget_config_center_total
+                                BtWidgetAllocationCenter.TOP -> R.string.bt_widget_config_center_top
+                            },
+                        )
+                    },
+                    onSelect = { center = it },
+                )
+            }
         }
     }
 
@@ -949,6 +961,18 @@ fun btWidgetDeltaStyleLabel(style: BtWidgetDeltaStyle): Int = when (style) {
     BtWidgetDeltaStyle.BOTH -> R.string.bt_widget_config_style_both
     BtWidgetDeltaStyle.ABSOLUTE -> R.string.bt_widget_config_style_abs
     BtWidgetDeltaStyle.PERCENT -> R.string.bt_widget_config_style_pct
+}
+
+/**
+ * The `Darstellung` names, shared by the in-app builder and the reconfigure
+ * screen so the two can never drift into calling the same shape two things.
+ */
+fun btWidgetAllocFormLabel(form: BtWidgetAllocationForm): Int = when (form) {
+    BtWidgetAllocationForm.DONUT -> R.string.bt_viz_form_donut
+    BtWidgetAllocationForm.TREEMAP -> R.string.bt_viz_form_treemap
+    BtWidgetAllocationForm.MOSAIC -> R.string.bt_viz_form_mosaic
+    BtWidgetAllocationForm.BAR -> R.string.bt_viz_form_stacked_bar
+    BtWidgetAllocationForm.HEATMAP -> R.string.bt_viz_form_heatmap
 }
 
 fun btWidgetAllocGroupLabel(group: BtWidgetAllocationGroup): Int = when (group) {

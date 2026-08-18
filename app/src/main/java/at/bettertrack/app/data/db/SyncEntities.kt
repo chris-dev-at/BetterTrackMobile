@@ -115,20 +115,22 @@ data class MetaEntity(
         fun keyCashCouplingDefault(portfolioId: String) = "cash_coupling_default_$portfolioId"
 
         /**
-         * The portfolio → icon-kind map, as a JSON object of
+         * LEGACY. The portfolio → icon-kind map, as a JSON object of
          * `{"<portfolioId>": "<kind wire name>"}`.
          *
-         * ⚠️ CLIENT-ONLY, and the web has the same problem. There is no `kind`
-         * field on the portfolio row and no PATCH body field for it, so the web
-         * keeps this in `localStorage` under `bt.portfolio.kinds`
-         * (`portfolioKinds.ts:78`, which documents the gap itself). The app
-         * therefore stores it here — account-keyed and wiped on logout, which is
-         * the closest thing to the web's per-browser scope.
+         * This key is no longer written. The icon is a **server** field —
+         * `PATCH /portfolios/{id}.kind`, five tokens, contract
+         * `portfolio.ts:71` — and `PortfolioEntity.kind` now holds it. The old
+         * claim recorded here, that no such field existed on either client, was
+         * simply wrong: the web had been writing it to the API the whole time,
+         * which is why an icon chosen in the browser never reached the phone.
          *
-         * **Consequence the user will meet:** a kind chosen on the web does not
-         * appear on the phone, and vice versa. That is a platform gap, not an app
-         * bug; the graduation path is a `kind` field on the portfolio row, after
-         * which this key and its accessors are deleted and nothing else changes.
+         * The key survives for exactly one job:
+         * `PortfolioRepository.migrateLocalKinds` reads it after a successful
+         * portfolio refresh and pushes any icon that only ever existed on this
+         * device up to the account. Once the server answers with a `kind`, the
+         * entry is inert — the read path prefers the server value — and the key
+         * can be deleted in a later release without a migration.
          */
         const val KEY_PORTFOLIO_KINDS = "portfolio_kinds"
     }

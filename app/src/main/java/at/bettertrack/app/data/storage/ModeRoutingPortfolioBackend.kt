@@ -69,6 +69,12 @@ class ModeRoutingPortfolioBackend(
     override suspend fun renamePortfolio(portfolioId: String, name: String): BtResult<Unit> =
         active().renamePortfolio(portfolioId, name)
 
+    override suspend fun setPortfolioKind(portfolioId: String, kind: String): BtResult<Unit> =
+        active().setPortfolioKind(portfolioId, kind)
+
+    override suspend fun setDefaultPayFromCash(portfolioId: String, value: Boolean): BtResult<Unit> =
+        active().setDefaultPayFromCash(portfolioId, value)
+
     override suspend fun archivePortfolio(portfolioId: String): BtResult<Unit> =
         active().archivePortfolio(portfolioId)
 

@@ -38,6 +38,14 @@ data class PortfolioDto(
     val isDefault: Boolean,
     val defaultPayFromCash: Boolean,
     val archivedAt: String? = null,
+    /**
+     * The portfolio's icon/kind: `private|family|business|savings|property`.
+     *
+     * Nullable because the server distinguishes "never chosen" from a concrete
+     * choice — a null must not be read as `private`, or the one-time migration
+     * of a locally-chosen icon would have nothing to detect.
+     */
+    val kind: String? = null,
     /** v5: present when this portfolio is a mirrorchain (group) copy. */
     val mirror: PortfolioMirrorBadgeDto? = null,
     /** v5: present when it USED to be one. Mutually exclusive with [mirror]. */
@@ -55,12 +63,20 @@ data class PortfolioMutationResponse(
     val portfolio: PortfolioDto,
 )
 
-/** PATCH /portfolios/{id} — rename and/or change visibility (Step 6 switcher). */
+/**
+ * PATCH /portfolios/{id} — rename, visibility, cash-coupling default, icon.
+ *
+ * Every field is nullable and the shared `Json` has `explicitNulls = false`, so
+ * a request carries only what actually changed. The server's schema is strict,
+ * which is the other half of why this must not gain speculative fields.
+ */
 @Serializable
 data class UpdatePortfolioRequest(
     val name: String? = null,
     val visibility: String? = null,
     val defaultPayFromCash: Boolean? = null,
+    /** `private|family|business|savings|property`. */
+    val kind: String? = null,
 )
 
 // ── GET /portfolios/{id}/history — the §6.1 graph (server-computed series) ──

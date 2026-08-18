@@ -2464,7 +2464,6 @@
     <string name="bt_profile_icon_anchor">Anker</string>
     <string name="bt_pf_icon_section">Symbol</string>
     <string name="bt_pf_icon_sub">Farbe und Zeichen in der Auswahl und im Kopfbereich.</string>
-    <string name="bt_pf_icon_local_note">Nur auf diesem Gerät gespeichert — das Web hat sein eigenes.</string>
     <string name="bt_pf_kind_private">Privat</string>
     <string name="bt_pf_kind_family">Familie</string>
     <string name="bt_pf_kind_business">Geschäftlich</string>
@@ -3011,4 +3010,72 @@
     <string name="bt_notif_dc_err_not_webhook">Das sieht nicht wie eine Discord-Webhook-URL aus.</string>
     <string name="bt_notif_dc_err_test_failed">Discord hat die Testnachricht abgelehnt. Prüfe die Webhook-URL und versuche es erneut.</string>
     <string name="bt_notif_dc_err_remove">Der Webhook konnte nicht entfernt werden. Bitte versuche es erneut.</string>
+    <!-- Round-5 chart study: the configurable "Darstellung" (display form) -->
+    <string name="bt_widget_heatmap_scope">Meine Positionen</string>
+    <string name="bt_viz_title">Darstellung</string>
+    <string name="bt_viz_choose">Darstellung wählen</string>
+    <string name="bt_viz_auto">Automatisch (empfohlen)</string>
+    <string name="bt_viz_auto_short">Automatisch</string>
+    <string name="bt_viz_auto_resolves">Automatisch · %1$s</string>
+    <string name="bt_viz_form_treemap">Treemap</string>
+    <string name="bt_viz_form_mosaic">Flächenraster</string>
+    <string name="bt_viz_form_stacked_bar" formatted="false">100-%-Balken</string>
+    <string name="bt_viz_form_ranked_bars">Rangbalken</string>
+    <string name="bt_viz_form_ring">Segmentring</string>
+    <string name="bt_viz_form_waffle">Punktraster</string>
+    <string name="bt_viz_form_dot_plot">Punktdiagramm</string>
+    <string name="bt_viz_form_bubbles">Blasen</string>
+    <string name="bt_viz_form_heatmap">Heatmap</string>
+    <string name="bt_viz_form_donut">Donut</string>
+    <string name="bt_viz_labels">Beschriftung</string>
+    <string name="bt_viz_labels_shares">Anteile</string>
+    <string name="bt_viz_labels_amounts">Beträge</string>
+    <string name="bt_viz_auto_tiny">Auto</string>
+    <string name="bt_viz_scope">Umfang</string>
+    <string name="bt_viz_scope_top">Top %1$d</string>
+    <string name="bt_viz_scope_all">Alle</string>
+    <string name="bt_viz_cash">Cash</string>
+    <string name="bt_viz_cash_show">Cash anzeigen</string>
+    <string name="bt_viz_cash_hide">Cash ausblenden</string>
+    <string name="bt_viz_cash_excluded">Ohne Cash</string>
+    <string name="bt_viz_preview">Vorschau</string>
+    <string name="bt_viz_reset">Zurücksetzen</string>
+    <string name="bt_viz_unavailable">Bei dieser Größe nicht verfügbar</string>
+    <string name="bt_viz_unavailable_hint">Wähle für diese Größe eine andere Darstellung.</string>
+    <string name="bt_viz_clear_selection">Auswahl aufheben</string>
+    <string name="bt_viz_zero_axis">Gemeinsame Nullachse</string>
+    <string name="bt_viz_waffle_key">1 Punkt = 1 %</string>
+    <string name="bt_viz_empty_data">Noch keine Daten</string>
+    <string name="bt_viz_empty_allocation">Noch keine Aufteilung</string>
+    <string name="bt_viz_empty_holdings">Noch keine Positionen</string>
+    <string name="bt_viz_empty_spending">Noch keine Ausgaben</string>
+    <string name="bt_viz_empty_movers">Keine Bewegungen heute</string>
+    <string name="bt_viz_movers_section">Gewinner &amp; Verlierer</string>
+    <string name="bt_viz_today">Heute</string>
+    <string name="bt_viz_movers_title">Beitrag zum Tageswert</string>
+    <string name="bt_viz_movers_counts">%1$s · %2$s</string>
+    <plurals name="bt_viz_movers_winners">
+        <item quantity="one">%1$d Gewinner</item>
+        <item quantity="other">%1$d Gewinner</item>
+    </plurals>
+    <plurals name="bt_viz_movers_losers">
+        <item quantity="one">%1$d Verlierer</item>
+        <item quantity="other">%1$d Verlierer</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_other_positions">
+        <item quantity="one">Andere · %1$d Position</item>
+        <item quantity="other">Andere · %1$d Positionen</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_remaining_positions">
+        <item quantity="one">Weitere · %1$d Position</item>
+        <item quantity="other">Weitere · %1$d Positionen</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_other_categories">
+        <item quantity="one">Andere · %1$d Kategorie</item>
+        <item quantity="other">Andere · %1$d Kategorien</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_remaining_categories">
+        <item quantity="one">Weitere · %1$d Kategorie</item>
+        <item quantity="other">Weitere · %1$d Kategorien</item>
+    </plurals>
 </resources>

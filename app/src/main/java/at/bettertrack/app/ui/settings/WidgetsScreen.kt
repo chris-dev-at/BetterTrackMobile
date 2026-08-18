@@ -60,7 +60,18 @@ import at.bettertrack.app.ui.components.BtPickerRow
 import at.bettertrack.app.ui.components.BtPickerSheet
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.theme.BtShapes
+import at.bettertrack.app.ui.charts.viz.BtVizCanvas
+import at.bettertrack.app.ui.charts.viz.BtVizChart
+import at.bettertrack.app.ui.charts.viz.BtVizForm
+import at.bettertrack.app.ui.charts.viz.BtVizFormat
+import at.bettertrack.app.ui.charts.viz.BtVizHeatmap
+import at.bettertrack.app.ui.charts.viz.VizDatum
+import at.bettertrack.app.ui.charts.viz.VizHeatCell
+import at.bettertrack.app.ui.charts.viz.VizRole
+import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import at.bettertrack.app.widget.BT_QUICK_LINKS_DEFAULT
 import at.bettertrack.app.widget.BT_WIDGET_ROWS_MOVERS_DEFAULTS
 import at.bettertrack.app.widget.BT_WIDGET_ROWS_WATCHLIST_DEFAULTS
@@ -79,6 +90,7 @@ import at.bettertrack.app.widget.BtSpendingWidgetReceiver
 import at.bettertrack.app.widget.BtWatchlistWidgetReceiver
 import at.bettertrack.app.widget.BtWidgetAllocationCenter
 import at.bettertrack.app.widget.BtWidgetAllocationConfig
+import at.bettertrack.app.widget.BtWidgetAllocationForm
 import at.bettertrack.app.widget.BtWidgetAllocationGroup
 import at.bettertrack.app.widget.BtWidgetAssetConfig
 import at.bettertrack.app.widget.BtWidgetBudget
@@ -96,6 +108,7 @@ import at.bettertrack.app.widget.BtWidgetRowDirection
 import at.bettertrack.app.widget.BtWidgetRowSort
 import at.bettertrack.app.widget.BtWidgetRowSource
 import at.bettertrack.app.widget.BtWidgetRowsConfig
+import at.bettertrack.app.widget.btWidgetAllocFormLabel
 import at.bettertrack.app.widget.btWidgetAllocGroupLabel
 import at.bettertrack.app.widget.btWidgetAssetChoices
 import at.bettertrack.app.widget.btWidgetBudgetFraction
@@ -167,6 +180,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
     var allocGroup by remember { mutableStateOf(BtWidgetAllocationGroup.CLASS) }
     var allocCash by remember { mutableStateOf(true) }
     var allocCenter by remember { mutableStateOf(BtWidgetAllocationCenter.TOTAL) }
+    var allocForm by remember { mutableStateOf(BtWidgetAllocationForm.DONUT) }
 
     // Flow knobs.
     var flowMode by remember { mutableStateOf(BtWidgetFlowMode.DONUT) }
@@ -552,7 +566,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
                 WidgetCard(
                     title = stringResource(R.string.bt_widget_allocation_title),
                     description = stringResource(R.string.bt_widget_allocation_description),
-                    preview = { AllocationMock(allocCenter) },
+                    preview = { AllocationMock(allocCenter, allocForm) },
                     config = {
                         ChipRow(
                             label = stringResource(R.string.bt_widget_config_group_by),
@@ -560,6 +574,13 @@ fun WidgetsScreen(onBack: () -> Unit) {
                             selected = allocGroup,
                             optionLabel = { stringResource(btWidgetAllocGroupLabel(it)) },
                             onSelect = { allocGroup = it },
+                        )
+                        ChipRow(
+                            label = stringResource(R.string.bt_viz_title),
+                            options = BtWidgetAllocationForm.entries.toList(),
+                            selected = allocForm,
+                            optionLabel = { stringResource(btWidgetAllocFormLabel(it)) },
+                            onSelect = { allocForm = it },
                         )
                         ChipRow(
                             label = stringResource(R.string.bt_widget_allocation_cash),
@@ -572,22 +593,26 @@ fun WidgetsScreen(onBack: () -> Unit) {
                             },
                             onSelect = { allocCash = it },
                         )
-                        ChipRow(
-                            label = stringResource(R.string.bt_widget_config_center),
-                            options = BtWidgetAllocationCenter.entries.toList(),
-                            selected = allocCenter,
-                            optionLabel = {
-                                stringResource(
-                                    when (it) {
-                                        BtWidgetAllocationCenter.TOTAL ->
-                                            R.string.bt_widget_config_center_total
-                                        BtWidgetAllocationCenter.TOP ->
-                                            R.string.bt_widget_config_center_top
-                                    },
-                                )
-                            },
-                            onSelect = { allocCenter = it },
-                        )
+                        // The centre figure belongs to the ring's hole; the
+                        // other forms have no hole to fill.
+                        if (allocForm == BtWidgetAllocationForm.DONUT) {
+                            ChipRow(
+                                label = stringResource(R.string.bt_widget_config_center),
+                                options = BtWidgetAllocationCenter.entries.toList(),
+                                selected = allocCenter,
+                                optionLabel = {
+                                    stringResource(
+                                        when (it) {
+                                            BtWidgetAllocationCenter.TOTAL ->
+                                                R.string.bt_widget_config_center_total
+                                            BtWidgetAllocationCenter.TOP ->
+                                                R.string.bt_widget_config_center_top
+                                        },
+                                    )
+                                },
+                                onSelect = { allocCenter = it },
+                            )
+                        }
                     },
                     onAdd = {
                         pin(BtAllocationWidgetReceiver::class.java) {
@@ -595,7 +620,12 @@ fun WidgetsScreen(onBack: () -> Unit) {
                                 context,
                                 BtWidgetPinKind.ALLOCATION,
                                 btWidgetPinPayload(
-                                    BtWidgetAllocationConfig(allocGroup, allocCash, allocCenter),
+                                    BtWidgetAllocationConfig(
+                                        allocGroup,
+                                        allocCash,
+                                        allocCenter,
+                                        allocForm,
+                                    ),
                                 ),
                             )
                         }
@@ -1426,8 +1456,20 @@ private fun BudgetMock(
     }
 }
 
+/**
+ * The allocation card's preview.
+ *
+ * It follows the `Darstellung` chip, because a picker whose preview never
+ * changes is a picker the user has to place a widget to evaluate. The sample
+ * numbers are the study's set A so the shapes are compared on the same data the
+ * design was decided on.
+ */
 @Composable
-private fun AllocationMock(center: BtWidgetAllocationCenter) {
+private fun AllocationMock(center: BtWidgetAllocationCenter, form: BtWidgetAllocationForm) {
+    if (form != BtWidgetAllocationForm.DONUT) {
+        AllocationFormMock(form)
+        return
+    }
     val bt = BtTheme.colors
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val slices = listOf(0.42f, 0.28f, 0.16f, 0.14f)
@@ -1491,6 +1533,90 @@ private fun AllocationMock(center: BtWidgetAllocationCenter) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Treemap / mosaic / bar / heatmap preview.
+ *
+ * Drawn with the shared `ui.charts.viz` renderer rather than a hand-built mock,
+ * so what the builder shows and what the launcher paints come from one
+ * description of each shape. The heatmap sample carries signed changes because
+ * that is the whole point of the form.
+ */
+@Composable
+private fun AllocationFormMock(form: BtWidgetAllocationForm) {
+    val bt = BtTheme.colors
+    val heat = form == BtWidgetAllocationForm.HEATMAP
+    val sample = remember(heat) {
+        if (heat) {
+            listOf(
+                VizDatum("a", "MSFT", 12.8, colorIndex = 0),
+                VizDatum("b", "VWCE", 11.8, colorIndex = 1),
+                VizDatum("c", "ETH", 10.4, colorIndex = 2),
+                VizDatum("d", "BAYN", 8.4, colorIndex = 3),
+                VizDatum("e", "RKLB", 7.5, colorIndex = 4),
+                VizDatum("f", "NVDA", 6.8, colorIndex = 5),
+            )
+        } else {
+            listOf(
+                VizDatum("a", "Aktien", 16_203.28, colorIndex = 0),
+                VizDatum("b", "ETFs", 10_802.18, colorIndex = 1),
+                VizDatum("c", "Krypto", 6_172.68, colorIndex = 2),
+                VizDatum("d", "Cash", 3_086.34, role = VizRole.Cash),
+                VizDatum("e", "Anleihen", 1_543.17, colorIndex = 3),
+            )
+        }
+    }
+    // Direction for the heatmap sample: both hues, and one unquoted cell, so the
+    // preview shows the neutral case too rather than implying every tile moves.
+    val signs = listOf(2.4, 1.1, -0.6, -2.8, 3.9, null)
+    val locale = rememberBtLocale()
+    val format = remember(locale) {
+        BtVizFormat(
+            amount = { v -> formatEur(v, locale) },
+            share = { f -> formatPercent(f * 100.0, locale, showSign = false) },
+        )
+    }
+    // A Column, not a bare stack: the `preview` slot is a Box, so a Spacer and a
+    // caption emitted after the chart would paint ON TOP of it.
+    Column(Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth().height(if (form == BtWidgetAllocationForm.BAR) 30.dp else 112.dp)) {
+        if (heat) {
+            BtVizHeatmap(
+                cells = sample.mapIndexed { i, d ->
+                    VizHeatCell(d.key, d.label, d.value, signs.getOrNull(i))
+                },
+                changeText = { formatPercent(it, locale, showSign = true) },
+                emptyText = "",
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            BtVizChart(
+                items = sample,
+                form = when (form) {
+                    BtWidgetAllocationForm.TREEMAP -> BtVizForm.TREEMAP
+                    BtWidgetAllocationForm.MOSAIC -> BtVizForm.MOSAIC
+                    else -> BtVizForm.STACKED_BAR
+                },
+                canvas = BtVizCanvas.APP_FULL,
+                format = format,
+                emptyText = "",
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+    // Only the heatmap needs a caption, and it needs it for a reason rather
+    // than for symmetry: its universe is the account's own holdings, and the
+    // scope of a map has to be stated or the reader supplies a wrong one.
+    if (heat) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.bt_widget_heatmap_scope),
+            color = bt.textMuted,
+            fontSize = 11.sp,
+        )
+    }
     }
 }
 

@@ -101,6 +101,30 @@ object BtGlanceChartPalette {
         (if (night) BtGlanceColor.Border.night else BtGlanceColor.Border.day).toInt()
 
     /** The card surface — the endpoint dot's ring, so the dot reads as ON the line. */
+    /**
+     * A readable ink for text painted ON a resolved fill.
+     *
+     * The widget mirror of `BtColors.chartInk`, and it exists for the same
+     * reason: the fill is chosen by the data, so white cannot be assumed. On the
+     * pale cash silver white is ~3.5:1 while near-black is ~5.5:1, and a widget
+     * has no tooltip to compensate for a label nobody can read.
+     */
+    fun inkOn(fill: Int): Int {
+        fun channel(shift: Int): Double {
+            val c = ((fill shr shift) and 0xFF) / 255.0
+            return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+        }
+        val luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        // 0.1791 is the luminance at which white and black contrast equally.
+        return if (luminance > 0.1791) INK_ON_PALE.toInt() else INK_ON_FILL.toInt()
+    }
+
+    /** Near-white ink for saturated/dark fills. Mirrors `BtColors.chartInkOnFill`. */
+    const val INK_ON_FILL: Long = 0xFFF7F9FB
+
+    /** Near-black ink for pale fills. Mirrors `BtColors.chartInkOnPaleFill`. */
+    const val INK_ON_PALE: Long = 0xFF0B0E14
+
     fun surface(night: Boolean): Int =
         (if (night) BtGlanceColor.Surface.night else BtGlanceColor.Surface.day).toInt()
 }

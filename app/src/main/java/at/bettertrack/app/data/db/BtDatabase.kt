@@ -73,7 +73,7 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         VaultMetaRow::class,
         PriceCacheRow::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -313,6 +313,24 @@ abstract class BtDatabase : RoomDatabase() {
         }
 
         /**
+         * v10 → v11: the portfolio icon becomes a server field.
+         *
+         * Purely additive — one nullable column. Nothing is back-filled here on
+         * purpose: the old value lives in the account-scoped `meta` KV, and
+         * copying it across in SQL would only move a client-only fact from one
+         * client-only place to another. The real repair is to PUSH the local
+         * choice to the API once, which `PortfolioRepository` does on the first
+         * refresh that finds a server `kind` of null beside a stored local one.
+         * Until that runs, a null column reads exactly as it should: "the server
+         * does not know yet".
+         */
+        internal val MIGRATION_PORTFOLIO_KIND = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("portfolios", "kind", "TEXT")
+            }
+        }
+
+        /**
          * The whole chain, in one place, so [create] and the migration regression
          * suite can never disagree about what ships. Room resolves the path itself;
          * the order here is documentation.
@@ -331,6 +349,7 @@ abstract class BtDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_VAULT_TABLES,
             MIGRATION_SYNC_ERROR_CODE,
+            MIGRATION_PORTFOLIO_KIND,
         )
 
         fun create(context: Context): BtDatabase =

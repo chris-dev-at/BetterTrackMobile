@@ -641,6 +641,11 @@ object AppGraph {
         at.bettertrack.app.data.prefs.DevicePrefs(appContext)
     }
 
+    /** Per-data-family chart `Darstellung`. Device-scoped like [devicePrefs]. */
+    val vizPrefs: at.bettertrack.app.data.prefs.VizPrefs by lazy {
+        at.bettertrack.app.data.prefs.VizPrefs(appContext)
+    }
+
     /**
      * Fires the first-of-session data load on login-success / logged-in cold
      * start so no screen sits on skeletons until a manual pull-to-refresh

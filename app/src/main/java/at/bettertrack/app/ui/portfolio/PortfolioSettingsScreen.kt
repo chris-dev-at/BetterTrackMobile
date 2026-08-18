@@ -228,16 +228,10 @@ fun PortfolioSettingsScreen(
                         )
                     }
                 }
-                // Said plainly, once. The choice lives in this device's meta
-                // table because the API carries no field for it on either
-                // client (see PortfolioRepository.portfolioKinds) — leaving a
-                // user to discover that by finding a different icon in the
-                // browser would read as the app losing their setting.
-                Text(
-                    text = stringResource(R.string.bt_pf_icon_local_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textFaint,
-                )
+                // The "this icon only lives on this device" note that used to
+                // sit here has been deleted rather than reworded: the icon now
+                // saves to the account, so the sentence was actively false. A
+                // setting that simply works needs no explanation.
 
                 // ── Sharing ──────────────────────────────────────────────────
                 BtSectionHeader(stringResource(R.string.bt_psettings_sharing))
@@ -524,13 +518,23 @@ class PortfolioSettingsViewModel(
     /**
      * Store this portfolio's Icon.
      *
-     * No busy flag and no error path, deliberately: this is a local write to the
-     * meta table, it cannot fail in a way the user could act on, and the row's
-     * check mark moves when the observed map re-emits — which is the honest
-     * confirmation, because it is the same value the switcher will read.
+     * This **can** fail now, and that is the point of the change: the icon is a
+     * server field (`PATCH /portfolios/{id}.kind`), not a local garnish. It used
+     * to be written to the Room `meta` table only, so the phone and the web held
+     * different icons for the same portfolio and a reinstall lost the phone's.
+     *
+     * Because it crosses the network it needs an error path — a silently dropped
+     * write is exactly the failure this fix exists to remove. The check mark
+     * still moves off the observed map, which now reflects the server's value, so
+     * a failed write visibly does not stick.
      */
     fun setKind(kind: BtPortfolioKind) {
-        viewModelScope.launch { portfolios.setPortfolioKind(portfolioId, kind) }
+        viewModelScope.launch {
+            when (val r = portfolios.setPortfolioKind(portfolioId, kind)) {
+                is BtResult.Ok -> _state.value = _state.value.copy(error = null)
+                is BtResult.Err -> _state.value = _state.value.copy(error = r.error.asMessage())
+            }
+        }
     }
 
     fun reload() {

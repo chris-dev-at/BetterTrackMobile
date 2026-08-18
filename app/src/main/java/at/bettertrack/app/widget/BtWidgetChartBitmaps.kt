@@ -5,6 +5,10 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import at.bettertrack.app.ui.charts.viz.VizDatum
+import at.bettertrack.app.ui.charts.viz.VizRect
+import at.bettertrack.app.ui.charts.viz.orderedMosaic
+import at.bettertrack.app.ui.charts.viz.squarifiedTreemap
 
 /**
  * The chart widgets' RASTER half: [Bitmap]s painted with [Canvas]/[Paint].
@@ -263,3 +267,181 @@ fun btWidgetFlowBarsBitmap(
     return bitmap
 }
 
+
+// ── Tile forms: treemap, ordered mosaic, and the signed heatmap ──────────────
+
+/**
+ * One tile to paint. [fill] is a resolved ARGB int; [label] and [value] are
+ * already localised strings, because a bitmap cannot resolve a resource and this
+ * file decides nothing about money or language.
+ */
+data class BtWidgetTile(
+    val label: String,
+    val weight: Double,
+    val fill: Int,
+    val value: String,
+    /** Ink for text drawn ON [fill]. Resolved by the caller, per tile. */
+    val ink: Int,
+)
+
+/**
+ * Paint [tiles] as an area chart — squarified when [squarified], otherwise the
+ * ordered mosaic that keeps a stable reading order.
+ *
+ * The tiling itself comes from the app's own pure geometry
+ * (`ui.charts.viz.squarifiedTreemap` / `orderedMosaic`), the same functions the
+ * in-app charts use and the same ones the unit tests pin. That shared origin is
+ * the point: a widget that laid its tiles out by a second, separately-written
+ * algorithm would drift from the card it is supposed to mirror, and only one of
+ * the two would have tests.
+ *
+ * Labels obey the study's rule rather than shrinking to fit: a tile that cannot
+ * hold its name at the standard size is left unlabelled. In a widget there is no
+ * tooltip to rescue it, so a 5px name would be decoration pretending to be
+ * information.
+ */
+fun btWidgetTilesBitmap(
+    tiles: List<BtWidgetTile>,
+    widthPx: Int,
+    heightPx: Int,
+    squarified: Boolean,
+    borderColor: Int,
+    density: Float,
+): Bitmap {
+    val w = widthPx.coerceAtLeast(1)
+    val h = heightPx.coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    if (tiles.isEmpty()) return bitmap
+
+    val data = tiles.mapIndexed { index, tile ->
+        VizDatum(key = index.toString(), label = tile.label, value = tile.weight)
+    }
+    val bounds = VizRect.of(w.toFloat(), h.toFloat())
+    val laid = if (squarified) squarifiedTreemap(data, bounds) else orderedMosaic(data, bounds)
+
+    val gap = 1.5f * density
+    val radius = 2f * density
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1f * density
+        color = borderColor
+    }
+    val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 11f * density
+        isFakeBoldText = true
+    }
+    val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f * density }
+
+    laid.forEach { placed ->
+        val tile = tiles[placed.key.toInt()]
+        val rect = RectF(
+            placed.rect.left + gap / 2f,
+            placed.rect.top + gap / 2f,
+            placed.rect.right - gap / 2f,
+            placed.rect.bottom - gap / 2f,
+        )
+        if (rect.width() <= 0f || rect.height() <= 0f) return@forEach
+        fillPaint.color = tile.fill
+        canvas.drawRoundRect(rect, radius, radius, fillPaint)
+        canvas.drawRoundRect(rect, radius, radius, edgePaint)
+
+        namePaint.color = tile.ink
+        valuePaint.color = tile.ink
+        val pad = 4f * density
+        val nameWidth = namePaint.measureText(tile.label)
+        val fitsName = rect.width() >= nameWidth + pad * 2f &&
+            rect.height() >= namePaint.textSize + pad * 2f
+        if (!fitsName) return@forEach
+
+        val valueWidth = valuePaint.measureText(tile.value)
+        val fitsValue = tile.value.isNotEmpty() &&
+            rect.width() >= valueWidth + pad * 2f &&
+            rect.height() >= namePaint.textSize + valuePaint.textSize + pad * 2.5f
+
+        if (fitsValue) {
+            canvas.drawText(tile.label, rect.left + pad, rect.top + pad + namePaint.textSize, namePaint)
+            canvas.drawText(
+                tile.value,
+                rect.left + pad,
+                rect.top + pad + namePaint.textSize + valuePaint.textSize * 1.15f,
+                valuePaint,
+            )
+        } else {
+            canvas.drawText(tile.label, rect.left + pad, rect.top + pad + namePaint.textSize, namePaint)
+        }
+    }
+    return bitmap
+}
+
+/**
+ * Blend [hue] toward [ground] so a small move reads as a pale tile and a big one
+ * as a saturated one.
+ *
+ * @param intensity 0 = barely tinted, 1 = the full directional hue.
+ *
+ * This is the heatmap's second channel, and it is deliberately the WEAKER one:
+ * direction is carried by hue AND by the printed signed number on the tile, so a
+ * reader who cannot separate the two hues still gets the answer. Intensity alone
+ * never has to be decoded.
+ */
+fun btWidgetBlendToward(hue: Int, ground: Int, intensity: Float): Int {
+    val t = intensity.coerceIn(0f, 1f)
+    fun mix(shift: Int): Int {
+        val a = (hue shr shift) and 0xFF
+        val b = (ground shr shift) and 0xFF
+        return (b + (a - b) * t).toInt().coerceIn(0, 255)
+    }
+    return (0xFF shl 24) or (mix(16) shl 16) or (mix(8) shl 8) or mix(0)
+}
+
+/**
+ * A single 100 % stacked bar: the one part-to-whole form that survives every
+ * widget size, which is why it is the fallback when a tile form cannot fit.
+ *
+ * Shares are printed inside a segment only where they genuinely fit; the rest
+ * stay silent and are named by the legend rows beside the image.
+ */
+fun btWidgetStackedBarBitmap(
+    tiles: List<BtWidgetTile>,
+    widthPx: Int,
+    heightPx: Int,
+    density: Float,
+): Bitmap {
+    val w = widthPx.coerceAtLeast(1)
+    val h = heightPx.coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val total = tiles.sumOf { it.weight }
+    if (total <= 0.0) return bitmap
+
+    val gap = 1.5f * density
+    val radius = 3f * density
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f * density }
+
+    var x = 0f
+    tiles.forEachIndexed { index, tile ->
+        val span = (tile.weight / total).toFloat() * w
+        val right = if (index == tiles.lastIndex) w.toFloat() else x + span
+        val rect = RectF(x + gap / 2f, 0f, right - gap / 2f, h.toFloat())
+        if (rect.width() > 0f) {
+            fill.color = tile.fill
+            canvas.drawRoundRect(rect, radius, radius, fill)
+            text.color = tile.ink
+            val label = tile.value
+            val tw = text.measureText(label)
+            if (label.isNotEmpty() && rect.width() >= tw + 6f * density) {
+                canvas.drawText(
+                    label,
+                    rect.centerX() - tw / 2f,
+                    rect.centerY() + text.textSize / 3f,
+                    text,
+                )
+            }
+        }
+        x = right
+    }
+    return bitmap
+}

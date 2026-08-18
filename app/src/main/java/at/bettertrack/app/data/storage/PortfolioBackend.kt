@@ -59,6 +59,20 @@ interface PortfolioBackend {
 
     suspend fun renamePortfolio(portfolioId: String, name: String): BtResult<Unit>
 
+    /**
+     * Persist the portfolio's icon (`kind`) upstream.
+     *
+     * This is a SERVER field — `PATCH /portfolios/{id}.kind` — and the web has
+     * always written it there. The phone used to keep its own copy in the Room
+     * `meta` table instead, so the two clients silently disagreed and a reinstall
+     * dropped the phone's choice entirely. Routing it through the backend is what
+     * makes the icon one fact instead of two.
+     */
+    suspend fun setPortfolioKind(portfolioId: String, kind: String): BtResult<Unit>
+
+    /** Persist the transaction sheet's "pay from cash" default upstream. */
+    suspend fun setDefaultPayFromCash(portfolioId: String, value: Boolean): BtResult<Unit>
+
     suspend fun archivePortfolio(portfolioId: String): BtResult<Unit>
 
     suspend fun restorePortfolio(portfolioId: String): BtResult<Unit>

@@ -16,6 +16,7 @@ import at.bettertrack.app.data.storage.PortfolioBackend
 import at.bettertrack.app.sync.PostSyncRefresher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -110,33 +111,80 @@ class PortfolioRepository(
     /** One-shot snapshot of every cached portfolio (initial-load resolution). */
     suspend fun portfoliosNow(): List<PortfolioEntity> = db.portfolioDao().getAll()
 
-    // ── Portfolio icon ("kind") — client-only, see KEY_PORTFOLIO_KINDS ───────
+    // ── Portfolio icon ("kind") — a SERVER field since 2026-08-18 ────────────
     //
-    // The API has no field for this on either client, so the web keeps it in
-    // localStorage and the app keeps it here. Same meta table, same account-scoped
-    // wipe as the selection above — one storage layer, not two.
+    // This used to be client-only, with a comment claiming the API had no field
+    // for it. That was wrong: the web has always written
+    // `PATCH /portfolios/{id}.kind`, so the two clients disagreed silently and a
+    // reinstall dropped whatever the phone had chosen. The icon is now read off
+    // the portfolio row like every other server fact, and the old `meta` map is
+    // kept for exactly one purpose — see [migrateLocalKinds].
 
-    /** Every stored portfolio → kind mapping. Ids with no entry are absent. */
-    val portfolioKinds: Flow<Map<String, BtPortfolioKind>> =
-        db.metaDao().observe(MetaEntity.KEY_PORTFOLIO_KINDS).map { decodeKinds(it) }
+    /**
+     * Every portfolio's icon, server value first.
+     *
+     * The locally stored map is consulted only where the server has no opinion
+     * yet (`kind == null`). That ordering is what makes the migration safe to
+     * run lazily: a portfolio whose icon reached the API stops reading the local
+     * copy immediately, so the two can never fight over it.
+     */
+    val portfolioKinds: Flow<Map<String, BtPortfolioKind>> = combine(
+        db.portfolioDao().observeAll(),
+        db.metaDao().observe(MetaEntity.KEY_PORTFOLIO_KINDS),
+    ) { rows, legacyRaw ->
+        val legacy = decodeKinds(legacyRaw)
+        rows.mapNotNull { row ->
+            val fromServer = row.kind?.let { wire -> BtPortfolioKind.entries.firstOrNull { it.wire == wire } }
+            (fromServer ?: legacy[row.id])?.let { row.id to it }
+        }.toMap()
+    }
 
-    /** One-shot read of the whole map. */
-    suspend fun portfolioKindsNow(): Map<String, BtPortfolioKind> =
-        decodeKinds(db.metaDao().get(MetaEntity.KEY_PORTFOLIO_KINDS))
-
-    /** Persist one portfolio's icon. */
-    suspend fun setPortfolioKind(portfolioId: String, kind: BtPortfolioKind) {
-        val next = portfolioKindsNow() + (portfolioId to kind)
-        val encoded = JsonObject(next.mapValues { JsonPrimitive(it.value.wire) })
-        db.metaDao().put(MetaEntity(MetaEntity.KEY_PORTFOLIO_KINDS, json.encodeToString(JsonObject.serializer(), encoded)))
+    /** One-shot read of the whole map, same precedence as the flow. */
+    suspend fun portfolioKindsNow(): Map<String, BtPortfolioKind> {
+        val legacy = decodeKinds(db.metaDao().get(MetaEntity.KEY_PORTFOLIO_KINDS))
+        return portfoliosNow().mapNotNull { row ->
+            val fromServer = row.kind?.let { wire -> BtPortfolioKind.entries.firstOrNull { it.wire == wire } }
+            (fromServer ?: legacy[row.id])?.let { row.id to it }
+        }.toMap()
     }
 
     /**
-     * Parse the stored map, dropping anything that is not a `{id: kind}` pair.
+     * Persist one portfolio's icon **upstream**, then let the refreshed row
+     * carry it back into Room.
      *
-     * Icons are pure garnish, so every failure mode — absent key, corrupt JSON, a
-     * kind written by a newer build — degrades to "everything is Private" rather
-     * than breaking the switcher. Same call the web's own reader makes.
+     * Returns the result rather than swallowing it: an icon that silently failed
+     * to save is precisely the failure mode this change exists to end, so the
+     * caller gets to say so.
+     */
+    suspend fun setPortfolioKind(portfolioId: String, kind: BtPortfolioKind): BtResult<Unit> =
+        backend.setPortfolioKind(portfolioId, kind.wire)
+
+    /**
+     * One-time repair: push icons that only ever existed on this phone.
+     *
+     * Runs after a portfolio-list refresh. For every portfolio where the server
+     * still has no `kind` but this device remembers one, the local choice is
+     * sent up — after which the server is the single source and the `meta` entry
+     * is inert. Failures are ignored on purpose: this is a best-effort catch-up
+     * on someone else's timeline, and retrying on the next refresh costs nothing
+     * while surfacing an error here would interrupt a screen the user did not
+     * ask anything of.
+     */
+    suspend fun migrateLocalKinds() {
+        val legacy = decodeKinds(db.metaDao().get(MetaEntity.KEY_PORTFOLIO_KINDS))
+        if (legacy.isEmpty()) return
+        portfoliosNow()
+            .filter { it.kind == null }
+            .forEach { row -> legacy[row.id]?.let { backend.setPortfolioKind(row.id, it.wire) } }
+    }
+
+    /**
+     * Parse the stored legacy map, dropping anything that is not a `{id: kind}`
+     * pair.
+     *
+     * Icons are garnish, so every failure mode — absent key, corrupt JSON, a kind
+     * written by a newer build — degrades to "no local opinion" rather than
+     * breaking the switcher.
      */
     private fun decodeKinds(raw: String?): Map<String, BtPortfolioKind> {
         if (raw.isNullOrBlank()) return emptyMap()
@@ -169,14 +217,35 @@ class PortfolioRepository(
         db.metaDao().observe(MetaEntity.keyCashCouplingDefault(portfolioId))
             .map { it?.toBooleanStrictOrNull() }
 
+    /**
+     * Remember the toggle, on this device AND on the account.
+     *
+     * The local sticky stays because it is what makes the next transaction sheet
+     * open correctly while offline. What is new is the upstream write: the web
+     * has always persisted this as `PATCH /portfolios/{id}.defaultPayFromCash`,
+     * so leaving it phone-only meant the same portfolio opened with a different
+     * default depending on which client you reached for.
+     *
+     * The local write happens FIRST and unconditionally. This toggle's whole job
+     * is to make the next sheet open right, and that must not depend on the
+     * network; the server write is the durable half and may fail quietly.
+     */
     suspend fun setCashCouplingDefault(portfolioId: String, value: Boolean) {
         db.metaDao().put(MetaEntity(MetaEntity.keyCashCouplingDefault(portfolioId), value.toString()))
+        backend.setDefaultPayFromCash(portfolioId, value)
     }
 
     // ── Backend → Room refresh paths (one-line delegation) ───────────────────
 
     /** Refresh the portfolio LIST (archived included). */
-    suspend fun refreshPortfolios(): BtResult<Unit> = backend.refreshPortfolios()
+    suspend fun refreshPortfolios(): BtResult<Unit> {
+        val result = backend.refreshPortfolios()
+        // Only after a successful refresh: before it, `kind == null` on a row may
+        // just mean "this row is stale", and pushing a local icon on that basis
+        // could overwrite a newer choice made on the web.
+        if (result is BtResult.Ok) migrateLocalKinds()
+        return result
+    }
 
     /** Refresh holdings + totals for one portfolio. */
     suspend fun refreshPortfolioDetail(portfolioId: String): BtResult<Unit> =

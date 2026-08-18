@@ -247,11 +247,110 @@ fun btWidgetAllocationCenter(raw: String?): BtWidgetAllocationCenter =
     BtWidgetAllocationCenter.entries.firstOrNull { it.name == raw }
         ?: BtWidgetAllocationCenter.TOTAL
 
-/** Never null — the defaults (by class, cash in, total centred) are the widget. */
+val BT_WIDGET_PREF_ALLOC_FORM: Preferences.Key<String> = stringPreferencesKey("bt_alloc_form")
+val BT_WIDGET_PREF_ALLOC_TOP: Preferences.Key<String> = stringPreferencesKey("bt_alloc_top")
+
+/**
+ * The allocation widget's `Darstellung` — which shape the same holdings take.
+ *
+ * ## Why these live on ONE widget instead of becoming new providers
+ *
+ * Every entry here answers "how is my book divided", off the same rows, with the
+ * same tap target. Splitting them into separate launcher providers would put
+ * five near-identical cards in the picker and force the user to delete and
+ * re-place a widget to change its shape — which is exactly the thing a
+ * per-instance setting exists to avoid. One provider, one config screen, and an
+ * existing pinned instance keeps [DONUT] because that is what it was placed as.
+ */
+enum class BtWidgetAllocationForm {
+    /** The ring this widget shipped as. Still the default, for continuity. */
+    DONUT,
+
+    /** Squarified treemap — concentration at a glance. */
+    TREEMAP,
+
+    /** Ordered rectangle mosaic — the resize-stable tiling. */
+    MOSAIC,
+
+    /** A single 100 % stacked bar; the only form that survives every size. */
+    BAR,
+
+    /**
+     * Signed heatmap: tiles sized by position value, coloured by today's move.
+     *
+     * **This is the one place in the app where a part-to-whole geometry carries
+     * a directional colour, and it is deliberate.** Elsewhere the rule is strict:
+     * emerald and red mean money direction and nothing else, and an area form
+     * means share-of-whole. A heatmap combines them on purpose — area answers
+     * "how much of my book is this" and hue answers "what did it do today" — two
+     * independent questions on two independent channels. It stays honest because
+     * neither channel is asked to imply the other: the tile also prints its
+     * signed percentage, so direction never rests on hue alone.
+     */
+    HEATMAP,
+}
+
+fun btWidgetAllocationForm(raw: String?): BtWidgetAllocationForm =
+    BtWidgetAllocationForm.entries.firstOrNull { it.name == raw } ?: BtWidgetAllocationForm.DONUT
+
+/**
+ * The form actually drawn at [heightDp] × [widthDp].
+ *
+ * Tile forms need real estate in BOTH axes — the study's ladder puts the
+ * smallest honest tiling at the 2x2 canvas — so on a short or narrow cell they
+ * fall back to the stacked bar rather than rendering a row of unreadable
+ * confetti. The saved choice is untouched; growing the widget restores it.
+ */
+fun btWidgetAllocationFormFor(
+    form: BtWidgetAllocationForm,
+    widthDp: Float,
+    heightDp: Float,
+): BtWidgetAllocationForm {
+    val tiles = form == BtWidgetAllocationForm.TREEMAP ||
+        form == BtWidgetAllocationForm.MOSAIC ||
+        form == BtWidgetAllocationForm.HEATMAP
+    if (!tiles) return form
+    return if (heightDp >= BT_WIDGET_TILE_MIN_DP && widthDp >= BT_WIDGET_TILE_MIN_DP) {
+        form
+    } else {
+        BtWidgetAllocationForm.BAR
+    }
+}
+
+/**
+ * The smallest edge a tile form is offered at.
+ *
+ * Measured against this launcher's real cells (dossier §3): one row is 120dp, so
+ * 110dp admits a 2-row-tall widget and excludes a 1-row strip — where a treemap
+ * would be four coloured slivers and no labels.
+ */
+const val BT_WIDGET_TILE_MIN_DP: Float = 110f
+
+/**
+ * How many tiles a canvas of this size can name before the rest becomes one
+ * `Andere` cell.
+ *
+ * These are the study's own capacities ("Andere bucketing and the long tail"),
+ * and the narrow column is the one that matters: a 2×2 gets **four**. Six was
+ * tried on the device first and the extra two arrived as unlabelled slivers —
+ * which is precisely the failure the study describes, a mark that looks
+ * identified and is not. Width is the binding constraint rather than area,
+ * because a tile has to fit a ticker horizontally before anything else.
+ */
+fun btWidgetTileCount(widthDp: Float, heightDp: Float): Int = when {
+    widthDp >= 300f && heightDp >= 180f -> 8
+    widthDp >= 300f -> 6
+    else -> 4
+}
+
+/** Never null — the defaults (by class, cash in, total centred, donut) are the widget. */
 data class BtWidgetAllocationConfig(
     val group: BtWidgetAllocationGroup = BtWidgetAllocationGroup.CLASS,
     val includeCash: Boolean = true,
     val center: BtWidgetAllocationCenter = BtWidgetAllocationCenter.TOTAL,
+    val form: BtWidgetAllocationForm = BtWidgetAllocationForm.DONUT,
+    /** `Umfang`: 0 = let the canvas decide, otherwise an explicit cap. */
+    val topN: Int = 0,
 )
 
 fun btWidgetAllocationConfig(prefs: Preferences): BtWidgetAllocationConfig =
@@ -259,12 +358,16 @@ fun btWidgetAllocationConfig(prefs: Preferences): BtWidgetAllocationConfig =
         group = btWidgetAllocationGroup(prefs[BT_WIDGET_PREF_ALLOC_GROUP]),
         includeCash = prefs[BT_WIDGET_PREF_ALLOC_CASH] != "0",
         center = btWidgetAllocationCenter(prefs[BT_WIDGET_PREF_ALLOC_CENTER]),
+        form = btWidgetAllocationForm(prefs[BT_WIDGET_PREF_ALLOC_FORM]),
+        topN = prefs[BT_WIDGET_PREF_ALLOC_TOP]?.toIntOrNull() ?: 0,
     )
 
 fun btWidgetPutAllocationConfig(prefs: MutablePreferences, config: BtWidgetAllocationConfig) {
     prefs[BT_WIDGET_PREF_ALLOC_GROUP] = config.group.name
     prefs[BT_WIDGET_PREF_ALLOC_CASH] = if (config.includeCash) "1" else "0"
     prefs[BT_WIDGET_PREF_ALLOC_CENTER] = config.center.name
+    prefs[BT_WIDGET_PREF_ALLOC_FORM] = config.form.name
+    prefs[BT_WIDGET_PREF_ALLOC_TOP] = config.topN.toString()
 }
 
 // The row family: source, sort, direction.

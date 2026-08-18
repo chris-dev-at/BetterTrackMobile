@@ -143,6 +143,19 @@ class VaultPortfolioBackend(
     override suspend fun renamePortfolio(portfolioId: String, name: String): BtResult<Unit> =
         editEntity(VaultKinds.PORTFOLIO, portfolioId) { it.with("name", JsonPrimitive(name)) }
 
+    /**
+     * The icon lives in the vault's own portfolio record, exactly as it lives in
+     * the server's row — same field name, same five tokens. Drive-autonomous
+     * mode is a different STORE, not a different data model.
+     */
+    override suspend fun setPortfolioKind(portfolioId: String, kind: String): BtResult<Unit> =
+        editEntity(VaultKinds.PORTFOLIO, portfolioId) { it.with("kind", JsonPrimitive(kind)) }
+
+    override suspend fun setDefaultPayFromCash(portfolioId: String, value: Boolean): BtResult<Unit> =
+        editEntity(VaultKinds.PORTFOLIO, portfolioId) {
+            it.with("defaultPayFromCash", JsonPrimitive(value))
+        }
+
     override suspend fun archivePortfolio(portfolioId: String): BtResult<Unit> =
         editEntity(VaultKinds.PORTFOLIO, portfolioId) { data ->
             data.with("archivedAt", JsonPrimitive(nowIsoDate()))

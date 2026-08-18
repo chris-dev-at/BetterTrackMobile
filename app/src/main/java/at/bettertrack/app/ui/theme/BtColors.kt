@@ -3,6 +3,7 @@ package at.bettertrack.app.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -385,6 +386,21 @@ data class BtColors(
     val chartRest: Color,
     /** Cash slice — semantically "uninvested", quiet silver, distinct from [chartRest]. */
     val chartCash: Color,
+    /**
+     * Ink printed **inside** a categorical mark — a treemap tile, a mosaic cell,
+     * a wide stacked-bar segment. Paired with [chartInkOnPaleFill]; pick between
+     * them with [chartInk], never by hand.
+     *
+     * Why this is one value in both tables rather than a mode pair: the
+     * substrate here is not the page, it is a saturated hue out of
+     * [chartSeries], and both tables' ramps are mid-dark by construction. The
+     * ink follows the *fill*, so it does not flip with the mode — which is
+     * precisely why it needs to be a named token instead of a `Color.White` at
+     * the call site that only looked right in one of them.
+     */
+    val chartInkOnFill: Color,
+    /** The counterpart for pale fills — the neutral silver of cash, mainly. */
+    val chartInkOnPaleFill: Color,
 
     // ── Portfolio identity ───────────────────────────────────────────────────
     /**
@@ -460,7 +476,33 @@ data class BtColors(
         return hue.copy(alpha = (alpha * gain).coerceIn(0f, 1f))
     }
 
+    /**
+     * The readable ink for text printed **on top of** [fill] — a treemap tile, a
+     * mosaic cell, a wide stacked-bar segment.
+     *
+     * It picks whichever of [chartInkOnFill] / [chartInkOnPaleFill] wins the
+     * WCAG contrast ratio against that specific fill, rather than assuming
+     * white. That assumption is what breaks on the two neutral roles: white on
+     * the cash silver is ~3.5:1, while the dark ink on the same silver is
+     * ~5.5:1. Since the fill is chosen by the data and not by the designer, the
+     * only way a label can be guaranteed legible is to compute it.
+     *
+     * This is a deliberate, documented divergence from the round-5 study's
+     * raster, which prints white inside every mark: the study is a visual
+     * specification at one fixed size, and the owner's standing rule is that
+     * configuration must never produce an illegible result.
+     */
+    fun chartInk(fill: Color): Color {
+        val substrate = fill.luminance() + WCAG_OFFSET
+        val onDarkInk = (chartInkOnFill.luminance() + WCAG_OFFSET) / substrate
+        val onPaleInk = substrate / (chartInkOnPaleFill.luminance() + WCAG_OFFSET)
+        return if (onPaleInk >= onDarkInk) chartInkOnPaleFill else chartInkOnFill
+    }
+
     private companion object {
+        /** The `+0.05` both sides of a WCAG contrast ratio carry. */
+        const val WCAG_OFFSET = 0.05f
+
         /**
          * §1.4: gold washes 14%→16% and 22%→26% on white.
          *
@@ -609,6 +651,8 @@ val BtDarkColors = BtColors(
     ),
     chartRest = Color(0xFF525252),
     chartCash = Color(0xFF8A8A8A),
+    chartInkOnFill = Color(0xFFF7F9FB),
+    chartInkOnPaleFill = Color(0xFF0B0E14),
 
     kindTints = listOf(
         Color(0xFF3987E5), // private  — palette blue
@@ -795,6 +839,8 @@ val BtLightColors = BtColors(
     ),
     chartRest = Color(0xFF6E7276),
     chartCash = Color(0xFF7A828B),
+    chartInkOnFill = Color(0xFFF7F9FB),
+    chartInkOnPaleFill = Color(0xFF0B0E14),
 
     // The web's own light chip block, verbatim. Slot 4 stays at the web's
     // #5C7A13 rather than the re-stepped lime above: chips are never adjacent

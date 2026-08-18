@@ -26,6 +26,18 @@ data class PortfolioEntity(
     val sortOrder: Int,
     val isDefault: Boolean,
     val defaultPayFromCash: Boolean,
+    /**
+     * The portfolio's icon: `private|family|business|savings|property`, or null
+     * when the owner never chose one.
+     *
+     * A SERVER field (`PATCH /portfolios/{id}.kind`), not a local garnish. It
+     * used to live only in the `meta` KV on this client while the web wrote it
+     * to the API, so the two disagreed and a reinstall lost the phone's choice.
+     * The nullability is load-bearing: "never chosen" has to stay
+     * distinguishable from an explicit `private`, or the one-time upgrade of a
+     * locally-stored icon would have nothing to detect.
+     */
+    val kind: String? = null,
     /** ISO timestamp, null = active. */
     val archivedAt: String?,
     /** Base currency from the detail response; null until detail synced. */

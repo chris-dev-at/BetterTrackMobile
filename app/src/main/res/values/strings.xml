@@ -2591,7 +2591,6 @@
     -->
     <string name="bt_pf_icon_section">Icon</string>
     <string name="bt_pf_icon_sub">Colour and glyph shown in the switcher and the header.</string>
-    <string name="bt_pf_icon_local_note">Saved on this device only — the web keeps its own.</string>
     <string name="bt_pf_kind_private">Private</string>
     <string name="bt_pf_kind_family">Family</string>
     <string name="bt_pf_kind_business">Business</string>
@@ -3201,4 +3200,72 @@
     <string name="bt_notif_dc_err_not_webhook">This does not look like a Discord webhook URL.</string>
     <string name="bt_notif_dc_err_test_failed">Discord rejected the test message. Check the webhook URL and try again.</string>
     <string name="bt_notif_dc_err_remove">Couldn\'t remove the webhook. Please try again.</string>
+    <!-- Round-5 chart study: the configurable "Darstellung" (display form) -->
+    <string name="bt_widget_heatmap_scope">My holdings</string>
+    <string name="bt_viz_title">Display</string>
+    <string name="bt_viz_choose">Choose display</string>
+    <string name="bt_viz_auto">Automatic (recommended)</string>
+    <string name="bt_viz_auto_short">Automatic</string>
+    <string name="bt_viz_auto_resolves">Automatic · %1$s</string>
+    <string name="bt_viz_form_treemap">Treemap</string>
+    <string name="bt_viz_form_mosaic">Area mosaic</string>
+    <string name="bt_viz_form_stacked_bar" formatted="false">100% stacked bar</string>
+    <string name="bt_viz_form_ranked_bars">Ranked bars</string>
+    <string name="bt_viz_form_ring">Segmented ring</string>
+    <string name="bt_viz_form_waffle">Dot grid</string>
+    <string name="bt_viz_form_dot_plot">Dot plot</string>
+    <string name="bt_viz_form_bubbles">Bubbles</string>
+    <string name="bt_viz_form_heatmap">Heatmap</string>
+    <string name="bt_viz_form_donut">Donut</string>
+    <string name="bt_viz_labels">Labels</string>
+    <string name="bt_viz_labels_shares">Shares</string>
+    <string name="bt_viz_labels_amounts">Amounts</string>
+    <string name="bt_viz_auto_tiny">Auto</string>
+    <string name="bt_viz_scope">Scope</string>
+    <string name="bt_viz_scope_top">Top %1$d</string>
+    <string name="bt_viz_scope_all">All</string>
+    <string name="bt_viz_cash">Cash</string>
+    <string name="bt_viz_cash_show">Show cash</string>
+    <string name="bt_viz_cash_hide">Hide cash</string>
+    <string name="bt_viz_cash_excluded">Excluding cash</string>
+    <string name="bt_viz_preview">Preview</string>
+    <string name="bt_viz_reset">Reset</string>
+    <string name="bt_viz_unavailable">Not available at this size</string>
+    <string name="bt_viz_unavailable_hint">Choose another display for this size.</string>
+    <string name="bt_viz_clear_selection">Clear selection</string>
+    <string name="bt_viz_zero_axis">Shared zero axis</string>
+    <string name="bt_viz_waffle_key">1 dot = 1%</string>
+    <string name="bt_viz_empty_data">No data yet</string>
+    <string name="bt_viz_empty_allocation">No allocation yet</string>
+    <string name="bt_viz_empty_holdings">No holdings yet</string>
+    <string name="bt_viz_empty_spending">No spending yet</string>
+    <string name="bt_viz_empty_movers">No movements today</string>
+    <string name="bt_viz_movers_section">Winners &amp; losers</string>
+    <string name="bt_viz_today">Today</string>
+    <string name="bt_viz_movers_title">Contribution to daily value</string>
+    <string name="bt_viz_movers_counts">%1$s · %2$s</string>
+    <plurals name="bt_viz_movers_winners">
+        <item quantity="one">%1$d winner</item>
+        <item quantity="other">%1$d winners</item>
+    </plurals>
+    <plurals name="bt_viz_movers_losers">
+        <item quantity="one">%1$d loser</item>
+        <item quantity="other">%1$d losers</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_other_positions">
+        <item quantity="one">Other · %1$d holding</item>
+        <item quantity="other">Other · %1$d holdings</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_remaining_positions">
+        <item quantity="one">Remaining · %1$d holding</item>
+        <item quantity="other">Remaining · %1$d holdings</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_other_categories">
+        <item quantity="one">Other · %1$d category</item>
+        <item quantity="other">Other · %1$d categories</item>
+    </plurals>
+    <plurals name="bt_viz_bucket_remaining_categories">
+        <item quantity="one">Remaining · %1$d category</item>
+        <item quantity="other">Remaining · %1$d categories</item>
+    </plurals>
 </resources>
