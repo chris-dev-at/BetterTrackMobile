@@ -1223,7 +1223,7 @@ No urgency on any of these — nothing is broken, they are coverage gaps. Tick t
 | 3 | `POST /account/paranoid/enable`\|`disable` | **accepted with condition** — step-up re-auth in the request | `account:security` + step-up | **#1326** |
 | 4 | `PATCH /vault/media` + retired-purge pair | **accepted** | `vault:sync` | **#1326** |
 | 5 | `GET /settings/taxes/years`, `POST …/{year}/unlock`\|`relock` | **accepted** | `account:security` | **#1324** |
-| 6 | `POST`/`DELETE /auth/remembered-device` | **needs design** — the literal allowlist does not work, see below | `account:security` | **#1327** |
+| 6 | Remembered-device management; literal `POST`/`DELETE` refused | **✅ design confirmed** — plural list/revoke API below; implementation #1327 | `account:security` | **#1327** |
 | 7 | Bearer-completable Google **link** | **needs design** — the only item needing a new flow | `account:security` | **#1328** |
 | 8 | `POST /auth/first-run/complete` | **accepted** | `account:security` | **#1324** |
 
@@ -1259,6 +1259,8 @@ Item 6 was filed as a mechanical allowlist alongside 1/4/5/8. It is not, and we 
 - `DELETE /auth/remembered-device` is **already public** — no auth at all — because it reads the device id exclusively from that signed cookie, never the body (deliberate: the client controls its display record, not which account it is). A bearer call carries no cookie, so it would forget nothing and answer `{ok: true}`. A silently-lying success is worse than the 403 you get today.
 
 What Christian's ruling does entitle you to is **management** of that state, and the server already keeps a per-user reverse index precisely so every live binding is enumerable for deletion. So #1327 builds bearer-callable **list / revoke-one / revoke-all** over remembered devices, on `account:security`, with the raw device id never leaving the server (it is a bearer-equivalent secret). The minting route stays browser-only, and your Custom Tab can already hit it during the OAuth leg — that part is app-side, not a missing endpoint. Design goes on #1327 and gets ticked here before you wire anything.
+
+**✅ Design tick (2026-08-18, #1327; implementation pending — not the go-live tick).** Confirmed shape: `GET /api/v1/auth/remembered-devices`, `DELETE /api/v1/auth/remembered-devices/{handle}`, and `DELETE /api/v1/auth/remembered-devices`, all session + bearer on existing `account:security`. List rows are `{handle, createdAt, lastSeenAt, expiresAt}`; historical timestamps may be `null` for pre-metadata bindings. `handle` is the domain-separated SHA-256/base64url digest of the high-entropy raw cookie id. The server resolves it only while enumerating the authenticated users reverse index — there is no global handle lookup, no client user id, and no raw device id in any response. One/all revoke clear the binding, reverse-index member, quick-auth marker and metadata; unknown/expired/foreign handles are idempotent no-op success. The singular mint route stays browser-session-only because `bt_rdid` must land in the Custom Tab browser jar; singular public delete stays cookie-bound. Full rationale is on BetterTrack #1327. Mobile may design the Trusted devices adapter against this contract now, but waits for the merge tick before enabling it. — Platform
 
 ### Item 7: confirmed as the only real design item
 
