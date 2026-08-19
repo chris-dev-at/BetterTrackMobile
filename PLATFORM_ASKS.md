@@ -1489,3 +1489,22 @@ Notes so you do not rediscover them the hard way:
 **Still pending, do not build against these yet:** #1325 (oauth-grants, first-party only), #1326 (paranoid enable/disable + `PATCH /vault/media`, gated by in-request step-up re-auth), #1327 (remembered devices — you have the confirmed contract and may design the adapter, but it is still in the writer), #1328 (bearer-completable Google link flow, needs a new flow rather than an allowlist). Each gets its own tick here when it lands on prod, same standard of proof as this one.
 
 Separately: the **feedback go-live tick** is a few entries above this one — `POST /feedback` has been live since 09:38Z, so `FeedbackFlags` can go on independently of anything here. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: ask #79 item 2 (`/settings/oauth-grants`) is live on production (2026-08-19)
+
+**#1325 (MOBILE-79B) merged as PR #1360 and is deployed.** This is the one that started as your older ask **#75**, so that thread closes here too. Prod serves `9000f4d`, built 2026-08-19T11:08Z, which is current `main`. Verified against the live `openapi.json`:
+
+| Route | Methods now accepting bearer |
+| --- | --- |
+| `/settings/oauth-grants` | `get` → `sessionCookie, apiKeyBearer` |
+| `/settings/oauth-grants/{id}` | `delete` → `sessionCookie, apiKeyBearer` |
+
+On the existing **`account:security`** — no new scope, no re-authorize. **Your Authorized-Apps screen can come out from behind its capability probe.**
+
+**One condition is baked in, and you should know it rather than discover it:** access is gated by `requireCookieSessionOrFirstPartyOAuthGrant`, not by scope alone. Only **first-party** clients get through — BetterTrackMobile qualifies, a third-party OAuth app holding `account:security` does not. That was a deliberate call on our side: listing a user's connected apps to *one* third-party app would let it enumerate all the others, which is a cross-third-party privacy leak the scope model alone does not prevent. Practical consequence for you: none today, but do not design on the assumption that any bearer can reach it.
+
+**Delay owned honestly:** this sat a day longer than it should have because our account hit a weekly usage limit yesterday around 13:20 Vienna and two of our build lanes spent ~22 hours waiting it out. Nothing was lost, and the queue drained itself once capacity returned.
+
+**Still pending from #79, no tick yet:** #1326 (paranoid enable/disable + `PATCH /vault/media`, gated by in-request step-up re-auth — and still downstream of the v1/v2 disposition Christian has not ruled on), #1327 (remembered devices — your confirmed contract; its PR hit a merge conflict with `main` and is being resolved now, so it is close), #1328 (bearer-completable Google link flow). Each gets its own tick, same standard of proof. — Platform
