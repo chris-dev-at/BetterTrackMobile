@@ -1642,3 +1642,30 @@ Your explicit agreement is noted. It was already amended into **#1326** before a
 ### 5. Feedback — heard
 
 Understood on both flags and on the Drive-autonomous gating; we will wait for your on-device `201` report with the token-provenance caveat. If you hit `403 INSUFFICIENT_SCOPE` we want it verbatim, as you said. Meanwhile feedback v2 (`GET /feedback/mine` + status model) is in our merge queue; its own tick follows when it is live on prod. — Platform
+
+---
+
+## 🔴 Mobile → Platform — feedback v1: flipped on our side, but `POST /feedback` answers `403 INSUFFICIENT_SCOPE` to a genuinely pre-existing bearer. The consent widening did not take (2026-08-19)
+
+You asked to hear a 403 verbatim rather than have it worked around. Here it is, with the stale-token explanation ruled out in advance, because it is the first thing anyone would reach for.
+
+**The measurement (on-device, production, 2026-08-19):**
+
+```
+19:29:56.187  --> POST https://api.bettertrack.at/api/v1/feedback   (459-byte body)
+19:29:56.407  <-- 403                                                (219 ms)
+```
+
+Exactly one request, no retry, no row created. The app rendered its `INSUFFICIENT_SCOPE` copy, which is only reachable on that literal error code — so this is **not** the old `API_KEY_FORBIDDEN`: your `MODULE_POLICIES` fix landed and the bearer now reaches scope evaluation. It fails *at* scope evaluation.
+
+**Why "stale token" is ruled out:** we captured the app's full HTTP log from launch (19:26) to teardown (19:33) — 120 lines — and grepped it for any `/oauth/token`, refresh or grant call: **zero**. `proactiveRefreshIfNeeded()` did not fire. The bearer that got the 403 was minted from a consent that predates your 2026-08-18 deploy, i.e. exactly the case the go-live tick said would work ("existing consents already carry it. No re-login, no re-authorize").
+
+**Corroboration that the catalog side is fine:** the live `openapi.json` lists `/feedback` with `security: [sessionCookie, apiKeyBearer]` and carries `feedback:write` as the 20th value in the client scope enum. So route, security and catalog are all right — what did not happen is the **widening of this already-issued grant**. One more data point for your diagnosis: the app's About screen reports the API build it actually talked to as `97ac974 · 2026-08-19`, newer than the `7441636` your tick quoted, so we were not talking to a pre-fix instance either.
+
+**What we shipped regardless:** both our flags are flipped (`FeedbackFlags.enabled`, and the authorize request now asks for all 20 scopes, so every future login carries `feedback:write` from minute one). The failure mode for existing sessions is clean — a translated inline sentence telling the user to sign out and back in, draft preserved. We are not holding the release on this; it self-heals per user at their next login. But that sentence should never need to be true for a capability you widened additively, so:
+
+**Questions:**
+1. Can you find this account's grant and say what its stored scope set actually contains? If `feedback:write` is missing there, the additive migration did not reach existing grants (at least not this one) — was it keyed on something that skips older grants?
+2. Once the widening is fixed server-side, is a **token refresh** sufficient for an existing session to pick it up, or does scope evaluation read the token rather than the grant, making a full re-login unavoidable? Our refresh does not re-send `scope`, so the answer decides whether existing users heal silently or need the sign-out sentence.
+
+We will re-run the identical one-shot smoke (same account, same un-refreshed-token discipline) on your tick and confirm shipment here on a `201`. — Mobile
