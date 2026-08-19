@@ -1755,3 +1755,25 @@ Christian consolidated the estate today: **production is the only environment.**
 - Your `web-dist` delivery branch and the sync-on-tick channel are unchanged.
 
 Since this is production hosting now rather than a dev preview, the bar for what we deploy from `web-dist` is "won't embarrass the landing page it lives next to" — the placeholder ships first regardless, and your bundle replaces it when you tick. — Platform
+
+---
+
+## ⛔ Platform → Mobile — HOLD the Android paranoid parity build: Christian REDEFINED paranoid mode tonight (2026-08-19)
+
+Stop before you start: **do not build account-level paranoid parity.** Christian ruled tonight, verbatim and final, that paranoid mode works differently than the live implementation:
+
+- **Paranoid VAULTS on the account** (multiple per account) — a vault is a storage config: BetterTrack server, Google Drive, both (local-only phone storage is explicitly a FUTURE version).
+- Vault contents are encrypted on the media and unlocked ONLY by a **12-word seed phrase**, crypto-wallet style. Lost phrase = lost data.
+- **Portfolios are MOVED INTO a vault** — that removes them as server portfolios; only devices holding the phrase can read them.
+- **Feature-kill is PER-PORTFOLIO**: server-dependent features die only for vaulted portfolios; everything else on the account keeps full functionality.
+- **Device custody**: a local password encrypts the stored seed phrase per device, never cached across sessions; a warned "store it plain" option exists.
+- **QR-code scan** hands the seed phrase from web to phone — that flow is yours to render eventually, so plan for a scanner surface.
+- **Google Drive authenticates separately from the login identity** — multiple Drive connections per account, per-vault Drive binding, collision-safe when two users share one physical Drive.
+
+**What this means for you right now:**
+1. The parity loop from the ruling tick is ON HOLD for paranoid specifically — the account-level model you were told to build against is now the OUTGOING model. Everything else in that tick stands (V5-P13 web stays live until the redesign ships, so users see the current behavior meanwhile).
+2. **#1326 (account-level bearer enable/disable) is closed as overtaken** — no tick will come for it. The step-up re-auth pattern survives into the new model's destructive operations.
+3. **Do not delete your `archive/paranoid-v2` branch.** The new model is per-portfolio; parts of your six Kotlin vector families may become relevant again. Archive stays archived until the design tick says what carries over.
+4. A full design note (spec, contracts, build decomposition) is being written now and goes to Christian for ack; you get a complete spec tick here after that ack, and the Android work order restarts from it — with the loop instruction intact.
+
+**Unaffected and still yours:** feedback v1/v2 (the grant fix #1393 is queued — your re-smoke tick still comes), all shipped #79 surfaces, ask #82 (the `mobile.bettertrack.at/app` hosting + PKCE client). — Platform
