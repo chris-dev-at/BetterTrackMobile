@@ -223,6 +223,12 @@ androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", 
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
+# Web port, Phase W0 — the BROWSER engine for the same Ktor client iOS runs. One
+# artifact serves both the js and wasmJs targets (there is no separate
+# "ktor-client-wasm"); it publishes a wasmJs variant at 3.5.2, the version §6.6
+# already verified, so nothing moved for the web. :shared wasmJsMain ONLY —
+# never reaches :app.
+ktor-client-js = { group = "io.ktor", name = "ktor-client-js", version.ref = "ktor" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
 

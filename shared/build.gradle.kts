@@ -1,8 +1,11 @@
-// ── :shared — the KMP module (KMP/iOS port, Phase 1) ───────────────────────
-// Holds Kotlin that both the Android app and the iOS app compile from the SAME
-// source. Phase 1 keeps it deliberately thin: the pure-domain seam plus the
-// Compose Multiplatform UI the iOS executable renders. No Room, no Ktor, no
-// settings/lifecycle libraries yet — those land in Phase 2.
+// ── :shared — the KMP module (KMP/iOS port, Phase 1; web bring-up, Phase W0) ─
+// Holds Kotlin that the Android app, the iOS app and the browser build compile
+// from the SAME source. Phase 1 kept it thin (pure domain + the CMP UI iOS
+// renders); Phase 2 migrated the DTOs, Room and the network seam down; Phase W0
+// added the `wasmJs` target and split the two source sets that make the browser
+// build possible without touching what Android and iOS compile (see below).
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     // The ANDROID target. MUST be the KMP-specific Android plugin: plain
@@ -53,9 +56,38 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
+    // ── The BROWSER target (web port, Phase W0) ─────────────────────────────
+    // Kotlin/Wasm, for the build served at mobile-dev.bettertrack.at/app. The
+    // `wasmJs { }` DSL is still marked experimental in KGP 2.3.20 (the accessor
+    // carries @ExperimentalWasmDsl), hence the opt-in; the TARGET itself is
+    // stable enough that CMP 1.10.3, Ktor 3.5.2, kotlinx-serialization 1.9.0,
+    // kotlinx-datetime 0.8.0 and coroutines 1.10.2 all publish wasmJs klibs at
+    // the exact versions §6.6 already verified — no version moved for the web.
+    //
+    // `browser()` is the deployment environment; `nodejs()` exists ONLY so the
+    // 622-vector conformance harness in commonTest can replay headlessly
+    // (`:shared:wasmJsNodeTest`) without a Karma/Chrome setup. Neither creates a
+    // binary — :shared stays a library; the executable is :webApp.
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        browser()
+        nodejs()
+    }
+
+    // The default hierarchy template is applied AUTOMATICALLY only for as long as
+    // a module declares no `dependsOn` edge of its own. The two intermediate
+    // source sets below declare six, so without this explicit call KGP silently
+    // falls back to the pre-1.9.20 layout — `iosMain` would stop being the parent
+    // of iosArm64Main / iosSimulatorArm64Main and every iOS file would fail to
+    // resolve. Re-applying the template first is the documented fix, not a
+    // workaround (kotlinlang.org "Additional configuration").
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
-        // commonMain — compiled for BOTH platforms. It holds the pure domain
-        // layer (at.bettertrack.app.domain.*). Phase 1 declared no dependencies
+        // commonMain — compiled for ALL THREE platforms as of Phase W0. It holds
+        // the pure domain layer (at.bettertrack.app.domain.*), the DTOs and the
+        // platform-neutral network interfaces; Room moved down to `dbMain` because
+        // the browser cannot compile it. Phase 1 declared no dependencies
         // here; Phase 2 migrated the calculation engine down, whose JS-runtime
         // date shims need a multiplatform date/time library — hence the single
         // commonMain dependency below. It is pure Kotlin with no UI surface, so
@@ -70,19 +102,100 @@ kotlin {
         // reaching it transitively via :shared changes nothing in :app's resolved
         // shipping graph — verified with :app:dependencies before/after. Pure data,
         // no Compose: it stays in commonMain and pulls in no UI.
+        // All three commonMain dependencies publish wasmJs klibs at exactly these
+        // versions, so the browser target reads this source set unmodified.
         commonMain.dependencies {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
-            // KMP/iOS port, Phase 2 (Room -> :shared): the @Database, its 18
-            // entities and 13 DAOs now compile here for BOTH platforms. room-runtime
-            // is the multiplatform artifact (2.8.4, the SAME version :app declares
-            // directly); :app reaches it transitively via :shared at the identical
-            // coordinate, so its resolved shipping graph is unchanged (the classic
-            // Android SupportSQLite APIs live in room-runtime-android, pulled in on
-            // the android target only). coroutines-core backs the DAO `Flow<>`
-            // returns — 1.10.2, again the version :app already resolves.
-            implementation(libs.androidx.room.runtime)
+            // coroutines-core backs the DAO `Flow<>` returns and the Ktor client —
+            // 1.10.2, the version :app already resolves.
             implementation(libs.kotlinx.coroutines.core)
+        }
+
+        // ── dbMain — Room, for {android, ios} but NOT the browser ────────────
+        //
+        // Web port, Phase W0. Room 2.8.4 — the NEWEST published release, checked
+        // against the Gradle module metadata on dl.google.com, not against docs —
+        // publishes `room-runtime` for android/jvm/native only. There is no
+        // `room-runtime-wasm-js` and no `room-runtime-js` at ANY version; only
+        // `room-common` (the bare annotations) ships a wasmJs artifact. Its
+        // driver dependency is in the same state: `sqlite-bundled` has no wasm
+        // variant either (androidx.sqlite 2.7.0 has begun publishing a
+        // `sqlite-web-wasm-js` browser driver, but Room cannot consume it yet).
+        //
+        // So the browser must not SEE the persistence layer at all. Rather than
+        // stub a fake driver — which would compile and then lie about durability
+        // — the `@Database`, its 18 entities and 13 DAOs moved out of commonMain
+        // into this intermediate source set, shared by android + ios exactly as
+        // before. Nothing about what those two targets compile changed: the same
+        // files, the same package, the same golden v10 identityHash
+        // (a9fab166f6bcb1451ac240972a08a408), the same room-runtime 2.8.4 on
+        // :app's runtime graph. What the browser gets instead is documented
+        // absence plus a named seam — see docs/KMP_PLAN.md §14 "Phase W", W2.
+        val dbMain by creating { dependsOn(commonMain.get()) }
+        dbMain.dependencies {
+            // room-runtime is the multiplatform artifact (2.8.4, the SAME version
+            // :app declares directly); :app reaches it transitively via :shared at
+            // the identical coordinate, so its resolved shipping graph is
+            // unchanged (the classic Android SupportSQLite APIs live in
+            // room-runtime-android, pulled in on the android target only).
+            implementation(libs.androidx.room.runtime)
+        }
+        androidMain.get().dependsOn(dbMain)
+        iosMain.get().dependsOn(dbMain)
+
+        // ── nonAndroidMain — everything the JVM half does differently ────────
+        //
+        // Web port, Phase W0. Shared by {ios, wasmJs}: the two targets that have
+        // no `java.*` and no Retrofit/OkHttp. It holds precisely two things, both
+        // MOVED verbatim out of iosMain, neither changed by a byte:
+        //
+        //  1. `PlatformFormat.nonAndroid.kt` — the pure-Kotlin `formatScientific`
+        //     actual. It feeds vault plaintext and the GCM AAD header, so a
+        //     duplicated Wasm copy of that arithmetic is the single most
+        //     dangerous thing this phase could have done. There is one copy, and
+        //     the 622-vector harness gates it on every target that compiles it.
+        //  2. The Ktor client (`BtKtorApiClient` + the two session-critical
+        //     plugins + the synthetic-call machinery). Those seven files import
+        //     nothing but `io.ktor.*` and `kotlinx.*` — they are engine-agnostic
+        //     by construction, taking an `HttpClientEngine` in the constructor —
+        //     so iOS keeps passing `Darwin.create()` and the browser passes
+        //     `Js.create()`. Android is untouched: it still keeps Retrofit/OkHttp
+        //     verbatim (Option B) and no io.ktor artifact reaches :app.
+        val nonAndroidMain by creating { dependsOn(commonMain.get()) }
+        nonAndroidMain.dependencies {
+            // ktor-client-core carries createClientPlugin / MockEngine SPI / the
+            // HttpClientCall+HttpResponseData used to synthesize the 304→200
+            // replay. Engine artifacts stay per-target below.
+            implementation(libs.ktor.client.core)
+        }
+        iosMain.get().dependsOn(nonAndroidMain)
+        wasmJsMain.get().dependsOn(nonAndroidMain)
+
+        // wasmJsMain — the browser's engine half, and nothing else. The Compose
+        // runtime is declared even though no file here is @Composable, for the
+        // same reason androidMain declares it: the Compose compiler plugin is
+        // applied per MODULE, so it runs over this compilation too.
+        wasmJsMain.dependencies {
+            implementation(libs.ktor.client.js)
+            implementation(compose.runtime)
+            // kotlinx-datetime's wasmJs implementation is js-joda, and js-joda
+            // ships with NO IANA time-zone database — kotlinx-datetime pulls
+            // `@js-joda/core` 3.2.0 and nothing else. Without this package
+            // `TimeZone.of("Europe/Vienna")` does not throw, it CRASHES the whole
+            // wasm module ("RuntimeError: dereferencing a null pointer" inside
+            // `toLocalDateTime`), which is what `Tax.viennaYearOf` — the tax-year
+            // boundary — calls on every taxable transaction. Found by running the
+            // conformance harness on `:shared:wasmJsNodeTest`, not by reading a
+            // README; a compile-only bring-up would have shipped it.
+            //
+            // 2.3.0 is the pairing kotlinx-datetime itself documents and the
+            // newest line whose peerDependency (`@js-joda/core >= 1.11.0`) admits
+            // the 3.2.0 core kotlinx-datetime pins; 2.25.2 demands core >= 5.7.0.
+            // It carries the full tz database — see the bundle-size note in
+            // docs/KMP_PLAN.md §14.1, and the 10-year-range build if that ever
+            // needs trimming.
+            implementation(npm("@js-joda/timezone", "2.3.0"))
         }
 
         // commonTest — the domain CONFORMANCE harness (Phase 2). It runs on BOTH
@@ -155,15 +268,12 @@ kotlin {
             // on :app's classpath (see the androidxSqlite version note). It pulls
             // androidx.sqlite (2.6.2) transitively for the Native targets only.
             implementation(libs.androidx.sqlite.bundled)
-            // KMP/iOS port, Phase 2 (network layer, Option B): the Ktor Darwin
-            // client that REPRODUCES Android's Retrofit/OkHttp session behaviours
-            // for iOS (BtKtorApiClient + the two session-critical plugins). Ktor is
-            // iOS-ONLY — declared here, never in commonMain/androidMain — so it never
-            // reaches :app's classpath (Android keeps its Retrofit stack verbatim;
-            // verified with `:app:dependencies` — no io.ktor on the runtime graph).
-            // ktor-client-core carries createClientPlugin / MockEngine SPI / the
-            // HttpClientCall+HttpResponseData used to synthesize the 304→200 replay.
-            implementation(libs.ktor.client.core)
+            // KMP/iOS port, Phase 2 (network layer, Option B): the Ktor DARWIN
+            // ENGINE. The client that reproduces Android's Retrofit/OkHttp session
+            // behaviours moved to nonAndroidMain in Phase W0 (with ktor-client-core);
+            // only the engine is iOS-specific. Ktor is still declared nowhere that
+            // reaches the android target, so :app's runtime graph carries no io.ktor
+            // (verified with `:app:dependencies`) and Android keeps Retrofit verbatim.
             implementation(libs.ktor.client.darwin)
         }
 
@@ -193,7 +303,8 @@ room {
 // generates the SupportSQLite-backed BtDatabase_Impl (the one :app + the
 // migration regression suite consume), and each iOS target generates the
 // SQLiteDriver-backed one. There is no commonMain KSP configuration — Room codegen
-// is inherently per-platform.
+// is inherently per-platform. Deliberately NO `kspWasmJs`: the browser target does
+// not compile `dbMain`, so it has nothing for Room to process (Phase W0).
 dependencies {
     add("kspAndroid", libs.androidx.room.compiler)
     add("kspIosArm64", libs.androidx.room.compiler)

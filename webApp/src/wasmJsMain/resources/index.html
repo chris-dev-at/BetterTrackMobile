@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de-AT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <title>BetterTrack</title>
+    <style>
+        /* The page paints the app background BEFORE the wasm module loads, so the
+           first frame is never a white flash on a dark product. */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #0A0D12;
+            color: #8B949F;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overscroll-behavior: none;
+        }
+        #bootstrap {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+        }
+        /* No JS hook is needed to hide the bootstrap note: ComposeViewport calls
+           attachShadow() on its container — <body> here — and an element with a
+           shadow root stops rendering its light-DOM children. The note therefore
+           disappears at exactly the moment Compose takes over. */
+    </style>
+</head>
+<body>
+    <div id="bootstrap">BetterTrack — loading</div>
+    <script type="application/javascript" src="webApp.js"></script>
+</body>
+</html>

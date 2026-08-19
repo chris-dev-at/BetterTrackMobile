@@ -1,12 +1,17 @@
 package at.bettertrack.app.domain
 
 /**
- * Kotlin/Native actual of [formatScientific] — reproduces
- * `String.format(Locale.ROOT, "%.<fractionDigits>e", value)` WITHOUT `java.text`
- * (there is none on Native), using an exact base-10 big-integer expansion of the
- * `Double`. No `BigInteger`/`BigDecimal` exist on Native either, so the few big
- * operations needed (multiply by 2 / by 5, decimal stringify, +1) are hand-rolled
- * on a little-endian digit list.
+ * The NON-JVM actual of [formatScientific] — compiled verbatim for BOTH
+ * Kotlin/Native (iOS) and Kotlin/Wasm (browser), which is why it sits in
+ * `nonAndroidMain` rather than `iosMain` (KMP web port, Phase W0). A second copy
+ * of this arithmetic is the one thing that could make the two runtimes disagree
+ * on bytes the vault depends on, so there is exactly one.
+ *
+ * It reproduces `String.format(Locale.ROOT, "%.<fractionDigits>e", value)`
+ * WITHOUT `java.text` (neither runtime has one), using an exact base-10
+ * big-integer expansion of the `Double`. No `BigInteger`/`BigDecimal` exist on
+ * either runtime, so the few big operations needed (multiply by 2 / by 5,
+ * decimal stringify, +1) are hand-rolled on a little-endian digit list.
  *
  * Java's `%e` does two things, reproduced here in the same order:
  *   1. take the SHORTEST round-trip decimal of the double (its `Double.toString`

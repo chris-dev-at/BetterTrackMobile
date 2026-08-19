@@ -25,9 +25,12 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
 
 /**
- * The iOS implementation of [BtApiClient], on a Ktor Darwin client that carries
- * the two session-critical plugins. It is constructed with an [HttpClientEngine]
- * so tests inject Ktor's MockEngine; production passes `Darwin.create()`.
+ * The Ktor implementation of [BtApiClient], carrying the two session-critical
+ * plugins. It is constructed with an [HttpClientEngine] and touches NO platform
+ * API of its own, which is why it lives in `nonAndroidMain` and is compiled by
+ * both non-JVM targets (KMP web port, Phase W0): iOS passes `Darwin.create()`,
+ * the browser passes `Js.create()`, tests inject Ktor's MockEngine. Android is
+ * unaffected — it keeps Retrofit/OkHttp verbatim (Option B).
  *
  * Plugin order is LOAD-BEARING: [BtConditionalGetPlugin] is installed FIRST
  * (outer) and [BtAuthPlugin] SECOND (inner), so conditional-GET replay sees the

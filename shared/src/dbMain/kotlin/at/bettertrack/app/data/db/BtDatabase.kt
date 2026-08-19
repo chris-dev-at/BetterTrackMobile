@@ -14,11 +14,14 @@ import androidx.room.RoomDatabaseConstructor
  * Migrations are REAL (not destructive) from v1 on: the sync queue is durable
  * user data — an app update must never drop queued ledger events.
  *
- * ## KMP/iOS port (Phase 2)
+ * ## KMP/iOS port (Phase 2), source set narrowed in the web port (Phase W0)
  *
- * The `@Database` declaration, its 18 entities and 13 DAOs live in commonMain so
- * BOTH the Android app and the iOS app compile the SAME schema from the SAME
- * source. Construction is source-set-specific: the ANDROID factory keeps the
+ * The `@Database` declaration, its 18 entities and 13 DAOs live in the `dbMain`
+ * source set so BOTH the Android app and the iOS app compile the SAME schema
+ * from the SAME source. `dbMain` sits between commonMain and {android, ios}
+ * rather than being commonMain itself because Room publishes NO wasmJs artifact
+ * (room-runtime 2.8.4 ships android/jvm/native only), so the browser target must
+ * not see this file at all — see the `dbMain` note in shared/build.gradle.kts. Construction is source-set-specific: the ANDROID factory keeps the
  * exact historical migration chain (see `BtDatabase.create(Context)` in
  * androidMain, byte-identical to what shipped), while iOS — which has no existing
  * installs — opens a fresh v10 database (see `BtDatabase.create()` in iosMain).

@@ -1229,3 +1229,328 @@ compiles.**
   DTOs and persistence — plus the calculation engine now compile and run on iOS
   from shared source. Next: the network layer** (Ktorfit re-plumb per D8) and
   the `sync/` seams.
+---
+
+## 14. Phase W — the web target (opened 2026-08-19)
+
+Owner ruling, 2026-08-19: the KMP program is the real port, and the UI that
+moves into `:shared` serves **two** consumers, not one — a future iOS app *and* a
+browser build via **Kotlin/Wasm**, to be served at `mobile-dev.bettertrack.at/app`.
+Hosting, CORS and a web OAuth client are platform-side asks that are already
+filed; none of them blocks the engineering below.
+
+This section extends the plan; it overrules nothing above it. In particular the
+CMP 1.10.3 ceiling (§6.3) and the verified stack (§6.6) still hold — **W0 moved
+no version at all**, which is the first thing worth reporting.
+
+### 14.1 W0 result — the browser target is real
+
+`:shared` now declares `wasmJs { browser(); nodejs() }` alongside `android`,
+`iosArm64` and `iosSimulatorArm64`, and a third consumer module `:webApp`
+produces a browser bundle from it. The screen it renders is not a "hello canvas":
+it runs `reducePosition` over a real transaction log and `computeSeriesStats`
+over a real value series, and prints every number through `jsNumberToString` —
+i.e. through the `formatScientific` `expect`/`actual` that decides vault
+plaintext and the GCM AAD header — with de-AT separators.
+
+**What compiles for `wasmJs`, measured not assumed.** Every dependency below was
+checked against its published Gradle module metadata (`*.module`) at the exact
+version §6.6 pins, before a line of build script was written:
+
+| commonMain piece | wasmJs | Note |
+| --- | --- | --- |
+| `domain/` (7 files, the calculation engine) | **yes** | pure Kotlin; only `formatScientific` needed an actual |
+| `data/api/dto/` (21 files, 261 `@Serializable`) | **yes** | kotlinx-serialization-json 1.9.0 publishes wasmJs |
+| `data/net/` interfaces (`BtApiClient`, `ApiResponse`, `TokenRefresher`, …) | **yes** | pure interfaces |
+| the Ktor client + 2 session plugins (was `iosMain`) | **yes** | ktor 3.5.2 core + `ktor-client-js` both publish wasmJs |
+| kotlinx-datetime 0.8.0 | **yes** | |
+| kotlinx-coroutines-core 1.10.2 | **yes** | but single-threaded — see R15 |
+| CMP 1.10.3 (`runtime`/`foundation`/`ui`), material3 1.9.0 | **yes** | the ceiling is an *iOS-SDK* ceiling, not a web one |
+| `data/db/` (Room: `@Database`, 18 entities, 13 DAOs) | **NO** | see 14.2 |
+
+**Two new intermediate source sets** carry the split. Neither changes a byte of
+what Android or iOS compiles — the same files, the same packages, the same
+golden v10 identityHash:
+
+- **`dbMain` = {android, ios}** — the Room layer, lifted out of `commonMain` so
+  the browser target never sees it.
+- **`nonAndroidMain` = {ios, wasmJs}** — the pure-Kotlin `formatScientific`
+  actual and the seven engine-agnostic Ktor files, lifted out of `iosMain`. The
+  formatter especially: a second Wasm copy of that arithmetic is the one thing
+  this phase could have done that would put vault bytes at risk, so there is
+  exactly one copy and the 622-vector harness gates every target that compiles it.
+
+Both required an explicit `applyDefaultHierarchyTemplate()` call: KGP applies the
+default template automatically only while a module declares no `dependsOn` edge
+of its own, and silently falls back to the pre-1.9.20 layout otherwise (which
+would detach `iosMain` from both iOS targets).
+
+**It runs, and it is right.** Headless Chrome against the production bundle:
+`/Users/cwiesi/bt_scratch/kmp-2026-08-19/web_w0_bringup.png`. Every value on that
+page came out of `:shared/commonMain`, in de-AT:
+
+| On screen | From |
+| --- | --- |
+| Ø cost `80,88 €`, realised `+74,92 €` | `reducePosition` over a 3-transaction log |
+| market value `1.369,50 €`, unrealised `+156,37 €  +12,89 %` | the same position × a quote |
+| total return `+8,88 %`, max drawdown `-4,36 %`, best day `2026-07-21 +5,93 %` | `computeSeriesStats` |
+| `0.1 + 0.2` → `0.30000000000000004`, `1.23e-7`, `9007199254740992` | `jsNumberToString`, i.e. the `formatScientific` actual |
+| `2025-12-31T22:30:00Z` → **2025**, `23:30:00Z` → **2026** | `Tax.viennaYearOf` across the CET tax-year boundary |
+
+The last row is the one that had to be earned — see 14.2.
+
+**Bundle size.** `:webApp:wasmJsBrowserDistribution`, production, measured with
+`gzip -9`:
+
+| Artifact | Raw | gzip -9 |
+| --- | --- | --- |
+| `skiko.wasm` | 8,642,989 (8.24 MiB) | 3,277,754 (3.13 MiB) |
+| app `.wasm` | 1,830,381 (1.75 MiB) | 608,956 (595 KiB) |
+| `webApp.js` (incl. `skiko.mjs` + js-joda core & tz) | 777,443 (759 KiB) | 131,819 (129 KiB) |
+| `index.html` + licence | 4,980 | 1,412 |
+| **shipped total** (sourcemap excluded) | **11,255,793 (10.7 MiB)** | **4,019,846 (3.83 MiB)** |
+
+Excluded: `webApp.js.map`, 1,917,778 bytes, which production does not serve.
+
+That is a first-load budget the product has to accept knowingly (R16): **78% of
+it is Skia**, it is constant regardless of how much of the app ships, and it is
+paid before the first pixel. It caches well and it does not grow linearly with
+screens — but it is not a number a marketing page can hide.
+
+**Gates**, all re-run with `--rerun-tasks` on the final tree:
+
+| Gate | Result |
+| --- | --- |
+| `:shared:testAndroidHostTest` | **13 / 0 failures / 0 errors** |
+| `:shared:iosSimulatorArm64Test` | **23 / 0 / 0** |
+| `:shared:compileKotlinIosArm64` (+ SimulatorArm64) | green |
+| `:shared:compileKotlinWasmJs` | green |
+| `:shared:wasmJsNodeTest` | **13 / 0 / 0 — NEW** |
+| `:webApp:wasmJsBrowserDistribution` | green |
+| golden v10 schema | md5 `d90e198351d6e5ac062a7c55fdd7a2c5`, identityHash `a9fab166f6bcb1451ac240972a08a408` — **unchanged**, and `shared/schemas` still byte-identical to `app/schemas` |
+| `:app` githubDebugRuntimeClasspath | **zero** `io.ktor`, `org.jetbrains.compose`, `skiko`, `js-joda`, `sqlite-bundled`; room 2.8.4 / sqlite 2.6.2 exactly as before |
+
+**`wasmJsNodeTest` 13/0 is the headline.** It is the same commonTest harness that
+gives 13/0 on the JVM, so **all 622 domain conformance vectors — holdings, series
+stats, cash ledger, tax, server-TWR parity — now replay byte-exact on
+Kotlin/Wasm as well as on the JVM and Kotlin/Native.** No tolerance was loosened
+and no vector was skipped. D5's cross-platform gate now covers three runtimes.
+
+### 14.1a Three things W0 found that a compile-only bring-up would have shipped
+
+1. **`Tax.viennaYearOf` crashes the wasm module.** kotlinx-datetime on Wasm is
+   js-joda, and js-joda carries no IANA zone rules; kotlinx-datetime declares
+   `@js-joda/core` and nothing else. `TimeZone.of("Europe/Vienna")` does not
+   throw — it takes the module down with
+   `RuntimeError: dereferencing a null pointer` inside `toLocalDateTime`, i.e.
+   on every taxable transaction. Fixed by adding `npm("@js-joda/timezone",
+   "2.3.0")` **and** a `@JsModule` external declaration that is reachable from
+   `:webApp`'s `main()` — the npm dependency alone changes nothing, because the
+   package is side-effect-only and DCE removes an unreferenced import from the
+   production bundle. `2.3.0` is the newest line whose peer range admits the
+   `@js-joda/core` 3.2.0 that kotlinx-datetime pins (2.25.2 wants core ≥ 5.7.0).
+   Cost: 200 KiB in the bundle. Found by running the vectors, not by reading a
+   changelog.
+2. **Kotlin 2.3.20 crashes on incremental wasmJs recompilation.** Editing a
+   wasmJs source file and rebuilding fails with
+   `ArrayIndexOutOfBoundsException … WasmIrFileMetadata.fromByteArray` →
+   "Internal compiler error". Reproduced twice; deleting
+   `shared/build/kotlin/compileKotlinWasmJs` made the identical sources compile.
+   `kotlin.incremental.wasm=false` is now set in `gradle.properties` with the
+   stack trace recorded next to it. Revisit past 2.3.20.
+3. **`FAIL_ON_PROJECT_REPOS` is incompatible with a Kotlin/Wasm browser build.**
+   KGP downloads Node.js, Yarn and Binaryen's `wasm-opt` by registering ivy
+   repositories from inside its own setup tasks — project code — and the guard
+   fails on the ADD, so declaring identical repositories in settings does not
+   satisfy it. `settings.gradle.kts` now uses `PREFER_SETTINGS` and declares all
+   three toolchain repositories itself, each `content { includeModule(...) }`-
+   scoped so nothing else can resolve against them. Project-declared
+   repositories are still ignored, which is the property that mattered.
+
+### 14.2 R13 (new, RED for storage) — Room has no wasm target
+
+Checked against the published Gradle module metadata on `dl.google.com`, not
+against documentation:
+
+- `androidx.room:room-runtime` **2.8.4 — the newest release** — publishes
+  android, jvm, and 17 native targets. There is **no** `room-runtime-wasm-js`
+  and no `room-runtime-js`, at *any* version. Only `room-common` (the bare
+  annotations) ships a wasmJs artifact, from 2.8.0.
+- Its driver is in the same state: `androidx.sqlite:sqlite-bundled` has no wasm
+  variant either. `androidx.sqlite` **has** begun publishing browser pieces
+  (`sqlite-wasm-js`, `sqlite-web-wasm-js` at 2.7.0), so the platform intent
+  exists — Room simply cannot consume them yet.
+
+**Decision: absence with a named seam, never a stub.** No fake driver was added
+to make the browser compile. `dbMain` carves the persistence layer out of the
+wasm compilation entirely, so the browser build has *no* local database and says
+so at the type level rather than pretending to persist. Three futures, to be
+chosen in W6:
+
+1. **Server-only mode in the browser** — no local mirror, every read hits the
+   API. This is how the existing web client already behaves, so it is the
+   least surprising, and it is the recommended W6 default.
+2. **An IndexedDB/OPFS store behind the existing interfaces.** `interface
+   OpStore` is already Room-free and Android-free (§4.4), so the outbound queue
+   in particular has a clean place to land.
+3. **Wait for Room over `sqlite-web-wasm-js`.** Free when it arrives; not
+   plannable.
+
+The sharp consequence of (1) is not technical: §7.3's durable outbound sync
+queue — "an app update must never drop queued ledger events" — has **no durable
+home in a browser tab** under server-only mode. Mutations on the web would be
+online-only. That is a product decision for the owner, not an engineering one.
+
+### 14.3 Per-layer verdicts for the browser
+
+Same discipline as §4.4: measured over `app/src/main/java` in this worktree
+(note the branch is behind `main` — `main` carries 2984 string keys and a
+32-file widget package this branch has not merged yet).
+
+- **Strings/resources — shares after seam; the seam is a build migration, not a
+  code one.** 2984 keys × EN/DE (2021 + 35 plurals on this branch), reached
+  through 2483 `R.string.` refs in 99 files, of which 1823 are
+  `stringResource(...)` inside composition and ~660 are not. compose-resources
+  (`components-resources`, wasmJs-published at 1.10.3) reads the *same*
+  Android-style `<string>`/`<plurals>` XML, so the files move rather than
+  convert and the refs rewrite mechanically to `Res.string.*`. Three sharp
+  risks: **(a)** on web, resources are fetched, so `stringResource` resolves
+  asynchronously and a naive port shows an **empty first paint**; **(b)** the
+  ~660 non-composable sites need `getString(Res.string.x)`, which is `suspend` —
+  each one is a decision, not a find-and-replace; **(c)** §4.7's in-app EN/DE
+  switch (`LocaleManager.wrap`/`recreate()`, no iOS analogue) needs the same
+  `CompositionLocal` redesign here, seeded from `navigator.language`.
+- **Navigation — shares after seam.** `org.jetbrains.androidx.navigation:navigation-compose`
+  2.9.2 publishes wasmJs, and R7 already proved `BtSheetNavigator` compiles
+  against it unchanged, so the 49 `btSheet<T>` routes and 4 pager tabs port. The
+  seam is the thing neither Android nor iOS has: **the URL bar and the browser
+  Back button**. Compose nav does not wire itself to `window.history`; without an
+  explicit bridge, Back leaves the app and no screen is addressable or
+  bookmarkable. Not hard, but it is invisible until a user presses Back.
+- **ViewModels — shares as-is.** 42 of them, still zero `AndroidViewModel` /
+  `SavedStateHandle` / `Context`; `lifecycle-viewmodel-compose` 2.11.0 publishes
+  wasmJs. The caveat is not the ViewModels, it is the runtime underneath them:
+  **Kotlin/Wasm is single-threaded**. `runBlocking` does not exist there at all
+  (6 sites in 4 files) and neither does `Dispatchers.IO` (12 sites in 8 files);
+  `synchronized` (14 sites) is unavailable on Native and Wasm alike. Every one is
+  a compile error the moment that file moves to `commonMain`, which is the good
+  kind of risk — loud, and countable in advance.
+- **Storage — gates off (Room) / shares after seam (prefs).** See 14.2 for the
+  database. The 10 `SharedPreferences` stores go to `multiplatform-settings`
+  (D11), which publishes wasmJs and is backed by `localStorage`; the token store
+  does **not** follow them (see auth).
+- **Crypto / vault — gates off, on D4's precedent.** D4 already says: if
+  byte-identity is not *demonstrated* by the vectors, vault features are disabled
+  behind a clean flag rather than approximated. The web has two independent
+  reasons to invoke it. First, Argon2id at m=65536 KiB / t=3 wants 64 MB of
+  linear memory and runs on the **single UI thread** of a tab — the canvas
+  freezes for its whole duration, and there is no Web Worker path wired here
+  (R15). Second, AES-GCM in a browser means WebCrypto (`crypto.subtle`), which
+  is async and secure-context-only. Also worth flagging early: D3 puts DEFLATE
+  *above* Argon2 on the risk register, and browsers ship `CompressionStream`
+  natively — an advantage over Native, but its exact byte output is not
+  specified to match zlib's default strategy, so it is a vector question, never
+  an assumption.
+- **Auth / OAuth — redesign, small but real.** Android's flow is Chrome Custom
+  Tabs returning to `bettertrack://oauth/callback`, the app's *only* deep link
+  (§4.5). A browser has no custom-scheme return leg, so it becomes a normal
+  https redirect — the platform ask is filed and a web client is being minted.
+  Three consequences the redirect drags along: it is a **public** client, so
+  PKCE is mandatory and there is no secret; there is no
+  `EncryptedSharedPreferences`/Keychain, so a refresh token in `localStorage` is
+  XSS-readable and the honest choices are a short-lived in-memory access token
+  with an httpOnly refresh cookie (a platform endpoint) or re-login on reload;
+  and a full-page redirect **destroys all in-memory state**, so state restore
+  has to survive a reload before login can be called done. `TokenRefresher`
+  itself is untouched — it is already a common interface, and its single-flight
+  contract is unchanged.
+- **Charts / canvas — shares as-is.** 9 `Canvas(` sites in 7 files, 100%
+  hand-drawn, rendered by Skiko on WebGL. The caveat is not the charts, it is
+  the medium (R14): CMP paints the **entire app into one canvas**, so there is
+  no DOM text anywhere — no browser text selection, no find-in-page, no SEO, and
+  accessibility is CMP's own bridge rather than real semantics. Acceptable for
+  an authenticated dashboard; unacceptable to discover late.
+- **Widgets — N/A.** 32 files / 9 Glance widgets on `main`. Glance is
+  `RemoteViews` in an Android launcher; there is no browser equivalent, and the
+  nearest analogues (PWA install, `manifest.json` shortcuts) are a different
+  product rather than a port. This branch has not merged them yet either.
+- **Theme / typography — shares as-is after a move.** `ui/theme` is 1439 LOC of
+  pure Compose (`BtColors`/`BtTypography`/`BtShapes`). One real cost: a canvas
+  has no system font, so every face must be embedded as a compose-resource, and
+  **132 distinct `Icons.*` symbols** currently come from androidx
+  `material-icons-extended` 1.7.8 (dropped from recent BOMs) — the JetBrains
+  coordinate is a different artifact and its pairing must be re-derived, with
+  the bundle-size budget watching.
+- **Formatters (D1 / R8) — shares after seam, and this is the highest-value item
+  in the whole web phase.** `BtNumberFormat` is 194 LOC on ICU
+  (`java.text.NumberFormat`, `BigDecimal`, `Currency.getSymbol`), contractually
+  byte-identical to the web client (PLATFORM_ASKS #18/#19). Wasm has no ICU —
+  but the browser has `Intl.NumberFormat`, **which is exactly what the web
+  client already uses and what the Android formatter was written to match**. So
+  the wasm actual is plausibly a thin `Intl` call that reaches byte-identity by
+  construction. Doing it properly finishes D1 for all three runtimes at once and
+  closes **R8 2-of-3**, which iOS needs anyway. Do not let it be improvised as a
+  presentation shim; W3 exists for it.
+- **Notifications — redesign / gates off.** 4 channels + FCM today. Web push
+  needs a service worker and VAPID keys; the server's delivery matrix already
+  carries a `webpush` axis (§4.5), so the data side exists and the client side
+  does not.
+- **App lock / biometrics — gates off.** §4.7 already calls the Android
+  Keystore-HMAC PIN custody a redesign rather than a port for iOS; a browser is
+  a third custody model again (WebAuthn), and it is not on the critical path.
+- **Google Drive — shares after seam.** The most portable code in the repo
+  (§4.5), plain REST over OkHttp; it becomes the same Ktor client. The new
+  questions are the *web* OAuth scope on the same new client, and whether
+  `googleapis.com` CORS admits a browser client at all.
+- **WorkManager / sync scheduling — redesign.** 2 one-shot idempotent workers.
+  A tab has foreground drain and nothing else — the same degradation §4.5
+  already accepted for iOS (no data loss, only latency), minus even the
+  opportunistic background refresh.
+- **Discreet mode — shares as-is.** Pure Kotlin state; nothing platform-shaped.
+
+### 14.4 New risks
+
+| # | Risk | Colour |
+| --- | --- | --- |
+| R13 | Room publishes no wasmJs artifact at any version; the browser has no local database and, in server-only mode, no durable outbound queue | RED (storage) |
+| R14 | CMP web is one canvas: no DOM text, no selection, no find-in-page, no SEO, a11y via CMP's bridge only | AMBER |
+| R15 | Kotlin/Wasm is single-threaded: no `runBlocking`, no `Dispatchers.IO`, no `synchronized`; Argon2id at 64 MB / t=3 freezes the tab | AMBER |
+| R16 | First-load bundle is dominated by Skia and is paid before the first pixel | AMBER |
+| R17 | Browser token custody: no Keychain, no EncryptedSharedPreferences; `localStorage` is XSS-readable | AMBER, needs an owner call |
+| R18 | Kotlin 2.3.20 crashes on incremental wasmJs recompilation (`WasmIrFileMetadata.fromByteArray`); mitigated by `kotlin.incremental.wasm=false`, so wasm builds are always non-incremental until the compiler moves | GREEN (mitigated), do not silently re-enable |
+| R19 | The IANA zone database reaches the browser ONLY through a live call to `btInstallTimeZoneDatabase()` from the host's `main()`. A future web host that forgets it compiles fine and then crashes the module on the first tax computation — a runtime cliff with no compile-time signal | AMBER; W1 should make it unforgettable (an entry-point helper, or an `Intl`-based `viennaYearOf` actual) |
+
+### 14.5 Milestones
+
+Sized in **builder-days** (one focused builder, this machine, serialized Gradle
+lane). They assume W0 as landed and exclude anything the platform owes.
+
+- **W1 — the shell renders (8–10 d).** Move `ui/theme` and one real screen into
+  `:shared/commonMain`; **reconcile the Compose BOM against CMP** (§6.6's open
+  caveat — this, not the screens, is the blocker); embed fonts; settle the icon
+  artifact; seed locale from `navigator.language`. Exit: one production screen
+  in the browser with the real theme, Android byte-identical.
+- **W2 — strings (6–8 d).** 2984 keys × EN/DE to compose-resources; 2483 refs
+  rewritten; the ~660 non-composable sites decided one by one; async resolution
+  proven not to flash empty. Exit: no `R.string` in shared code, both platforms
+  green.
+- **W3 — the formatter (5–7 d; highest value).** Finish D1: `BtNumberFormat`
+  becomes one vector-gated `expect`/`actual`, wasm actual over
+  `Intl.NumberFormat`, vectors replaying on JVM + Native + Wasm. Closes R8
+  2-of-3 and pays for itself on iOS.
+- **W4 — navigation and history (4–6 d).** 49 sheet routes + 4 tabs on
+  multiplatform navigation; bridge the back stack to `history.pushState` /
+  `popstate`; Back must not exit the app; decide the URL shape.
+- **W5 — auth (5–7 d, platform-gated).** PKCE redirect against the new web
+  client; token custody decided explicitly (R17); a reload must not silently log
+  the user out mid-session without saying so.
+- **W6 — data (8–12 d).** Server-only mode behind the existing repository
+  interfaces, or the IndexedDB/OPFS `OpStore` — the R13 decision. Includes the
+  mutation story without a durable queue.
+- **W7 — the long tail (open).** Vault gate-off flag, web push, Drive, a11y
+  pass, bundle budget, CI job for the wasm build.
+
+**Honest total: ~36–50 builder-days** from here to a browser build showing real
+logged-in data, W7 and platform work excluded. The three that can surprise are
+W1 (the BOM reconciliation is a real unknown), W2 (async resources) and W6 (a
+product decision sits inside it).

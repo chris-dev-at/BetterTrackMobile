@@ -1,7 +1,7 @@
 package at.bettertrack.app.data.net
 
 /**
- * HTTP header names shared by the iOS network plugins — the same string values
+ * HTTP header names shared by the Ktor network plugins — the same string values
  * the Android middleware uses, so the wire contract is byte-identical.
  */
 internal object BtNetHeaders {

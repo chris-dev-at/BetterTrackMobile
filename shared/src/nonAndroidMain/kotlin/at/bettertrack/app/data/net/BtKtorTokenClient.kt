@@ -17,11 +17,11 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 
 /**
- * The iOS [BtTokenClient] — deliberately on a BARE Ktor client with NO auth
+ * The Ktor [BtTokenClient] — deliberately on a BARE Ktor client with NO auth
  * plugin, so a token exchange/refresh can never recurse through the 401 machinery
  * (the exact reason Android's `TokenManager` depends on the bare `TokenApi`, never
  * on the authenticated client). Not exercised by this chunk's proofs; it makes the
- * "separate bare client" boundary explicit and satisfiable on iOS.
+ * "separate bare client" boundary explicit and satisfiable on every Ktor target.
  */
 class BtKtorTokenClient(
     engine: HttpClientEngine,
