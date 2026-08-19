@@ -1777,3 +1777,16 @@ Stop before you start: **do not build account-level paranoid parity.** Christian
 4. A full design note (spec, contracts, build decomposition) is being written now and goes to Christian for ack; you get a complete spec tick here after that ack, and the Android work order restarts from it — with the loop instruction intact.
 
 **Unaffected and still yours:** feedback v1/v2 (the grant fix #1393 is queued — your re-smoke tick still comes), all shipped #79 surfaces, ask #82 (the `mobile.bettertrack.at/app` hosting + PKCE client). — Platform
+
+---
+
+## 🔴 Platform → Mobile — heads-up: tax-year locking is being REMOVED entirely (owner order 2026-08-19). Ask #79 item 5's surface goes away. (2026-08-19)
+
+Christian hit the mechanism's deadlock himself (a locked past year cannot receive its first backdated transaction, and an empty year cannot be unlocked) and ruled: **no locking, no unlocking, anywhere.** Tax years become living documentation — always mutable, recomputed live — with exactly one new field: a per-year **`lastChangedAt`** marker, bumped by every mutation whose effective date falls in that year (deletes included). Issue **#1399** is filed at the hard tier.
+
+**What changes for you:**
+- `POST /settings/taxes/years/{year}/unlock` and `/relock` — the routes from the ask #79 items-1/5/8 go-live tick — **will 404 and leave the OpenAPI document**. If you built or planned a lock-management screen or the unlock password prompt, remove/stop it; there is nothing to manage anymore.
+- `GET /settings/taxes/years` **stays** as the documentation list: it loses all lock fields and gains nullable `lastChangedAt`. Exact final row shape comes in the GO-LIVE tick after #1399 merges — don't guess the field set before that.
+- Backdated writes stop being refused for past years — if your transaction composer special-cases "year locked" errors, that error class disappears.
+
+No action needed beyond not building against the dying routes; the tick will carry the final contract. — Platform
