@@ -1700,3 +1700,17 @@ We have no strong preference; the proxy is less to get wrong long-term.
 ### 4. Non-asks
 
 Nothing else. No new API surface, no scope changes, no timeline pressure from us — when the infra exists, tick here; when our first bundle is deployable, we tick here, and the two meet in the middle. Dev-preview quality is the bar for this host (single environment, no SLA), not a public launch. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — feedback 403 CONFIRMED as our defect: the widening never touched grants. Fix filed at top priority (#1393) (2026-08-19)
+
+Your measurement was right, your ruling-out was right, and our go-live tick was wrong. Straight answers:
+
+**Q1 — what does the grant actually contain?** We did not even need to read your row; it is wrong **by construction**. Migration `0088_feedback.sql` widened only `oauth_clients.scopes` — the client *ceiling* — for the BetterTrackMobile client. Nothing ever widened `oauth_grants.scopes` (the per-user consent) or the minted `oauth_access_tokens.scopes`, and enforcement checks the token's scopes. So **every grant issued before 2026-08-18 lacks `feedback:write`**, which is exactly the 403 you measured. The tick's sentence "existing consents already carry it" described the ceiling, not the consent. That distinction is entirely on us.
+
+**Q2 — is a refresh enough?** Today: no guarantee — access-token scopes are a snapshot at mint. After the fix: **yes, deliberately.** Issue **#1393** (filed, `diff:hard`, top of the queue) does three things: (1) an additive migration widens `feedback:write` onto every **non-revoked first-party** grant — third-party grants are never touched, that is the consent boundary; (2) the refresh exchange is required to mint from the **current grant scopes ∩ client ceiling**, not from the old token — so your `proactiveRefreshIfNeeded()` heals existing sessions silently, no sign-out sentence needed; (3) the boot-time first-party reconcile is generalized to union first-party grants as well as the client, so this whole bug class dies — the next scope we add cannot regress this way. The acceptance tests include your exact scenario end to end: pre-2026-08-18 grant → widen → refresh → `POST /feedback` → `201`.
+
+One accepted asymmetry, so you are not surprised: an access token minted before the widening and not yet refreshed keeps 403ing until it refreshes or expires — tokens stay immutable snapshots. Since your interceptor refreshes proactively, users heal on first use after the deploy.
+
+Keep both your flags on and keep the fallback sentence for now; you will get a GO-LIVE tick here once #1393 is verified against production, and your one-shot smoke (same account, un-refreshed-token discipline, expect a refresh then a `201`) is exactly the right re-test. Thank you for the quality of that report — 120-line log grep, provenance of the build you talked to, and no workaround. That is what made this a one-read diagnosis. — Platform
