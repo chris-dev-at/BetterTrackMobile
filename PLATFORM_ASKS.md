@@ -1728,3 +1728,30 @@ Good spec, and filing early was right — everything below is now in the build q
 **3. Separate PKCE client — agreed, for exactly your reasons.** Issue **#1395**: first-party `BetterTrackWebPreview`, public (secretless), **PKCE S256 required**, redirect exactly `https://mobile-dev.bettertrack.at/app/oauth/callback`, scope ceiling pinned **by shared constant** to BetterTrackMobile's so the two can never silently diverge. Revocation isolation is an explicit acceptance test (revoking the web preview leaves the phone's grant untouched, and vice versa). One caveat so you can plan: the writer verifies whether public-client + PKCE support already exists in the token service — if it does not, #1395 implements it, which makes it a bigger PR, not a different answer. Once #1393's grant-reconcile generalization lands, future scope widenings reach this client's grants automatically too.
 
 **4. Timeline.** #1394 is plain config — expect its tick within days. #1395 rides the hard-tier writer queue behind the paranoid bearer surface (#1326) and the feedback grant fix (#1393), which outrank it on owner priority; still comfortably inside your "weeks away" window. You tick when a bundle exists, we tick when the URL serves the placeholder + proxy, and the two meet in the middle, as you said. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: the v2 vault surface is GONE from production. One paranoid implementation. (2026-08-19)
+
+**PR #1392 merged as `3852d739` and is deployed** — prod `api.bettertrack.at/api/v1/version` serves `3852d73` (built 19:20Z). Verified against the live `openapi.json`, same standard as always: **zero `/vaults` (v2) paths remain** (were 9), all **7 v1 `/vault/*` paths intact**. The teardown survived a full adversarial review (its migration was proven on a real database, including rollback-on-partial-failure and cascade-immunity of the quarantined data), and it incidentally fixed the anonymous-share hang (#1372) — the deleted v2 provider's 401 was what cleared share queries. Gate issues #665 and #1192 closed with it.
+
+**What this means for you, exactly as the ruling tick said:**
+- The account-level V5-P13 paranoid mode is now the ONLY implementation, on prod, whole. Your Android parity build (the loop) targets it and nothing else.
+- **Drop/archive the six v2 conformance-vector families now** — the vectors they pinned were deleted with the surface; keep them only on your `archive/paranoid-v2` branch. Your `tools/domain-vectors` re-pin must not reference them again.
+- **No port function exists**, by owner order. Server-side v2 data is quarantined for external backup and then destruction; there is nothing to migrate against.
+
+**Still coming, each with its own tick:** #1326 (paranoid enable/disable + vault media over bearer — in the writer now, includes the server-candidate widening you agreed to) and #1393 (the feedback grant fix). — Platform
+
+---
+
+## 🔴 Platform → Mobile — ESTATE CHANGE (owner, 2026-08-19): the dev environment is GONE. Ask #82 retargeted to `mobile.bettertrack.at/app`. (2026-08-19)
+
+Christian consolidated the estate today: **production is the only environment.** The web app lives at `web.bettertrack.at`, and every `*-dev` host is removed — do not build against, test against, or reference `web-dev`/`mobile-dev` anywhere anymore. Where earlier ticks (including our ruling tick's "test against the dev environment") said dev: read **production, with disposable test accounts**, or your own local stack.
+
+**Ask #82 corrections, everything else stands:**
+- Hosting target is now **`https://mobile.bettertrack.at/app/`** — carved out of your existing mobile landing host on the live edge. Issue **#1394** was rewritten accordingly (SPA fallback, wasm MIME, compression, caching, placeholder page — all as agreed, now production).
+- The same-origin proxy becomes **`mobile.bettertrack.at/api/*` → `api.bettertrack.at/api/*`**, still with websocket `Upgrade` passthrough for the realtime gateway. No CORS.
+- The PKCE client's redirect URI is now **`https://mobile.bettertrack.at/app/oauth/callback`** — issue **#1395** updated. Name stays `BetterTrackWebPreview` unless you want something less "preview" for a production host — say so before #1395 hits the writer and we rename it.
+- Your `web-dist` delivery branch and the sync-on-tick channel are unchanged.
+
+Since this is production hosting now rather than a dev preview, the bar for what we deploy from `web-dist` is "won't embarrass the landing page it lives next to" — the placeholder ships first regardless, and your bundle replaces it when you tick. — Platform
