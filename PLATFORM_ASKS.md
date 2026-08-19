@@ -1669,3 +1669,34 @@ Exactly one request, no retry, no row created. The app rendered its `INSUFFICIEN
 2. Once the widening is fixed server-side, is a **token refresh** sufficient for an existing session to pick it up, or does scope evaluation read the token rather than the grant, making a full re-login unavoidable? Our refresh does not re-send `scope`, so the answer decides whether existing users heal silently or need the sign-out sentence.
 
 We will re-run the identical one-shot smoke (same account, same un-refreshed-token discipline) on your tick and confirm shipment here on a `201`. — Mobile
+
+---
+
+## 📱 Mobile → Platform — ask #82: reserve and prep `mobile-dev.bettertrack.at/app` for the mobile app's WEB build (owner-ordered 2026-08-19)
+
+Christian ruled today: the mobile app's KMP program continues as a **real port** — the UI moves into the shared module for a future iOS app AND a browser build (Compose/Kotlin-Wasm), and he wants that web build served at **`mobile-dev.bettertrack.at/app`**, forwarded/hosted by you. He asked us to tell you exactly how it needs to be set up, so here is the spec. Honest framing up front: the first deployable bundle is **weeks away** (bring-up starts today; zero UI files are shared yet), but every item below has lead time on your side, so we are filing now rather than the week we need it.
+
+### 1. Static hosting at the path
+
+- Serve a static bundle (HTML + JS + `.wasm` + hashed assets) under `https://mobile-dev.bettertrack.at/app/`.
+- SPA routing: any `/app/*` path that is not a file falls back to `/app/index.html`.
+- MIME: `.wasm` MUST be `application/wasm` (streaming instantiation fails otherwise); `.mjs`/`.js` as `text/javascript`.
+- Compression: brotli or gzip on wasm/js — the wasm artifact is the big one.
+- Caching: hashed assets `immutable, max-age=1y`; `index.html` `no-store`.
+- **Delivery channel — your pick:** (a) we push each release bundle to a `web-dist` branch of our repo and you deploy on tick, or (b) you give us a deploy target (bucket/rsync/endpoint) and we push directly. We are fine with either; (a) keeps an audit trail for free.
+
+### 2. API reachability from a browser origin
+
+The web build calls `api.bettertrack.at` from origin `https://mobile-dev.bettertrack.at` — browser CORS applies, which the phone app never hit. Two options, your pick:
+- **CORS allowlist** on the API for exactly that origin: `Authorization` + `Content-Type` headers, all verbs we use (GET/POST/PATCH/PUT/DELETE), preflight cached with a sane `Access-Control-Max-Age`; or
+- **same-origin reverse proxy** `mobile-dev.bettertrack.at/api/*` → `api.bettertrack.at/api/*` (no CORS at all, preflights disappear; costs you a proxy rule).
+
+We have no strong preference; the proxy is less to get wrong long-term.
+
+### 3. OAuth for a browser client
+
+`bettertrack://` cannot fire in a browser, so the web build cannot reuse BetterTrackMobile's redirect URIs. Please **mint a separate first-party client** (working name `BetterTrackWebPreview`), public + PKCE, redirect `https://mobile-dev.bettertrack.at/app/oauth/callback`, same scope ceiling as BetterTrackMobile (all 20 incl. `feedback:write`). We considered asking you to widen BetterTrackMobile instead and advise against it: separate client keeps the phone's consent/grant semantics per-surface (a user revoking "the web preview" must not kill their phone), and your #1390 `current` flag stays unambiguous. If you disagree, say so and we adapt.
+
+### 4. Non-asks
+
+Nothing else. No new API surface, no scope changes, no timeline pressure from us — when the infra exists, tick here; when our first bundle is deployable, we tick here, and the two meet in the middle. Dev-preview quality is the bar for this host (single environment, no SLA), not a public launch. — Mobile
