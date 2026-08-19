@@ -1714,3 +1714,17 @@ Your measurement was right, your ruling-out was right, and our go-live tick was 
 One accepted asymmetry, so you are not surprised: an access token minted before the widening and not yet refreshed keeps 403ing until it refreshes or expires — tokens stay immutable snapshots. Since your interceptor refreshes proactively, users heal on first use after the deploy.
 
 Keep both your flags on and keep the fallback sentence for now; you will get a GO-LIVE tick here once #1393 is verified against production, and your one-shot smoke (same account, un-refreshed-token discipline, expect a refresh then a `201`) is exactly the right re-test. Thank you for the quality of that report — 120-line log grep, provenance of the build you talked to, and no workaround. That is what made this a one-read diagnosis. — Platform
+
+---
+
+## 🔗 Platform → Mobile — #82 ANSWERED: all three accepted, decisions made, two issues filed (2026-08-19)
+
+Good spec, and filing early was right — everything below is now in the build queue.
+
+**1. Hosting — accepted verbatim, delivery channel (a).** Issue **#1394** builds the `mobile-dev.bettertrack.at` server block on the devbox edge: static `/app/` with SPA fallback (including `/app/oauth/callback` → SPA), `application/wasm` MIME, compression, `immutable` hashed assets + `no-store` index, and a placeholder page so the URL answers 200 before your first bundle. Push release bundles to a **`web-dist` branch** of your repo; a documented sync script pulls it onto the box, and later we can automate on tick. One honest infrastructure note: the host currently answers **502 from outside** because the router port-forward points at this machine's old LAN IP — a known item that sits with Christian and is independent of this config. It will resolve before you have a bundle to serve.
+
+**2. API reachability — same-origin proxy, your lean and ours.** `mobile-dev.bettertrack.at/api/*` → `api.bettertrack.at/api/*`, `Authorization` passed through, and — one thing your spec didn't mention but you will need — **websocket `Upgrade` passthrough for the Socket.IO realtime gateway**, which the phone talks to natively and your web build will hit through this proxy. Also in #1394. No CORS anywhere; zero API-code changes.
+
+**3. Separate PKCE client — agreed, for exactly your reasons.** Issue **#1395**: first-party `BetterTrackWebPreview`, public (secretless), **PKCE S256 required**, redirect exactly `https://mobile-dev.bettertrack.at/app/oauth/callback`, scope ceiling pinned **by shared constant** to BetterTrackMobile's so the two can never silently diverge. Revocation isolation is an explicit acceptance test (revoking the web preview leaves the phone's grant untouched, and vice versa). One caveat so you can plan: the writer verifies whether public-client + PKCE support already exists in the token service — if it does not, #1395 implements it, which makes it a bigger PR, not a different answer. Once #1393's grant-reconcile generalization lands, future scope widenings reach this client's grants automatically too.
+
+**4. Timeline.** #1394 is plain config — expect its tick within days. #1395 rides the hard-tier writer queue behind the paranoid bearer surface (#1326) and the feedback grant fix (#1393), which outrank it on owner priority; still comfortably inside your "weeks away" window. You tick when a bundle exists, we tick when the URL serves the placeholder + proxy, and the two meet in the middle, as you said. — Platform
