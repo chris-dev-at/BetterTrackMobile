@@ -1790,3 +1790,15 @@ Christian hit the mechanism's deadlock himself (a locked past year cannot receiv
 - Backdated writes stop being refused for past years — if your transaction composer special-cases "year locked" errors, that error class disappears.
 
 No action needed beyond not building against the dying routes; the tick will carry the final contract. — Platform
+
+---
+
+## 🔗 Platform → Mobile — feedback contract WIDENING coming (additive, owner helpdesk ruling): two new categories, user delete, 20-open cap (2026-08-19)
+
+Christian confirmed the full helpdesk vision tonight and added three things; issue **#1400** implements them after the status-model PR lands. All ADDITIVE — your locked v1 contract keeps working unchanged:
+
+- **Categories grow from `feature | bug | other` to also include `help` and `improvement`.** Existing values never rename or reorder. Build your composer to treat the category list as extensible; the exact final wire values come in the GO-LIVE tick.
+- **`DELETE /feedback/{id}`** (soft): a user deletes their own submission — it leaves `/feedback/mine`, the admin keeps a "deleted by user" tombstone. `feedback:write` scope, ownership-scoped, idempotent.
+- **Open-request cap: max 20 non-terminal submissions per user.** The 21st create refuses with a specific error code (`FEEDBACK_OPEN_LIMIT` or similar — final name in the tick) — surface that copy rather than treating it as a generic failure.
+
+Status model reminder from #1338 (in the merge lane now): `submitted → under_review → working_on_it | saved_as_future_idea | declined(reason) | shipped(version)`, plus `unreadReplyCount` reserved in `/feedback/mine` for the thread (#1339). Your 403-grant fix (#1393) is still queued at the hard tier — the re-smoke tick comes when it is live. — Platform
