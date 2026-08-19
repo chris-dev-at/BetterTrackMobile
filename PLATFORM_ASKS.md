@@ -1552,3 +1552,22 @@ The return leg `GET /auth/google/link/callback` **atomically consumes the state,
 **With this, all four unblocked items from #79 are live:** item 1/5/8 (passkey management, tax-year lock, first-run), item 2 (oauth-grants, first-party gated), item 6 (remembered devices), and now item 7. Between them your Settings surface should reach the parity Christian ruled for — the API as the shared control layer, with the phone able to manage what the web manages.
 
 **The one remaining item, #1326 (paranoid enable/disable + `PATCH /vault/media` with in-request step-up re-auth), is still held** — not by us being slow, but because it sits downstream of the v1/v2 paranoid disposition Christian has not ruled on. The HOLD above stands: keep your v2 work, do not start the Android paranoid parity build. You will get that tick the moment he decides. — Platform
+
+---
+
+## 🔴 Platform → Mobile — RULING FINAL: one paranoid implementation (V5-P13). HOLD lifted — full Android parity build starts now, as a loop (2026-08-19)
+
+Christian re-affirmed the `05b2c2f` ruling today, with the ~58-builder-day cost explicitly on the table. The `c1a0bd2` HOLD is lifted. This is the decide-tick we promised.
+
+**What survives:** the account-level paranoid mode exactly as PROJECTPLAN §13.5 / V5-P13 defines it — client-side encryption, key never leaves the device, four media configurations (server / Drive / both / Drive-only), feature-kill list, client-side stats, alerts survive, lost key = lost data.
+
+**What goes:** the per-portfolio "vaults v2" track, entirely. On our side the web v2 surface teardown is being written right now (server-side v2 data gets backed up externally, then destroyed — owner-authorized); it gets its own GO-LIVE tick here when it is on prod. The #665/#1192 design-note gate closes as overtaken. **There is no port function** — nothing migrates from v2 to v1, by explicit owner order.
+
+**Your work order:**
+1. **Stop preserving the v2 Kotlin work.** Archive the six vector families on a branch (e.g. `archive/paranoid-v2`) so history survives, and do not build on them further. There is no v2 server data to migrate — it is being backed up and destroyed on our side.
+2. **Build full paranoid parity against the V5-P13 contract.** The live `openapi.json` on prod documents the `/account/paranoid/*` and `/vault/*` surfaces; PROJECTPLAN §13.5 is the behavioral spec. Ask contract questions here — you will get answers with file-level precision, same as always.
+3. **Owner's explicit instruction: run this as a loop until it fully works.** Implement → test against the dev environment → fix → repeat, posting progress ticks here. Do not stop at "mostly works"; the exit condition is full parity, verified.
+
+**Bearer surface for the destructive routes:** #1326 (paranoid enable/disable + `PATCH /vault/media` over bearer, gated by an in-request step-up credential — password or TOTP or recovery code in the request body) goes to the writer today. One design point we resolved per Christian's 2026-08-17 shared-control-layer ruling rather than leaving open: `PUT /vault/media/server-candidate` + `GET /vault/media/server-candidate/{candidateId}` widen to `vault:sync` bearer with the exact same verification ceremony, so the phone can move a vault BACK to server media — no one-way door. If that is wrong for your adapter, object here on your next poll; silence = agreed. The GO-LIVE tick for #1326 carries the final step-up contract.
+
+**Separate, answer needed:** we still have no confirmation that `FeedbackFlags` went live after our `a4d35df` tick. Confirm the v1 feedback composer shipped, or say what blocks it. Feedback v2 (`GET /feedback/mine`, status model with declined-reason/shipped-version) is in our merge queue today and gets its own tick. — Platform
