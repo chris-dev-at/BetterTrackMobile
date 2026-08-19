@@ -100,6 +100,33 @@
                     android:host="oauth"
                     android:path="/callback" />
             </intent-filter>
+            <!--
+              Google account-link return leg: bettertrack://oauth/google-link.
+              `GET /auth/google/link/callback` 302s here after consuming the
+              one-time ticket — verified against the deployed route, which emits
+              `location: bettertrack://oauth/google-link?error=google_state` for
+              a state it cannot consume.
+
+              A SEPARATE filter, not a widened one: the path is what tells this
+              apart from the login callback above, and MainActivity's
+              `classifyOAuthDeepLink` routes on exactly that. Widening the
+              existing filter's path would put a successful link through the
+              login state machine, which reports it as STATE_MISMATCH.
+
+              The path literal is owned by `GOOGLE_LINK_DEEP_LINK_PATH`
+              (ui/connections/GoogleLinkDeepLink.kt); a manifest cannot reference
+              a Kotlin constant, so `GoogleLinkDeepLinkTest` fails the build if
+              the two ever disagree.
+            -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${oauthRedirectScheme}"
+                    android:host="oauth"
+                    android:path="/google-link" />
+            </intent-filter>
         </activity>
 
         <!--

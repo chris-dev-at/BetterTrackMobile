@@ -191,6 +191,38 @@ class ConnectionsRepositoryTest {
         assertEquals("2026-02-01T00:00:00Z", apps[0].lastUsedAt)
         assertEquals("btc_xyz", apps[1].appName)
         assertNull(apps[1].lastUsedAt)
+        // Platform #1390 is not live: a server that omits the two flags must
+        // decode as "no opinion", never as a declared false. The screen falls
+        // back to clientId on null and would make its OWN row revocable on false.
+        assertNull(apps[0].firstParty)
+        assertNull(apps[0].current)
+    }
+
+    @Test
+    fun `the first-party flags decode when the server does ship them`() = runBlocking {
+        // Forward-compatibility for #1390, pinned now so the flip is a server
+        // deploy rather than an app release.
+        server.enqueue(
+            ok(
+                """
+                {"grants":[
+                  {"id":"g1","clientId":"btc_mobile","appName":"BetterTrack Mobile",
+                   "scopes":["portfolio:read"],"createdAt":"2026-01-01T00:00:00Z",
+                   "lastUsedAt":null,"firstParty":true,"current":true},
+                  {"id":"g2","clientId":"btc_mobile","appName":"BetterTrack Mobile",
+                   "scopes":["portfolio:read"],"createdAt":"2026-01-01T00:00:00Z",
+                   "lastUsedAt":null,"firstParty":true,"current":false}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val apps = (repo.authorizedApps() as AuthorizedAppsResult.Ready).apps
+        assertEquals(true, apps[0].firstParty)
+        assertEquals(true, apps[0].current)
+        // The same app on the user's OTHER device: first-party, but not the
+        // credential this request is riding — so it stays revocable from here.
+        assertEquals(true, apps[1].firstParty)
+        assertEquals(false, apps[1].current)
     }
 
     @Test
@@ -210,6 +242,66 @@ class ConnectionsRepositoryTest {
         // then blame the wrong panel.
         server.enqueue(ok("""{"enabled":true,"linked":false,"email":null,"linkedAt":null,"canUnlink":false}"""))
         assertTrue(repo.googleLink() is GoogleLinkResult.Ready)
+    }
+
+    // ── Google link: the connect leg ─────────────────────────────────────────
+
+    @Test
+    fun `link start posts nothing and hands back the server's URL`() = runBlocking {
+        server.enqueue(
+            ok(
+                """
+                {"authorizationUrl":"https://accounts.google.com/o/oauth2/v2/auth?state=tkt",
+                 "expiresAt":"2026-08-19T18:10:00Z"}
+                """.trimIndent(),
+            ),
+        )
+        val started = repo.startGoogleLink()
+        assertEquals(
+            "https://accounts.google.com/o/oauth2/v2/auth?state=tkt",
+            (started as GoogleLinkStartResult.Ready).authorizationUrl,
+        )
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/google/link/start", recorded.path)
+        // No body and NO redirect target: the route accepts none, and the ticket
+        // is bound to the account server-side. A client that sent one would be
+        // claiming a say in where the consent returns to.
+        assertEquals(0L, recorded.bodySize)
+    }
+
+    @Test
+    fun `a 404 on link start is the env gate, same as on the status read`() = runBlocking {
+        // Both Google routes 404 together when the deployment has no Google
+        // client, and the screen answers by re-reading the status — which then
+        // removes the whole group rather than leaving a dead connect button.
+        server.enqueue(fail(404, "NOT_FOUND"))
+        assertEquals(GoogleLinkStartResult.Unavailable, repo.startGoogleLink())
+    }
+
+    @Test
+    fun `a 403 on link start is web-only and shares the Google capability cache`() = runBlocking {
+        server.enqueue(fail(403, "API_KEY_FORBIDDEN"))
+        assertEquals(GoogleLinkStartResult.WebOnly, repo.startGoogleLink())
+        // Same allowlist entry as the status read, so the status must not spend a
+        // second round trip to be told the same thing.
+        assertEquals(GoogleLinkResult.WebOnly, repo.googleLink())
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `a 200 with no URL is a failure, not a tap that does nothing`() = runBlocking {
+        server.enqueue(ok("""{"authorizationUrl":"   ","expiresAt":"2026-08-19T18:10:00Z"}"""))
+        assertTrue(repo.startGoogleLink() is GoogleLinkStartResult.Failed)
+    }
+
+    @Test
+    fun `a server fault on link start is retryable and caches nothing`() = runBlocking {
+        server.enqueue(fail(500, "INTERNAL"))
+        assertTrue(repo.startGoogleLink() is GoogleLinkStartResult.Failed)
+        // Not cached: the next attempt must be allowed to reach the server.
+        server.enqueue(ok("""{"authorizationUrl":"https://x.test/a","expiresAt":"2026-08-19T18:10:00Z"}"""))
+        assertTrue(repo.startGoogleLink() is GoogleLinkStartResult.Ready)
     }
 
     @Test

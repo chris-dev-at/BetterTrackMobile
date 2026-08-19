@@ -1043,6 +1043,58 @@
     <string name="bt_sessions_on_date">Active %1$s</string>
     <string name="bt_sessions_unknown">Active recently</string>
 
+    <!-- Passkeys (native manager, LIVE routes 2026-08-18/19) -->
+    <string name="bt_passkeys_sub">Sign in without a password</string>
+    <string name="bt_passkeys_intro">Sign in without a password using Face ID, Touch ID, Windows Hello, or a security key.</string>
+    <string name="bt_passkeys_empty">You haven\'t added any passkeys yet.</string>
+    <string name="bt_passkeys_empty_hint">Add one from the web app — a passkey belongs to the site it was created on.</string>
+    <string name="bt_passkeys_added">Added %1$s</string>
+    <string name="bt_passkeys_added_unknown">Added a while ago</string>
+    <string name="bt_passkeys_last_used">last used %1$s</string>
+    <string name="bt_passkeys_never_used">never used</string>
+    <string name="bt_passkeys_rename">Rename</string>
+    <string name="bt_passkeys_rename_title">Rename passkey</string>
+    <string name="bt_passkeys_name_label">Passkey name</string>
+    <string name="bt_passkeys_name_limit">Up to %1$d characters.</string>
+    <string name="bt_passkeys_save">Save</string>
+    <string name="bt_passkeys_renamed">Passkey renamed.</string>
+    <string name="bt_passkeys_delete">Remove</string>
+    <string name="bt_passkeys_delete_title">Remove this passkey?</string>
+    <string name="bt_passkeys_delete_message">Confirm your password to remove this passkey.</string>
+    <string name="bt_passkeys_delete_last_message">This is your last passkey. You can still sign in with your password. Confirm it to remove this passkey.</string>
+    <string name="bt_passkeys_password_label">Current password</string>
+    <string name="bt_passkeys_delete_submit">Remove passkey</string>
+    <string name="bt_passkeys_removed">Passkey removed.</string>
+    <string name="bt_passkeys_add_title">Add a passkey</string>
+    <string name="bt_passkeys_add_sub">Opens the web app — a passkey only works on the site that created it.</string>
+    <string name="bt_passkeys_offline">Your passkeys need a connection.</string>
+    <string name="bt_passkeys_signed_out">Sign in again to manage your passkeys.</string>
+
+    <!-- Trusted (remembered) devices — the phone is the first client that can manage these -->
+    <string name="bt_dest_trusted_devices">Trusted devices</string>
+    <string name="bt_trusted_sub">Browsers that can skip signing in</string>
+    <string name="bt_trusted_intro">These browsers may skip the sign-in step and go straight to your PIN. They are set up on the web when you tick “remember this device” — this app never adds one.</string>
+    <string name="bt_trusted_empty">No browser is remembered right now.</string>
+    <string name="bt_trusted_empty_hint">One shows up here after you tick “remember this device” while signing in on the web.</string>
+    <string name="bt_trusted_remembered">Remembered %1$s</string>
+    <string name="bt_trusted_last_seen">last seen %1$s</string>
+    <string name="bt_trusted_expires">expires %1$s</string>
+    <string name="bt_trusted_unknown">Remembered browser</string>
+    <string name="bt_trusted_unknown_hint">This one was remembered before we started keeping dates.</string>
+    <string name="bt_trusted_forget">Forget this browser</string>
+    <string name="bt_trusted_forget_title">Forget this browser?</string>
+    <string name="bt_trusted_forget_message">It will have to sign in from scratch next time.</string>
+    <string name="bt_trusted_forget_confirm">Forget</string>
+    <string name="bt_trusted_forgotten">Forgotten.</string>
+    <string name="bt_trusted_still_listed">The server accepted that, but the entry is still listed.</string>
+    <string name="bt_trusted_forget_all">Forget every remembered browser</string>
+    <string name="bt_trusted_forget_all_title">Forget every remembered browser?</string>
+    <string name="bt_trusted_forget_all_message">All of them will have to sign in from scratch next time. This app stays signed in.</string>
+    <string name="bt_trusted_forget_all_confirm">Forget all</string>
+    <string name="bt_trusted_app_note">This app is never listed here — it signs in with a secure token, and it cannot create a remembered device.</string>
+    <string name="bt_trusted_offline">Remembered browsers need a connection.</string>
+    <string name="bt_trusted_signed_out">Sign in again to manage remembered browsers.</string>
+
     <!-- Language -->
     <string name="bt_lang_intro">Choose the language for the app. Money and dates follow the same setting.</string>
     <string name="bt_lang_system">System default</string>
@@ -2734,6 +2786,7 @@
     <string name="bt_scope_mirrorchain_read">View your group portfolios, members, activity and invitations</string>
     <string name="bt_scope_mirrorchain_write">Accept or decline group invitations and leave group portfolios</string>
     <string name="bt_scope_vault_sync">Synchronize your client-encrypted vault across your devices</string>
+    <string name="bt_scope_feedback_write">Send feedback, feature requests and bug reports on your behalf</string>
 
     <!-- Shared "the server has not allowed this yet" state (bearer allowlist). -->
     <string name="bt_cap_web_title">Not released by this server yet</string>
@@ -3805,4 +3858,31 @@
     <string name="bt_insight_deposits_note_body">The curve uses the performance series calculated on the server. Inflows and outflows are not counted as investment return.</string>
     <string name="bt_insight_form_timeseries">Time series</string>
     <string name="bt_insight_form_paired">Paired bars</string>
+
+    <!-- Feedback v1 go-live (2026-08-19). The /feedback limiter is ~5 per hour, so the
+         generic RATE_LIMITED copy ("wait a moment") would be wrong by two orders of
+         magnitude; see `feedbackFailureMessage`, which keys this off HTTP 429 rather
+         than a server error code the contract does not document. -->
+    <string name="bt_feedback_err_rate_limited">Too many messages in a row. This form takes about five per hour — your text stays here, so try again a bit later.</string>
+
+    <!-- ===== Connections surface completion (2026-08-19) — Authorized apps + Google link =====
+         `/settings/oauth-grants` and `POST /auth/google/link/start` went live on
+         `account:security`. Two consequences needed copy: this install's OWN grant is in its
+         own list (the platform keeps first-party rows there on purpose — that row is how a
+         lost phone is killed from a browser), so it is ANNOTATED here and only its revoke is
+         suppressed; and connecting a Google account is now a real in-app flow that returns via
+         `bettertrack://oauth/google-link` instead of a hand-off to the web panel. -->
+    <string name="bt_grants_this_device">This device</string>
+    <string name="bt_grants_this_device_hint">This is the access BetterTrack itself is using right now. To remove it, sign out in Settings — or revoke it from another device if this one is lost.</string>
+    <!-- Mirrors the web's `settings.api.keys.scopeInactive`; rendered in brackets after a
+         struck-through scope, so it is a fragment, not a sentence. -->
+    <string name="bt_grants_scope_inactive">inactive in Paranoid mode</string>
+    <string name="bt_grants_revoke_sheet_body">This app\'s access ends immediately. It has to be authorized again from scratch.</string>
+    <string name="bt_conn_google_connecting">Opening Google…</string>
+    <string name="bt_conn_google_linked_ok">Google account connected.</string>
+    <!-- Return-leg `?error=` codes. Only `google_state` needs its own sentence: every other
+         code the platform listed for this leg already has catalogued copy under its
+         SCREAMING_SNAKE envelope name (see `RETURN_LEG_ALIASES`). -->
+    <string name="bt_conn_google_err_state">That link attempt expired. Tap Connect Google to start a fresh one.</string>
+    <string name="bt_conn_google_link_failed">Google was not connected. Please start again.</string>
 </resources>

@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
@@ -79,16 +80,52 @@ import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.launch
 
 /**
+ * The sentence the composer shows when a submission fails.
+ *
+ * Everything defers to the app-wide catalogue via [asMessage] — with exactly one
+ * exception, and the exception is about honesty rather than polish.
+ *
+ * `/feedback` is rate-limited to roughly **five submissions per user per hour**.
+ * The catalogue's generic `RATE_LIMITED` copy says *"wait a moment"*, which is off
+ * by two orders of magnitude for an hourly window: somebody who taps Send again
+ * thirty seconds later, as instructed, gets refused again and learns the app lies.
+ *
+ * The branch keys off the HTTP **status**, not an error code, and that is
+ * deliberate. The live `openapi.json` documents only `201`, `400`, `401` and a
+ * generic error envelope for this route, so the `code` the limiter emits is not
+ * knowable from the contract — and an unmapped code falls through
+ * [asMessage] to the generic sentence PLUS the server's ENGLISH diagnostic, which
+ * on a German phone is exactly the failure P0-4 exists to prevent. Guessing a code
+ * into `BtErrorCopy` would be inventing a wire fact; `429` is the status the
+ * contract itself names, so that is what this reads.
+ *
+ * Kept a pure top-level function so the branch is unit-tested without a Compose
+ * runtime.
+ */
+internal fun feedbackFailureMessage(error: BtApiError): BtMessage =
+    if (error.httpStatus == 429) {
+        BtMessage(R.string.bt_feedback_err_rate_limited)
+    } else {
+        error.asMessage()
+    }
+
+/**
  * The in-app feedback composer (platform #1315 / #1316 / #1317).
  *
  * ## Reachability
  *
- * This screen is only routed when
- * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] is `true`, which it is not
- * yet — the `feedback:write` scope is still being seeded to the mobile OAuth
- * client, and until then every POST from this app would 403. The composer is
- * finished and testable; it simply has no entry point on a shipped build. See that
- * flag's KDoc for the exact order the two switches have to be flipped in.
+ * Live since 2026-08-19. `POST /feedback` has been on production since the
+ * platform's 2026-08-18 deploy, accepts a bearer token, and `feedback:write` is
+ * seeded to the mobile OAuth client — including on consents that already existed,
+ * so no re-login was required. The two entry rows are gated by
+ * [at.bettertrack.app.data.repo.feedbackEntryVisible]: the capability flag AND this
+ * install having a BetterTrack account, because a Drive-autonomous install has no
+ * account and therefore no bearer token to send.
+ *
+ * Only v1 exists — one POST, no history. `GET /feedback/mine`, the per-submission
+ * thread, `PATCH /feedback/{id}` and the status/notification model are platform
+ * #1338–#1342, queued behind the admin inbox #1316. Nothing on this screen may
+ * promise them: the sent card says the message arrived, not that a reply will.
  *
  * ## Three decisions worth stating
  *
@@ -319,7 +356,7 @@ fun FeedbackScreen(
                     scope.launch {
                         when (val r = repo.submit(draft, context)) {
                             is BtResult.Ok -> sent = true
-                            is BtResult.Err -> failure = r.error.asMessage()
+                            is BtResult.Err -> failure = feedbackFailureMessage(r.error)
                         }
                         sending = false
                     }

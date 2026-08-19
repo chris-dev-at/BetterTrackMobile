@@ -29,19 +29,20 @@ import kotlinx.serialization.json.Json
  *
  * ## Why both reads double as capability probes
  *
- * The platform gates bearer tokens per route. `/settings/oauth-grants` is
- * `session-only` on that allowlist, so a bearer is refused with
- * `403 API_KEY_FORBIDDEN` before the service is reached. The two Google routes
- * are bearer-callable under `account:security` on current platform main, but the
- * stack this app is developed against is older and refuses it the same way.
+ * The platform gates bearer tokens per route, and a token's allowlist is fixed
+ * for the life of the process. Every route here is bearer-callable under
+ * `account:security` on the production deployment; a deployment that has not
+ * opened one of them answers `403 API_KEY_FORBIDDEN` before the service is
+ * reached, and the app has to be able to tell that apart from a real fault.
  *
- * Neither refusal is a reason to omit the surface — the owner's ask is native
- * parity with the web, and the honest reading of "not yet" is to build the panel,
- * say plainly where the capability currently lives, and make the switch-on a
- * platform config change rather than an app release. So both panels are complete
- * and real, and each one's own READ is its probe: both are side-effect-free, so
- * no harmless-mutation trick is needed (contrast [MirrorchainRepository.adminCapability],
- * which has no read to probe with and must send a no-op rename).
+ * A refusal is not a reason to omit the surface — the owner's ask is native
+ * parity with the web, and the honest reading of "not here" is to build the
+ * panel, say plainly where the capability currently lives, and make the
+ * switch-on a platform config change rather than an app release. So both panels
+ * are complete and real, and each one's own READ is its probe: both are
+ * side-effect-free, so no harmless-mutation trick is needed (contrast
+ * [MirrorchainRepository.adminCapability], which has no read to probe with and
+ * must send a no-op rename).
  *
  * The resolution rules — carried over from that pattern deliberately:
  *  - a **200** ⇒ [ConnectionsCapability.Allowed], and the data is already in hand;
@@ -107,7 +108,36 @@ sealed interface GoogleLinkResult {
     data class Failed(val error: BtApiError) : GoogleLinkResult
 }
 
-/** One third-party app's standing permission on this account. */
+/**
+ * The connect leg's answer: a URL to open, or a reason there is none.
+ *
+ * Mirrors [GoogleLinkResult]'s four-way split on purpose — the start route sits
+ * behind the same env gate and the same allowlist entry as the status read, so a
+ * 404 and a 403 mean exactly what they mean there, and a screen that has learned
+ * one shape does not have to learn a second.
+ */
+sealed interface GoogleLinkStartResult {
+    /** Open [authorizationUrl] in a Custom Tab; the return arrives as a deep link. */
+    data class Ready(val authorizationUrl: String) : GoogleLinkStartResult
+
+    /** 404 — no Google client on this deployment (same gate as the status read). */
+    data object Unavailable : GoogleLinkStartResult
+
+    /** 403 — the bearer allowlist refused the route. */
+    data object WebOnly : GoogleLinkStartResult
+
+    /** Offline, a 5xx, or a body with no URL in it. Retryable. */
+    data class Failed(val error: BtApiError) : GoogleLinkStartResult
+}
+
+/**
+ * One app's standing permission on this account.
+ *
+ * Not necessarily a THIRD-party app: the platform deliberately does not filter
+ * the first-party grant out of this list, because that row is how a user revokes
+ * a lost or stolen phone from a browser. [firstParty] / [current] are how the
+ * server says so — see [at.bettertrack.app.data.api.dto.OAuthGrant].
+ */
 data class AuthorizedApp(
     val id: String,
     val clientId: String,
@@ -116,6 +146,10 @@ data class AuthorizedApp(
     val scopes: List<String>,
     val createdAt: String?,
     val lastUsedAt: String?,
+    /** Platform #1390, not live yet: `null` = this deployment does not say. */
+    val firstParty: Boolean? = null,
+    /** Platform #1390, not live yet: the grant THIS request is authenticated with. */
+    val current: Boolean? = null,
 )
 
 /** The Authorized-apps read: capability and data in one value (see [GoogleLinkResult]). */
@@ -161,6 +195,39 @@ class ConnectionsRepository(
             }
         }
     }
+
+    /**
+     * Begin the native connect: ask the server for a one-time ticket and the
+     * Google authorization URL that carries it.
+     *
+     * The 404 branch is the same env gate [googleLink] handles — a deployment
+     * with no Google client 404s BOTH routes — and the caller answers it by
+     * re-reading the status, which then removes the whole group rather than
+     * leaving a connect button that cannot work.
+     *
+     * A 200 with a blank URL is treated as a failure rather than opening
+     * nothing: a tap that visibly does nothing is the one outcome the user
+     * cannot interpret.
+     */
+    suspend fun startGoogleLink(): GoogleLinkStartResult =
+        when (val r = apiCall(json) { api.startGoogleLink() }) {
+            is BtResult.Ok -> r.value.authorizationUrl.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let { GoogleLinkStartResult.Ready(it) }
+                ?: GoogleLinkStartResult.Failed(
+                    BtApiError(HTTP_OK, BtApiError.Codes.UNKNOWN, "link/start returned no authorizationUrl"),
+                )
+
+            is BtResult.Err -> when {
+                r.error.httpStatus == HTTP_NOT_FOUND -> GoogleLinkStartResult.Unavailable
+                capabilityFromError(r.error) == ConnectionsCapability.WebOnly -> {
+                    cachedGoogleCapability = ConnectionsCapability.WebOnly
+                    GoogleLinkStartResult.WebOnly
+                }
+
+                else -> GoogleLinkStartResult.Failed(r.error)
+            }
+        }
 
     /**
      * Unlink Google after re-authenticating with the account password.
@@ -215,6 +282,8 @@ class ConnectionsRepository(
         scopes = scopes,
         createdAt = createdAt,
         lastUsedAt = lastUsedAt,
+        firstParty = firstParty,
+        current = current,
     )
 
     companion object {
@@ -228,15 +297,15 @@ class ConnectionsRepository(
         /** 409 — the account would be left with no usable sign-in method. */
         const val CODE_GOOGLE_ONLY_SIGN_IN = "GOOGLE_ONLY_SIGN_IN"
 
+        private const val HTTP_OK = 200
         private const val HTTP_NOT_FOUND = 404
         private const val HTTP_UNAUTHORIZED = 401
 
         /**
          * Process-wide caches for the two capability answers, held separately
-         * because they are two different allowlist entries: the platform can
-         * (and on current main does) open the Google routes to bearers while
-         * `/settings/oauth-grants` stays session-only, and one cache would then
-         * blame the wrong panel.
+         * because they are two different allowlist entries: a deployment can
+         * open the Google routes to bearers while `/settings/oauth-grants` stays
+         * session-only, and one cache would then blame the wrong panel.
          *
          * In the companion rather than on the instance so the lifetime is honest
          * about being global — the repository is a lazy singleton, and this is a

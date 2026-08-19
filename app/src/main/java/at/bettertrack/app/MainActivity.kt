@@ -26,6 +26,10 @@ import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCustomTab
+import at.bettertrack.app.ui.connections.GOOGLE_LINK_DEEP_LINK_PATH
+import at.bettertrack.app.ui.connections.GoogleLinkReturnHolder
+import at.bettertrack.app.ui.connections.OAUTH_CALLBACK_DEEP_LINK_PATH
+import at.bettertrack.app.ui.connections.googleLinkReturnFor
 import at.bettertrack.app.ui.shell.BtRoot
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_ASSET_ID
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_INFLOW
@@ -290,15 +294,46 @@ class MainActivity : FragmentActivity() {
         launchCustomTab(url)
     }
 
+    /**
+     * Route one incoming `bettertrack://oauth/…` URI to the handler that owns it.
+     *
+     * ## Why the path check is load-bearing
+     *
+     * This matched on scheme + host alone while `/callback` was the only path in
+     * the namespace. The Google account-link return added a second one, and
+     * without discrimination it would have been fed to
+     * [AuthRepository.onAuthorizationResult] — which finds no `code` and no
+     * pending PKCE state and reports `LoginPhase.Failed(STATE_MISMATCH)`. A
+     * *successful* link would have surfaced as a login error, and the user would
+     * have been looking at a failure screen for something that worked.
+     *
+     * Both handlers are all-or-nothing on the same intent: whichever one claims
+     * it also consumes it, so a rotation or a process restart cannot replay a
+     * callback that has already been acted on.
+     */
     private fun handleAuthDeepLink(intent: Intent?) {
         val data: Uri = intent?.data ?: return
-        if (data.scheme == REDIRECT_SCHEME && data.host == REDIRECT_HOST) {
-            awaitingTabReturn = false
-            auth.onAuthorizationResult(data)
-            // Consume it so a rotation / restart doesn't re-process the callback.
-            intent.data = null
-            setIntent(intent)
+        when (classifyOAuthDeepLink(data.scheme, data.host, data.path)) {
+            BtOAuthDeepLink.AuthCallback -> {
+                awaitingTabReturn = false
+                auth.onAuthorizationResult(data)
+            }
+
+            BtOAuthDeepLink.GoogleLink ->
+                // Not a login. The tab we are returning from was a Google consent
+                // opened from Connections, so the login state machine is not
+                // touched at all — [awaitingTabReturn] included, since nothing in
+                // this flow ever set it. Park the verdict; the screen re-reads the
+                // real status before it says anything to the user.
+                GoogleLinkReturnHolder.park(googleLinkReturnFor(data.getQueryParameter("error")))
+
+            // Some other URI (or a path added server-side that this build has
+            // never heard of). Left untouched rather than guessed at.
+            BtOAuthDeepLink.None -> return
         }
+        // Consume it so a rotation / restart doesn't re-process the callback.
+        intent.data = null
+        setIntent(intent)
     }
 
     private fun launchCustomTab(url: Uri) {
@@ -321,7 +356,47 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val TAG = "BtMainActivity"
-        const val REDIRECT_SCHEME = "bettertrack"
-        const val REDIRECT_HOST = "oauth"
     }
 }
+
+// ── The `bettertrack://oauth/…` namespace ────────────────────────────────────
+
+/** Which handler an incoming OAuth-family deep link belongs to. */
+internal enum class BtOAuthDeepLink {
+    /** `bettertrack://oauth/callback` — the login PKCE redirect. */
+    AuthCallback,
+
+    /** `bettertrack://oauth/google-link` — the account-link return leg. */
+    GoogleLink,
+
+    /** Not ours. */
+    None,
+}
+
+/**
+ * Scheme + host + **path** → the owning handler.
+ *
+ * Pure, and separate from the activity, for one reason: the bug it prevents is a
+ * routing bug, and a routing bug is exactly the kind that a device test finds
+ * late and a JVM test finds instantly. See
+ * [at.bettertrack.app.MainActivity.handleAuthDeepLink] for what went wrong
+ * before the path was considered.
+ *
+ * A path of `null` or `/` is NOT treated as the login callback: matching the
+ * host alone is the defect this function exists to remove, so an under-specified
+ * URI is refused rather than assigned to the more dangerous of the two handlers.
+ */
+internal fun classifyOAuthDeepLink(scheme: String?, host: String?, path: String?): BtOAuthDeepLink {
+    if (scheme != OAUTH_DEEP_LINK_SCHEME || host != OAUTH_DEEP_LINK_HOST) return BtOAuthDeepLink.None
+    return when (path?.trimEnd('/')?.ifEmpty { "/" }) {
+        OAUTH_CALLBACK_DEEP_LINK_PATH -> BtOAuthDeepLink.AuthCallback
+        GOOGLE_LINK_DEEP_LINK_PATH -> BtOAuthDeepLink.GoogleLink
+        else -> BtOAuthDeepLink.None
+    }
+}
+
+/** The `oauthRedirectScheme` manifest placeholder's value (see `app/build.gradle.kts`). */
+internal const val OAUTH_DEEP_LINK_SCHEME = "bettertrack"
+
+/** Shared host for both paths; only the path tells them apart. */
+internal const val OAUTH_DEEP_LINK_HOST = "oauth"

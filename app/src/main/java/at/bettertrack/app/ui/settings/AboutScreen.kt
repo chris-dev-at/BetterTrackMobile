@@ -106,12 +106,18 @@ fun AboutScreen(
     /**
      * The feedback composer, reached from here as the discreet second entry point
      * (the primary one is a Settings row). Only ever wired when
-     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
+     * [at.bettertrack.app.data.repo.feedbackEntryVisible].
      */
     onOpenFeedback: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Where this install's data lives. Read the same way `SettingsScreen` reads it
+    // (stored mode → debug Drive gate), because the two feedback entry rows must
+    // agree: a Drive-autonomous install has no BetterTrack account, so it has no
+    // bearer token to POST feedback with, and the row must not exist there.
+    val storedMode by AppGraph.storageModeStore.mode.collectAsStateWithLifecycle()
+    val storageMode = AppGraph.gatedStorageMode(storedMode)
     val webOrigin = ServerOrigins.webOrigin.trimEnd('/')
     val webHost = webOrigin.substringAfter("://")
     // Public legal pages (board #34 — live + final; required for Play review).
@@ -331,9 +337,12 @@ fun AboutScreen(
                 // the bottom of THIS group because that is where somebody already
                 // is when they have just read the version number and want to say
                 // something about it — and unlike every other row here it stays in
-                // the app instead of opening the browser. Gated on the same flag as
-                // the primary Settings row; see `FeedbackFlags.enabled`.
-                if (at.bettertrack.app.data.repo.FeedbackFlags.enabled) {
+                // the app instead of opening the browser. Live since the platform's
+                // 2026-08-18 deploy, and gated on exactly the same two conditions as
+                // the primary Settings row — the capability flag AND this install
+                // having a BetterTrack account. Both doors must agree; see
+                // `feedbackEntryVisible`.
+                if (at.bettertrack.app.data.repo.feedbackEntryVisible(storageMode)) {
                     BtGroupRow(
                         icon = Icons.Outlined.Feedback,
                         title = stringResource(R.string.bt_dest_feedback),

@@ -42,6 +42,11 @@ import at.bettertrack.app.data.api.dto.TaxYearReportResponse
 import at.bettertrack.app.data.api.dto.UpdateTaxSettingsRequest
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
+import at.bettertrack.app.data.api.dto.PasskeyDeleteRequest
+import at.bettertrack.app.data.api.dto.PasskeyDto
+import at.bettertrack.app.data.api.dto.PasskeyListResponse
+import at.bettertrack.app.data.api.dto.PasskeyRenameRequest
+import at.bettertrack.app.data.api.dto.RememberedDeviceListResponse
 import at.bettertrack.app.data.api.dto.RevokeSessionsResponse
 import at.bettertrack.app.data.api.dto.SessionListResponse
 import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
@@ -149,6 +154,7 @@ import at.bettertrack.app.data.api.dto.CreateTransactionRequest
 import at.bettertrack.app.data.api.dto.CreateTransactionsResponse
 import at.bettertrack.app.data.api.dto.DeregisterDeviceRequest
 import at.bettertrack.app.data.api.dto.DeviceAckResponse
+import at.bettertrack.app.data.api.dto.GoogleLinkStartResponse
 import at.bettertrack.app.data.api.dto.GoogleLinkStatusResponse
 import at.bettertrack.app.data.api.dto.GoogleUnlinkRequest
 import at.bettertrack.app.data.api.dto.MarkReadAllRequest
@@ -277,12 +283,14 @@ interface BtApi {
      * Apps the user has authorized — the **Authorized apps** screen's whole read,
      * and the lookup that finds our own grant for logout revocation.
      *
-     * Session-only on the platform's bearer allowlist today, so this answers a
-     * bearer with `403 API_KEY_FORBIDDEN`. That is not a bug to route around: it
-     * is the capability signal
+     * Bearer-callable under `account:security` (live since the 2026-08-19
+     * deploy). A **403** is still meaningful and still handled: it is the
+     * capability signal
      * [at.bettertrack.app.data.repo.ConnectionsRepository.authorizedApps] probes
-     * on, which is what lets the screen render its designed "not released yet"
-     * state and light up on a platform config flip with no app release.
+     * on, so a deployment without the route open renders the "manage on the web"
+     * state instead of an error. `listGrants` does NOT filter first-party, so
+     * this app's own grant is in the list — see
+     * [at.bettertrack.app.ui.connections.isOwnGrant]. [account:security]
      */
     @GET("settings/oauth-grants")
     suspend fun oauthGrants(): Response<OAuthGrantListResponse>
@@ -303,6 +311,20 @@ interface BtApi {
      */
     @GET("auth/google/link-status")
     suspend fun googleLinkStatus(): Response<GoogleLinkStatusResponse>
+
+    /**
+     * Begin a native Google account LINK: mint a short-lived, hashed, one-time
+     * ticket bound to this account and get back the Google authorization URL to
+     * open in a Custom Tab.
+     *
+     * **No body, no parameters, and no redirect target** — the callback's return
+     * address is registered server-side, which is the property that makes the
+     * ticket unusable by anyone who intercepts it. A **404** means Google is not
+     * configured on this deployment (same env gate as [googleLinkStatus]).
+     * [account:security]
+     */
+    @POST("auth/google/link/start")
+    suspend fun startGoogleLink(): Response<GoogleLinkStartResponse>
 
     /**
      * Remove the Google link after a password re-auth. `409 GOOGLE_ONLY_SIGN_IN`
@@ -1580,6 +1602,75 @@ interface BtApi {
     @POST("auth/sessions/revoke-others")
     suspend fun revokeOtherSessions(): Response<RevokeSessionsResponse>
 
+    // ── Passkeys (LIVE 2026-08-18/19; openapi-verified 2026-08-19) ───────────
+
+    /**
+     * The account's registered passkeys, newest first. Envelope
+     * `{ "passkeys": [...] }` — not a bare array. [account:security]
+     */
+    @GET("auth/passkeys")
+    suspend fun passkeys(): Response<PasskeyListResponse>
+
+    /**
+     * Rename one passkey. No re-authentication — the contract says so and the
+     * web renames inline with nothing but a text field.
+     *
+     * `X-Bt-No-Reauth` rides along anyway, for the same reason [unlinkGoogle]
+     * carries it: this whole route family answers a credential question, and a
+     * 401 here must reach the screen as a domain answer rather than send
+     * [at.bettertrack.app.data.auth.TokenAuthenticator] off to refresh and then
+     * sign the user out. [account:security]
+     */
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @PATCH("auth/passkeys/{passkeyId}")
+    suspend fun renamePasskey(
+        @Path("passkeyId") passkeyId: String,
+        @Body body: PasskeyRenameRequest,
+    ): Response<PasskeyDto>
+
+    /**
+     * Remove one passkey. **A DELETE with a body** — the re-auth credential goes
+     * in it — so `@HTTP(hasBody = true)`, exactly like [deleteAccount].
+     *
+     * `X-Bt-No-Reauth` is load-bearing here: a 401 on this route means "that
+     * password is wrong", not "your token expired". Without the header the app
+     * would refresh and silently re-submit the wrong password against the
+     * server's re-auth limiter, and a simple typo could end in a sign-out.
+     * [account:security]
+     */
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @HTTP(method = "DELETE", path = "auth/passkeys/{passkeyId}", hasBody = true)
+    suspend fun deletePasskey(
+        @Path("passkeyId") passkeyId: String,
+        @Body body: PasskeyDeleteRequest,
+    ): Response<Unit>
+
+    // ── Remembered devices (LIVE 2026-08-18/19; openapi-verified 2026-08-19) ─
+
+    /**
+     * The browsers that may skip the sign-in step. Envelope
+     * `{ "devices": [...] }`. This app never creates one — see
+     * [at.bettertrack.app.data.api.dto.RememberedDeviceDto]. [account:security]
+     */
+    @GET("auth/remembered-devices")
+    suspend fun rememberedDevices(): Response<RememberedDeviceListResponse>
+
+    /** Forget EVERY remembered-device binding on the account. [account:security] */
+    @DELETE("auth/remembered-devices")
+    suspend fun forgetAllRememberedDevices(): Response<Unit>
+
+    /**
+     * Forget ONE binding by its safe handle. **Idempotent**: unknown, expired and
+     * foreign handles all answer 200, so a 200 alone proves nothing — the caller
+     * re-reads the list and lets that be the truth.
+     *
+     * The handle is base64url (`A–Z a–z 0–9 - _ =`); none of those characters are
+     * in Retrofit's path-segment encode set, so an unencoded `@Path` sends them
+     * verbatim and no double-encoding occurs. [account:security]
+     */
+    @DELETE("auth/remembered-devices/{handle}")
+    suspend fun forgetRememberedDevice(@Path("handle") handle: String): Response<Unit>
+
     /** The account defaults incl. the server-side UI `locale`. [social:read] */
     @GET("settings/account")
     suspend fun accountSettings(): Response<AccountSettingsResponse>
@@ -1763,14 +1854,21 @@ interface BtApi {
      * standard validation envelope, and the route is rate-limited to roughly
      * 5 submissions per user per hour (429).
      *
-     * Session-cookie AND bearer reachable; the bearer path needs `feedback:write`,
-     * which is NOT in the app's requested scope set yet — see
-     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED]. Until that
-     * flips, every call from this app would 403 INSUFFICIENT_SCOPE, which is exactly
-     * why the composer ships dark behind
+     * LIVE on production since 2026-08-18. Session-cookie AND bearer reachable; the
+     * bearer path needs `feedback:write`, which the app now requests — see
+     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] — and which
+     * existing consents were widened to carry, so a token minted before the deploy
+     * works too. The composer is live behind
      * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
      *
-     * `GET /feedback/mine` is intentionally absent: skipped for v1.
+     * The rate limit's error CODE is not documented: the live `openapi.json` declares
+     * only 201/400/401 plus the generic error envelope for this route, so a 429's
+     * `code` is unknown to this build and would resolve through the generic
+     * unknown-error path. Do not guess one into `BtErrorCopy`; the composer keys its
+     * own rate-limit sentence off the HTTP status instead.
+     *
+     * `GET /feedback/mine` is intentionally absent: not live (feedback v2 is platform
+     * #1338–#1342, queued behind the admin inbox #1316).
      */
     @Headers("Content-Type: application/json")
     @POST("feedback")

@@ -1,5 +1,8 @@
 package at.bettertrack.app.data.account
 
+import at.bettertrack.app.data.api.dto.BT_PASSKEY_NAME_MAX
+import at.bettertrack.app.data.api.dto.PasskeyDto
+import at.bettertrack.app.data.api.dto.RememberedDeviceDto
 import at.bettertrack.app.data.api.dto.SessionSummaryDto
 import java.time.Instant
 
@@ -144,4 +147,127 @@ object SessionMapper {
             else -> SessionRecency.OnDate(lastSeenMs)
         }
     }
+}
+
+// ── Passkeys (from GET /auth/passkeys) ───────────────────────────────────────
+
+/**
+ * One registered passkey, timestamps already parsed.
+ *
+ * [lastUsedAtMs] is null for a passkey that has never completed a login — a real
+ * state the contract models explicitly, not a parse failure, and the screen must
+ * say "never used" rather than leave the clause blank.
+ */
+data class AccountPasskey(
+    val id: String,
+    val name: String,
+    val createdAtMs: Long?,
+    val lastUsedAtMs: Long?,
+)
+
+object PasskeyMapper {
+    fun from(dto: PasskeyDto): AccountPasskey = AccountPasskey(
+        id = dto.id,
+        name = dto.name.trim(),
+        createdAtMs = SessionMapper.parseIsoMs(dto.createdAt),
+        lastUsedAtMs = SessionMapper.parseIsoMs(dto.lastUsedAt),
+    )
+
+    /**
+     * Is [name] something the server will accept as a rename?
+     *
+     * `passkeyNameSchema` is `z.string().trim().min(1).max(64)`, so the trim
+     * happens server-side too: a name of nothing but spaces is a 400, and the
+     * length ceiling applies to the TRIMMED value. Both are checked here so the
+     * Save button can be honest instead of the user learning it from a round
+     * trip.
+     */
+    fun isValidName(name: String): Boolean {
+        val trimmed = name.trim()
+        return trimmed.isNotEmpty() && trimmed.length <= BT_PASSKEY_NAME_MAX
+    }
+}
+
+// ── Remembered devices (from GET /auth/remembered-devices) ───────────────────
+
+/**
+ * One remembered-device binding — a BROWSER that may skip the sign-in step.
+ *
+ * [handle] is an opaque base64url digest. It is the revocation token and nothing
+ * else: it is never rendered, because a 43-character hash tells a human nothing
+ * and would read as a device name.
+ */
+data class RememberedDevice(
+    val handle: String,
+    val createdAtMs: Long?,
+    val lastSeenAtMs: Long?,
+    val expiresAtMs: Long?,
+)
+
+/**
+ * One phrase of a remembered device's label.
+ *
+ * The row title has to be BUILT, because the only identifying facts a binding
+ * carries are its timestamps and every one of them can be absent (bindings
+ * created before the metadata columns existed carry no history at all). A clause
+ * list keeps the "drop what is null" rule pure and testable, and leaves the
+ * date formatting — which is locale work — to the composable.
+ */
+sealed interface RememberedDeviceClause {
+    /** "Remembered <date>". */
+    data class Remembered(val epochMs: Long) : RememberedDeviceClause
+
+    /** "last seen <date>". */
+    data class LastSeen(val epochMs: Long) : RememberedDeviceClause
+
+    /** "expires <date>". */
+    data class Expires(val epochMs: Long) : RememberedDeviceClause
+}
+
+object RememberedDeviceMapper {
+    fun from(dto: RememberedDeviceDto): RememberedDevice = RememberedDevice(
+        handle = dto.handle,
+        createdAtMs = SessionMapper.parseIsoMs(dto.createdAt),
+        lastSeenAtMs = SessionMapper.parseIsoMs(dto.lastSeenAt),
+        expiresAtMs = SessionMapper.parseIsoMs(dto.expiresAt),
+    )
+
+    /**
+     * The clauses this binding can actually support, in render order. Empty when
+     * the binding carries no timestamp at all — the screen then falls back to a
+     * generic name, which is still better than printing the digest.
+     */
+    fun clauses(device: RememberedDevice): List<RememberedDeviceClause> = buildList {
+        device.createdAtMs?.let { add(RememberedDeviceClause.Remembered(it)) }
+        device.lastSeenAtMs?.let { add(RememberedDeviceClause.LastSeen(it)) }
+        device.expiresAtMs?.let { add(RememberedDeviceClause.Expires(it)) }
+    }
+
+    /**
+     * Did a revoke actually take effect?
+     *
+     * The API is idempotent — unknown, expired and foreign handles all answer
+     * 200 — so "Forgotten." must be decided by the RE-READ, never by the status
+     * code. [after] is the freshly fetched list.
+     */
+    fun wasForgotten(handle: String, after: List<RememberedDevice>): Boolean =
+        after.none { it.handle == handle }
+}
+
+/**
+ * How the two account-security lists join the phrases that make up a row's
+ * subline.
+ *
+ * Both new screens build their label out of clauses that may each be absent — a
+ * passkey that has never been used, a remembered device from before the metadata
+ * columns existed — so "drop the empty ones and separate the rest" is a rule
+ * shared by both and worth having in exactly one place. The separator is the
+ * middle dot the rest of the app already uses between facts on one line.
+ */
+object SecurityLabel {
+    const val SEPARATOR: String = " · "
+
+    /** Join already-localized clause phrases, dropping the blanks. */
+    fun join(parts: List<String>): String =
+        parts.filter { it.isNotBlank() }.joinToString(SEPARATOR)
 }

@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +55,11 @@ import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.ConnectionsRepository
 import at.bettertrack.app.data.repo.GoogleLink
 import at.bettertrack.app.data.repo.GoogleLinkResult
+import at.bettertrack.app.data.repo.GoogleLinkStartResult
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
+import at.bettertrack.app.ui.components.BtCustomTab
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
@@ -95,6 +98,18 @@ internal class ConnectionsViewModel(
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    /**
+     * The connect attempt's verdict, waiting to be announced exactly once.
+     *
+     * Held here rather than raised as a callback because the round trip that
+     * produces it outlives the composition that started it: the user leaves for a
+     * Custom Tab and comes back, and on a low-memory device the activity may have
+     * been recreated in between. A value on the ViewModel survives that; a
+     * lambda captured in a composable does not.
+     */
+    private val _linkOutcome = MutableStateFlow<GoogleLinkOutcome?>(null)
+    val linkOutcome: StateFlow<GoogleLinkOutcome?> = _linkOutcome.asStateFlow()
+
     init {
         load()
     }
@@ -108,6 +123,69 @@ internal class ConnectionsViewModel(
      */
     fun load() {
         viewModelScope.launch { _google.value = repo.googleLink() }
+    }
+
+    /**
+     * Begin the connect: ask the server for a ticketed authorization URL and hand
+     * it to [openTab].
+     *
+     * The URL is NEVER built here. `link/start` accepts no redirect target and
+     * mints a one-time, account-bound ticket, so the only URL that can complete
+     * this flow is the one the server just returned.
+     *
+     * The two non-Ready answers are re-reads rather than messages: a 404 means
+     * the deployment lost its Google client and the whole group has to disappear;
+     * a 403 means the allowlist closed and the group has to become the web-only
+     * state. Both are decided by [load], which already draws them.
+     */
+    fun connect(openTab: (String) -> Unit) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            _linkOutcome.value = null
+            val started = repo.startGoogleLink()
+            _busy.value = false
+            when (started) {
+                is GoogleLinkStartResult.Ready -> openTab(started.authorizationUrl)
+                GoogleLinkStartResult.Unavailable, GoogleLinkStartResult.WebOnly -> load()
+                is GoogleLinkStartResult.Failed ->
+                    _linkOutcome.value = GoogleLinkOutcome.Failed(started.error.asMessage())
+            }
+        }
+    }
+
+    /**
+     * The browser came back. Decide what actually happened — from the SERVER,
+     * not from the redirect.
+     *
+     * The redirect is a hint, not proof: it is a URL a browser handed us, and the
+     * word "connected" is worth one round trip to be sure of. So the status is
+     * re-read first and the link's own `linked` flag decides. The redirect's
+     * error code only picks WHICH failure sentence to show once the re-read has
+     * confirmed there is one.
+     */
+    fun onLinkReturn(ret: GoogleLinkReturn) {
+        viewModelScope.launch {
+            _busy.value = true
+            val fresh = repo.googleLink()
+            _google.value = fresh
+            _busy.value = false
+            val linked = (fresh as? GoogleLinkResult.Ready)?.link?.linked == true
+            _linkOutcome.value = when {
+                linked -> GoogleLinkOutcome.Linked
+                ret is GoogleLinkReturn.Failed -> GoogleLinkOutcome.Failed(googleLinkFailureMessage(ret.code))
+                // The redirect claimed the success leg and the account still is
+                // not linked. Rare — a race with another device consuming the
+                // ticket, or a re-read that failed — but it must not be reported
+                // as a success, so it takes the generic failure.
+                else -> GoogleLinkOutcome.Failed(BtMessage(R.string.bt_conn_google_link_failed))
+            }
+        }
+    }
+
+    /** The outcome has been shown; do not re-announce it on the next recomposition. */
+    fun clearLinkOutcome() {
+        _linkOutcome.value = null
     }
 
     /** `onDone(null)` means it worked; the status is re-read either way. */
@@ -139,11 +217,10 @@ internal class ConnectionsViewModel(
  * parity, and each one is a different KIND of thing, which is why they do not
  * share a shape:
  *
- *  1. **Google account** — the real thing: status, unlink behind a password
- *     re-auth, and a connect hand-off. Env-gated: when the deployment has no
- *     Google client the group renders nothing at all, exactly as the web does —
- *     an empty "Google account" section would advertise a feature the server
- *     does not have.
+ *  1. **Google account** — the real thing: status, connect, and unlink behind a
+ *     password re-auth. Env-gated: when the deployment has no Google client the
+ *     group renders nothing at all, exactly as the web does — an empty "Google
+ *     account" section would advertise a feature the server does not have.
  *  2. **Google Drive** — a link INTO this app, not a second implementation. The
  *     vault's Drive medium already has a full native home at "Where your data
  *     lives"; duplicating its controller here would be two surfaces racing over
@@ -152,23 +229,27 @@ internal class ConnectionsViewModel(
  *     names itself, says what it does, states whether it stays connected or is a
  *     one-time import, and wears a "coming soon" chip. No dead buttons.
  *
- * ## Why "Connect Google" leaves the app, and why that is not a shortcut
+ * ## Connecting: a browser trip that really does come back
  *
- * `GET /auth/google/start` is a cookie-session browser redirect chain, and its
- * callback bounces to the WEB app with `?google=linked`. A bearer client cannot
- * complete it — there is no version of this flow an in-app HTTP call finishes.
- * So the connect action opens the web connections panel in a Custom Tab and says
- * so on the row itself ([R.string.bt_conn_google_connect_hint]), rather than
- * pretending to a flow that would dead-end.
+ * Connecting cannot happen inside an HTTP call — it is a Google consent screen,
+ * and only a browser can show one. What it CAN do is return. `link/start` mints
+ * a one-time, account-bound ticket and returns the authorization URL; the tab
+ * runs the consent; the public callback consumes the ticket, links the bound
+ * account, mints no session and 302s to `bettertrack://oauth/google-link`
+ * (`GoogleLinkDeepLink.kt`). The activity parks that verdict, this screen
+ * consumes it once and re-reads the status before saying anything.
+ *
+ * That is why [R.string.bt_conn_google_connect_hint] — "finishes in your browser,
+ * then returns here" — is now literally what happens. It was aspirational for as
+ * long as the row's only trick was opening the web control panel.
  *
  * ## The capability probe
  *
- * The Google routes are bearer-callable on current platform main and session-only
- * on the older stack this is developed against, so the group's own read decides
- * which of three things is drawn: the live status, the designed "not released
- * yet" explainer, or a retryable error. The day the platform allowlists the
- * routes the probe stops returning WebOnly and this group lights up untouched —
- * no app release. See [ConnectionsRepository].
+ * The Google routes are bearer-callable under `account:security` on production;
+ * a deployment that has not opened them refuses with a 403. The group's own read
+ * decides which of three things is drawn: the live status, the "manage on the
+ * web" explainer, or a retryable error — no app release either way. See
+ * [ConnectionsRepository].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,8 +258,29 @@ fun ConnectionsScreen(onBack: () -> Unit, onOpenDataHome: () -> Unit = {}) {
         ConnectionsViewModel(AppGraph.connectionsRepository)
     }
     val bt = BtTheme.colors
+    val context = LocalContext.current
+    val snackbar = LocalBtSnackbar.current
     val google by vm.google.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val linkOutcome by vm.linkOutcome.collectAsStateWithLifecycle()
+
+    // The browser's return, parked by the activity while this screen was in the
+    // background. Consumed once — a second collection must not re-run the flow.
+    val pendingReturn by GoogleLinkReturnHolder.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingReturn) {
+        if (pendingReturn != null) {
+            GoogleLinkReturnHolder.consume()?.let { vm.onLinkReturn(it) }
+        }
+    }
+
+    // Success is a snackbar and then gone; a FAILURE stays on the row (see
+    // [GoogleNotLinkedGroup]) because it is something the user may want to act on.
+    LaunchedEffect(linkOutcome) {
+        if (linkOutcome is GoogleLinkOutcome.Linked) {
+            snackbar.show(R.string.bt_conn_google_linked_ok)
+            vm.clearLinkOutcome()
+        }
+    }
 
     val scrollBehavior = rememberBtCollapsingHeaderBehavior()
     Scaffold(
@@ -217,7 +319,9 @@ fun ConnectionsScreen(onBack: () -> Unit, onOpenDataHome: () -> Unit = {}) {
             GoogleSection(
                 state = google,
                 busy = busy,
+                failure = (linkOutcome as? GoogleLinkOutcome.Failed)?.message,
                 onRetry = { vm.load() },
+                onConnect = { vm.connect { url -> BtCustomTab.open(context, url) } },
                 onUnlink = vm::unlink,
             )
             DriveSection(onOpenDataHome = onOpenDataHome)
@@ -234,7 +338,9 @@ fun ConnectionsScreen(onBack: () -> Unit, onOpenDataHome: () -> Unit = {}) {
 private fun GoogleSection(
     state: GoogleLinkResult?,
     busy: Boolean,
+    failure: BtMessage?,
     onRetry: () -> Unit,
+    onConnect: () -> Unit,
     onUnlink: (String, (BtMessage?) -> Unit) -> Unit,
 ) {
     // The feature is absent on this deployment — no header, no group, no trace.
@@ -268,7 +374,7 @@ private fun GoogleSection(
             if (state.link.linked) {
                 GoogleLinkedGroup(link = state.link, busy = busy, onUnlink = onUnlink)
             } else {
-                GoogleNotLinkedGroup()
+                GoogleNotLinkedGroup(busy = busy, failure = failure, onConnect = onConnect)
             }
 
         // Handled above; the `when` stays exhaustive without an else branch.
@@ -410,14 +516,28 @@ private fun GoogleLinkedGroup(
 /**
  * No Google identity yet — the state, and the one thing that can change it.
  *
- * The connect row is honest about leaving the app: the OAuth start is a
- * cookie-session redirect chain whose callback lands on the web app, so this
- * hands off to a Custom Tab rather than faking an in-app flow.
+ * The row still leaves the app, because a Google consent screen only exists in a
+ * browser — but it now leaves for a URL the SERVER minted, carrying a one-time
+ * account-bound ticket, and it comes back. The old row opened the web control
+ * panel and left the user to finish there; the hint claiming it "returns here"
+ * was the one line on this screen that was not true.
+ *
+ * While [busy] the row keeps its place and only its subtitle changes to "opening
+ * Google" — swapping it for a spinner would collapse the group for the half
+ * second `link/start` takes, and a layout that jumps under a finger reads as a
+ * mis-tap.
+ *
+ * A [failure] from the last attempt sits under the row rather than in a snackbar:
+ * it is the answer to something the user just did, and it should still be there
+ * when they look back at the screen to decide whether to try again.
  */
 @Composable
-private fun GoogleNotLinkedGroup() {
+private fun GoogleNotLinkedGroup(
+    busy: Boolean,
+    failure: BtMessage?,
+    onConnect: () -> Unit,
+) {
     val bt = BtTheme.colors
-    val context = LocalContext.current
     BtGroup {
         BtGroupRow(
             icon = Icons.Outlined.LinkOff,
@@ -429,8 +549,10 @@ private fun GoogleNotLinkedGroup() {
             iconTint = bt.goldEmphasis,
             title = stringResource(R.string.bt_conn_google_connect),
             titleColor = bt.goldEmphasis,
-            subtitle = stringResource(R.string.bt_conn_google_connect_hint),
-            onClick = { openBtWebApp(context, WEB_CONNECTIONS_PATH) },
+            subtitle = stringResource(
+                if (busy) R.string.bt_conn_google_connecting else R.string.bt_conn_google_connect_hint,
+            ),
+            onClick = if (busy) null else onConnect,
             trailing = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -440,6 +562,15 @@ private fun GoogleNotLinkedGroup() {
                 )
             },
         )
+        failure?.let {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+            ) {
+                BtFormError(it)
+            }
+        }
     }
 }
 

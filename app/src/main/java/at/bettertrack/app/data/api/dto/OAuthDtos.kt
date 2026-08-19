@@ -109,7 +109,11 @@ data class PinStatusResponse(
     val pinSet: Boolean = false,
 )
 
-// ── GET /api/v1/settings/oauth-grants (best-effort logout revocation) ────────
+// ── GET /api/v1/settings/oauth-grants ────────────────────────────────────────
+// Two consumers: the Authorized-apps screen, and the best-effort self-revocation
+// on logout. The list is NOT filtered first-party — the platform keeps this app's
+// own grant in it deliberately, because that row is how a user kills a lost or
+// stolen phone's access from a browser. See [OAuthGrant.firstParty].
 @Serializable
 data class OAuthGrantListResponse(
     val grants: List<OAuthGrant> = emptyList(),
@@ -123,6 +127,32 @@ data class OAuthGrant(
     val scopes: List<String> = emptyList(),
     val createdAt: String? = null,
     val lastUsedAt: String? = null,
+
+    /**
+     * Server-declared "this grant belongs to a first-party BetterTrack client".
+     *
+     * Platform #1390, **not live yet** — hence nullable with no default opinion.
+     * `null` means "this deployment does not say", which is different from a
+     * declared `false`, and only the declared answer may override the client-side
+     * fallback ([at.bettertrack.app.ui.connections.isOwnGrant] matching on
+     * `clientId`). Decoded now so the flag lights up on a server deploy rather
+     * than an app release.
+     */
+    val firstParty: Boolean? = null,
+
+    /**
+     * Server-declared "this grant is the credential the calling request is riding".
+     *
+     * The precise thing the Authorized-apps screen needs and cannot compute:
+     * `clientId` identifies the APP, but the same app on the user's tablet holds a
+     * different grant with the same `clientId`. Derived server-side from the
+     * presented token, so it is always `false` for a cookie caller.
+     *
+     * Also #1390 and also not live. Until it ships, the screen falls back to
+     * `clientId`, which over-matches across the user's own devices — stated in
+     * [at.bettertrack.app.ui.connections.isOwnGrant] rather than hidden.
+     */
+    val current: Boolean? = null,
 )
 
 // ── Error envelope: { error: { code, message, details? } } ───────────────────

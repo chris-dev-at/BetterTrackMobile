@@ -203,7 +203,7 @@ fun SettingsScreen(
     onOpenWidgets: () -> Unit = {},
     onOpenTaxSettings: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
-    /** The feedback composer. Only ever reached when `FeedbackFlags.enabled`. */
+    /** The feedback composer. Only ever reached when `feedbackEntryVisible(mode)`. */
     onOpenFeedback: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     // `onOpenChangelog` was removed 2026-08-09: it went vestigial in a1e7882 when
@@ -844,11 +844,15 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.bt_settings_about_sub),
                     onClick = onOpenAbout,
                 )
-                // The feedback composer's primary entry point. Held behind the
-                // capability flag — the route exists, but a row that opens a form
-                // whose POST can only 403 is worse than no row. See
-                // `FeedbackFlags.enabled` for the two-step unlock.
-                if (at.bettertrack.app.data.repo.FeedbackFlags.enabled) {
+                // The feedback composer's primary entry point. Live since the
+                // platform's 2026-08-18 deploy — `POST /feedback` accepts bearer and
+                // existing consents already carry `feedback:write`. Still gated,
+                // now on TWO things: the capability flag and whether this install
+                // has a BetterTrack account at all. A Drive-autonomous install has
+                // no account and no token, so the row would open a form whose Send
+                // can only stay disabled — worse than no row. See
+                // `feedbackEntryVisible`.
+                if (at.bettertrack.app.data.repo.feedbackEntryVisible(storageMode)) {
                     BtGroupRow(
                         icon = Icons.Outlined.Feedback,
                         title = stringResource(R.string.bt_dest_feedback),

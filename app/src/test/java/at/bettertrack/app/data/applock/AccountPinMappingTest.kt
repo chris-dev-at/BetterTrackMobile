@@ -93,7 +93,7 @@ class AccountPinMappingTest {
 
     private val smallVerifyBody = """{"ok":true}"""
     private val fullUserBody = """
-        {"id":"u_1","email":"a@b.co","username":"chrisiwiesi","role":"user",
+        {"id":"u_1","email":"a@b.co","username":"testuser","role":"user",
          "status":"active","mustChangePassword":false,"pinEnabled":true,
          "pinLockIdleMinutes":5,"baseCurrency":"EUR","locale":"en",
          "lastLoginAt":"2026-07-09T00:00:00Z","createdAt":"2020-01-01T00:00:00Z"}

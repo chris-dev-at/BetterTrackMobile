@@ -180,7 +180,7 @@ data class ItemThreadUi(
     val sending: Boolean = false,
     /** Item-level emojis with a toggle in flight. */
     val busyItemEmojis: Set<String> = emptySet(),
-    /** `commentId` + ` ` + emoji, for comment-level toggles in flight. */
+    /** `commentId` + `\u0000` + emoji, for comment-level toggles in flight. */
     val busyCommentEmojis: Set<String> = emptySet(),
     val deleting: Set<String> = emptySet(),
 ) {
@@ -253,7 +253,7 @@ class ItemThreadViewModel(
     }
 
     fun toggleCommentReaction(commentId: String, emoji: String) {
-        val key = commentId + ' ' + emoji
+        val key = commentId + '\u0000' + emoji
         if (key in _state.value.busyCommentEmojis) return
         val before = _state.value.comments
         _state.value = _state.value.copy(

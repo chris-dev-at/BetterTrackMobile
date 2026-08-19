@@ -6,12 +6,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tripwire for the requested OAuth scope set. The alerts:* scopes must stay OUT
- * of the request until the platform seeds them for the mobile client: requesting
- * an un-seeded scope makes the OAuth authorize endpoint reject the whole login
- * ("authorization request is invalid"), i.e. it breaks sign-in for everyone, not
- * just /alerts. These lock that on/off behaviour without initializing OAuthConfig
- * (which reads BuildConfig).
+ * Tripwire for the requested OAuth scope set.
+ *
+ * The rule every assertion here serves: a scope may only be requested once the
+ * platform has seeded it for the mobile client, because requesting an un-seeded
+ * scope makes the OAuth authorize endpoint reject the whole login ("authorization
+ * request is invalid") — it breaks sign-in for everyone, not just the surface the
+ * scope was for. alerts:* taught the app that in 2026-07; feedback:write was held
+ * out for the same reason until 2026-08-19.
+ *
+ * Both of those are now seeded and live, so the shipped request is the client's
+ * full 20-scope ceiling. These tests lock that, and lock the levers that take a
+ * scope back out if the platform ever retracts a seed — all without initializing
+ * OAuthConfig (which reads BuildConfig).
  */
 class OAuthScopeTest {
 
@@ -95,40 +102,52 @@ class OAuthScopeTest {
     @Test
     fun `the requested scope set is space-separated with no doubled or edge spaces`() {
         // The authorize endpoint splits on whitespace; a stray empty token in the
-        // list is the kind of thing that hard-rejects a whole login.
-        val scopes = requestedScopes(alertsScopesEnabled = true)
+        // list is the kind of thing that hard-rejects a whole login. Checked on the
+        // WIDEST string the builder can produce — every optional append is on — so
+        // a separator bug in the last-appended scope cannot hide behind a flag.
+        val scopes = requestedScopes(alertsScopesEnabled = true, feedbackScopeEnabled = true)
         assertFalse(scopes.contains("  "))
         assertTrue(scopes == scopes.trim())
         assertTrue(scopes.split(" ").all { it.isNotBlank() && it.contains(':') })
-        // 14 legacy + 5 v5 = the client's full allowed set.
-        assertTrue(scopes.split(" ").size == 19)
-        assertTrue(scopes.split(" ").toSet().size == 19) // no duplicates
+        // 14 legacy + 5 v5 + feedback:write = the client's full allowed set.
+        assertTrue(scopes.split(" ").size == 20)
+        assertTrue(scopes.split(" ").toSet().size == 20) // no duplicates
     }
 
     // ── The production request (the gate that used to live here) ─────────────
 
     @Test
-    fun `production requests the full 19 including the cash scopes`() {
+    fun `production requests the full 20 including the cash scopes`() {
         // THE tripwire for the INSUFFICIENT_SCOPE bug: prod used to be the one
         // origin that requested only 14, so every /cash endpoint 403'd there.
         // There is no origin-dependent branch any more — one scope string, every
-        // backend — so this is simply what the app asks for on api.bettertrack.at.
-        val scopes = requestedScopes(alertsScopesEnabled = true)
+        // backend — so this is simply what the app asks for on api.bettertrack.at,
+        // read off the shipped flags rather than hardcoded arguments.
+        val scopes = requestedScopes(
+            alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
+            feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+        )
         assertTrue(scopes.contains("cash:read"))
         assertTrue(scopes.contains("cash:write"))
         assertTrue(scopes.contains("mirrorchain:read"))
         assertTrue(scopes.contains("mirrorchain:write"))
         assertTrue(scopes.contains("vault:sync"))
         assertTrue(scopes.contains("alerts:read"))
-        assertEquals(19, scopes.split(" ").size)
+        assertTrue(scopes.contains("feedback:write"))
+        assertEquals(20, scopes.split(" ").size)
     }
 
     @Test
-    fun `the shipped request is exactly the client's 19-scope ceiling`() {
+    fun `the shipped request is exactly the client's 20-scope ceiling`() {
         // What the app asks for as configured today, on every backend — nothing
         // about the effective API origin (prod, the dev stack, a LAN box) can
-        // change it. ALERTS_SCOPES_ENABLED is a const, so this still needs no
-        // OAuthConfig init (which would read BuildConfig).
+        // change it. Both flags are consts, so this still needs no OAuthConfig
+        // init (which would read BuildConfig).
+        //
+        // Grew from 19 to 20 on 2026-08-19 when `feedback:write` went live. The
+        // set below is the client's ceiling verbatim: production's live
+        // `openapi.json` enumerates exactly these twenty in its scope enum, with
+        // `feedback:write` last.
         val scopes = requestedScopes(
             alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
             feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
@@ -148,33 +167,42 @@ class OAuthScopeTest {
                 "cash:read", "cash:write",
                 "mirrorchain:read", "mirrorchain:write",
                 "vault:sync",
+                "feedback:write",
             ),
             scopes,
         )
     }
 
     // ── feedback:write (platform #1315/#1316/#1317) ──────────────────────────
-    // The scope is PREPARED but must stay out of the authorize request until the
-    // platform confirms the seed. This is the same class of tripwire the alerts
-    // scopes needed, and for the same reason: an un-seeded scope does not get
-    // dropped, it hard-rejects the whole login.
+    // Live on production since the 2026-08-18 deploy: the scope is in the catalog
+    // and in the BetterTrackMobile client's ceiling, the seed unions rather than
+    // narrows and re-runs on every deploy, and an additive migration widened the
+    // consents that already existed. HISTORY: held out of the request from
+    // 2026-08-17 while the seed was unconfirmed — the same class of tripwire the
+    // alerts scopes needed, and for the same reason: an un-seeded scope does not
+    // get dropped, it hard-rejects the whole login.
 
     @Test
-    fun `feedback write is NOT requested while the platform seed is unconfirmed`() {
-        // THE guard. If this fails, sign-in is at risk for every user.
-        assertFalse(OAuthConfig.FEEDBACK_SCOPE_ENABLED)
-        assertFalse(
+    fun `feedback write IS requested now the platform seed is live`() {
+        // The counterpart to `FeedbackTest`'s flag assertion: the UI flag alone
+        // would ride today's widened consents and then silently lose the
+        // capability at the next re-login, because a token only carries a scope
+        // the authorize request asked for. The two flags move together.
+        assertTrue(OAuthConfig.FEEDBACK_SCOPE_ENABLED)
+        assertTrue(
             requestedScopes(
                 alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
                 feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
-            ).contains("feedback:"),
+            ).contains("feedback:write"),
         )
     }
 
     @Test
     fun `omitting the feedback argument cannot widen the request by accident`() {
-        // The parameter defaults to false, so every pre-existing call site — and
-        // any future one that forgets it — keeps the proven 19.
+        // The parameter still defaults to false even though the shipped call site
+        // passes `true`: widening an authorize request is the one thing that must
+        // never happen by forgetting an argument, and the default doubles as the
+        // lever if the platform ever retracts the seed.
         assertFalse(requestedScopes(alertsScopesEnabled = true).contains("feedback:"))
     }
 

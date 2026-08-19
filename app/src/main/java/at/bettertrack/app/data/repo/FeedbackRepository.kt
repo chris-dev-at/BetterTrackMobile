@@ -6,46 +6,84 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.FeedbackContextDto
 import at.bettertrack.app.data.api.dto.SubmitFeedbackRequest
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.shows
 import kotlinx.serialization.json.Json
 
 /**
  * In-app feedback (platform #1315 / #1316 / #1317).
  *
- * ## Why this ships dark
+ * ## Live since 2026-08-19 (platform deploy 2026-08-18)
  *
- * The contract is final and the route is real, but the bearer path needs a
- * `feedback:write` scope that the platform has not finished seeding to the
- * BetterTrackMobile OAuth client. Requesting an un-seeded scope at authorize time
- * does not merely drop that scope — it **hard-rejects the entire login** ("This
- * app's authorization request is invalid"), which is how the alerts scopes broke
- * sign-in once already
+ * `POST /feedback` is on production and accepts a **bearer** token: the live
+ * `openapi.json` lists the route with `security: [sessionCookie, apiKeyBearer]`,
+ * and the `MODULE_POLICIES` row exists, so the `403 API_KEY_FORBIDDEN` this app
+ * measured on 2026-08-17 is gone. `feedback:write` is in the scope catalog and in
+ * the BetterTrackMobile client's scope ceiling (which the openapi enumerates as 20
+ * scopes, `feedback:write` among them); the platform's seed unions rather than
+ * narrows and an additive migration widened the consents that already exist — so
+ * **no re-login and no re-authorize is required** for a session that predates the
+ * deploy. [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] is on
+ * too, so every future authorize asks for the scope as well.
+ *
+ * HISTORY: this surface shipped dark from 2026-08-17. The scope was not seeded
+ * yet, and requesting an un-seeded scope at authorize time does not merely drop
+ * that scope — it **hard-rejects the entire login** ("This app's authorization
+ * request is invalid"), which is how the alerts scopes broke sign-in once already
  * ([at.bettertrack.app.data.auth.OAuthConfig.ALERTS_SCOPES_ENABLED] carries that
- * history). So the scope stays out of the authorize request, every call from this
- * client would 403 INSUFFICIENT_SCOPE, and the whole surface is held behind
- * [FeedbackFlags.enabled].
+ * history). If the platform ever retracts the seed, the same lever applies: both
+ * flags back to `false`, rebuild, re-verify.
  *
- * Turning it on is two flags and a re-login — see [FeedbackFlags.enabled].
+ * ## v2 is NOT live — do not build against it
+ *
+ * `GET /feedback/mine`, the per-submission thread, `PATCH /feedback/{id}` and the
+ * status/notification model are platform issues **#1338–#1342**, queued behind the
+ * admin inbox (**#1316**). Only v1 — one fire-and-forget POST — exists. A
+ * consequence worth knowing while #1316 is unmerged: submissions are stored and
+ * readable in the database, but nobody can triage them in the admin panel yet.
  */
 object FeedbackFlags {
     /**
-     * Whether the feedback composer exists in the UI at all. **Default OFF.**
+     * Whether the feedback composer exists in the UI at all. **ON since
+     * 2026-08-19** (platform GO-LIVE tick for #1315, deployed 2026-08-18T09:38Z).
      *
-     * ### What must happen before this flips
+     * This is one of two independent switches and it is the narrower one: it gates
+     * the two entry rows (Settings → About group, and the bottom of the About
+     * screen's link group). The other,
+     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED], decides
+     * whether `feedback:write` rides along in the authorize request — i.e. whether
+     * tokens minted from here on carry the capability at all. Turning this one on
+     * alone would work today (existing consents were widened server-side) and then
+     * silently lose the capability at the next re-login, so the two move together.
      *
-     * 1. The platform confirms `feedback:write` is seeded to the BetterTrackMobile
-     *    client (the tick on #1317). Until then the scope cannot be requested.
-     * 2. Flip [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] to
-     *    `true` so the authorize request actually asks for it.
-     * 3. Flip this to `true`.
-     * 4. Re-login once — a token minted before step 2 does not carry the scope, and
-     *    a stale token 403s the POST no matter what these flags say.
-     *
-     * Doing (3) without (1) and (2) would put a working-looking form in front of
-     * the user that can only ever fail with INSUFFICIENT_SCOPE. Doing (2) without
-     * (1) breaks sign-in for everybody. The order is not negotiable.
+     * This flag is NOT the account check. A Drive-autonomous install has no
+     * BetterTrack account and no bearer token to send, so the entry rows are gated
+     * on [feedbackEntryVisible], which is this flag AND
+     * [at.bettertrack.app.data.storage.BtSurface.ACCOUNT_SETTINGS].
      */
-    const val enabled: Boolean = false
+    const val enabled: Boolean = true
 }
+
+/**
+ * Whether either feedback entry row may be rendered in [mode].
+ *
+ * Two conditions, one place. [FeedbackFlags.enabled] is the capability switch, and
+ * `ACCOUNT_SETTINGS` is the honest question underneath it: `POST /feedback` is a
+ * *server* route authenticated by a bearer token, and a Drive-autonomous install
+ * has neither — no BetterTrack account, no token, nothing for the endpoint to
+ * attribute the report to. Showing the row there would open a composer whose Send
+ * button is permanently disabled behind its signed-in check, which is precisely
+ * the "a row that opens a form that can only fail" outcome the flag was created to
+ * prevent.
+ *
+ * Kept here rather than duplicated at the two call sites for the reason
+ * [at.bettertrack.app.data.storage.surfaceAvailability] states for the whole
+ * surface table: two independent copies of a visibility rule drift, and the drift
+ * is invisible until a Drive user finds the dead row.
+ */
+fun feedbackEntryVisible(mode: StorageMode): Boolean =
+    FeedbackFlags.enabled && mode.shows(BtSurface.ACCOUNT_SETTINGS)
 
 /** The three wire categories. The wire values are ASCII and never translated. */
 enum class FeedbackCategory(val wire: String) {

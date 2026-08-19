@@ -555,10 +555,13 @@ object AppGraph {
     }
 
     /**
-     * In-app feedback (platform #1315/#1316/#1317). Constructed lazily like every
-     * other repository; nothing reaches it while
-     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] is `false`, so on a
-     * shipped build this object is never created.
+     * In-app feedback (platform #1315/#1316/#1317) — live on production since the
+     * 2026-08-18 deploy. Constructed lazily like every other repository, which now
+     * means "on the first tap of a Feedback row" rather than never: the surface is
+     * reachable wherever
+     * [at.bettertrack.app.data.repo.feedbackEntryVisible] holds, i.e. on every
+     * install that has a BetterTrack account. A Drive-autonomous install has no
+     * entry row, so there this object is still never created.
      */
     val feedbackRepository: at.bettertrack.app.data.repo.FeedbackRepository by lazy {
         at.bettertrack.app.data.repo.DefaultFeedbackRepository(api = btApi, json = json)

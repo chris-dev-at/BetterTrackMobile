@@ -300,9 +300,23 @@ class AuthRepository(
 
     /**
      * Find our OAuth grant and revoke it, killing the access + refresh tokens
-     * server-side. Session-cookie scoped in the OpenAPI, so an OAuth bearer may
-     * be refused (scope/session) — we log the outcome and always fall through to
-     * the local wipe. TODO(platform): a bearer-reachable self-revocation endpoint.
+     * server-side.
+     *
+     * This spent its whole life 403ing — `/settings/oauth-grants` was session-only
+     * on the bearer allowlist — and logging that it had. Since the 2026-08-19
+     * deploy the route answers a bearer holding `account:security`, so the
+     * revocation now actually lands: logging out really does drop this device's
+     * grant rather than only its local tokens.
+     *
+     * That is the intended shape. The grant is a standing permission and logout
+     * is the user withdrawing it; the next login re-authorizes and re-shows the
+     * consent screen, which is the truthful thing to show someone who just
+     * removed the app's access. Nothing else is affected — other devices hold
+     * their own grants, and the account, its data and its sessions are untouched.
+     *
+     * Still best-effort in every direction: a refusal, a network failure or a
+     * 5xx is logged and the local wipe proceeds regardless. A logout that cannot
+     * reach the server must still leave the phone with nothing on it.
      */
     private suspend fun revokeGrantBestEffort() {
         try {

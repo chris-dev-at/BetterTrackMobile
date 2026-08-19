@@ -1895,6 +1895,12 @@ private fun BtSheetHost(
                 onOpenTwoFactor = { navController.navigate(TwoFactorRoute) },
                 onOpenSessions = { navController.navigate(ActiveSessionsRoute) },
                 onOpenAccountPin = { navController.navigate(AccountPinRoute) },
+                onOpenPasskeys = {
+                    navController.navigate(at.bettertrack.app.navigation.PasskeysRoute)
+                },
+                onOpenTrustedDevices = {
+                    navController.navigate(at.bettertrack.app.navigation.TrustedDevicesRoute)
+                },
             )
         }
         btSheet<HeatmapRoute> {
@@ -1953,6 +1959,12 @@ private fun BtSheetHost(
         btSheet<ChangePasswordRoute> { ChangePasswordScreen(onBack = back) }
         btSheet<TwoFactorRoute> { TwoFactorScreen(onBack = back) }
         btSheet<ActiveSessionsRoute> { ActiveSessionsScreen(onBack = back) }
+        btSheet<at.bettertrack.app.navigation.PasskeysRoute> {
+            at.bettertrack.app.ui.settings.PasskeysScreen(onBack = back)
+        }
+        btSheet<at.bettertrack.app.navigation.TrustedDevicesRoute> {
+            at.bettertrack.app.ui.settings.TrustedDevicesScreen(onBack = back)
+        }
         btSheet<DeleteAccountRoute> { DeleteAccountScreen(onBack = back) }
 
         // Sync & debug

@@ -30,22 +30,32 @@ object OAuthConfig {
 
     /**
      * Whether to request `feedback:write` (in-app feedback, platform #1315/#1316/
-     * #1317). **HELD `false` DELIBERATELY — do not flip this on a hunch.**
+     * #1317). **NOW ON (2026-08-19).**
      *
-     * The platform is seeding the scope to the BetterTrackMobile client but has not
-     * ticked it done. Requesting a scope the serving OAuth client row does not allow
-     * does NOT quietly drop that scope: the authorize endpoint hard-rejects the
-     * WHOLE login with "This app's authorization request is invalid", which is
-     * exactly how the alerts scopes locked users out once (see
-     * [ALERTS_SCOPES_ENABLED]). So an un-seeded `feedback:write` here would cost
-     * sign-in for everybody, to buy a form nobody can reach yet.
+     * The platform seeded the scope and ticked it live on production: it is in the
+     * scope catalog and in the BetterTrackMobile client's scope ceiling — the live
+     * `openapi.json` enumerates that ceiling as exactly the 20 scopes this file
+     * requests, `feedback:write` included — and the seed unions rather than
+     * narrows, re-running on every deploy. An additive migration widened the
+     * consents that already existed, so no user has to re-authorize; this flag
+     * exists so tokens minted from here on keep carrying the scope.
      *
-     * FLIP WHEN: the platform confirms the seed on #1317. Then also flip
-     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] to `true`, rebuild, and
-     * re-login once — a token minted before this flag was on carries no
-     * `feedback:write` and the POST 403s INSUFFICIENT_SCOPE regardless.
+     * HISTORY: held `false` from 2026-08-17 while the seed was unconfirmed.
+     * Requesting a scope the serving OAuth client row does not allow does NOT
+     * quietly drop that scope: the authorize endpoint hard-rejects the WHOLE login
+     * with "This app's authorization request is invalid", which is exactly how the
+     * alerts scopes locked users out once (see [ALERTS_SCOPES_ENABLED]). If the
+     * platform ever retracts the seed and login starts hard-rejecting, flip this
+     * back to `false` together with
+     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled], rebuild, and re-verify.
+     *
+     * This flag and [at.bettertrack.app.data.repo.FeedbackFlags.enabled] are
+     * INDEPENDENT and must move together: that one gates the two UI rows, this one
+     * gates the authorize request. Flipping only the UI flag works for today's
+     * widened consents and then silently drops the capability at the next
+     * re-login — a latent bug, not a nicety.
      */
-    const val FEEDBACK_SCOPE_ENABLED: Boolean = false
+    const val FEEDBACK_SCOPE_ENABLED: Boolean = true
 
     /**
      * Space-separated coarse module scopes the app requests — the FULL allowed
@@ -69,6 +79,9 @@ object OAuthConfig {
      * scope with no read/write split, and `PATCH /vault/media` plus every
      * `/account/paranoid/…` transition deliberately stay session-only) are
      * requested on EVERY backend, production included — see [V5_SCOPES].
+     * feedback:write (`POST /feedback`, the in-app composer) is appended when
+     * [FEEDBACK_SCOPE_ENABLED], which is on since the platform's 2026-08-19
+     * go-live tick — bringing the requested set to the client's full 20.
      */
     val SCOPES: String = requestedScopes(
         alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
@@ -135,18 +148,23 @@ private const val V5_SCOPES =
     "cash:read cash:write mirrorchain:read mirrorchain:write vault:sync"
 
 /**
- * In-app feedback (`POST /feedback`). Prepared but INERT — appended to the request
- * only when [OAuthConfig.FEEDBACK_SCOPE_ENABLED], which is `false` until the
- * platform ticks the seed on #1317. `OAuthScopeTest` pins that the shipped scope
- * string does not contain it.
+ * In-app feedback (`POST /feedback`, platform #1315). Appended when
+ * [OAuthConfig.FEEDBACK_SCOPE_ENABLED], which has been `true` since 2026-08-19 —
+ * the platform's seed is live on production and this scope is the twentieth and
+ * last entry of the client's ceiling. `OAuthScopeTest` pins that the shipped scope
+ * string contains it exactly once and that the set is exactly those 20.
+ *
+ * There is no read half. v1 is a single fire-and-forget POST; `GET /feedback/mine`
+ * and the rest of feedback v2 (#1338–#1342) are not live, so no read scope exists
+ * to request.
  */
 private const val FEEDBACK_SCOPE = "feedback:write"
 
 /**
  * The scope string the app requests: the client's full allowed set, with alerts:*
- * appended only when [alertsScopesEnabled]. Kept a pure top-level function so the
- * behaviour is unit-testable without initializing [OAuthConfig] (which reads
- * BuildConfig).
+ * appended only when [alertsScopesEnabled] and feedback:write only when
+ * [feedbackScopeEnabled]. Kept a pure top-level function so the behaviour is
+ * unit-testable without initializing [OAuthConfig] (which reads BuildConfig).
  */
 internal fun requestedScopes(
     alertsScopesEnabled: Boolean,
@@ -155,9 +173,10 @@ internal fun requestedScopes(
     append(BASE_SCOPES)
     if (alertsScopesEnabled) append(' ').append(ALERTS_SCOPES)
     append(' ').append(V5_SCOPES)
-    // Appended ONLY once the platform has seeded it — see
-    // [OAuthConfig.FEEDBACK_SCOPE_ENABLED]. The default is `false` at every call
-    // site that does not say otherwise, so forgetting the argument can never widen
-    // the authorize request by accident.
+    // Seeded and live since 2026-08-18 — see [OAuthConfig.FEEDBACK_SCOPE_ENABLED],
+    // which is what the shipped call site passes. The parameter still defaults to
+    // `false` rather than tracking the flag: a scope that widens an authorize
+    // request should never arrive by forgetting an argument, and the default is
+    // also the safe lever if the platform ever retracts the seed.
     if (feedbackScopeEnabled) append(' ').append(FEEDBACK_SCOPE)
 }

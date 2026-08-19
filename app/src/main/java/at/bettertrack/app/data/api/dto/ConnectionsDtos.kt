@@ -52,6 +52,32 @@ data class GoogleLinkStatusResponse(
 )
 
 /**
+ * `POST /auth/google/link/start` — the native connect leg (openapi schema
+ * `GoogleMobileLinkStartResponse`).
+ *
+ * The request has **no body and no parameters**: the route mints a short-lived,
+ * hashed, one-time ticket bound to the authenticated account and accepts no
+ * redirect target from the caller, which is what makes the return leg's deep
+ * link a property of the deployment rather than of this client.
+ *
+ * Both fields are `required` in the contract, so neither carries a default —
+ * a body missing [authorizationUrl] has nothing to open and is better surfaced
+ * as a failure than as a tap that does nothing.
+ *
+ * [expiresAt] is read but not acted on: the ticket's lifetime is the server's to
+ * enforce, and it does (an expired one comes back as `?error=google_state` on
+ * the return leg). Keeping the field means the strict contract round-trips and
+ * a future "this link expires in N minutes" hint has its input already.
+ */
+@Serializable
+data class GoogleLinkStartResponse(
+    /** The Google consent URL to open in a Custom Tab. */
+    val authorizationUrl: String,
+    /** ISO instant the one-time ticket stops being accepted. */
+    val expiresAt: String,
+)
+
+/**
  * `POST /auth/google/unlink` — the account password, re-authenticating the
  * caller before the link is removed.
  *

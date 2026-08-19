@@ -214,9 +214,15 @@ import kotlinx.serialization.Serializable
  * the build, one from Settings usually about a setting.
  *
  * Registered unconditionally; the ENTRY POINTS are what
- * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] gates. A route with no row
- * pointing at it is unreachable, and keeping it registered means turning the
- * feature on is one flag rather than a re-wire.
+ * [at.bettertrack.app.data.repo.feedbackEntryVisible] gates — the capability flag
+ * AND this install having a BetterTrack account. A route with no row pointing at it
+ * is unreachable, which is what made the 2026-08-19 go-live one flag rather than a
+ * re-wire, and is what keeps a Drive-autonomous install from reaching a composer it
+ * has no token to send from.
+ *
+ * v1 only: there is deliberately no route for a submission list or thread —
+ * `GET /feedback/mine`, `PATCH /feedback/{id}` and the status model are platform
+ * #1338–#1342 and are NOT live.
  */
 @Serializable data class SettingsFeedbackRoute(val origin: String)
 
@@ -250,6 +256,19 @@ import kotlinx.serialization.Serializable
 @Serializable data object TwoFactorRoute
 /** Step 18: the account's active web/other-device sessions (list + revoke). */
 @Serializable data object ActiveSessionsRoute
+/**
+ * Settings → Security → Passkeys (2026-08-19): the native manager — list, rename,
+ * remove. Registration stays a labelled web hand-off inside the screen, because a
+ * WebAuthn credential is bound to the origin that mints it.
+ */
+@Serializable data object PasskeysRoute
+/**
+ * Settings → Security → Trusted devices (2026-08-19): the remembered-device
+ * bindings that let a BROWSER skip the sign-in step. Sits beside
+ * [ActiveSessionsRoute] on purpose — sessions answer "where am I signed in",
+ * this answers "where can I skip signing in".
+ */
+@Serializable data object TrustedDevicesRoute
 /** Step 18: type-to-confirm account deletion (destructive; submit safety-gated). */
 @Serializable data object DeleteAccountRoute
 /** In-app changelog / "New features" (owner 2026-07-09) — bundled per-version notes. */

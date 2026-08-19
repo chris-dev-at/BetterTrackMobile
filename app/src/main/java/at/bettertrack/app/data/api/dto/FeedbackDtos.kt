@@ -8,18 +8,21 @@ import kotlinx.serialization.Serializable
  *
  *  - POST /api/v1/feedback → [SubmitFeedbackRequest] → 201 [FeedbackCreatedResponse]
  *
- * The route accepts BOTH a session cookie and a bearer token; the bearer path needs
- * the new `feedback:write` scope, which the platform is seeding to the
- * BetterTrackMobile client. Until that seed is confirmed the whole surface is dark
- * behind [at.bettertrack.app.data.repo.FeedbackFlags.enabled] and the scope is NOT
- * requested at authorize time — see
- * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] for why an
- * un-seeded scope in the authorize request is not a soft failure but a hard reject
- * of the entire login.
+ * LIVE on production since the platform's 2026-08-18 deploy. The route accepts BOTH
+ * a session cookie and a bearer token (`security: [sessionCookie, apiKeyBearer]` in
+ * the live `openapi.json`); the bearer path carries the `feedback:write` scope,
+ * which is seeded to the BetterTrackMobile client and already present on existing
+ * consents, so no re-login was needed. The surface is on behind
+ * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] and the scope is requested at
+ * authorize time — see
+ * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED], which also
+ * records why the flag existed at all (an UN-seeded scope in an authorize request is
+ * not a soft failure but a hard reject of the entire login).
  *
- * `GET /feedback/mine` is deliberately NOT modelled: it is out of scope for v1
- * (owner ruling), and a DTO for a screen nobody builds is a promise the app does
- * not keep.
+ * `GET /feedback/mine` is deliberately NOT modelled, and still is not: feedback v2
+ * (mine + status model + the per-submission thread + `PATCH /feedback/{id}`) is
+ * platform #1338–#1342, queued behind the admin inbox #1316 and NOT live. A DTO for
+ * a screen nobody builds is a promise the app does not keep.
  */
 
 /**

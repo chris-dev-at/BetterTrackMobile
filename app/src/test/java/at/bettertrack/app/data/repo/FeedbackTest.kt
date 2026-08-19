@@ -2,6 +2,9 @@ package at.bettertrack.app.data.repo
 
 import at.bettertrack.app.data.api.dto.FeedbackCreatedResponse
 import at.bettertrack.app.data.api.dto.SubmitFeedbackRequest
+import at.bettertrack.app.data.storage.BtSurface
+import at.bettertrack.app.data.storage.StorageMode
+import at.bettertrack.app.data.storage.shows
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -11,12 +14,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * In-app feedback (platform #1315 / #1316 / #1317) — the wire contract and the
- * composer's validation, pinned before the endpoint is live.
+ * In-app feedback (platform #1315 / #1316 / #1317) — the wire contract, the
+ * composer's validation, and the two conditions the entry rows are gated on.
  *
- * The contract was agreed on 2026-08-17 and the route has not shipped yet, so these
- * are the only thing standing between "we built to the spec" and "we built to what
- * we remembered of the spec". They assert the exact bytes.
+ * The contract was agreed on 2026-08-17 and went live on production on 2026-08-18.
+ * These assertions were written before the endpoint existed and are worth more now
+ * than they were then: they are what stands between "we built to the spec" and "we
+ * built to what we remembered of the spec". They assert the exact bytes.
  */
 class FeedbackTest {
 
@@ -35,13 +39,50 @@ class FeedbackTest {
         screen = FeedbackOrigin.SETTINGS,
     )
 
-    // ── The flag, which is the whole reason this ships dark ─────────────────────
+    // ── The two gates: the capability flag and the account condition ────────────
 
     @Test
-    fun `the feedback surface is OFF until the platform seeds the scope`() {
-        // Turning this on before `feedback:write` is seeded puts a form in front of
-        // the user whose POST can only ever 403 INSUFFICIENT_SCOPE.
-        assertFalse(FeedbackFlags.enabled)
+    fun `the feedback surface is ON now the platform has seeded the scope`() {
+        // Flipped 2026-08-19 on the platform's go-live tick: `POST /feedback` is on
+        // production, accepts bearer, and `feedback:write` is seeded to the
+        // BetterTrackMobile client (existing consents widened, so no re-login).
+        // If the platform ever retracts the seed, this and
+        // OAuthConfig.FEEDBACK_SCOPE_ENABLED go back to false together.
+        assertTrue(FeedbackFlags.enabled)
+    }
+
+    @Test
+    fun `a Drive-autonomous install never shows a feedback entry`() {
+        // THE regression guard. `POST /feedback` is a SERVER route authenticated by
+        // a bearer token; a Drive-only install has no BetterTrack account and no
+        // token, so the row would open a composer whose Send is permanently
+        // disabled behind its signed-in check — the exact "a row that opens a form
+        // that can only fail" outcome the flag was created to prevent. The flag
+        // alone does not encode this, which is why the rows call
+        // `feedbackEntryVisible` and not `FeedbackFlags.enabled`.
+        assertFalse(feedbackEntryVisible(StorageMode.DRIVE))
+    }
+
+    @Test
+    fun `every mode that has an account shows the feedback entry`() {
+        // SERVER and BOTH both have a BetterTrack account behind them, and UNSET
+        // resolves to SERVER (an install that has not answered the wizard behaves
+        // exactly as the app always has), so all three carry the row.
+        assertTrue(feedbackEntryVisible(StorageMode.SERVER))
+        assertTrue(feedbackEntryVisible(StorageMode.BOTH))
+        assertTrue(feedbackEntryVisible(StorageMode.UNSET))
+    }
+
+    @Test
+    fun `the entry gate is exactly the flag AND the account surface`() {
+        // Pins the composition rather than the current values: whichever way the
+        // flag is set, the gate must never be looser than `ACCOUNT_SETTINGS`.
+        StorageMode.entries.forEach { mode ->
+            assertEquals(
+                FeedbackFlags.enabled && mode.shows(BtSurface.ACCOUNT_SETTINGS),
+                feedbackEntryVisible(mode),
+            )
+        }
     }
 
     // ── The wire enum ───────────────────────────────────────────────────────────

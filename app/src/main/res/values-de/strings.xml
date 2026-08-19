@@ -963,6 +963,58 @@
     <string name="bt_sessions_on_date">Aktiv am %1$s</string>
     <string name="bt_sessions_unknown">Kürzlich aktiv</string>
 
+    <!-- Passkeys (native Verwaltung) -->
+    <string name="bt_passkeys_sub">Ohne Passwort anmelden</string>
+    <string name="bt_passkeys_intro">Melde dich ohne Passwort an — mit Face ID, Touch ID, Windows Hello oder einem Sicherheitsschlüssel.</string>
+    <string name="bt_passkeys_empty">Du hast noch keine Passkeys hinzugefügt.</string>
+    <string name="bt_passkeys_empty_hint">Leg einen in der Web-App an — ein Passkey gehört zu der Seite, auf der er erstellt wurde.</string>
+    <string name="bt_passkeys_added">Hinzugefügt am %1$s</string>
+    <string name="bt_passkeys_added_unknown">Vor einiger Zeit hinzugefügt</string>
+    <string name="bt_passkeys_last_used">zuletzt verwendet am %1$s</string>
+    <string name="bt_passkeys_never_used">noch nie verwendet</string>
+    <string name="bt_passkeys_rename">Umbenennen</string>
+    <string name="bt_passkeys_rename_title">Passkey umbenennen</string>
+    <string name="bt_passkeys_name_label">Passkey-Name</string>
+    <string name="bt_passkeys_name_limit">Höchstens %1$d Zeichen.</string>
+    <string name="bt_passkeys_save">Speichern</string>
+    <string name="bt_passkeys_renamed">Passkey umbenannt.</string>
+    <string name="bt_passkeys_delete">Entfernen</string>
+    <string name="bt_passkeys_delete_title">Diesen Passkey entfernen?</string>
+    <string name="bt_passkeys_delete_message">Bestätige dein Passwort, um diesen Passkey zu entfernen.</string>
+    <string name="bt_passkeys_delete_last_message">Das ist dein letzter Passkey. Du kannst dich weiterhin mit deinem Passwort anmelden. Bestätige es, um diesen Passkey zu entfernen.</string>
+    <string name="bt_passkeys_password_label">Aktuelles Passwort</string>
+    <string name="bt_passkeys_delete_submit">Passkey entfernen</string>
+    <string name="bt_passkeys_removed">Passkey entfernt.</string>
+    <string name="bt_passkeys_add_title">Passkey hinzufügen</string>
+    <string name="bt_passkeys_add_sub">Öffnet die Web-App — ein Passkey gilt nur für die Seite, die ihn erstellt hat.</string>
+    <string name="bt_passkeys_offline">Für deine Passkeys braucht es eine Verbindung.</string>
+    <string name="bt_passkeys_signed_out">Melde dich neu an, um deine Passkeys zu verwalten.</string>
+
+    <!-- Vertraute Geräte (gemerkte Browser) -->
+    <string name="bt_dest_trusted_devices">Vertraute Geräte</string>
+    <string name="bt_trusted_sub">Browser, die die Anmeldung überspringen dürfen</string>
+    <string name="bt_trusted_intro">Diese Browser dürfen die Anmeldung überspringen und direkt zu deiner PIN gehen. Sie entstehen im Web, wenn du „dieses Gerät merken“ anhakst — diese App legt nie einen an.</string>
+    <string name="bt_trusted_empty">Gerade ist kein Browser gemerkt.</string>
+    <string name="bt_trusted_empty_hint">Einer taucht hier auf, sobald du dich im Web anmeldest und „dieses Gerät merken“ anhakst.</string>
+    <string name="bt_trusted_remembered">Gemerkt am %1$s</string>
+    <string name="bt_trusted_last_seen">zuletzt gesehen am %1$s</string>
+    <string name="bt_trusted_expires">läuft ab am %1$s</string>
+    <string name="bt_trusted_unknown">Gemerkter Browser</string>
+    <string name="bt_trusted_unknown_hint">Dieser wurde gemerkt, bevor wir Datumsangaben gespeichert haben.</string>
+    <string name="bt_trusted_forget">Diesen Browser vergessen</string>
+    <string name="bt_trusted_forget_title">Diesen Browser vergessen?</string>
+    <string name="bt_trusted_forget_message">Er muss sich beim nächsten Mal wieder ganz normal anmelden.</string>
+    <string name="bt_trusted_forget_confirm">Vergessen</string>
+    <string name="bt_trusted_forgotten">Vergessen.</string>
+    <string name="bt_trusted_still_listed">Der Server hat das angenommen, der Eintrag steht aber weiterhin in der Liste.</string>
+    <string name="bt_trusted_forget_all">Alle gemerkten Browser vergessen</string>
+    <string name="bt_trusted_forget_all_title">Alle gemerkten Browser vergessen?</string>
+    <string name="bt_trusted_forget_all_message">Alle müssen sich beim nächsten Mal wieder ganz normal anmelden. Diese App bleibt angemeldet.</string>
+    <string name="bt_trusted_forget_all_confirm">Alle vergessen</string>
+    <string name="bt_trusted_app_note">Diese App steht hier nie — sie meldet sich mit einem sicheren Token an und kann gar kein gemerktes Gerät anlegen.</string>
+    <string name="bt_trusted_offline">Für gemerkte Browser braucht es eine Verbindung.</string>
+    <string name="bt_trusted_signed_out">Melde dich neu an, um gemerkte Browser zu verwalten.</string>
+
     <!-- Sprache -->
     <string name="bt_lang_intro">Wähle die Sprache für die App. Beträge und Datumsangaben folgen derselben Einstellung.</string>
     <string name="bt_lang_system">Systemstandard</string>
@@ -2587,6 +2639,7 @@
     <string name="bt_scope_mirrorchain_read">Deine Gruppenportfolios, Mitglieder, Aktivitäten und Einladungen ansehen</string>
     <string name="bt_scope_mirrorchain_write">Gruppeneinladungen annehmen oder ablehnen und Gruppenportfolios verlassen</string>
     <string name="bt_scope_vault_sync">Deinen clientseitig verschlüsselten Tresor über deine Geräte synchronisieren</string>
+    <string name="bt_scope_feedback_write">In deinem Namen Feedback, Funktionswünsche und Fehlerberichte senden</string>
 
     <!-- Gemeinsamer Zustand „vom Server noch nicht freigegeben“ (Bearer-Allowlist). -->
     <string name="bt_cap_web_title">Von diesem Server noch nicht freigegeben</string>
@@ -3615,4 +3668,22 @@
     <string name="bt_insight_deposits_note_body">Die Kurve nutzt die vom Server berechnete Performanceserie. Zu- und Abflüsse werden nicht als Anlageerfolg gezählt.</string>
     <string name="bt_insight_form_timeseries">Zeitreihe</string>
     <string name="bt_insight_form_paired">Doppelspur</string>
+
+    <!-- Feedback v1 go-live (2026-08-19). Siehe EN-Kommentar: ~5 pro Stunde, deshalb
+         eigener Text statt der generischen RATE_LIMITED-Kopie. -->
+    <string name="bt_feedback_err_rate_limited">Zu viele Nachrichten hintereinander. Dieses Formular nimmt etwa fünf pro Stunde — dein Text bleibt stehen, versuch es etwas später noch einmal.</string>
+
+    <!-- ===== Connections-Ausbau (2026-08-19) — Autorisierte Apps + Google-Verknüpfung =====
+         Siehe EN-Kommentar: die eigene Freigabe dieses Geräts bleibt in der Liste SICHTBAR
+         (genau darüber wird ein verlorenes Handy vom Browser aus abgemeldet) und wird nur
+         gekennzeichnet, ohne Entzugs-Schaltfläche; das Verbinden mit Google läuft neu
+         vollständig in der App und kommt über `bettertrack://oauth/google-link` zurück. -->
+    <string name="bt_grants_this_device">Dieses Gerät</string>
+    <string name="bt_grants_this_device_hint">Das ist der Zugriff, den BetterTrack gerade selbst nutzt. Zum Entfernen in den Einstellungen abmelden — oder von einem anderen Gerät aus entziehen, falls dieses verloren ist.</string>
+    <string name="bt_grants_scope_inactive">im Paranoid-Modus inaktiv</string>
+    <string name="bt_grants_revoke_sheet_body">Der Zugriff dieser App endet sofort. Sie muss danach komplett neu autorisiert werden.</string>
+    <string name="bt_conn_google_connecting">Google wird geöffnet …</string>
+    <string name="bt_conn_google_linked_ok">Google-Konto verbunden.</string>
+    <string name="bt_conn_google_err_state">Dieser Verbindungsversuch ist abgelaufen. Tippe auf „Google verbinden“, um neu zu starten.</string>
+    <string name="bt_conn_google_link_failed">Google wurde nicht verbunden. Bitte noch einmal starten.</string>
 </resources>

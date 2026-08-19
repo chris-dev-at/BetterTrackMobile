@@ -15,6 +15,8 @@ import at.bettertrack.app.data.api.dto.SetPinIdleTimeoutRequest
 import at.bettertrack.app.data.api.dto.AccountSettingsResponse
 import at.bettertrack.app.data.api.dto.ChangePasswordRequest
 import at.bettertrack.app.data.api.dto.DeleteAccountRequest
+import at.bettertrack.app.data.api.dto.PasskeyDeleteRequest
+import at.bettertrack.app.data.api.dto.PasskeyRenameRequest
 import at.bettertrack.app.data.api.dto.ProfileSettingsResponse
 import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
 import at.bettertrack.app.data.api.dto.TwoFactorDisableRequest
@@ -114,6 +116,64 @@ class AccountRepository(
             is BtResult.Ok -> BtResult.Ok(r.value.revoked)
             is BtResult.Err -> r
         }
+
+    // ── Passkeys ─────────────────────────────────────────────────────────────
+    //
+    // Registration is deliberately absent: the WebAuthn ceremony is bound to the
+    // web origin, so the app links out for that one job. Everything else — list,
+    // rename, remove — is native here.
+
+    /** The account's registered passkeys, newest first (the server's order, kept). */
+    suspend fun passkeys(): BtResult<List<AccountPasskey>> =
+        when (val r = apiCall(json) { api.passkeys() }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.passkeys.map { PasskeyMapper.from(it) })
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Rename one passkey. The name is trimmed here because the server trims it
+     * too (`passkeyNameSchema`), so sending the untrimmed value would let the
+     * UI's 64-character check disagree with the one that actually decides.
+     */
+    suspend fun renamePasskey(id: String, name: String): BtResult<AccountPasskey> =
+        when (val r = apiCall(json) { api.renamePasskey(id, PasskeyRenameRequest(name.trim())) }) {
+            is BtResult.Ok -> BtResult.Ok(PasskeyMapper.from(r.value))
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Remove one passkey after a password re-auth.
+     *
+     * The password is passed straight to the wire and never stored, logged or
+     * echoed into any state the app keeps — the same rule the account PIN and
+     * the deletion flow follow.
+     */
+    suspend fun deletePasskey(id: String, password: String): BtResult<Unit> =
+        emptyCall { api.deletePasskey(id, PasskeyDeleteRequest(password = password)) }
+
+    // ── Remembered devices ───────────────────────────────────────────────────
+
+    /** The browsers allowed to skip the sign-in step. This app never creates one. */
+    suspend fun rememberedDevices(): BtResult<List<RememberedDevice>> =
+        when (val r = apiCall(json) { api.rememberedDevices() }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.devices.map { RememberedDeviceMapper.from(it) })
+            is BtResult.Err -> r
+        }
+
+    /**
+     * Forget ONE binding.
+     *
+     * Returns `Ok` for the HTTP call only. **That is not evidence the binding is
+     * gone** — the route is idempotent and answers 200 for unknown, expired and
+     * foreign handles alike. Callers must re-read [rememberedDevices] and use
+     * [RememberedDeviceMapper.wasForgotten] before telling the user anything.
+     */
+    suspend fun forgetRememberedDevice(handle: String): BtResult<Unit> =
+        emptyCall { api.forgetRememberedDevice(handle) }
+
+    /** Forget every binding on the account. Same idempotency caveat as above. */
+    suspend fun forgetAllRememberedDevices(): BtResult<Unit> =
+        emptyCall { api.forgetAllRememberedDevices() }
 
     // ── Language (server-side locale mirror) ─────────────────────────────────
     /** The account's stored UI language tag ("en"/"de"), best-effort. */

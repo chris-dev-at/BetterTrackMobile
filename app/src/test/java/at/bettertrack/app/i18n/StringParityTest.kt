@@ -155,6 +155,12 @@ class StringParityTest {
         // "Use at least %1$d characters." — the argument is the compile-time
         // minimum length (a constant well above 1), never a live count.
         "bt_storage_pass_too_short",
+        // "Up to %1$d characters." — the same case exactly: the argument is
+        // BT_PASSKEY_NAME_MAX (64, the server's `PASSKEY_NAME_MAX`), a compile-
+        // time ceiling that can never be 1. It is passed rather than baked into
+        // the sentence so the copy cannot drift from the constant the Save
+        // button validates against.
+        "bt_passkeys_name_limit",
     )
 
     /**

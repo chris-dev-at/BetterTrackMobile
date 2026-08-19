@@ -327,3 +327,112 @@ object BtExportStatus {
     const val FAILED = "failed"
     const val EXPIRED = "expired"
 }
+
+// ── Passkeys (GET /auth/passkeys · PATCH/DELETE /auth/passkeys/{id}) ─────────
+//
+// LIVE on production 2026-08-18/19, bearer-reachable under `account:security`
+// (the app's shipped 19-scope list already carries it — no re-consent).
+//
+// Verified against the deployed `https://api.bettertrack.at/openapi.json` on
+// 2026-08-19, and TWO things there are worth writing down because the go-live
+// note said otherwise:
+//
+//  - the list is an **envelope**, `{ "passkeys": [...] }`, not a bare array;
+//  - the path parameter is spelled **`{id}`** (`/auth/passkeys/{id}`), matching
+//    `passkeyIdParamSchema` in `packages/contracts/src/auth.ts`, not the
+//    `{passkeyId}` the go-live table used. Retrofit templates are local names,
+//    so this build's `{passkeyId}` placeholder addresses the same route either
+//    way — but the wire path is `/auth/passkeys/<uuid>` and nothing else.
+//
+// REGISTRATION IS NOT HERE ON PURPOSE. `/auth/passkeys/register/options` +
+// `/verify` are a WebAuthn ceremony bound to the web ORIGIN; a credential minted
+// anywhere else would not be the one the browser is later asked to present. The
+// app links out for that one job and manages everything else natively.
+
+/** One registered passkey (`passkeySchema`, `packages/contracts/src/auth.ts`). */
+@Serializable
+data class PasskeyDto(
+    val id: String,
+    /** The user-chosen label, max [BT_PASSKEY_NAME_MAX] characters. */
+    val name: String = "",
+    /** ISO-8601 registration instant. */
+    val createdAt: String? = null,
+    /** ISO-8601 last successful login, or null for a passkey never used since it was added. */
+    val lastUsedAt: String? = null,
+)
+
+/** `GET /auth/passkeys` — newest first. */
+@Serializable
+data class PasskeyListResponse(
+    val passkeys: List<PasskeyDto> = emptyList(),
+)
+
+/** `PATCH /auth/passkeys/{id}` — rename only; the server asks for no credential. */
+@Serializable
+data class PasskeyRenameRequest(val name: String)
+
+/**
+ * `DELETE /auth/passkeys/{id}` — re-auth gated, and therefore a DELETE **with a
+ * body** (`@HTTP(hasBody = true)`, same shape as `DELETE /account`).
+ *
+ * At least one of the three must be present (server `.refine()`), and
+ * `explicitNulls = false` drops the unset ones so the wire carries exactly the
+ * one credential the user supplied. Removing the LAST passkey is allowed — the
+ * contract says so in as many words — because password sign-in always remains;
+ * the UI still warns, because losing it is a real consequence.
+ */
+@Serializable
+data class PasskeyDeleteRequest(
+    val password: String? = null,
+    /** A fresh TOTP code — 2FA-enrolled accounts may use this instead. */
+    val code: String? = null,
+    /** An unused recovery code. Consumed even on a failed match. */
+    val recoveryCode: String? = null,
+)
+
+/** Server ceiling on a passkey label (`PASSKEY_NAME_MAX`). */
+const val BT_PASSKEY_NAME_MAX: Int = 64
+
+// ── Remembered devices (GET/DELETE /auth/remembered-devices[/{handle}]) ─────
+//
+// The bindings that let a BROWSER skip the sign-in step on the web's OAuth PIN
+// quick-auth path. LIVE on production 2026-08-18/19; openapi-verified 2026-08-19.
+//
+// Two facts shape everything below:
+//
+//  - **The app never mints one.** `POST /auth/remembered-device` is
+//    session-cookie-only and belongs to the web login page's "remember me"
+//    checkbox. This client signs in through a Custom-Tab OAuth leg and has no
+//    quick-auth path at all, so every row a user sees here was created by their
+//    browser. The screen says so, or the list is baffling.
+//  - **Revocation is idempotent.** Unknown, expired and foreign handles all
+//    answer 200, so a 200 is NOT evidence that anything was forgotten. The
+//    screen re-reads the list after every revoke and lets the list be the truth.
+
+/**
+ * One live remembered-device binding.
+ *
+ * [handle] is a domain-separated SHA-256 digest in base64url — an opaque
+ * revocation token, never a name. base64url's alphabet (`A–Z a–z 0–9 - _ =`)
+ * contains nothing Retrofit percent-encodes in a path segment, so it travels
+ * as-is; `RememberedDeviceWireTest` asserts that on the actual bytes.
+ *
+ * Every timestamp is nullable here even though the deployed schema marks
+ * `expiresAt` required: bindings created before the metadata columns existed
+ * carry no history, the go-live note called all three nullable, and a missing
+ * key must degrade to "clause omitted" rather than to a decode failure that
+ * empties the whole screen.
+ */
+@Serializable
+data class RememberedDeviceDto(
+    val handle: String,
+    val createdAt: String? = null,
+    val lastSeenAt: String? = null,
+    val expiresAt: String? = null,
+)
+
+/** `GET /auth/remembered-devices` — envelope `{ "devices": [...] }`, openapi-verified. */
+@Serializable
+data class RememberedDeviceListResponse(
+    val devices: List<RememberedDeviceDto> = emptyList(),
+)

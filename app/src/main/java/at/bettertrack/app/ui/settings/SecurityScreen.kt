@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -58,7 +59,6 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
 import at.bettertrack.app.ui.components.BtSectionHeader
-import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.theme.BtTheme
@@ -89,6 +89,8 @@ fun SecurityScreen(
     onOpenTwoFactor: () -> Unit = {},
     onOpenSessions: () -> Unit = {},
     onOpenAccountPin: () -> Unit = {},
+    onOpenPasskeys: () -> Unit = {},
+    onOpenTrustedDevices: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val controller = AppGraph.appLockController
@@ -141,25 +143,32 @@ fun SecurityScreen(
                     subtitle = stringResource(R.string.bt_settings_2fa_sub),
                     onClick = onOpenTwoFactor,
                 )
-                // Passkeys — deferred to the web (parity ruling 2026-08-08), and
-                // placed HERE rather than anywhere else in Settings because this
-                // group is where "how you prove you are you" lives: it sits
-                // directly under two-factor, which is the same question answered
-                // with a different credential, and above active sessions, which is
-                // the *result* of having proved it. The app-lock section below is
-                // a different subject entirely — that PIN guards this phone, not
-                // the account.
+                // Passkeys — placed HERE rather than anywhere else in Settings
+                // because this group is where "how you prove you are you" lives:
+                // it sits directly under two-factor, which is the same question
+                // answered with a different credential, and above active
+                // sessions, which is the *result* of having proved it. The
+                // app-lock section below is a different subject entirely — that
+                // PIN guards this phone, not the account.
                 //
-                // Not reimplemented natively on purpose: registering a passkey is
-                // a WebAuthn ceremony bound to an origin, and doing it in a Custom
-                // Tab on the real web origin is the ONLY way the credential ends
-                // up scoped to the same origin the browser will later be asked to
-                // authenticate against.
-                BtWebLinkRow(
+                // Native since 2026-08-19. This was a `BtWebLinkRow` into
+                // `/control/sign-in` under the 2026-08-08 parity ruling, because
+                // the routes were not bearer-reachable then. `GET /auth/passkeys`
+                // and `PATCH`/`DELETE /auth/passkeys/{id}` went live on
+                // production on 2026-08-18/19 under `account:security`, which the
+                // app has always requested — no new scope and no re-consent.
+                //
+                // Registration is still web-only and always will be: a WebAuthn
+                // credential is bound to the ORIGIN that mints it, so it has to
+                // be created in a Custom Tab on the real web origin. That single
+                // job keeps its own labelled hand-off row INSIDE the passkeys
+                // screen (owner rule 2026-08-09: individual named links, never a
+                // blanket "manage this on the web").
+                BtGroupRow(
                     icon = Icons.Outlined.Fingerprint,
                     title = stringResource(R.string.bt_settings_passkeys),
-                    subtitle = stringResource(R.string.bt_settings_managed_on_web),
-                    path = "/control/sign-in",
+                    subtitle = stringResource(R.string.bt_passkeys_sub),
+                    onClick = onOpenPasskeys,
                 )
                 // The ACCOUNT PIN — the credential the account itself carries,
                 // asked for wherever the user signs in. It belongs in this group
@@ -183,6 +192,21 @@ fun SecurityScreen(
                     title = stringResource(R.string.bt_dest_active_sessions),
                     subtitle = stringResource(R.string.bt_settings_sessions_sub),
                     onClick = onOpenSessions,
+                )
+                // Trusted devices, directly under active sessions and nowhere
+                // else: sessions answer "where am I signed in", these answer
+                // "where can I skip signing in". They are two halves of the same
+                // question and reading one without the other gives an incomplete
+                // picture of who can reach the account.
+                //
+                // The app can only ever READ and REVOKE these — it has no
+                // quick-auth path and cannot mint one — so the screen behind this
+                // row leads with that fact.
+                BtGroupRow(
+                    icon = Icons.Outlined.VerifiedUser,
+                    title = stringResource(R.string.bt_dest_trusted_devices),
+                    subtitle = stringResource(R.string.bt_trusted_sub),
+                    onClick = onOpenTrustedDevices,
                 )
             }
 
