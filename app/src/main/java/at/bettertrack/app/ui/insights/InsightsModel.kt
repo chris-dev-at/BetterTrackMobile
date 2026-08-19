@@ -65,12 +65,52 @@ data class BtInsightSnapshot(
     val coverage: BtInsightCoverage? = null,
     /** Non-null means: render the designed empty state, not a chart. */
     val empty: BtInsightEmptyReason? = null,
+    /**
+     * What [datums] are measured in.
+     *
+     * Almost every insight draws euro amounts, which is why this defaults to
+     * [BtInsightUnit.MONEY]. The movers card's price-movement ranges draw
+     * percentages instead, and a renderer that printed those through the money
+     * formatter would put a € sign on a percentage — the single worst thing this
+     * feature could do to a reader. Carrying the unit on the snapshot is what
+     * lets all four surfaces (card, legend, PDF, poster) agree without each one
+     * re-deciding.
+     */
+    val datumUnit: BtInsightUnit = BtInsightUnit.MONEY,
+    /**
+     * Rows the card KNOWS about but has no number for — listed by name, never
+     * silently dropped and never drawn at zero.
+     *
+     * A position whose price history could not be fetched has not moved 0 %; it
+     * has an unknown move, and a dot at the origin would be a lie about a real
+     * holding. The chart cannot place an unknown, so the card names them under
+     * it instead.
+     */
+    val unavailable: List<String> = emptyList(),
+    /**
+     * The movement span this snapshot answers for, when the insight has one.
+     *
+     * On the snapshot rather than read back from the config because the three
+     * export surfaces receive a snapshot and nothing else. A PDF section headed
+     * *Bewegungen* with no span beside it would be the one genuinely misleading
+     * artefact this feature could produce — the reader cannot tell a week from a
+     * year by looking at percentages.
+     */
+    val moveRange: BtInsightMoveRange? = null,
 ) {
     val isEmpty: Boolean get() = empty != null
 
     /** True when the snapshot holds exactly one datum for a time-series insight. */
     val isSinglePoint: Boolean get() = series.size == 1
 }
+
+/**
+ * The unit a snapshot's [BtInsightSnapshot.datums] carry.
+ *
+ * Two, not more: everything this feature draws is either an amount of money or a
+ * proportion, and a third would mean a chart axis nobody has designed.
+ */
+enum class BtInsightUnit { MONEY, PERCENT }
 
 /** One point of a value or performance series. */
 data class BtInsightPoint(val epochDay: Long, val value: Double)
@@ -159,6 +199,25 @@ enum class BtInsightEmptyReason {
     NO_DIVIDENDS,
     NO_TAX_DATA,
     NO_LIQUID_FUNDS,
+
+    /**
+     * The movers card's price-history pass for the requested span is still in
+     * flight — a transient state, not an answer.
+     *
+     * It exists as its own reason rather than reusing [NO_PRICE_HISTORY] because
+     * the two are opposite claims: this one says *ask again in a moment*, the
+     * other says *we asked and the server had nothing*. Collapsing them would
+     * tell a reader on a slow connection that their portfolio has no price data.
+     */
+    PRICE_HISTORY_LOADING,
+
+    /**
+     * The fetch finished and not one position came back with a usable series.
+     *
+     * Shown instead of a chart of zeros: a position whose series could not be
+     * fetched has an unknown move, and 0 % is an answer nobody computed.
+     */
+    NO_PRICE_HISTORY,
 }
 
 // ---------------------------------------------------------------------------

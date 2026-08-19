@@ -104,7 +104,14 @@ fun buildInsightsReportDoc(
             legend = snapshot.datums.map { datum ->
                 Triple(
                     datum.label,
-                    formatter.money(datum.value, snapshot.signed),
+                    // The PDF legend must say the same thing the card said. A
+                    // percent set printed through the money formatter would put
+                    // a € on a price movement in a file the user keeps.
+                    if (snapshot.datumUnit == BtInsightUnit.PERCENT) {
+                        formatter.percent(datum.value, signed = true)
+                    } else {
+                        formatter.money(datum.value, snapshot.signed)
+                    },
                     if (total != 0.0 && !snapshot.signed) formatter.share(datum.value / total) else "",
                 )
             },

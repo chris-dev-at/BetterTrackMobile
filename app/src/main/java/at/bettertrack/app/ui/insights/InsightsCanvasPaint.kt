@@ -335,6 +335,11 @@ private class InsightPainter(
      * is exactly what the transform promises to preserve.
      */
     private fun markText(datum: VizDatum): String? = when {
+        // A percentage is not a balance, so it prints on the poster too: the
+        // privacy transform removes euro amounts, and [BtInsightValue.Percent]
+        // is explicitly one of the types it keeps. Routing these through
+        // [BtInsightPaintLabels.amount] would stamp a € on a price movement.
+        snapshot.datumUnit == BtInsightUnit.PERCENT -> labels.signedPercent(datum.value)
         snapshot.signed && labels.showAmounts -> labels.signedAmount(datum.value)
         snapshot.signed -> null
         !labels.showAmounts || labels.labels == BtVizLabels.SHARES -> shareText(datum)

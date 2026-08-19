@@ -36,6 +36,7 @@ import at.bettertrack.app.ui.charts.viz.BtVizConfig
 import at.bettertrack.app.ui.charts.viz.BtVizForm
 import at.bettertrack.app.ui.charts.viz.BtVizFormat
 import at.bettertrack.app.ui.charts.viz.rememberVizItems
+import at.bettertrack.app.ui.charts.viz.vizEffectiveLimit
 import at.bettertrack.app.ui.charts.viz.vizFill
 import at.bettertrack.app.ui.charts.viz.vizFormHasOwnRows
 import at.bettertrack.app.ui.components.BtBadge
@@ -43,6 +44,7 @@ import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.formatEur
+import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -140,8 +142,32 @@ fun InsightCard(
                 snapshot.coverage?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.bt_insight_coverage_label) +
-                            " · " + formatter.coverage(it),
+                        // On a price span the fraction counts positions with a
+                        // usable series, which has nothing to do with cost basis.
+                        // Caught on device: a percent card read "Kostenbasis-
+                        // Abdeckung · 10 von 11" about price history.
+                        text = stringResource(
+                            if (snapshot.datumUnit == BtInsightUnit.PERCENT) {
+                                R.string.bt_insight_coverage_prices_label
+                            } else {
+                                R.string.bt_insight_coverage_label
+                            },
+                        ) + " · " + formatter.coverage(it),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = bt.textFaint,
+                    )
+                }
+                // Positions the card knows about but has no number for. Named,
+                // never dropped and never drawn at zero: a holding whose series
+                // could not be fetched has an unknown move, and a bar at the
+                // origin would be a claim nobody measured.
+                if (snapshot.unavailable.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.bt_insight_movers_unavailable,
+                            snapshot.unavailable.joinToString(", "),
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = bt.textFaint,
                     )
@@ -152,6 +178,18 @@ fun InsightCard(
                         text = formatter.caption(it),
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.textMuted,
+                    )
+                }
+                // What the numbers above ARE. Persistent, like the tax card's
+                // disclaimer and for the same reason: a reader who arrives from a
+                // report or a deep link must see it too, and "percent, not euro"
+                // is exactly the misreading this card invites.
+                snapshot.moveRange?.let(::insightMoveNoteRes)?.let { noteRes ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(noteRes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = bt.textFaint,
                     )
                 }
                 if (insight == BtInsight.PORTFOLIO_DEVELOPMENT) {
@@ -212,18 +250,24 @@ private fun InsightCardHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            val dates = if (snapshot.fromEpochDay == snapshot.toEpochDay) {
+                stringResource(
+                    R.string.bt_insight_as_of,
+                    insightFormatDate(snapshot.asOfEpochDay, locale),
+                )
+            } else {
+                insightFormatRange(snapshot.fromEpochDay, snapshot.toEpochDay, locale)
+            }
+            // The card is now called `Bewegungen`, so the span has to be visible
+            // without opening the configurator — a page holding a 1-Woche and a
+            // 1-Jahr copy of it would otherwise show two identical headers over
+            // two very different sets of percentages.
+            val span = snapshot.moveRange?.let { stringResource(insightMoveRangeRes(it)) }
             Text(
                 // A stichtag says `Stand {date}`; only a real range prints one.
                 // An allocation labelled "1. Sep. 2025 – 18. Aug. 2026" would
                 // claim to describe a year it only describes one moment of.
-                text = if (snapshot.fromEpochDay == snapshot.toEpochDay) {
-                    stringResource(
-                        R.string.bt_insight_as_of,
-                        insightFormatDate(snapshot.asOfEpochDay, locale),
-                    )
-                } else {
-                    insightFormatRange(snapshot.fromEpochDay, snapshot.toEpochDay, locale)
-                },
+                text = if (span != null) "$span · $dates" else dates,
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
                 maxLines = 1,
@@ -358,17 +402,46 @@ private fun InsightChart(
 
         else -> {
             val vizConfig = remember(config, family) { insightVizConfig(config, family) }
+            val isPercent = snapshot.datumUnit == BtInsightUnit.PERCENT
+            // `reduceToTopN` folds the tail into one "Andere" mark by SUMMING it.
+            // That is right for euro contributions and wrong for price moves:
+            // two positions that fell 4,69 % and 4,39 % did not fall 9,08 %, and
+            // no market printed that number. So a percent set is truncated to the
+            // same rank the reducer would have kept and simply stops there — the
+            // full rendition still lists every row. Caught on device 2026-08-19.
+            val raw = remember(snapshot.datums, isPercent, vizConfig, resolved, canvas) {
+                if (!isPercent) {
+                    snapshot.datums
+                } else {
+                    insightMoveChartDatums(
+                        snapshot.datums,
+                        vizEffectiveLimit(vizConfig, resolved, canvas),
+                    )
+                }
+            }
             val items = rememberVizItems(
-                raw = snapshot.datums,
+                raw = raw,
                 form = resolved,
                 canvas = canvas,
                 config = vizConfig,
                 categories = snapshot.insight == BtInsight.ASSET_CLASSES,
             )
-            val total = snapshot.total.takeIf { it != 0.0 } ?: items.sumOf { it.value }
-            val format = remember(locale, total, snapshot.signed) {
+            // A percent set has no whole to be a share of, and printing its values
+            // through the euro formatter would put a € on a price movement — the
+            // single worst thing this card could do to a reader.
+            val total = when {
+                isPercent -> 0.0
+                else -> snapshot.total.takeIf { it != 0.0 } ?: items.sumOf { it.value }
+            }
+            val format = remember(locale, total, snapshot.signed, isPercent) {
                 BtVizFormat(
-                    amount = { formatEur(it, locale, showSign = snapshot.signed) },
+                    amount = { value ->
+                        if (isPercent) {
+                            formatPercent(value, locale, showSign = true)
+                        } else {
+                            formatEur(value, locale, showSign = snapshot.signed)
+                        }
+                    },
                     share = { fraction ->
                         if (total != 0.0) {
                             at.bettertrack.app.ui.portfolio.formatWeight(fraction * 100.0, locale)
@@ -409,7 +482,11 @@ private fun InsightChart(
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                text = formatEur(datum.value, locale, showSign = snapshot.signed),
+                                text = if (isPercent) {
+                                    formatPercent(datum.value, locale, showSign = true)
+                                } else {
+                                    formatEur(datum.value, locale, showSign = snapshot.signed)
+                                },
                                 style = BtTheme.type.numberCaption,
                                 color = bt.textMuted,
                                 maxLines = 1,

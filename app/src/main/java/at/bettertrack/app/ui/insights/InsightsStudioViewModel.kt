@@ -13,6 +13,7 @@ import at.bettertrack.app.data.prefs.InsightsPrefs
 import at.bettertrack.app.data.prefs.VizPrefs
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.repo.HistoryRange
+import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.data.repo.PortfolioRepository
 import at.bettertrack.app.data.repo.TaxRepository
 import at.bettertrack.app.ui.charts.viz.BtVizConfig
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * State for the Insights Studio.
@@ -68,6 +71,7 @@ class InsightsStudioViewModel(
     private val repo: PortfolioRepository,
     private val cashRepo: CashClassificationRepository,
     private val taxRepo: TaxRepository,
+    private val marketRepo: MarketRepository,
     private val prefs: InsightsPrefs,
     private val vizPrefs: VizPrefs,
     private val seedPortfolioId: String,
@@ -169,6 +173,36 @@ class InsightsStudioViewModel(
     private val _valueSeries = MutableStateFlow<Map<String, List<BtInsightPoint>>>(emptyMap())
     private val _performanceSeries = MutableStateFlow<Map<String, List<BtInsightPoint>>>(emptyMap())
 
+    /** Asset id → percent price move, for [_assetMovesRange] and no other span. */
+    private val _assetMoves = MutableStateFlow<Map<String, Double>>(emptyMap())
+    private val _assetMovesRange = MutableStateFlow<BtInsightMoveRange?>(null)
+    private val _assetMovesLoading = MutableStateFlow(false)
+
+    /**
+     * Fetched price moves, keyed by asset **and** span, with the moment each was
+     * read so [insightMoveCacheTtlMs] can expire it.
+     *
+     * This is the whole cost-control story. `GET /assets/{id}/history` has no
+     * batch form, so a movers card set to a price span costs one round trip per
+     * position *every time it resolves* — and it resolves on every scope change,
+     * every pull-to-refresh and every return to the page. One warm entry turns
+     * all of those into zero calls, and the TTL is per span because a year's
+     * first-to-last percentage barely moves between two closes while a week's
+     * does.
+     *
+     * Deliberately in memory rather than in Room: it is a derived presentation
+     * value with a ten-minute life, and persisting it would mean a cold app
+     * could show a stale span with no way for the reader to tell.
+     */
+    private val moveCache = mutableMapOf<MoveKey, CachedMove>()
+
+    private data class MoveKey(val assetId: String, val range: BtInsightMoveRange)
+
+    private data class CachedMove(val pct: Double, val fetchedAtMs: Long)
+
+    /** The span a price pass is currently fetching, so two schedulers cannot race. */
+    private var movesInFlight: BtInsightMoveRange? = null
+
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -203,7 +237,17 @@ class InsightsStudioViewModel(
         FetchedRows(budgets, years, positions, values, performance)
     }
 
-    val source: StateFlow<BtInsightSource> = combine(cached, fetched) { rows, extra ->
+    /**
+     * A third group only because `combine`'s typed overloads stop at five, and
+     * an array-typed sixth argument would cost every reader below its name.
+     */
+    private val moves = combine(
+        _assetMoves,
+        _assetMovesRange,
+        _assetMovesLoading,
+    ) { values, range, loading -> MoveRows(values, range, loading) }
+
+    val source: StateFlow<BtInsightSource> = combine(cached, fetched, moves) { rows, extra, mv ->
         BtInsightSource(
             portfolios = rows.portfolios,
             holdings = rows.holdings,
@@ -217,6 +261,9 @@ class InsightsStudioViewModel(
             budgets = extra.budgets,
             valueSeries = extra.valueSeries,
             performanceSeries = extra.performanceSeries,
+            assetMoves = mv.values,
+            assetMovesRange = mv.range,
+            assetMovesLoading = mv.loading,
             taxYear = extra.taxYears,
             taxPositions = extra.taxPositions,
         )
@@ -238,10 +285,36 @@ class InsightsStudioViewModel(
         val performanceSeries: Map<String, List<BtInsightPoint>>,
     )
 
+    private data class MoveRows(
+        val values: Map<String, Double>,
+        val range: BtInsightMoveRange?,
+        val loading: Boolean,
+    )
+
     init {
         viewModelScope.launch {
             repo.refreshPortfolios()
             refreshDerived()
+        }
+        // ── Why the movements span needs its own collector ──────────────────
+        //
+        // [refreshDerived] runs on the events that CHANGE the frame, and on a
+        // cold open it runs from `init` — at which point `cards` is still the
+        // stateIn seed (empty) because the prefs flow has not emitted yet. A
+        // card the user saved on `1 Jahr` therefore looked like `Heute` at that
+        // instant, no price pass was scheduled, and nothing ever re-scheduled
+        // one: the card sat on *Kursverläufe werden geladen* forever.
+        //
+        // The visible set has the same timing problem, so both are watched. The
+        // pair is distinct-until-changed, so this fires once per real change and
+        // a warm cache still makes the resulting pass free.
+        viewModelScope.launch {
+            combine(cards, page) { saved, layout ->
+                val range = saved[BtInsight.DAILY_MOVERS]?.moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT
+                range.takeIf { BtInsight.DAILY_MOVERS in layout.visible && it.needsPriceHistory }
+            }
+                .distinctUntilChanged()
+                .collect { range -> if (range != null) loadAssetMoves(range) }
         }
     }
 
@@ -348,6 +421,10 @@ class InsightsStudioViewModel(
 
     fun refresh() {
         viewModelScope.launch {
+            // An explicit refresh means "get me today's numbers", so it outranks
+            // the price cache's TTL. Dropping the entries is enough; the pass
+            // below refetches exactly the span the card is on.
+            moveCache.clear()
             val ids = scopedPortfolios.value.map { it.id }
             coroutineScope {
                 ids.map { async { repo.refreshPortfolioDetail(it) } }.awaitAll()
@@ -382,6 +459,13 @@ class InsightsStudioViewModel(
                 if (visible.any { it in TAX_BACKED }) {
                     jobs += async { loadTax(ids) }
                 }
+                // Only when the card is on screen AND set to a span that needs a
+                // price series. Heute and Seit Kauf read fields the holdings rows
+                // already carry, so they must never cost a request.
+                if (BtInsight.DAILY_MOVERS in visible) {
+                    val range = moveRange()
+                    if (range.needsPriceHistory) jobs += async { loadAssetMoves(range) }
+                }
                 jobs.awaitAll()
             }
         } finally {
@@ -403,6 +487,102 @@ class InsightsStudioViewModel(
         }
         _valueSeries.value = values
         _performanceSeries.value = perf
+    }
+
+    /** The span the movements card is currently set to. */
+    fun moveRange(): BtInsightMoveRange =
+        configFor(BtInsight.DAILY_MOVERS).moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT
+
+    /**
+     * Fetch one price series per in-scope position and reduce each to a percent.
+     *
+     * Four things keep this affordable, and all four matter because there is no
+     * batch history endpoint:
+     *
+     *  1. **It only runs for a span that needs it** — see the call site.
+     *  2. **The targets are capped** by [insightMoveFetchCap], which honours the
+     *     card's own `Umfang`, applied to the positions ranked by market value.
+     *     Everything past the cap is reported as unavailable, not as flat.
+     *  3. **The cache is checked first**, per asset and per span, so a re-resolve
+     *     inside the TTL issues nothing at all.
+     *  4. **Concurrency is bounded** to [BT_INSIGHT_MOVE_FETCH_PARALLELISM], so a
+     *     wide account queues rather than opening thirty sockets.
+     *
+     * A failed call leaves the asset OUT of the map. That is the whole reason the
+     * map is sparse rather than defaulted: absence means "unknown", and the
+     * builder prints it as unavailable instead of drawing a zero nobody measured.
+     */
+    private suspend fun loadAssetMoves(range: BtInsightMoveRange) {
+        val assetRange = range.assetRange ?: return
+        // Two paths schedule this — [refreshDerived] and the span collector — and
+        // on a cold open they can arrive together. Checking before the first
+        // suspension point is enough to make one of them a no-op, because view
+        // model coroutines resume on the main dispatcher.
+        if (movesInFlight == range) return
+        val asOf = windowFor(BtInsight.DAILY_MOVERS).asOfEpochDay
+        val valueByAsset = holdings.value
+            .groupBy { it.assetId }
+            .mapValues { (_, rows) -> rows.sumOf { it.marketValueEur ?: 0.0 } }
+            .filterValues { it > 0.0 }
+        if (valueByAsset.isEmpty()) {
+            _assetMoves.value = emptyMap()
+            _assetMovesRange.value = range
+            return
+        }
+        val scope = configFor(BtInsight.DAILY_MOVERS).topN ?: familyFor(BtInsight.DAILY_MOVERS).scope
+        val targets = insightMoveFetchTargets(valueByAsset, insightMoveFetchCap(scope))
+
+        val now = System.currentTimeMillis()
+        val ttl = insightMoveCacheTtlMs(range)
+        val warm = mutableMapOf<String, Double>()
+        val cold = mutableListOf<String>()
+        targets.forEach { assetId ->
+            val hit = moveCache[MoveKey(assetId, range)]
+            if (hit != null && now - hit.fetchedAtMs < ttl) warm[assetId] = hit.pct else cold += assetId
+        }
+
+        if (cold.isEmpty()) {
+            _assetMoves.value = warm
+            _assetMovesRange.value = range
+            return
+        }
+
+        _assetMovesLoading.value = true
+        movesInFlight = range
+        try {
+            val gate = Semaphore(BT_INSIGHT_MOVE_FETCH_PARALLELISM)
+            val fresh = coroutineScope {
+                cold.map { assetId ->
+                    async {
+                        gate.withPermit {
+                            when (val result = marketRepo.assetHistory(assetId, assetRange)) {
+                                // Clamped, not taken raw: the Drive-autonomous
+                                // source ignores `range` and hands back its whole
+                                // cache, which under a "1 Woche" label would be a
+                                // move since the cache began.
+                                is BtResult.Ok ->
+                                    assetId to insightMovePercentIn(result.value.points, range, asOf)
+                                // Offline, refused, or an asset the price service
+                                // does not cover. Unknown, never zero.
+                                is BtResult.Err -> assetId to null
+                            }
+                        }
+                    }
+                }.awaitAll()
+            }
+            val stamped = System.currentTimeMillis()
+            fresh.forEach { (assetId, pct) ->
+                if (pct != null) {
+                    warm[assetId] = pct
+                    moveCache[MoveKey(assetId, range)] = CachedMove(pct, stamped)
+                }
+            }
+            _assetMoves.value = warm
+            _assetMovesRange.value = range
+        } finally {
+            movesInFlight = null
+            _assetMovesLoading.value = false
+        }
     }
 
     private suspend fun loadBudgets(ids: List<String>) {

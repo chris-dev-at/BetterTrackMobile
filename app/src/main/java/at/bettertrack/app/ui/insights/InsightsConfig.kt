@@ -77,6 +77,15 @@ data class BtInsightConfig(
     val showBudgets: Boolean = true,
     val showFees: Boolean = true,
     val includeTransfers: Boolean = false,
+    /**
+     * `null` = the insight's own default movement span (today).
+     *
+     * Only meaningful where [BtInsightSpec.moveRanges] is non-empty. Stored as an
+     * enum NAME appended to the end of the codec line, so every config written
+     * before this field existed decodes to `null` and keeps behaving exactly as
+     * it did — a card the user configured yesterday still opens on Heute.
+     */
+    val moveRange: BtInsightMoveRange? = null,
 ) {
     /** True when nothing was ever overridden — the card is purely inherited. */
     val isPristine: Boolean
@@ -276,10 +285,12 @@ fun insightForReport(
  * those live in [BtInsightsPage].
  */
 fun insightResetToFamily(card: BtInsightConfig): BtInsightConfig = BtInsightConfig(
-    // Period and scope are the card's own subject, not a `Darstellung` — a
-    // reset must not silently retarget the card at a different year.
+    // Period, scope and movement span are the card's own subject, not a
+    // `Darstellung` — a reset must not silently retarget the card at a different
+    // year, or throw a reader back to today when they were reading the year.
     period = card.period,
     portfolioIds = card.portfolioIds,
+    moveRange = card.moveRange,
 )
 
 /** True when [card] holds at least one `Darstellung` override worth resetting. */
@@ -322,6 +333,7 @@ fun insightConfigEncode(config: BtInsightConfig): String? {
         if (config.showBudgets) "1" else "0",
         if (config.showFees) "1" else "0",
         if (config.includeTransfers) "1" else "0",
+        config.moveRange?.name ?: NONE,
     ).joinToString(SEP)
 }
 
@@ -362,5 +374,8 @@ fun insightConfigDecode(raw: String?): BtInsightConfig {
         showBudgets = parts.getOrNull(14)?.let { it == "1" } ?: true,
         showFees = parts.getOrNull(15)?.let { it == "1" } ?: true,
         includeTransfers = parts.getOrNull(16) == "1",
+        moveRange = at(17)?.let { name ->
+            BtInsightMoveRange.entries.firstOrNull { it.name == name }
+        },
     )
 }

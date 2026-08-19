@@ -3428,8 +3428,8 @@
     <string name="bt_insight_q_development">How did portfolio value and performance develop over the selected period?</string>
     <string name="bt_insight_name_asset_classes">Asset classes</string>
     <string name="bt_insight_q_asset_classes">How is the current portfolio value allocated across asset classes?</string>
-    <string name="bt_insight_name_movers">Daily movers</string>
-    <string name="bt_insight_q_movers">Which holdings moved today\'s portfolio value the most?</string>
+    <string name="bt_insight_name_movers">Movements</string>
+    <string name="bt_insight_q_movers">Which holdings moved the most over the selected span?</string>
     <string name="bt_insight_name_cashflow">Monthly cash flow</string>
     <string name="bt_insight_q_cashflow">How are inflow, outflow, and net cash flow developing over recent months?</string>
     <string name="bt_insight_name_spending">Budgets &amp; spending</string>
@@ -3491,6 +3491,7 @@
     <string name="bt_insight_fact_top_source_share">Its share</string>
     <string name="bt_insight_fact_source_count">Cash sources</string>
     <string name="bt_insight_coverage_label">Cost basis coverage</string>
+    <string name="bt_insight_coverage_prices_label">Price history coverage</string>
 
     <!-- ── Insights Studio — captions (deterministic, factual) ── -->
     <string name="bt_insight_caption_development">The server-calculated performance for this period is %1$s.</string>
@@ -3533,6 +3534,24 @@
     <string name="bt_insight_empty_tax_body">No tax summary is available for this portfolio and calendar year.</string>
     <string name="bt_insight_empty_liquid_title">No liquid funds recorded</string>
     <string name="bt_insight_empty_liquid_body">Add a cash source to see available funds.</string>
+    <string name="bt_insight_empty_prices_loading_title">Loading price history</string>
+    <string name="bt_insight_empty_prices_loading_body">The price series for this span is still being fetched.</string>
+    <string name="bt_insight_empty_prices_title">No price history available</string>
+    <string name="bt_insight_empty_prices_body">The server returned no price series for these holdings over this span.</string>
+
+    <!-- ── Movements — the span picker and its honesty notes ── -->
+    <string name="bt_insight_move_label">Span</string>
+    <string name="bt_insight_move_day">Today</string>
+    <string name="bt_insight_move_week">1 week</string>
+    <string name="bt_insight_move_month">1 month</string>
+    <string name="bt_insight_move_year">1 year</string>
+    <string name="bt_insight_move_since_buy">Since purchase</string>
+    <string name="bt_insight_fact_best_move">Its price move</string>
+    <string name="bt_insight_fact_worst_move">Its price move</string>
+    <string name="bt_insight_caption_biggest_price_move">%1$s shows the strongest price move over this span at %2$s.</string>
+    <string name="bt_insight_movers_price_note">Price movement in percent, taken from the server price series. No euro contribution — that would require the position size held throughout the span.</string>
+    <string name="bt_insight_movers_since_buy_note">Result since the recorded cost basis, calculated by the server. Not the price move since the series began.</string>
+    <string name="bt_insight_movers_unavailable">No price history: %1$s</string>
 
     <!-- ── Insights Studio — configuration and page editing ── -->
     <string name="bt_insight_add">Add insight</string>

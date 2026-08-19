@@ -21,6 +21,14 @@ import at.bettertrack.app.ui.charts.viz.BtVizScope
  *     is a tax year." A greyed-out control still advertises a capability the
  *     product does not have, so [BtInsightSpec] simply does not list it and the
  *     configurator has nothing to draw. [InsightsCatalogTest] guards this.
+ *
+ *     The movers card's [BtInsightSpec.moveRanges] is the exception that proves
+ *     the rule rather than a hole in it: it still exposes no period control,
+ *     because `dayChangeEur` still has no weekly form. It exposes a *different*
+ *     control that switches to a different server fact — a price series, or the
+ *     recorded unrealized result — and each option prints only what its own
+ *     source can state. The euro-per-position-over-a-period figure the study
+ *     refused is still refused. See [BtInsightMoveRange].
  *  2. **The product boundary.** Every insight below reads holdings, cost basis,
  *     market value, server-calculated P/L, portfolio history, cash movements and
  *     tags, budgets, transactions and fees, dividend records, or annual tax
@@ -177,6 +185,16 @@ data class BtInsightSpec(
     val feesToggle: Boolean = false,
     /** True when transfers may be folded back into the flow. */
     val transfersToggle: Boolean = false,
+    /**
+     * The movement spans this insight may offer, in picker order.
+     *
+     * Empty for eleven of the twelve. This is NOT [BtInsightPeriodKind] under
+     * another name: a period is a frame every card shares, while a movement span
+     * selects *which server fact answers the question at all* — a session's
+     * `dayChangeEur`, a price series, or the recorded unrealized result. See
+     * [BtInsightMoveRange] for why those cannot be one control.
+     */
+    val moveRanges: List<BtInsightMoveRange> = emptyList(),
 )
 
 /** The five insights a new user meets, in rank order. */
@@ -251,7 +269,13 @@ fun insightSpec(insight: BtInsight): BtInsightSpec = when (insight) {
         rank = 3,
         defaultOn = true,
         group = BtInsightGroup.PORTFOLIO,
-        // "Tagesbewegungen cannot become an arbitrary range."
+        // Still SESSION, and still no [BtInsightPeriodKind] control: the study's
+        // "Tagesbewegungen cannot become an arbitrary range" is a statement about
+        // `dayChangeEur`, which exists for one session and for no other span.
+        // [moveRanges] below does not weaken that — it offers the four OTHER
+        // questions the server can answer, each from its own field, and each
+        // labelled as what it is. A 1-Woche euro contribution is still absent,
+        // because it would still have to be invented.
         timing = BtInsightTiming.SESSION,
         family = BtVizFamily.MOVERS,
         signed = true,
@@ -265,6 +289,13 @@ fun insightSpec(insight: BtInsight): BtInsightSpec = when (insight) {
         sorts = listOf(BtInsightSort.AMOUNT, BtInsightSort.PERCENT),
         groupings = emptyList(),
         focus = true,
+        moveRanges = listOf(
+            BtInsightMoveRange.DAY,
+            BtInsightMoveRange.WEEK,
+            BtInsightMoveRange.MONTH,
+            BtInsightMoveRange.YEAR,
+            BtInsightMoveRange.SINCE_BUY,
+        ),
     )
 
     BtInsight.MONTHLY_CASHFLOW -> BtInsightSpec(

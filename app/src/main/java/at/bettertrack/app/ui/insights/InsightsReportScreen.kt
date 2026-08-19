@@ -106,6 +106,7 @@ fun InsightsReportScreen(
             repo = AppGraph.portfolioRepository,
             cashRepo = AppGraph.cashClassificationRepository,
             taxRepo = AppGraph.taxRepository,
+            marketRepo = AppGraph.marketRepository,
             prefs = AppGraph.insightsPrefs,
             vizPrefs = AppGraph.vizPrefs,
             seedPortfolioId = portfolioId,

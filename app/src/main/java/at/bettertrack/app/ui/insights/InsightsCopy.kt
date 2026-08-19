@@ -85,6 +85,8 @@ fun insightEmptyTitleRes(reason: BtInsightEmptyReason): Int = when (reason) {
     BtInsightEmptyReason.NO_DIVIDENDS -> R.string.bt_insight_empty_dividends_title
     BtInsightEmptyReason.NO_TAX_DATA -> R.string.bt_insight_empty_tax_title
     BtInsightEmptyReason.NO_LIQUID_FUNDS -> R.string.bt_insight_empty_liquid_title
+    BtInsightEmptyReason.PRICE_HISTORY_LOADING -> R.string.bt_insight_empty_prices_loading_title
+    BtInsightEmptyReason.NO_PRICE_HISTORY -> R.string.bt_insight_empty_prices_title
 }
 
 @StringRes
@@ -100,6 +102,8 @@ fun insightEmptyBodyRes(reason: BtInsightEmptyReason): Int = when (reason) {
     BtInsightEmptyReason.NO_DIVIDENDS -> R.string.bt_insight_empty_dividends_body
     BtInsightEmptyReason.NO_TAX_DATA -> R.string.bt_insight_empty_tax_body
     BtInsightEmptyReason.NO_LIQUID_FUNDS -> R.string.bt_insight_empty_liquid_body
+    BtInsightEmptyReason.PRICE_HISTORY_LOADING -> R.string.bt_insight_empty_prices_loading_body
+    BtInsightEmptyReason.NO_PRICE_HISTORY -> R.string.bt_insight_empty_prices_body
 }
 
 @StringRes
@@ -110,6 +114,40 @@ fun insightPeriodRes(kind: BtInsightPeriodKind): Int = when (kind) {
     BtInsightPeriodKind.MAX -> R.string.bt_insight_period_max
     BtInsightPeriodKind.CUSTOM -> R.string.bt_insight_period_custom
     BtInsightPeriodKind.CALENDAR_YEAR -> R.string.bt_insight_period_calendar_year
+}
+
+/**
+ * The picker label for a movement span.
+ *
+ * Deliberately NOT reusing [insightPeriodRes]: `1 M` there names a *frame* over a
+ * portfolio series, while `1 Monat` here names a different server fact entirely.
+ * Sharing the strings would invite sharing the control, which is the one thing
+ * [BtInsightMoveRange] exists to prevent.
+ */
+@StringRes
+fun insightMoveRangeRes(range: BtInsightMoveRange): Int = when (range) {
+    BtInsightMoveRange.DAY -> R.string.bt_insight_move_day
+    BtInsightMoveRange.WEEK -> R.string.bt_insight_move_week
+    BtInsightMoveRange.MONTH -> R.string.bt_insight_move_month
+    BtInsightMoveRange.YEAR -> R.string.bt_insight_move_year
+    BtInsightMoveRange.SINCE_BUY -> R.string.bt_insight_move_since_buy
+}
+
+/**
+ * The sentence printed under a movements chart saying what its numbers are.
+ *
+ * `null` for [BtInsightMoveRange.DAY], which needs no disclaimer: it prints
+ * server-computed euro contributions and has done since the card shipped. The
+ * other four each make a claim a reader could misread, so each says what it is.
+ */
+@StringRes
+fun insightMoveNoteRes(range: BtInsightMoveRange): Int? = when (range) {
+    BtInsightMoveRange.DAY -> null
+    BtInsightMoveRange.WEEK,
+    BtInsightMoveRange.MONTH,
+    BtInsightMoveRange.YEAR,
+    -> R.string.bt_insight_movers_price_note
+    BtInsightMoveRange.SINCE_BUY -> R.string.bt_insight_movers_since_buy_note
 }
 
 @StringRes

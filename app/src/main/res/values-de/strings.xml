@@ -3238,8 +3238,8 @@
     <string name="bt_insight_q_development">Wie haben sich Depotwert und Performance im gewählten Zeitraum entwickelt?</string>
     <string name="bt_insight_name_asset_classes">Anlageklassen</string>
     <string name="bt_insight_q_asset_classes">Wie verteilt sich der aktuelle Depotwert auf Anlageklassen?</string>
-    <string name="bt_insight_name_movers">Tagesbewegungen</string>
-    <string name="bt_insight_q_movers">Welche Positionen haben den heutigen Depotwert am stärksten bewegt?</string>
+    <string name="bt_insight_name_movers">Bewegungen</string>
+    <string name="bt_insight_q_movers">Welche Positionen haben sich im gewählten Zeitraum am stärksten bewegt?</string>
     <string name="bt_insight_name_cashflow">Monats-Cashflow</string>
     <string name="bt_insight_q_cashflow">Wie entwickeln sich Zufluss, Abfluss und Netto über die letzten Monate?</string>
     <string name="bt_insight_name_spending">Budgets &amp; Ausgaben</string>
@@ -3301,6 +3301,7 @@
     <string name="bt_insight_fact_top_source_share">Ihr Anteil</string>
     <string name="bt_insight_fact_source_count">Cash-Quellen</string>
     <string name="bt_insight_coverage_label">Kostenbasis-Abdeckung</string>
+    <string name="bt_insight_coverage_prices_label">Kursverlauf-Abdeckung</string>
 
     <!-- ── Insights Studio — captions (deterministic, factual) ── -->
     <string name="bt_insight_caption_development">Die serverseitig berechnete Performance beträgt in diesem Zeitraum %1$s.</string>
@@ -3343,6 +3344,24 @@
     <string name="bt_insight_empty_tax_body">Für dieses Depot und Kalenderjahr liegt keine Steuerübersicht vor.</string>
     <string name="bt_insight_empty_liquid_title">Keine liquiden Mittel erfasst</string>
     <string name="bt_insight_empty_liquid_body">Füge eine Cash-Quelle hinzu, um verfügbare Mittel zu sehen.</string>
+    <string name="bt_insight_empty_prices_loading_title">Kursverläufe werden geladen</string>
+    <string name="bt_insight_empty_prices_loading_body">Die Kursreihen für diesen Zeitraum werden noch geladen.</string>
+    <string name="bt_insight_empty_prices_title">Keine Kursverläufe verfügbar</string>
+    <string name="bt_insight_empty_prices_body">Der Server hat für diese Positionen keine Kursreihen zu diesem Zeitraum geliefert.</string>
+
+    <!-- ── Bewegungen — die Zeitspannen-Auswahl und ihre Klarstellungen ── -->
+    <string name="bt_insight_move_label">Zeitspanne</string>
+    <string name="bt_insight_move_day">Heute</string>
+    <string name="bt_insight_move_week">1 Woche</string>
+    <string name="bt_insight_move_month">1 Monat</string>
+    <string name="bt_insight_move_year">1 Jahr</string>
+    <string name="bt_insight_move_since_buy">Seit Kauf</string>
+    <string name="bt_insight_fact_best_move">Seine Kursbewegung</string>
+    <string name="bt_insight_fact_worst_move">Seine Kursbewegung</string>
+    <string name="bt_insight_caption_biggest_price_move">%1$s zeigt mit %2$s die stärkste Kursbewegung in diesem Zeitraum.</string>
+    <string name="bt_insight_movers_price_note">Kursbewegung in Prozent, aus der Kursreihe des Servers. Kein Euro-Beitrag — dafür müsste die über den Zeitraum gehaltene Stückzahl bekannt sein.</string>
+    <string name="bt_insight_movers_since_buy_note">Ergebnis seit der erfassten Kostenbasis, vom Server berechnet. Nicht die Kursbewegung seit Beginn der Kursreihe.</string>
+    <string name="bt_insight_movers_unavailable">Ohne Kursverlauf: %1$s</string>
 
     <!-- ── Insights Studio — configuration and page editing ── -->
     <string name="bt_insight_add">Insight hinzufügen</string>

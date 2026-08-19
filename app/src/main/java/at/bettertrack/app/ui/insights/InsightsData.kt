@@ -69,6 +69,25 @@ data class BtInsightSource(
     val valueSeries: Map<String, List<BtInsightPoint>> = emptyMap(),
     /** Server performance series per portfolio id, rebased by the SERVER. */
     val performanceSeries: Map<String, List<BtInsightPoint>> = emptyMap(),
+    /**
+     * Asset id → percent price move over [assetMovesRange], derived from the
+     * server's own close series (see [insightMovePercent]).
+     *
+     * An asset absent from this map has an UNKNOWN move, not a zero one — either
+     * its history call failed or it fell outside the fetch cap — and the movers
+     * builder lists it as unavailable rather than plotting it at the origin.
+     */
+    val assetMoves: Map<String, Double> = emptyMap(),
+    /**
+     * The range [assetMoves] was fetched for.
+     *
+     * Carried so the builder can refuse to label a week's numbers as a year's
+     * while a newly requested range is still in flight. Mismatched means "not
+     * fetched yet", never "close enough".
+     */
+    val assetMovesRange: BtInsightMoveRange? = null,
+    /** True while a price-history pass for the requested range is in flight. */
+    val assetMovesLoading: Boolean = false,
     /** Server tax-year totals for the resolved calendar year, per portfolio. */
     val taxYear: List<BtInsightTaxYear> = emptyList(),
     /** Server per-position realized/dividend rows for the resolved year. */
@@ -275,7 +294,7 @@ fun buildInsightSnapshot(
 ): BtInsightSnapshot = when (insight) {
     BtInsight.PORTFOLIO_DEVELOPMENT -> buildDevelopment(config, source, window)
     BtInsight.ASSET_CLASSES -> buildAssetClasses(config, source, window)
-    BtInsight.DAILY_MOVERS -> buildDailyMovers(config, source, window)
+    BtInsight.DAILY_MOVERS -> buildMovers(config, source, window)
     BtInsight.MONTHLY_CASHFLOW -> buildCashflow(config, source, window, zone)
     BtInsight.BUDGETS_SPENDING -> buildSpending(config, source, window, zone)
     BtInsight.HOLDING_CONCENTRATION -> buildConcentration(config, source, window)
@@ -458,15 +477,56 @@ private fun buildAssetClasses(
     )
 }
 
-// ── 3 · Tagesbewegungen ─────────────────────────────────────────────────────
+// ── 3 · Bewegungen ──────────────────────────────────────────────────────────
 
-private fun buildDailyMovers(
+/**
+ * Which positions moved, over the span the card is set to.
+ *
+ * Three shapes, because three different server facts answer the question and
+ * they are not interchangeable — see [BtInsightMoveRange] for the full table and
+ * the reasoning:
+ *
+ *  - **Heute** and **Seit Kauf** are euro answers, each summed from a
+ *    server-computed per-holding field (`dayChangeEur`, `unrealizedPnlEur`).
+ *  - **1 Woche / 1 Monat / 1 Jahr** are PERCENT answers derived from the server's
+ *    own close series, because the euro contribution of a position over a span
+ *    needs its quantity *through* that span and no endpoint states it.
+ *
+ * The card never mixes the two: [BtInsightSnapshot.datumUnit] tells every
+ * renderer which one it is holding.
+ */
+private fun buildMovers(
     config: BtInsightConfig,
     source: BtInsightSource,
     window: BtInsightWindow,
 ): BtInsightSnapshot {
-    // `dayChangeEur` is server-computed. A euro move is never derived from a
-    // percentage and a market value here.
+    val range = config.moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT
+    val span = insightMoveWindow(range, window.asOfEpochDay)
+    val spanned = window.copy(fromEpochDay = span.first, toEpochDay = span.last)
+    val snapshot = when (range) {
+        BtInsightMoveRange.DAY -> buildSessionMovers(config, source, spanned)
+        BtInsightMoveRange.SINCE_BUY -> buildSinceBuyMovers(config, source, spanned)
+        BtInsightMoveRange.WEEK,
+        BtInsightMoveRange.MONTH,
+        BtInsightMoveRange.YEAR,
+        -> buildPriceMovers(config, source, spanned, range)
+    }
+    // Stamped once, here, so the empty and populated paths cannot disagree about
+    // which span the card is showing.
+    return snapshot.copy(moveRange = range)
+}
+
+/**
+ * Today's session, unchanged from the card as it shipped.
+ *
+ * `dayChangeEur` is server-computed. A euro move is never derived from a
+ * percentage and a market value here.
+ */
+private fun buildSessionMovers(
+    config: BtInsightConfig,
+    source: BtInsightSource,
+    window: BtInsightWindow,
+): BtInsightSnapshot {
     val rows = source.holdings
         .filter { (it.dayChangeEur ?: 0.0) != 0.0 }
         .groupBy { it.assetSymbol }
@@ -526,6 +586,179 @@ private fun buildDailyMovers(
             )
         },
         total = dayTotal,
+    )
+}
+
+/**
+ * **Seit Kauf** — the honest "all time".
+ *
+ * The tempting reading of "all time" is the MAX close series, and it is wrong:
+ * that series starts when the *instrument's* data starts, typically years before
+ * the user bought anything, so its first-to-last move describes a position nobody
+ * held. The result the user actually has since they bought is the server's
+ * per-holding `unrealizedPnlEur` — the same figure the *Unrealisierte G/V*
+ * insight prints, deliberately, rather than a second number that would have to
+ * disagree with it.
+ *
+ * A holding with no recorded cost basis has no such result and is counted in
+ * [BtInsightCoverage] instead of being shown at break-even.
+ */
+private fun buildSinceBuyMovers(
+    config: BtInsightConfig,
+    source: BtInsightSource,
+    window: BtInsightWindow,
+): BtInsightSnapshot {
+    val all = source.holdings.filter { (it.marketValueEur ?: 0.0) > 0.0 }
+    val covered = all.filter { it.unrealizedPnlEur != null }
+    val coverage = BtInsightCoverage(covered.size, all.size)
+    val rows = covered
+        .groupBy { it.assetSymbol }
+        .map { (symbol, group) ->
+            VizDatum(
+                key = "mv:$symbol",
+                label = symbol,
+                value = group.sumOf { it.unrealizedPnlEur ?: 0.0 },
+                hiddenCount = group.size,
+            )
+        }
+        .filter { it.value != 0.0 }
+    if (rows.isEmpty()) {
+        return empty(BtInsight.DAILY_MOVERS, window, BtInsightEmptyReason.NO_COST_BASIS, coverage)
+    }
+
+    val sorted = when (config.sort) {
+        BtInsightSort.PERCENT -> rows.sortedByDescending { datum ->
+            covered.firstOrNull { "mv:${it.assetSymbol}" == datum.key }?.unrealizedPnlPct ?: 0.0
+        }
+        else -> rows.sortedByDescending { it.value }
+    }
+    val total = source.portfolios.sumOf { it.totals?.unrealizedPnlEur ?: 0.0 }
+    val best = rows.maxByOrNull { it.value }
+    val worst = rows.minByOrNull { it.value }
+
+    return base(BtInsight.DAILY_MOVERS, window).copy(
+        datums = sorted,
+        headline = BtInsightValue.Money(total, signed = true),
+        facts = listOfNotNull(
+            best?.let { BtInsightFact(R.string.bt_insight_fact_best, BtInsightValue.Text(it.label)) },
+            best?.let {
+                BtInsightFact(
+                    R.string.bt_insight_fact_best_amount,
+                    BtInsightValue.Money(it.value, signed = true),
+                )
+            },
+            worst?.let { BtInsightFact(R.string.bt_insight_fact_worst, BtInsightValue.Text(it.label)) },
+            worst?.let {
+                BtInsightFact(
+                    R.string.bt_insight_fact_worst_amount,
+                    BtInsightValue.Money(it.value, signed = true),
+                )
+            },
+        ),
+        caption = BtInsightCaption(
+            templateRes = R.string.bt_insight_caption_unrealized,
+            value = BtInsightValue.Money(total, signed = true),
+        ),
+        total = total,
+        coverage = coverage,
+        unavailable = all.filter { it.unrealizedPnlEur == null }
+            .map { it.assetSymbol }
+            .distinct()
+            .sorted(),
+    )
+}
+
+/**
+ * **1 Woche / 1 Monat / 1 Jahr** — percent price movement per position.
+ *
+ * What this may print and what it may not:
+ *
+ *  - It prints the first-to-last percent of a series the SERVER returned for a
+ *    range the SERVER chose the interval for, which is the same presentation-level
+ *    difference the shipped hero's `rangeDeltaEur` already prints.
+ *  - It prints **no euro figure and no portfolio total**, because both would need
+ *    the position's quantity through the span. The headline is therefore the
+ *    strongest single move, which is a value that actually exists.
+ *  - It plots nothing for a position whose series is missing. Those are named in
+ *    [BtInsightSnapshot.unavailable] and counted in [BtInsightCoverage], because
+ *    an unknown move is not a flat one.
+ *
+ * [BtInsightSource.assetMovesRange] must match the requested range: numbers
+ * fetched for last week are not this year's, and showing them under a year's
+ * label while the year's fetch is still in flight would be the exact mislabelling
+ * this whole file exists to prevent.
+ */
+private fun buildPriceMovers(
+    config: BtInsightConfig,
+    source: BtInsightSource,
+    window: BtInsightWindow,
+    range: BtInsightMoveRange,
+): BtInsightSnapshot {
+    val held = source.holdings.filter { (it.marketValueEur ?: 0.0) > 0.0 }
+    if (held.isEmpty()) {
+        return empty(BtInsight.DAILY_MOVERS, window, BtInsightEmptyReason.NO_HOLDINGS)
+    }
+    val fresh = source.assetMovesRange == range
+    val moves = if (fresh) source.assetMoves else emptyMap()
+
+    // Grouped by SYMBOL like every other row on this card, but the move is a
+    // property of the ASSET — two portfolios holding the same stock saw one
+    // price move, not two, so the percentage is taken once and never summed.
+    val bySymbol = held.groupBy { it.assetSymbol }
+    val rows = bySymbol.mapNotNull { (symbol, group) ->
+        val pct = group.firstNotNullOfOrNull { moves[it.assetId] } ?: return@mapNotNull null
+        VizDatum(key = "mv:$symbol", label = symbol, value = pct, hiddenCount = group.size)
+    }
+    val missing = bySymbol.keys.filter { symbol -> rows.none { it.key == "mv:$symbol" } }.sorted()
+
+    if (rows.isEmpty()) {
+        val reason = if (!fresh || source.assetMovesLoading) {
+            BtInsightEmptyReason.PRICE_HISTORY_LOADING
+        } else {
+            BtInsightEmptyReason.NO_PRICE_HISTORY
+        }
+        return empty(BtInsight.DAILY_MOVERS, window, reason, BtInsightCoverage(0, bySymbol.size))
+    }
+
+    // Both offered sorts rank the same quantity here — the rows ARE percentages —
+    // so `Betrag` and `Prozent` agree instead of quietly meaning the same thing
+    // twice. Order is by the move itself, strongest gain first.
+    val sorted = rows.sortedByDescending { it.value }
+    val best = rows.maxByOrNull { it.value }
+    val worst = rows.minByOrNull { it.value }
+
+    return base(BtInsight.DAILY_MOVERS, window).copy(
+        datums = sorted,
+        headline = best?.let { BtInsightValue.Percent(it.value, signed = true) },
+        facts = listOfNotNull(
+            best?.let { BtInsightFact(R.string.bt_insight_fact_best, BtInsightValue.Text(it.label)) },
+            best?.let {
+                BtInsightFact(
+                    R.string.bt_insight_fact_best_move,
+                    BtInsightValue.Percent(it.value, signed = true),
+                )
+            },
+            worst?.let { BtInsightFact(R.string.bt_insight_fact_worst, BtInsightValue.Text(it.label)) },
+            worst?.let {
+                BtInsightFact(
+                    R.string.bt_insight_fact_worst_move,
+                    BtInsightValue.Percent(it.value, signed = true),
+                )
+            },
+        ),
+        caption = best?.let {
+            BtInsightCaption(
+                templateRes = R.string.bt_insight_caption_biggest_price_move,
+                name = it.label,
+                value = BtInsightValue.Percent(it.value, signed = true),
+            )
+        },
+        // A signed percent set has no whole to be a share of, and the config's
+        // `Beträge` labels have no euro to print — the renderer reads the unit.
+        total = 0.0,
+        datumUnit = BtInsightUnit.PERCENT,
+        coverage = BtInsightCoverage(rows.size, bySymbol.size),
+        unavailable = missing,
     )
 }
 

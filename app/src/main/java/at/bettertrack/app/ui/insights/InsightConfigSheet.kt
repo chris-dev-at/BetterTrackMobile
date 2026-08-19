@@ -164,6 +164,21 @@ fun InsightConfigSheet(
             )
         }
 
+        // ── Zeitspanne — the movements card's subject, not a Darstellung ────
+        // Sits where the period row would be, because for this card it IS the
+        // period question. Its hint states what the chosen span can print, so
+        // the reader learns that 1 Woche is a percentage BEFORE they pick it
+        // rather than by noticing the euro sign vanished.
+        if (spec.moveRanges.isNotEmpty()) {
+            val range = draft.moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT
+            ConfigValueRow(
+                label = stringResource(R.string.bt_insight_move_label),
+                hint = insightMoveNoteRes(range)?.let { stringResource(it) },
+                value = stringResource(insightMoveRangeRes(range)),
+                onClick = { picker = ConfigPicker.MoveRange },
+            )
+        }
+
         // ── Scope ───────────────────────────────────────────────────────────
         ConfigValueRow(
             label = stringResource(R.string.bt_insight_scope),
@@ -338,6 +353,18 @@ fun InsightConfigSheet(
             onDismiss = { picker = null },
         )
 
+        ConfigPicker.MoveRange -> InsightOptionSheet(
+            title = stringResource(R.string.bt_insight_move_label),
+            options = spec.moveRanges,
+            label = { stringResource(insightMoveRangeRes(it)) },
+            selected = draft.moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT,
+            onSelect = {
+                draft = draft.copy(moveRange = it)
+                picker = null
+            },
+            onDismiss = { picker = null },
+        )
+
         ConfigPicker.Scope -> InsightOptionSheet(
             title = stringResource(R.string.bt_insight_scope),
             options = listOf<String?>(null) + portfolioNames.keys.toList(),
@@ -454,7 +481,9 @@ fun InsightConfigSheet(
     }
 }
 
-private enum class ConfigPicker { Period, Scope, Form, Labels, TopN, Sort, Grouping, Series, Focus }
+private enum class ConfigPicker {
+    Period, MoveRange, Scope, Form, Labels, TopN, Sort, Grouping, Series, Focus,
+}
 
 /**
  * A nested value picker.
