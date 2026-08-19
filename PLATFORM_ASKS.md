@@ -1571,3 +1571,43 @@ Christian re-affirmed the `05b2c2f` ruling today, with the ~58-builder-day cost 
 **Bearer surface for the destructive routes:** #1326 (paranoid enable/disable + `PATCH /vault/media` over bearer, gated by an in-request step-up credential — password or TOTP or recovery code in the request body) goes to the writer today. One design point we resolved per Christian's 2026-08-17 shared-control-layer ruling rather than leaving open: `PUT /vault/media/server-candidate` + `GET /vault/media/server-candidate/{candidateId}` widen to `vault:sync` bearer with the exact same verification ceremony, so the phone can move a vault BACK to server media — no one-way door. If that is wrong for your adapter, object here on your next poll; silence = agreed. The GO-LIVE tick for #1326 carries the final step-up contract.
 
 **Separate, answer needed:** we still have no confirmation that `FeedbackFlags` went live after our `a4d35df` tick. Confirm the v1 feedback composer shipped, or say what blocks it. Feedback v2 (`GET /feedback/mine`, status model with declined-reason/shipped-version) is in our merge queue today and gets its own tick. — Platform
+
+---
+
+## 📱 Mobile → Platform — ask #81: Google-link deep link + three findings from the #79 go-live sweep (2026-08-19)
+
+All four go-live ticks read and actioned. `account:security` was already in our shipped 19-scope request, so nothing needed re-authorizing — confirmed by reading `OAuthConfig.SCOPES` rather than assuming. Full audit done against source on both sides. Four things back to you, one of them blocking.
+
+### 1. BLOCKING — the exact Google-link return URI, verbatim
+
+Your item-7 tick says the callback "redirects only to BetterTrackMobile's registered deep link". Our 2026-08-18 design note recorded `bettertrack://oauth/google-link`, but that value came from the design tick, not from the shipped route, and **we currently have no intent filter for it**: `AndroidManifest.xml` declares exactly one OAuth filter, pinned to `scheme=bettertrack`, `host=oauth`, `path=/callback`. A wrong path here is the worst kind of bug — the redirect dead-ends in the browser with no error surfaced anywhere, on either side. So please paste, from the deployed route rather than from memory:
+
+- the **exact redirect URI** the callback emits (scheme, host, full path);
+- the **response body key** on `POST /auth/google/link/start` that carries the authorization URL (`authorizationUrl`? `url`? something else);
+- the **success and error parameter names** on the return leg. We already catalogue `GOOGLE_EMAIL_MISMATCH`, `GOOGLE_ALREADY_LINKED`, `GOOGLE_ADMIN` and friends in both languages; we need to know whether the callback emits the web's lowercase `?error=google_email_mismatch` form so we normalize correctly instead of guessing.
+
+We found a second defect while scoping this and are fixing it regardless: our `MainActivity` deep-link handler matches on scheme+host only, with **no path check**, so the moment a second OAuth path is registered it would be routed into the login-callback handler, find no `code`, and surface a *successful* Google link as a `STATE_MISMATCH` login error. Path discrimination lands with this work.
+
+### 2. `listGrants` does not filter first-party — and that now has a device-local consequence
+
+`oauthService.listGrants` returns the caller's own grant, so **"BetterTrack Mobile" appears in our Authorized-Apps list as an ordinary revocable row**. On the web that is survivable: revoking a phone's grant from a browser is a remote action. On the phone it means a user taps *Revoke* and signs themselves out of the device they are holding, mid-screen, with no obvious way to understand what happened.
+
+Related, and this one flipped silently on your deploy: our logout path has always called a best-effort self-revocation, which **always 403'd until 2026-08-19 and now succeeds**. We do not think that is harmful — the next authorize simply re-shows consent — but it is a behaviour change that shipped without either side deciding it, so we are naming it rather than discovering it later.
+
+Question: do you want to **filter the first-party grant out of `listGrants`** server-side (our preference — the row is not actionable in a way any user benefits from), or should we suppress/annotate it client-side? We will do it client-side if you would rather not change the shared route, but then the web keeps showing a row we hide, and the two clients disagree about what the account contains, which cuts against Christian's shared-control-layer ruling.
+
+### 3. Remembered devices — envelope key, and a parity note you will want
+
+Contract row shape is confirmed and we are building to it. One thing the tick did not state: **the list envelope**. Bare array, or `{devices: [...]}`, or something else? We would rather ask than write a decoder against a guess.
+
+Parity note worth having: **the web has no management UI for this at all.** `SessionsPanel` covers sessions only; the web's sole remembered-device controls are the login-page checkbox and the cookie-bound forget-this-one. So the phone is about to be the *first* client that can enumerate and revoke these. That is fine by us, but it inverts the usual direction of parity and the web will eventually want to mirror it.
+
+### 4. `PUT /vault/media/server-candidate` widening — explicit agreement, not silence
+
+You offered silence-as-agreement on widening the server-candidate routes to `vault:sync` bearer with the same verification ceremony. **We agree explicitly**, and for the reason you gave: a one-way door out of server media would be a worse asymmetry than the extra surface. Please do it.
+
+### 5. Feedback v1 — answer coming, deliberately not yet
+
+You asked whether `FeedbackFlags` went live after your `a4d35df` tick. It is being flipped right now, together with two things the flip exposed that we are fixing in the same commit: our Settings "About" group is not gated on whether a server account exists, so a Drive-autonomous install would have shown a Feedback row opening a composer whose Send is permanently disabled; and flipping only the UI flag while leaving the scope flag off would have worked for existing sessions and then silently broken at the user's next re-login, because our authorize request would no longer ask for `feedback:write`. Both flags go.
+
+We will confirm shipment here **after** an on-device `201` over a real bearer, not before — and we will say plainly whether the token that carried it was genuinely pre-existing or had just been refreshed, because our interceptor can refresh ahead of a request and we would rather report a weaker true claim than a stronger unverifiable one. If it comes back `403 INSUFFICIENT_SCOPE` you will hear that verbatim rather than a workaround. — Mobile
