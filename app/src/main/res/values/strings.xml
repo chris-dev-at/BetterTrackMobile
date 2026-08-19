@@ -3885,4 +3885,62 @@
          SCREAMING_SNAKE envelope name (see `RETURN_LEG_ALIASES`). -->
     <string name="bt_conn_google_err_state">That link attempt expired. Tap Connect Google to start a fresh one.</string>
     <string name="bt_conn_google_link_failed">Google was not connected. Please start again.</string>
+
+    <!-- ── First-run setup wizard (§6.12) ────────────────────────────────────
+         The native half of the web's `/welcome`. An account created through the
+         app's Custom-Tab login is exempted from the web's first-run redirect
+         (`/oauth/authorize`), so this is the only surface that can run — or
+         finish — its setup. Step ids and order mirror `stepMeta.ts` exactly. -->
+    <string name="bt_firstrun_step_of">Step %1$d of %2$d · %3$s</string>
+    <string name="bt_firstrun_continue">Continue</string>
+    <string name="bt_firstrun_later">Do this later</string>
+    <string name="bt_firstrun_finish">Finish setup</string>
+    <string name="bt_firstrun_loading">Loading…</string>
+    <string name="bt_firstrun_offline">Offline — connect to load this.</string>
+    <string name="bt_firstrun_signed_out">Your session ended. Sign in again to finish setup.</string>
+    <string name="bt_firstrun_unknown_value">Not set</string>
+
+    <string name="bt_firstrun_profile_label">Profile</string>
+    <string name="bt_firstrun_profile_title">Is this you?</string>
+    <string name="bt_firstrun_profile_hint">These came from the account you just created.</string>
+    <string name="bt_firstrun_profile_name">Display name</string>
+    <string name="bt_firstrun_profile_email">Email</string>
+    <string name="bt_firstrun_profile_parked">Renaming isn\'t available yet — the API has no route for it. Your picture and bio come later in this setup.</string>
+
+    <string name="bt_firstrun_verify_label">Email</string>
+    <string name="bt_firstrun_verify_title">Is your email verified?</string>
+    <string name="bt_firstrun_verify_verified">Verified through Google</string>
+    <string name="bt_firstrun_verify_parked_sub">Not verified</string>
+    <string name="bt_firstrun_verify_parked">There is no verification mail yet. Only accounts signed in with Google arrive verified.</string>
+
+    <string name="bt_firstrun_security_label">Security</string>
+    <string name="bt_firstrun_security_title">Add a second lock?</string>
+    <string name="bt_firstrun_security_hint">Two-factor, an account PIN or this phone\'s app lock — any one of them counts.</string>
+    <string name="bt_firstrun_security_row">Security</string>
+    <string name="bt_firstrun_security_on">A second lock is active</string>
+    <string name="bt_firstrun_security_off">No second lock yet</string>
+
+    <string name="bt_firstrun_prefs_label">Preferences</string>
+    <string name="bt_firstrun_prefs_title">How should the app look?</string>
+    <string name="bt_firstrun_prefs_language">Language</string>
+    <string name="bt_firstrun_prefs_theme">Appearance</string>
+
+    <string name="bt_firstrun_tax_label">Tax</string>
+    <string name="bt_firstrun_tax_title">How should gains be taxed?</string>
+    <string name="bt_firstrun_tax_hint">This becomes the default for new portfolios. Each portfolio can still differ.</string>
+    <string name="bt_firstrun_tax_row">Tax handling</string>
+
+    <string name="bt_firstrun_public_label">Public profile</string>
+    <string name="bt_firstrun_public_title">Should others find you?</string>
+    <string name="bt_firstrun_public_row">Public profile</string>
+    <string name="bt_firstrun_public_on">Public</string>
+    <string name="bt_firstrun_public_off">Private</string>
+
+    <string name="bt_firstrun_done_label">Done</string>
+    <string name="bt_firstrun_done_title">That\'s your setup</string>
+    <string name="bt_firstrun_done_set">Set</string>
+    <string name="bt_firstrun_done_later">Later</string>
+
+    <string name="bt_firstrun_settings_row">Finish setup</string>
+    <string name="bt_firstrun_settings_row_sub">A few account basics are still waiting.</string>
 </resources>

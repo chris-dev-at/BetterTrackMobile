@@ -184,7 +184,7 @@ class AuthRepository(
                         }
                         _loginPhase.value = LoginPhase.Idle
                         // No username/email in logs — logcat must stay PII-free.
-                        Log.i(TAG, "Logged in (role=${user.role}).")
+                        Log.i(TAG, "Logged in (role=${user.role}, firstRun=${user.firstRun}).")
                         onSessionAuthenticated()
                     }
                 }
@@ -239,6 +239,14 @@ class AuthRepository(
                             } else {
                                 AuthState.LoggedIn(user)
                             }
+                            // The first-run signal, named rather than inferred.
+                            // UNKNOWN and DONE look identical on every surface —
+                            // both simply show no wizard — so without this line
+                            // there is no way to tell "the server says this
+                            // account is set up" from "the server never sent the
+                            // field". PII-free by construction: it is one of
+                            // three enum names.
+                            Log.i(TAG, "Session refreshed (firstRun=${user.firstRun}).")
                         }
                     }
                 }
@@ -247,6 +255,42 @@ class AuthRepository(
             }
         }
     }
+
+    // ── First-run setup (§6.12) ───────────────────────────────────────────────
+
+    /**
+     * Tell the server this account's setup run is over — finished or dismissed.
+     *
+     * The endpoint answers the **fresh** `/auth/me`, so the stored session user is
+     * rebuilt from that body rather than from an optimistic local edit: the
+     * server's own `firstRunCompletedAt` is what the gate reads, and inventing a
+     * timestamp the server may not have written would hide a failed call.
+     *
+     * Deliberately NOT best-effort-silent like [refreshUser]: the wizard's
+     * terminal step renders this result (retry on failure), because a completion
+     * that quietly did not land would bring the wizard back on the next launch
+     * with no explanation. The local dismissal record is what keeps the user out
+     * of a loop meanwhile.
+     */
+    suspend fun completeFirstRun(): BtResult<SessionUser> =
+        when (val r = apiCall(json) { btApi.completeFirstRun() }) {
+            is BtResult.Ok -> {
+                val user = r.value.toSessionUser()
+                store.saveUser(user)
+                _authState.value = if (user.mustChangePassword) {
+                    AuthState.PasswordChangeRequired(user)
+                } else {
+                    AuthState.LoggedIn(user)
+                }
+                Log.i(TAG, "First-run setup marked complete (state=${user.firstRun}).")
+                BtResult.Ok(user)
+            }
+
+            is BtResult.Err -> {
+                Log.w(TAG, "completeFirstRun failed: ${r.error.message}")
+                r
+            }
+        }
 
     // ── Logout ────────────────────────────────────────────────────────────────
 

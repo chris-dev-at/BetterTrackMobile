@@ -11,11 +11,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.data.auth.AuthState
+import at.bettertrack.app.data.auth.FirstRunGate
+import at.bettertrack.app.data.auth.firstRunGate
 import at.bettertrack.app.data.storage.RootGate
+import at.bettertrack.app.data.storage.hasServerAccount
 import at.bettertrack.app.data.storage.rootGate
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
+import at.bettertrack.app.ui.firstrun.FirstRunWizard
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originLabel
@@ -66,7 +70,16 @@ fun BtRoot(
         RootGate.VAULT_UNLOCK -> VaultUnlockGate { BtApp() }
 
         // SERVER and BOTH keep today's behaviour byte for byte.
-        RootGate.AUTH -> AuthGate(onStartLogin = onStartLogin, onOpenUrl = onOpenUrl)
+        RootGate.AUTH -> AuthGate(
+            onStartLogin = onStartLogin,
+            onOpenUrl = onOpenUrl,
+            // Drive-autonomous installs have no BetterTrack account, so first-run
+            // setup does not apply to them and the wizard must never be reachable
+            // from there. Passed as a fact rather than re-derived inside the auth
+            // gate so the ordering — storage mode decided BEFORE the account
+            // question — stays visible at the one place that owns it.
+            hasServerAccount = AppGraph.gatedStorageMode(storedMode).hasServerAccount,
+        )
     }
 
     // Dev update notifier (Step V) — an app-level overlay dialog, shown over any
@@ -86,6 +99,7 @@ fun BtRoot(
 private fun AuthGate(
     onStartLogin: () -> Unit,
     onOpenUrl: (String) -> Unit,
+    hasServerAccount: Boolean,
 ) {
     val auth = AppGraph.authRepository
     val state by auth.authState.collectAsStateWithLifecycle()
@@ -147,7 +161,29 @@ private fun AuthGate(
                     },
                 )
             } else {
-                BtApp()
+                // The first-run gate (§6.12) — BELOW the storage gate, below the
+                // auth gate and below the app lock, in that order and for the same
+                // reason each of those sits where it does: "has this account been
+                // set up?" only means anything once "is there an account, and may
+                // this person see it?" has been answered.
+                //
+                // The no-flash discipline is [firstRunGate]'s third clause rather
+                // than a `resolved` flag: the signal's own UNKNOWN value already
+                // means "the server has not told us", and an upgrade-in-place or a
+                // pre-0074 server reads UNKNOWN — so there is no window in which a
+                // months-old install can be routed here, not even for one frame.
+                val dismissedAccount by AppGraph.firstRunStore.dismissedAccount
+                    .collectAsStateWithLifecycle()
+                val user = (state as AuthState.LoggedIn).user
+                val gate = firstRunGate(
+                    hasServerAccount = hasServerAccount,
+                    state = user.firstRun,
+                    dismissedForAccount = user.id.isNotBlank() && dismissedAccount == user.id,
+                )
+                when (gate) {
+                    FirstRunGate.WIZARD -> FirstRunWizard()
+                    FirstRunGate.APP -> BtApp()
+                }
             }
         }
     }

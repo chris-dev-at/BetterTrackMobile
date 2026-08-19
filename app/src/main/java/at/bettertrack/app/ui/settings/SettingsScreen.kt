@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
@@ -77,6 +78,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.BuildConfig
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.AuthState
+import at.bettertrack.app.data.auth.FirstRunState
+import at.bettertrack.app.data.auth.firstRunEscapeRowVisible
 import at.bettertrack.app.data.auth.SessionUser
 import at.bettertrack.app.data.i18n.AppLanguage
 import at.bettertrack.app.data.i18n.LocaleManager
@@ -429,6 +432,25 @@ fun SettingsScreen(
                         // as "we lost it", not "your server does not say".
                         memberSince = formatMemberSince(user?.memberSince, rememberBtLocale()),
                     )
+                    // The way back into the first-run wizard for anyone who
+                    // dismissed it (§6.12). Shown only while the SERVER says the
+                    // account is still pending — never on DONE, and never on
+                    // UNKNOWN, where a row offering to finish a setup nobody
+                    // mentioned would be a task the app invented. See
+                    // [firstRunEscapeRowVisible].
+                    //
+                    // It navigates by clearing the local dismissal: the root gate
+                    // is already observing that value, so there is exactly one
+                    // source of truth for "is the wizard showing" and no window in
+                    // which a route has fired but the gate disagrees.
+                    if (firstRunEscapeRowVisible(hasAccount, user?.firstRun ?: FirstRunState.UNKNOWN)) {
+                        BtGroupRow(
+                            icon = Icons.Outlined.AutoAwesome,
+                            title = stringResource(R.string.bt_firstrun_settings_row),
+                            subtitle = stringResource(R.string.bt_firstrun_settings_row_sub),
+                            onClick = { AppGraph.firstRunStore.reopen() },
+                        )
+                    }
                     BtGroupRow(
                         title = stringResource(R.string.bt_settings_profile_icon),
                         subtitle = stringResource(R.string.bt_settings_profile_icon_sub),

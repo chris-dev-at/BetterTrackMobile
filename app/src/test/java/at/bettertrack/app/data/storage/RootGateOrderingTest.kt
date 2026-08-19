@@ -1,5 +1,8 @@
 package at.bettertrack.app.data.storage
 
+import at.bettertrack.app.data.auth.FirstRunGate
+import at.bettertrack.app.data.auth.FirstRunState
+import at.bettertrack.app.data.auth.firstRunGate
 import at.bettertrack.app.data.prefs.gatedStorageMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -112,5 +115,80 @@ class RootGateOrderingTest {
         // server" distinction the wizard is built on.
         assertEquals(StorageMode.UNSET, gatedStorageMode(StorageMode.UNSET, driveEnabled = false))
         assertEquals(RootGate.WIZARD, rootGate(resolved = true, gatedMode = StorageMode.UNSET))
+    }
+
+    // ── The ACCOUNT first-run gate, stacked under this one ──────────────────
+    //
+    // Two different wizards now sit in the root stack and they must never be
+    // confused: [RootGate.WIZARD] is the STORAGE setup ("where should your data
+    // live?"), which runs before there is a session at all; [FirstRunGate.WIZARD]
+    // is the ACCOUNT setup (§6.12), which runs below the auth gate and the app
+    // lock, for a signed-in account the server reports as never set up.
+    //
+    // The regression these guard is the same shape as the one above — an
+    // established user shown a first-run screen — with a different trigger: not a
+    // mode that has not resolved yet, but a signal the server never sent.
+
+    @Test
+    fun `an unknown first-run signal behaves exactly like a completed one`() {
+        // The dangerous case. A pre-0074 server, or a session cached by a build
+        // that did not know the field, reads UNKNOWN — and UNKNOWN must be as
+        // inert as DONE, for every account, dismissed or not.
+        for (dismissed in listOf(true, false)) {
+            assertEquals(
+                FirstRunGate.APP,
+                firstRunGate(hasServerAccount = true, state = FirstRunState.UNKNOWN, dismissedForAccount = dismissed),
+            )
+            assertEquals(
+                firstRunGate(hasServerAccount = true, state = FirstRunState.DONE, dismissedForAccount = dismissed),
+                firstRunGate(hasServerAccount = true, state = FirstRunState.UNKNOWN, dismissedForAccount = dismissed),
+            )
+        }
+    }
+
+    @Test
+    fun `only the two server modes can ever reach the account wizard`() {
+        // Composition with the gate above: whatever `rootGate` selects, the
+        // account wizard is reachable only where the install actually HAS a
+        // BetterTrack account. A Drive-only user has none and never will.
+        for (mode in StorageMode.entries) {
+            val gate = firstRunGate(
+                hasServerAccount = mode.hasServerAccount,
+                state = FirstRunState.PENDING,
+                dismissedForAccount = false,
+            )
+            val expected = if (mode.hasServerAccount) FirstRunGate.WIZARD else FirstRunGate.APP
+            assertEquals("mode=$mode", expected, gate)
+        }
+        assertNotEquals(
+            FirstRunGate.WIZARD,
+            firstRunGate(
+                hasServerAccount = StorageMode.DRIVE.hasServerAccount,
+                state = FirstRunState.PENDING,
+                dismissedForAccount = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `the two wizards can never both be selected`() {
+        // `BtRoot` composes them in sequence, so the account wizard is only ever
+        // evaluated on the AUTH branch. The property that makes that safe rather
+        // than merely true today: every mode the STORAGE wizard claims is a mode
+        // for which the account gate answers APP, so nothing can ever want both.
+        for (mode in StorageMode.entries) {
+            if (rootGate(resolved = true, gatedMode = mode) != RootGate.WIZARD) continue
+            // UNSET means "we have not asked where the data lives yet" — there is
+            // no account question to have an answer to.
+            assertEquals(
+                "mode=$mode selects the storage wizard, so the account wizard must be inert",
+                FirstRunGate.APP,
+                firstRunGate(
+                    hasServerAccount = false,
+                    state = FirstRunState.PENDING,
+                    dismissedForAccount = false,
+                ),
+            )
+        }
     }
 }

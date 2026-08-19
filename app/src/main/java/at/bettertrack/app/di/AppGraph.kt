@@ -304,6 +304,9 @@ object AppGraph {
                 // V5 S2b: discreet mode is per-account, so the next account must
                 // not inherit the previous one's masking preference.
                 discreetModeStore.clear()
+                // Same rule for the first-run dismissal: the record is scoped to
+                // one account, and the account it belonged to is gone.
+                firstRunStore.clear()
             },
         )
     }
@@ -573,6 +576,14 @@ object AppGraph {
      */
     val discreetModeStore: at.bettertrack.app.data.prefs.DiscreetModeStore by lazy {
         at.bettertrack.app.data.prefs.DiscreetModeStore(appContext)
+    }
+
+    /**
+     * The first-run wizard's local "dismissed here" record (account-scoped). The
+     * gate in `BtRoot` and Settings' escape row both read it; nothing else does.
+     */
+    val firstRunStore: at.bettertrack.app.data.prefs.FirstRunStore by lazy {
+        at.bettertrack.app.data.prefs.FirstRunStore(appContext)
     }
 
     val pushTokenManager: PushTokenManager by lazy {

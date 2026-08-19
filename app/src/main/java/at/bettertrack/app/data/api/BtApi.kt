@@ -230,6 +230,20 @@ interface BtApi {
     suspend fun me(): Response<MeResponse>
 
     /**
+     * Mark first-run setup as finished or dismissed (§6.12).
+     *
+     * Idempotent and set-once server-side, and it only ever touches the caller's
+     * own row — there is no payload. Live for bearers since the 2026-08-18 deploy
+     * under `account:security`, which this app already requests.
+     *
+     * Answers the **fresh** [MeResponse], so the caller does not have to re-read
+     * `/auth/me` to learn the new `firstRunCompletedAt`; the session user is
+     * refreshed straight from this body.
+     */
+    @POST("auth/first-run/complete")
+    suspend fun completeFirstRun(): Response<MeResponse>
+
+    /**
      * Does the signed-in account have a web PIN? The dedicated, lightweight gate
      * for the "use my BetterTrack PIN" app-lock option (§5) — the option is
      * offered only when `pinSet == true`. Read-only; never sets or changes the PIN.

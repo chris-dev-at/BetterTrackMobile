@@ -3686,4 +3686,58 @@
     <string name="bt_conn_google_linked_ok">Google-Konto verbunden.</string>
     <string name="bt_conn_google_err_state">Dieser Verbindungsversuch ist abgelaufen. Tippe auf „Google verbinden“, um neu zu starten.</string>
     <string name="bt_conn_google_link_failed">Google wurde nicht verbunden. Bitte noch einmal starten.</string>
+
+    <!-- ── Ersteinrichtung (§6.12) ─────────────────────────────────────────── -->
+    <string name="bt_firstrun_step_of">Schritt %1$d von %2$d · %3$s</string>
+    <string name="bt_firstrun_continue">Weiter</string>
+    <string name="bt_firstrun_later">Später erledigen</string>
+    <string name="bt_firstrun_finish">Einrichtung abschließen</string>
+    <string name="bt_firstrun_loading">Wird geladen …</string>
+    <string name="bt_firstrun_offline">Offline — zum Laden bitte verbinden.</string>
+    <string name="bt_firstrun_signed_out">Deine Sitzung ist beendet. Melde dich neu an, um die Einrichtung abzuschließen.</string>
+    <string name="bt_firstrun_unknown_value">Nicht gesetzt</string>
+
+    <string name="bt_firstrun_profile_label">Profil</string>
+    <string name="bt_firstrun_profile_title">Bist das du?</string>
+    <string name="bt_firstrun_profile_hint">Das stammt aus dem Konto, das du gerade angelegt hast.</string>
+    <string name="bt_firstrun_profile_name">Anzeigename</string>
+    <string name="bt_firstrun_profile_email">E-Mail</string>
+    <string name="bt_firstrun_profile_parked">Umbenennen geht noch nicht — die API hat dafür keine Route. Bild und Kurztext kommen später in dieser Einrichtung.</string>
+
+    <string name="bt_firstrun_verify_label">E-Mail</string>
+    <string name="bt_firstrun_verify_title">Ist deine E-Mail bestätigt?</string>
+    <string name="bt_firstrun_verify_verified">Über Google bestätigt</string>
+    <string name="bt_firstrun_verify_parked_sub">Nicht bestätigt</string>
+    <string name="bt_firstrun_verify_parked">Es gibt noch keine Bestätigungsmail. Nur mit Google angemeldete Konten kommen bestätigt an.</string>
+
+    <string name="bt_firstrun_security_label">Sicherheit</string>
+    <string name="bt_firstrun_security_title">Ein zweites Schloss?</string>
+    <string name="bt_firstrun_security_hint">Zwei-Faktor, eine Konto-PIN oder die App-Sperre dieses Handys — eines davon genügt.</string>
+    <string name="bt_firstrun_security_row">Sicherheit</string>
+    <string name="bt_firstrun_security_on">Ein zweites Schloss ist aktiv</string>
+    <string name="bt_firstrun_security_off">Noch kein zweites Schloss</string>
+
+    <string name="bt_firstrun_prefs_label">Einstellungen</string>
+    <string name="bt_firstrun_prefs_title">Wie soll die App aussehen?</string>
+    <string name="bt_firstrun_prefs_language">Sprache</string>
+    <string name="bt_firstrun_prefs_theme">Darstellung</string>
+
+    <string name="bt_firstrun_tax_label">Steuern</string>
+    <string name="bt_firstrun_tax_title">Wie sollen Gewinne versteuert werden?</string>
+    <string name="bt_firstrun_tax_hint">Das wird der Standard für neue Portfolios. Jedes Portfolio kann davon abweichen.</string>
+    <string name="bt_firstrun_tax_row">Steuerbehandlung</string>
+
+    <string name="bt_firstrun_public_label">Öffentliches Profil</string>
+    <string name="bt_firstrun_public_title">Sollen dich andere finden?</string>
+    <string name="bt_firstrun_public_row">Öffentliches Profil</string>
+    <string name="bt_firstrun_public_on">Öffentlich</string>
+    <string name="bt_firstrun_public_off">Privat</string>
+
+    <string name="bt_firstrun_done_label">Fertig</string>
+    <string name="bt_firstrun_done_title">Das ist deine Einrichtung</string>
+    <string name="bt_firstrun_done_set">Erledigt</string>
+    <string name="bt_firstrun_done_later">Später</string>
+
+    <string name="bt_firstrun_settings_row">Einrichtung abschließen</string>
+    <string name="bt_firstrun_settings_row_sub">Ein paar Konto-Grundlagen warten noch.</string>
 </resources>

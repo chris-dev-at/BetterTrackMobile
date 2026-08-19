@@ -59,6 +59,22 @@ data class SessionUser(
      * row is simply not rendered (see `formatMemberSince`).
      */
     val memberSince: String? = null,
+    /**
+     * Whether this account has ever been through first-run setup, as last seen on
+     * `/auth/me` — the signal the native first-run wizard gates on.
+     *
+     * Stored as the resolved [FirstRunState] rather than as the wire's
+     * absent/null/timestamp shape because only the three-valued answer is ever
+     * consulted, and because a persisted enum keeps the meaning readable in the
+     * session blob.
+     *
+     * Defaulted to [FirstRunState.UNKNOWN] for the reason the whole tri-state
+     * exists: a session written by a build that had no such field must decode to
+     * "the server never told us", which never gates. A cold start therefore shows
+     * the wizard only to an account the server has *already* reported as pending —
+     * the same pre-flight discipline [privacyMode] uses.
+     */
+    val firstRun: FirstRunState = FirstRunState.UNKNOWN,
 ) {
     companion object {
         /** Placeholder used when a valid token exists but /auth/me hasn't resolved yet. */
@@ -72,6 +88,7 @@ data class SessionUser(
             baseCurrency = "EUR",
             privacyMode = null,
             memberSince = null,
+            firstRun = FirstRunState.UNKNOWN,
         )
     }
 }
@@ -86,6 +103,7 @@ fun MeResponse.toSessionUser(): SessionUser = SessionUser(
     baseCurrency = baseCurrency,
     privacyMode = privacyMode,
     memberSince = createdAt,
+    firstRun = firstRunState,
 )
 
 /**

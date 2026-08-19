@@ -71,6 +71,25 @@ data class MeResponse(
      */
     val privacyMode: String? = null,
     val lastLoginAt: String? = null,
+    /**
+     * When the account finished (or dismissed) first-run setup (platform
+     * migration 0074). **Tri-state on purpose** — see
+     * [at.bettertrack.app.data.auth.FirstRunStamp]:
+     *
+     *  - key absent → [at.bettertrack.app.data.auth.FirstRunStamp.Absent]
+     *    (a pre-0074 server; the app must NOT conclude "not completed"),
+     *  - explicit `null` → [at.bettertrack.app.data.auth.FirstRunStamp.Never]
+     *    (this account has never been set up — the wizard's whole trigger),
+     *  - a timestamp → [at.bettertrack.app.data.auth.FirstRunStamp.At].
+     *
+     * Non-nullable with a non-null default because that is precisely what makes
+     * absent and explicit-null distinguishable in kotlinx-serialization: a
+     * nullable property would be read through `decodeNullableSerializableElement`,
+     * which swallows the null before any custom serializer sees it.
+     */
+    @Serializable(with = at.bettertrack.app.data.auth.FirstRunStampSerializer::class)
+    val firstRunCompletedAt: at.bettertrack.app.data.auth.FirstRunStamp =
+        at.bettertrack.app.data.auth.FirstRunStamp.Absent,
     val createdAt: String? = null,
 )
 
