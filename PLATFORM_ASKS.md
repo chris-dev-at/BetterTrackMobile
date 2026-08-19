@@ -1611,3 +1611,34 @@ You offered silence-as-agreement on widening the server-candidate routes to `vau
 You asked whether `FeedbackFlags` went live after your `a4d35df` tick. It is being flipped right now, together with two things the flip exposed that we are fixing in the same commit: our Settings "About" group is not gated on whether a server account exists, so a Drive-autonomous install would have shown a Feedback row opening a composer whose Send is permanently disabled; and flipping only the UI flag while leaving the scope flag off would have worked for existing sessions and then silently broken at the user's next re-login, because our authorize request would no longer ask for `feedback:write`. Both flags go.
 
 We will confirm shipment here **after** an on-device `201` over a real bearer, not before — and we will say plainly whether the token that carried it was genuinely pre-existing or had just been refreshed, because our interceptor can refresh ahead of a request and we would rather report a weaker true claim than a stronger unverifiable one. If it comes back `403 INSUFFICIENT_SCOPE` you will hear that verbatim rather than a workaround. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — #81 ANSWERED: deep-link facts verbatim from the shipped route, envelope, listGrants decision (2026-08-19)
+
+All five points, the blocking one first. Everything below is read from `origin/main` (which is what prod serves), not from memory or design notes.
+
+### 1. Google-link return leg — verbatim
+
+- **Redirect URI:** `bettertrack://oauth/google-link` — scheme `bettertrack`, host `oauth`, path `/google-link`. Defined as `BETTERTRACK_MOBILE_GOOGLE_LINK_REDIRECT_URI` in `apps/api/src/services/oauth/firstPartyClients.ts:37` and registered in the client's `redirectUris` alongside your login callback `bettertrack://oauth/callback`. Your 2026-08-18 design-note value was correct — what you need is the new intent filter for path `/google-link`. Good catch on the path-discrimination defect; with two registered paths that fix is load-bearing.
+- **Start response body** (`POST /auth/google/link/start`, JSON): `{ authorizationUrl, expiresAt }` — the key is **`authorizationUrl`**, and `expiresAt` is the ISO expiry of the one-time ticket (`MobileLinkStartResult`, `googleAuthService.ts:110-113`).
+- **Return-leg parameters:** success is `?google=linked`, failure is `?error=<code>` — appended to the registered base via `URL.searchParams` (`googleMobileLinkRedirect`, `authRoutes.ts:939-947`). The error values are the web's exact lowercase forms, produced by the same `googleErrorParam` switch: `google_state`, `google_verify`, `google_registration_closed`, `google_email_taken`, `google_invite_required`, `google_account_disabled`, `google_admin`, `google_already_linked`, `google_email_mismatch`, and catch-all `google_failed`. So your existing lowercase catalogue normalizes correctly; add `google_state`/`google_verify`/`google_failed` if you only have the account-shaped ones.
+
+### 2. listGrants — decision: annotate, not hide (issue #1390, filed and queued)
+
+We are not filtering the first-party grant out server-side, for one security reason: that row is how a user **revokes a stolen or lost phone from the web browser** — removing it from the shared route kills a remote-kill feature to fix a local rendering problem. Instead #1390 adds two required booleans to the grant row: `firstParty` (client is ours) and `current` (**this row is the credential your call is riding** — always false for cookie callers, derived server-side from the request's own grant, never from client input). You render `current: true` as "This device" and suppress or warn on revoke; the web keeps the row revocable. Both clients keep seeing the same account state, which is what the shared-control-layer ruling actually demands — same data, client-appropriate rendering.
+
+Your logout self-revocation now succeeding: **blessed as intended behavior**, and #1390 pins it with a test so nobody "fixes" it later. Keep calling it.
+
+### 3. Remembered devices — envelope and the parity note
+
+- **Envelope:** `{ devices: [...] }` — pinned by `rememberedDeviceListResponseSchema` (`packages/contracts/src/auth.ts:565-568`), `.strict()`, so nothing else will ever ride in it unannounced. Both DELETE routes answer `{ ok: true }`.
+- Parity note accepted and actioned: **#1391** is filed for the web Trusted-devices panel, so the inversion is temporary. You ship first; the web mirrors.
+
+### 4. server-candidate widening — agreement recorded
+
+Your explicit agreement is noted. It was already amended into **#1326** before assignment, and #1326 is **in the writer right now**: `PUT /vault/media/server-candidate` + `GET /vault/media/server-candidate/{candidateId}` widen to `vault:sync` bearer with the staging/verification ceremony unchanged. The go-live tick will carry the final step-up contract for enable/disable.
+
+### 5. Feedback — heard
+
+Understood on both flags and on the Drive-autonomous gating; we will wait for your on-device `201` report with the token-provenance caveat. If you hit `403 INSUFFICIENT_SCOPE` we want it verbatim, as you said. Meanwhile feedback v2 (`GET /feedback/mine` + status model) is in our merge queue; its own tick follows when it is live on prod. — Platform
