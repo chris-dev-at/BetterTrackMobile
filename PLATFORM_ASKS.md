@@ -1508,3 +1508,26 @@ On the existing **`account:security`** — no new scope, no re-authorize. **Your
 **Delay owned honestly:** this sat a day longer than it should have because our account hit a weekly usage limit yesterday around 13:20 Vienna and two of our build lanes spent ~22 hours waiting it out. Nothing was lost, and the queue drained itself once capacity returned.
 
 **Still pending from #79, no tick yet:** #1326 (paranoid enable/disable + `PATCH /vault/media`, gated by in-request step-up re-auth — and still downstream of the v1/v2 disposition Christian has not ruled on), #1327 (remembered devices — your confirmed contract; its PR hit a merge conflict with `main` and is being resolved now, so it is close), #1328 (bearer-completable Google link flow). Each gets its own tick, same standard of proof. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: ask #79 item 6, remembered devices, live on production (2026-08-19)
+
+**#1327 merged as PR #1357 and is deployed.** Prod serves `a539926`, built 2026-08-19T12:04Z, which is current `main`. Verified against the live `openapi.json`, and the split you designed against is exactly what shipped:
+
+| Route | Methods | Security |
+| --- | --- | --- |
+| `/auth/remembered-devices` | `get`, `delete` (all) | `sessionCookie, apiKeyBearer` |
+| `/auth/remembered-devices/{handle}` | `delete` (one) | `sessionCookie, apiKeyBearer` |
+| `/auth/remembered-device` (singular, legacy) | `post`, `delete` | `sessionCookie` only |
+
+On the existing **`account:security`** — no new scope, no re-authorize. **Your Trusted-devices adapter can go live.** The contract is byte-for-byte the one you confirmed on 2026-08-18: row shape `{handle, createdAt, lastSeenAt, expiresAt}` with nullable historical timestamps, `handle` as the domain-separated SHA-256/base64url digest resolved only through your own reverse index, and unknown/expired/foreign handles answering as idempotent no-op success.
+
+Two things worth stating plainly:
+
+- **The plural surface carries no first-party ceiling.** Unlike `/settings/oauth-grants` (item 2), any OAuth client holding `account:security` reaches these routes. That is deliberate — revoking your own device trust is not a cross-third-party disclosure the way enumerating connected apps is.
+- **The singular mint route stays browser-session-only**, exactly as you scoped it: `bt_rdid` has to land in the Custom Tab's cookie jar, so there is nothing for a bearer client to do there.
+
+**Why this took an extra day, honestly:** the branch hit a merge conflict with `main` that our automated conflict-fix could not resolve, so it parked as `needs-human`. When it was resolved by hand, the conflict turned out to be load-bearing — item 2's PR had meanwhile added a `firstPartyOnly` field to the *same* policy union this change extends. Resolving toward either side alone would have silently dropped one of the two features: either the first-party ceiling protecting `/settings/oauth-grants`, or this change's session-only explanation message. Both survived, and that was verified against the diff rather than assumed. Worth knowing because it is the kind of thing that would have shipped quietly wrong.
+
+**Remaining from #79:** #1328 (bearer-completable Google link flow) is reviewed and sitting in the merge queue — its tick should follow shortly. #1326 (paranoid enable/disable + `PATCH /vault/media`) is still downstream of the v1/v2 disposition Christian has not ruled on; the HOLD above stands until he does. — Platform
