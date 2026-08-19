@@ -1531,3 +1531,24 @@ Two things worth stating plainly:
 **Why this took an extra day, honestly:** the branch hit a merge conflict with `main` that our automated conflict-fix could not resolve, so it parked as `needs-human`. When it was resolved by hand, the conflict turned out to be load-bearing — item 2's PR had meanwhile added a `firstPartyOnly` field to the *same* policy union this change extends. Resolving toward either side alone would have silently dropped one of the two features: either the first-party ceiling protecting `/settings/oauth-grants`, or this change's session-only explanation message. Both survived, and that was verified against the diff rather than assumed. Worth knowing because it is the kind of thing that would have shipped quietly wrong.
 
 **Remaining from #79:** #1328 (bearer-completable Google link flow) is reviewed and sitting in the merge queue — its tick should follow shortly. #1326 (paranoid enable/disable + `PATCH /vault/media`) is still downstream of the v1/v2 disposition Christian has not ruled on; the HOLD above stands until he does. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: ask #79 item 7, Google account LINK from the phone, live on production (2026-08-19)
+
+**#1328 merged as PR #1361 and is deployed.** Prod serves `60f45da`, built 2026-08-19T13:18Z, which is current `main`. This was the one item that needed a genuinely new flow rather than an allowlist, so here is the shape as it actually shipped, read from the live `openapi.json`:
+
+| Route | Method | Security |
+| --- | --- | --- |
+| `/auth/google/link/start` | `post` | `sessionCookie, apiKeyBearer` |
+| `/auth/google/link/callback` | `get` | public (the return leg) |
+| `/auth/google/link-status` | `get` | `sessionCookie, apiKeyBearer` (already yours) |
+| `/auth/google/unlink` | `post` | `sessionCookie, apiKeyBearer` (already yours) |
+
+**How it works, in the server's own words:** `POST /auth/google/link/start` mints a **short-lived, hashed, one-time LINK ticket bound to the authenticated account** and returns its authorization URL. Bearers need `account:security` — which you already hold, so **no new scope and no re-authorize.** Critically, **no redirect target is accepted from the caller**; you get the URL, you do not get to say where it lands.
+
+The return leg `GET /auth/google/link/callback` **atomically consumes the state, links only the server-bound account, never mints a session, and redirects only to BetterTrackMobile's registered deep link** with stable success/error parameters. That is what makes this safe to expose publicly and what solves the problem you reported: the old `/auth/google/start` was a cookie redirect chain whose callback bounced to the webapp, so a bearer client could never finish it. Both routes answer `404` when Google is not configured on the deployment — worth handling rather than treating as a bug.
+
+**With this, all four unblocked items from #79 are live:** item 1/5/8 (passkey management, tax-year lock, first-run), item 2 (oauth-grants, first-party gated), item 6 (remembered devices), and now item 7. Between them your Settings surface should reach the parity Christian ruled for — the API as the shared control layer, with the phone able to manage what the web manages.
+
+**The one remaining item, #1326 (paranoid enable/disable + `PATCH /vault/media` with in-request step-up re-auth), is still held** — not by us being slow, but because it sits downstream of the v1/v2 paranoid disposition Christian has not ruled on. The HOLD above stands: keep your v2 work, do not start the Android paranoid parity build. You will get that tick the moment he decides. — Platform
