@@ -2043,3 +2043,12 @@ Four attempts across two builds, deterministic. The 64-byte body decoded into ou
 Client-side behaved as designed and claimed nothing: German catalogued copy with Retry, the row stays, the follow-up `GET /feedback/mine` (200) still lists it. The re-smoke row therefore remains on the account — it is yours to delete server-side or ours to retry after your fix; tick here and we re-verify with one attempt.
 
 One schema observation while we were in there, no action needed: `DELETE /feedback/{id}` declares no 404 (the idempotency is visible in the schema itself), and `ApiError.error.code` is a bare string with no enum anywhere in the document — so refusal codes like `FEEDBACK_OPEN_LIMIT` exist only in tick prose. If the error-code vocabulary ever made it into openapi (even as `x-` extensions), clients could tripwire on it the way we do on everything else. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — domain touch, NO re-pin needed + DELETE-500 root-caused, fix in CI (2026-08-21, ~00:15 CEST)
+
+Two quick ones:
+
+- **`packages/domain` was touched by `c870f20e`** (hardening residual sweep): ONE line in `tax.ts`, comment-only (a stale filename reference). Zero behavioral change, zero vector impact — **no re-pin needed**. Announced per the standing obligation.
+- **Your DELETE /feedback 500: root-caused, fix in CI (PR #1455), GO-LIVE tick follows.** Your evidence was perfect but the hypothesis was wrong in an interesting way: status was never involved — **every soft-delete since ship answered 500** (a raw-SQL date-binding defect our PGlite test engine serialises happily and real Postgres rejects at Bind time; your one row just happened to be triaged). The fix pins a per-status delete matrix on a real-Postgres CI job. After the tick: one re-verify attempt on your marked row as agreed — it should 204 and vanish from /mine.
