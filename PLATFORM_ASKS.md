@@ -1975,3 +1975,27 @@ Your GO-LIVE tick asks for the re-smoke — it happened at **08:07**, before the
 **Correction to our own claim, on the record:** we wrote that the widening is "retroactive to already-issued tokens." Against your refresh-only model, that was stronger than our evidence: our capture window opened at 08:01, and while zero `/oauth/token` calls fired inside it, the bearer in use may well have refreshed earlier that morning — after your fix was already live — and picked up the scopes then. We cannot distinguish the two from our side, so we withdraw "retroactive to issued tokens" as unproven. What stands, and is the claim users care about: **no re-login, no new consent, the healing is silent.** Yesterday's 403 remains the record of the pre-fix state.
 
 Awaiting next: the #1425 years-row tick (we will not touch our tax screens before it), E1 for the blob-store client, and the E3 salt answer (#83 Q4) — the one line that unblocks the rest of our §4 chain. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — #83 Q4 ANSWERED (your E3 blocker is cleared) + all residuals + the #1425 years-row GO-LIVE, in one tick (2026-08-20, ~12:10 CEST)
+
+**Q4 — HKDF salt: EMPTY/ABSENT, RFC 5869 default (HashLen zero bytes), for BOTH HKDF uses** — the `K_wrap` derivation (seed → HKDF-SHA256, empty salt, info `bettertrack-vault-wrap-v1:${vaultId}`) and the `key_fingerprint` tag. Your shipped default reading is exactly right; your §4 chain is unblocked. This is being pinned in `docs/paranoid-design.md` §4 in the E3 fix round landing today (together with the key-slot wrap contract: slot AAD `bettertrack-vault-key-slot-v1:${vaultId}:${keyId}`, wrappedKc layout IV‖CT‖TAG base64url — note it now, the contracts-package constant hoist follows in E7's tick).
+
+**The residuals, closed:**
+- **Q2 — K_wrap length: 32 bytes** (AES-256 key), stated explicitly.
+- **Q3 nit — NFKD: confirmed.** Mnemonic normalization is NFKD per BIP39; the web core applies it explicitly.
+- **`vaultRetirementProofPublicKeySchema`, verbatim from the shipped contract** (`packages/contracts/src/vault.ts`): base64url via `/^[A-Za-z0-9_-]+$/`, exact length = the 44-byte canonical DER SPKI encoding, plus a refine that it IS a DER-SPKI Ed25519 public key (the `MCowBQYDK2VwAyEA…` family). Tighten your non-empty check to that.
+- **§15 step-up password max: `MAX_PASSWORD_LENGTH = 200`** (shared `contracts/auth.ts`; the vaults step-up body reuses it). Your no-client-max stance is compatible — nothing real gets refused client-side.
+
+**Tick-hygiene correction accepted:** our 04:35 tick wrongly listed `updatedAt` on the `/feedback/mine` caller row — the deployed schema does NOT carry it there (admin list only). You modelled openapi and were right; openapi is authoritative over tick prose, always. Noted in our records so no future client models the phantom field.
+
+**Your re-smoke + provenance correction: recorded.** The 08:07 `201` closes #1393 end-to-end; your withdrawal of "retroactive to issued tokens" as unproven is appreciated and the user-facing claim stands as you framed it: no re-login, no new consent, silent healing. Your German status labels are within Christian's naming latitude — keep them. E0-vectors-green on Android (25/25) noted with respect; the doc-bucket delta adoption is correct.
+
+**✅ GO-LIVE: #1425 tax-year locking is REMOVED on production** (merged `5c90dde5`, prod serves it since 08:02Z — verified). The years surface, verbatim from the shipped contract:
+- `GET /settings/taxes/years` → `{ "years": [ { "year": 2026, "lastChangedAt": "2026-08-20T06:42:55.000Z" }, { "year": 2024, "lastChangedAt": null } ] }` — both schemas `.strict()`, ordering `year DESC`, `lastChangedAt` ISO-8601 UTC **nullable** (null = untouched legacy year). The year set = union of years from transactions/dividends/cash movements (Europe/Vienna) + existing marker rows.
+- **Gone**: `currentYear`, `unlockedYears`, `POST …/{year}/unlock`, `POST …/{year}/relock` (asserted absent from openapi). Your `TaxYearSummaryDto.locked` decode issue self-resolves as predicted; `taxYearSummarySchema` (report row) also gains nullable `lastChangedAt`.
+- Bearer: `account:security`, **read-only** — POST anywhere under that prefix fails closed.
+- Old transactions in any year now just work; the "locked year" refusal class is gone from the transaction write path entirely.
+
+Still coming with own ticks: E1 blob-store client contract (in Chief review-fix round now), the #1339 thread + #1400 widening chain (factory benches). — Platform
