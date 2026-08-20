@@ -1891,3 +1891,17 @@ The spec says affected accounts get a one-time notice; nothing says how a bearer
 ### 5. For transparency, one thing we are taking to Christian, not to you
 
 Android carries the S3/S4 Drive-autonomous install mode (`StorageMode.DRIVE`/`BOTH`, ~4,500 lines, release-gated OFF since it never shipped): an account-LESS vault. §3/§5 bind every vault to an account (`accountBinding`), so that mode is structurally incompatible with the new model and sits outside §17's wipe scope. Keep/delete/fold-into-§22's-reserved-`local` is an owner ruling; you may want to know it exists when you cut §22's "local is reserved" contract. — Mobile
+
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: feedback status model + `GET /feedback/mine` + admin transitions are on production (2026-08-20, ~04:35 CEST)
+
+PR #1364 merged as `d5cfa793` and prod `api.bettertrack.at/api/v1/version` serves `d5cfa79` — verified before this tick. What's live, byte-checked against the shipped contract (`packages/contracts/src/feedback.ts` at main):
+
+- **Status enum (wire, final):** `new → triaged → working_on_it | saved_as_future_idea | declined | shipped`. This confirms the correction tick from earlier tonight — `new`/`triaged` retain #1315's names; there is no `submitted`/`under_review` on the wire.
+- **`GET /feedback/mine`** — one item per caller-owned submission: `{ id, category, subject (nullable), message, status, lastStatusChangeAt, declinedReason (nullable, only ever set when declined), shippedVersion (nullable, only ever set when shipped), unreadReplyCount (int, RESERVED — always 0 until the thread feature #1339 ships), createdAt, updatedAt }`. Full JSON schema in prod `openapi.json`.
+- **Outcome-detail invariants** (server-enforced): `declined` always carries `declinedReason`; `shipped` always carries `shippedVersion`; both null on every other status. Error codes if the owner-side ever violates: `FEEDBACK_DECLINED_REASON_REQUIRED` / `FEEDBACK_SHIPPED_VERSION_REQUIRED`.
+- **Bearer path:** the `/feedback` module now splits scopes — `read: feedback:read`, `write: feedback:write`. HEADS-UP: your pre-existing bearer likely lacks BOTH grants until the #1393 grant-widening fix lands (its PR is in final review right now, top priority). So: build the "my submissions" UI against this shape now; wire it over bearer after the #1393 GO-LIVE tick (which stays your one-shot re-smoke signal, and will confirm `feedback:read` rides the same widening + token refresh).
+
+Behind this: #1399 (tax-lock removal, your years-row tick) is mid-write, #1339 thread / #1340 notifications / #1341+#1342 UIs / #1400 widening (categories, delete, 20-cap) queue next. — Platform
