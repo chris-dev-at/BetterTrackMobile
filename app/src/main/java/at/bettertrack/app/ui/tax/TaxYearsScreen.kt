@@ -17,7 +17,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -33,8 +32,6 @@ import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.TaxRepository
 import at.bettertrack.app.data.repo.TaxYearSummary
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.ui.components.BtBadge
-import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -47,6 +44,7 @@ import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,13 +89,15 @@ internal class TaxYearsViewModel(
 /**
  * One portfolio's tax years (V3-P4 reports).
  *
- * Each row carries the one number that answers "what did this year cost me" plus
- * the badge that says whether that number can still move. The open/closed
- * distinction is not decoration: a closed year keeps the settlements it was
- * recorded with forever, while an open one re-derives on every read under the
- * portfolio's CURRENT settings — so the same row means two different things
- * depending on the badge, and hiding that would be the fastest way to make the
- * whole report untrustworthy.
+ * Each row carries the one number that answers "what did this year cost me",
+ * and — when the server has a marker for it — when that year last changed.
+ *
+ * There used to be a Closed / "Still open" badge here, standing for a server
+ * concept that no longer exists (GO-LIVE #1425 removed `locked`, `currentYear`,
+ * `unlockedYears` and the unlock/relock routes outright). Keeping a badge whose
+ * meaning nothing on the wire supports would have been the fastest way to make
+ * the whole report untrustworthy, so it is gone and `lastChangedAt` says what
+ * the data actually knows. See [taxYearLastChangedDay].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -184,31 +184,35 @@ fun TaxYearsScreen(
     }
 }
 
+/**
+ * One year.
+ *
+ * The Closed / "Still open" badge that used to sit under the amount is gone with
+ * the server concept behind it (GO-LIVE #1425). What replaced it is a clause on
+ * the existing subline — "Tax for the year · Last changed 3 Aug 2026" — because
+ * a stamp is a fact about the row's identity, not about the number to its right,
+ * and because a second stacked caption in the trailing column was the crowding
+ * the badge was already guilty of. A year with no marker simply says less.
+ */
 @Composable
 private fun TaxYearRow(year: TaxYearSummary, onClick: () -> Unit) {
+    val locale = rememberBtLocale()
+    val changed = taxYearLastChangedDay(year.lastChangedAt, locale)
+        ?.let { stringResource(R.string.bt_taxyears_last_changed, it) }
     BtGroupRow(
         title = year.year.toString(),
-        subtitle = stringResource(R.string.bt_taxyears_net),
+        subtitle = taxYearClauses(stringResource(R.string.bt_taxyears_net), changed),
         onClick = onClick,
         trailing = {
-            Column(horizontalAlignment = Alignment.End) {
-                // Neutral, not gain/loss: tax withheld is not a loss and a refund
-                // is not a gain — colouring them that way would editorialise a
-                // number the user is only trying to read.
-                MoneyText(
-                    value = year.taxNetEur,
-                    style = BtTheme.type.moneySmall,
-                    colorMode = MoneyColorMode.Neutral,
-                    color = BtTheme.colors.textPrimary,
-                )
-                BtBadge(
-                    text = stringResource(
-                        if (year.locked) R.string.bt_taxyears_locked else R.string.bt_taxyears_open,
-                    ),
-                    kind = if (year.locked) BtBadgeKind.Neutral else BtBadgeKind.Gold,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+            // Neutral, not gain/loss: tax withheld is not a loss and a refund
+            // is not a gain — colouring them that way would editorialise a
+            // number the user is only trying to read.
+            MoneyText(
+                value = year.taxNetEur,
+                style = BtTheme.type.moneySmall,
+                colorMode = MoneyColorMode.Neutral,
+                color = BtTheme.colors.textPrimary,
+            )
         },
     )
 }

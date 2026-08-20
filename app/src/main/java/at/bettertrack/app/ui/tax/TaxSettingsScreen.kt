@@ -366,7 +366,9 @@ fun TaxSettingsScreen(onBack: () -> Unit, onOpenTaxReports: (portfolioId: String
  *
  * The web row stays because it is not the same destination. Checked against the
  * platform source, the native screens already match the web on the years table,
- * the per-year drill-down, the locked/"Passed" badge, the German year-end block
+ * the per-year drill-down, the `lastChangedAt` marker (which replaced both
+ * clients' locked/"Passed" badge when the server dropped the lock concept —
+ * GO-LIVE #1425), the German year-end block
  * (allowance, both loss pots, KapESt/Soli) and the locale-aware CSV. What the web
  * page has that no native screen does is the **print route**:
  * `/portfolio/tax/print` (`UserApp.tsx:285`), a chrome-free document that

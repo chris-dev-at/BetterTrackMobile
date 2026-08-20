@@ -248,12 +248,16 @@ data class PvHeaderDoc(
  * `vaultClientSecuritySchema` — reused v1 shape,
  * `{ retirementProof: { publicKey, privateKey } }`.
  *
- * The two halves are validated as non-empty base64url text and nothing more:
- * the platform's exact `vaultRetirementProofPublicKeySchema` (DER length bounds,
- * padding rules) is not part of the extracted E0 contract, and inventing a
- * stricter rule here could reject a vault the web client wrote — the one failure
- * mode a client-encrypted format may never have. Recorded as an open question
- * rather than guessed.
+ * The two halves are validated as non-empty base64url text and nothing more,
+ * and that stays true even though the public half's schema IS now answered
+ * (2026-08-20: the 44-byte DER SPKI Ed25519 shape, enforced at the request
+ * boundary by [PvVaultConfig.retirementProofPublicKeyProblem]).
+ *
+ * The asymmetry is the point. Refusing to SEND a malformed key costs a retry;
+ * refusing to OPEN a doc costs the vault, and there is no escrow behind it
+ * (§16). So the tight rule lives where a rejection is recoverable, and the doc
+ * parse keeps the loose one — which also covers the PRIVATE half, whose
+ * encoding the extracted E0 contract still does not pin.
  */
 data class PvRetirementProof(val publicKey: String, val privateKey: String) {
     fun toJson(): JsonObject = JsonObject(

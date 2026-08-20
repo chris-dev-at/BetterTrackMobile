@@ -94,11 +94,14 @@ data class DeTaxYearSummary(
 /**
  * One Europe/Vienna calendar year.
  *
- * [locked] is the field that changes what the screen may promise. A closed year
- * keeps its recording-time settlements forever; an open year re-derives live on
- * every read under the portfolio's CURRENT settings, so its numbers genuinely
- * will move if the user edits the mode. Saying so is the difference between a
- * report the user trusts and one they quietly stop believing.
+ * [lastChangedAt] replaced the old `locked` flag when the server dropped the
+ * closed/open concept entirely (GO-LIVE #1425). It is an ISO-8601 instant, or
+ * **null** for a year the server holds no marker for — an untouched legacy year.
+ *
+ * Null is not "never changed" and it is not "still open"; it is "unknown", and
+ * the screens are required to render nothing rather than invent a caption for
+ * it. Saying less than the data supports is the difference between a report the
+ * user trusts and one they quietly stop believing.
  */
 data class TaxYearSummary(
     val year: Int,
@@ -108,7 +111,7 @@ data class TaxYearSummary(
     val taxRefundedEur: Double,
     val taxNetEur: Double,
     val de: DeTaxYearSummary?,
-    val locked: Boolean,
+    val lastChangedAt: String?,
 )
 
 /** One sell in a year's drill-down, with its FROZEN tax facts. */
@@ -313,7 +316,7 @@ class TaxRepository(
         taxRefundedEur = taxRefundedEur,
         taxNetEur = taxNetEur,
         de = de?.toDomain(),
-        locked = locked,
+        lastChangedAt = lastChangedAt,
     )
 
     private fun TaxYearDeSummaryDto.toDomain() = DeTaxYearSummary(

@@ -181,14 +181,16 @@ class PvCreateDisciplineTest {
         )
     }
 
-    // ── the E3 stop line, from the outside ──────────────────────────────────
+    // ── the §4 salt convention, from the outside ────────────────────────────
 
     @Test
-    fun `the vault derivation takes every salt from the one blocked function`() {
+    fun `the vault derivation takes every salt from the one named convention`() {
         // The one thing that would break cross-client key agreement silently: a
-        // salt written straight into an HKDF call. Board ask #83 Q4 is open, so
-        // until it answers, every `salt =` in the derivation file must be the
-        // call that refuses.
+        // salt written straight into an HKDF call. The ruling (2026-08-20) is
+        // RFC 5869's empty salt for both uses, so every `salt =` in the
+        // derivation file must be the single function that names that choice —
+        // and that function must delegate to the shipped v2 rail's constant
+        // rather than spell "empty" a second time.
         val derivation = code(keySources().first { it.first == "PvVaultKeyDerivation.kt" }.second)
         val arguments = Regex("""[^a-zA-Z]salt\s*=\s*([^,\n]+)""")
             .findAll(derivation)
@@ -198,6 +200,10 @@ class PvCreateDisciplineTest {
         assertTrue(
             "a salt reached HKDF from somewhere other than pvDerivationSalt(): $arguments",
             arguments.all { it == "pvDerivationSalt()" },
+        )
+        assertTrue(
+            "pvDerivationSalt() must return the shared VAULT_HKDF_EMPTY_SALT",
+            derivation.contains("fun pvDerivationSalt(): ByteArray = VAULT_HKDF_EMPTY_SALT"),
         )
         // …and BIP-39's own salt, which IS pinned by the standard, is built from
         // the fixed prefix rather than from a literal typed at the call site.

@@ -2552,10 +2552,7 @@
     <string name="bt_taxyears_empty">No tax years yet</string>
     <string name="bt_taxyears_empty_sub">A year appears here once this portfolio has a sell or a dividend in it.</string>
     <string name="bt_taxyears_net">Tax for the year</string>
-    <string name="bt_taxyears_locked">Closed</string>
-    <string name="bt_taxyears_open">Still open</string>
-    <string name="bt_taxyears_locked_note">A closed year keeps the tax it was recorded with and never changes.</string>
-    <string name="bt_taxyears_open_note">This year is still open — its figures update as you trade and if you change the tax mode.</string>
+    <string name="bt_taxyears_last_changed">Last changed %1$s</string>
     <string name="bt_taxyear_realized">Realized gain/loss</string>
     <string name="bt_taxyear_dividends">Dividends (gross)</string>
     <string name="bt_taxyear_withheld">Tax withheld</string>

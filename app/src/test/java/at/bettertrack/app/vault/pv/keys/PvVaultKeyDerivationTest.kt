@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -16,28 +17,30 @@ import org.junit.Test
 import java.io.File
 
 /**
- * **E3 derivation: what is pinned, what is blocked, and what will run the day
- * the salt is ruled.**
+ * **E3 derivation: what is implemented, what proves it, and what is still owed.**
  *
- * The §4 chain above the BIP-39 seed cannot be finished yet. Three of its
- * parameters came back with the deployed E0 contract; the HKDF **salt** did not,
- * and it is on the mobile board as ask #83 Q4. `PvVaultKeyDerivation.kt`
- * therefore ships shapes and a single blocking point rather than a guess.
+ * The §4 chain above the BIP-39 seed is now WRITTEN. Its last open parameter —
+ * the HKDF salt — was ruled on 2026-08-20 as RFC 5869's empty salt for both
+ * `K_wrap` and `key_fingerprint`, and `PvVaultKeyDerivation.kt` no longer
+ * refuses to derive.
  *
- * This file has two halves and they are deliberately different in kind:
+ * What is NOT finished is the proof of *cross-client* agreement, and this file
+ * is deliberately honest about the difference. Three kinds of test live here:
  *
- *  1. **Tests that run today** and assert the blocked state itself — that the
- *     stop line is where it is supposed to be, that it names the ask, and that
- *     every input contract E0 *did* answer is enforced before it. These pass
- *     now, and they are what would fail if someone quietly slipped a salt in.
- *  2. **The vector scaffolding**, which `assumeTrue`s on [PV_E3_PINNED] and on
- *     the presence of `vault-vectors/pv-derivation.fixture.json`. Those show up
- *     as SKIPPED in the report, with the board ask in the reason string, until
- *     the platform ships both — at which point they run without anyone
- *     remembering to come back and write them.
+ *  1. **Tests that run today and pin the implementation.** The salt convention
+ *     (asserted at the source level, so a literal cannot be slipped back in),
+ *     the input contracts E0 answered, the contract literals, and the
+ *     self-derived chain fixture — which cross-checks Kotlin/BouncyCastle
+ *     against an independent WebCrypto run of the same specification.
+ *  2. **The RFC 5869 vectors**, in `PvHkdfVectorTest` — the external oracle for
+ *     the primitive itself, including the empty-salt case.
+ *  3. **The platform's own E3 vectors**, which have NOT shipped. Those three
+ *     tests still `assumeTrue` on [PV_E3_PINNED] and on the presence of
+ *     `vault-vectors/pv-derivation.fixture.json`, and show as SKIPPED with the
+ *     reason in the report until the platform delivers.
  *
- * The skip is not silence: `E3 is still blocked on the board ask` below runs on
- * every build and fails the moment the flag is flipped without the work.
+ * The skip is not silence: `the chain is implemented, and E3 is honest about
+ * what is still unproven` below runs on every build.
  */
 class PvVaultKeyDerivationTest {
 
@@ -48,56 +51,67 @@ class PvVaultKeyDerivationTest {
 
     private fun contentKey(fill: Byte = 0x22): ByteArray = ByteArray(PV_WRAP_KEY_BYTES) { fill }
 
-    // ── half one: the blocked state, asserted out loud ──────────────────────
+    private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
+
+    private fun unhex(value: String): ByteArray =
+        ByteArray(value.length / 2) { value.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private fun derivationSource(): String {
+        val relative = "src/main/java/at/bettertrack/app/vault/pv/keys/PvVaultKeyDerivation.kt"
+        return listOf(File(relative), File("app/$relative")).first { it.isFile }.readText()
+    }
+
+    // ── half one: the implemented state, asserted out loud ──────────────────
 
     @Test
-    fun `E3 is still blocked on the board ask`() {
-        // The canary. When the platform answers, this test is the one that says
-        // "the flag moved" — flip it here together with pvDerivationSalt(), and
-        // the scaffolding below stops skipping.
+    fun `the chain is implemented, and E3 is honest about what is still unproven`() {
+        // The canary, inverted from what it used to be. It no longer says "do
+        // not derive"; it says "derive, and do not claim the platform has
+        // checked you". Both halves have to keep being true.
+        pvVaultWrapKey(seed(), vaultId)
+        pvKeyFingerprint(contentKey())
         assertFalse(
-            "PV_E3_PINNED is set. Either the §4 HKDF salt was ruled — in which " +
-                "case write it into pvDerivationSalt(), drop the fixture in as " +
-                "vault-vectors/pv-derivation.fixture.json and update this test — " +
-                "or it was flipped by accident, which would derive keys the web " +
-                "client cannot read.",
+            "PV_E3_PINNED is set. That flag means the PLATFORM's E3 vectors " +
+                "(vault-vectors/pv-derivation.fixture.json) are in the tree and " +
+                "green — not that the chain compiles. If they landed, drop the " +
+                "fixture in, delete pv-derivation.selfderived.fixture.json and " +
+                "flip this. If they did not, cross-client byte-identity is still " +
+                "unproven and the flag must stay false.",
             PV_E3_PINNED,
         )
     }
 
     @Test
-    fun `the blocked derivations name the ask instead of saying not implemented`() {
-        val fromSalt = assertThrows(NotImplementedError::class.java) { pvDerivationSalt() }
-        val fromWrap = assertThrows(NotImplementedError::class.java) { pvVaultWrapKey(seed(), vaultId) }
-        val fromPrint = assertThrows(NotImplementedError::class.java) { pvKeyFingerprint(contentKey()) }
-        listOf(fromSalt, fromWrap, fromPrint).forEach { error ->
-            val message = error.message.orEmpty()
-            assertTrue("the block does not name the board ask: $message", message.contains("#83 Q4"))
-            assertTrue("the block does not name the salt: $message", message.contains("salt"))
-        }
-        assertEquals(PV_E3_BOARD_ASK, fromWrap.message)
-    }
-
-    @Test
-    fun `every derivation funnels through the one blocking point`() {
-        // If a second `throw NotImplementedError` appeared inline in either
-        // function, this file would still be green while the salt lived in two
-        // places. The source check is what makes "one place to edit" true.
-        val relative = "src/main/java/at/bettertrack/app/vault/pv/keys/PvVaultKeyDerivation.kt"
-        val source = listOf(File(relative), File("app/$relative")).first { it.isFile }.readText()
-        assertEquals(
-            "exactly one function may throw the E3 block",
-            1,
-            Regex("""throw NotImplementedError""").findAll(source).count(),
-        )
+    fun `the salt convention is stated once, by name, and never as a literal`() {
+        // The source check that replaced the old "exactly one throw" tripwire.
+        // The failure it guards is the one that cannot be caught by running the
+        // code: a second empty array, or worse a non-empty one, written straight
+        // into an HKDF call. Both would derive perfectly valid keys that open
+        // nothing another client wrote.
+        val source = derivationSource()
         assertEquals(
             "every derivation must take its salt from pvDerivationSalt()",
             2,
             Regex("""salt = pvDerivationSalt\(\)""").findAll(source).count(),
         )
+        val body = Regex("""fun pvDerivationSalt\(\)[^\n]*""").find(source)?.value
+            ?: error("pvDerivationSalt() is gone — the one place the §4 salt is stated")
+        assertTrue(
+            "pvDerivationSalt() must return the shared empty-salt primitive " +
+                "(vault/v2/VaultHkdf.kt), not a second spelling of 'empty': $body",
+            body.contains("VAULT_HKDF_EMPTY_SALT"),
+        )
+        assertFalse(
+            "a salt must never be constructed in this file: $body",
+            body.contains("ByteArray(") || body.contains("byteArrayOf("),
+        )
+        assertFalse(
+            "the derivation file must not build any byte array by hand",
+            Regex("""byteArrayOf\(""").containsMatchIn(source),
+        )
     }
 
-    // ── the answers E0 DID give, enforced before the stop line ──────────────
+    // ── the answers E0 gave, enforced before anything derives ───────────────
 
     @Test
     fun `the wrap key derives from the sixty-four byte seed, not the words or the bits`() {
@@ -107,9 +121,9 @@ class PvVaultKeyDerivationTest {
         assertThrows(VaultCryptoError::class.java) { pvVaultWrapKey(ByteArray(16), vaultId) }
         assertThrows(VaultCryptoError::class.java) { pvVaultWrapKey(ByteArray(32), vaultId) }
         assertThrows(VaultCryptoError::class.java) { pvVaultWrapKey(ByteArray(0), vaultId) }
-        // …and a correctly-shaped seed gets past the shape check to the block,
-        // which is how we know the refusals above were about the shape.
-        assertThrows(NotImplementedError::class.java) { pvVaultWrapKey(seed(), vaultId) }
+        // …and a correctly-shaped seed derives an AES-256 key, which is how we
+        // know the refusals above were about the shape and not about everything.
+        assertEquals(PV_WRAP_KEY_BYTES, pvVaultWrapKey(seed(), vaultId).size)
     }
 
     @Test
@@ -122,7 +136,7 @@ class PvVaultKeyDerivationTest {
     fun `the fingerprint takes a two-hundred-fifty-six bit content key`() {
         assertThrows(VaultCryptoError::class.java) { pvKeyFingerprint(ByteArray(16)) }
         assertThrows(VaultCryptoError::class.java) { pvKeyFingerprint(ByteArray(64)) }
-        assertThrows(NotImplementedError::class.java) { pvKeyFingerprint(contentKey()) }
+        assertEquals(PvVaultContract.KEY_FINGERPRINT_CHARS, pvKeyFingerprint(contentKey()).length)
     }
 
     @Test
@@ -138,13 +152,100 @@ class PvVaultKeyDerivationTest {
         assertTrue("the fingerprint HKDF output is too short to fill 16 chars", PV_FINGERPRINT_HKDF_BYTES >= 12)
     }
 
-    // ── half two: the scaffolding, skipped with its reason until E3 ships ───
+    @Test
+    fun `the fingerprint is base64url characters and carries no padding`() {
+        val printed = pvKeyFingerprint(contentKey())
+        assertTrue("'$printed' is not base64url", Regex("^[A-Za-z0-9_-]{16}$").matches(printed))
+        // Prefix-stability: a longer HKDF output must not change the 16 chars,
+        // which is what makes PV_FINGERPRINT_HKDF_BYTES a free parameter.
+        assertEquals(printed, pvKeyFingerprint(contentKey()))
+    }
+
+    @Test
+    fun `two vault ids separate one phrase into two unrelated wrap keys`() {
+        // The property §4 leans on. It needs no vectors, so it is not gated:
+        // if the info string ever stopped carrying the vault id, this is the
+        // test that notices, and it notices on every build.
+        val shared = seed()
+        assertNotEquals(
+            hex(pvVaultWrapKey(shared, vaultId)),
+            hex(pvVaultWrapKey(shared, "0f0e0d0c-0b0a-4908-8706-050403020100")),
+        )
+    }
+
+    // ── half two: the SELF-DERIVED chain fixture (runs; proves what it can) ──
+
+    /**
+     * The full chain, cross-checked against Node WebCrypto. Not the platform's
+     * data — see the file's own `_provenance` and [PV_E3_PINNED].
+     */
+    private val selfFixture: JsonObject by lazy {
+        val stream = javaClass.getResourceAsStream("/vault-vectors/pv-derivation.selfderived.fixture.json")
+            ?: error("vault-vectors/pv-derivation.selfderived.fixture.json missing from test resources")
+        Json.parseToJsonElement(stream.bufferedReader().use { it.readText() }).jsonObject
+    }
+
+    private val selfChain: List<JsonObject> by lazy {
+        selfFixture["chain"]!!.jsonArray.map { it.jsonObject }
+    }
+
+    private fun JsonObject.str(key: String): String = this[key]!!.jsonPrimitive.content
+
+    @Test
+    fun `the self-derived fixture admits in writing that it is not the platform's`() {
+        // The single most important assertion about this file. A fixture that
+        // looks authoritative and is not is worse than no fixture at all: it
+        // ends an investigation that should have continued.
+        assertEquals(
+            "self-derived pending platform E3 fixture - replace, never merge",
+            selfFixture.str("_provenance"),
+        )
+        val source = selfFixture["_source"]!!.jsonObject
+        assertTrue(
+            "the fixture must name the independent generator it was cross-checked against",
+            source.str("generator").contains("WebCrypto"),
+        )
+        assertTrue(
+            "the fixture must say the platform E3 vectors have not shipped",
+            source.str("why").contains("has NOT shipped"),
+        )
+        assertEquals("the chain fixture lost rows", 3, selfChain.size)
+    }
+
+    @Test
+    fun `the whole chain reproduces the cross-checked bytes`() {
+        // mnemonic → seed → K_wrap → fingerprint, every link, on every row.
+        selfChain.forEach { row ->
+            val derivedSeed = pvBip39Seed(row.str("mnemonic"))
+            assertEquals("seed for ${row.str("entropy")}", row.str("seed"), hex(derivedSeed))
+            val wrapKey = pvVaultWrapKey(derivedSeed, row.str("vaultId"))
+            assertEquals("K_wrap for ${row.str("vaultId")}", row.str("kWrap"), hex(wrapKey))
+            assertEquals(
+                "fingerprint for ${row.str("vaultId")}",
+                row.str("keyFingerprint"),
+                pvKeyFingerprint(unhex(row.str("contentKey"))),
+            )
+        }
+    }
+
+    @Test
+    fun `the fixture's own separation rows still separate`() {
+        val separation = selfFixture["separation"]!!.jsonObject
+        val sharedSeed = pvBip39Seed(separation.str("mnemonic"))
+        assertEquals(separation.str("kWrapA"), hex(pvVaultWrapKey(sharedSeed, separation.str("vaultIdA"))))
+        assertEquals(separation.str("kWrapB"), hex(pvVaultWrapKey(sharedSeed, separation.str("vaultIdB"))))
+        assertNotEquals(separation.str("kWrapA"), separation.str("kWrapB"))
+    }
+
+    // ── half three: the PLATFORM vectors, skipped with their reason ─────────
 
     private val skipReason =
-        "E3 derivation vectors are not consumable yet: the §4 HKDF salt is " +
-            "unanswered (mobile board ask #83 Q4) and " +
-            "vault-vectors/pv-derivation.fixture.json has not shipped. " +
-            "Flip PV_E3_PINNED and drop the fixture in to run this."
+        "The platform's E3 conformance fixture has not shipped: " +
+            "vault-vectors/pv-derivation.fixture.json is absent and PV_E3_PINNED " +
+            "is false. The chain IS implemented and is covered by the RFC 5869 " +
+            "vectors plus a self-derived cross-check; what these three tests add " +
+            "is byte-identity with the platform, which nothing can assert yet. " +
+            "Drop the fixture in and flip PV_E3_PINNED to run them."
 
     /** Null until the platform ships the E3 vectors next to the E0 ones. */
     private val derivationFixture: JsonObject? by lazy {
@@ -159,11 +260,6 @@ class PvVaultKeyDerivationTest {
         assumeTrue(skipReason, fixture != null)
         return fixture!!
     }
-
-    private fun unhex(value: String): ByteArray =
-        ByteArray(value.length / 2) { value.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
-
-    private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
 
     @Test
     fun `the wrap key matches the platform vectors`() {

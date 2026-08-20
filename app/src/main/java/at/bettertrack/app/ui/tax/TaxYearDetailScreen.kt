@@ -60,6 +60,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.isGermanUi
+import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -262,16 +263,14 @@ fun TaxYearDetailScreen(portfolioId: String, year: Int, onBack: () -> Unit) {
                         )
                     }
 
-                    // Whether these figures can still move. See TaxYearsScreen.
-                    TaxFootnote(
-                        stringResource(
-                            if (summary.locked) {
-                                R.string.bt_taxyears_locked_note
-                            } else {
-                                R.string.bt_taxyears_open_note
-                            },
-                        ),
-                    )
+                    // When this year last moved — nothing at all when the server
+                    // holds no marker for it. The Closed / "Still open" footnote
+                    // that used to sit here died with the server concept behind
+                    // it (GO-LIVE #1425); see TaxYearsScreen and
+                    // [taxYearLastChangedDay].
+                    taxYearLastChangedDay(summary.lastChangedAt, rememberBtLocale())?.let { day ->
+                        TaxFootnote(stringResource(R.string.bt_taxyears_last_changed, day))
+                    }
 
                     // ── The German year-end block, on DE-taxed years only ─────
                     summary.de?.let { DeYearBlock(it) }

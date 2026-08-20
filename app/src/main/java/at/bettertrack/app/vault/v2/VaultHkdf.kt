@@ -24,11 +24,29 @@ import org.bouncycastle.crypto.params.HKDFParameters
  * Argon2id. Both implement RFC 5869 exactly, and the conformance vectors are
  * what proves the two agree.
  */
+
+/**
+ * **RFC 5869's empty salt** — the extract step's "if not provided, it is set to
+ * a string of HashLen zeros" default, and the salt EVERY BetterTrack derivation
+ * uses (r3's three consumers above; `paranoid-design.md` §4's `K_wrap` and
+ * `key_fingerprint`, ruled 2026-08-20).
+ *
+ * It exists as a named constant so a derivation site says *which convention it
+ * chose* instead of spelling `ByteArray(0)` and leaving the next reader to
+ * decide whether that was a decision or an oversight. "Empty" is a choice: RFC
+ * 5869 turns it into HashLen zero bytes, and a different client that passed, say,
+ * the vault id as the salt would derive a perfectly valid key that opens nothing
+ * this one wrote.
+ *
+ * A zero-length array has nothing to mutate, so sharing one instance is safe.
+ */
+internal val VAULT_HKDF_EMPTY_SALT: ByteArray = ByteArray(0)
+
 internal fun hkdfSha256(
     ikm: ByteArray,
     info: ByteArray,
     length: Int,
-    salt: ByteArray = ByteArray(0),
+    salt: ByteArray = VAULT_HKDF_EMPTY_SALT,
 ): ByteArray {
     if (ikm.isEmpty()) {
         throw VaultCryptoError(

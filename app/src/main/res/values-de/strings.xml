@@ -2434,10 +2434,7 @@
     <string name="bt_taxyears_empty">Noch keine Steuerjahre</string>
     <string name="bt_taxyears_empty_sub">Ein Jahr erscheint hier, sobald dieses Portfolio darin einen Verkauf oder eine Dividende hat.</string>
     <string name="bt_taxyears_net">Steuer für das Jahr</string>
-    <string name="bt_taxyears_locked">Abgeschlossen</string>
-    <string name="bt_taxyears_open">Noch offen</string>
-    <string name="bt_taxyears_locked_note">Ein abgeschlossenes Jahr behält die erfasste Steuer und ändert sich nicht mehr.</string>
-    <string name="bt_taxyears_open_note">Dieses Jahr ist noch offen — die Zahlen ändern sich beim Handeln und bei einem Wechsel des Steuermodus.</string>
+    <string name="bt_taxyears_last_changed">Zuletzt geändert %1$s</string>
     <string name="bt_taxyear_realized">Realisierter Gewinn/Verlust</string>
     <string name="bt_taxyear_dividends">Dividenden (brutto)</string>
     <string name="bt_taxyear_withheld">Einbehaltene Steuer</string>

@@ -28,6 +28,15 @@ import kotlinx.serialization.Serializable
  *
  * Response DTOs keep the house rule (every field defaulted, so a missing key
  * degrades instead of throwing) with `ignoreUnknownKeys = true` on top.
+ *
+ * ## One route this file deliberately does not model
+ *
+ * `GET /settings/taxes/years` (`TaxYearChangesResponse`, read-only,
+ * `account:security`) returns the account-wide `{ year, lastChangedAt }` markers
+ * in year-DESC order. Nothing in the app calls it and nothing needs to: the
+ * per-portfolio report rows below carry the same marker inline, on the screens
+ * that actually show years. A DTO with no client is a DTO nobody keeps in step
+ * with the contract, so the route is recorded here instead of transcribed.
  */
 
 // ── GET /settings/taxes · PATCH /settings/taxes ──────────────────────────────
@@ -132,23 +141,31 @@ data class TaxYearDeSummaryDto(
  * the current movement-level truth (corrections included), with
  * `taxNetEur = taxWithheldEur − taxRefundedEur`.
  *
- * [locked] marks a closed year (any Vienna year before the current one): it
- * keeps its recording-time settlements and is never re-derived by a settings
- * change. Open years omit the key and re-derive live on every read — which is
- * exactly the distinction the report screen has to state, because it is the
- * difference between "this number is final" and "this number will move if you
- * change the mode".
+ * ## The lock concept is gone; `lastChangedAt` replaced it (GO-LIVE #1425)
+ *
+ * This row used to carry a `locked` boolean standing for "a closed year, never
+ * re-derived". The server no longer has that idea at all — no `locked`, no
+ * `currentYear`, no `unlockedYears`, no unlock/relock routes — and the deployed
+ * openapi confirms it: `TaxYearListResponse`'s row requires exactly
+ * `year, lastChangedAt, realizedPnlEur, dividendsGrossEur, taxWithheldEur,
+ * taxRefundedEur, taxNetEur` with `additionalProperties: false`.
+ *
+ * [lastChangedAt] is an ISO-8601 instant or **null**, and null carries exactly
+ * one meaning: an untouched legacy year the server has no marker for. It is NOT
+ * "never changed" and it is NOT "open" — the UI may say when a year last moved
+ * and must say nothing at all when it does not know.
  */
 @Serializable
 data class TaxYearSummaryDto(
     val year: Int = 0,
+    /** ISO-8601 instant, or null for an untouched legacy year. Required, nullable. */
+    val lastChangedAt: String? = null,
     val realizedPnlEur: Double = 0.0,
     val dividendsGrossEur: Double = 0.0,
     val taxWithheldEur: Double = 0.0,
     val taxRefundedEur: Double = 0.0,
     val taxNetEur: Double = 0.0,
     val de: TaxYearDeSummaryDto? = null,
-    val locked: Boolean = false,
 )
 
 /** `GET /portfolios/:id/reports/tax-years` — newest year first. */
