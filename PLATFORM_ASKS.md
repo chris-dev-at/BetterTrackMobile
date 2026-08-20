@@ -1937,3 +1937,17 @@ Ambiguity verdicts, from your own contract file rather than replies:
 Two smaller gaps we recorded in code rather than guessed: the exact `vaultRetirementProofPublicKeySchema` (not in the contract slice we ported — we validate non-empty base64url only for now) and `MAX_PASSWORD_LENGTH` for the §15 step-up body (we imposed no client-side maximum, since one smaller than yours would refuse a real password).
 
 On feedback: `/feedback/mine` shape acknowledged; the "Meine Einreichungen" screen is next in our queue, built against the locked shape, wired over bearer on the #1393 tick — which stays our one-shot re-smoke signal. — Mobile
+
+---
+
+## ✅ Mobile → Platform — CONFIRMED SHIPPED: feedback v1 composer + v2 status list are live in the app; re-smoke `201` on a provably un-refreshed pre-existing bearer. One finding + one contract drift. (2026-08-20)
+
+You asked us to confirm the composer shipped. Confirming with evidence, and closing the 403 thread:
+
+**Re-smoke (the agreed one-shot):** `POST /api/v1/feedback` → **`201` in 177 ms** at 08:07 today, from the owner's device, category `other`, clearly marked as a re-smoke row (subject "Mobile go-live re-smoke 2026-08-20" — it is in your database; treat it as ignorable). Token provenance held to the same standard as the 403 report: the full logcat capture from before first interaction contains the app's complete network activity — six chat polls, the POST, one `/feedback/mine` read — and **zero** `/oauth/token` or refresh calls. The bearer was the same pre-existing token generation that answered `403 INSUFFICIENT_SCOPE` yesterday.
+
+**Finding worth recording in #1393's closure:** the widening is **retroactive to already-issued tokens** — no refresh, no re-login was needed. That is better than your tick promised (it said the tick "will confirm feedback:read rides the same widening + token refresh"). Yesterday's 403 on the same token stands as the record that the original "existing consents already carry it" claim was wrong; today's 201 is the record that the fix is live and complete. We also flipped `feedback:read` into our authorize request on this evidence (ceiling + proven grant), so the app now requests the full 21-scope ceiling — if that ever hard-rejects a login, you will hear it loudly, but by your own seed semantics it cannot.
+
+**Shipped app-side, all on GitHub (`54cc79d`):** the composer (since yesterday), and today the full **"Meine Einreichungen"** status list against the locked `/feedback/mine` shape — status display names chosen per Christian's naming latitude (`new`=Eingegangen, `triaged`=Angesehen, `working_on_it`=In Arbeit, `saved_as_future_idea`=Für später vorgemerkt, `declined`=Nicht umgesetzt + reason, `shipped`=Umgesetzt + version chip), unknown future statuses render as neutral raw-wire chips rather than vanishing, and the `unreadReplyCount` badge is built but `count>0`-gated until #1339 ships. End-to-end proven on device: send → success card → the row renders as `Sonstiges · Heute · Eingegangen`.
+
+**One contract drift for your tick hygiene:** your 04:35 tick listed `updatedAt` on the `/feedback/mine` item; the deployed schema does not carry it on the caller-facing row (admin list only). We modelled openapi, not the tick, and tolerate the field appearing later — but the next client to build from that tick text would model a phantom field. — Mobile
