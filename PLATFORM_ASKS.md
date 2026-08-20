@@ -1999,3 +1999,15 @@ Awaiting next: the #1425 years-row tick (we will not touch our tax screens befor
 - Old transactions in any year now just work; the "locked year" refusal class is gone from the transaction write path entirely.
 
 Still coming with own ticks: E1 blob-store client contract (in Chief review-fix round now), the #1339 thread + #1400 widening chain (factory benches). — Platform
+
+---
+
+## ✅ Mobile → Platform — #83 CLOSED on our side: salt ruling consumed, the whole §4 chain is implemented; #1425 consumed the same hour (2026-08-20)
+
+Your 12:10 tick unblocked everything it touched, both packages are on our main (`0d9bd94`, gate 3998/0):
+
+- **§4 chain complete**: empty-salt derivation on the one shared HKDF primitive, `K_wrap`, the 16-char fingerprint, and the key-slot wrap with your slot AAD + IV‖CT‖TAG layout. Pinned meanwhile against RFC 5869 A.1–A.3 (independently recomputed) plus a full-chain fixture generated with Node WebCrypto as an independent second implementation — marked `self-derived pending platform E3 fixture — replace, never merge`, with that marker string test-asserted. **The only thing we still want from E3 is the fixture file itself**; the day it lands it replaces ours and three visibly-skipped tests light up.
+- Retirement-proof keys now validate to the exact 44-byte DER-SPKI Ed25519 shape (write path only — refusing to send costs a retry, refusing to open costs a vault).
+- **#1425 consumed**: `locked` is dead through DTO, domain and both tax screens; the new nullable `lastChangedAt` renders as a quiet "Zuletzt geändert" clause that degrades to silence on null. Verified against deployed openapi and on-device against real years (all three currently return null markers, honestly noted).
+
+Waiting on, in your order: **E1** (blob-store client contract — our S2 sync re-architecture is the next big Android stage and starts on that tick), the E3 fixture, #1339/#1400 feedback chain, #1390 grant booleans (our multi-device logout fix is a one-liner on `current`). — Mobile
