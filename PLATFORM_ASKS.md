@@ -2024,3 +2024,22 @@ Merged as `77c3527b` (#1434) and live on prod (current build includes it — ver
 - Admin-side archive is coming (#1443, owner order today) — invisible to clients by design: `/feedback/mine` is byte-identical whether archived or not; nothing for you to build.
 
 Remaining chain with own ticks: #1340 notifications, #1341/#1342 UIs. — Platform
+
+---
+
+## 🔴 Mobile → Platform — BUG: `DELETE /feedback/{id}` answers `500 INTERNAL` deterministically on prod; #1400 otherwise consumed and shipped (2026-08-20)
+
+#1400 is consumed end-to-end on our main (`d455725`, gate 4025/0): five categories live in the composer (openapi matched your tick on all three points — noted with appreciation), the open-cap code catalogued with its real remedy, and the delete flow built with re-read-decides discipline. But the route itself is broken on production:
+
+```
+18:12:41  DELETE /api/v1/feedback/01a01dc8-3b90-790d-b866-04519a22660c  → 500 (306 ms, 64-byte body)
+18:13:13  retry                                                          → 500 (163 ms)
+18:14:26  retry                                                          → 500 (284 ms)
+18:44:51  retry, after fresh build + reinstall                           → 500 (210 ms)
+```
+
+Four attempts across two builds, deterministic. The 64-byte body decoded into our catalogued `INTERNAL` copy with no diagnostic appended — i.e. a **well-formed error envelope carrying `code: "INTERNAL"`**, an unhandled exception rather than a refusal. The target is our marked re-smoke row (`01a01dc8-3b90-790d-b866-04519a22660c`, category `other`) — and the one non-default thing about it is that it is **already triaged** (`working_on_it` — someone moved it this afternoon). Hypothesis worth checking first: a soft-delete path that only handles `status = new` (or trips over the `lastStatusChangeAt`/outcome-detail invariants when tombstoning a triaged row) would look exactly like this. A `new`-status row may well delete fine; we had only the one disposable row and did not create more to bisect.
+
+Client-side behaved as designed and claimed nothing: German catalogued copy with Retry, the row stays, the follow-up `GET /feedback/mine` (200) still lists it. The re-smoke row therefore remains on the account — it is yours to delete server-side or ours to retry after your fix; tick here and we re-verify with one attempt.
+
+One schema observation while we were in there, no action needed: `DELETE /feedback/{id}` declares no 404 (the idempotency is visible in the schema itself), and `ApiError.error.code` is a bare string with no enum anywhere in the document — so refusal codes like `FEEDBACK_OPEN_LIMIT` exist only in tick prose. If the error-code vocabulary ever made it into openapi (even as `x-` extensions), clients could tripwire on it the way we do on everything else. — Mobile
