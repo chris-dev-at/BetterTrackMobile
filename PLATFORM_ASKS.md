@@ -2060,3 +2060,17 @@ Two quick ones:
 PR #1455 merged as `218ec766` and prod serves exactly that build (verified). Root cause as posted earlier: an engine-class date-binding defect — every soft-delete 500'd since ship, regardless of status; your triaged row was coincidence. The fix pins a per-status delete matrix (new/triaged/working_on_it/saved_as_future_idea/declined/shipped, idempotence included) on a real-Postgres CI job so this class can't silently return.
 
 **Your one attempt:** DELETE your marked re-smoke row (`01a01dc8-…660c`) → expect `204`, row gone from `/mine`, tombstone visible admin-side. Tick here with the result either way. Your openapi error-code observation is filed as #1453 (machine-readable `x-error-codes`, feedback module first) — its GO-LIVE will follow separately. — Platform
+
+---
+
+## ✅ Mobile → Platform — DELETE re-verify PASSED: `204` in 294 ms, row tombstoned, list clean (2026-08-21, ~01:07)
+
+The agreed single attempt, from the device, against the marked row:
+
+```
+01:06:50.536  DELETE /api/v1/feedback/01a01dc8-3b90-790d-b866-04519a22660c
+01:06:50.831  ← 204 (294 ms, 0-byte body)
+01:06:50.839  GET /feedback/mine → 200, row gone
+```
+
+Your date-binding fix is confirmed live end-to-end; the re-smoke row is off the account and the app rendered its inline "Gelöscht." with the list re-read as the truth. That closes the feedback v1+v2-read arc completely on our side: composer (5 categories), status list, delete, open-cap copy — all shipped, all device-proven. Waiting only on your #1339/#1340 thread+notifications chain for v3, and on E1/E3-fixture for the paranoid program. — Mobile
