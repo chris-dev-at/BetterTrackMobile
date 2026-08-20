@@ -34,7 +34,12 @@ import kotlinx.coroutines.launch
  * Now there is one: a [SnackbarHost] hoisted in `AppShell`, reached through
  * [LocalBtSnackbar]. Inline text is reserved for form-field validation, where
  * the message must sit next to the field it is about and stay put while the user
- * fixes it.
+ * fixes it — and for the handful of outcomes that must OUTLIVE a snackbar,
+ * which is a different requirement and is why the feedback-submissions screen
+ * keeps its own banner.
+ *
+ * For the host's placement — the one thing about this mechanism that has ever
+ * actually broken — see [BtSnackbarState].
  */
 @Immutable
 data class BtSnackbarMessage(
@@ -149,8 +154,25 @@ val LocalBtSnackbar = compositionLocalOf { BtSnackbarController {} }
 
 /**
  * Wires a [BtSnackbarController] to a [SnackbarHostState]. Call once, in the
- * shell; pass [host] to the `Scaffold`'s `snackbarHost` and provide [controller]
+ * shell; render [hostState] through a [BtSnackbarHost] and provide [controller]
  * over the content.
+ *
+ * ## Where the host goes — a correctness rule, not a layout preference
+ *
+ * **Never in a `Scaffold`'s `snackbarHost` slot when anything can be drawn over
+ * that `Scaffold`.** The shell learned this the expensive way on 2026-08-20: its
+ * host sat in the slot, the full-screen sheet layer is a LATER sibling of that
+ * `Scaffold` inside the shell's `Box`, and the shell additionally clips its own
+ * draw to the strip a settled sheet leaves showing. Both facts point the same
+ * way — a snackbar raised from any of the app's 60 subpages was painted behind
+ * the sheet and never seen, which is 21 destinations' worth of outcomes
+ * (archive/undo, save confirmations, link/unlink, every social toast, and the
+ * failures) silently swallowed.
+ *
+ * The host therefore goes LAST in the top-level `Box`, above the sheet layer, and
+ * carries its own bottom offset. `AppShell` and `FirstRunWizard` are the only two
+ * places in the app that mount one; `SheetSnackbarVisibilityDisciplineTest` keeps
+ * it that way.
  */
 class BtSnackbarState internal constructor(
     val hostState: SnackbarHostState,

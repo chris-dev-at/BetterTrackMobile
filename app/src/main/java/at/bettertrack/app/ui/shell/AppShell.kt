@@ -11,7 +11,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +53,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -699,6 +702,11 @@ fun BtApp() {
         }
     }
 
+    // The bottom bar's own height, in px, as measured. Read by the snackbar
+    // overlay at the bottom of this Box — see there for why it cannot be a
+    // constant.
+    var bottomBarPx by remember { mutableIntStateOf(0) }
+
     // The shell is a Box, not just a Scaffold, because the sheet layer has to be
     // able to cover the bottom bar as well as the pages. A full-screen sheet that
     // stopped at the Scaffold's content slot would be a full-screen sheet with a
@@ -731,7 +739,15 @@ fun BtApp() {
             // layer consumes its own. Zeroing here keeps the two from being paid
             // for twice.
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { BtSnackbarHost(snackbar.hostState) },
+            // NO `snackbarHost` here — deliberately, and this is the whole fix for
+            // the sheet-snackbar defect (see the overlay at the bottom of this
+            // Box). The slot puts the host INSIDE the Scaffold, and the Scaffold is
+            // (a) drawn before the sheet layer, so a sheet paints over it, and
+            // (b) clipped by the occlusion rule above to the strip a settled sheet
+            // leaves showing — which is the top of the window, never the bottom
+            // where a snackbar lives. Between the two, every outcome raised from a
+            // subpage was invisible. Proven on the owner's device 2026-08-20: a
+            // feedback delete that answered 500 showed nothing at all.
             // No shell top bar: every tab drives its own collapsing header, and
             // Overview's — the last one the shell used to draw — now travels with
             // the Portfolio tab that hosts it.
@@ -782,6 +798,13 @@ fun BtApp() {
                             TabTap.Switch -> switchToTab(tab.tab)
                         }
                     },
+                    // Measured, not assumed: the snackbar overlay at the bottom of
+                    // this Box has to clear this bar while the tabs are what the
+                    // user is looking at, and `ShortNavigationBar`'s height is an
+                    // M3 token plus whatever gesture inset the bar consumed. A
+                    // hardcoded dp would be wrong on the next token change and on
+                    // any device in a different navigation mode.
+                    modifier = Modifier.onSizeChanged { bottomBarPx = it.height },
                 )
             },
         ) { innerPadding ->
@@ -893,6 +916,45 @@ fun BtApp() {
                 occlusion = occlusion,
             )
         }
+
+        // ── THE snackbar, above the sheet layer ──────────────────────────────
+        //
+        // Last child of the Box, so it is drawn over the sheets as well as over
+        // the pages. That placement is the entire mechanism: `BtSnackbar`'s KDoc
+        // promises "one feedback idiom … every screen — a tab page or inside a
+        // sheet — answers the same way", and until 2026-08-20 that promise was
+        // false for every subpage in the app. 21 of the 60 sheet destinations
+        // raise outcomes through this controller — including the notification
+        // inbox's archive/undo, Settings, Connections, Trusted devices and the
+        // whole social toast surface — and not one of them was ever seen. The
+        // host was in the Scaffold's slot, under the sheets and inside the
+        // occlusion clip.
+        //
+        // Composed exactly once, so a message can never be drawn twice, and no
+        // screen has to know whether it is a tab or a sheet.
+        //
+        // Vertical placement is the only thing that depends on which it is:
+        //
+        //  - tabs showing (`sheetsClosed`) — clear the bottom bar, which is what
+        //    the `Scaffold` slot used to do for free. The bar has already eaten
+        //    the gesture inset, so its measured height IS the whole offset;
+        //    adding a navigation-bar padding on top would count that inset twice.
+        //    `coerceAtLeast` covers the first frame, before the bar has measured.
+        //  - a sheet showing — the bar is behind the sheet, so the snackbar sits
+        //    directly above the gesture inset, exactly as `FirstRunWizard`'s own
+        //    host does over its own full-screen surface.
+        //
+        // `sheetsClosed` is a composition read of the nav graph's floor, not of
+        // [BtOcclusion]: it flips once per sheet open/close rather than once per
+        // frame of a drag, so it costs one recomposition of this one node.
+        val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val barInset = with(LocalDensity.current) { bottomBarPx.toDp() }
+        BtSnackbarHost(
+            hostState = snackbar.hostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (sheetsClosed) barInset.coerceAtLeast(navInset) else navInset),
+        )
     }
 }
 
@@ -1192,6 +1254,7 @@ private fun BtBottomBar(
     pinnedIndex: Int?,
     hasBadge: (TabSpec) -> Boolean,
     onSelect: (TabSpec) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bt = BtTheme.colors
     val density = LocalDensity.current
@@ -1213,7 +1276,7 @@ private fun BtBottomBar(
     // under a storage-mode switch.
     val centreY: Float? = tabs.indices.firstNotNullOfOrNull { iconCentres[it]?.y }
 
-    Column {
+    Column(modifier) {
         // Nothing in dark (the bar's own tone separates it), a real hairline in
         // light. One token, the same rule BtGroup and BtCard follow.
         HorizontalDivider(thickness = 1.dp, color = bt.groupBorder)

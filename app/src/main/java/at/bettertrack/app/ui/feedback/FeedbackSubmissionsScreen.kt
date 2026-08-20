@@ -388,13 +388,18 @@ fun FeedbackSubmissionsScreen(onBack: () -> Unit) {
                 .padding(innerPadding),
         ) {
         // ── What the last delete did ─────────────────────────────────────────
-        // INLINE, not a snackbar, and this is a measured decision rather than a
-        // style one: this screen is a full-screen SHEET destination, and the sheet
-        // layer is composed OVER everything the shell's Scaffold drew — including
-        // its `snackbarHost`. A snackbar raised from here is therefore painted
-        // behind the sheet and never seen. Verified on the owner's device on
-        // 2026-08-20: a delete that answered `500` showed the user nothing at all.
-        // A banner that lives inside this screen cannot be occluded by it.
+        // INLINE, not a snackbar, and it stays inline now that the shell's host is
+        // fixed. The original reason was that this is a full-screen SHEET
+        // destination and the shell's `snackbarHost` sat inside the Scaffold the
+        // sheet layer is drawn over — verified on the owner's device 2026-08-20,
+        // a delete that answered `500` showed the user nothing at all. That defect
+        // is gone (the host is now the last child of the shell's Box, above the
+        // sheets; see [at.bettertrack.app.ui.components.BtSnackbarState]), so the
+        // remaining reason is the one specific to this screen: a deletion verdict
+        // must STAY readable. Three outcomes are possible — deleted, still listed,
+        // or the call failed — the middle one is a claim the user will want to
+        // check against the list in front of them, and a snackbar that has already
+        // faded cannot be re-read.
         //
         // Above the state `when`, not inside its list arm, because two of the three
         // outcomes have to survive the list going empty (a successful delete of the
