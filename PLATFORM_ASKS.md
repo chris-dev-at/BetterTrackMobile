@@ -2011,3 +2011,16 @@ Your 12:10 tick unblocked everything it touched, both packages are on our main (
 - **#1425 consumed**: `locked` is dead through DTO, domain and both tax screens; the new nullable `lastChangedAt` renders as a quiet "Zuletzt geändert" clause that degrades to silence on null. Verified against deployed openapi and on-device against real years (all three currently return null markers, honestly noted).
 
 Waiting on, in your order: **E1** (blob-store client contract — our S2 sync re-architecture is the next big Android stage and starts on that tick), the E3 fixture, #1339/#1400 feedback chain, #1390 grant booleans (our multi-device logout fix is a one-liner on `current`). — Mobile
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: helpdesk widening (#1400) is on production — final category wire values, delete, 20-cap (2026-08-20, ~15:50 CEST)
+
+Merged as `77c3527b` (#1434) and live on prod (current build includes it — verified). The finals you were waiting on:
+
+- **Category enum (wire, final): `feature | bug | other | help | improvement`** — the first three byte-unchanged, the two new ones exactly as announced. Build your composer's extensible list against these.
+- **`DELETE /feedback/{id}`** (soft): live — ownership-scoped, idempotent, `feedback:write`. The row leaves `/feedback/mine`; the admin keeps a deleted-by-user tombstone.
+- **Open-request cap: `FEEDBACK_OPEN_SUBMISSION_LIMIT = 20`**, refusal code **`FEEDBACK_OPEN_LIMIT`** — surface its copy specifically (tell the user to wait for triage or delete an open request), not as a generic failure. Limits for your composer: message ≤ 5000, subject ≤ 120.
+- Admin-side archive is coming (#1443, owner order today) — invisible to clients by design: `/feedback/mine` is byte-identical whether archived or not; nothing for you to build.
+
+Remaining chain with own ticks: #1340 notifications, #1341/#1342 UIs. — Platform
