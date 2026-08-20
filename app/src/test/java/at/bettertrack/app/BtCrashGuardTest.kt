@@ -5,6 +5,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -72,6 +74,10 @@ class BtCrashGuardTest {
      * death on Android. `SupervisorJob` does **not** prevent this; it only stops
      * siblings being cancelled. The two halves of this test are the before and
      * after of every `CoroutineScope(SupervisorJob() + …)` in the app.
+     *
+     * The first half genuinely leaks an uncaught exception into the JVM — see
+     * [drainCoroutinesTestExceptionCollector] for why that has to be cleaned up
+     * after, and why it cannot be cleaned up by not leaking.
      */
     @Test
     fun `only a guarded background scope keeps a throwing root coroutine off the thread handler`() {
@@ -115,5 +121,55 @@ class BtCrashGuardTest {
         val handler = BtCrashGuard.backgroundHandler("unit-test")
         // Must not throw: this is the whole point of the ambient-work boundary.
         handler.handleException(EmptyCoroutineContext, ConnectException("Connection refused"))
+    }
+
+    /**
+     * DO NOT REMOVE — without this, this class fails a *different*, arbitrary
+     * test class, and the failure rotates with test ordering.
+     *
+     * This class is the only one in the suite that deliberately lets a coroutine
+     * exception go all the way uncaught, and `kotlinx-coroutines-test` is on the
+     * unit-test classpath, which makes that a cross-class hazard:
+     *
+     *  - the test artifact registers `ExceptionCollectorAsService` in
+     *    `META-INF/services/kotlinx.coroutines.CoroutineExceptionHandler`, so
+     *    coroutines' `handleUncaughtCoroutineException` consults the library's
+     *    global `ExceptionCollector` *before* falling back to the thread's
+     *    `UncaughtExceptionHandler` — the fallback this class asserts on;
+     *  - the collector arms itself on the first `runTest` in the JVM fork and,
+     *    by design, **never disarms** — its own source comments its `enabled`
+     *    flag with "never becomes false again". With ~100 `runTest` classes in
+     *    the suite it is armed for essentially the whole fork;
+     *  - armed but with no test in flight, it has nobody to hand the exception
+     *    to, so it parks it in a static `unprocessedExceptions` list and lets it
+     *    continue to the thread handler. Our assertion passes; the exception
+     *    stays behind;
+     *  - the *next* `runTest` anywhere in the fork drains that list in
+     *    `TestScopeImpl.enter()` and dies with `UncaughtExceptionsBeforeTest`,
+     *    carrying our `UnknownHostException` as a suppressed cause. The victim is
+     *    simply whichever class Gradle scheduled next — observed as
+     *    `StorageModeTransitionsTest` and `SyncEngineTest`, in 3 of 6 full-gate
+     *    runs, latent for months until new classes reshuffled the order.
+     *
+     * The drain is a throwaway `runTest {}`: `enter()` is the one public entry
+     * point that empties `unprocessedExceptions`, and it deregisters its own
+     * callback before rethrowing, so afterwards the collector holds no queued
+     * exception and no stale callback — byte-for-byte the state any ordinary
+     * `runTest` leaves behind. Deterministic, because the exception is delivered
+     * synchronously inside job completion, i.e. strictly before `join()` returns.
+     *
+     * Note this must stay *outside* the assertions: wrapping the crash itself in
+     * `runTest` would register a collector callback, the collector would then
+     * report the exception as handled (`ExceptionSuccessfullyProcessed`), and the
+     * thread handler — the entire subject of this class — would never be reached.
+     */
+    @After
+    fun drainCoroutinesTestExceptionCollector() {
+        val leaked = runCatching { runTest { } }.exceptionOrNull() ?: return
+        // Only swallow the crash this class plants on purpose; anything else is a
+        // real leak that must not be hidden by the cleanup that hides the fake one.
+        val queued = leaked.suppressedExceptions
+        if (queued.isNotEmpty() && queued.all { it is UnknownHostException }) return
+        throw leaked
     }
 }
