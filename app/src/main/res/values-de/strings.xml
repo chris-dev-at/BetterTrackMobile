@@ -3859,4 +3859,50 @@
     <string name="bt_pv_qr_sheet_scan">Transfer-QR scannen</string>
     <string name="bt_pv_qr_sheet_type">Die 12 Wörter eintippen</string>
     <!-- ===== END paranoid vaults · §13 QR seed-phrase transfer (A1) ===== -->
+    <!-- ===== BEGIN paranoid vaults · §21 creation ceremony (A4) ===== -->
+    <string name="bt_pv_create_continue">Weiter</string>
+    <string name="bt_pv_create_name_title">Diesen Tresor benennen</string>
+    <string name="bt_pv_create_name_sub">Ein Tresor ist ein Ort, in den deine Portfolios umziehen können. Du kannst ihn später umbenennen.</string>
+    <string name="bt_pv_create_name_label">Tresorname</string>
+    <string name="bt_pv_create_name_note_title">Was verschlüsselt ist — und was nicht</string>
+    <string name="bt_pv_create_name_note">Verschlüsselt: alles in den Portfolios, die du hineinlegst — Positionen, Transaktionen, Notizen. Nicht verschlüsselt: dieser Name und der Speicherort des Tresors. BetterTrack braucht beides, um deine Daten zuzustellen; lesen kann es sie nicht.</string>
+    <string name="bt_pv_create_media_title">Wo sollen die Daten liegen?</string>
+    <string name="bt_pv_create_media_sub">Was du auch wählst: Die Daten werden verschlüsselt, bevor sie dieses Telefon verlassen.</string>
+    <string name="bt_pv_create_media_server">BetterTrack</string>
+    <string name="bt_pv_create_media_server_sub">Mit deinem Konto synchronisiert, Ende-zu-Ende verschlüsselt.</string>
+    <string name="bt_pv_create_media_drive">Google Drive</string>
+    <string name="bt_pv_create_media_drive_sub">Ein Google-Konto, das du separat verbindest — es muss nicht das sein, mit dem du dich anmeldest.</string>
+    <string name="bt_pv_create_media_both">Beides</string>
+    <string name="bt_pv_create_media_both_sub">Jede Änderung geht an BetterTrack und an dein Drive.</string>
+    <string name="bt_pv_create_media_drive_pending">Ein Drive-Konto zu verbinden ist noch nicht gebaut, deshalb kann dieser Build nur BetterTrack nutzen.</string>
+    <string name="bt_pv_create_words_title">Deine 12 Wiederherstellungswörter</string>
+    <string name="bt_pv_create_words_sub">Schreib sie in dieser Reihenfolge auf Papier. Sie sind der einzige Schlüssel zu diesem Tresor.</string>
+    <string name="bt_pv_create_words_next">Ich habe sie aufgeschrieben</string>
+    <string name="bt_pv_create_words_no_copy">Es gibt bewusst keinen Kopieren-Button: Die Wörter berühren weder Zwischenablage noch Netzwerk noch den Speicher dieses Telefons.</string>
+    <string name="bt_pv_create_words_missed">Das war nicht das Wort an dieser Stelle. Lies sie noch einmal und mach dann weiter.</string>
+    <string name="bt_pv_create_verify_title">Eine kurze Kontrolle</string>
+    <string name="bt_pv_create_verify_sub">Tippe Wort Nummer %1$d der Phrase ein, die du gerade aufgeschrieben hast. Nur dieses eine.</string>
+    <string name="bt_pv_create_verify_label">Wort %1$d</string>
+    <string name="bt_pv_create_verify_action">Prüfen</string>
+    <string name="bt_pv_create_verify_hint">Groß- und Kleinschreibung und zusätzliche Leerzeichen spielen keine Rolle. Bei einem Fehler siehst du einfach wieder die Wörter.</string>
+    <string name="bt_pv_create_ack_title">Ist die Phrase weg, ist der Tresor weg</string>
+    <string name="bt_pv_create_ack_warn_title">Es gibt kein Zurücksetzen und kein Backup</string>
+    <string name="bt_pv_create_ack_warn_body">BetterTrack hat keine Kopie deiner Wörter und keinen Weg daran vorbei. Ist jede Kopie verloren, kommt niemand mehr an den Inhalt dieses Tresors — kein Support, wir auch nicht.</string>
+    <string name="bt_pv_create_ack_check">Ich verstehe das und habe die Wörter sicher verwahrt.</string>
+    <string name="bt_pv_create_ack_contrast_title">Was dich nichts kostet</string>
+    <string name="bt_pv_create_ack_contrast_body">Das Gerätepasswort dieses Telefons zu vergessen kostet nichts: Du setzt den Schlüsselspeicher zurück und gibst die Phrase erneut ein. Das Telefon zu verlieren kostet nichts, solange es eine weitere Kopie der Phrase gibt. Erst wenn jede Kopie weg ist, ist dieser Tresor weg — nie deine anderen Tresore, nie dein Konto.</string>
+    <string name="bt_pv_create_custody_title">Wie soll dieses Telefon die Phrase verwahren?</string>
+    <string name="bt_pv_create_custody_sub">Du kannst das später jederzeit ändern, für jeden Tresor einzeln.</string>
+    <string name="bt_pv_create_custody_explainer">Ein Gerätepasswort schützt jede auf diesem Telefon gespeicherte Phrase, und es wird nie über die Sitzung hinaus behalten. Ohne Passwort zu speichern ist möglich und weniger sicher — die Auswahl erklärt beides.</string>
+    <string name="bt_pv_create_custody_open">Verwahrung wählen</string>
+    <string name="bt_pv_create_custody_change">Ändern</string>
+    <string name="bt_pv_create_summary_name">Name</string>
+    <string name="bt_pv_create_summary_media">Speicher</string>
+    <string name="bt_pv_create_summary_custody">Auf diesem Telefon</string>
+    <string name="bt_pv_create_summary_unset">Nicht gewählt</string>
+    <string name="bt_pv_create_done_title">Das war alles</string>
+    <string name="bt_pv_create_done_sub">Deine Wörter stehen auf Papier und sonst nirgends, bis du sie verwahrst.</string>
+    <string name="bt_pv_create_done_pending_title">Noch nicht aktiviert</string>
+    <string name="bt_pv_create_done_pending">Tresore werden aktiviert, sobald der Server bereit ist. Es wurde nichts angelegt und nichts irgendwohin gesendet.</string>
+    <!-- ===== END paranoid vaults · §21 creation ceremony (A4) ===== -->
 </resources>

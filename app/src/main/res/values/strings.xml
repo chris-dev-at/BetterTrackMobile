@@ -4062,4 +4062,50 @@
     <string name="bt_pv_qr_sheet_scan">Scan a transfer QR</string>
     <string name="bt_pv_qr_sheet_type">Type the 12 words</string>
     <!-- ===== END paranoid vaults · §13 QR seed-phrase transfer (A1) ===== -->
+    <!-- ===== BEGIN paranoid vaults · §21 creation ceremony (A4) ===== -->
+    <string name="bt_pv_create_continue">Continue</string>
+    <string name="bt_pv_create_name_title">Name this vault</string>
+    <string name="bt_pv_create_name_sub">A vault is a place your portfolios can move into. You can rename it later.</string>
+    <string name="bt_pv_create_name_label">Vault name</string>
+    <string name="bt_pv_create_name_note_title">What is encrypted, and what is not</string>
+    <string name="bt_pv_create_name_note">Encrypted: everything inside the portfolios you move in — positions, transactions, notes. Not encrypted: this name and where the vault keeps its data. BetterTrack needs those to route your bytes; it cannot read what is in them.</string>
+    <string name="bt_pv_create_media_title">Where should it keep its data?</string>
+    <string name="bt_pv_create_media_sub">Whatever you pick, the bytes are encrypted before they leave this phone.</string>
+    <string name="bt_pv_create_media_server">BetterTrack</string>
+    <string name="bt_pv_create_media_server_sub">Synced with your account, encrypted end to end.</string>
+    <string name="bt_pv_create_media_drive">Google Drive</string>
+    <string name="bt_pv_create_media_drive_sub">A Google account you connect separately — it does not have to be the one you sign in with.</string>
+    <string name="bt_pv_create_media_both">Both</string>
+    <string name="bt_pv_create_media_both_sub">Every change goes to BetterTrack and to your Drive.</string>
+    <string name="bt_pv_create_media_drive_pending">Connecting a Drive account is not built yet, so this build can only use BetterTrack.</string>
+    <string name="bt_pv_create_words_title">Your 12 recovery words</string>
+    <string name="bt_pv_create_words_sub">Write them on paper, in this order. They are the only key to this vault.</string>
+    <string name="bt_pv_create_words_next">I wrote them down</string>
+    <string name="bt_pv_create_words_no_copy">There is no copy button on purpose: the words never touch the clipboard, the network or this phone\'s storage.</string>
+    <string name="bt_pv_create_words_missed">That was not the word in that position. Read them again, then carry on.</string>
+    <string name="bt_pv_create_verify_title">One quick check</string>
+    <string name="bt_pv_create_verify_sub">Type word number %1$d of the phrase you just wrote down. Only that one.</string>
+    <string name="bt_pv_create_verify_label">Word %1$d</string>
+    <string name="bt_pv_create_verify_action">Check</string>
+    <string name="bt_pv_create_verify_hint">Upper or lower case and extra spaces make no difference. Get it wrong and you simply see the words again.</string>
+    <string name="bt_pv_create_ack_title">If the phrase is gone, the vault is gone</string>
+    <string name="bt_pv_create_ack_warn_title">There is no reset and no backup</string>
+    <string name="bt_pv_create_ack_warn_body">BetterTrack keeps no copy of your words and no way around them. If every copy is lost, nobody can recover what is in this vault — not support, not us.</string>
+    <string name="bt_pv_create_ack_check">I understand and have stored the words safely.</string>
+    <string name="bt_pv_create_ack_contrast_title">What does not cost you anything</string>
+    <string name="bt_pv_create_ack_contrast_body">Forgetting this phone\'s device password costs nothing: you reset the phone\'s keystore and enter the phrase again. Losing the phone costs nothing while another copy of the phrase exists. Only losing every copy loses this vault — never your other vaults, never your account.</string>
+    <string name="bt_pv_create_custody_title">How should this phone keep the phrase?</string>
+    <string name="bt_pv_create_custody_sub">You can change this later, separately for each vault.</string>
+    <string name="bt_pv_create_custody_explainer">One device password protects every phrase stored on this phone, and it is never kept between sessions. Storing without it is possible and less safe — the choice explains both.</string>
+    <string name="bt_pv_create_custody_open">Choose how it is kept</string>
+    <string name="bt_pv_create_custody_change">Change</string>
+    <string name="bt_pv_create_summary_name">Name</string>
+    <string name="bt_pv_create_summary_media">Storage</string>
+    <string name="bt_pv_create_summary_custody">On this phone</string>
+    <string name="bt_pv_create_summary_unset">Not chosen</string>
+    <string name="bt_pv_create_done_title">That is everything</string>
+    <string name="bt_pv_create_done_sub">Your words exist on paper and nowhere else until you store them.</string>
+    <string name="bt_pv_create_done_pending_title">Not activated yet</string>
+    <string name="bt_pv_create_done_pending">Vaults switch on as soon as the server supports them. Nothing has been created and nothing has been sent anywhere yet.</string>
+    <!-- ===== END paranoid vaults · §21 creation ceremony (A4) ===== -->
 </resources>
