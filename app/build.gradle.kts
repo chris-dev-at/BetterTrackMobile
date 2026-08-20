@@ -273,6 +273,17 @@ android {
     }
 }
 
+// Room schema export (`BtDatabase.exportSchema = true`). The JSON per schema
+// version is a COMMITTED artifact under app/schemas: it is what makes a
+// migration reviewable ("what exactly changed in v12?") and what
+// BtDatabaseMigrationTest replays a historical schema from instead of a
+// hand-typed reconstruction. Room refuses to export without this location, and
+// exporting nowhere is how this project shipped two different physical schemas
+// under one `user_version` — twice (see BtDatabase's migration comments).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -340,6 +351,18 @@ dependencies {
     // shared composition with the app. The artifact is kept isolated on purpose
     // (see the catalog note) — it neither reads from nor moves the Compose BOM.
     implementation(libs.androidx.glance.appwidget)
+
+    // Paranoid vaults §13 — the QR seed-phrase transfer's receiver leg
+    // (at.bettertrack.app.ui.vault.qr). CameraX provides the preview and the
+    // ImageAnalysis frame stream; the QR DECODER is `zxing.core` above — the
+    // same artifact that encodes the 2FA and transfer codes, which is what makes
+    // the encode→decode round trip a plain JVM unit test. ML Kit is deliberately
+    // avoided: its scanner model arrives via Play services, and the `github`
+    // flavor must build and run without them.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

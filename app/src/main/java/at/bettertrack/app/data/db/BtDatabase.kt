@@ -72,9 +72,11 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         VaultEntityRow::class,
         VaultMetaRow::class,
         PriceCacheRow::class,
+        PvVaultRow::class,
+        PvVaultDocRow::class,
     ],
-    version = 11,
-    exportSchema = false,
+    version = 12,
+    exportSchema = true,
 )
 abstract class BtDatabase : RoomDatabase() {
     abstract fun portfolioDao(): PortfolioDao
@@ -331,6 +333,59 @@ abstract class BtDatabase : RoomDatabase() {
         }
 
         /**
+         * v11 → v12 (paranoid vaults, epic E0): the two DORMANT vault tables and
+         * the two dormant membership columns on `portfolios`.
+         *
+         * Purely additive, and additive in the strongest sense — nothing in this
+         * build reads or writes any of it (see [PvVaultRow] / [PvVaultDocRow]),
+         * so an upgraded install gains two empty tables and two NULL columns and
+         * behaves identically. The reason it ships before the feature is that a
+         * schema version is the one thing that cannot be back-filled cheaply:
+         * this project has twice shipped two different physical schemas under
+         * one `user_version` by adding an entity without a migration, and the
+         * cure for that is to move the schema on its own, early, with a test.
+         *
+         * The column definitions must match what Room's compiler generates for
+         * the two entities EXACTLY — including the index and the nullability —
+         * or `validateMigration` fails at startup on the first upgraded device.
+         * `BtDatabaseMigrationTest` compares both, against the generated
+         * expectation AND against the committed `schemas/…/12.json`.
+         */
+        internal val MIGRATION_PARANOID_VAULTS = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vaults` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`media` TEXT NOT NULL, " +
+                        "`driveConnectionId` TEXT, " +
+                        "`keyFingerprint` TEXT NOT NULL, " +
+                        "`retirementProofPublicKey` TEXT NOT NULL, " +
+                        "`createdAt` TEXT NOT NULL, " +
+                        "`updatedAt` TEXT NOT NULL, " +
+                        "`syncedAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vault_docs` (" +
+                        "`vaultId` TEXT NOT NULL, " +
+                        "`docId` TEXT NOT NULL, " +
+                        "`docKind` TEXT NOT NULL, " +
+                        "`portfolioId` TEXT, " +
+                        "`docVersion` INTEGER NOT NULL, " +
+                        "`formatVersion` INTEGER NOT NULL, " +
+                        "`sizeBytes` INTEGER NOT NULL, " +
+                        "`envelope` BLOB, " +
+                        "`cachedAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`vaultId`, `docId`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_docs_vaultId` ON `vault_docs` (`vaultId`)")
+                db.addColumnIfMissing("portfolios", "vaultId", "TEXT")
+                db.addColumnIfMissing("portfolios", "vaultAlias", "TEXT")
+            }
+        }
+
+        /**
          * The whole chain, in one place, so [create] and the migration regression
          * suite can never disagree about what ships. Room resolves the path itself;
          * the order here is documentation.
@@ -350,6 +405,7 @@ abstract class BtDatabase : RoomDatabase() {
             MIGRATION_VAULT_TABLES,
             MIGRATION_SYNC_ERROR_CODE,
             MIGRATION_PORTFOLIO_KIND,
+            MIGRATION_PARANOID_VAULTS,
         )
 
         fun create(context: Context): BtDatabase =

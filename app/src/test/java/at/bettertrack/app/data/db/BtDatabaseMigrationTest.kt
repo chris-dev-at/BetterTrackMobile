@@ -2,7 +2,12 @@ package at.bettertrack.app.data.db
 
 import android.database.Cursor
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.lang.reflect.Proxy
@@ -52,6 +57,14 @@ import java.sql.DriverManager
  * [SCHEMA_V7_OWNER_DEVICE] is not a reconstruction at all — it is the `.schema`
  * of the owner's actual phone database, pulled over adb on 2026-08-05 while it
  * sat at `user_version = 7`. Only the shape is here; none of his rows are.
+ *
+ * From v11 on there is a third, better source: `exportSchema` is finally ON and
+ * `app/schemas/at.bettertrack.app.data.db.BtDatabase/<version>.json` is
+ * committed, so the newest steps start from the schema Room itself wrote rather
+ * than from anybody's transcription of it. `MigrationTestHelper` — the androidx
+ * way to consume those files — needs an instrumented device; this suite stays
+ * device-free on purpose (it is a CI gate), so it consumes the same JSONs
+ * through the same JDBC harness instead.
  */
 class BtDatabaseMigrationTest {
 
@@ -167,6 +180,104 @@ class BtDatabaseMigrationTest {
         assertEquals("reconstructed v7 differs from the device", emptyList<String>(), diffSchemas(real, reconstructed))
     }
 
+    // ── The exported schema JSONs (app/schemas), now that they exist ─────────
+    //
+    // `exportSchema` was `false` for eleven versions — a long-flagged defect,
+    // because the export is what makes a migration reviewable and what lets a
+    // test start from the schema that ACTUALLY shipped rather than from a
+    // reconstruction of it. It is on from v11 forward: 11.json was exported
+    // before the v12 work, 12.json with it, and both are committed.
+
+    /** Every committed export must be a schema this code still agrees with. */
+    @Test
+    fun theCommittedSchemaExportsMatchTheRoomExpectation() {
+        val declared = declaredVersion()
+        assertEquals("the newest export must be the declared version", declared, exportedVersions().max())
+        assertTrue("v11 must stay exported as the migration's starting point", 11 in exportedVersions())
+
+        val expected = openJdbc(newDbFile()).use { conn ->
+            createRoomExpectedTables(conn)
+            readSchema(conn)
+        }
+        val exported = schemaFrom(exportedStatements(declared))
+        assertEquals(
+            "schemas/$declared.json differs from what Room's compiler generates — re-export it",
+            emptyList<String>(),
+            diffSchemas(expected, exported),
+        )
+        assertEquals("tables", expected.keys.sorted(), exported.keys.sorted())
+    }
+
+    /**
+     * The v11→v12 step, started from the COMMITTED v11 export rather than from a
+     * reconstruction: this is the closest a JVM test gets to `MigrationTestHelper`
+     * (which needs an instrumented device, and this project's whole migration
+     * suite is deliberately device-free so CI gates on it).
+     */
+    @Test
+    fun theCommittedV11SchemaMigratesToTheCommittedV12Schema() {
+        withMigratedDb(exportedStatements(11), fromVersion = 11) { conn ->
+            assertSchemaMatchesRoomExpectation(conn, "committed schemas/11.json")
+            assertEquals(
+                "migrating 11→12 must reproduce the committed 12.json exactly",
+                emptyList<String>(),
+                diffSchemas(schemaFrom(exportedStatements(12)), readSchema(conn)),
+            )
+        }
+    }
+
+    /** The two dormant tables arrive empty, and no existing row is touched. */
+    @Test
+    fun theParanoidVaultMigrationIsPurelyAdditive() {
+        val db = newDbFile()
+        openJdbc(db).use { conn ->
+            conn.applyAll(exportedStatements(11))
+            conn.exec("PRAGMA user_version = 11")
+            conn.applyAll(SAMPLE_ROWS_V7)
+            val before = conn.rowCounts(COUNTED_TABLES)
+
+            runMigrations(conn, from = 11)
+
+            assertEquals("migration 11→12 must not touch a single user row", before, conn.rowCounts(COUNTED_TABLES))
+            assertEquals("`vaults` arrives empty", mapOf("vaults" to 0), conn.rowCounts(listOf("vaults")))
+            assertEquals("`vault_docs` arrives empty", mapOf("vault_docs" to 0), conn.rowCounts(listOf("vault_docs")))
+            // The membership columns exist and read as "not in a vault".
+            assertEquals(null, conn.single("SELECT `vaultId` FROM `portfolios` LIMIT 1"))
+            assertEquals(null, conn.single("SELECT `vaultAlias` FROM `portfolios` LIMIT 1"))
+        }
+    }
+
+    private fun declaredVersion(): Int = roomOpenDelegate().let { delegate ->
+        delegate.javaClass.getMethod("getVersion").apply { isAccessible = true }.invoke(delegate) as Int
+    }
+
+    private fun exportedSchemaDir(): File =
+        listOf(File("schemas"), File("app/schemas")).firstOrNull { it.isDirectory }
+            ?.resolve("at.bettertrack.app.data.db.BtDatabase")
+            ?.takeIf { it.isDirectory }
+            ?: error("exported Room schemas not found from ${File(".").absolutePath}")
+
+    private fun exportedVersions(): List<Int> =
+        exportedSchemaDir().listFiles().orEmpty()
+            .mapNotNull { it.name.removeSuffix(".json").toIntOrNull() }
+            .sorted()
+
+    /** The `CREATE` statements Room itself wrote into `<version>.json`. */
+    private fun exportedStatements(version: Int): List<String> {
+        val file = exportedSchemaDir().resolve("$version.json")
+        assertTrue("missing exported schema ${file.absolutePath}", file.isFile)
+        val database = Json.parseToJsonElement(file.readText()).jsonObject["database"]!!.jsonObject
+        return buildList {
+            database["entities"]!!.jsonArray.forEach { entity ->
+                val table = entity.jsonObject["tableName"]!!.jsonPrimitive.content
+                fun sql(element: kotlinx.serialization.json.JsonElement) =
+                    element.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table)
+                add(sql(entity))
+                entity.jsonObject["indices"]?.jsonArray?.forEach { add(sql(it)) }
+            }
+        }
+    }
+
     // ── Machinery ────────────────────────────────────────────────────────────
 
     private fun withMigratedDb(schema: List<String>, fromVersion: Int, assertions: (Connection) -> Unit) {
@@ -205,7 +316,7 @@ class BtDatabaseMigrationTest {
             readSchema(expectedConn)
         }
         val differences = diffSchemas(expected, readSchema(actualConn))
-        assertEquals("$what: schema differs from the Room v10 expectation", emptyList<String>(), differences)
+        assertEquals("$what: schema differs from the Room expectation", emptyList<String>(), differences)
         assertEquals("$what: Room's own validateMigration rejected the migrated database", "", roomValidationFailure(actualConn))
     }
 
@@ -662,12 +773,24 @@ class BtDatabaseMigrationTest {
             "CREATE INDEX `index_price_cache_assetId` ON `price_cache` (`assetId`)",
         )
 
+        /** rev 6f0a3ea — `@Database(version = 10)`: the parked-op reason code. */
+        val DELTA_SYNC_ERROR_CODE = listOf(
+            "ALTER TABLE `sync_ops` ADD COLUMN `errorCode` TEXT",
+        )
+
+        /** rev 8adf20a — `@Database(version = 11)`: the portfolio icon becomes a server field. */
+        val DELTA_PORTFOLIO_KIND = listOf(
+            "ALTER TABLE `portfolios` ADD COLUMN `kind` TEXT",
+        )
+
         val SCHEMA_V4 = SCHEMA_V3 + DELTA_SMOOTHING
         val SCHEMA_V5 = SCHEMA_V4 + DELTA_FIRST_ATTEMPT_AT_MS
         val SCHEMA_V6 = SCHEMA_V5 + DELTA_PROVENANCE_AND_MIRROR
         val SCHEMA_V7 = SCHEMA_V6 + DELTA_BACKEND_TAG
         val SCHEMA_V8 = SCHEMA_V7 + DELTA_CASH_TAGS
         val SCHEMA_V9 = SCHEMA_V8 + DELTA_VAULT_TABLES
+        val SCHEMA_V10 = SCHEMA_V9 + DELTA_SYNC_ERROR_CODE
+        val SCHEMA_V11 = SCHEMA_V10 + DELTA_PORTFOLIO_KIND
 
         val HISTORICAL_SCHEMAS = listOf(
             1 to SCHEMA_V1,
@@ -679,6 +802,8 @@ class BtDatabaseMigrationTest {
             7 to SCHEMA_V7,
             8 to SCHEMA_V8,
             9 to SCHEMA_V9,
+            10 to SCHEMA_V10,
+            11 to SCHEMA_V11,
         )
 
         /**

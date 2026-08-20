@@ -95,6 +95,17 @@ bouncycastle = "1.80"
 # resolves the BOM's newer runtime for both and nothing is downgraded.
 glance = "1.1.1"
 
+# ── Paranoid vaults §13 — QR seed-phrase transfer, receiver leg ────────────
+# CameraX supplies the preview + ImageAnalysis stream the scanner reads frames
+# from; the DECODER is the zxing-core artifact already pinned above (the same
+# one that encodes the 2FA QR), so encoder and decoder are one library and the
+# round trip is unit-testable. ML Kit's barcode scanner is deliberately NOT
+# used: its model is delivered through Google Play services, and the `github`
+# flavor is the Play-services-free build. camera-camera2 is the CameraX backend,
+# camera-lifecycle binds use cases to a LifecycleOwner, camera-view supplies
+# PreviewView (hosted through AndroidView) — all four move together.
+camerax = "1.6.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
@@ -149,6 +160,12 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+
+# Paranoid vaults §13 — QR scanner camera stack (see the `camerax` note above).
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

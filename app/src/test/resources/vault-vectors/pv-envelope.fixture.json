@@ -1,0 +1,255 @@
+{
+  "_source": [
+    "packages/contracts/src/vaults.vectors.test.ts (platform main 14f27679, epic E0 #1410) — the ONE",
+    "conformance vector source for paranoid-vaults envelope v2. Every literal below is transcribed from",
+    "that file; the doc-bucket map is transcribed from its sibling packages/contracts/src/vaults.ts.",
+    "The TS suite generates its AES key and IV at run time and asserts PROPERTIES (round trip, anti-swap,",
+    "canonicalization, fail-closed), so there are no ciphertext oracles to pin — except the two",
+    "accountBinding digests below, which are fully determined by the contract and ARE pinned here."
+  ],
+  "ids": {
+    "accountId": "018f6a3e-0000-7000-8000-00000000aaaa",
+    "otherAccountId": "018f6a3e-0000-7000-8000-00000000bbbb",
+    "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+    "otherVaultId": "018f6a3e-1111-7000-8000-000000000002",
+    "docId": "018f6a3e-2222-7000-8000-000000000001",
+    "otherDocId": "018f6a3e-2222-7000-8000-000000000002",
+    "keyId": "018f6a3e-3333-7000-8000-000000000001",
+    "deviceId": "018f6a3e-4444-7000-8000-000000000001",
+    "writeId": "018f6a3e-5555-7000-8000-000000000001"
+  },
+  "accountBinding": {
+    "infoPrefix": "bettertrack-vault-owner-v1:",
+    "note": "base64url(sha256(infoPrefix + accountId)), unpadded — 43 chars, per vaultAccountBindingSchema.",
+    "account": "In0ASUJtTcwXZ8bZ7WFj2PvDjDa3_ynS4kFFR-MDOFw",
+    "otherAccount": "-Q65VHuANuHIACsi_zaCRip8dLfUZIKu_5PKrVJTtBc"
+  },
+  "header": {
+    "formatVersion": 2,
+    "cipher": "A256GCM",
+    "docKind": "portfolio",
+    "docVersion": 7,
+    "schemaVersion": 1,
+    "writtenAt": "2026-08-20T12:00:00.000Z",
+    "wrappedKc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "wrappedKcNote": "base64url(new Uint8Array(48)) — 48 zero bytes.",
+    "slot": "seed-v1"
+  },
+  "roundTrip": {
+    "plaintext": "{\"schemaVersion\":1,\"entities\":{}}"
+  },
+  "antiSwap": [
+    {
+      "name": "formatVersion rollback 2 to 1",
+      "from": "\"formatVersion\":2",
+      "to": "\"formatVersion\":1"
+    },
+    {
+      "name": "swapped vaultId",
+      "from": "018f6a3e-1111-7000-8000-000000000001",
+      "to": "018f6a3e-1111-7000-8000-000000000002"
+    },
+    {
+      "name": "swapped docId",
+      "from": "018f6a3e-2222-7000-8000-000000000001",
+      "to": "018f6a3e-2222-7000-8000-000000000002"
+    },
+    {
+      "name": "swapped accountBinding",
+      "from": "In0ASUJtTcwXZ8bZ7WFj2PvDjDa3_ynS4kFFR-MDOFw",
+      "to": "-Q65VHuANuHIACsi_zaCRip8dLfUZIKu_5PKrVJTtBc"
+    }
+  ],
+  "versioning": {
+    "futureFormatHeader": {
+      "formatVersion": 3,
+      "totallyUnknownField": { "nested": true },
+      "schemaVersion": 9
+    },
+    "futureFormatExpectation": { "formatVersion": 3, "schemaVersion": 9 },
+    "futureFormatCiphertext": [1, 2, 3, 4],
+    "futurePayloadSchemaVersion": 2,
+    "v1AccountHeader": {
+      "formatVersion": 1,
+      "cipher": "A256GCM",
+      "iv": "aXY",
+      "keyId": "018f6a3e-3333-7000-8000-000000000001",
+      "wrappedKeys": [],
+      "vaultVersion": 1,
+      "schemaVersion": 1,
+      "deviceId": "018f6a3e-4444-7000-8000-000000000001",
+      "writeId": "018f6a3e-5555-7000-8000-000000000001",
+      "writtenAt": "2026-08-20T12:00:00.000Z"
+    },
+    "unknownExtraHeaderField": { "sneaky": 1 },
+    "serverHeader": { "formatVersion": 2, "docVersion": 7 },
+    "serverHeaderFuture": { "formatVersion": 99, "docVersion": 3, "mystery": true }
+  },
+  "media": {
+    "values": ["server", "drive", "local"],
+    "serverAccepted": ["server", "drive"],
+    "reserved": "local",
+    "validLists": [["local"], ["server"], ["server", "drive"]],
+    "invalidLists": [[], ["server", "server"], ["tape"]],
+    "createVault": {
+      "keyFingerprint": "AAAAAAAAAAAAAAAA",
+      "retirementProofPublicKey": "MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "retirementProofPublicKeyNote": "base64url of a real 44-byte DER SPKI Ed25519 key (canonical prefix + 32 zero bytes).",
+      "cases": [
+        {
+          "name": "the CONTRACT accepts the reserved local medium",
+          "vaultName": "Future phone vault",
+          "media": ["local"],
+          "driveConnectionId": null,
+          "valid": true
+        },
+        {
+          "name": "drive without a binding",
+          "vaultName": "Drive vault",
+          "media": ["drive"],
+          "driveConnectionId": null,
+          "valid": false
+        },
+        {
+          "name": "drive with a binding",
+          "vaultName": "Drive vault",
+          "media": ["drive"],
+          "driveConnectionId": "018f6a3e-1111-7000-8000-000000000001",
+          "valid": true
+        },
+        {
+          "name": "a binding without the drive medium",
+          "vaultName": "Drive vault",
+          "media": ["server"],
+          "driveConnectionId": "018f6a3e-1111-7000-8000-000000000001",
+          "valid": false
+        }
+      ]
+    }
+  },
+  "keyFingerprint": {
+    "chars": 16,
+    "valid": ["abcDEF123456-_Zz"],
+    "invalid": ["abcDEF123456-_Z", "abcDEF123456-_Zzq", "abcDEF123456+/Zz"]
+  },
+  "docBuckets": {
+    "_source": "VAULT_ENTITY_DOC_BUCKETS, packages/contracts/src/vaults.ts — the typed Record over the full kind enum.",
+    "entityDocBuckets": {
+      "portfolio": "portfolio",
+      "transaction": "portfolio",
+      "dividend": "portfolio",
+      "cashSource": "portfolio",
+      "cashMovement": "portfolio",
+      "portfolioSetting": "portfolio",
+      "standingOrder": "portfolio",
+      "standingOrderRun": "portfolio",
+      "importBatch": "portfolio",
+      "importRow": "portfolio",
+      "portfolioDailySnapshot": "portfolio",
+      "portfolioSnapshotState": "portfolio",
+      "cashMovementTag": "portfolio",
+      "cashBudget": "portfolio",
+      "cashBudgetFire": "portfolio",
+      "taxSetting": "common",
+      "customAsset": "common",
+      "customAssetValue": "common",
+      "expenseCategory": "common",
+      "expenseTransaction": "common",
+      "expenseRule": "common",
+      "expenseBudget": "common",
+      "expenseBudgetFire": "common",
+      "cashTag": "common",
+      "cashRule": "common",
+      "cashRuleTag": "common"
+    },
+    "tellingCases": {
+      "transaction": "portfolio",
+      "standingOrderRun": "portfolio",
+      "cashBudget": "portfolio",
+      "taxSetting": "common",
+      "customAsset": "common",
+      "expenseTransaction": "common",
+      "cashTag": "common"
+    },
+    "movedFromV2ToPortfolio": ["cashBudget", "cashBudgetFire"]
+  },
+  "docPayloads": {
+    "retirementProofPublicKey": "MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "retirementProofPrivateKey": "MC4CAQAwBQYDK2VwBCIEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "retirementProofPrivateKeyNote": "base64url of a real 48-byte DER PKCS#8 Ed25519 key (canonical prefix + 32 zero bytes).",
+    "headerDoc": {
+      "valid": {
+        "schemaVersion": 1,
+        "name": "Family vault",
+        "portfolios": [{ "id": "018f6a3e-1111-7000-8000-000000000001", "name": "Main" }],
+        "keySlots": [
+          {
+            "keyId": "018f6a3e-3333-7000-8000-000000000001",
+            "slot": "seed-v1",
+            "wrappedKc": "d2s"
+          }
+        ],
+        "driveConnection": null,
+        "created": {
+          "at": "2026-08-20T12:00:00.000Z",
+          "deviceId": "018f6a3e-4444-7000-8000-000000000001"
+        }
+      },
+      "emptyKeySlots": {
+        "schemaVersion": 1,
+        "name": "x",
+        "portfolios": [],
+        "keySlots": [],
+        "driveConnection": null,
+        "created": {
+          "at": "2026-08-20T12:00:00.000Z",
+          "deviceId": "018f6a3e-4444-7000-8000-000000000001"
+        }
+      }
+    },
+    "commonDoc": {
+      "valid": {
+        "schemaVersion": 1,
+        "entities": {},
+        "clientSecurity": {
+          "retirementProof": {
+            "publicKey": "MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "privateKey": "MC4CAQAwBQYDK2VwBCIEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        }
+      },
+      "missingClientSecurity": { "schemaVersion": 1, "entities": {} },
+      "portfolioBucketKind": "transaction"
+    },
+    "portfolioDoc": {
+      "valid": {
+        "schemaVersion": 1,
+        "portfolioId": "018f6a3e-1111-7000-8000-000000000001",
+        "entities": {}
+      },
+      "commonBucketKind": "customAsset",
+      "portfolioBucketKind": "transaction"
+    }
+  },
+  "moveBodies": {
+    "stepUp": { "password": "hunter2hunter2" },
+    "stepUpCode": { "code": "123456" },
+    "moveIn": {
+      "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+      "docVersion": 1,
+      "portfolioDataRevision": "abc123_-"
+    },
+    "moveOut": {
+      "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+      "moveOutId": "018f6a3e-2222-7000-8000-000000000001",
+      "document": { "schemaVersion": 1, "entities": [] }
+    }
+  },
+  "headerSchema": {
+    "rejects": [
+      { "name": "formatVersion 1", "field": "formatVersion", "value": 1 },
+      { "name": "an unknown key-slot kind", "field": "keySlots.slot", "value": "password-v1" },
+      { "name": "an unknown docKind", "field": "docKind", "value": "roster" }
+    ]
+  }
+}

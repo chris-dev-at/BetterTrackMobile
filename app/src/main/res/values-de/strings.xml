@@ -3740,4 +3740,87 @@
 
     <string name="bt_firstrun_settings_row">Einrichtung abschließen</string>
     <string name="bt_firstrun_settings_row_sub">Ein paar Konto-Grundlagen warten noch.</string>
+
+    <!-- ===== BEGIN paranoid vaults · §12 device custody (A2) ===== -->
+    <string name="bt_pv_custody_unlock_title">Tresore entsperren</string>
+    <string name="bt_pv_custody_unlock_body">Ein Passwort auf diesem Telefon öffnet jede hier gespeicherte Phrase. Es wird nie gespeichert und verlässt das Gerät nie.</string>
+    <string name="bt_pv_custody_password_label">Gerätepasswort</string>
+    <string name="bt_pv_custody_unlock_action">Entsperren</string>
+    <string name="bt_pv_custody_unlock_working">Wird entsperrt …</string>
+    <string name="bt_pv_custody_unlock_wrong">Dieses Passwort passt nicht. Geprüft wird nur auf diesem Telefon.</string>
+    <string name="bt_pv_custody_lockout">Zu viele Versuche. Nächster Versuch in %1$s.</string>
+    <string name="bt_pv_custody_forgot">Passwort vergessen?</string>
+    <string name="bt_pv_custody_reset_title">Schlüsselspeicher dieses Telefons zurücksetzen?</string>
+    <string name="bt_pv_custody_reset_body">Das löscht nur die auf diesem Telefon gespeicherten Phrasen — es gehen keine Tresordaten verloren, und du kommst wieder hinein, indem du die Wörter erneut eingibst oder den QR-Code von einem anderen Gerät scannst.</string>
+    <string name="bt_pv_custody_reset_confirm">Gespeicherte Phrasen löschen</string>
+    <string name="bt_pv_custody_choice_title">Wie soll diese Phrase gespeichert werden?</string>
+    <string name="bt_pv_custody_choice_wrapped">Mit Gerätepasswort geschützt</string>
+    <string name="bt_pv_custody_choice_wrapped_sub">Du gibst das Passwort einmal pro Sitzung ein, und es öffnet jeden Tresor auf diesem Telefon.</string>
+    <string name="bt_pv_custody_choice_plain">Ohne Passwort gespeichert</string>
+    <string name="bt_pv_custody_choice_plain_sub">Wer auf dieses Telefon kommt, kann die Phrase lesen; für BetterTrack bleibt sie so oder so unlesbar.</string>
+    <string name="bt_pv_custody_choice_new_password">Neues Gerätepasswort</string>
+    <string name="bt_pv_custody_choice_repeat_password">Passwort wiederholen</string>
+    <string name="bt_pv_custody_choice_mismatch">Die beiden Eingaben sind unterschiedlich.</string>
+    <string name="bt_pv_custody_choice_too_short">Zu kurz — bitte mindestens acht Zeichen verwenden.</string>
+    <string name="bt_pv_custody_choice_save">Speichern</string>
+    <string name="bt_pv_custody_lock_action">Tresore sperren</string>
+    <string name="bt_pv_custody_lock_sub_unlocked">Offen, bis du sie sperrst oder die App-Sperre greift.</string>
+    <string name="bt_pv_custody_lock_sub_locked">Gesperrt. Der nächste Tresor fragt nach dem Passwort.</string>
+    <string name="bt_pv_custody_state_plain_action">Öffnen</string>
+    <string name="bt_pv_custody_state_absent_action">Wörter eingeben / QR scannen</string>
+    <string name="bt_pv_custody_state_wrapped_sub">Mit dem Gerätepasswort geschützt.</string>
+    <string name="bt_pv_custody_state_plain_sub">Öffnet ohne Passwort.</string>
+    <string name="bt_pv_custody_state_absent_sub">Diese Phrase liegt nicht auf diesem Telefon.</string>
+    <string name="bt_pv_custody_vault_fallback">Tresor</string>
+    <!-- ===== END paranoid vaults · §12 device custody (A2) ===== -->
+
+    <!-- ===== paranoid vaults · §13 QR seed-phrase transfer (A1) =====
+         Behind ParanoidVaultsFlags.enabled; nothing reaches these while it is off.
+         Sender: ui/vault/qr/VaultQrShowScreen.kt · receiver: VaultQrScanScreen.kt -->
+    <string name="bt_pv_qr_show_title">Transfer-QR</string>
+    <string name="bt_pv_qr_show_warning">Wer diesen Code abfotografiert, besitzt diesen Tresor. Keine Screenshots, keine Bildschirmfreigabe — achte darauf, wer mitschauen kann.</string>
+    <string name="bt_pv_qr_show_expires">Verschwindet in %1$d s</string>
+    <string name="bt_pv_qr_show_scan_hint">Auf dem anderen Gerät scannen: Tresor → Transfer-QR scannen.</string>
+    <string name="bt_pv_qr_show_expired_title">Code ausgeblendet</string>
+    <string name="bt_pv_qr_show_expired_body">Der Code wird immer nur 60 Sekunden lang angezeigt.</string>
+    <string name="bt_pv_qr_show_again">Erneut anzeigen</string>
+    <string name="bt_pv_qr_show_no_clipboard">Es gibt absichtlich keinen Kopieren-Knopf — die Phrase landet nie in der Zwischenablage, im Netzwerk oder im Speicher dieses Geräts.</string>
+    <string name="bt_pv_qr_show_unavailable">Das sind keine 12 gültigen Wiederherstellungswörter — es gibt nichts zu übertragen.</string>
+    <string name="bt_pv_qr_scan_title">Transfer-QR scannen</string>
+    <string name="bt_pv_qr_scan_hint">Richte die Kamera auf den Transfer-QR deines anderen Geräts. Es wird nichts über das Netzwerk gesendet.</string>
+    <string name="bt_pv_qr_scan_permission_title">Kamerazugriff nötig</string>
+    <string name="bt_pv_qr_scan_permission_body">Die Kamera ist der gesamte Übertragungsweg — Bildschirm zu Kamera, nichts dazwischen.</string>
+    <string name="bt_pv_qr_scan_permission_grant">Kamera erlauben</string>
+    <string name="bt_pv_qr_scan_permission_denied_body">Der Kamerazugriff ist für BetterTrack deaktiviert. Aktiviere ihn in den Android-App-Einstellungen — oder tippe die 12 Wörter ein.</string>
+    <string name="bt_pv_qr_scan_open_settings">App-Einstellungen öffnen</string>
+    <string name="bt_pv_qr_scan_no_camera_title">Dieses Gerät hat keine Kamera</string>
+    <string name="bt_pv_qr_scan_no_camera_body">Tippe stattdessen die 12 Wörter ein — das führt genau zum selben Ziel.</string>
+    <string name="bt_pv_qr_scan_camera_error_title">Die Kamera konnte nicht starten</string>
+    <string name="bt_pv_qr_scan_camera_error_body">Vielleicht benutzt sie gerade eine andere App. Schließe diese App und komm zurück — oder tippe die 12 Wörter ein.</string>
+    <string name="bt_pv_qr_scan_torch_on">Licht einschalten</string>
+    <string name="bt_pv_qr_scan_torch_off">Licht ausschalten</string>
+    <string name="bt_pv_qr_scan_manual">Stattdessen die 12 Wörter eintippen</string>
+    <string name="bt_pv_qr_scan_again">Erneut scannen</string>
+    <string name="bt_pv_qr_reject_title">Nicht übernommen</string>
+    <string name="bt_pv_qr_reject_generic">Dieser Code konnte nicht gelesen werden. Zeige ihn auf dem anderen Gerät erneut an und scanne noch einmal.</string>
+    <string name="bt_pv_qr_reject_update">Dieser Code stammt aus einer neueren BetterTrack-Version. Aktualisiere die App und versuche es erneut.</string>
+    <string name="bt_pv_qr_reject_legacy">Dieser Code stammt aus einer älteren BetterTrack-Version. Erzeuge auf dem anderen Gerät einen neuen Transfer-QR.</string>
+    <string name="bt_pv_qr_reject_foreign">Das ist kein BetterTrack-Transfercode.</string>
+    <string name="bt_pv_qr_result_title">Gescannter Tresor</string>
+    <string name="bt_pv_qr_result_unnamed">Unbenannter Tresor</string>
+    <string name="bt_pv_qr_check_prefix">BetterTrack-Transfercode</string>
+    <string name="bt_pv_qr_check_keys">Wiederherstellungswörter und Tresor-ID vorhanden</string>
+    <string name="bt_pv_qr_check_checksum">12 Wörter, Prüfsumme gültig</string>
+    <string name="bt_pv_qr_check_vault_id">Tresor-ID wohlgeformt</string>
+    <string name="bt_pv_qr_verify_offline_note">Diese vier Prüfungen laufen offline. Ob diese Wörter den Tresor wirklich öffnen, lässt sich nur am Tresor selbst beweisen.</string>
+    <string name="bt_pv_qr_verify_pending">Wird am Tresor geprüft…</string>
+    <string name="bt_pv_qr_verify_pending_body">Der Tresor-Header wird geladen, um zu beweisen, dass die Wörter ihn öffnen.</string>
+    <string name="bt_pv_qr_verify_unavailable_title">In dieser Version noch nicht prüfbar</string>
+    <string name="bt_pv_qr_verify_unavailable_body">Es wurde nichts gespeichert. Diese Version erreicht keinen Tresor, um zu beweisen, dass die Wörter ihn öffnen — deshalb wird die Phrase bewusst nicht auf diesem Gerät abgelegt.</string>
+    <string name="bt_pv_qr_verify_ok_title">Die Wörter öffnen diesen Tresor</string>
+    <string name="bt_pv_qr_verify_ok_body">Wähle, wie dieses Gerät die Phrase aufbewahren soll.</string>
+    <string name="bt_pv_qr_sheet_title">Wiederherstellungswörter hinzufügen</string>
+    <string name="bt_pv_qr_sheet_scan">Transfer-QR scannen</string>
+    <string name="bt_pv_qr_sheet_type">Die 12 Wörter eintippen</string>
+    <!-- ===== END paranoid vaults · §13 QR seed-phrase transfer (A1) ===== -->
 </resources>

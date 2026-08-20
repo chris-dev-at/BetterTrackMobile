@@ -52,6 +52,21 @@ data class PortfolioEntity(
      * on `GET /portfolios/{id}`, so a detail refresh must not clear it.
      */
     @Embedded val mirror: PortfolioMirror? = null,
+    /**
+     * **Dormant** paranoid-vault membership (`paranoid-design.md` §3, epic E0).
+     *
+     * `vaultId == null` ⇒ a normal portfolio, today's behaviour byte for byte —
+     * which is every portfolio in this build, because the program is gated by
+     * `ParanoidVaultsFlags.enabled` (false) and nothing writes these two columns
+     * yet. Non-null ⇒ the LOCKED STUB: zero content rows, only identity, alias
+     * and vault membership, so the app can render "N locked portfolios" and the
+     * unlock affordance without being able to read a single row inside.
+     *
+     * [vaultAlias] is the stub's display label, cleartext by design; the TRUE
+     * portfolio name travels inside the vault's encrypted header doc.
+     */
+    val vaultId: String? = null,
+    val vaultAlias: String? = null,
 )
 
 /** Chain badge for a group portfolio, flattened into [PortfolioEntity]. */

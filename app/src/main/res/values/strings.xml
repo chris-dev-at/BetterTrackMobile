@@ -3943,4 +3943,87 @@
 
     <string name="bt_firstrun_settings_row">Finish setup</string>
     <string name="bt_firstrun_settings_row_sub">A few account basics are still waiting.</string>
+
+    <!-- ===== BEGIN paranoid vaults · §12 device custody (A2) ===== -->
+    <string name="bt_pv_custody_unlock_title">Unlock vaults</string>
+    <string name="bt_pv_custody_unlock_body">One password on this phone opens every phrase stored here. It is never saved and it never leaves the device.</string>
+    <string name="bt_pv_custody_password_label">Device password</string>
+    <string name="bt_pv_custody_unlock_action">Unlock</string>
+    <string name="bt_pv_custody_unlock_working">Unlocking…</string>
+    <string name="bt_pv_custody_unlock_wrong">That password does not match. The check happens on this phone only.</string>
+    <string name="bt_pv_custody_lockout">Too many attempts. Next try in %1$s.</string>
+    <string name="bt_pv_custody_forgot">Forgot the password?</string>
+    <string name="bt_pv_custody_reset_title">Reset this phone\'s keystore?</string>
+    <string name="bt_pv_custody_reset_body">This deletes the phrases stored on this phone only — no vault data is lost, and you get back in by typing the words again or scanning the QR code from another device.</string>
+    <string name="bt_pv_custody_reset_confirm">Delete stored phrases</string>
+    <string name="bt_pv_custody_choice_title">How should this phrase be stored?</string>
+    <string name="bt_pv_custody_choice_wrapped">Protected by a device password</string>
+    <string name="bt_pv_custody_choice_wrapped_sub">You enter the password once per session, and it opens every vault stored on this phone.</string>
+    <string name="bt_pv_custody_choice_plain">Stored without a password</string>
+    <string name="bt_pv_custody_choice_plain_sub">Anyone who gets into this phone can read the phrase; for BetterTrack it stays unreadable either way.</string>
+    <string name="bt_pv_custody_choice_new_password">New device password</string>
+    <string name="bt_pv_custody_choice_repeat_password">Repeat the password</string>
+    <string name="bt_pv_custody_choice_mismatch">The two entries are different.</string>
+    <string name="bt_pv_custody_choice_too_short">Too short — please use at least eight characters.</string>
+    <string name="bt_pv_custody_choice_save">Save</string>
+    <string name="bt_pv_custody_lock_action">Lock vaults</string>
+    <string name="bt_pv_custody_lock_sub_unlocked">Open until you lock them or the app lock kicks in.</string>
+    <string name="bt_pv_custody_lock_sub_locked">Locked. The next vault you open asks for the password.</string>
+    <string name="bt_pv_custody_state_plain_action">Open</string>
+    <string name="bt_pv_custody_state_absent_action">Enter words / scan QR</string>
+    <string name="bt_pv_custody_state_wrapped_sub">Protected by the device password.</string>
+    <string name="bt_pv_custody_state_plain_sub">Opens without a password.</string>
+    <string name="bt_pv_custody_state_absent_sub">This phrase is not on this phone.</string>
+    <string name="bt_pv_custody_vault_fallback">Vault</string>
+    <!-- ===== END paranoid vaults · §12 device custody (A2) ===== -->
+
+    <!-- ===== paranoid vaults · §13 QR seed-phrase transfer (A1) =====
+         Behind ParanoidVaultsFlags.enabled; nothing reaches these while it is off.
+         Sender: ui/vault/qr/VaultQrShowScreen.kt · receiver: VaultQrScanScreen.kt -->
+    <string name="bt_pv_qr_show_title">Transfer QR</string>
+    <string name="bt_pv_qr_show_warning">Anyone who captures this code owns this vault. No screenshots, no screen sharing — mind who can see your screen.</string>
+    <string name="bt_pv_qr_show_expires">Hides in %1$d s</string>
+    <string name="bt_pv_qr_show_scan_hint">Scan it on your other device: vault → Scan transfer QR.</string>
+    <string name="bt_pv_qr_show_expired_title">Code hidden</string>
+    <string name="bt_pv_qr_show_expired_body">The code is only shown for 60 seconds at a time.</string>
+    <string name="bt_pv_qr_show_again">Show again</string>
+    <string name="bt_pv_qr_show_no_clipboard">There is no copy button on purpose — the phrase never touches the clipboard, the network or this phone\'s storage.</string>
+    <string name="bt_pv_qr_show_unavailable">These are not 12 valid recovery words, so there is nothing to transfer.</string>
+    <string name="bt_pv_qr_scan_title">Scan transfer QR</string>
+    <string name="bt_pv_qr_scan_hint">Point the camera at the transfer QR on your other device. Nothing is sent over the network.</string>
+    <string name="bt_pv_qr_scan_permission_title">Camera access needed</string>
+    <string name="bt_pv_qr_scan_permission_body">The camera is the whole transfer channel — screen to camera, nothing in between.</string>
+    <string name="bt_pv_qr_scan_permission_grant">Allow camera</string>
+    <string name="bt_pv_qr_scan_permission_denied_body">Camera access is off for BetterTrack. Turn it on in Android\'s app settings, or type the 12 words instead.</string>
+    <string name="bt_pv_qr_scan_open_settings">Open app settings</string>
+    <string name="bt_pv_qr_scan_no_camera_title">No camera on this device</string>
+    <string name="bt_pv_qr_scan_no_camera_body">Type the 12 words instead — it leads to exactly the same place.</string>
+    <string name="bt_pv_qr_scan_camera_error_title">The camera could not start</string>
+    <string name="bt_pv_qr_scan_camera_error_body">Another app may be using it. Close that app and come back, or type the 12 words.</string>
+    <string name="bt_pv_qr_scan_torch_on">Turn on the torch</string>
+    <string name="bt_pv_qr_scan_torch_off">Turn off the torch</string>
+    <string name="bt_pv_qr_scan_manual">Type the 12 words instead</string>
+    <string name="bt_pv_qr_scan_again">Scan again</string>
+    <string name="bt_pv_qr_reject_title">Not accepted</string>
+    <string name="bt_pv_qr_reject_generic">This code could not be read. Show it again on the other device and scan it once more.</string>
+    <string name="bt_pv_qr_reject_update">This code comes from a newer version of BetterTrack. Update the app and try again.</string>
+    <string name="bt_pv_qr_reject_legacy">This code comes from an older version of BetterTrack. Create a new transfer QR on the other device.</string>
+    <string name="bt_pv_qr_reject_foreign">That is not a BetterTrack transfer code.</string>
+    <string name="bt_pv_qr_result_title">Scanned vault</string>
+    <string name="bt_pv_qr_result_unnamed">Unnamed vault</string>
+    <string name="bt_pv_qr_check_prefix">BetterTrack transfer code</string>
+    <string name="bt_pv_qr_check_keys">Recovery words and vault ID present</string>
+    <string name="bt_pv_qr_check_checksum">12 words, checksum valid</string>
+    <string name="bt_pv_qr_check_vault_id">Vault ID well-formed</string>
+    <string name="bt_pv_qr_verify_offline_note">These four checks work offline. Whether these words really open that vault can only be proven against the vault itself.</string>
+    <string name="bt_pv_qr_verify_pending">Checking against the vault…</string>
+    <string name="bt_pv_qr_verify_pending_body">Fetching the vault header to prove the words open it.</string>
+    <string name="bt_pv_qr_verify_unavailable_title">Can\'t verify on this build yet</string>
+    <string name="bt_pv_qr_verify_unavailable_body">Nothing was saved. This build cannot reach a vault to prove that the words open it, so the phrase is deliberately not stored on this phone.</string>
+    <string name="bt_pv_qr_verify_ok_title">The words open this vault</string>
+    <string name="bt_pv_qr_verify_ok_body">Choose how this phone should keep the phrase.</string>
+    <string name="bt_pv_qr_sheet_title">Add the recovery words</string>
+    <string name="bt_pv_qr_sheet_scan">Scan a transfer QR</string>
+    <string name="bt_pv_qr_sheet_type">Type the 12 words</string>
+    <!-- ===== END paranoid vaults · §13 QR seed-phrase transfer (A1) ===== -->
 </resources>

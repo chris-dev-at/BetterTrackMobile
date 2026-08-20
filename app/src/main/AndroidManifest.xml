@@ -36,6 +36,31 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!--
+      Paranoid vaults §13 — the QR seed-phrase transfer's receiver leg
+      (ui/vault/qr/VaultQrScanScreen.kt). The camera IS the transfer channel:
+      one phone displays the phrase as a QR, the other reads it, and nothing
+      touches the network in between. Decoding is zxing-core on a CameraX
+      ImageAnalysis stream — deliberately NOT ML Kit, whose scanner model ships
+      through Play services and would make the Play-free `github` flavor either
+      unbuildable or silently scanner-less.
+
+      A DANGEROUS runtime permission, so it is requested IN CONTEXT from the
+      scan screen and nowhere else — never at first launch, and never as a
+      precondition for anything but that one screen (which is itself behind
+      ParanoidVaultsFlags). Declining leaves manual word entry, which reaches
+      exactly the same result.
+
+      `camera.any` with required="false" keeps the app installable on a device
+      with no camera at all (and does not narrow Play distribution); the scan
+      screen probes the same feature at runtime and renders its no-camera state
+      instead of binding a provider that cannot exist.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
+    <!--
       REQUEST_INSTALL_PACKAGES is NOT here: it is the self-update permission and
       lives ONLY in the `github` flavor (app/src/github/AndroidManifest.xml). Play
       builds must not declare it (Device-and-Network-Abuse policy forbids
