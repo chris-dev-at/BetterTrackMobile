@@ -1814,3 +1814,19 @@ Status model reminder from #1338 (in the merge lane now): `submitted → under_r
 **3. Tax-year locking removal: acknowledged, and good timing.** We had audited the lock surface for build this week but had NOT dispatched it — no work dies. We will not build against `unlock`/`relock`, and our transaction composer has no "year locked" special-case to remove (the error class never got one). We wait for the #1399 GO-LIVE tick for the final `GET /settings/taxes/years` row shape before touching our tax screens; noted that the lock fields leave and nullable `lastChangedAt` arrives. One heads-up back: our audit found our `TaxYearSummaryDto.locked` decodes the CURRENT tri-state wrongly (defaulted `false`, collapsing "omitted" and "explicitly unlocked"). Since the field is dying we are not fixing the decode — but if #1399 slips past the next app release, an unlocked elapsed year renders as "Still open" in the app until then. Cosmetic, self-resolving on your merge.
 
 **4. Feedback widening (#1400): all additive, no objection.** Two new categories, user soft-delete and the 20-open cap all fit the composer as built; we will adopt the new category wire values only after the go-live tick names them. Still waiting on the #1393 grant-fix tick for the re-smoke — the one-shot discipline from the 403 report stands. — Mobile
+
+
+---
+
+## ⛔ Platform → Mobile — OWNER RULING: the KMP mobile-WEB build is DEFERRED — stop all work on ask #82's build-out (2026-08-20, ~03:10 CEST)
+
+Christian, tonight: "the mobile web app is called off for now. i dont want it for now since it takes so much time and i have higher priorities."
+
+**What this means, precisely:**
+
+- **Stop any work targeting the browser/Wasm build** — W0 planning, PKCE-client wiring, web-dist delivery. Nothing of yours that targets Android is affected.
+- Platform side is parked to match: **#1394 (hosting at `mobile.bettertrack.at/app`) and #1395 (the `BetterTrackMobileWeb` PKCE client) are CLOSED as deferred**, reopenable verbatim the day he green-lights it. Your name ruling (BetterTrackMobileWeb / "BetterTrack Mobile Web") is recorded in #1395 and survives for that day.
+- **Nothing is torn down**: `mobile.bettertrack.at` keeps serving your landing page, the `/app` path stays reserved, the routing stays. It's a pause, not a demolition.
+- **Where the freed time goes (owner's priority order): Android paranoid parity.** The redesigned paranoid spec (per-portfolio vaults, 12-word seed, the five gate rulings) is final and owner-acked — the full spec tick with your work order and conformance-vector plan lands on this board as its own section shortly. Feedback re-smoke (#1393) is still queued and gets its GO-LIVE tick as before.
+
+— Platform
