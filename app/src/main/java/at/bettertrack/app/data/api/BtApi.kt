@@ -387,13 +387,27 @@ interface BtApi {
 
     /**
      * Value-over-time + server-computed performance series (§6.1 graph).
-     * Supported ranges: 1M | 6M | 1Y | MAX (day-granular; no 1D/1W/3M window —
-     * platform gap, the web app offers the same subset).
+     *
+     * Supported ranges: `1D|1W|1M|6M|1Y|5Y|MAX` — the deployed
+     * `openapi.json` enum, re-read 2026-08-20. (3M is the one range asset
+     * history has and this does not.) 1D/1W/1M come back as intraday curves;
+     * everything longer is the daily grid.
+     *
+     * [overlay] — send the literal `"true"` to additionally receive EVERY held
+     * asset's own daily close series in
+     * [PortfolioHistoryResponse.assets][at.bettertrack.app.data.api.dto.PortfolioHistoryResponse.assets],
+     * which is what turns a per-asset history fan-out into one request. The
+     * server's query schema is an explicit `'true' | 'false'` enum (a boolean
+     * coercion would read the string `"false"` as true), so this is a String and
+     * `null` omits the parameter entirely — keeping the plain call's URL
+     * byte-identical to what it always was, which matters because the ETag store
+     * in [ConditionalGetInterceptor] is keyed by full URL.
      */
     @GET("portfolios/{portfolioId}/history")
     suspend fun portfolioHistory(
         @Path("portfolioId") portfolioId: String,
         @Query("range") range: String,
+        @Query("overlay") overlay: String? = null,
     ): Response<PortfolioHistoryResponse>
 
     @GET("custom-assets/{id}/value-points")

@@ -1,7 +1,9 @@
 package at.bettertrack.app.ui.insights
 
 import at.bettertrack.app.data.repo.AssetRange
+import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PricePoint
+import at.bettertrack.app.data.repo.assetTwin
 import at.bettertrack.app.ui.charts.viz.BtVizScope
 import at.bettertrack.app.ui.charts.viz.VizDatum
 import java.time.Instant
@@ -26,13 +28,16 @@ import java.time.ZoneId
  * data source, so it gets its own, deliberately short vocabulary and its own
  * rules about what may be shown:
  *
- * | Range        | Source                                   | Unit | Aggregate |
- * |--------------|------------------------------------------|------|-----------|
- * | [DAY]        | server `dayChangeEur` / `dayChangePct`   | €    | yes       |
- * | [WEEK]       | `GET /assets/{id}/history?range=1W`      | %    | no        |
- * | [MONTH]      | `GET /assets/{id}/history?range=1M`      | %    | no        |
- * | [YEAR]       | `GET /assets/{id}/history?range=1Y`      | %    | no        |
- * | [SINCE_BUY]  | server `unrealizedPnlEur`                | €    | yes       |
+ * | Range        | Source                                            | Unit | Aggregate |
+ * |--------------|---------------------------------------------------|------|-----------|
+ * | [DAY]        | server `dayChangeEur` / `dayChangePct`            | €    | yes       |
+ * | [WEEK]       | `GET /portfolios/{id}/history?range=1W&overlay=true` | %  | no        |
+ * | [MONTH]      | `GET /portfolios/{id}/history?range=1M&overlay=true` | %  | no        |
+ * | [YEAR]       | `GET /portfolios/{id}/history?range=1Y&overlay=true` | %  | no        |
+ * | [SINCE_BUY]  | server `unrealizedPnlEur`                         | €    | yes       |
+ *
+ * The three price rows are ONE request each — the overlay carries every held
+ * asset's own close series — not one request per position as they shipped.
  *
  * ## The two rails that decide that table
  *
@@ -57,14 +62,22 @@ import java.time.ZoneId
  * class as the Tief/Hoch facts on the development card. Nothing is re-based,
  * interpolated or converted here.
  *
- * The closes arrive in the asset's **trading currency** and are never converted:
- * the wire response carries a `currency` alongside `points[{time, close}]` and no
- * FX rate, and `AssetHistoryResponse` does not even model that field today. So
- * for an asset that does not trade in EUR this is the instrument's own move, not
- * the euro move of the position. Since a first-to-last ratio is taken inside one
+ * The closes arrive in the asset's **trading currency** and are never converted.
+ * The overlay states that outright — each row carries its own `currency` beside
+ * its closes and no FX rate — exactly as the per-asset endpoint did. So for an
+ * asset that does not trade in EUR this is the instrument's own move, not the
+ * euro move of the position. Since a first-to-last ratio is taken inside one
  * currency, the percentage itself is unaffected — but it is emphatically not a
  * euro result, and the card says so rather than implying one; see
- * `bt_insight_movers_price_note`.
+ * `bt_insight_movers_price_note`. Two currencies are never mixed and two series
+ * are never combined: one row, one series, one ratio.
+ *
+ * The overlay serves every window on the **daily** grid, where the per-asset
+ * endpoint served 1W/1M as intraday candles. Both are the server's own closes,
+ * and a calendar-window card is if anything better described by close-to-close
+ * than by "the price at some intraday minute a month ago" — but they are not the
+ * same series, so the same span can print a slightly different percentage than
+ * it did before the batch (measured on device when this landed).
  */
 enum class BtInsightMoveRange {
     /** Today's session — the only range with a server-computed euro figure. */
@@ -83,23 +96,38 @@ enum class BtInsightMoveRange {
      */
     val isMoney: Boolean get() = this == DAY || this == SINCE_BUY
 
-    /** True when this range needs a per-asset price series fetched for it. */
-    val needsPriceHistory: Boolean get() = assetRange != null
+    /** True when this range needs a price series fetched for it. */
+    val needsPriceHistory: Boolean get() = historyRange != null
 
     /**
-     * The `GET /assets/{id}/history` range this maps onto, or `null` when the
-     * range is answered from a server-computed holding field instead.
+     * The window this range asks the server for, in the PORTFOLIO history
+     * vocabulary — or `null` when the range is answered from a server-computed
+     * holding field instead.
      *
-     * Only wire values the asset-history endpoint actually accepts appear here
-     * (`1D|1W|1M|3M|6M|1Y|5Y|MAX`), and only ones this card has a question for.
+     * Why the portfolio vocabulary and not the asset one: the series arrive
+     * through `GET /portfolios/{id}/history?overlay=true`, one call for every
+     * held asset, and that endpoint enumerates `1D|1W|1M|6M|1Y|5Y|MAX`
+     * (deployed `openapi.json`, re-read 2026-08-20 — the older app note claiming
+     * `1M|6M|1Y|MAX` was stale, and 1W in particular IS served). All three
+     * windows this card asks for are in that set, so no range has to fall back
+     * to a fan-out for lack of vocabulary.
      */
-    val assetRange: AssetRange?
+    val historyRange: HistoryRange?
         get() = when (this) {
             DAY, SINCE_BUY -> null
-            WEEK -> AssetRange.W1
-            MONTH -> AssetRange.M1
-            YEAR -> AssetRange.Y1
+            WEEK -> HistoryRange.W1
+            MONTH -> HistoryRange.M1
+            YEAR -> HistoryRange.Y1
         }
+
+    /**
+     * The same window in the `GET /assets/{id}/history` vocabulary — what a data
+     * source with no batch of its own fans out with.
+     *
+     * Derived from [historyRange] rather than restated, so the two can never
+     * drift into naming different spans.
+     */
+    val assetRange: AssetRange? get() = historyRange?.assetTwin
 }
 
 /** The card's default when nothing was ever configured: today, as it shipped. */
@@ -223,10 +251,13 @@ fun insightMovePercentIn(
  *
  * Longer ranges get longer lives for the obvious reason: one more close at the
  * end of a 250-point year moves the first-to-last percentage by almost nothing,
- * while the same close is a meaningful share of a five-day week. Together with
- * [BT_INSIGHT_MOVE_FETCH_CAP] this is the cost-control story for the per-asset
- * fan-out this card uses today — one warm cache turns N calls into zero for the
- * rest of the session.
+ * while the same close is a meaningful share of a five-day week.
+ *
+ * Still worth having now that a span costs ONE overlay call rather than one call
+ * per position: the card re-resolves on every scope change, every pull-to-refresh
+ * and every return to the page, and a warm cache turns each of those into zero
+ * requests instead of one. It is per asset because that is the unit the cache
+ * holds; a span whose assets are all warm issues nothing.
  */
 fun insightMoveCacheTtlMs(range: BtInsightMoveRange): Long = when (range) {
     BtInsightMoveRange.WEEK -> 10 * MINUTE_MS
@@ -237,50 +268,56 @@ fun insightMoveCacheTtlMs(range: BtInsightMoveRange): Long = when (range) {
 }
 
 /**
- * The hard cap on assets fetched for one range.
+ * The hard cap on assets fetched for one range **when the price source has no
+ * batch** and every position therefore costs its own round trip.
  *
- * This card fetches one `GET /assets/{id}/history` per position, so `Umfang: Alle`
- * on a thirty-position account would otherwise mean thirty round trips every time
- * it resolves. The cap is applied to the positions sorted by market value
- * descending — the ones that actually moved the portfolio — and everything past
- * it is *listed as unavailable*, so the card never pretends the tail is flat.
+ * The cap was never a display decision: it exists because one
+ * `GET /assets/{id}/history` per position turns `Umfang: Alle` on a
+ * thirty-position account into thirty round trips every time the card resolves.
+ * It is applied to the positions sorted by market value descending — the ones
+ * that actually moved the portfolio — and everything past it is *listed as
+ * unavailable*, so the card never pretends the tail is flat.
  *
- * ## The batch endpoint this does not yet use
+ * ## Why it no longer applies on the server source
  *
- * A per-asset fan-out is not the only option the platform offers, and the cap
- * exists because of the shape this card fetches with rather than because the
- * server forces it. Verified in the platform contracts:
+ * `GET /portfolios/{id}/history?range=…&overlay=true` returns EVERY held asset's
+ * daily close series in ONE call (deployed `openapi.json`
+ * `PortfolioHistoryResponse.assets[]`; platform contract
+ * `packages/contracts/src/portfolio.ts`). When the source answers
+ * [at.bettertrack.app.data.storage.MarketDataSource.batchesAssetHistories] with
+ * true, a thirty-position account costs the same one request as a
+ * three-position one, so capping would buy nothing and cost the user real rows —
+ * see [insightMoveFetchCap]'s `batched` argument.
  *
- *  - `GET /portfolios/{id}/history?range=…&overlay=true` returns EVERY held
- *    asset's own daily close series in ONE call
- *    (`packages/contracts/src/portfolio.ts` `overlay`/`assets[]`). The app's
- *    Retrofit signature sends only `range`, so the capability is unused.
- *  - `GET /assets/sparklines?ids=…` returns 1-month daily series for up to 100
- *    ids in one call (`packages/contracts/src/assets.ts`). Also unused.
- *
- * Adopting either would delete this cap and the whole *unavailable tail* it
- * produces, but it means new DTOs and an implementation in each of the four
- * `MarketDataSource`s — a deliberate change, not a detail of this card.
+ * The other batch the platform offers, `GET /assets/sparklines?ids=…` (1-month
+ * daily series, ≤100 ids), stays unused: it serves exactly one span, and this
+ * card needs three.
  */
 const val BT_INSIGHT_MOVE_FETCH_CAP: Int = 12
 
-/** Concurrent history calls. Bounded so a wide account cannot flood the API. */
+/** Concurrent history calls on the fan-out path. Bounded so a wide account cannot flood the API. */
 const val BT_INSIGHT_MOVE_FETCH_PARALLELISM: Int = 4
 
 /**
- * The number of assets this card will fetch history for, given its `Umfang`.
+ * The number of assets this card will fetch history for, given its `Umfang` and
+ * whether the price source [batched] them into one call.
  *
- * The card already has a Top-N control, so a user who set `Top 3` has said what
- * they want to see and there is no reason to pay for twelve round trips to draw
- * three bars. An explicit small scope therefore *lowers* the fetch count;
- * `Automatisch` and `Alle` take the hard cap, because neither states a number
- * and an unbounded fan-out over a wide account is the failure this cap exists
- * to prevent.
+ * **A batching source is uncapped.** The cap paid for round trips, and there are
+ * no per-asset round trips left to pay for: the overlay hands back the whole
+ * portfolio whether the caller wanted twelve rows or forty. Keeping it would mean
+ * printing "nicht verfügbar" beside positions whose series is already in the
+ * response — an invented gap.
  *
- * Never raises above [BT_INSIGHT_MOVE_FETCH_CAP]: `Alle` is a display wish, not
- * a licence to issue forty requests.
+ * On a fan-out source the old rule stands, and it honours the card's own Top-N:
+ * a user who set `Top 3` has said what they want to see, so there is no reason to
+ * pay for twelve round trips to draw three bars. `Automatisch` and `Alle` take
+ * the hard cap, because neither states a count and an unbounded fan-out over a
+ * wide account is the failure the cap exists to prevent. It never raises above
+ * [BT_INSIGHT_MOVE_FETCH_CAP]: `Alle` is a display wish, not a licence to issue
+ * forty requests.
  */
-fun insightMoveFetchCap(scope: BtVizScope?): Int {
+fun insightMoveFetchCap(scope: BtVizScope?, batched: Boolean = false): Int {
+    if (batched) return Int.MAX_VALUE
     val requested = scope?.limit ?: -1
     // AUTO is -1 and ALL is 0; neither names a count this can honour cheaply.
     if (requested <= 0) return BT_INSIGHT_MOVE_FETCH_CAP
@@ -294,7 +331,8 @@ fun insightMoveFetchCap(scope: BtVizScope?): Int {
  * Pure and separately tested because it is the whole cost story: the order is by
  * market value descending (largest positions first — a 40 % move on a €30 stub
  * is not what "moved the portfolio" means), ties break on the id so the choice is
- * stable between renders, and the list is cut at [BT_INSIGHT_MOVE_FETCH_CAP].
+ * stable between renders, and the list is cut at [cap] — which
+ * [insightMoveFetchCap] leaves effectively unlimited on a batching source.
  */
 fun insightMoveFetchTargets(
     valueByAssetId: Map<String, Double>,

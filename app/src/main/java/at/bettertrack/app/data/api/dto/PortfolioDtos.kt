@@ -108,6 +108,57 @@ data class PortfolioHistoryResponse(
     val baseCurrency: String,
     val points: List<HistoryPointDto> = emptyList(),
     val performance: List<PerformancePointDto> = emptyList(),
+    /**
+     * Every held asset's own daily close series — present **only** when the
+     * request carried `overlay=true` (platform issue #122), absent otherwise.
+     *
+     * Nullable rather than defaulted-empty on purpose: `null` means "not asked
+     * for / not answered", `[]` means "asked for and the portfolio has no priced
+     * asset". A caller that batches its per-asset reads through this field has to
+     * be able to tell those apart, because only the second one is an answer.
+     */
+    val assets: List<HistoryOverlayAssetDto>? = null,
+)
+
+/**
+ * One held asset's daily price series inside a `overlay=true` history response.
+ *
+ * Verified against the deployed `https://api.bettertrack.at/openapi.json`
+ * (`PortfolioHistoryResponse.assets[]`, read 2026-08-20) and the platform
+ * contract `packages/contracts/src/portfolio.ts`
+ * (`portfolioHistoryOverlaySchema`). Every field below is `required` there.
+ *
+ * ## What the closes are, exactly
+ *
+ * [points] is a **daily** carry-forward close series in the asset's **native
+ * [currency]** — never EUR-converted, never the portfolio's base. The server
+ * expands a sparse provider series into one close per calendar day over the
+ * requested window, repeating the last known close across weekends, holidays
+ * and provider gaps (`packages/domain/src/holdings.ts` `dailyCloseSeries`), and
+ * drops an asset entirely when nothing of its data falls inside the window.
+ *
+ * That is a different grid from `GET /assets/{id}/history`, which serves 1W/1M
+ * as INTRADAY candles (15m/30m). Both are the server's own closes and a
+ * first-to-last ratio inside one series is legitimate for either, but they are
+ * not the same series, so a reader must not treat the two as interchangeable
+ * inputs to the same number.
+ */
+@Serializable
+data class HistoryOverlayAssetDto(
+    val assetId: String,
+    val symbol: String,
+    val name: String,
+    /** ISO-4217 of the closes below. NOT converted — see the class doc. */
+    val currency: String,
+    val points: List<HistoryOverlayPointDto> = emptyList(),
+)
+
+/** One daily close of an overlay series. Day granularity — there is no `time`. */
+@Serializable
+data class HistoryOverlayPointDto(
+    /** Calendar date `yyyy-MM-dd`, UTC. */
+    val date: String,
+    val close: Double,
 )
 
 @Serializable

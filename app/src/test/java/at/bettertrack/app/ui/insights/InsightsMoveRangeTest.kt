@@ -4,6 +4,7 @@ import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.PortfolioTotals
 import at.bettertrack.app.data.repo.AssetRange
+import at.bettertrack.app.data.repo.HistoryRange
 import at.bettertrack.app.data.repo.PricePoint
 import at.bettertrack.app.ui.charts.viz.BtVizScope
 import java.time.LocalDate
@@ -89,6 +90,29 @@ class InsightsMoveRangeTest {
         val accepted = setOf("1D", "1W", "1M", "3M", "6M", "1Y", "5Y", "MAX")
         BtInsightMoveRange.entries.mapNotNull { it.assetRange }.forEach { range ->
             assertTrue("${range.wire} is not an accepted history range", range.wire in accepted)
+        }
+    }
+
+    /**
+     * The series now arrive through the portfolio endpoint's per-asset overlay,
+     * so the span the card sends is a PORTFOLIO range. Both vocabularies must
+     * keep naming the same window — a card labelled "1 Woche" fetching a month
+     * is the exact mislabelling this file exists to prevent.
+     */
+    @Test
+    fun `the portfolio span and the per-asset span name the same window`() {
+        assertNull(BtInsightMoveRange.DAY.historyRange)
+        assertNull(BtInsightMoveRange.SINCE_BUY.historyRange)
+        assertEquals(HistoryRange.W1, BtInsightMoveRange.WEEK.historyRange)
+        assertEquals(HistoryRange.M1, BtInsightMoveRange.MONTH.historyRange)
+        assertEquals(HistoryRange.Y1, BtInsightMoveRange.YEAR.historyRange)
+
+        BtInsightMoveRange.entries.forEach { range ->
+            assertEquals(
+                "${range.name} asks two endpoints for two different windows",
+                range.historyRange?.wire,
+                range.assetRange?.wire,
+            )
         }
     }
 
@@ -237,6 +261,36 @@ class InsightsMoveRangeTest {
         BtVizScope.entries.forEach {
             assertTrue("$it raised the cap", insightMoveFetchCap(it) <= BT_INSIGHT_MOVE_FETCH_CAP)
         }
+    }
+
+    /**
+     * The cap paid for round trips. A source that answers every asset in ONE
+     * call has none left to pay for, so capping there would print "nicht
+     * verfügbar" beside positions whose series is already in the response.
+     */
+    @Test
+    fun `a batching source fetches every position, whatever the Umfang says`() {
+        val values = (1..40).associate { "a%02d".format(it) to it.toDouble() }
+
+        BtVizScope.entries.forEach { scope ->
+            val cap = insightMoveFetchCap(scope, batched = true)
+            assertTrue("$scope still capped a batch at $cap", cap >= values.size)
+            assertEquals(
+                "$scope dropped positions from a batch",
+                values.size,
+                insightMoveFetchTargets(values, cap).size,
+            )
+        }
+        assertEquals(40, insightMoveFetchTargets(values, insightMoveFetchCap(null, batched = true)).size)
+    }
+
+    @Test
+    fun `ranking survives the uncapped batch so renders stay stable`() {
+        val values = mapOf("a" to 100.0, "b" to 9_000.0, "c" to 3_000.0)
+        assertEquals(
+            listOf("b", "c", "a"),
+            insightMoveFetchTargets(values, insightMoveFetchCap(BtVizScope.AUTO, batched = true)),
+        )
     }
 
     @Test

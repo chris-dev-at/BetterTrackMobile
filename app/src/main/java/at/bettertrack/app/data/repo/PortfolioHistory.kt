@@ -78,6 +78,32 @@ enum class HistoryRange(val wire: String) {
     }
 }
 
+/**
+ * The `GET /assets/{id}/history` range that names the SAME window as this
+ * portfolio range.
+ *
+ * Total by construction, and it has to stay total: it is what lets one call site
+ * ask for a window and be served either by the portfolio endpoint's per-asset
+ * overlay (one request) or, on a source that has no such batch, by a fan-out of
+ * per-asset reads — without the caller branching on which. Asset history
+ * enumerates a superset of the portfolio ranges (it also has `3M`), so every
+ * member here has a twin with an identical wire value; `HistoryRangeTwinTest`
+ * asserts exactly that rather than trusting this `when`.
+ *
+ * **Same window, not the same series.** The asset endpoint answers 1W/1M with
+ * intraday candles while the overlay is always daily closes — see
+ * [at.bettertrack.app.data.api.dto.HistoryOverlayAssetDto].
+ */
+val HistoryRange.assetTwin: AssetRange
+    get() = when (this) {
+        HistoryRange.D1 -> AssetRange.D1
+        HistoryRange.W1 -> AssetRange.W1
+        HistoryRange.M1 -> AssetRange.M1
+        HistoryRange.M6 -> AssetRange.M6
+        HistoryRange.Y1 -> AssetRange.Y1
+        HistoryRange.MAX -> AssetRange.MAX
+    }
+
 /** Decode a cached row into the typed series; null when a blob is corrupt. */
 fun parsePortfolioHistory(entity: PortfolioHistoryEntity, json: Json): PortfolioHistory? {
     val range = HistoryRange.fromWire(entity.range) ?: return null

@@ -181,6 +181,27 @@ class MarketRepository(
     suspend fun assetHistory(assetId: String, range: AssetRange): BtResult<AssetPriceSeries> =
         data.assetHistory(assetId, range)
 
+    /**
+     * Whether [assetHistories] costs one request no matter how many assets are
+     * named. Read it before deciding how many positions to ask for; see
+     * [MarketDataSource.batchesAssetHistories].
+     */
+    val batchesAssetHistories: Boolean get() = data.batchesAssetHistories
+
+    /**
+     * Price series for many assets of one portfolio, over one window — the
+     * server serves this as a single `overlay=true` history call.
+     *
+     * A missing key means the series was NOT read (unknown), never that the asset
+     * did not move. The map may also carry ids that were not asked for, because
+     * the batch answers per portfolio.
+     */
+    suspend fun assetHistories(
+        portfolioId: String,
+        assetIds: List<String>,
+        range: HistoryRange,
+    ): BtResult<Map<String, AssetPriceSeries>> = data.assetHistories(portfolioId, assetIds, range)
+
     /** Latest quote for one asset (watchlist rows, §6.6). */
     suspend fun quote(assetId: String): BtResult<AssetSnapshot> = data.quote(assetId)
 

@@ -201,6 +201,30 @@ class ModeRoutingMarketDataSource(
         range: at.bettertrack.app.data.repo.AssetRange,
     ): BtResult<at.bettertrack.app.data.repo.AssetPriceSeries> = active().assetHistory(assetId, range)
 
+    /**
+     * Answered by whichever source is active RIGHT NOW, never cached.
+     *
+     * The routing decision moves with the storage mode and the price-lookup
+     * opt-in, so a caller that read this once and remembered it would size its
+     * request for the source it met at start-up rather than the one that will
+     * answer.
+     */
+    override val batchesAssetHistories: Boolean get() = active().batchesAssetHistories
+
+    /**
+     * Forwarded explicitly for the same reason [quotes] is: the interface's
+     * default body fans out through [assetHistory], and inheriting it here would
+     * route every asset individually through this class and never reach
+     * [ApiMarketDataSource]'s single overlay call — an N+1 that looks collapsed
+     * from the outside.
+     */
+    override suspend fun assetHistories(
+        portfolioId: String,
+        assetIds: List<String>,
+        range: at.bettertrack.app.data.repo.HistoryRange,
+    ): BtResult<Map<String, at.bettertrack.app.data.repo.AssetPriceSeries>> =
+        active().assetHistories(portfolioId, assetIds, range)
+
     override suspend fun quote(assetId: String): BtResult<at.bettertrack.app.data.repo.AssetSnapshot> =
         active().quote(assetId)
 

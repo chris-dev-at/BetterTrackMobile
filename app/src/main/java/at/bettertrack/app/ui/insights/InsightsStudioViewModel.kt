@@ -182,13 +182,15 @@ class InsightsStudioViewModel(
      * Fetched price moves, keyed by asset **and** span, with the moment each was
      * read so [insightMoveCacheTtlMs] can expire it.
      *
-     * This is the whole cost-control story. `GET /assets/{id}/history` has no
-     * batch form, so a movers card set to a price span costs one round trip per
-     * position *every time it resolves* — and it resolves on every scope change,
-     * every pull-to-refresh and every return to the page. One warm entry turns
-     * all of those into zero calls, and the TTL is per span because a year's
-     * first-to-last percentage barely moves between two closes while a week's
-     * does.
+     * A movers card set to a price span costs one request per portfolio *every
+     * time it resolves* — and it resolves on every scope change, every
+     * pull-to-refresh and every return to the page. A fully warm span issues
+     * nothing at all, and the TTL is per span because a year's first-to-last
+     * percentage barely moves between two closes while a week's does.
+     *
+     * Keyed per ASSET even though the fetch is per portfolio: the batch response
+     * carries assets the card may not be showing, and caching those too means the
+     * next span-or-scope change often finds them already answered.
      *
      * Deliberately in memory rather than in Room: it is a derived presentation
      * value with a ten-minute life, and persisting it would mean a cold app
@@ -494,48 +496,67 @@ class InsightsStudioViewModel(
         configFor(BtInsight.DAILY_MOVERS).moveRange ?: BT_INSIGHT_MOVE_RANGE_DEFAULT
 
     /**
-     * Fetch one price series per in-scope position and reduce each to a percent.
+     * Fetch the in-scope positions' price series and reduce each to a percent.
      *
-     * Four things keep this affordable, and all four matter because there is no
-     * batch history endpoint:
+     * ## One request per portfolio, not one per position
+     *
+     * The span's series arrive through
+     * `GET /portfolios/{id}/history?range=…&overlay=true`, which carries EVERY
+     * held asset's own close series in one response
+     * ([MarketRepository.assetHistories]). A portfolio of eleven positions
+     * therefore costs one request where it used to cost eleven (measured on the
+     * owner's device 2026-08-20, before and after). Portfolios are looped because
+     * the endpoint is per portfolio — `Alle Depots` over three portfolios is three
+     * requests, still not thirty — and they run concurrently, bounded.
+     *
+     * Four things still keep this affordable:
      *
      *  1. **It only runs for a span that needs it** — see the call site.
-     *  2. **The targets are capped** by [insightMoveFetchCap], which honours the
-     *     card's own `Umfang`, applied to the positions ranked by market value.
-     *     Everything past the cap is reported as unavailable, not as flat.
-     *  3. **The cache is checked first**, per asset and per span, so a re-resolve
-     *     inside the TTL issues nothing at all.
-     *  4. **Concurrency is bounded** to [BT_INSIGHT_MOVE_FETCH_PARALLELISM], so a
-     *     wide account queues rather than opening thirty sockets.
+     *  2. **The cache is checked first**, per asset and per span, so a re-resolve
+     *     inside the TTL issues nothing at all. Everything the batch returns is
+     *     stamped into it, including assets that were still warm — the response
+     *     was paid for whole.
+     *  3. **The targets are capped only when the source has no batch**
+     *     ([insightMoveFetchCap]); on the server source every position is fetched,
+     *     because a thirty-position account costs exactly the same one request as
+     *     a three-position one.
+     *  4. **Concurrency is bounded** to [BT_INSIGHT_MOVE_FETCH_PARALLELISM] — which
+     *     now bounds portfolios rather than assets.
      *
-     * A failed call leaves the asset OUT of the map. That is the whole reason the
-     * map is sparse rather than defaulted: absence means "unknown", and the
-     * builder prints it as unavailable instead of drawing a zero nobody measured.
+     * ## Failure stays visible
+     *
+     * A failed batch leaves its portfolio's assets OUT of the map and nothing is
+     * retried per asset: falling back to the fan-out would answer a broken batch
+     * with eleven requests and hide that it is broken. Absence means "unknown", so
+     * the builder prints those positions as unavailable — or, when nothing at all
+     * came back, the card's existing "no price history" state — instead of drawing
+     * a zero nobody measured.
      */
     private suspend fun loadAssetMoves(range: BtInsightMoveRange) {
-        val assetRange = range.assetRange ?: return
+        val historyRange = range.historyRange ?: return
         // Two paths schedule this — [refreshDerived] and the span collector — and
         // on a cold open they can arrive together. Checking before the first
         // suspension point is enough to make one of them a no-op, because view
         // model coroutines resume on the main dispatcher.
         if (movesInFlight == range) return
         val asOf = windowFor(BtInsight.DAILY_MOVERS).asOfEpochDay
-        val valueByAsset = holdings.value
+        val heldRows = holdings.value.filter { (it.marketValueEur ?: 0.0) > 0.0 }
+        val valueByAsset = heldRows
             .groupBy { it.assetId }
             .mapValues { (_, rows) -> rows.sumOf { it.marketValueEur ?: 0.0 } }
-            .filterValues { it > 0.0 }
         if (valueByAsset.isEmpty()) {
             _assetMoves.value = emptyMap()
             _assetMovesRange.value = range
             return
         }
         val scope = configFor(BtInsight.DAILY_MOVERS).topN ?: familyFor(BtInsight.DAILY_MOVERS).scope
-        val targets = insightMoveFetchTargets(valueByAsset, insightMoveFetchCap(scope))
+        val batched = marketRepo.batchesAssetHistories
+        val targets = insightMoveFetchTargets(valueByAsset, insightMoveFetchCap(scope, batched))
 
         val now = System.currentTimeMillis()
         val ttl = insightMoveCacheTtlMs(range)
         val warm = mutableMapOf<String, Double>()
-        val cold = mutableListOf<String>()
+        val cold = mutableSetOf<String>()
         targets.forEach { assetId ->
             val hit = moveCache[MoveKey(assetId, range)]
             if (hit != null && now - hit.fetchedAtMs < ttl) warm[assetId] = hit.pct else cold += assetId
@@ -547,34 +568,42 @@ class InsightsStudioViewModel(
             return
         }
 
+        // Which portfolio to ask for each cold asset. One asset held in two
+        // portfolios is asked for once — the price move is a property of the
+        // asset, and the second response would carry the identical series.
+        val coldByPortfolio = heldRows
+            .filter { it.assetId in cold }
+            .groupBy({ it.portfolioId }, { it.assetId })
+            .mapValues { (_, ids) -> ids.distinct() }
+
         _assetMovesLoading.value = true
         movesInFlight = range
         try {
             val gate = Semaphore(BT_INSIGHT_MOVE_FETCH_PARALLELISM)
-            val fresh = coroutineScope {
-                cold.map { assetId ->
+            val fetched = coroutineScope {
+                coldByPortfolio.map { (portfolioId, assetIds) ->
                     async {
                         gate.withPermit {
-                            when (val result = marketRepo.assetHistory(assetId, assetRange)) {
-                                // Clamped, not taken raw: the Drive-autonomous
-                                // source ignores `range` and hands back its whole
-                                // cache, which under a "1 Woche" label would be a
-                                // move since the cache began.
-                                is BtResult.Ok ->
-                                    assetId to insightMovePercentIn(result.value.points, range, asOf)
-                                // Offline, refused, or an asset the price service
-                                // does not cover. Unknown, never zero.
-                                is BtResult.Err -> assetId to null
-                            }
+                            marketRepo.assetHistories(portfolioId, assetIds, historyRange)
                         }
                     }
                 }.awaitAll()
             }
             val stamped = System.currentTimeMillis()
-            fresh.forEach { (assetId, pct) ->
-                if (pct != null) {
-                    warm[assetId] = pct
+            fetched.forEach { result ->
+                // Err = this portfolio answered nothing. Its assets stay absent.
+                if (result !is BtResult.Ok) return@forEach
+                result.value.forEach { (assetId, priceSeries) ->
+                    // Clamped, not taken raw: the Drive-autonomous source ignores
+                    // `range` and hands back its whole cache, which under a
+                    // "1 Woche" label would be a move since the cache began.
+                    val pct = insightMovePercentIn(priceSeries.points, range, asOf) ?: return@forEach
                     moveCache[MoveKey(assetId, range)] = CachedMove(pct, stamped)
+                    // Only currently HELD assets become rows. The overlay is built
+                    // from every asset the portfolio ever transacted, so it also
+                    // carries positions that were sold out — a card listing those
+                    // would be reporting on holdings the user does not have.
+                    if (assetId in valueByAsset) warm[assetId] = pct
                 }
             }
             _assetMoves.value = warm
