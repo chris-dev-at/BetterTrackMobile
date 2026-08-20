@@ -16,33 +16,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 /**
- * BetterTrack's haptic vocabulary (R-arc R3 §4).
+ * The ANDROID half of [BtHaptics] — the motor, and everything about it that had
+ * to be measured on a real phone rather than read in a doc.
  *
- * ## The rule this type exists to enforce
- *
- * Haptics are **confirmation, never decoration**. A tick that fires on every
- * tappable thing teaches the user nothing and turns into noise they disable in
- * system settings — taking the two haptics that DID mean something with it. So
- * this app has exactly four haptic meanings and no fifth, and each one answers a
- * question the user is actually asking:
- *
- * | Meaning | When | Answers |
- * |---|---|---|
- * | [confirm] | a primary action committed | "did that go through?" |
- * | [toggle]  | a two-state control settled | "which way is it now?" |
- * | [reject]  | the app refused the input | "why didn't that work?" |
- * | [keyTap]  | one character of input landed | "did that key register?" |
- * | [detent]  | a drag crossed a decision boundary | "have I pulled far enough?" |
- *
- * [detent] is a fifth meaning added later, on the owner's explicit instruction,
- * and its KDoc carries the argument for why it belongs rather than assuming it.
- * It has exactly one call site. A sixth needs the same standard of proof.
- *
- * Everything else — navigating, opening a sheet, scrolling, pressing a
- * *secondary* button — stays silent. [BtSecondaryButton] deliberately has no
- * haptic while [BtPrimaryButton] does: that difference is what makes the primary
- * one mean "committed" rather than merely "pressed", and it puts the
- * primary/secondary distinction into the touch channel as well as the colour.
+ * The vocabulary itself (which six meanings exist and why there is no seventh)
+ * lives on the interface in `commonMain`; this file moved here verbatim in the
+ * web port, Phase W1, because every line below is `android.os` or a fact about
+ * one Samsung's LRA. Nothing about the Android feel changed in the move.
  *
  * ## Why it wraps Compose's [HapticFeedback] rather than the View API
  *
@@ -58,19 +38,19 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * deliberate property of the keypad's original implementation and it survives
  * here — an app that vibrates after being told not to is a bug, not a feature.
  */
-class BtHaptics(
+private class AndroidBtHaptics(
     private val haptics: HapticFeedback,
     /** See [detent]. Null when the device has no vibrator to reach past Compose. */
     private val detentVibrator: BtDetent? = null,
     /** See [scrubTick]. Null on the same devices [detentVibrator] is null on. */
     private val scrubVibrator: BtDetent? = null,
-) {
+) : BtHaptics {
 
     /**
      * A primary action committed — a save, a create, a submit, a destructive
      * confirmation. The single tick that says the app took the input.
      */
-    fun confirm() = haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+    override fun confirm() = haptics.performHapticFeedback(HapticFeedbackType.Confirm)
 
     /**
      * A two-state control settled. On and off feel different on purpose: a
@@ -78,7 +58,7 @@ class BtHaptics(
      * switch may be under their thumb), so the direction is worth carrying in
      * the haptic itself.
      */
-    fun toggle(on: Boolean) = haptics.performHapticFeedback(
+    override fun toggle(on: Boolean) = haptics.performHapticFeedback(
         if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
     )
 
@@ -87,10 +67,10 @@ class BtHaptics(
      * change the server rolled back. Firmer than [confirm] because it is the one
      * case where the user must look at the screen to find out why.
      */
-    fun reject() = haptics.performHapticFeedback(HapticFeedbackType.Reject)
+    override fun reject() = haptics.performHapticFeedback(HapticFeedbackType.Reject)
 
     /** One character of input landed. The PIN keypad's per-digit tick. */
-    fun keyTap() = haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
+    override fun keyTap() = haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap)
 
     /**
      * A drag crossed a threshold that changes what letting go will do.
@@ -142,7 +122,7 @@ class BtHaptics(
      *
      * Fired once per crossing, never repeated while held.
      */
-    fun detent() {
+    override fun detent() {
         if (detentVibrator == null) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         } else {
@@ -183,7 +163,7 @@ class BtHaptics(
      * user's touch-feedback switch, and re-solving that here would be how the app
      * ends up with one haptic that respects the setting and one that does not.
      */
-    fun scrubTick() {
+    override fun scrubTick() {
         if (scrubVibrator == null) {
             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
         } else {
@@ -278,7 +258,7 @@ private const val BT_SCRUB_FALLBACK_MS = 16L
 
 /** The app's haptics, scoped to the current composition. */
 @Composable
-fun rememberBtHaptics(): BtHaptics {
+actual fun rememberBtHaptics(): BtHaptics {
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     return remember(haptics, context) {
@@ -289,7 +269,7 @@ fun rememberBtHaptics(): BtHaptics {
             context.getSystemService(Vibrator::class.java)
         }
         val motor = vibrator?.takeIf { it.hasVibrator() }
-        BtHaptics(
+        AndroidBtHaptics(
             haptics = haptics,
             detentVibrator = motor?.let { BtDetent(it, context.contentResolver) },
             scrubVibrator = motor?.let {

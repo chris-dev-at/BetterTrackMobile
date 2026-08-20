@@ -18,7 +18,15 @@ import androidx.compose.ui.unit.sp
 /** Tabular figures — put on every money/number style. */
 const val FONT_FEATURE_TABULAR = "tnum"
 
-private val System = FontFamily.Default
+/**
+ * The face the ramp is set in. `by lazy` rather than an eager `val` since the
+ * web port (W1): a browser has no system font to resolve `FontFamily.Default`
+ * against, so the browser host installs an embedded family into [BtFonts]
+ * before the first composition, and the first read of this pins it. On Android
+ * and iOS nothing installs anything and this stays `FontFamily.Default`, i.e.
+ * byte-identical to the eager line it replaced. See [BtFonts].
+ */
+private val System: FontFamily by lazy { BtFonts.appFontFamily }
 
 /** Brand-specific styles that don't map 1:1 onto Material roles. */
 @Immutable
@@ -102,23 +110,32 @@ data class BtTypography(
 
 val LocalBtTypography = staticCompositionLocalOf { BtTypography() }
 
-/** Material3 typography mapped to the brand rules (bold + tight for titles). */
-val BtMaterialTypography = Typography().run {
-    copy(
-        displayLarge = displayLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
-        displayMedium = displayMedium.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
-        displaySmall = displaySmall.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
-        headlineLarge = headlineLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
-        headlineMedium = headlineMedium.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
-        headlineSmall = headlineSmall.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.015).em),
-        titleLarge = titleLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.015).em),
-        titleMedium = titleMedium.copy(fontFamily = System, fontWeight = FontWeight.SemiBold),
-        titleSmall = titleSmall.copy(fontFamily = System, fontWeight = FontWeight.SemiBold),
-        bodyLarge = bodyLarge.copy(fontFamily = System),
-        bodyMedium = bodyMedium.copy(fontFamily = System),
-        bodySmall = bodySmall.copy(fontFamily = System),
-        labelLarge = labelLarge.copy(fontFamily = System, fontWeight = FontWeight.Medium),
-        labelMedium = labelMedium.copy(fontFamily = System, fontWeight = FontWeight.Medium),
-        labelSmall = labelSmall.copy(fontFamily = System, fontWeight = FontWeight.Medium),
-    )
+/**
+ * Material3 typography mapped to the brand rules (bold + tight for titles).
+ *
+ * `by lazy` for the same reason [System] is (web port, W1) — it bakes the face
+ * into 15 styles, so it must not be built before the browser host has installed
+ * one. Still exactly one instance for the process once built, which is what
+ * keeps `MaterialTheme(typography = …)` from invalidating on recomposition.
+ */
+val BtMaterialTypography: Typography by lazy {
+    Typography().run {
+        copy(
+            displayLarge = displayLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
+            displayMedium = displayMedium.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
+            displaySmall = displaySmall.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
+            headlineLarge = headlineLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
+            headlineMedium = headlineMedium.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em),
+            headlineSmall = headlineSmall.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.015).em),
+            titleLarge = titleLarge.copy(fontFamily = System, fontWeight = FontWeight.Bold, letterSpacing = (-0.015).em),
+            titleMedium = titleMedium.copy(fontFamily = System, fontWeight = FontWeight.SemiBold),
+            titleSmall = titleSmall.copy(fontFamily = System, fontWeight = FontWeight.SemiBold),
+            bodyLarge = bodyLarge.copy(fontFamily = System),
+            bodyMedium = bodyMedium.copy(fontFamily = System),
+            bodySmall = bodySmall.copy(fontFamily = System),
+            labelLarge = labelLarge.copy(fontFamily = System, fontWeight = FontWeight.Medium),
+            labelMedium = labelMedium.copy(fontFamily = System, fontWeight = FontWeight.Medium),
+            labelSmall = labelSmall.copy(fontFamily = System, fontWeight = FontWeight.Medium),
+        )
+    }
 }

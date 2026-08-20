@@ -4,7 +4,7 @@ import at.bettertrack.app.domain.jsNumberToString
 import kotlin.math.abs
 
 /**
- * de-AT PRESENTATION of numbers the shared domain engine produced.
+ * Locale PRESENTATION of numbers the shared domain engine produced.
  *
  * ## Read this before reusing any of it
  *
@@ -24,10 +24,16 @@ import kotlin.math.abs
  * vault plaintext and the GCM AAD header — and only moves separators around it
  * to the de-AT conventions rule 1/2/3 of BtNumberFormat specify:
  *
- *  - money: exactly 2 decimals, HALF-UP, `.` groups, `,` decimal, symbol LAST
- *    ("1.234,56 €");
- *  - percent: 2 decimals and a space before `%` ("+12,89 %");
+ *  - money: exactly 2 decimals, HALF-UP, locale separators, symbol LAST
+ *    ("1.234,56 €" in de-AT, "1,234.56 €" in en);
+ *  - percent: 2 decimals, with a space before `%` in DE and none in EN
+ *    ("+12,89 %" / "+12.89%");
  *  - quantity: whole numbers plain, otherwise up to 8 decimals, zeros trimmed.
+ *
+ * The separators and the percent spacing come from [BtWebLocale], seeded from
+ * `navigator.language` (W1). That is the only thing the locale changes here —
+ * the VALUE is whatever the shared engine produced, and rounding still happens
+ * on the decimal string rather than on a re-derived number.
  *
  * The rounding is done on the DECIMAL STRING, not by re-deriving the value, so
  * nothing here can disagree with the engine about what the number is — the worst
@@ -75,14 +81,14 @@ private fun fixedDecimal(value: Double, scale: Int): String? {
     return if (scale == 0) head else head + "." + combined.substring(cut)
 }
 
-/** `.` every three digits from the right — the de-AT grouping separator. */
-private fun group(intDigits: String): String {
+/** The locale's group separator, every three digits from the right. */
+private fun group(intDigits: String, locale: BtWebLocale): String {
     val sb = StringBuilder(intDigits.length + intDigits.length / 3)
     var count = 0
     for (i in intDigits.indices.reversed()) {
         sb.append(intDigits[i])
         count++
-        if (count % 3 == 0 && i > 0) sb.append('.')
+        if (count % 3 == 0 && i > 0) sb.append(locale.groupSeparator)
     }
     return sb.reverse().toString()
 }
@@ -90,11 +96,15 @@ private fun group(intDigits: String): String {
 /** True when every digit of a plain decimal string is `0` — i.e. it rounded to zero. */
 private fun isAllZero(plain: String): Boolean = plain.all { it == '0' || it == '.' }
 
-private fun deAtFixed(value: Double, scale: Int, showSign: Boolean): String? {
+private fun localeFixed(value: Double, scale: Int, showSign: Boolean, locale: BtWebLocale): String? {
     val collapsed = if (value == 0.0) 0.0 else value // -0.0 never renders a minus
     val fixed = fixedDecimal(abs(collapsed), scale) ?: return null
     val dot = fixed.indexOf('.')
-    val body = if (dot < 0) group(fixed) else group(fixed.substring(0, dot)) + "," + fixed.substring(dot + 1)
+    val body = if (dot < 0) {
+        group(fixed, locale)
+    } else {
+        group(fixed.substring(0, dot), locale) + locale.decimalSeparator + fixed.substring(dot + 1)
+    }
     // A value that rounds AWAY to zero (-0.001 at scale 2) must not keep a sign,
     // matching BigDecimal.setScale, whose result has signum 0.
     val sign = when {
@@ -107,26 +117,34 @@ private fun deAtFixed(value: Double, scale: Int, showSign: Boolean): String? {
 }
 
 /** Rule 1 — fiat money, symbol-last, exactly 2 decimals. */
-internal fun deAtMoney(value: Double?, symbol: String = "€", showSign: Boolean = false): String {
+internal fun webMoney(
+    value: Double?,
+    locale: BtWebLocale,
+    symbol: String = "€",
+    showSign: Boolean = false,
+): String {
     if (value == null || !value.isFinite()) return WEB_EM_DASH
-    val body = deAtFixed(value, scale = 2, showSign = showSign)
+    val body = localeFixed(value, scale = 2, showSign = showSign, locale = locale)
         ?: return jsNumberToString(value) + " " + symbol // out of the plain-decimal range
     return "$body $symbol"
 }
 
-/** Rule 2 — percent, 2 decimals, space before `%` (the DE convention). */
-internal fun deAtPercent(value: Double?, showSign: Boolean = false): String {
+/** Rule 2 — percent, 2 decimals; DE spaces before `%`, EN does not. */
+internal fun webPercent(value: Double?, locale: BtWebLocale, showSign: Boolean = false): String {
+    val pct = if (locale.spaceBeforePercent) " %" else "%"
     if (value == null || !value.isFinite()) return WEB_EM_DASH
-    val body = deAtFixed(value, scale = 2, showSign = showSign) ?: return jsNumberToString(value) + " %"
-    return "$body %"
+    val body = localeFixed(value, scale = 2, showSign = showSign, locale = locale)
+        ?: return jsNumberToString(value) + pct
+    return body + pct
 }
 
 /** Rule 3 — bare quantity, up to 8 decimals, trailing zeros trimmed. */
-internal fun deAtQuantity(value: Double?): String {
+internal fun webQuantity(value: Double?, locale: BtWebLocale): String {
     if (value == null || !value.isFinite()) return WEB_EM_DASH
     val fixed = fixedDecimal(abs(value), scale = 8) ?: return jsNumberToString(value)
     val dot = fixed.indexOf('.')
     val trimmed = fixed.substring(dot + 1).trimEnd('0')
-    val body = group(fixed.substring(0, dot)) + if (trimmed.isEmpty()) "" else ",$trimmed"
+    val body = group(fixed.substring(0, dot), locale) +
+        if (trimmed.isEmpty()) "" else "${locale.decimalSeparator}$trimmed"
     return (if (value < 0 && !isAllZero(fixed)) "-" else "") + body
 }

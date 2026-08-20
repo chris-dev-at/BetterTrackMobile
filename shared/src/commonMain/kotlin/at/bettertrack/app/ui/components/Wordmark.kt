@@ -6,13 +6,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.ui.theme.BtFonts
 import at.bettertrack.app.ui.theme.BtTheme
 
 /**
@@ -71,7 +71,10 @@ fun Wordmark(
         modifier = modifier,
         fontSize = fontSize,
         fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Default,
+        // BtFonts.appFontFamily, not FontFamily.Default, since the web port (W1):
+        // identical on Android and iOS, and the embedded face in a browser, where
+        // there is no system font for Default to resolve against. See BtFonts.
+        fontFamily = BtFonts.appFontFamily,
         letterSpacing = (-0.025).em,
         maxLines = 1,
         overflow = TextOverflow.Clip,

@@ -38,6 +38,10 @@ import java.io.File
  * `ui/theme/` is exempt by construction: it is where colour is *defined*. Every
  * other exemption is enumerated below with its reason, so adding one is a
  * visible edit rather than a quiet regex loosening.
+ *
+ * Since the web port (W1) the scope is **both** `ui/` trees — `:app`'s and
+ * `:shared`'s — because the theme and the first shared components now live in
+ * the latter. See [sharedUiRoots].
  */
 class BtThemeDisciplineTest {
 
@@ -62,15 +66,40 @@ class BtThemeDisciplineTest {
             ?: error("ui sources not found; tried ${roots.map { it.absolutePath }}")
     }
 
-    /** Every `ui/` source outside `ui/theme/`, keyed by its path relative to `ui/`. */
-    private fun sourcesOutsideTheme(): List<Pair<String, File>> {
-        val root = uiRoot()
-        return root.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .map { it.relativeTo(root).path to it }
-            .filterNot { (rel, _) -> rel.startsWith("theme" + File.separator) }
-            .toList()
+    /**
+     * The `ui/` trees inside `:shared`, one per source set that has one.
+     *
+     * The web port (W1) moved `ui/theme` and the first shared components out of
+     * `:app`, and a guard that reads `:app`'s tree from disk stops covering code
+     * the moment that code leaves the tree. Rather than let these rules quietly
+     * narrow one migration at a time, the walk follows the code. At least one
+     * shared `ui/` tree must exist: if the whole thing is ever moved back, that
+     * should be a deliberate edit here, not a silent loss of coverage.
+     */
+    private fun sharedUiRoots(): List<File> {
+        val bases = listOf(File("../shared/src"), File("shared/src"))
+        val base = bases.firstOrNull { it.isDirectory }
+            ?: error("shared sources not found; tried ${bases.map { it.absolutePath }}")
+        val roots = base.listFiles().orEmpty()
+            .map { File(it, "kotlin/at/bettertrack/app/ui") }
+            .filter { it.isDirectory }
+            .sortedBy { it.path }
+        check(roots.isNotEmpty()) { "no :shared ui/ tree under ${base.absolutePath}" }
+        return roots
     }
+
+    /**
+     * Every `ui/` source outside `ui/theme/`, in `:app` AND in `:shared`, keyed
+     * by its path relative to its own `ui/` root.
+     */
+    private fun sourcesOutsideTheme(): List<Pair<String, File>> =
+        (listOf(uiRoot()) + sharedUiRoots()).flatMap { root ->
+            root.walkTopDown()
+                .filter { it.isFile && it.extension == "kt" }
+                .map { it.relativeTo(root).path to it }
+                .filterNot { (rel, _) -> rel.startsWith("theme" + File.separator) }
+                .toList()
+        }
 
     /** Strip `//` line comments and KDoc/block-comment bodies so prose never trips a rule. */
     private fun codeLines(file: File): List<Pair<Int, String>> {

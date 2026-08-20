@@ -100,21 +100,8 @@ sealed interface AuthState {
     data class PasswordChangeRequired(val user: SessionUser) : AuthState
 }
 
-/** Localizable login failure reasons (message strings resolved in the UI). */
-enum class LoginError {
-    GENERIC,
-    NETWORK,
-    STATE_MISMATCH,
-    EXCHANGE_FAILED,
-    ACCOUNT_DISABLED,
-    ADMIN_NOT_ALLOWED,
-    SERVER_DENIED,
-}
-
-/** The login screen's transient state (button progress + error surface). */
-sealed interface LoginPhase {
-    data object Idle : LoginPhase
-    /** Custom Tab is open and/or the token exchange is running. */
-    data object InProgress : LoginPhase
-    data class Failed(val error: LoginError, val detail: String? = null) : LoginPhase
-}
+// [LoginError] and [LoginPhase] moved to :shared/commonMain (web port, W1):
+// they are the two types the shared login screen takes, and they are pure
+// Kotlin. Package unchanged, so nothing that reads them moved. The rest of this
+// file — the token/session models and the OAuth plumbing around them — stays
+// here until W5 settles browser auth.

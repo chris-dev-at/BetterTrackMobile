@@ -18,7 +18,7 @@ import io.ktor.client.engine.js.Js
  *
  *  - **CORS preflight.** `Authorization`, `Idempotency-Key`, `X-Bt-No-Reauth` and
  *    `If-None-Match` are all non-simple request headers, so every call from
- *    `mobile-dev.bettertrack.at` to `api.bettertrack.at` costs an `OPTIONS`
+ *    `mobile.bettertrack.at` to `api.bettertrack.at` costs an `OPTIONS`
  *    preflight and the API must name each of them in `Access-Control-Allow-Headers`.
  *  - **ETag readability.** [BtConditionalGetPlugin] reads the `ETag` off a
  *    response. Cross-origin JavaScript cannot see a response header unless the

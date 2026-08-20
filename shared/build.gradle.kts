@@ -64,13 +64,43 @@ kotlin {
     // kotlinx-datetime 0.8.0 and coroutines 1.10.2 all publish wasmJs klibs at
     // the exact versions §6.6 already verified — no version moved for the web.
     //
-    // `browser()` is the deployment environment; `nodejs()` exists ONLY so the
-    // 622-vector conformance harness in commonTest can replay headlessly
-    // (`:shared:wasmJsNodeTest`) without a Karma/Chrome setup. Neither creates a
+    // `browser()` is the deployment environment. Neither environment creates a
     // binary — :shared stays a library; the executable is :webApp.
+    //
+    // ── Where the 622 vectors replay on wasm, and why it MOVED in W1 ────────
+    //
+    // W0 ran the conformance harness on `:shared:wasmJsNodeTest`, deliberately,
+    // to avoid a Karma/Chrome setup. W1 made that impossible, and the reason is
+    // worth writing down because it will look like a regression otherwise:
+    //
+    // promoting the Compose UI into `commonMain` puts **Skia** on every wasmJs
+    // binary this module produces, the test executable included (a test binary
+    // is compiled in development mode, so nothing is dead-code-eliminated). And
+    // skiko's emscripten glue is a BROWSER build with its Node branch compiled
+    // out — literally `if (false) { …createRequire…fs.readFileSync… }` at the
+    // top of `skiko.mjs`. Under Node it therefore has no `readBinary`, and
+    // `ENVIRONMENT_IS_WEB` is false so it never reaches the `fetch` path either:
+    //   Aborted(both async and sync fetching of the wasm failed)
+    // The 8.2 MB `skiko.wasm` is sitting right next to `skiko.mjs` in the test
+    // package — the loader simply has no way to read a file.
+    //
+    // So the harness runs in the runtime skiko is built for. That is a strictly
+    // BETTER gate than Node was: the 622 vectors now replay in the same engine
+    // the product ships in. `wasmJsNodeTest` is disabled below rather than left
+    // to fail, and `nodejs()` stays declared only because the node toolchain is
+    // what webpack/yarn run on.
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        browser()
+        browser {
+            testTask {
+                useKarma {
+                    // No-sandbox: Chrome's sandbox needs a user namespace this
+                    // build environment does not always have, and the page under
+                    // test is our own bundle from localhost.
+                    useChromeHeadlessNoSandbox()
+                }
+            }
+        }
         nodejs()
     }
 
@@ -102,14 +132,54 @@ kotlin {
         // reaching it transitively via :shared changes nothing in :app's resolved
         // shipping graph — verified with :app:dependencies before/after. Pure data,
         // no Compose: it stays in commonMain and pulls in no UI.
-        // All three commonMain dependencies publish wasmJs klibs at exactly these
-        // versions, so the browser target reads this source set unmodified.
+        // All three of those publish wasmJs klibs at exactly these versions, so
+        // the browser target reads this source set unmodified.
+        //
+        // ── The Compose UI stack, promoted here in W1 ───────────────────────
+        //
+        // §6.6 left one caveat open: "on Android, CMP artifacts *are*
+        // androidx.compose, so compose-bom wins; on iOS the org.jetbrains.compose
+        // klibs govern — Android and iOS would run different Compose patch
+        // versions unless the BOM is dropped or pinned to match CMP." W1 had to
+        // settle it, because `ui/theme` and the login screen cannot compile in
+        // commonMain without a Compose dependency in commonMain.
+        //
+        // It settles with NO version moved, and the reason is a property of the
+        // artifacts rather than a compromise. Read from the published Gradle
+        // module metadata of each 1.10.3 artifact: **every `org.jetbrains.compose`
+        // androidJvm variant publishes an EMPTY file list.** They are pure
+        // redirects — `org.jetbrains.compose.runtime:runtime:1.10.3` (android)
+        // carries no classes at all, only a dependency on
+        // `androidx.compose.runtime:runtime:1.10.5`; foundation → androidx
+        // foundation 1.10.5; ui → androidx ui 1.10.5; material3 1.9.0 → androidx
+        // material3 **1.4.0**. Those are plain `requires`, not `strictly`, and
+        // :app's `compose-bom:2026.06.01` constrains the same modules HIGHER
+        // (foundation/ui/runtime 1.11.4, material3 1.4.0), so Gradle's conflict
+        // resolution keeps :app on exactly the versions it shipped before. On the
+        // android target this shared UI therefore compiles against, and runs on,
+        // the SAME androidx Compose the app always had; the BOM is neither
+        // dropped nor pinned to CMP.
+        //
+        // The one artifact CMP contributes real Android code from is
+        // `org.jetbrains.compose.ui:ui-backhandler-android` (a 4,183-byte release
+        // AAR, pulled by material3). That is the entire APK cost of the move.
+        //
+        // On iOS and wasmJs there is no BOM in sight and the 1.10.3 klibs govern,
+        // unchanged from W0. `compose.material3` resolving to material3 **1.9.0**
+        // is not a typo — material3 versions on its own line; see the note that
+        // used to live on iosMain below.
         commonMain.dependencies {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
             // coroutines-core backs the DAO `Flow<>` returns and the Ktor client —
             // 1.10.2, the version :app already resolves.
             implementation(libs.kotlinx.coroutines.core)
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            // compose.ui carries Painter/ImageVector, the window-inset modifiers
+            // the login screen uses, and ComposeUIViewController on iOS.
+            implementation(compose.ui)
         }
 
         // ── dbMain — Room, for {android, ios} but NOT the browser ────────────
@@ -172,13 +242,11 @@ kotlin {
         iosMain.get().dependsOn(nonAndroidMain)
         wasmJsMain.get().dependsOn(nonAndroidMain)
 
-        // wasmJsMain — the browser's engine half, and nothing else. The Compose
-        // runtime is declared even though no file here is @Composable, for the
-        // same reason androidMain declares it: the Compose compiler plugin is
-        // applied per MODULE, so it runs over this compilation too.
+        // wasmJsMain — the browser's engine half, plus the two actuals a browser
+        // answers differently (reduced motion, haptics). The Compose stack itself
+        // is inherited from commonMain since W1.
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.js)
-            implementation(compose.runtime)
             // kotlinx-datetime's wasmJs implementation is js-joda, and js-joda
             // ships with NO IANA time-zone database — kotlinx-datetime pulls
             // `@js-joda/core` 3.2.0 and nothing else. Without this package
@@ -214,54 +282,45 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
         }
         //
-        // androidMain — the Compose RUNTIME only, and pinned by :app's own BOM.
+        // androidMain — :app's own Compose BOM, and the Android actuals.
         //
-        // This is the load-bearing decision of Phase 1. On an Android target the
-        // JetBrains `compose.*` accessors resolve to the ANDROIDX Compose
-        // artifacts, so declaring the UI stack (foundation/material3/ui) in
-        // commonMain would push a second, CMP-chosen androidx.compose version
-        // into :app's dependency graph and silently move the shipping app off
-        // its `composeBom` — CMP 1.10.3 pulls androidx.compose.runtime 1.10.5.
-        // The Phase-1 gate is "the Android app is completely unharmed", so the
-        // UI is scoped to iosMain below.
+        // Phase 1 declared the BOM here for a narrow reason (the Compose compiler
+        // plugin runs over the Android compilation and aborts without a runtime
+        // on the classpath) and kept the UI itself in iosMain so the shipping
+        // graph could not move. W1 promoted the UI to commonMain — see the long
+        // note there — and this line is now what makes that safe rather than
+        // merely convenient:
         //
-        // androidMain cannot be left EMPTY, though: the Compose compiler plugin
-        // is applied per-module, not per-target, so it also runs over the
-        // Android compilation and aborts there with
-        //   IncompatibleComposeRuntimeVersionException: The Compose Compiler
-        //   requires the Compose Runtime to be on the class path
-        // even though no androidMain/commonMain file is @Composable. The runtime
-        // is therefore declared here — but via `androidx-compose-bom`, THE SAME
-        // BOM :app resolves against, so the coordinate and version are byte-for-
-        // byte what :app already had and no resolution result changes.
+        // `androidx-compose-bom` is a PLATFORM, so its constraints apply to the
+        // whole android compile/runtime resolution, including the androidx
+        // modules that CMP's zero-file android redirects ask for at 1.10.5. The
+        // BOM asks for 1.11.4, Gradle takes the higher, and the shared UI is
+        // therefore compiled against EXACTLY the androidx Compose :app ships
+        // (foundation/ui/runtime 1.11.4, material3 1.4.0) — not against CMP's
+        // choice. Same BOM, same coordinates, same resolution result as before.
         //
-        // When shared UI genuinely moves cross-platform (Phase 3+), promoting
-        // the UI deps to commonMain has to be done together with reconciling the
-        // BOM — it is not a free move.
+        // Removing it would not break the build; it would silently drop :shared's
+        // android compilation to CMP's 1.10.5 while :app kept 1.11.4. Keep it.
         androidMain.dependencies {
             implementation(project.dependencies.platform(libs.androidx.compose.bom))
             implementation(libs.androidx.compose.runtime)
         }
 
-        // iosMain — the Compose Multiplatform UI, iOS-only for now.
+        // iosMain — the two iOS-only artifacts. The Compose UI stack moved up to
+        // commonMain in W1 (it now serves three consumers, not one), so this set
+        // is down to the SQLite driver and the Ktor engine.
         //
-        // These use the `compose.*` ACCESSORS from the JetBrains plugin rather
-        // than explicit coordinates, on purpose, even though 1.10.3 marks them
-        // deprecated ("Specify dependency directly" — four warnings at configure
-        // time, expected, not a defect). The accessors know pairings that are
-        // NOT derivable from the CMP version: `compose.material3` at CMP 1.10.3
-        // resolves to org.jetbrains.compose.material3:material3:**1.9.0**, since
-        // material3 versions on its own line. Hand-pinning that to 1.10.3 asks
-        // for an artifact that does not exist. Revisit only when the deprecated
-        // accessors are actually removed, and re-derive every pairing from a
-        // real `:shared:dependencies` report at that time.
+        // The note that used to live here is worth keeping, because it explains
+        // a version that looks wrong: the `compose.*` accessors know pairings
+        // that are NOT derivable from the CMP version — `compose.material3` at
+        // CMP 1.10.3 resolves to org.jetbrains.compose.material3:material3
+        // **1.9.0**, since material3 versions on its own line, and hand-pinning
+        // it to 1.10.3 asks for an artifact that does not exist. The accessors
+        // are deprecated at 1.10.3 ("Specify dependency directly" — expected
+        // configure-time warnings, not a defect); when they are actually
+        // removed, re-derive every pairing from a real `:shared:dependencies`
+        // report rather than guessing.
         iosMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            // compose.ui carries ComposeUIViewController, the UIKit bridge the
-            // iOS executable hosts its Compose content in.
-            implementation(compose.ui)
             // KMP/iOS port, Phase 2 (Room -> :shared): the bundled SQLite driver
             // that backs the KMP Room database on Kotlin/Native. iOS-ONLY — it is
             // declared here, never in commonMain/androidMain, so nothing new lands
@@ -538,3 +597,12 @@ val generateVectorFixtures = tasks.register<GenerateVectorFixtures>("generateVec
 kotlin.sourceSets.named("commonTest") {
     kotlin.srcDir(generateVectorFixtures.flatMap { it.outputDir })
 }
+
+// ── The wasm conformance harness runs in a browser, not in Node (W1) ────────
+// See the long note on the `wasmJs { }` block: a wasmJs test binary from this
+// module now links Skia, and skiko's emscripten glue cannot load its own .wasm
+// under Node. `wasmJsBrowserTest` is the replacement gate and it runs the same
+// commonTest harness — the 622 vectors, unchanged. This task is disabled rather
+// than deleted so that anyone who goes looking for the Node run finds the
+// reason instead of a missing task.
+tasks.named("wasmJsNodeTest") { enabled = false }

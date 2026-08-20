@@ -1,6 +1,5 @@
 package at.bettertrack.app.ui.components
 
-import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,33 +10,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import at.bettertrack.app.ui.theme.BtTheme
 
-/**
- * True when the system requests reduced motion (animator duration scale is 0 —
- * "remove animations"). Every BetterTrack animation must respect this (§3.7).
- */
-@Composable
-fun rememberReducedMotion(): Boolean {
-    val context = LocalContext.current
-    return remember {
-        Settings.Global.getFloat(
-            context.contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f,
-        ) == 0f
-    }
-}
+// `rememberReducedMotion()` moved to :shared as an expect/actual (web port, W1)
+// — the Android reading of ANIMATOR_DURATION_SCALE went with it unchanged, the
+// browser reads `prefers-reduced-motion` instead. Same package, so no call site
+// here or anywhere else moved.
 
 /**
  * The two tones a skeleton is built from, picked per colour table.

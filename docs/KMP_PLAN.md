@@ -1519,17 +1519,22 @@ Same discipline as §4.4: measured over `app/src/main/java` in this worktree
 | R17 | Browser token custody: no Keychain, no EncryptedSharedPreferences; `localStorage` is XSS-readable | AMBER, needs an owner call |
 | R18 | Kotlin 2.3.20 crashes on incremental wasmJs recompilation (`WasmIrFileMetadata.fromByteArray`); mitigated by `kotlin.incremental.wasm=false`, so wasm builds are always non-incremental until the compiler moves | GREEN (mitigated), do not silently re-enable |
 | R19 | The IANA zone database reaches the browser ONLY through a live call to `btInstallTimeZoneDatabase()` from the host's `main()`. A future web host that forgets it compiles fine and then crashes the module on the first tax computation — a runtime cliff with no compile-time signal | AMBER; W1 should make it unforgettable (an entry-point helper, or an `Intl`-based `viennaYearOf` actual) |
+| R20 | compose-resources' readers only work from inside composition on wasm: `Res.readBytes(...)` from a plain coroutine suspends forever and never issues the request. W2 moves 2984 string keys onto this library, and every non-composable `getString(...)` site (~660 of them, §14.3) is exactly this shape | AMBER, and it is W2's problem more than W1's |
+| R21 | compose-resources' DRAWABLE path renders nothing on CMP 1.10.3 / wasm — `painterResource(Res.drawable.x)` fetches the file and returns a painter that draws no pixels. Worked around in W1 by carrying the one image the shell needs inside the binary; a screen with real imagery cannot do that | AMBER |
+| R22 | A `:shared` wasm test binary now links Skia, and skiko's emscripten glue has its Node branch compiled out, so `wasmJsNodeTest` cannot load its own `.wasm`. The conformance harness moved to `wasmJsBrowserTest` (Karma + headless Chrome), which is closer to production but adds Chrome to the gate's requirements | GREEN (resolved), but CI needs a browser |
+| R23 | The brand mark `splash_bt_glyph.png` is white-on-transparent, so on the LIGHT page only the gold "T" is visible — the "B" disappears into `#FFFFFF`. Pre-existing on Android (same asset, same light table), surfaced by rendering both tables side by side. Not fixed here: it is an Android visual change and therefore an owner call | AMBER, product |
 
 ### 14.5 Milestones
 
 Sized in **builder-days** (one focused builder, this machine, serialized Gradle
 lane). They assume W0 as landed and exclude anything the platform owes.
 
-- **W1 — the shell renders (8–10 d).** Move `ui/theme` and one real screen into
-  `:shared/commonMain`; **reconcile the Compose BOM against CMP** (§6.6's open
-  caveat — this, not the screens, is the blocker); embed fonts; settle the icon
-  artifact; seed locale from `navigator.language`. Exit: one production screen
-  in the browser with the real theme, Android byte-identical.
+- **W1 — the shell renders (8–10 d). LANDED — see §14.6.** Move `ui/theme` and
+  one real screen into `:shared/commonMain`; **reconcile the Compose BOM against
+  CMP** (§6.6's open caveat — this, not the screens, is the blocker); embed
+  fonts; settle the icon artifact; seed locale from `navigator.language`. Exit:
+  one production screen in the browser with the real theme, Android
+  byte-identical.
 - **W2 — strings (6–8 d).** 2984 keys × EN/DE to compose-resources; 2483 refs
   rewritten; the ~660 non-composable sites decided one by one; async resolution
   proven not to flash empty. Exit: no `R.string` in shared code, both platforms
@@ -1554,3 +1559,174 @@ lane). They assume W0 as landed and exclude anything the platform owes.
 logged-in data, W7 and platform work excluded. The three that can surprise are
 W1 (the BOM reconciliation is a real unknown), W2 (async resources) and W6 (a
 product decision sits inside it).
+
+### 14.6 W1 result — the shell renders
+
+The browser now draws a **production screen out of `:shared/commonMain`**: the
+login screen, in both colour tables, in the real type ramp, with the app's own
+brand mark and its own gear glyph, formatted by a locale seeded from
+`navigator.language`. Nothing on that page re-implements a token, a dp or a
+layout — it is the same source `:app` compiles.
+
+**The BOM caveat is closed, and it cost zero version moves.** §6.6 asked whether
+the Compose BOM and CMP can coexist once UI is in `commonMain`. They can, and
+the reason is a property of the artifacts rather than a compromise. Read from
+the published Gradle module metadata of each 1.10.3 artifact: **every
+`org.jetbrains.compose` androidJvm variant publishes an EMPTY file list** — they
+are pure redirects. On Android:
+
+| `compose.*` accessor | org.jetbrains version | its android variant `requires` | :app's BOM 2026.06.01 | resolved |
+| --- | --- | --- | --- | --- |
+| `compose.runtime` | 1.10.3 | androidx.compose.runtime 1.10.5 | 1.11.4 | **1.11.4** |
+| `compose.foundation` | 1.10.3 | androidx.compose.foundation 1.10.5 | 1.11.4 | **1.11.4** |
+| `compose.ui` | 1.10.3 | androidx.compose.ui 1.10.5 | 1.11.4 | **1.11.4** |
+| `compose.material3` | **1.9.0** | androidx.compose.material3 **1.4.0** | 1.4.0 | **1.4.0** |
+
+Those are `requires`, not `strictly`, so Gradle takes the higher and `:app` stays
+on exactly the versions it shipped before — verified in the resolved
+`githubDebugRuntimeClasspath`, where every CMP request appears literally as
+`1.10.5 -> 1.11.4`. The shared UI is therefore *compiled against* the same
+androidx Compose the app runs. The BOM was neither dropped nor pinned to CMP; it
+stayed in `androidMain`, where being a platform is what pulls CMP's redirects up.
+On iOS and wasmJs there is no BOM and the 1.10.3 klibs govern, unchanged from W0.
+
+**What that adds to the APK: one 4,183-byte AAR.** `:app`'s runtime classpath
+gains 20 `org.jetbrains.compose.*` and 7 `org.jetbrains.androidx.{lifecycle,savedstate}`
+nodes, and every one of them was checked: all publish `files: []` on
+`releaseRuntimeElements`. The single exception is
+`org.jetbrains.compose.ui:ui-backhandler-android:1.9.1`, a real 4,183-byte
+release AAR pulled by material3. `androidx.lifecycle` stays at 2.11.0 (the JB
+redirects ask for 2.9.4). Still **zero** `io.ktor`, `org.jetbrains.skiko`,
+`js-joda` or `sqlite-bundled` on `:app` — W0's invariant holds.
+
+**What moved, and what stayed behind which seam.** 2,678 lines, of which the
+theme moved as a literal relocation — `BtColors.kt`, `BtIcons.kt`, `BtShapes.kt`
+and `BetterTrackTheme.kt` are **byte-identical to their `:app` originals**
+(`diff` against `HEAD`, zero lines), and so are `BtButtons.kt` and `BtMotion.kt`.
+
+| Now in | What | Note |
+| --- | --- | --- |
+| `commonMain/ui/theme` | the whole package (1,439 LOC) + `BtFonts.kt` | 4 of 5 files byte-identical; `BtTypography.kt` differs by exactly two lines |
+| `commonMain/ui/components` | `Wordmark`, `BtButtons`, `BtMotion`, the `BtHaptics` contract, the `rememberReducedMotion` expect | Wordmark differs by one line |
+| `commonMain/ui/auth` | `BtLoginScreen` + `LoginStrings` | the layout, weights, entrance animation and every dp are the Android screen's |
+| `commonMain/data/prefs` | `BtThemeMode` | package unchanged, so no import in `:app` moved |
+| `commonMain/data/auth` | `LoginPhase`, `LoginError` | same |
+| `androidMain/ui/components` | the whole `BtHaptics` motor + `rememberReducedMotion` actual | verbatim, including its device measurements |
+| `nonAndroidMain` / `wasmJsMain` / `iosMain` | the no-op haptics, `prefers-reduced-motion`, `UIAccessibility` | 59 lines total |
+| stayed in `:app` | `LoginScreen.kt` — now a 111-line Android host | 16 `R.string` reads, one `R.drawable`, `Icons.Outlined.Settings`, `PreLoginSettingsSheet` |
+
+`:app`'s two call sites (`BtRoot`, `StorageSetupWizard`) are **untouched**: the
+host keeps the original signature. Three things could not cross into
+`commonMain` and are parameters rather than rewrites — the strings (W2), the two
+images (W2/W7), and the pre-login settings sheet, which reads
+`SharedPreferences` and switches server origins (W5/W6). Android passes exactly
+what it passed before, so its pixels are unchanged by construction.
+
+**Fonts.** Roboto ships as ONE variable font — Google Fonts
+`ofl/roboto/Roboto[wdth,wght].ttf`, SIL OFL 1.1, **488,584 bytes / 280,258
+gzipped** — registered four times at four `wght` positions, because the design's
+hierarchy is built almost entirely out of weight and synthetic bolding is not a
+600. `BtTypography`'s face became `by lazy { BtFonts.appFontFamily }`; on Android
+and iOS nothing ever installs anything, so that reads `FontFamily.Default`
+exactly as the eager line it replaced. Digits line up in one ruler-straight
+column on the canvas — and the screenshot states the honest reason, which is that
+Roboto's default lining figures are already tabular, so the app's `tnum` is
+belt-and-braces rather than the thing doing the work.
+
+**Icons, settled two different ways.** The favicon is `art/BT_AppIcon.png`
+base64-inlined as a `data:` URI in `index.html` — no request, ever, which matters
+because a favicon is fetched before anything else on an authenticated page. The
+in-app 72dp mark is `splash_bt_glyph.png`, the same bytes Android draws, carried
+inside the wasm binary (see R21). **Material's icon set has no answer on this
+stack**: `org.jetbrains.compose.material:material-icons-extended` stops at
+**1.7.3**, whose klibs are `abi_version=1.8.0 / compiler_version=1.9.24 /
+metadata_version=1.4.1` — pre-2.0 metadata that Kotlin 2.3.20 will not read — and
+the wasmJs klib is **23,888,396 bytes** anyway. So the web substitutes the app's
+own `BtIcons.Settings` for the login gear; that is the one glyph where the two
+renders differ today, and the 132-symbol question is still open for W7.
+
+**Locale.** `navigator.language` is read exactly once, in `main()`, and mapped to
+de-AT or an English fallback; it seeds `<html lang>` and the number conventions.
+Proven side by side: `de-AT` → `1.369,50 €`, `+12,89 %`; `en-US` → `1,369.50 €`,
+`+12.89%`. The formatter itself is still W0's provisional shim — **W3 owns
+`BtNumberFormat`** and nothing here pre-empts it.
+
+**Gates**, all re-run with `--rerun-tasks` on the final tree:
+
+| Gate | Result |
+| --- | --- |
+| `:app:testGithubDebugUnitTest` | **2099 / 0 failures / 0 errors** / 7 skipped, 172 suites |
+| `:app:testPlayDebugUnitTest` | **2099 / 0 / 0** / 19 skipped, 172 suites |
+| `:app:assembleGithubDebug` | green — 95,721,794-byte debug APK |
+| `:app:lintGithubDebug` | **0 errors**, 102 warnings, 2 hints |
+| `:shared:testAndroidHostTest` | **13 / 0 / 0** |
+| `:shared:iosSimulatorArm64Test` | **23 / 0 / 0** |
+| `:shared:wasmJsBrowserTest` | **13 / 0 / 0 — the 622 vectors, now in a real browser** |
+| `:shared:compileKotlinIosArm64` (+ SimulatorArm64, WasmJs) | green |
+| `:webApp:wasmJsBrowserDistribution` | green |
+| golden v10 schema | md5 `d90e198351d6e5ac062a7c55fdd7a2c5`, identityHash `a9fab166f6bcb1451ac240972a08a408` — unchanged; `shared/schemas` still byte-identical to `app/schemas` |
+
+The `:app` count reads 2099 rather than §13's 2101 because that figure predates
+`02f889d`/`a3f81ce`; W1 moved no test at all, which is checkable rather than
+assertable — `git grep -E '^[[:space:]]*@Test' -- app/src/test` returns **2082 in
+167 files at `HEAD` and 2082 in 167 files in the worktree**.
+
+**Two guards were repointed rather than left to rot.** `BtThemeDisciplineTest`
+and `PreLoginSettingsTest` read `:app`'s `ui/` tree off disk, so a migration
+narrows them silently. Both now walk `:shared`'s `ui/` trees as well, and the
+pre-login guard checks each owner-mandated invariant on whichever side of the
+seam now owns it — the server line is still display-only and the gear still has
+a `bt_dest_settings` description, asserted across two files instead of one.
+
+**Bundle**, `gzip -9`, sourcemap excluded:
+
+| Artifact | Raw | gzip -9 | vs W0 |
+| --- | --- | --- | --- |
+| `skiko.wasm` | 8,642,989 | 3,277,728 | unchanged |
+| app `.wasm` | 2,393,521 | 786,912 | +563,140 / +177,956 |
+| `webApp.js` | 780,512 | 132,495 | +3,069 / +676 |
+| `index.html` + licence | 19,021 | 9,401 | +14,041 / +7,989 (the inlined favicon) |
+| `composeResources/…/roboto_variable.ttf` | 488,584 | 280,238 | new |
+| **shipped total** | **12,324,627 (11.75 MiB)** | **4,486,774 (4.28 MiB)** | **+1,068,834 raw (+9.5%) / +466,928 gz (+11.6%)** |
+
+Skia is still 70% of it. The whole product UI — theme, components, a screen, and
+the brand mark carried as bytes — cost 563 KB of wasm; the typeface cost 489 KB.
+R16 stands unchanged in character.
+
+Screenshots (headless Chrome, production distribution, 1:1 device pixels):
+`/Users/cwiesi/bt_scratch/kmp-2026-08-19/web_w1_shell_de.png` and
+`…/web_w1_shell_en.png`.
+
+### 14.6a Four things W1 found that a compile-only move would have shipped
+
+1. **The wasm conformance harness cannot run under Node any more.** Putting
+   Compose in `commonMain` puts Skia on every wasmJs binary the module makes,
+   the test binary included, and skiko's emscripten glue is a browser build with
+   its Node branch compiled out — literally `if (false) { …fs.readFileSync… }`.
+   Under Node it has no `readBinary` and `ENVIRONMENT_IS_WEB` is false, so it
+   never reaches `fetch` either: `Aborted(both async and sync fetching of the
+   wasm failed)`, with the 8.2 MB `skiko.wasm` sitting next to it in the same
+   directory. Fixed by moving the harness to `wasmJsBrowserTest` (Karma +
+   `ChromeHeadlessNoSandbox`), which is a better gate — the vectors now replay in
+   the engine the product ships in — at the cost of a browser in CI (R22). Karma
+   resolved out of the shared `~/.kotlin/kotlin-npm-tooling` install, so
+   `kotlin-js-store/yarn.lock` is untouched.
+2. **compose-resources only reads from inside composition here.**
+   `Res.readBytes(...)` from a plain `CoroutineScope(Dispatchers.Main)` coroutine
+   suspends and never resumes, and never issues the request. Localised with
+   stage markers written into the page's bootstrap element: execution reached the
+   coroutine and resumed across a `delay(1)`, then stopped dead at the first
+   `Res.readBytes`; the dev server logged `index.html`, `webApp.js` and both
+   `.wasm` files and nothing else. The composable readers work. This is R20, and
+   it is aimed straight at W2's ~660 non-composable `getString` sites.
+3. **compose-resources' drawable path renders nothing.**
+   `painterResource(Res.drawable.bt_glyph)` fetches the PNG — 200 in the server
+   log — and returns a painter that draws no pixels. Proven rather than assumed
+   by putting a `goldWash` background behind the `Image`: the 64dp square
+   painted, the mark did not. The font half of the same library works on the same
+   page. R21; worked around by carrying the mark's bytes in the binary.
+4. **The brand mark disappears on the light page.** `splash_bt_glyph.png` is a
+   white "B" and a gold "T" on transparency, so on `#FFFFFF` only the T survives.
+   This is **pre-existing on Android** — same asset, same light table — and it
+   became visible only because the shell renders both tables side by side. Left
+   alone: fixing it changes Android pixels, which is an owner call (R23).

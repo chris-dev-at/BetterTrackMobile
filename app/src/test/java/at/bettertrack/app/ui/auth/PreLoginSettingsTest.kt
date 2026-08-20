@@ -34,15 +34,34 @@ import java.io.File
  */
 class PreLoginSettingsTest {
 
+    /**
+     * Read one `ui/` source by name, from `:app` or from `:shared`.
+     *
+     * Both trees since the web port (W1): the screen itself now lives in
+     * `:shared/commonMain` as `BtLoginScreen.kt` and `:app`'s `LoginScreen.kt`
+     * is the Android host that hands it the resources. The invariants below did
+     * not move — they are now checked on whichever side of that seam owns each
+     * one, which is why several assertions name a file explicitly.
+     */
     private fun uiSource(name: String): String {
-        val roots = listOf(
+        val appRoots = listOf(
             File("src/main/java/at/bettertrack/app/ui"),
             File("app/src/main/java/at/bettertrack/app/ui"),
         )
-        val root = roots.firstOrNull { it.isDirectory }
-            ?: error("ui sources not found; tried ${roots.map { it.absolutePath }}")
-        val file = root.walkTopDown().firstOrNull { it.isFile && it.name == name }
-            ?: error("$name not found under ${root.absolutePath}")
+        val sharedBases = listOf(File("../shared/src"), File("shared/src"))
+        val roots = buildList {
+            appRoots.firstOrNull { it.isDirectory }?.let { add(it) }
+            sharedBases.firstOrNull { it.isDirectory }
+                ?.listFiles().orEmpty()
+                .map { File(it, "kotlin/at/bettertrack/app/ui") }
+                .filter { it.isDirectory }
+                .sortedBy { it.path }
+                .forEach { add(it) }
+        }
+        check(roots.isNotEmpty()) { "no ui/ sources found from ${File(".").absolutePath}" }
+        val file = roots.firstNotNullOfOrNull { root ->
+            root.walkTopDown().firstOrNull { it.isFile && it.name == name }
+        } ?: error("$name not found under ${roots.map { it.absolutePath }}")
         return file.readText()
     }
 
@@ -62,25 +81,27 @@ class PreLoginSettingsTest {
      */
     @Test
     fun `the login screen's server line is plain text`() {
-        val src = code(uiSource("LoginScreen.kt"))
+        val host = code(uiSource("LoginScreen.kt"))
         assertTrue(
-            "LoginScreen no longer renders the bottom `Server: <host>` line at all. The " +
-                "owner asked for it to stay — as text.",
-            src.contains("R.string.bt_login_server_label"),
+            "The Android host no longer resolves `bt_login_server_label`, so the bottom " +
+                "`Server: <host>` line cannot be rendered at all. The owner asked for it to " +
+                "stay — as text.",
+            host.contains("R.string.bt_login_server_label"),
         )
+        val src = code(uiSource("BtLoginScreen.kt"))
         // Exactly what wraps the line: everything between the guard that decides
-        // whether to draw it and the string it draws.
-        val guard = "if (serverHost != null) {"
+        // whether to draw it and the end of the branch.
+        val guard = "if (serverLine != null) {"
         assertTrue(
-            "LoginScreen no longer guards the server line on `serverHost` alone. It must not " +
-                "depend on `onOpenServer` either — the line is display, and display does not " +
-                "need a destination.",
+            "BtLoginScreen no longer guards the server line on `serverLine` alone. It must " +
+                "not depend on a destination either — the line is display, and display does " +
+                "not need one.",
             src.contains(guard),
         )
-        val block = src.substringAfter(guard).substringBefore("R.string.bt_login_server_label")
+        val block = src.substringAfter(guard).substringBefore("} else {")
         assertTrue(
             "The bottom server line is not rendered by a plain `Text(`.",
-            block.contains("Text("),
+            block.contains("Text(") && block.contains("text = serverLine"),
         )
         listOf("TextButton", "Button(", "clickable", "onClick", "selectable").forEach { control ->
             assertTrue(
@@ -93,7 +114,7 @@ class PreLoginSettingsTest {
         assertTrue(
             "`onOpenServer` is wired to a control on the login screen itself. It belongs to " +
                 "the pre-login settings sheet's Server row and nowhere else.",
-            !src.contains("onClick = onOpenServer"),
+            !src.contains("onClick = onOpenServer") && !host.contains("onClick = onOpenServer"),
         )
     }
 
@@ -106,20 +127,31 @@ class PreLoginSettingsTest {
      */
     @Test
     fun `the login screen carries a settings gear that opens the pre-login sheet`() {
-        val src = code(uiSource("LoginScreen.kt"))
+        val src = code(uiSource("BtLoginScreen.kt"))
         assertTrue(
-            "LoginScreen no longer renders a settings gear — owner order 2026-08-08.",
-            src.contains("Icons.Outlined.Settings"),
+            "BtLoginScreen no longer renders a settings gear — owner order 2026-08-08.",
+            src.contains("imageVector = settingsIcon"),
         )
         assertTrue(
-            "The login screen's gear has no `bt_dest_settings` contentDescription. It is an " +
-                "unlabelled icon on a screen with no other chrome; the description is the " +
-                "only name it has.",
-            src.contains("contentDescription = stringResource(R.string.bt_dest_settings)"),
+            "The login screen's gear has no contentDescription. It is an unlabelled icon on " +
+                "a screen with no other chrome; the description is the only name it has.",
+            src.contains("contentDescription = strings.settingsLabel"),
+        )
+        val host = code(uiSource("LoginScreen.kt"))
+        assertTrue(
+            "The Android host stopped passing Material's gear. The glyph is a platform " +
+                "resource since W1 — the browser substitutes BtIcons.Settings — but Android " +
+                "must keep rendering exactly what it rendered before the move.",
+            host.contains("settingsIcon = Icons.Outlined.Settings"),
+        )
+        assertTrue(
+            "The Android host stopped resolving `bt_dest_settings`, so the gear has no name " +
+                "for TalkBack.",
+            host.contains("settingsLabel = stringResource(R.string.bt_dest_settings)"),
         )
         assertTrue(
             "The gear no longer opens PreLoginSettingsSheet.",
-            src.contains("PreLoginSettingsSheet("),
+            host.contains("PreLoginSettingsSheet("),
         )
     }
 

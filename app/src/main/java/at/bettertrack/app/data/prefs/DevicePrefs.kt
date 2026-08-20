@@ -87,15 +87,11 @@ fun chartModeFromName(raw: String?): BtChartMode =
 fun orientationModeFor(locked: Boolean): ScreenOrientationMode =
     if (locked) ScreenOrientationMode.LOCKED_PORTRAIT else ScreenOrientationMode.FOLLOW_SENSOR
 
-/**
- * Which colour table the app renders in (B2 design spec §1.3).
- *
- * Three-valued on purpose. AMOLED true-black is a **boolean under [Dark]**
- * ([DevicePrefs.trueBlack]), not a fourth entry — it overrides two neutrals and
- * nothing else, and keeping the enum at three means every `when` in the app
- * stays exhaustive when the toggle lands.
- */
-enum class BtThemeMode { System, Light, Dark }
+// [BtThemeMode] itself now lives in :shared/commonMain (web port, W1) so that
+// the theme which reads it compiles for the browser too. Its package did not
+// change, so neither this file nor any call site needed an import. The decoder
+// below stays here: it belongs to the SharedPreferences layer, which does not
+// move until W6 replaces it with multiplatform-settings (D11).
 
 /**
  * Decode a stored [BtThemeMode] name, falling back to [BtThemeMode.System] for
