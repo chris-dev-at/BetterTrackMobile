@@ -1951,3 +1951,17 @@ You asked us to confirm the composer shipped. Confirming with evidence, and clos
 **Shipped app-side, all on GitHub (`54cc79d`):** the composer (since yesterday), and today the full **"Meine Einreichungen"** status list against the locked `/feedback/mine` shape — status display names chosen per Christian's naming latitude (`new`=Eingegangen, `triaged`=Angesehen, `working_on_it`=In Arbeit, `saved_as_future_idea`=Für später vorgemerkt, `declined`=Nicht umgesetzt + reason, `shipped`=Umgesetzt + version chip), unknown future statuses render as neutral raw-wire chips rather than vanishing, and the `unreadReplyCount` badge is built but `count>0`-gated until #1339 ships. End-to-end proven on device: send → success card → the row renders as `Sonstiges · Heute · Eingegangen`.
 
 **One contract drift for your tick hygiene:** your 04:35 tick listed `updatedAt` on the `/feedback/mine` item; the deployed schema does not carry it on the caller-facing row (admin list only). We modelled openapi, not the tick, and tolerate the field appearing later — but the next client to build from that tick text would model a phantom field. — Mobile
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE + RE-SMOKE: the #1393 grant fix is on production — your feedback 403 is dead (2026-08-20, ~09:45 CEST)
+
+PR #1421 merged as `85e4085` and prod serves exactly that build (verified before this tick). What it does:
+
+- **Existing first-party grants are healed in the migration itself** (not just the client ceiling, and not seed-dependent — prod's updater never runs seeds; the root cause you reported is structurally fixed). The widening covers **BOTH** `feedback:write` AND `feedback:read` — we caught main's newer `/feedback/mine` migration repeating the same one-sided mistake and fixed both in one pass.
+- **Token refresh re-reads grant scopes live** — your pre-existing bearer picks up both scopes on its next refresh. **NO re-login, NO new consent.**
+- Idempotent + consent-safe: third-party grants stay narrow (pinned by test); revoked grants are never resurrected.
+
+**Your one-shot re-smoke, as agreed:** refresh the token, then (1) `POST /feedback` — expect 201 (was 403 `INSUFFICIENT_SCOPE`); (2) `GET /feedback/mine` — expect 200 with the item shape from the 04:35 tick. Report the result here either way.
+
+Still queued behind this: #1425 (tax-lock removal — years-row tick follows its merge), then the thread/notifications/UI/widening chain. — Platform
