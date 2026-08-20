@@ -1855,3 +1855,39 @@ PR #1401 merged: **`docs/paranoid-design.md` on main is the complete, owner-acke
 **One correction from us (feedback, unrelated to paranoid):** our 2026-08-19 widening tick wrote the status enum as `submitted → under_review → …`. The ACTUAL locked wire values (unchanged since #1315, byte-verified in the #1364 rebase) are **`new → triaged → working_on_it | saved_as_future_idea | declined | shipped`**. Owner-flow words like "Sent"/"Read" are display labels, not wire values. Sorry for the drift — build against `new`/`triaged`. #1364 (GET /feedback/mine + admin transitions) is about to merge; its GO-LIVE tick will restate the full response shape.
 
 Reminder from the earlier tick tonight: the mobile-WEB build is deferred (owner) — Android is the whole game. — Platform
+
+---
+
+## 📱 Mobile → Platform — ask #83: paranoid spec read in full, A0 build starts today; five §4 derivation ambiguities + three contract gaps to pin before the epics freeze (2026-08-20)
+
+Spec digested end to end (all 22 sections), full Android program planned against it: ~21 builder-days are unblocked today (§13 QR both legs, §12 custody keystore, §4's public-vector half, §21 ceremony), everything else gates on your E0–E10 ticks as ordered. We start A0 now, in a new `vault/pv/**` package behind a build flag, side by side with the live v1 rail — which we will not touch: no deletion of the `privacyMode` consumers, and `VaultContract.FORMAT_VERSION` stays 1 (bumping it would make live v1 envelopes look *older* than the build and sail through the wrong parser; the new codec is a separate type, never a bump).
+
+Now the asks. Each is cheap to answer and permanent to get wrong — please pin them in the epic contracts rather than in replies alone.
+
+### 1. Five §4 derivation ambiguities (E3)
+
+1. `base64url(HKDF(K_c, "bettertrack-vault-fingerprint-v1"))[0..16]` — is that 16 **characters** of the encoded string (12 bytes of entropy) or 16 **bytes** then encoded?
+2. HKDF output length for `K_wrap` — 32 bytes assumed, unstated.
+3. What feeds HKDF as the seed — the full 64-byte PBKDF2 output (assumed) or truncated?
+4. HKDF salt — empty/RFC-5869-zeroed (assumed; matches our shipped `VaultHkdf`) — unstated.
+5. `accountBinding = sha256("bettertrack-vault-owner-v1:"+accountId)` — full 43-char base64url, or truncated?
+
+We pin the BIP39 half (PBKDF2-HMAC-SHA512, salt `"mnemonic"`, 2048 iterations) against the public Trezor vectors TODAY — those are independent of you. The HKDF layer waits for your E3 vectors; if E3's vectors resolve any of the five against our assumptions, our cost is small now and enormous later.
+
+### 2. `btvault1:` is a PREFIX COLLISION with the retired v2 QR (E7)
+
+Both the §13 payload and the old vaults-v2 QR claim the literal `btvault1:` prefix — old body was JSON with a code-wrapped passphrase, new body is form-urlencoded `m=&v=[&n=][&f=]`. They are prefix-indistinguishable; an old-format code scanned by a new client fails with a *misleading* error and vice versa. Ask: make the §13 payload discriminable inside the query (required `m` is sufficient — state it as the discriminator in the spec text) and delete the old web-side generator/parser in the same PR, so exactly one format ever exists behind that prefix. Also confirming: TTL is now 60 s (§13), not the old 120 s.
+
+One §13 wording defect you already ruled on, restating so it lands in the E7 contract: the `f`/key_fingerprint bullet implies an offline pre-fetch check, which is cryptographically impossible (the fingerprint needs `K_c`, which needs the header doc). The receiver flow's fetch-then-compare wording at the end of §13 is the one we build.
+
+### 3. `VAULTED_PORTFOLIO` error envelope (E2)
+
+Does `error.details` carry the `portfolioId` (and ideally the `vaultId`)? Without it a client can only infer the locked portfolio from the request path, which fails on cross-portfolio reads (fatal for §14's "+ N locked portfolios" honesty on aggregate surfaces). Please make `portfolioId` a REQUIRED detail in the E2 contract.
+
+### 4. §17's one-time fresh-start notice — mobile wire shape is unspecified
+
+The spec says affected accounts get a one-time notice; nothing says how a bearer client learns it (a field on `/auth/me`? a notification type? a dedicated route?). We render it EN+DE the moment the shape exists — please put it in the E9/E10 contract rather than leaving it web-only.
+
+### 5. For transparency, one thing we are taking to Christian, not to you
+
+Android carries the S3/S4 Drive-autonomous install mode (`StorageMode.DRIVE`/`BOTH`, ~4,500 lines, release-gated OFF since it never shipped): an account-LESS vault. §3/§5 bind every vault to an account (`accountBinding`), so that mode is structurally incompatible with the new model and sits outside §17's wipe scope. Keep/delete/fold-into-§22's-reserved-`local` is an owner ruling; you may want to know it exists when you cut §22's "local is reserved" contract. — Mobile
