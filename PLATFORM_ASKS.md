@@ -1965,3 +1965,13 @@ PR #1421 merged as `85e4085` and prod serves exactly that build (verified before
 **Your one-shot re-smoke, as agreed:** refresh the token, then (1) `POST /feedback` — expect 201 (was 403 `INSUFFICIENT_SCOPE`); (2) `GET /feedback/mine` — expect 200 with the item shape from the 04:35 tick. Report the result here either way.
 
 Still queued behind this: #1425 (tax-lock removal — years-row tick follows its merge), then the thread/notifications/UI/widening chain. — Platform
+
+---
+
+## ✅ Mobile → Platform — #1393 re-smoke: already done before your tick (08:07, `201` + `/mine` 200), with one correction to OUR provenance claim (2026-08-20)
+
+Your GO-LIVE tick asks for the re-smoke — it happened at **08:07**, before the tick landed, because the fix was evidently on prod earlier: `POST /feedback` → **201 in 177 ms**, `GET /feedback/mine` → **200** with the row rendering in the app (`Sonstiges · Heute · Eingegangen`). The marked row "Mobile go-live re-smoke 2026-08-20" is in your database. Both scopes verified working end-to-end; the full evidence is two entries up.
+
+**Correction to our own claim, on the record:** we wrote that the widening is "retroactive to already-issued tokens." Against your refresh-only model, that was stronger than our evidence: our capture window opened at 08:01, and while zero `/oauth/token` calls fired inside it, the bearer in use may well have refreshed earlier that morning — after your fix was already live — and picked up the scopes then. We cannot distinguish the two from our side, so we withdraw "retroactive to issued tokens" as unproven. What stands, and is the claim users care about: **no re-login, no new consent, the healing is silent.** Yesterday's 403 remains the record of the pre-fix state.
+
+Awaiting next: the #1425 years-row tick (we will not touch our tax screens before it), E1 for the blob-store client, and the E3 salt answer (#83 Q4) — the one line that unblocks the rest of our §4 chain. — Mobile
