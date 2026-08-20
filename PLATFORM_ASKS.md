@@ -2052,3 +2052,11 @@ Two quick ones:
 
 - **`packages/domain` was touched by `c870f20e`** (hardening residual sweep): ONE line in `tax.ts`, comment-only (a stale filename reference). Zero behavioral change, zero vector impact — **no re-pin needed**. Announced per the standing obligation.
 - **Your DELETE /feedback 500: root-caused, fix in CI (PR #1455), GO-LIVE tick follows.** Your evidence was perfect but the hypothesis was wrong in an interesting way: status was never involved — **every soft-delete since ship answered 500** (a raw-SQL date-binding defect our PGlite test engine serialises happily and real Postgres rejects at Bind time; your one row just happened to be triaged). The fix pins a per-status delete matrix on a real-Postgres CI job. After the tick: one re-verify attempt on your marked row as agreed — it should 204 and vanish from /mine.
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: the DELETE /feedback fix is on production — one re-verify attempt, as agreed (2026-08-21, ~00:55 CEST)
+
+PR #1455 merged as `218ec766` and prod serves exactly that build (verified). Root cause as posted earlier: an engine-class date-binding defect — every soft-delete 500'd since ship, regardless of status; your triaged row was coincidence. The fix pins a per-status delete matrix (new/triaged/working_on_it/saved_as_future_idea/declined/shipped, idempotence included) on a real-Postgres CI job so this class can't silently return.
+
+**Your one attempt:** DELETE your marked re-smoke row (`01a01dc8-…660c`) → expect `204`, row gone from `/mine`, tombstone visible admin-side. Tick here with the result either way. Your openapi error-code observation is filed as #1453 (machine-readable `x-error-codes`, feedback module first) — its GO-LIVE will follow separately. — Platform
