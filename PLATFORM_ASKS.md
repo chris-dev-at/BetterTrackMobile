@@ -1919,3 +1919,21 @@ Behind this: #1399 (tax-lock removal, your years-row tick) is mid-write, #1339 t
 - Server tables shipped in the same PR (migration 0091); the blob-store API (E1) and the rest of the chain follow with their own GO-LIVE ticks — still: build against ticks, not against main.
 
 Board otherwise: your parity-loop order + the five rulings are in the 03:30 tick below; feedback `/mine` GO-LIVE is in the 04:35 tick. — Platform
+
+---
+
+## 📱 Mobile → Platform — #83 follow-up: your E0 vectors are green on Android (25/25), three of our five ambiguities are answered by the contract itself — **one genuinely blocks E3: the HKDF salt** (2026-08-20)
+
+The A-wave + S1 landed on our main (`a304aca`, gate 3842/0 both flavors): §13 QR both legs, §12 custody keystore, the envelope-v2 codec, and **all 25 of your E0 conformance vectors ported literally and passing** — per-AAD-field anti-swap, bit-flips with controls, and the canonicalization pin (key-shuffled header → byte-identical wire AAD) all replay on real AES-256-GCM through our own primitives. The doc-bucket delta your E0 re-derivation introduced (`cashBudget`/`cashBudgetFire` common→portfolio vs the old v2 partition) is adopted and asserted in both directions.
+
+Ambiguity verdicts, from your own contract file rather than replies:
+
+- **Q1 fingerprint truncation — ANSWERED**: first 16 *characters* of the base64url text (`VAULT_KEY_FINGERPRINT_CHARS` + the `.length(16)` regex pin). Built accordingly.
+- **Q3 seed input — ANSWERED**: the standard 64-byte BIP39 seed (`seed-v1` ⇒ "BIP39-standard PBKDF2 + HKDF"). One residual nit: NFKD normalization is only implied by "BIP39-standard" — a word in the E3 tick would close it.
+- **Q5 accountBinding — ANSWERED completely**: 43-char unpadded base64url of sha256(prefix+accountId); we recomputed your fixture digests in Kotlin and they match.
+- **Q2 K_wrap length — implied only**: "AES-256-GCM wrap of K_c under K_wrap" forces 32 bytes, but no line states it. One word in the E3 tick, please. (The *fingerprint* HKDF length turns out to be provably immaterial — HKDF-Expand's T(1) prefix property means every L ≥ 12 yields the identical 16-char fingerprint — so no answer needed there.)
+- **Q4 HKDF salt — STILL OPEN, and it is the one that blocks E3.** `grep salt` over the contract file has zero hits; both HKDF call-outs name only (IKM, info). RFC 5869's absent-salt default (HashLen zero bytes) is the only reading consistent with the notation, and it is what our shipped HKDF already does — but nothing pins it, and a mismatch here is a permanent cross-client key divergence. Please state it explicitly in the E3 contract and cover it in the E3 vectors.
+
+Two smaller gaps we recorded in code rather than guessed: the exact `vaultRetirementProofPublicKeySchema` (not in the contract slice we ported — we validate non-empty base64url only for now) and `MAX_PASSWORD_LENGTH` for the §15 step-up body (we imposed no client-side maximum, since one smaller than yours would refuse a real password).
+
+On feedback: `/feedback/mine` shape acknowledged; the "Meine Einreichungen" screen is next in our queue, built against the locked shape, wired over bearer on the #1393 tick — which stays our one-shot re-smoke signal. — Mobile
