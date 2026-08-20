@@ -5,6 +5,8 @@ import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.FeedbackContextDto
+import at.bettertrack.app.data.api.dto.FeedbackStatus
+import at.bettertrack.app.data.api.dto.MyFeedbackItemDto
 import at.bettertrack.app.data.api.dto.SubmitFeedbackRequest
 import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.StorageMode
@@ -35,13 +37,19 @@ import kotlinx.serialization.json.Json
  * history). If the platform ever retracts the seed, the same lever applies: both
  * flags back to `false`, rebuild, re-verify.
  *
- * ## v2 is NOT live — do not build against it
+ * ## v2's READ half is live since 2026-08-20
  *
- * `GET /feedback/mine`, the per-submission thread, `PATCH /feedback/{id}` and the
- * status/notification model are platform issues **#1338–#1342**, queued behind the
- * admin inbox (**#1316**). Only v1 — one fire-and-forget POST — exists. A
- * consequence worth knowing while #1316 is unmerged: submissions are stored and
- * readable in the database, but nobody can triage them in the admin panel yet.
+ * `GET /feedback/mine` is on production (platform #1338) and modelled here as
+ * [FeedbackRepository.mine]. The per-submission reply thread and
+ * `PATCH /feedback/{id}` (the rest of #1338–#1342) are still not live, which is why
+ * `unreadReplyCount` is carried but never drawn.
+ *
+ * The module now has a read/write scope split — `read: feedback:read`,
+ * `write: feedback:write` — and the app requests both halves; see
+ * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED] for the
+ * evidence trail that flipped the read half on 2026-08-20. A token minted before
+ * the platform's grant-widening can still answer `403 INSUFFICIENT_SCOPE`, and the
+ * submissions screen renders the catalogued sign-out/in copy for exactly that.
  */
 object FeedbackFlags {
     /**
@@ -183,6 +191,99 @@ fun feedbackContextOf(
     screen = screen?.takeIf { it.isNotBlank() },
 )
 
+// ── "Meine Einreichungen" — the read model behind GET /feedback/mine ─────────
+
+/**
+ * One row of the submissions list: the wire item, decoded once.
+ *
+ * A domain model rather than the raw DTO because three things have to happen
+ * exactly once and be testable without a phone: the two wire enums resolve (to
+ * `null` when the server names something this build does not know), the two ISO
+ * stamps parse to epoch millis, and the list sorts newest-first. Doing any of that
+ * in the composable would make it untestable and would re-parse on every
+ * recomposition.
+ *
+ * Both `…Wire` fields are kept ALONGSIDE the resolved enums, and that is the whole
+ * unknown-value strategy: [status] is `null` for a value the contract does not
+ * name, and [statusWire] still carries what the server actually said, so the chip
+ * can print it verbatim instead of vanishing or guessing.
+ *
+ * @param createdAtMs `null` only if the server sent an unparseable stamp. Such a
+ *   row sorts LAST rather than being dropped — a submission the user wrote is not
+ *   something to hide over a bad timestamp.
+ * @param unreadReplyCount RESERVED, always 0 today (no reply thread exists yet).
+ */
+data class FeedbackSubmission(
+    val id: String,
+    val category: FeedbackCategory?,
+    val categoryWire: String,
+    val subject: String?,
+    val message: String,
+    val status: FeedbackStatus?,
+    val statusWire: String,
+    val createdAtMs: Long?,
+    val lastStatusChangeAtMs: Long?,
+    val declinedReason: String?,
+    val shippedVersion: String?,
+    val unreadReplyCount: Int,
+)
+
+/**
+ * ISO-8601 instant → epoch millis, `null` for absent or unparseable.
+ *
+ * Two attempts, the same pair the portfolio and chat repositories use: `Instant`
+ * for the `…Z` form the platform emits today, `OffsetDateTime` for an explicit
+ * offset (`…+02:00`), which the contract's `format: date-time` also permits.
+ */
+private fun feedbackStampMs(iso: String?): Long? {
+    if (iso.isNullOrBlank()) return null
+    return try {
+        java.time.Instant.parse(iso).toEpochMilli()
+    } catch (_: java.time.format.DateTimeParseException) {
+        try {
+            java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+        } catch (_: java.time.format.DateTimeParseException) {
+            null
+        }
+    }
+}
+
+/** Decode one wire item. Blank optional strings become `null` — see [toSubmissions]. */
+internal fun MyFeedbackItemDto.toSubmission(): FeedbackSubmission = FeedbackSubmission(
+    id = id,
+    category = FeedbackCategory.fromWire(category),
+    categoryWire = category,
+    subject = subject?.trim()?.ifBlank { null },
+    message = message,
+    status = FeedbackStatus.fromWire(status),
+    statusWire = status,
+    createdAtMs = feedbackStampMs(createdAt),
+    lastStatusChangeAtMs = feedbackStampMs(lastStatusChangeAt),
+    // The two server invariants are honoured as READ rules, not re-asserted as
+    // writes: the contract says `declinedReason` is set only on `declined` and
+    // `shippedVersion` only on `shipped`, so a value arriving on any other status
+    // is a server bug — and one this client must not amplify by rendering a
+    // decline reason next to "In Arbeit". Dropping it is the conservative read.
+    declinedReason = declinedReason?.trim()?.ifBlank { null }
+        ?.takeIf { FeedbackStatus.fromWire(status) == FeedbackStatus.Declined },
+    shippedVersion = shippedVersion?.trim()?.ifBlank { null }
+        ?.takeIf { FeedbackStatus.fromWire(status) == FeedbackStatus.Shipped },
+    unreadReplyCount = unreadReplyCount.coerceAtLeast(0),
+)
+
+/**
+ * Decode the whole list, **newest first by `createdAt`**.
+ *
+ * The route documents no ordering, so the app imposes one rather than rendering
+ * whatever order a query planner happened to produce. Rows whose stamp did not
+ * parse sort last (they have no place on a timeline), and `id` is the tie-break so
+ * two submissions written in the same millisecond do not swap places between two
+ * loads of the same screen.
+ */
+internal fun List<MyFeedbackItemDto>.toSubmissions(): List<FeedbackSubmission> =
+    map { it.toSubmission() }
+        .sortedWith(compareByDescending<FeedbackSubmission> { it.createdAtMs ?: Long.MIN_VALUE }.thenBy { it.id })
+
 interface FeedbackRepository {
     /**
      * POST the draft. `Ok` means the server stored it (201); every failure is
@@ -195,6 +296,24 @@ interface FeedbackRepository {
      * sent when it was not is the single worst thing this screen could do.
      */
     suspend fun submit(draft: FeedbackDraft, context: FeedbackContextDto?): BtResult<Unit>
+
+    /**
+     * `GET /feedback/mine` — my submissions, newest first.
+     *
+     * Same error discipline as [submit], for the same reason and one more: every
+     * failure comes back verbatim as a [BtApiError], with no retry loop and no
+     * softening to an empty list. An empty list is a real and common answer here
+     * ("you have not written anything yet"), so a failure that returned one would
+     * be indistinguishable from the truth — and would tell a user whose token
+     * lacks `feedback:read` that their submissions do not exist.
+     *
+     * The `403 INSUFFICIENT_SCOPE` this returns on today's tokens is deliberately
+     * NOT special-cased here: it is an ordinary [BtApiError] whose code the app's
+     * error catalogue already owns copy for (`bt_err_insufficient_scope`, whose
+     * remedy — sign out and back in — is exactly right once the scope is
+     * requested). The screen renders it as its error state.
+     */
+    suspend fun mine(): BtResult<List<FeedbackSubmission>>
 }
 
 class DefaultFeedbackRepository(
@@ -220,4 +339,10 @@ class DefaultFeedbackRepository(
             is BtResult.Err -> r
         }
     }
+
+    override suspend fun mine(): BtResult<List<FeedbackSubmission>> =
+        when (val r = apiCall(json) { api.myFeedback() }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.submissions.toSubmissions())
+            is BtResult.Err -> r
+        }
 }

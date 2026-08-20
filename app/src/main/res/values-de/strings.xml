@@ -3018,10 +3018,46 @@
     <string name="bt_feedback_context_locale">Sprache</string>
     <string name="bt_feedback_context_screen">Geöffnet über</string>
     <string name="bt_feedback_sent_title">Nachricht gesendet</string>
-    <string name="bt_feedback_sent_body">Danke. In der App gibt es keinen Antwort-Verlauf — Rückfragen kommen per E-Mail.</string>
+    <string name="bt_feedback_sent_body">Danke. Unter „Meine Einreichungen“ siehst du, was daraus wird. Einen Antwort-Verlauf gibt es in der App weiterhin nicht — Rückfragen kommen per E-Mail.</string>
     <string name="bt_feedback_sent_again">Noch etwas schreiben</string>
     <string name="bt_feedback_offline">Keine Verbindung. Feedback geht sofort beim Tippen raus, das muss also warten — dein Text bleibt hier stehen.</string>
     <string name="bt_feedback_signed_out">Melde dich an, um Feedback zu senden.</string>
+
+    <!-- ==== MEINE EINREICHUNGEN · GET /feedback/mine (DE) ==== -->
+    <!-- Die Status-Bezeichnungen unten sind reine Anzeigetexte. Auf der Leitung
+         bleiben new | triaged | working_on_it | saved_as_future_idea | declined |
+         shipped in jeder Sprache; ein Status, den dieser Build nicht kennt, wird
+         wortwörtlich angezeigt statt geraten. -->
+    <string name="bt_feedback_mine_title">Meine Einreichungen</string>
+    <string name="bt_feedback_mine_open_sub">Sieh nach, was aus deinen Nachrichten wurde</string>
+    <string name="bt_feedback_mine_sent_link">Meine Einreichungen ansehen</string>
+    <string name="bt_feedback_mine_status_new">Eingegangen</string>
+    <string name="bt_feedback_mine_status_triaged">Angesehen</string>
+    <string name="bt_feedback_mine_status_working">In Arbeit</string>
+    <string name="bt_feedback_mine_status_future">Für später vorgemerkt</string>
+    <string name="bt_feedback_mine_status_declined">Nicht umgesetzt</string>
+    <string name="bt_feedback_mine_status_shipped">Umgesetzt</string>
+    <string name="bt_feedback_mine_empty_title">Noch keine Einreichungen</string>
+    <string name="bt_feedback_mine_empty_body">Schreib eine Nachricht auf der Seite davor — sie steht dann hier, samt Status.</string>
+    <string name="bt_feedback_mine_empty_action">Feedback schreiben</string>
+    <string name="bt_feedback_mine_signed_out">Melde dich an, um deine Einreichungen zu sehen.</string>
+    <string name="bt_feedback_mine_offline">Deine Einreichungen liegen am Server, diese Liste braucht also eine Verbindung.</string>
+    <string name="bt_feedback_mine_scope_title">Berechtigung fehlt</string>
+    <string name="bt_feedback_mine_today">Heute</string>
+    <string name="bt_feedback_mine_yesterday">Gestern</string>
+    <string name="bt_feedback_mine_sent_on">Gesendet %1$s</string>
+    <string name="bt_feedback_mine_changed_on">Status geändert %1$s</string>
+    <string name="bt_feedback_mine_no_subject">Ohne Betreff</string>
+    <string name="bt_feedback_mine_message_header">Deine Nachricht</string>
+    <string name="bt_feedback_mine_declined_header">Warum nicht</string>
+    <string name="bt_feedback_mine_shipped_header">Umgesetzt in</string>
+    <!-- RESERVIERT: Den Antwort-Verlauf gibt es noch nicht, unreadReplyCount ist
+         immer 0 — heute wird das nie vorgelesen. Es existiert, damit das Abzeichen
+         am Tag des Thread-Starts vollständig ist. -->
+    <plurals name="bt_feedback_mine_replies_cd">
+        <item quantity="one">%1$d ungelesene Antwort</item>
+        <item quantity="other">%1$d ungelesene Antworten</item>
+    </plurals>
 
     <!-- ==== TELEGRAM + DISCORD CHANNEL SETUP (DE) ==== -->
     <string name="bt_notif_tg_dc_section">Kanäle</string>

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -122,10 +124,12 @@ internal fun feedbackFailureMessage(error: BtApiError): BtMessage =
  * install having a BetterTrack account, because a Drive-autonomous install has no
  * account and therefore no bearer token to send.
  *
- * Only v1 exists — one POST, no history. `GET /feedback/mine`, the per-submission
- * thread, `PATCH /feedback/{id}` and the status/notification model are platform
- * #1338–#1342, queued behind the admin inbox #1316. Nothing on this screen may
- * promise them: the sent card says the message arrived, not that a reply will.
+ * The status LIST exists since 2026-08-20 ([FeedbackSubmissionsScreen],
+ * `GET /feedback/mine`) and is reachable from here twice: a footer row, and a link
+ * on the sent card. The per-submission reply THREAD and `PATCH /feedback/{id}`
+ * still do not exist, and nothing on this screen may promise them — the sent card
+ * says the message arrived and where to watch it, never that a reply will come
+ * back in the app.
  *
  * ## Three decisions worth stating
  *
@@ -151,6 +155,12 @@ internal fun feedbackFailureMessage(error: BtApiError): BtMessage =
 @Composable
 fun FeedbackScreen(
     onBack: () -> Unit,
+    /**
+     * Opens "Meine Einreichungen". Deliberately has NO default: a no-op default
+     * would let a future call site render both entry points as dead taps, and a
+     * row that looks like a link and does nothing is worse than no row at all.
+     */
+    onOpenSubmissions: () -> Unit,
     origin: String = FeedbackOrigin.SETTINGS,
 ) {
     val bt = BtTheme.colors
@@ -230,6 +240,7 @@ fun FeedbackScreen(
                         failure = null
                     },
                     onDone = onBack,
+                    onOpenSubmissions = onOpenSubmissions,
                 )
                 return@Column
             }
@@ -368,6 +379,29 @@ fun FeedbackScreen(
                 loading = sending,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── MY SUBMISSIONS ───────────────────────────────────────────────
+            // A footer row rather than a header action: the header's one slot is
+            // worth more to a back arrow on a full-screen sheet, and this is not
+            // something anyone opens the composer to do — it is what they reach
+            // for after writing, or when they come back a week later.
+            //
+            // Rendered UNCONDITIONALLY inside this screen, which is the whole
+            // point: the composer is itself behind `feedbackEntryVisible`, so this
+            // row inherits that gate by construction. A second copy of the rule
+            // here is exactly the drift `FeedbackEntryDisciplineTest` exists to
+            // prevent. It is not gated on being signed in either — the list has
+            // its own signed-out state, and hiding the door mid-session because a
+            // token expired would look like the feature was removed.
+            Spacer(Modifier.height(6.dp))
+            BtGroup {
+                BtGroupRow(
+                    icon = Icons.Outlined.Inbox,
+                    title = stringResource(R.string.bt_feedback_mine_title),
+                    subtitle = stringResource(R.string.bt_feedback_mine_open_sub),
+                    onClick = onOpenSubmissions,
+                )
+            }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -453,7 +487,11 @@ private fun ContextLine(labelRes: Int, value: String?) {
 }
 
 @Composable
-private fun SentCard(onAgain: () -> Unit, onDone: () -> Unit) {
+private fun SentCard(
+    onAgain: () -> Unit,
+    onDone: () -> Unit,
+    onOpenSubmissions: () -> Unit,
+) {
     val bt = BtTheme.colors
     BtCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -487,6 +525,21 @@ private fun SentCard(onAgain: () -> Unit, onDone: () -> Unit) {
                     text = stringResource(R.string.bt_action_done),
                     onClick = onDone,
                     modifier = Modifier.weight(1f),
+                )
+            }
+            // The natural next question after "sent" is "and then what?", so the
+            // status list is offered right here rather than only on the form the
+            // user has just left. A text button, not a third filled one: it is an
+            // aside, and three buttons of equal weight would make none of them the
+            // obvious one.
+            TextButton(
+                onClick = onOpenSubmissions,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.bt_feedback_mine_sent_link),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = bt.goldEmphasis,
                 )
             }
         }

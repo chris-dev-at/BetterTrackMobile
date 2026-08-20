@@ -58,6 +58,27 @@ object OAuthConfig {
     const val FEEDBACK_SCOPE_ENABLED: Boolean = true
 
     /**
+     * Whether to request `feedback:read` — the READ half of the feedback module,
+     * which `GET /feedback/mine` is gated on. **ON since 2026-08-20.**
+     *
+     * The flip signal was going to be #1393's board tick, but the evidence
+     * arrived first: on 2026-08-20 morning a bearer minted from a PRE-EXISTING
+     * consent answered `GET /feedback/mine` with 200 on production — so the
+     * grant-widening demonstrably ran, and a widened consent cannot hold a scope
+     * outside the client ceiling, which the live `openapi.json` also enumerates
+     * (`feedback:read` as the twenty-first bearer scope). That is the same
+     * evidence standard that flipped [FEEDBACK_SCOPE_ENABLED].
+     *
+     * Why these flags exist at all, for the next scope the platform ships:
+     * requesting a scope the serving OAuth client row does not allow does NOT
+     * quietly drop that scope, it **hard-rejects the entire authorize** ("This
+     * app's authorization request is invalid") — the failure that locked users
+     * out once over alerts:* ([ALERTS_SCOPES_ENABLED]). Never flip on a route
+     * merely existing; flip on the ceiling + the grant both being proven.
+     */
+    const val FEEDBACK_READ_SCOPE_ENABLED: Boolean = true
+
+    /**
      * Space-separated coarse module scopes the app requests — the FULL allowed
      * set for the BetterTrackMobile client (PLATFORM_ASKS ⚡ ACTIVATION blesses
      * requesting the full set so future grants need no app change). A token
@@ -82,10 +103,14 @@ object OAuthConfig {
      * feedback:write (`POST /feedback`, the in-app composer) is appended when
      * [FEEDBACK_SCOPE_ENABLED], which is on since the platform's 2026-08-19
      * go-live tick — bringing the requested set to the client's full 20.
+     * feedback:read (`GET /feedback/mine`) is the twenty-first the platform now
+     * publishes and is deliberately NOT requested yet — see
+     * [FEEDBACK_READ_SCOPE_ENABLED], which is the one-line flip once #1393 lands.
      */
     val SCOPES: String = requestedScopes(
         alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
         feedbackScopeEnabled = FEEDBACK_SCOPE_ENABLED,
+        feedbackReadScopeEnabled = FEEDBACK_READ_SCOPE_ENABLED,
     )
 
     /**
@@ -154,21 +179,37 @@ private const val V5_SCOPES =
  * last entry of the client's ceiling. `OAuthScopeTest` pins that the shipped scope
  * string contains it exactly once and that the set is exactly those 20.
  *
- * There is no read half. v1 is a single fire-and-forget POST; `GET /feedback/mine`
- * and the rest of feedback v2 (#1338–#1342) are not live, so no read scope exists
- * to request.
+ * The module split its scope in two on 2026-08-20 when the read half went live —
+ * `read: feedback:read`, `write: feedback:write`. This constant is the write half
+ * only; the read half is [FEEDBACK_READ_SCOPE], held out for now.
  */
 private const val FEEDBACK_SCOPE = "feedback:write"
 
 /**
+ * In-app feedback, READ half (`GET /feedback/mine`, platform #1338). Appended when
+ * [OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED], which is `false` today: the scope is
+ * published in the client's ceiling but not yet granted on consents that already
+ * exist, and #1393 (in final review) is the fix. See that flag for why requesting
+ * it early is a whole-login hard-reject rather than a soft miss.
+ *
+ * A separate constant from [FEEDBACK_SCOPE] and not a two-scope pair like
+ * [ALERTS_SCOPES], because the two halves move on different days: the write half
+ * has been live since 2026-08-19 and must not be taken hostage by the read half's
+ * grant problem.
+ */
+private const val FEEDBACK_READ_SCOPE = "feedback:read"
+
+/**
  * The scope string the app requests: the client's full allowed set, with alerts:*
- * appended only when [alertsScopesEnabled] and feedback:write only when
- * [feedbackScopeEnabled]. Kept a pure top-level function so the behaviour is
- * unit-testable without initializing [OAuthConfig] (which reads BuildConfig).
+ * appended only when [alertsScopesEnabled], feedback:write only when
+ * [feedbackScopeEnabled] and feedback:read only when [feedbackReadScopeEnabled].
+ * Kept a pure top-level function so the behaviour is unit-testable without
+ * initializing [OAuthConfig] (which reads BuildConfig).
  */
 internal fun requestedScopes(
     alertsScopesEnabled: Boolean,
     feedbackScopeEnabled: Boolean = false,
+    feedbackReadScopeEnabled: Boolean = false,
 ): String = buildString {
     append(BASE_SCOPES)
     if (alertsScopesEnabled) append(' ').append(ALERTS_SCOPES)
@@ -179,4 +220,9 @@ internal fun requestedScopes(
     // request should never arrive by forgetting an argument, and the default is
     // also the safe lever if the platform ever retracts the seed.
     if (feedbackScopeEnabled) append(' ').append(FEEDBACK_SCOPE)
+    // NOT requested today. Same defaulted-false discipline, and here it is load
+    // bearing rather than precautionary: the grant on existing consents is the
+    // thing that is missing, so an accidental append breaks sign-in for the very
+    // users who already have a token.
+    if (feedbackReadScopeEnabled) append(' ').append(FEEDBACK_READ_SCOPE)
 }

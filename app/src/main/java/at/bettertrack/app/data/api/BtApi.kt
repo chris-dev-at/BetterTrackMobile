@@ -81,6 +81,7 @@ import at.bettertrack.app.data.api.dto.DiscordSettingsDto
 import at.bettertrack.app.data.api.dto.DiscordTestResponse
 import at.bettertrack.app.data.api.dto.DiscordWebhookRequest
 import at.bettertrack.app.data.api.dto.FeedbackCreatedResponse
+import at.bettertrack.app.data.api.dto.MyFeedbackResponse
 import at.bettertrack.app.data.api.dto.TelegramConfirmResponse
 import at.bettertrack.app.data.api.dto.TelegramSettingsDto
 import at.bettertrack.app.data.api.dto.FriendGroupDto
@@ -1895,12 +1896,34 @@ interface BtApi {
      * unknown-error path. Do not guess one into `BtErrorCopy`; the composer keys its
      * own rate-limit sentence off the HTTP status instead.
      *
-     * `GET /feedback/mine` is intentionally absent: not live (feedback v2 is platform
-     * #1338–#1342, queued behind the admin inbox #1316).
+     * The read half is [myFeedback], live since 2026-08-20.
      */
     @Headers("Content-Type: application/json")
     @POST("feedback")
     suspend fun submitFeedback(
         @Body body: SubmitFeedbackRequest,
     ): Response<FeedbackCreatedResponse>
+
+    // ── Feedback v2, read half (platform #1338, live on production 2026-08-20) ──
+
+    /**
+     * Every submission the caller owns, with its lifecycle status —
+     * `200 { submissions: [ … ] }`, verified against production's `openapi.json`
+     * on 2026-08-20 (`MyFeedbackResponse`, `additionalProperties: false`, no
+     * pagination, no `updatedAt` on the caller-facing row).
+     *
+     * Session-cookie AND bearer reachable. The module split its scope in two when
+     * this landed — `read: feedback:read`, `write: feedback:write` — and the
+     * app does **not** request `feedback:read` yet, so on today's tokens this call
+     * answers `403 INSUFFICIENT_SCOPE`. That is a known, designed-for state, not a
+     * bug: the submissions screen renders the catalogued sign-out/in copy for it.
+     * See [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED]
+     * for why the scope is held out and what flips it.
+     *
+     * No pagination parameter exists on this route, so there is no page loop to
+     * write; the server returns the caller's whole (small) history in one body.
+     * [feedback:read]
+     */
+    @GET("feedback/mine")
+    suspend fun myFeedback(): Response<MyFeedbackResponse>
 }

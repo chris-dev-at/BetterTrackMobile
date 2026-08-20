@@ -220,11 +220,25 @@ import kotlinx.serialization.Serializable
  * re-wire, and is what keeps a Drive-autonomous install from reaching a composer it
  * has no token to send from.
  *
- * v1 only: there is deliberately no route for a submission list or thread —
- * `GET /feedback/mine`, `PATCH /feedback/{id}` and the status model are platform
- * #1338–#1342 and are NOT live.
+ * The submission LIST is [SettingsFeedbackMineRoute]. There is still no route for
+ * a per-submission reply thread or for `PATCH /feedback/{id}` — the rest of
+ * #1338–#1342 is not live.
  */
 @Serializable data class SettingsFeedbackRoute(val origin: String)
+
+/**
+ * "Meine Einreichungen" — the feedback status list (`GET /feedback/mine`,
+ * platform #1338, live 2026-08-20).
+ *
+ * No parameters: the route reads the caller's own submissions from the credential,
+ * so there is nothing to address. Reached only from [SettingsFeedbackRoute] (a
+ * footer row on the composer, and a link on the post-send card), which is what
+ * makes it inherit the composer's own
+ * [at.bettertrack.app.data.repo.feedbackEntryVisible] gate rather than needing a
+ * second copy of that rule — a Drive-autonomous install has no door to the
+ * composer and therefore none to this.
+ */
+@Serializable data object SettingsFeedbackMineRoute
 
 /**
  * The in-app widget builder (widget redesign 2026-08-16): preview every

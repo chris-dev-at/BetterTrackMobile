@@ -15,10 +15,13 @@ import org.junit.Test
  * scope was for. alerts:* taught the app that in 2026-07; feedback:write was held
  * out for the same reason until 2026-08-19.
  *
- * Both of those are now seeded and live, so the shipped request is the client's
- * full 20-scope ceiling. These tests lock that, and lock the levers that take a
- * scope back out if the platform ever retracts a seed — all without initializing
- * OAuthConfig (which reads BuildConfig).
+ * All three are now seeded and live, so the shipped request is 21 scopes.
+ * `feedback:read` is the twenty-first: its route went live 2026-08-20 and the
+ * #1393 grant-widening was PROVEN live the same morning — a pre-existing bearer
+ * answered `GET /feedback/mine` with 200, and a widened consent cannot hold a
+ * scope outside the client ceiling. These tests lock all of that, and lock the levers
+ * that take a scope back out if the platform ever retracts a seed — all without
+ * initializing OAuthConfig (which reads BuildConfig).
  */
 class OAuthScopeTest {
 
@@ -105,19 +108,25 @@ class OAuthScopeTest {
         // list is the kind of thing that hard-rejects a whole login. Checked on the
         // WIDEST string the builder can produce — every optional append is on — so
         // a separator bug in the last-appended scope cannot hide behind a flag.
-        val scopes = requestedScopes(alertsScopesEnabled = true, feedbackScopeEnabled = true)
+        val scopes = requestedScopes(
+            alertsScopesEnabled = true,
+            feedbackScopeEnabled = true,
+            feedbackReadScopeEnabled = true,
+        )
         assertFalse(scopes.contains("  "))
         assertTrue(scopes == scopes.trim())
         assertTrue(scopes.split(" ").all { it.isNotBlank() && it.contains(':') })
-        // 14 legacy + 5 v5 + feedback:write = the client's full allowed set.
-        assertTrue(scopes.split(" ").size == 20)
-        assertTrue(scopes.split(" ").toSet().size == 20) // no duplicates
+        // 14 legacy + 5 v5 + feedback:write + feedback:read = the widest the
+        // builder can produce, which is also the client's published ceiling — and
+        // since 2026-08-20 the SHIPPED request too (see the 21-scope tests below).
+        assertTrue(scopes.split(" ").size == 21)
+        assertTrue(scopes.split(" ").toSet().size == 21) // no duplicates
     }
 
     // ── The production request (the gate that used to live here) ─────────────
 
     @Test
-    fun `production requests the full 20 including the cash scopes`() {
+    fun `production requests the full 21 including the cash scopes`() {
         // THE tripwire for the INSUFFICIENT_SCOPE bug: prod used to be the one
         // origin that requested only 14, so every /cash endpoint 403'd there.
         // There is no origin-dependent branch any more — one scope string, every
@@ -126,6 +135,7 @@ class OAuthScopeTest {
         val scopes = requestedScopes(
             alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
             feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+            feedbackReadScopeEnabled = OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED,
         )
         assertTrue(scopes.contains("cash:read"))
         assertTrue(scopes.contains("cash:write"))
@@ -134,23 +144,27 @@ class OAuthScopeTest {
         assertTrue(scopes.contains("vault:sync"))
         assertTrue(scopes.contains("alerts:read"))
         assertTrue(scopes.contains("feedback:write"))
-        assertEquals(20, scopes.split(" ").size)
+        assertTrue(scopes.contains("feedback:read"))
+        assertEquals(21, scopes.split(" ").size)
     }
 
     @Test
-    fun `the shipped request is exactly the client's 20-scope ceiling`() {
+    fun `the shipped request is exactly the client's 21-scope ceiling`() {
         // What the app asks for as configured today, on every backend — nothing
         // about the effective API origin (prod, the dev stack, a LAN box) can
-        // change it. Both flags are consts, so this still needs no OAuthConfig
+        // change it. All flags are consts, so this still needs no OAuthConfig
         // init (which would read BuildConfig).
         //
-        // Grew from 19 to 20 on 2026-08-19 when `feedback:write` went live. The
-        // set below is the client's ceiling verbatim: production's live
-        // `openapi.json` enumerates exactly these twenty in its scope enum, with
-        // `feedback:write` last.
+        // Grew from 19 to 20 on 2026-08-19 when `feedback:write` went live, and
+        // to 21 later on 2026-08-20 when the #1393 grant-widening was PROVEN on
+        // production (a pre-existing bearer answered `GET /feedback/mine` 200;
+        // a widened consent cannot hold a scope outside the client ceiling).
+        // This assertion is what keeps the set deliberate — one flag flip fails
+        // this test and names the decision.
         val scopes = requestedScopes(
             alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
             feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+            feedbackReadScopeEnabled = OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED,
         )
             .split(" ")
             .toSet()
@@ -168,6 +182,7 @@ class OAuthScopeTest {
                 "mirrorchain:read", "mirrorchain:write",
                 "vault:sync",
                 "feedback:write",
+                "feedback:read",
             ),
             scopes,
         )
@@ -216,5 +231,68 @@ class OAuthScopeTest {
         assertTrue(scopes.contains("portfolio:read"))
         assertTrue(scopes.contains("vault:sync"))
         assertEquals(listOf("feedback:write"), scopes.filter { it.startsWith("feedback:") })
+    }
+
+    // ── feedback:read (platform #1338 live, #1393 widening PROVEN live) ──────
+    // The module split into `read: feedback:read` / `write: feedback:write` on
+    // 2026-08-20 when `GET /feedback/mine` went live. The read scope is published
+    // in the client's ceiling AND the grant-widening was proven on production the
+    // same morning: a bearer from a pre-existing consent answered /feedback/mine
+    // with 200, and a widened consent cannot hold a scope outside the ceiling.
+    // Same shape of tripwire as the two above, third time — now pinning ON.
+
+    @Test
+    fun `feedback read is requested now that the grant widening is proven live`() {
+        assertTrue(OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED)
+        assertTrue(
+            requestedScopes(
+                alertsScopesEnabled = OAuthConfig.ALERTS_SCOPES_ENABLED,
+                feedbackScopeEnabled = OAuthConfig.FEEDBACK_SCOPE_ENABLED,
+                feedbackReadScopeEnabled = OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED,
+            ).contains("feedback:read"),
+        )
+    }
+
+    @Test
+    fun `omitting the feedback read argument cannot widen the request by accident`() {
+        // The write half is ON and passed explicitly at the shipped call site; the
+        // read half must not ride along on a forgotten argument.
+        val scopes = requestedScopes(alertsScopesEnabled = true, feedbackScopeEnabled = true)
+        assertFalse(scopes.contains("feedback:read"))
+        assertTrue(scopes.contains("feedback:write"))
+    }
+
+    @Test
+    fun `flipping the feedback read flag appends exactly one scope and keeps the rest`() {
+        // The flip's exact effect, kept as a property test: twenty plus
+        // feedback:read, and nothing else moves.
+        val before = requestedScopes(alertsScopesEnabled = true, feedbackScopeEnabled = true)
+            .split(" ")
+        val after = requestedScopes(
+            alertsScopesEnabled = true,
+            feedbackScopeEnabled = true,
+            feedbackReadScopeEnabled = true,
+        ).split(" ")
+        assertEquals(21, after.size)
+        assertEquals(21, after.toSet().size)
+        assertEquals(listOf("feedback:read"), after - before.toSet())
+        assertEquals(
+            listOf("feedback:write", "feedback:read"),
+            after.filter { it.startsWith("feedback:") },
+        )
+    }
+
+    @Test
+    fun `the two feedback halves are independent levers`() {
+        // The write half has been live since 2026-08-19 and must not be taken
+        // hostage by the read half's grant problem — nor the other way round if
+        // the platform ever retracts the write seed.
+        val readOnly = requestedScopes(
+            alertsScopesEnabled = true,
+            feedbackScopeEnabled = false,
+            feedbackReadScopeEnabled = true,
+        )
+        assertTrue(readOnly.contains("feedback:read"))
+        assertFalse(readOnly.contains("feedback:write"))
     }
 }

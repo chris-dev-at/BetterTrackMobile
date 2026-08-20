@@ -3208,10 +3208,46 @@
     <string name="bt_feedback_context_locale">Language</string>
     <string name="bt_feedback_context_screen">Opened from</string>
     <string name="bt_feedback_sent_title">Message sent</string>
-    <string name="bt_feedback_sent_body">Thanks. There is no reply thread in the app, so any follow-up question comes by email.</string>
+    <string name="bt_feedback_sent_body">Thanks. You can follow what happens to it under My submissions. There is still no reply thread in the app, so any follow-up question comes by email.</string>
     <string name="bt_feedback_sent_again">Write another</string>
     <string name="bt_feedback_offline">No connection. Feedback is sent as you press the button, so this needs to wait — your text stays here.</string>
     <string name="bt_feedback_signed_out">Sign in to send feedback.</string>
+
+    <!-- ==== MY SUBMISSIONS · GET /feedback/mine (EN) ==== -->
+    <!-- The STATUS labels below are display copy only. The wire values stay
+         new | triaged | working_on_it | saved_as_future_idea | declined | shipped
+         in every language, and a status this build does not know is printed
+         verbatim rather than guessed at. -->
+    <string name="bt_feedback_mine_title">My submissions</string>
+    <string name="bt_feedback_mine_open_sub">See what happened to what you sent</string>
+    <string name="bt_feedback_mine_sent_link">See my submissions</string>
+    <string name="bt_feedback_mine_status_new">Received</string>
+    <string name="bt_feedback_mine_status_triaged">Reviewed</string>
+    <string name="bt_feedback_mine_status_working">In progress</string>
+    <string name="bt_feedback_mine_status_future">Saved for later</string>
+    <string name="bt_feedback_mine_status_declined">Not planned</string>
+    <string name="bt_feedback_mine_status_shipped">Shipped</string>
+    <string name="bt_feedback_mine_empty_title">Nothing sent yet</string>
+    <string name="bt_feedback_mine_empty_body">Write a message on the previous screen and it shows up here with its status.</string>
+    <string name="bt_feedback_mine_empty_action">Write feedback</string>
+    <string name="bt_feedback_mine_signed_out">Sign in to see your submissions.</string>
+    <string name="bt_feedback_mine_offline">Your submissions are stored on the server, so this list needs a connection.</string>
+    <string name="bt_feedback_mine_scope_title">Permission missing</string>
+    <string name="bt_feedback_mine_today">Today</string>
+    <string name="bt_feedback_mine_yesterday">Yesterday</string>
+    <string name="bt_feedback_mine_sent_on">Sent %1$s</string>
+    <string name="bt_feedback_mine_changed_on">Status changed %1$s</string>
+    <string name="bt_feedback_mine_no_subject">No subject</string>
+    <string name="bt_feedback_mine_message_header">Your message</string>
+    <string name="bt_feedback_mine_declined_header">Why not</string>
+    <string name="bt_feedback_mine_shipped_header">Shipped in</string>
+    <!-- RESERVED: the reply thread is not live, so unreadReplyCount is always 0
+         and this is never spoken today. It exists so the badge is complete the
+         day threads ship. -->
+    <plurals name="bt_feedback_mine_replies_cd">
+        <item quantity="one">%1$d unread reply</item>
+        <item quantity="other">%1$d unread replies</item>
+    </plurals>
 
     <!-- ==== TELEGRAM + DISCORD CHANNEL SETUP (EN) ==== -->
     <string name="bt_notif_tg_dc_section">Channels</string>

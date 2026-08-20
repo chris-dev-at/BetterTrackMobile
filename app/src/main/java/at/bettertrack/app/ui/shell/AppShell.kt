@@ -1942,7 +1942,18 @@ private fun BtSheetHost(
         }
         btSheet<at.bettertrack.app.navigation.SettingsFeedbackRoute> { entry ->
             val route = entry.toRoute<at.bettertrack.app.navigation.SettingsFeedbackRoute>()
-            at.bettertrack.app.ui.feedback.FeedbackScreen(onBack = back, origin = route.origin)
+            at.bettertrack.app.ui.feedback.FeedbackScreen(
+                onBack = back,
+                origin = route.origin,
+                onOpenSubmissions = {
+                    navController.navigate(
+                        at.bettertrack.app.navigation.SettingsFeedbackMineRoute,
+                    )
+                },
+            )
+        }
+        btSheet<at.bettertrack.app.navigation.SettingsFeedbackMineRoute> {
+            at.bettertrack.app.ui.feedback.FeedbackSubmissionsScreen(onBack = back)
         }
         // Connections & authorized apps, native (owner order 2026-08-08). Drive
         // is NOT reimplemented here — the Connections screen hands off in-app to
