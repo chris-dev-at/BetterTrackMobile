@@ -88,21 +88,45 @@ class FeedbackTest {
     // ── The wire enum ───────────────────────────────────────────────────────────
 
     @Test
-    fun `the category wire values are exactly feature, bug and other`() {
+    fun `the category wire values are the deployed enum, in its order`() {
+        // Copied from production's `openapi.json` on 2026-08-20, not from the
+        // widening's prose: `CreateFeedbackRequest.category.enum` is
+        // ["feature","bug","other","help","improvement"] and `MyFeedbackResponse`'s
+        // row declares the identical five.
         assertEquals(
-            listOf("feature", "bug", "other"),
+            listOf("feature", "bug", "other", "help", "improvement"),
             FeedbackCategory.entries.map { it.wire },
         )
     }
 
     @Test
+    fun `the widening left the first three wire values byte-unchanged`() {
+        // THE compatibility assertion. Platform #1400 APPENDED two values; had it
+        // renamed one, every submission already in the account would read back
+        // under a category this build cannot name — and the row would silently
+        // start printing a raw wire word.
+        assertEquals("feature", FeedbackCategory.Feature.wire)
+        assertEquals("bug", FeedbackCategory.Bug.wire)
+        assertEquals("other", FeedbackCategory.Other.wire)
+    }
+
+    @Test
+    fun `help and improvement are known values now, not unknown ones`() {
+        assertEquals(FeedbackCategory.Help, FeedbackCategory.fromWire("help"))
+        assertEquals(FeedbackCategory.Improvement, FeedbackCategory.fromWire("improvement"))
+        // …and the tolerance path still exists for whatever the platform adds next.
+        assertNull(FeedbackCategory.fromWire("question"))
+    }
+
+    @Test
     fun `the wire enum is never translated`() {
-        // The German UI reads "Feature/Verbesserung · Bug · Sonstiges" and still
-        // sends these three ASCII values. A localised category is a 400.
+        // The German UI reads "Feature · Verbesserung · Bug · Hilfe · Sonstiges"
+        // and still sends these five ASCII values. A localised category is a 400.
         FeedbackCategory.entries.forEach {
             assertTrue(it.wire.all { c -> c in 'a'..'z' })
         }
         assertNull(FeedbackCategory.fromWire("Sonstiges"))
+        assertNull(FeedbackCategory.fromWire("Verbesserung"))
         assertNull(FeedbackCategory.fromWire(null))
         assertEquals(FeedbackCategory.Other, FeedbackCategory.fromWire("other"))
     }
@@ -150,6 +174,17 @@ class FeedbackTest {
         assertEquals(120, FEEDBACK_SUBJECT_MAX)
     }
 
+    @Test
+    fun `the open-submission cap is mirrored but never enforced client-side`() {
+        // `FEEDBACK_OPEN_SUBMISSION_LIMIT = 20` (platform #1400). It is a number the
+        // refusal copy quotes, NOT a rule the composer may apply: "open" is the
+        // server's own definition and this app cannot compute it, so a draft is
+        // sendable regardless of how many submissions exist. Pre-refusing on a
+        // guess would block a user the server would have accepted.
+        assertEquals(20, FEEDBACK_OPEN_SUBMISSION_LIMIT)
+        assertTrue(FeedbackDraft(category = FeedbackCategory.Help, message = "?").isSendable())
+    }
+
     // ── The request body ────────────────────────────────────────────────────────
 
     @Test
@@ -160,6 +195,42 @@ class FeedbackTest {
             """{"category":"feature","message":"add dark mode"}""",
             json.encodeToString(body),
         )
+    }
+
+    @Test
+    fun `the two widened categories serialise as their own wire words`() {
+        // Byte-exact, same standard as the three that came before: the whole point
+        // of `improvement` existing is that it is NOT `feature`, and a body that
+        // sent the old value would look perfectly correct on this phone while
+        // filing every improvement under the wrong heading on the server.
+        assertEquals(
+            """{"category":"improvement","message":"make the chart scrub smoother"}""",
+            json.encodeToString(
+                FeedbackDraft(
+                    category = FeedbackCategory.Improvement,
+                    message = "make the chart scrub smoother",
+                ).toRequest(null)!!,
+            ),
+        )
+        assertEquals(
+            """{"category":"help","message":"where do I set my tax rate?"}""",
+            json.encodeToString(
+                FeedbackDraft(
+                    category = FeedbackCategory.Help,
+                    message = "where do I set my tax rate?",
+                ).toRequest(null)!!,
+            ),
+        )
+    }
+
+    @Test
+    fun `every category produces a body whose category is its own wire value`() {
+        // The general form, so a sixth value cannot ship mapped to a neighbour's.
+        FeedbackCategory.entries.forEach { category ->
+            val body = FeedbackDraft(category = category, message = "m").toRequest(null)!!
+            assertEquals(category.wire, body.category)
+            assertTrue(json.encodeToString(body).contains(""""category":"${category.wire}""""))
+        }
     }
 
     @Test

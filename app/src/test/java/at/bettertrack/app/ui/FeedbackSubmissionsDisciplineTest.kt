@@ -148,6 +148,57 @@ class FeedbackSubmissionsDisciplineTest {
         assertTrue(declaration.contains("when (category)"))
     }
 
+    /**
+     * ## 3. A delete may not report its own outcome from the status code
+     *
+     * `DELETE /feedback/{id}` is idempotent — the deployed contract declares 204 and
+     * no 404 — so a success proves nothing about the row: an id that was already
+     * gone answers 204 too. The only honest source for "it is deleted" is a re-read
+     * of `/feedback/mine`, and the only honest source for "it is still there" is the
+     * same list.
+     *
+     * A behavioural test cannot see the difference. Both spellings look identical on
+     * a phone whose delete worked, which is every phone until the day one does not —
+     * and on that day the ungated spelling says "Gelöscht." about a submission still
+     * sitting in the list. So the ordering is asserted in the source: the confirm
+     * path calls the route, THEN re-reads, THEN decides.
+     */
+    @Test
+    fun `the delete outcome is decided by a re-read, not by the status code`() {
+        val source = code(screen)
+        val delete = source.indexOf("repo.delete(")
+        assertTrue("the delete call is gone — was the flow removed?", delete >= 0)
+        val refetch = source.indexOf("fetch()", delete)
+        val deleted = source.indexOf("bt_feedback_mine_deleted", delete)
+        assertTrue("a delete must be followed by a re-read of the list", refetch > delete)
+        assertTrue(
+            "the \"deleted\" message must come AFTER the re-read that justifies it",
+            deleted > refetch,
+        )
+        // …and the verdict must actually be read off the fresh list.
+        assertTrue(
+            "the outcome must be decided from the re-read list, by id",
+            source.contains("after.none { it.id == target.id }"),
+        )
+    }
+
+    @Test
+    fun `deleting is never offered while offline`() {
+        // There is no queue behind this call, exactly as there is none behind the
+        // composer's Send. An enabled destructive button with no connection produces
+        // a network error the screen could have predicted — and the prediction is
+        // cheaper and kinder than the error.
+        val source = code(screen)
+        assertTrue(
+            "the delete affordance must be gated on being online",
+            source.contains("deleteEnabled = online && !deleting"),
+        )
+        assertTrue(
+            "the confirmation's destructive button must be gated too",
+            source.contains("enabled = online && !deleting"),
+        )
+    }
+
     @Test
     fun `an unknown wire status still reaches the chip`() {
         // The other half of the unknown-value contract: `fromWire` returns null,

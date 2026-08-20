@@ -1926,4 +1926,29 @@ interface BtApi {
      */
     @GET("feedback/mine")
     suspend fun myFeedback(): Response<MyFeedbackResponse>
+
+    /**
+     * Withdraw one of MY submissions — `204 No Content` (platform #1400, live on
+     * production 2026-08-20).
+     *
+     * Byte-checked against the deployed `openapi.json` on 2026-08-20. The route's
+     * own summary is *"Hide one caller-owned submission while retaining an
+     * admin-visible tombstone"*: it is a SOFT delete, ownership-scoped, and the row
+     * leaves `GET /feedback/mine` while the maintainer keeps the record. The
+     * declared responses are `204`, `400 VALIDATION_ERROR`, `401` and the generic
+     * envelope — **no 404**, which is the schema stating the idempotency: deleting
+     * an id that is already gone is a 204, not an error.
+     *
+     * Because of that, a 204 alone says nothing about the row, so
+     * [at.bettertrack.app.data.repo.FeedbackRepository.delete]'s caller re-reads
+     * [myFeedback] and reports what the LIST says — the same discipline
+     * `settings/remembered-devices` forced on the trusted-devices screen.
+     *
+     * Session-cookie AND bearer reachable; the bearer path needs `feedback:write`,
+     * which this app already holds for `POST /feedback`, so nothing about consent
+     * changes.
+     * [feedback:write]
+     */
+    @DELETE("feedback/{id}")
+    suspend fun deleteFeedback(@Path("id") id: String): Response<Unit>
 }

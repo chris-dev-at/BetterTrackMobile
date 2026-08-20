@@ -261,6 +261,14 @@ object BtErrorCopy {
         "WEBHOOK_NOT_FOUND" to R.string.bt_err_webhook_not_found,
         "WEBHOOK_LIMIT_REACHED" to R.string.bt_err_webhook_limit_reached,
 
+        // ── In-app feedback ──
+        // The open-submission cap (platform #1400): 20 open requests at once, and
+        // the copy names the two ways out — wait for triage, or delete one from
+        // "My submissions". It is catalogued rather than left to the generic
+        // fallback precisely because the fallback appends the server's ENGLISH
+        // sentence, which on a German phone is the failure P0-4 exists to prevent.
+        "FEEDBACK_OPEN_LIMIT" to R.string.bt_err_feedback_open_limit,
+
         // ── Data export ──
         "EXPORT_TOKEN_REQUIRED" to R.string.bt_err_export_token_required,
         "EXPORT_NOT_FOUND" to R.string.bt_err_export_not_found,

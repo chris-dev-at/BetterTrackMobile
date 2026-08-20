@@ -2266,6 +2266,12 @@
     <string name="bt_err_export_not_found">Dieser Export ist nicht mehr verfügbar.</string>
     <string name="bt_err_export_rate_limited">Du kannst einen Datenexport pro Tag anfordern. Bitte versuche es später erneut.</string>
 
+    <!-- Feedback (Plattform #1400). Die 20 ist FEEDBACK_OPEN_SUBMISSION_LIMIT und
+         steht ausgeschrieben da: Katalogcodes mit Formatargument verbrauchen es für
+         den englischen Servertext. FeedbackFailureCopyTest hält Zahl und Konstante
+         zusammen. -->
+    <string name="bt_err_feedback_open_limit">Du hast 20 offene Anfragen. Warte, bis einige angesehen wurden, oder lösche eine unter „Meine Einreichungen“.</string>
+
     <!-- Offline-Warteschlange: Idempotenzschlüssel -->
     <string name="bt_err_idempotency_key_invalid">Diese Änderung konnte nicht übermittelt werden (ihr Sync-Schlüssel wurde abgelehnt). Entferne sie und lege sie neu an.</string>
     <string name="bt_err_idempotency_key_mismatch">Diese Änderung wurde bereits in anderer Form übermittelt. Entferne sie und lege sie neu an.</string>
@@ -2988,18 +2994,25 @@
 
     <!-- ==== IN-APP-FEEDBACK (DE) ==== -->
     <!-- Die Kategorie-Labels sind reine Anzeigetexte — auf der Leitung bleiben es
-         in jeder Sprache feature|bug|other. -->
+         in jeder Sprache feature|bug|other|help|improvement (Plattform #1400).
+         „Feature/Verbesserung“ wurde am 2026-08-20 getrennt: „improvement“ ist
+         jetzt ein eigener Wert, ein Sammel-Label würde jede Verbesserung in den
+         falschen Topf schicken und dabei richtig aussehen. -->
     <string name="bt_dest_feedback">Feedback senden</string>
     <string name="bt_settings_feedback_sub">Fehler melden oder eine Verbesserung vorschlagen</string>
     <string name="bt_about_feedback_sub">Sag dem Entwickler, was als Nächstes drankommt</string>
     <string name="bt_feedback_intro">Schreib, was kaputt ist oder was fehlt. Das geht direkt an den Entwickler.</string>
     <string name="bt_feedback_category_header">Worum geht es?</string>
-    <string name="bt_feedback_cat_feature">Feature/Verbesserung</string>
+    <string name="bt_feedback_cat_feature">Feature</string>
     <string name="bt_feedback_cat_feature_sub">Etwas, das die App können sollte</string>
+    <string name="bt_feedback_cat_improvement">Verbesserung</string>
+    <string name="bt_feedback_cat_improvement_sub">Etwas Bestehendes besser machen</string>
     <string name="bt_feedback_cat_bug">Bug</string>
     <string name="bt_feedback_cat_bug_sub">Etwas ist kaputt, falsch oder zeigt die falsche Zahl</string>
+    <string name="bt_feedback_cat_help">Hilfe</string>
+    <string name="bt_feedback_cat_help_sub">Eine Frage dazu, wie etwas funktioniert</string>
     <string name="bt_feedback_cat_other">Sonstiges</string>
-    <string name="bt_feedback_cat_other_sub">Alles, was keines von beiden ist</string>
+    <string name="bt_feedback_cat_other_sub">Alles, was zu keinem der anderen Punkte passt</string>
     <string name="bt_feedback_message_header">Deine Nachricht</string>
     <string name="bt_feedback_subject_label">Betreff (optional)</string>
     <string name="bt_feedback_message_label">Was ist passiert, oder was würde helfen?</string>
@@ -3048,6 +3061,16 @@
     <string name="bt_feedback_mine_message_header">Deine Nachricht</string>
     <string name="bt_feedback_mine_declined_header">Warum nicht</string>
     <string name="bt_feedback_mine_shipped_header">Umgesetzt in</string>
+    <!-- DELETE /feedback/{id} (Plattform #1400) — ein weiches Löschen: die Zeile
+         verschwindet aus dieser Liste, der Entwickler behält den Vorgang. Genau das
+         sagt der Text, und nichts darüber hinaus. -->
+    <string name="bt_feedback_mine_delete">Einreichung löschen</string>
+    <string name="bt_feedback_mine_delete_offline">Zum Löschen brauchst du eine Verbindung.</string>
+    <string name="bt_feedback_mine_delete_title">Diese Einreichung löschen?</string>
+    <string name="bt_feedback_mine_delete_message">Sie verschwindet aus deiner Liste. Was schon beantwortet wurde, bleibt beim Entwickler als zurückgezogen erhalten.</string>
+    <string name="bt_feedback_mine_delete_confirm">Löschen</string>
+    <string name="bt_feedback_mine_deleted">Gelöscht.</string>
+    <string name="bt_feedback_mine_still_listed">Der Server hat das angenommen, die Einreichung steht aber weiterhin in der Liste.</string>
     <!-- RESERVIERT: Den Antwort-Verlauf gibt es noch nicht, unreadReplyCount ist
          immer 0 — heute wird das nie vorgelesen. Es existiert, damit das Abzeichen
          am Tag des Thread-Starts vollständig ist. -->

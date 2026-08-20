@@ -8,6 +8,7 @@ import at.bettertrack.app.data.api.dto.FeedbackContextDto
 import at.bettertrack.app.data.api.dto.FeedbackStatus
 import at.bettertrack.app.data.api.dto.MyFeedbackItemDto
 import at.bettertrack.app.data.api.dto.SubmitFeedbackRequest
+import at.bettertrack.app.data.api.unitApiCall
 import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.shows
@@ -93,11 +94,38 @@ object FeedbackFlags {
 fun feedbackEntryVisible(mode: StorageMode): Boolean =
     FeedbackFlags.enabled && mode.shows(BtSurface.ACCOUNT_SETTINGS)
 
-/** The three wire categories. The wire values are ASCII and never translated. */
+/**
+ * The five wire categories. The wire values are ASCII and never translated.
+ *
+ * ## Declared in the deployed enum's own order
+ *
+ * Verified against production's `openapi.json` on 2026-08-20:
+ * `CreateFeedbackRequest.category.enum` is
+ * `["feature", "bug", "other", "help", "improvement"]` — and `MyFeedbackResponse`'s
+ * row carries the identical five. The widening (platform #1400) appended `help`
+ * and `improvement`; the first three are byte-unchanged, so every submission this
+ * app has already sent still reads back with the same label.
+ *
+ * The order here is the WIRE order, not the order the composer draws. Those are
+ * two different facts and conflating them would mean a platform reordering its
+ * enum silently reshuffles the user's picker — see `FEEDBACK_CATEGORY_ORDER` in
+ * `ui/feedback/FeedbackScreen.kt` for the display order and the test that keeps
+ * it exhaustive.
+ *
+ * ## `improvement` is why the `feature` LABEL had to split
+ *
+ * Until the widening this app drew `feature` as "Feature/Verbesserung" / "Feature
+ * or improvement", because one wire value had to cover both meanings. It no longer
+ * does: a user who picks "Verbesserung" must now land on `improvement`, so the
+ * label lost its second half the moment the second value existed. Leaving it would
+ * have routed every improvement to the wrong bucket while looking correct.
+ */
 enum class FeedbackCategory(val wire: String) {
     Feature("feature"),
     Bug("bug"),
     Other("other"),
+    Help("help"),
+    Improvement("improvement"),
     ;
 
     companion object {
@@ -109,6 +137,20 @@ enum class FeedbackCategory(val wire: String) {
 /** Server-enforced limits, mirrored client-side so the composer refuses first. */
 const val FEEDBACK_MESSAGE_MAX = 5000
 const val FEEDBACK_SUBJECT_MAX = 120
+
+/**
+ * `FEEDBACK_OPEN_SUBMISSION_LIMIT` — how many submissions may be open at once
+ * before the server refuses a new one with `FEEDBACK_OPEN_LIMIT` (platform #1400).
+ *
+ * Mirrored here for ONE reason and it is not client-side enforcement: the app
+ * cannot know how many of the caller's submissions are still "open" (the wire
+ * carries a status per row, not the server's own definition of open), so the
+ * composer never pre-refuses on this. It exists so the number in the refusal copy
+ * has a constant to be checked against — `FeedbackFailureCopyTest` asserts both
+ * language strings still name it, which is what turns a platform change of the cap
+ * into a failing build rather than into a sentence that lies by one order.
+ */
+const val FEEDBACK_OPEN_SUBMISSION_LIMIT = 20
 
 /**
  * What the user has typed so far. Pure data so the validation and the exact request
@@ -314,6 +356,27 @@ interface FeedbackRepository {
      * requested). The screen renders it as its error state.
      */
     suspend fun mine(): BtResult<List<FeedbackSubmission>>
+
+    /**
+     * `DELETE /feedback/{id}` — hide one of MY submissions (platform #1400).
+     *
+     * Verified against production's `openapi.json` on 2026-08-20: the route
+     * exists, is summarised *"Hide one caller-owned submission while retaining an
+     * admin-visible tombstone"*, takes a `uuid` path parameter, answers **204 No
+     * Content**, and declares 400 / 401 / the generic envelope and **no 404** —
+     * which is the contract saying, in schema, that the call is idempotent.
+     *
+     * So a success here proves nothing about the row on its own, exactly as a
+     * trusted-device revoke does not: an id that was already deleted answers 204
+     * too. The caller re-reads [mine] afterwards and lets the LIST decide what the
+     * user is told. This method therefore returns [Unit] rather than a
+     * "was it deleted" boolean — a boolean would have to be invented from the
+     * status code, and inventing it is the lie.
+     *
+     * `feedback:write` on the bearer path, which this app already holds (the same
+     * scope `POST /feedback` uses), so no re-authorize is involved.
+     */
+    suspend fun delete(id: String): BtResult<Unit>
 }
 
 class DefaultFeedbackRepository(
@@ -345,4 +408,10 @@ class DefaultFeedbackRepository(
             is BtResult.Ok -> BtResult.Ok(r.value.submissions.toSubmissions())
             is BtResult.Err -> r
         }
+
+    // `unitApiCall`, not `apiCall`: the route answers 204 with no body, and
+    // `apiCall` treats an absent body as `APP_EMPTY_RESPONSE` — it would turn
+    // every successful delete into an error.
+    override suspend fun delete(id: String): BtResult<Unit> =
+        unitApiCall(json) { api.deleteFeedback(id) }
 }

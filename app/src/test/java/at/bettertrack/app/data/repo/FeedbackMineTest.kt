@@ -260,6 +260,10 @@ class FeedbackMineTest {
 
     @Test
     fun `a category this build does not know behaves the same way`() {
+        // `question` is NOT one of the five (platform #1400 shipped `help` and
+        // `improvement`, not this), so it stays the unknown-value case — which is
+        // the point of keeping this test on a value the contract does not name
+        // rather than on whichever value happened to be new that week.
         server.enqueue(
             ok(
                 """
@@ -275,6 +279,46 @@ class FeedbackMineTest {
         val item = loaded().single()
         assertNull(item.category)
         assertEquals("question", item.categoryWire)
+    }
+
+    @Test
+    fun `the two widened categories now decode as KNOWN, keeping their wire word`() {
+        // Yesterday `help` and `improvement` would have come back as unknown rows
+        // rendering a raw English wire word to a German reader. Since platform
+        // #1400 they resolve — and `categoryWire` is still carried, because the
+        // tolerance path must survive the values it no longer applies to.
+        server.enqueue(
+            ok(
+                """
+                {"submissions":[
+                  {"id":"h","category":"help","subject":"x","message":"m",
+                   "status":"new","lastStatusChangeAt":"2026-08-20T09:00:00.000Z",
+                   "declinedReason":null,"shippedVersion":null,"unreadReplyCount":0,
+                   "createdAt":"2026-08-20T09:00:00.000Z"},
+                  {"id":"i","category":"improvement","subject":"x","message":"m",
+                   "status":"new","lastStatusChangeAt":"2026-08-20T08:00:00.000Z",
+                   "declinedReason":null,"shippedVersion":null,"unreadReplyCount":0,
+                   "createdAt":"2026-08-20T08:00:00.000Z"}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val (help, improvement) = loaded()
+        assertEquals(FeedbackCategory.Help, help.category)
+        assertEquals("help", help.categoryWire)
+        assertEquals(FeedbackCategory.Improvement, improvement.category)
+        assertEquals("improvement", improvement.categoryWire)
+    }
+
+    @Test
+    fun `every wire category the contract names resolves`() {
+        val wire = listOf("feature", "bug", "other", "help", "improvement")
+        assertEquals(wire, FeedbackCategory.entries.map { it.wire })
+        wire.forEach { assertEquals(it, FeedbackCategory.fromWire(it)?.wire) }
+        assertNull(FeedbackCategory.fromWire(null))
+        assertNull(FeedbackCategory.fromWire(""))
+        // Case matters: the wire values are ASCII constants, not a fuzzy match.
+        assertNull(FeedbackCategory.fromWire("Help"))
     }
 
     @Test

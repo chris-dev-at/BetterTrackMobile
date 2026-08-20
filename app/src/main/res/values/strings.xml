@@ -2369,6 +2369,12 @@
     <string name="bt_err_export_not_found">This export is no longer available.</string>
     <string name="bt_err_export_rate_limited">You can request one data export per day. Please try again later.</string>
 
+    <!-- Feedback (platform #1400). The 20 is FEEDBACK_OPEN_SUBMISSION_LIMIT and is
+         written out rather than passed as an argument: catalogued codes that take a
+         format argument spend it on the server's own diagnostic, which is English.
+         FeedbackFailureCopyTest pins the number against the constant. -->
+    <string name="bt_err_feedback_open_limit">You have 20 open requests. Wait until some have been reviewed, or delete one under My submissions.</string>
+
     <!-- Offline queue: idempotency keys -->
     <string name="bt_err_idempotency_key_invalid">This change couldn\'t be submitted (its sync key was rejected). Remove it and create it again.</string>
     <string name="bt_err_idempotency_key_mismatch">This change was already submitted in a different form. Remove it and create it again.</string>
@@ -3176,20 +3182,27 @@
     <string name="bt_notif_routing_unavailable">The routing grid could not be loaded, so it is not shown here. Your settings are unchanged.</string>
 
     <!-- ==== IN-APP FEEDBACK (EN) ==== -->
-    <!-- POST /feedback (platform #1315/#1316/#1317). The CATEGORY labels below are
-         display copy only — the wire values stay feature|bug|other in every
-         language. -->
+    <!-- POST /feedback (platform #1315/#1316/#1317, widened by #1400). The CATEGORY
+         labels below are display copy only — the wire values stay
+         feature|bug|other|help|improvement in every language.
+         "Feature" lost its "or improvement" half on 2026-08-20: `improvement` is
+         its own wire value now, so a label covering both would route every
+         improvement into the wrong bucket while looking right. -->
     <string name="bt_dest_feedback">Send feedback</string>
     <string name="bt_settings_feedback_sub">Report a bug or suggest an improvement</string>
     <string name="bt_about_feedback_sub">Tell the developer what to fix next</string>
     <string name="bt_feedback_intro">Say what is broken or what is missing. This goes straight to the developer.</string>
     <string name="bt_feedback_category_header">What is this about?</string>
-    <string name="bt_feedback_cat_feature">Feature or improvement</string>
+    <string name="bt_feedback_cat_feature">Feature</string>
     <string name="bt_feedback_cat_feature_sub">Something the app should be able to do</string>
+    <string name="bt_feedback_cat_improvement">Improvement</string>
+    <string name="bt_feedback_cat_improvement_sub">Make something that already exists better</string>
     <string name="bt_feedback_cat_bug">Bug</string>
     <string name="bt_feedback_cat_bug_sub">Something is broken, wrong, or shows the wrong number</string>
+    <string name="bt_feedback_cat_help">Help</string>
+    <string name="bt_feedback_cat_help_sub">A question about how something works</string>
     <string name="bt_feedback_cat_other">Other</string>
-    <string name="bt_feedback_cat_other_sub">Anything that is neither of the above</string>
+    <string name="bt_feedback_cat_other_sub">Anything that fits none of the above</string>
     <string name="bt_feedback_message_header">Your message</string>
     <string name="bt_feedback_subject_label">Subject (optional)</string>
     <string name="bt_feedback_message_label">What happened, or what would help?</string>
@@ -3238,6 +3251,16 @@
     <string name="bt_feedback_mine_message_header">Your message</string>
     <string name="bt_feedback_mine_declined_header">Why not</string>
     <string name="bt_feedback_mine_shipped_header">Shipped in</string>
+    <!-- DELETE /feedback/{id} (platform #1400) — a soft delete: the row leaves this
+         list, the maintainer keeps the record. The copy says exactly that and
+         promises nothing about erasure it cannot deliver. -->
+    <string name="bt_feedback_mine_delete">Delete submission</string>
+    <string name="bt_feedback_mine_delete_offline">Deleting needs a connection.</string>
+    <string name="bt_feedback_mine_delete_title">Delete this submission?</string>
+    <string name="bt_feedback_mine_delete_message">It disappears from your list. Anything already answered stays with the developer, marked as withdrawn.</string>
+    <string name="bt_feedback_mine_delete_confirm">Delete</string>
+    <string name="bt_feedback_mine_deleted">Deleted.</string>
+    <string name="bt_feedback_mine_still_listed">The server accepted that, but the submission is still listed.</string>
     <!-- RESERVED: the reply thread is not live, so unreadReplyCount is always 0
          and this is never spoken today. It exists so the badge is complete the
          day threads ship. -->

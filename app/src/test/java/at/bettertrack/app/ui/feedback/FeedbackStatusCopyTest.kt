@@ -117,15 +117,24 @@ class FeedbackStatusCopyTest {
     }
 
     @Test
-    fun `the category labels are the composer's own three`() {
-        // Not new copy: a user who picked "Feature/Verbesserung" three screens ago
-        // has to read the same words back, or the list is describing something else.
+    fun `the category labels are the composer's own five`() {
+        // Not new copy: a user who picked "Verbesserung" three screens ago has to
+        // read the same word back, or the list is describing something else. Five
+        // since the #1400 widening — `help` and `improvement` are KNOWN values now,
+        // so a row carrying either prints a translated label instead of falling
+        // through to the raw wire word.
         assertEquals(
             R.string.bt_feedback_cat_feature,
             feedbackCategoryLabelRes(FeedbackCategory.Feature),
         )
         assertEquals(R.string.bt_feedback_cat_bug, feedbackCategoryLabelRes(FeedbackCategory.Bug))
         assertEquals(R.string.bt_feedback_cat_other, feedbackCategoryLabelRes(FeedbackCategory.Other))
+        assertEquals(R.string.bt_feedback_cat_help, feedbackCategoryLabelRes(FeedbackCategory.Help))
+        assertEquals(
+            R.string.bt_feedback_cat_improvement,
+            feedbackCategoryLabelRes(FeedbackCategory.Improvement),
+        )
+        assertEquals(5, FeedbackCategory.entries.size)
         assertEquals(
             FeedbackCategory.entries.size,
             FeedbackCategory.entries.map { feedbackCategoryLabelRes(it) }.toSet().size,

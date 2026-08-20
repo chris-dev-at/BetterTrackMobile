@@ -105,6 +105,16 @@ class BtApiError(
         const val CASH_LEDGER_WOULD_GO_NEGATIVE = "CASH_LEDGER_WOULD_GO_NEGATIVE"
         /** 400 — the default watchlist cannot be renamed or deleted (also enforced app-side). */
         const val WATCHLIST_DEFAULT_LOCKED = "WATCHLIST_DEFAULT_LOCKED"
+
+        /**
+         * `POST /feedback` refused: the caller already has
+         * [at.bettertrack.app.data.repo.FEEDBACK_OPEN_SUBMISSION_LIMIT] submissions
+         * open (platform #1400). Named as a constant because the feedback composer
+         * has to compare against it BY CODE — its rate-limit branch keys off the
+         * HTTP status, and whatever status this refusal arrives with must not be
+         * allowed to swallow it.
+         */
+        const val FEEDBACK_OPEN_LIMIT = "FEEDBACK_OPEN_LIMIT"
     }
 
     /**

@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.feedback
 
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -92,7 +96,7 @@ import kotlinx.coroutines.launch
  * by two orders of magnitude for an hourly window: somebody who taps Send again
  * thirty seconds later, as instructed, gets refused again and learns the app lies.
  *
- * The branch keys off the HTTP **status**, not an error code, and that is
+ * That branch keys off the HTTP **status**, not an error code, and that is
  * deliberate. The live `openapi.json` documents only `201`, `400`, `401` and a
  * generic error envelope for this route, so the `code` the limiter emits is not
  * knowable from the contract — and an unmapped code falls through
@@ -101,15 +105,85 @@ import kotlinx.coroutines.launch
  * into `BtErrorCopy` would be inventing a wire fact; `429` is the status the
  * contract itself names, so that is what this reads.
  *
- * Kept a pure top-level function so the branch is unit-tested without a Compose
+ * ## Which is why the open-submission cap has to be checked FIRST
+ *
+ * `FEEDBACK_OPEN_LIMIT` (platform #1400) is a code the catalogue DOES own copy for,
+ * and the contract does not say which status carries it. Reading the status first
+ * would let a `429 FEEDBACK_OPEN_LIMIT` be answered with the hourly sentence —
+ * "try again a bit later" — which is false advice for a cap that clears only when a
+ * submission is triaged or deleted. The code is the more specific fact, so the code
+ * wins; the status branch stays underneath it, for the limiter whose code nobody
+ * knows.
+ *
+ * Kept a pure top-level function so both branches are unit-tested without a Compose
  * runtime.
  */
-internal fun feedbackFailureMessage(error: BtApiError): BtMessage =
-    if (error.httpStatus == 429) {
-        BtMessage(R.string.bt_feedback_err_rate_limited)
-    } else {
-        error.asMessage()
-    }
+internal fun feedbackFailureMessage(error: BtApiError): BtMessage = when {
+    // The open-submission cap (platform #1400) beats the status branch, and the
+    // order is the whole point. `FEEDBACK_OPEN_LIMIT` is a CODE the catalogue owns
+    // real copy for — copy that names the actual remedy, which is to wait for
+    // triage or delete an open request. Whatever HTTP status the platform chose to
+    // carry it (the contract does not say, and 429 is a plausible one), letting the
+    // status branch answer first would replace that remedy with "about five per
+    // hour" — advice that is false here and that no amount of waiting satisfies.
+    error.code == BtApiError.Codes.FEEDBACK_OPEN_LIMIT -> error.asMessage()
+
+    error.httpStatus == 429 -> BtMessage(R.string.bt_feedback_err_rate_limited)
+
+    else -> error.asMessage()
+}
+
+/**
+ * The order the composer lists the five categories in.
+ *
+ * A product decision, deliberately NOT
+ * [at.bettertrack.app.data.repo.FeedbackCategory]'s declaration order — that one
+ * mirrors the wire enum (`feature, bug, other, help, improvement`), where `other`
+ * sits in the middle because that is where the platform appended things. Reading
+ * order goes the two "I want something" options first, the two "something is wrong
+ * / I don't understand" options next, and the catch-all last, where a catch-all
+ * belongs.
+ *
+ * Existing as a LIST rather than as five hand-written calls is what makes
+ * `FeedbackComposerCategoryTest` able to assert that every category the enum names
+ * is actually drawn: five hand-written rows would let the next widening ship a
+ * category the composer silently cannot select.
+ */
+internal val FEEDBACK_CATEGORY_ORDER: List<FeedbackCategory> = listOf(
+    FeedbackCategory.Feature,
+    FeedbackCategory.Improvement,
+    FeedbackCategory.Bug,
+    FeedbackCategory.Help,
+    FeedbackCategory.Other,
+)
+
+/**
+ * The line of copy under each category name — the part that actually disambiguates
+ * them, and the reason these are rows rather than chips.
+ *
+ * `when` with no `else`, same rule as `feedbackStatusLabelRes`: a sixth category
+ * must fail to COMPILE until somebody has written both languages for it, rather
+ * than silently inheriting a neighbour's sentence.
+ */
+@StringRes
+internal fun feedbackCategorySubRes(category: FeedbackCategory): Int = when (category) {
+    FeedbackCategory.Feature -> R.string.bt_feedback_cat_feature_sub
+    FeedbackCategory.Improvement -> R.string.bt_feedback_cat_improvement_sub
+    FeedbackCategory.Bug -> R.string.bt_feedback_cat_bug_sub
+    FeedbackCategory.Help -> R.string.bt_feedback_cat_help_sub
+    FeedbackCategory.Other -> R.string.bt_feedback_cat_other_sub
+}
+
+/** The leading glyph per category. Exhaustive for the same reason as the copy. */
+internal fun feedbackCategoryIcon(category: FeedbackCategory): ImageVector = when (category) {
+    FeedbackCategory.Feature -> Icons.Outlined.Lightbulb
+    // A slider, not a sparkle: "improvement" is adjusting something that already
+    // exists, and the sparkle glyph is spent on AI surfaces elsewhere in this app.
+    FeedbackCategory.Improvement -> Icons.Outlined.Tune
+    FeedbackCategory.Bug -> Icons.Outlined.BugReport
+    FeedbackCategory.Help -> Icons.AutoMirrored.Outlined.HelpOutline
+    FeedbackCategory.Other -> Icons.Outlined.ChatBubbleOutline
+}
 
 /**
  * The in-app feedback composer (platform #1315 / #1316 / #1317).
@@ -252,36 +326,29 @@ fun FeedbackScreen(
             )
 
             // ── CATEGORY ─────────────────────────────────────────────────────
-            // Rows rather than a segmented control: the German "Feature/
-            // Verbesserung" does not fit a third of a pill track, and each option
-            // earns a line of copy saying which one to pick. The wire values stay
-            // feature|bug|other regardless of what is drawn here.
+            // Rows rather than a segmented control or a chip track, and the
+            // widening to FIVE (platform #1400) is what settles that for good: five
+            // chips cannot hold "Verbesserung" and "Sonstiges" on one line of a
+            // narrow phone without either wrapping into a ragged second row or
+            // shrinking the type, and the whole difficulty here is telling
+            // "Feature" from "Verbesserung" from "Hilfe" — which is what the second
+            // line of each row does. A row costs vertical space; the alternative
+            // costs the user the distinction.
+            //
+            // Driven from FEEDBACK_CATEGORY_ORDER rather than hand-written, so a
+            // sixth wire value cannot ship as a category nobody can select.
             BtSectionHeader(stringResource(R.string.bt_feedback_category_header))
             BtGroup {
-                CategoryRow(
-                    category = FeedbackCategory.Feature,
-                    selected = category,
-                    titleRes = R.string.bt_feedback_cat_feature,
-                    subtitleRes = R.string.bt_feedback_cat_feature_sub,
-                    icon = Icons.Outlined.Lightbulb,
-                    enabled = !sending,
-                ) { category = it }
-                CategoryRow(
-                    category = FeedbackCategory.Bug,
-                    selected = category,
-                    titleRes = R.string.bt_feedback_cat_bug,
-                    subtitleRes = R.string.bt_feedback_cat_bug_sub,
-                    icon = Icons.Outlined.BugReport,
-                    enabled = !sending,
-                ) { category = it }
-                CategoryRow(
-                    category = FeedbackCategory.Other,
-                    selected = category,
-                    titleRes = R.string.bt_feedback_cat_other,
-                    subtitleRes = R.string.bt_feedback_cat_other_sub,
-                    icon = Icons.Outlined.ChatBubbleOutline,
-                    enabled = !sending,
-                ) { category = it }
+                FEEDBACK_CATEGORY_ORDER.forEach { option ->
+                    CategoryRow(
+                        category = option,
+                        selected = category,
+                        titleRes = feedbackCategoryLabelRes(option),
+                        subtitleRes = feedbackCategorySubRes(option),
+                        icon = feedbackCategoryIcon(option),
+                        enabled = !sending,
+                    ) { category = it }
+                }
             }
 
             // ── MESSAGE ──────────────────────────────────────────────────────
@@ -413,7 +480,7 @@ private fun CategoryRow(
     selected: FeedbackCategory?,
     titleRes: Int,
     subtitleRes: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     enabled: Boolean,
     onPick: (FeedbackCategory) -> Unit,
 ) {

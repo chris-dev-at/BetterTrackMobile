@@ -1,7 +1,9 @@
 package at.bettertrack.app.ui.feedback
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,22 +13,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtApiError
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.api.dto.FeedbackStatus
@@ -61,14 +75,17 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtCountBadge
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -150,17 +167,26 @@ internal fun feedbackStatusTone(status: FeedbackStatus?): BtBadgeKind = when (st
 }
 
 /**
- * The category label, reusing the composer's own three strings.
+ * The category label, reusing the composer's own five strings.
  *
- * Not new copy: a user who picked "Feature/Verbesserung" three screens ago has to
- * read the same words back, or the list is describing something else. `when` with
- * no `else` for the same reason as [feedbackStatusLabelRes].
+ * Not new copy: a user who picked "Verbesserung" three screens ago has to read the
+ * same word back, or the list is describing something else. `when` with no `else`
+ * for the same reason as [feedbackStatusLabelRes] — and platform #1400 is what that
+ * rule was for: two wire values arrived on 2026-08-20 and this function refused to
+ * compile until both had German and English of their own.
+ *
+ * `help` and `improvement` are KNOWN values now, so a row carrying either renders a
+ * translated label rather than the raw wire word. The unknown-value path below
+ * (`item.categoryWire`) is unchanged and still catches whatever the platform adds
+ * next.
  */
 @StringRes
 internal fun feedbackCategoryLabelRes(category: FeedbackCategory): Int = when (category) {
     FeedbackCategory.Feature -> R.string.bt_feedback_cat_feature
     FeedbackCategory.Bug -> R.string.bt_feedback_cat_bug
     FeedbackCategory.Other -> R.string.bt_feedback_cat_other
+    FeedbackCategory.Help -> R.string.bt_feedback_cat_help
+    FeedbackCategory.Improvement -> R.string.bt_feedback_cat_improvement
 }
 
 // ── Stamps ───────────────────────────────────────────────────────────────────
@@ -266,12 +292,28 @@ private fun stampText(ms: Long): String {
  * loop and no swipe-to-refresh: a status moves when a human moves it, which is on
  * the order of days, and re-asking a rate-limited feedback endpoint on a timer
  * would cost the user their submissions quota for nothing.
+ *
+ * ## Deleting: the list is the truth (platform #1400, live 2026-08-20)
+ *
+ * `DELETE /feedback/{id}` is a SOFT delete — the row leaves this list, the
+ * maintainer keeps a tombstone — and the deployed contract declares `204` with **no
+ * 404**, i.e. it is idempotent. A success therefore proves nothing on its own: an
+ * id that was already gone answers 204 too. So the confirm path calls the route,
+ * **re-reads `/feedback/mine`, and reports whatever the fresh list says** — the same
+ * discipline the trusted-devices screen had to adopt for the same reason. Saying
+ * "deleted" on a status code alone would be a claim this app has no way to check.
+ *
+ * Deleting is never offered optimistically: the action is disabled while offline
+ * (there is no queue behind it, exactly as there is none behind the composer's Send)
+ * and the sheet says so rather than letting a tap produce a network error the screen
+ * could have predicted.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackSubmissionsScreen(onBack: () -> Unit) {
     val bt = BtTheme.colors
     val repo = AppGraph.feedbackRepository
+    val scope = rememberCoroutineScope()
     val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
     val authState by AppGraph.authRepository.authState.collectAsStateWithLifecycle()
     val signedIn = authState is AuthState.LoggedIn || authState is AuthState.PasswordChangeRequired
@@ -281,6 +323,26 @@ fun FeedbackSubmissionsScreen(onBack: () -> Unit) {
     var failure by remember { mutableStateOf<BtApiError?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var opened by remember { mutableStateOf<FeedbackSubmission?>(null) }
+    var confirmDelete by remember { mutableStateOf<FeedbackSubmission?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    var outcome by remember { mutableStateOf<Int?>(null) }
+    var actionError by remember { mutableStateOf<BtMessage?>(null) }
+
+    /** Fetch and RETURN the fresh list, so a delete can judge its own outcome. */
+    suspend fun fetch(): List<FeedbackSubmission>? =
+        when (val r = repo.mine()) {
+            is BtResult.Ok -> {
+                items = r.value
+                failure = null
+                r.value
+            }
+            // The previous list is deliberately NOT cleared on a failed reload: a
+            // dropped Retry should leave what the user was reading on screen.
+            is BtResult.Err -> {
+                failure = r.error
+                null
+            }
+        }
 
     LaunchedEffect(reloadKey, signedIn) {
         if (!signedIn) {
@@ -291,15 +353,7 @@ fun FeedbackSubmissionsScreen(onBack: () -> Unit) {
         }
         loading = true
         failure = null
-        when (val r = repo.mine()) {
-            is BtResult.Ok -> {
-                items = r.value
-                failure = null
-            }
-            // The previous list is deliberately NOT cleared on a failed reload: a
-            // dropped Retry should leave what the user was reading on screen.
-            is BtResult.Err -> failure = r.error
-        }
+        fetch()
         loading = false
     }
 
@@ -322,81 +376,168 @@ fun FeedbackSubmissionsScreen(onBack: () -> Unit) {
             )
         },
     ) { innerPadding ->
-        val content = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
+        val content = Modifier.fillMaxSize()
         // Pulled out of the `when` so the branch smart-casts instead of needing a
         // `!!` — an assertion that would be correct today and wrong the first time
         // somebody reorders these arms.
         val error = failure
 
-        when {
-            !signedIn -> BtStateFill(content) {
-                BtEmptyState(
-                    icon = Icons.Outlined.Inbox,
-                    title = stringResource(R.string.bt_feedback_mine_signed_out),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+        // ── What the last delete did ─────────────────────────────────────────
+        // INLINE, not a snackbar, and this is a measured decision rather than a
+        // style one: this screen is a full-screen SHEET destination, and the sheet
+        // layer is composed OVER everything the shell's Scaffold drew — including
+        // its `snackbarHost`. A snackbar raised from here is therefore painted
+        // behind the sheet and never seen. Verified on the owner's device on
+        // 2026-08-20: a delete that answered `500` showed the user nothing at all.
+        // A banner that lives inside this screen cannot be occluded by it.
+        //
+        // Above the state `when`, not inside its list arm, because two of the three
+        // outcomes have to survive the list going empty (a successful delete of the
+        // last row switches the screen to its empty state) or staying empty (a
+        // failure while nothing is listed).
+        actionError?.let { message ->
+            BtInlineError(
+                message = message,
+                onRetry = {
+                    actionError = null
+                    reloadKey++
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
+        if (actionError == null) {
+            outcome?.let { res ->
+                Text(
+                    text = stringResource(res),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                 )
-            }
-
-            loading -> BtScrollFill(content) { SubmissionsSkeleton() }
-
-            // Offline only claims the screen when there is nothing to show. A
-            // failed reload over a list that is already on screen keeps the list.
-            !online && items.isEmpty() -> BtStateFill(content) {
-                BtOfflineState(
-                    message = stringResource(R.string.bt_feedback_mine_offline),
-                    onRetry = { reloadKey++ },
-                )
-            }
-
-            error != null && items.isEmpty() -> BtStateFill(content) {
-                BtErrorState(
-                    // The scope refusal is the one failure with a named cause and a
-                    // remedy the user can actually perform, so it gets its own
-                    // title. The MESSAGE is the app-wide catalogued sentence for
-                    // INSUFFICIENT_SCOPE, resolved by `asMessage()` — not copy
-                    // invented here, which is what keeps one remedy in one place.
-                    title = if (error.isInsufficientScope) {
-                        stringResource(R.string.bt_feedback_mine_scope_title)
-                    } else {
-                        stringResource(R.string.bt_error_generic_title)
-                    },
-                    message = error.asMessage(),
-                    onRetry = { reloadKey++ },
-                )
-            }
-
-            items.isEmpty() -> BtStateFill(content) {
-                BtEmptyState(
-                    icon = Icons.Outlined.Inbox,
-                    title = stringResource(R.string.bt_feedback_mine_empty_title),
-                    message = stringResource(R.string.bt_feedback_mine_empty_body),
-                    action = {
-                        // The only door in is the composer, so Back IS "write
-                        // feedback". Labelling it for what it does beats a bare
-                        // "Back" the empty state would not need to draw at all.
-                        BtSecondaryButton(
-                            text = stringResource(R.string.bt_feedback_mine_empty_action),
-                            onClick = onBack,
-                        )
-                    },
-                )
-            }
-
-            else -> LazyColumn(
-                modifier = content,
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(items, key = { it.id }) { item ->
-                    SubmissionRow(item = item, onOpen = { opened = item })
-                }
             }
         }
+
+        Box(Modifier.weight(1f)) {
+            when {
+                !signedIn -> BtStateFill(content) {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Inbox,
+                        title = stringResource(R.string.bt_feedback_mine_signed_out),
+                    )
+                }
+
+                loading -> BtScrollFill(content) { SubmissionsSkeleton() }
+
+                // Offline only claims the screen when there is nothing to show. A
+                // failed reload over a list that is already on screen keeps the list.
+                !online && items.isEmpty() -> BtStateFill(content) {
+                    BtOfflineState(
+                        message = stringResource(R.string.bt_feedback_mine_offline),
+                        onRetry = { reloadKey++ },
+                    )
+                }
+
+                error != null && items.isEmpty() -> BtStateFill(content) {
+                    BtErrorState(
+                        // The scope refusal is the one failure with a named cause and a
+                        // remedy the user can actually perform, so it gets its own
+                        // title. The MESSAGE is the app-wide catalogued sentence for
+                        // INSUFFICIENT_SCOPE, resolved by `asMessage()` — not copy
+                        // invented here, which is what keeps one remedy in one place.
+                        title = if (error.isInsufficientScope) {
+                            stringResource(R.string.bt_feedback_mine_scope_title)
+                        } else {
+                            stringResource(R.string.bt_error_generic_title)
+                        },
+                        message = error.asMessage(),
+                        onRetry = { reloadKey++ },
+                    )
+                }
+
+                items.isEmpty() -> BtStateFill(content) {
+                    BtEmptyState(
+                        icon = Icons.Outlined.Inbox,
+                        title = stringResource(R.string.bt_feedback_mine_empty_title),
+                        message = stringResource(R.string.bt_feedback_mine_empty_body),
+                        action = {
+                            // The only door in is the composer, so Back IS "write
+                            // feedback". Labelling it for what it does beats a bare
+                            // "Back" the empty state would not need to draw at all.
+                            BtSecondaryButton(
+                                text = stringResource(R.string.bt_feedback_mine_empty_action),
+                                onClick = onBack,
+                            )
+                        },
+                    )
+                }
+
+                else -> LazyColumn(
+                    modifier = content,
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        SubmissionRow(item = item, onOpen = { opened = item })
+                    }
+                }
+            }
+        } // Box
+    } // Column
     }
 
     opened?.let { item ->
-        SubmissionSheet(item = item, onDismiss = { opened = null })
+        SubmissionSheet(
+            item = item,
+            // Offline is a hard stop, not a warning, for the same reason the
+            // composer's Send is: there is no queue behind this call.
+            deleteEnabled = online && !deleting,
+            online = online,
+            onDelete = {
+                // Dismiss-then-open, the order every converted call site uses, so
+                // the confirmation never stacks on top of the detail sheet.
+                opened = null
+                confirmDelete = item
+            },
+            onDismiss = { opened = null },
+        )
+    }
+
+    confirmDelete?.let { target ->
+        FeedbackDeleteConfirmSheet(
+            detail = target.subject ?: target.message,
+            enabled = online && !deleting,
+            onDismiss = { confirmDelete = null },
+            onConfirm = {
+                confirmDelete = null
+                deleting = true
+                scope.launch {
+                    when (val r = repo.delete(target.id)) {
+                        is BtResult.Ok -> {
+                            // The 204 says nothing on its own — the route is
+                            // idempotent and answers the same for an id that was
+                            // already gone. The re-read decides what the user is
+                            // told, and a re-read that itself failed says nothing
+                            // at all rather than guessing.
+                            val after = fetch()
+                            outcome = when {
+                                after == null -> null
+                                after.none { it.id == target.id } ->
+                                    R.string.bt_feedback_mine_deleted
+                                else -> R.string.bt_feedback_mine_still_listed
+                            }
+                        }
+                        is BtResult.Err -> actionError = r.error.asMessage()
+                    }
+                    deleting = false
+                }
+            },
+        )
     }
 }
 
@@ -559,17 +700,28 @@ private fun SubmissionsSkeleton() {
 }
 
 /**
- * The whole submission: the message as written, both stamps, and whatever the
- * status carries with it.
+ * The whole submission: the message as written, both stamps, whatever the status
+ * carries with it, and the one thing the user can DO about it — delete.
  *
  * A bottom sheet, not a pushed page — the app pops everything transient from the
  * bottom, and this is a detail view over a row that stays on screen behind it.
  * There is no close button: the drag handle and the scrim are the dismiss, exactly
  * as in every other detail sheet.
+ *
+ * Delete lives at the BOTTOM, under the message, and it is the only affordance in
+ * here. That placement is the point: somebody opening a row is reading it, not
+ * looking for a destructive verb, so the verb waits at the end of the reading rather
+ * than sitting next to the title where a mis-tap lands.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubmissionSheet(item: FeedbackSubmission, onDismiss: () -> Unit) {
+private fun SubmissionSheet(
+    item: FeedbackSubmission,
+    deleteEnabled: Boolean,
+    online: Boolean,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // A sheet whose content reaches full height fights its own inner scroll — the
@@ -657,7 +809,133 @@ private fun SubmissionSheet(item: FeedbackSubmission, onDismiss: () -> Unit) {
                 header = stringResource(R.string.bt_feedback_mine_message_header),
                 body = item.message,
             )
+
+            // ── Delete ───────────────────────────────────────────────────────
+            Spacer(Modifier.height(20.dp))
+            Surface(
+                onClick = onDelete,
+                enabled = deleteEnabled,
+                color = bt.surface,
+                border = BorderStroke(
+                    1.dp,
+                    if (deleteEnabled) bt.edge(bt.loss, 0.4f) else bt.border,
+                ),
+                shape = BtShapes.card,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.DeleteOutline,
+                        contentDescription = null,
+                        tint = if (deleteEnabled) bt.loss else bt.textMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.bt_feedback_mine_delete),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (deleteEnabled) bt.loss else bt.textMuted,
+                    )
+                }
+            }
+            // The disabled row stays VISIBLE and says why, rather than vanishing:
+            // a control that disappears when the signal drops reads as a feature
+            // that was taken away.
+            if (!online) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.bt_feedback_mine_delete_offline),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textMuted,
+                )
+            }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * "Are you sure?" for the one destructive action on this screen — a bottom sheet,
+ * per the owner's 2026-08-16 order, with the same chrome and the same button
+ * hierarchy the trusted-devices confirmation uses: the destructive verb is the
+ * filled loss-coloured button and Cancel is the quiet one, so the dangerous choice
+ * has to be aimed at.
+ *
+ * The body copy states the two facts a soft delete has to state — it leaves YOUR
+ * list, and the maintainer keeps what was already answered — because a "Delete" that
+ * silently means "hide" is the kind of promise this app does not make.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedbackDeleteConfirmSheet(
+    detail: String,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = bt.surfaceHigh,
+        contentColor = bt.textPrimary,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = bt.textMuted) },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+                // No `ime` in the union: this sheet hosts no text field.
+                .windowInsetsPadding(WindowInsets.navigationBars),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                stringResource(R.string.bt_feedback_mine_delete_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = bt.textPrimary,
+            )
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textMuted,
+                // Which submission this is about, in the words the row showed —
+                // two lines, because a subjectless submission falls back to its
+                // whole message and an unbounded one would push the buttons off.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                stringResource(R.string.bt_feedback_mine_delete_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = bt.textSecondary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onConfirm,
+                enabled = enabled,
+                shape = BtShapes.control,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = bt.loss,
+                    contentColor = bt.bg,
+                    disabledContainerColor = bt.border,
+                    disabledContentColor = bt.textMuted,
+                ),
+                elevation = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+            ) {
+                Text(stringResource(R.string.bt_feedback_mine_delete_confirm))
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+            }
         }
     }
 }
