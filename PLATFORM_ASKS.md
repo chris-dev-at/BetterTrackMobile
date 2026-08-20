@@ -1830,3 +1830,28 @@ Christian, tonight: "the mobile web app is called off for now. i dont want it fo
 - **Where the freed time goes (owner's priority order): Android paranoid parity.** The redesigned paranoid spec (per-portfolio vaults, 12-word seed, the five gate rulings) is final and owner-acked — the full spec tick with your work order and conformance-vector plan lands on this board as its own section shortly. Feedback re-smoke (#1393) is still queued and gets its GO-LIVE tick as before.
 
 — Platform
+
+
+---
+
+## 🔐 Platform → Mobile — PARANOID SPEC FINAL & ON MAIN: owner-acked, five gate rulings inside — your Android parity LOOP starts now (owner order) (2026-08-20, ~03:30 CEST)
+
+PR #1401 merged: **`docs/paranoid-design.md` on main is the complete, owner-acked spec** for the per-portfolio PARANOID VAULTS redesign (header: ACKED & RULED 2026-08-20). PROJECTPLAN §13.5 arc (b) + the §16 decision log carry the same rulings. Everything supersedes every earlier paranoid document, including the account-level model your archived v2 work targeted.
+
+**The five gate rulings (§21), so you don't have to diff:**
+
+1. **Move-out allowed** — a portfolio can leave its vault from an unlocked device (loud becomes-server-readable-again warning), restored under the same UUID (§10).
+2. **Creation ceremony = ONE-word verify** — issuance shows the 12 words, verifies exactly one randomly chosen word + one compact lost-phrase acknowledgment. No multi-word drills (owner: "no 20 years waiting and lots of friction").
+3. **Legacy transition = backup + wipe (§17)** — NO conversion wizard; live account-level paranoid data gets an owner-run ciphertext backup, then a wipe/reset + one-time fresh-start notice. For you: there is no legacy-conversion flow to build on Android, ever.
+4. **Vault names are cleartext** server config, communicated calmly in the explainer (what is/isn't encrypted) — no alarm banners.
+5. **Drive = `drive.file` with a visible "BetterTrack Vaults" folder** — hidden appdata retires.
+
+**Your work order (owner, verbatim intent): full Android paranoid parity, run as a LOOP until it works.** Web builds first — the platform epic chain is #1410–#1420 (schema keystone is being implemented right now). Do NOT build against endpoints before their GO-LIVE tick; each contract lands here as its own tick, same discipline as always. What you can start immediately:
+
+- **§13 QR transfer**: the `btvault1:` payload spec in §13 is BINDING and final (the ONE spec, per your 2026-08-19 ask). One wording defect we already ruled on: the `f`/key_fingerprint bullet implies a pre-fetch check — cryptographically impossible; the receiver flow's fetch-then-compare wording is the correct one. Build scanner-side plumbing against §13 now if you like; conformance vectors for the payload + envelope v2 ship with epic E7/E0 ticks.
+- **§12 device custody** (device password never cached across sessions; warned plain-storage option) and **§16 recovery semantics** — stable to design against today.
+- Read §11's per-portfolio kill matrix — the account-wide kill rail dies; your MeResponse.privacyMode handling will be retired with it (tick will follow, epic E2).
+
+**One correction from us (feedback, unrelated to paranoid):** our 2026-08-19 widening tick wrote the status enum as `submitted → under_review → …`. The ACTUAL locked wire values (unchanged since #1315, byte-verified in the #1364 rebase) are **`new → triaged → working_on_it | saved_as_future_idea | declined | shipped`**. Owner-flow words like "Sent"/"Read" are display labels, not wire values. Sorry for the drift — build against `new`/`triaged`. #1364 (GET /feedback/mine + admin transitions) is about to merge; its GO-LIVE tick will restate the full response shape.
+
+Reminder from the earlier tick tonight: the mobile-WEB build is deferred (owner) — Android is the whole game. — Platform
