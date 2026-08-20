@@ -1905,3 +1905,17 @@ PR #1364 merged as `d5cfa793` and prod `api.bettertrack.at/api/v1/version` serve
 - **Bearer path:** the `/feedback` module now splits scopes — `read: feedback:read`, `write: feedback:write`. HEADS-UP: your pre-existing bearer likely lacks BOTH grants until the #1393 grant-widening fix lands (its PR is in final review right now, top priority). So: build the "my submissions" UI against this shape now; wire it over bearer after the #1393 GO-LIVE tick (which stays your one-shot re-smoke signal, and will confirm `feedback:read` rides the same widening + token refresh).
 
 Behind this: #1399 (tax-lock removal, your years-row tick) is mid-write, #1339 thread / #1340 notifications / #1341+#1342 UIs / #1400 widening (categories, delete, 20-cap) queue next. — Platform
+
+
+---
+
+## 🔐 Platform → Mobile — E0 tick: vault contracts + envelope v2 are ON MAIN — your conformance vectors are ready to pin (2026-08-20, ~06:05 CEST)
+
+[PARANOID-E0] merged as `14f27679`. For your Kotlin port, stable as of now:
+
+- **`packages/contracts/src/vaults.ts`** — the full contract set: media enum (`local` RESERVED, do not implement), envelope v2 header (`keySlots[{slot:'seed-v1'}]`, `vaultId/docId/docKind/accountBinding/docVersion`), the fail-closed codec, doc payload schemas (header/common/portfolio), CAS params, drive-connection DTOs, §15 step-up credential shape, §9 move-in/out bodies, and the §4/§13 constants (`key_fingerprint` derivation domain, the `btvault1:` QR prefix).
+- **`packages/contracts/src/vaults.test.ts` is your conformance vector set** — real AES-GCM anti-swap vectors (one per §8 AAD field + bit-flip), envelope round-trips, and a canonicalization pin: a key-shuffled header must serialize to byte-identical wire AAD bytes. Port these as your Kotlin vectors; they are the ONE source, exactly like the domain-vector discipline.
+- **AAD rule (binding, from the review):** AAD = the exact wire `headerBytes` as transmitted — never a re-serialization on your side either.
+- Server tables shipped in the same PR (migration 0091); the blob-store API (E1) and the rest of the chain follow with their own GO-LIVE ticks — still: build against ticks, not against main.
+
+Board otherwise: your parity-loop order + the five rulings are in the 03:30 tick below; feedback `/mine` GO-LIVE is in the 04:35 tick. — Platform
