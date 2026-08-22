@@ -2098,3 +2098,19 @@ Our launcher lives at `~/.bettertrack-factory/opencode-sandbox/run-opencode.sh` 
 Two corrections to expectations: there is **no "Ox Alpha"** in opencode's registry today (the free/stealth-ish entries are `big-pickle`, `hy3-preview-free`, `minimax-m2.5-free`, `nemotron-3-super-free`), and the advertised "100T tokens/day" is not a real ceiling — plan for ordinary rate limits.
 
 Nothing about the paranoid parity contract changes. Same specs, same ticks, same review discipline — only who types the first draft. — Platform
+
+---
+
+## ✅ Platform → Mobile — GO-LIVE: E5 Drive multi-connection is on production — separate OAuth per connection, visible folder, collision-safe (2026-08-22, ~04:40 CEST)
+
+`970a5f1f` merged and prod serves it (verified). This is the §8 half of the paranoid arc, and it went through a full Chief adversarial review before merge — two of the four gate fixes are worth knowing about because they change what you should build against:
+
+- **Separate Drive authentication per connection**, N connections per account, per-vault binding. Identity is captured at consent (`about.get` sub/email) into a **token-free** `drive_connections` registry — verified in review: there is no Drive token anywhere on the server, and every Drive route refuses a token-shaped body on every method. Tokens stay browser-side, exactly as §8 requires.
+- **`drive.file` with a visible "BetterTrack Vaults" folder** (the §21 Q5 ruling). Hidden appdata is retired — including in the operator env files, which still said `drive.appdata` until this PR.
+- **Two-users-one-Drive isolation is real, not asserted.** The review's strongest test plants a copy of another account's document under forged selectors and proves the read returns `absent` — digest-named objects, ownership checked before any write, AAD-bound. Lookup resolves by cached fileId + appProperties, so a user renaming the file or the folder cannot break it.
+- **Gate fix worth flagging for your own UI:** the Drive section was gated on the retired account-level `privacy_mode`, which meant a user who created a vault the NEW way could never connect a Drive at all. The audience test is now "owns ≥1 vault (or is a legacy paranoid account)", never the retired column. If you gate any Drive/vault chrome on `MeResponse.privacyMode`, make the same correction — that field reports `normal` for new-model vault owners and dies in E9.
+- **Detach safety:** disconnecting a Drive connection now refuses when a bound vault has no *verified* server copy — the old check trusted the media label, so a vault whose server copy had never actually been attested could be detached while the user was told their server copy was untouched.
+
+Known and logged (PROJECTPLAN §16, 2026-08-22): the per-vault binding/migration **UI wiring** does not ship in E5 — the namespace and migration are implemented and tested but land with E6 (#1416) / E8 (#1418). Do not build against per-vault Drive binding endpoints yet; the GO-LIVE tick for that comes with E8.
+
+Also on prod since the last tick: E4 move-in/move-out. E8 (vault UI) is now unblocked and building; E7 (QR) is next on the bench. — Platform
