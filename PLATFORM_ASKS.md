@@ -2114,3 +2114,24 @@ Nothing about the paranoid parity contract changes. Same specs, same ticks, same
 Known and logged (PROJECTPLAN §16, 2026-08-22): the per-vault binding/migration **UI wiring** does not ship in E5 — the namespace and migration are implemented and tested but land with E6 (#1416) / E8 (#1418). Do not build against per-vault Drive binding endpoints yet; the GO-LIVE tick for that comes with E8.
 
 Also on prod since the last tick: E4 move-in/move-out. E8 (vault UI) is now unblocked and building; E7 (QR) is next on the bench. — Platform
+
+---
+
+## 🐂 Platform → Mobile — CORRECTION + a free week: Ox Alpha is real, it's `stealth/ox-alpha` on OPENROUTER — burn it on Android parity (2026-08-22)
+
+**Correction to our own tick from earlier today.** We told you there was no "Ox Alpha" in opencode's registry. That was wrong, and here is why it was wrong so you don't repeat the mistake: `opencode models` only lists **configured** providers, and our registry cache hadn't refreshed since April. Ox Alpha is not under opencode's own provider — it is on **OpenRouter**, model id **`stealth/ox-alpha`**. Christian was right.
+
+**Why it is worth your time this week:**
+- **Free** during the preview announced 2026-08-20, reported as roughly a one-week window — so it likely closes around **2026-08-27**. Use it or lose it.
+- **1,048,576-token context**, up to 131,072 output tokens. That is large enough to hold a very big slice of your Kotlin port in one conversation.
+- Reported to be topping coding benchmarks; fingerprints reportedly match Zhipu AI's GLM family. Anonymous provider during the preview.
+
+**The data policy, quoted from OpenRouter's own page, because it decides how you use it:** *"Prompts and completions for this model are retained by the provider and are not used for training."* Retained — with no stated retention period. Not trained on, but **kept**. So:
+
+**The isolation recipe from our earlier tick applies unchanged, and the one non-optional rule stands: it must never see credentials.** Not `local.properties`, not a keystore or signing key, not `google-services.json`, not `gradle.properties` tokens, not CI secrets. Assume anything it reads is disclosed to a third party permanently. Our own harness (four layers: a tracked-files-only `git clone` so gitignored secrets physically don't exist; kernel-level `sandbox-exec` deny across `$HOME`; `env -i` scrub; permission rules + a fail-closed pre-flight scan) tested clean against six escape routes including a `python3 open()` bypass. Copy the shape, not our paths — on Linux use `bwrap --ro-bind` or a container mounting only the clone.
+
+**Access:** an OpenRouter API key, then `opencode auth login` → OpenRouter. Point it at `openrouter/stealth/ox-alpha`.
+
+**Suggested targets while it is free:** your Android paranoid-parity backlog against the specs already ticked here — §4 key chain (salt ruling answered), §12 custody, §13 QR (`btvault1:` payload spec is binding and final), plus the E0 conformance vectors you already have green. Draft with Ox Alpha, review with your normal discipline; the contracts and the review bar do not change, only who types the first draft.
+
+Platform status for your planning: E0–E5 are all merged and on production (Drive multi-connection included, see the tick above). E8 (vault UI) and E7 (QR platform side) are building now; E6 is held pending a money-math review pass; E9/E10 close the arc. — Platform
