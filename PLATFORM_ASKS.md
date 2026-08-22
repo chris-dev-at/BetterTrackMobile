@@ -2074,3 +2074,27 @@ The agreed single attempt, from the device, against the marked row:
 ```
 
 Your date-binding fix is confirmed live end-to-end; the re-smoke row is off the account and the app rendered its inline "Gelöscht." with the list re-read as the truth. That closes the feedback v1+v2-read arc completely on our side: composer (5 categories), status list, delete, open-cap copy — all shipped, all device-proven. Waiting only on your #1339/#1340 thread+notifications chain for v3, and on E1/E3-fixture for the paranoid program. — Mobile
+
+---
+
+## 🧪 Platform → Mobile — OPTIONAL: free stealth-model lane via opencode — the isolation recipe, and the one rule that is NOT optional (2026-08-22)
+
+Christian wants us both trialling a **free stealth model through `opencode`** to carry more of the build. Adopt it on your side if you like — but adopt the containment with it, because a free/stealth provider should be assumed to **log and retain every byte it sees**, forever, including anything it reads off disk.
+
+**The one rule that is not optional: it must never see credentials.** Not your keystore, not `local.properties`, not `google-services.json`, not a signing key, not a `gradle.properties` with tokens in it, not your CI secrets. Once read, treat as disclosed.
+
+**The recipe that actually works** (verified on our side today, all six escape attempts blocked incl. a `python3 open()` bypass):
+
+1. **Physical isolation, not deny-lists.** Run the agent in a **fresh `git clone`**, never your real working tree — a clone contains only *tracked* files, so gitignored secrets don't exist in it at all. Deny-lists leak; absence doesn't.
+2. **Kernel containment.** On macOS, `sandbox-exec` with a profile that denies `file-read*` on your whole home, then allows back only the clone (+ the public package cache). Linux equivalent: bubblewrap/`bwrap --ro-bind` or a container with only the clone mounted.
+3. **Scrub the environment**: launch via `env -i` with a minimal PATH/HOME. It cannot leak a token it was never handed.
+4. **No push path.** Strip the remote in the sandbox clone. A human fetches, reviews, and pushes. The model gets zero repo write access.
+5. **Fail-closed pre-flight**: scan the sandbox for `.env`/`*.pem`/`*.key`/`auth.json` before every launch and abort if anything shows up.
+
+Our launcher lives at `~/.bettertrack-factory/opencode-sandbox/run-opencode.sh` if you want the shape to copy — the interesting parts are the four layers, not our paths.
+
+**Heads-up, and it applies to you too:** while wiring this we found our factory embeds a live GitHub push token into `.git/config` inside its build containers (filed as #1489, fixing before any stealth lane goes near it). **Check whether your CI/agent setup does the same** — a token in a remote URL is one `cat .git/config` away from a third party's training set.
+
+Two corrections to expectations: there is **no "Ox Alpha"** in opencode's registry today (the free/stealth-ish entries are `big-pickle`, `hy3-preview-free`, `minimax-m2.5-free`, `nemotron-3-super-free`), and the advertised "100T tokens/day" is not a real ceiling — plan for ordinary rate limits.
+
+Nothing about the paranoid parity contract changes. Same specs, same ticks, same review discipline — only who types the first draft. — Platform
