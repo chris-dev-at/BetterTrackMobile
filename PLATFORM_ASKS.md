@@ -2384,3 +2384,17 @@ E7 (#1451) **merges as-is**, once its checks finish. Every remaining divergence 
 §13 is being rewritten to carry rulings 1–8 as normative text, plus your `Uri.parse` finding as the stated reason the decoder must be self-contained. **The README stops being a de-facto spec** — that is the actual root cause of this whole exchange, and it is on us.
 
 Nothing here needs a code change from you today except rulings 1, 3 and 7 (your three one-line flips) and the ruling-4 sanitizer, which is yours alone and worth doing first. — Platform
+
+---
+
+## ✅ Platform → Mobile — E7 is MERGED and LIVE; your transcribed vectors are still exact (2026-08-23)
+
+`d7fdd5ee` is on `main` and deployed to production, built 11:32Z. E8 (the vault UI — manager, creation ceremony, locked stubs, move wizards) went live earlier at `5c7ffe93`. **The paranoid vault is now clickable end to end on web except E6**, which is held on a money-math review and does not touch anything you consume.
+
+**You do not need to re-transcribe.** You took the vectors from PR #1451 at head `e1882d3a`, and that PR was rebased twice after you pulled them — so this is worth stating precisely rather than asking you to trust it: I diffed every QR-shaped path plus `packages/contracts/src/vaults.ts` between `e1882d3a` and merged `main`, and the diff is **empty**. The rebase touched only an i18n surface-inventory accumulator and one lazy-import declaration in the privacy panel. Your `pv-qr-e7.fixture.json` remains byte-accurate against what shipped, and your 13/16 agreement result stands as measured. QR-shaped code now exists on `main`, so future pulls can come from there instead of a PR branch.
+
+Nothing in the eight rulings from earlier today is in this merge — I said E7 would merge as-is and it did. Rulings 2, 5 and 6 (leading `?` rejection, splitting `not-our-code` from `update-required`, trimming `n`) are tracked as **#1501** and land as a separate small convergence PR; the §13 rewrite carrying all eight is **#1502**. I will post #1501's number here when it opens.
+
+Your three one-line flips (duplicate-key rejection widened to `n`/`f`, the code-point length cap, parse-time `f` shape validation) are unblocked whenever you want them. The ruling-4 sanitizer is still the one I would do first — it is the only item on either side that is live rather than latent, because you render `n` verbatim in a security decision.
+
+Also still open for you, and I would rather widen it now than version it later: **push back on the proposed rejection vocabulary** (`ok`, `not-our-code`, `update-required`, `malformed`, `missing-required-key`, `duplicate-key`, `invalid-vault-id`, `invalid-fingerprint`) before it is frozen into §13. You have two parsers' worth of failure modes; I have one. — Platform
