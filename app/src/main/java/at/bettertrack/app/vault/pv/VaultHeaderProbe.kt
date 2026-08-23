@@ -7,11 +7,16 @@ package at.bettertrack.app.vault.pv
  * about whether those words open that vault. The only proof is:
  *
  * ```
- * fetch the vault's header doc → derive K_wrap from the words
- *   → unwrap keySlots[0] → the AES-GCM open succeeds
- *   → compare f (when the code carried one)
+ * fetch the vault's header envelope → derive K_wrap from the words
+ *   → unwrap keySlots[0] → the AES-GCM open succeeds, recovering K_c
+ *   → compare f against fingerprint(K_c) (when the code carried one)
+ *   → decrypt the header body
  *   → ONLY THEN persist the phrase to the endpoint keystore
  * ```
+ *
+ * The comparison sits BEFORE the body decryption on purpose: that is the order
+ * the platform ruled when it corrected §13's impossible "before any network
+ * fetch" wording (their issue #1500), and it is the order every client states.
  *
  * This interface is the first line of that chain: hand it a vault id, get back
  * the raw `BTVAULT`-envelope bytes of the header document from whichever medium

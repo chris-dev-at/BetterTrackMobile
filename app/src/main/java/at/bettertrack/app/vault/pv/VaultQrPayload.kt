@@ -47,13 +47,19 @@ import kotlinx.serialization.json.JsonObject
  * `K_c` is a random content key that is only recoverable by unwrapping
  * `keySlots[0]` out of the vault's **header document** — which is a network
  * fetch. Words alone derive `K_wrap`, never `K_c`, so there is nothing to
- * compare `f` against offline. The platform has acknowledged the wording defect;
- * the authoritative flow is the receiver's **fetch-then-compare**:
+ * compare `f` against offline.
+ *
+ * The platform has confirmed the wording defect and is correcting §13 (their
+ * issue #1500). The ruled flow is the receiver's **fetch-then-compare**, and the
+ * order of its middle two steps is part of the ruling — the fingerprint is
+ * compared *before* the header body is decrypted, not after:
  *
  * ```
- * scan → offline validation (below) → fetch the vault header doc
- *      → prove the words decrypt it → compare f when present
- *      → only then persist the phrase to the endpoint keystore
+ * scan → offline validation (below) → fetch the vault header envelope
+ *      → derive K_wrap from the words → unwrap keySlots[0] to recover K_c
+ *      → compare f against fingerprint(K_c) when the code carried one
+ *      → only then decrypt the header body, and only then persist the
+ *        phrase to the endpoint keystore
  * ```
  *
  * `f` is therefore carried verbatim and used as a *confirmation* after the

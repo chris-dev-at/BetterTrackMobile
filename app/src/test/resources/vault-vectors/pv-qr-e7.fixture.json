@@ -1,0 +1,313 @@
+{
+  "_source": {
+    "provenance": "PLATFORM E7 conformance vectors - authored by the web client and transcribed here byte for byte. The 'payload' and 'web' members of every vector are theirs and were NOT computed by this app; the 'android' member is THIS app's observed behaviour, recorded beside theirs so a divergence cannot change silently in either direction.",
+    "tick": "2026-08-23 coordinator tick: the platform's E7 security review found no phrase-exposure path and flagged the one gap no code review can close - their vectors and our scanner had never been run against each other. This file closes it.",
+    "file": "apps/web/src/user/vault/qr/conformanceVectors.ts",
+    "readme": "apps/web/src/user/vault/qr/README.md",
+    "parser": "apps/web/src/user/vault/qr/payload.ts",
+    "repo": "chris-dev-at/BetterTrack",
+    "branch": "task/1417 - PR #1451 [PARANOID-E7], NOT yet merged to origin/main as of this transcription",
+    "commit": "e1882d3a5ac173c6dd6fc3db1c359a44d3cea2c1 (fetched 2026-08-23)",
+    "outcomeVocabulary": "Theirs: update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection. The two vocabularies are deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
+    "mnemonics": "The public BIP-39 all-zero-entropy phrase (128 bits). Not a real phrase; opens no real vault.",
+    "nameCap": "The web caps `n` at 64 Unicode CODE POINTS ([...value].length); this app caps it at 64 UTF-16 CODE UNITS (String.length). Sec13 says '<= 64 chars'. See the maxLengthComposedName note.",
+    "fingerprint": "The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint; this app carries any non-empty `f` verbatim because nothing offline can judge it and the comparison happens after the header fetch (Sec13 fetch-then-compare). Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none."
+  },
+  "golden": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+  "vectors": [
+    {
+      "name": "validRoundTrip",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "unknownPrefix",
+      "payload": "btvault2:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "update-required"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "UNSUPPORTED_VERSION"
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "bareString",
+      "payload": "m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "update-required"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-different-cause",
+      "note": "Both reject. The web collapses every non-`btvault1:` string into 'update-required'; this app splits it: a `btvault<n>:` prefix means UNSUPPORTED_VERSION ('update the app'), anything else means NOT_A_VAULT_CODE ('that is not a BetterTrack code'). Sec13's letter says 'anything else' gets the update notice; telling a user who scanned a Wi-Fi code to update the app is the reason this app diverged. Board question."
+    },
+    {
+      "name": "missingMnemonic",
+      "payload": "btvault1:v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "missing-mnemonic"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MISSING_REQUIRED_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Same decision; this app's reason is one step coarser (it does not name WHICH required key is missing) because the UI collapses phrase-adjacent reasons anyway."
+    },
+    {
+      "name": "missingVaultId",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about",
+      "web": {
+        "accepts": false,
+        "outcome": "missing-vault-id"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MISSING_REQUIRED_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Same decision, coarser reason - see missingMnemonic."
+    },
+    {
+      "name": "duplicateMnemonic",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about",
+      "web": {
+        "accepts": false,
+        "outcome": "invalid-mnemonic"
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "agreement": "different-decision",
+      "note": "DIVERGENCE. The web rejects a repeated `m` (invalid-mnemonic). This app takes the FIRST value, like URLSearchParams.get(), and accepts. Sec13's letter is silent on repeated keys; its stated rationale ('parsed as one application/x-www-form-urlencoded query string, which every platform parses identically') points at reject, because duplicate keys are exactly where platform form parsers do NOT agree. Not changed unilaterally: silent in Sec13 -> board question."
+    },
+    {
+      "name": "duplicateVaultId",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "invalid-vault-id"
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "agreement": "different-decision",
+      "note": "DIVERGENCE, same cause as duplicateMnemonic: the web rejects a repeated `v` (invalid-vault-id), this app takes the first value and accepts."
+    },
+    {
+      "name": "unknownExtraKey",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&future=ignored",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": "AbCdEfGhIjKlMn_o"
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "badChecksum",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "invalid-mnemonic"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "PHRASE_INVALID"
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "elevenWords",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "invalid-mnemonic"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "PHRASE_INVALID"
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "thirteenWords",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "invalid-mnemonic"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "PHRASE_INVALID"
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "uppercaseWords",
+      "payload": "btvault1:m=ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABANDON+ABOUT&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "plusSpaces",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "percent20Spaces",
+      "payload": "btvault1:m=abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20abandon%20about&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "nonAsciiName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Caf%C3%A9",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Café",
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Café",
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause"
+    },
+    {
+      "name": "maxLengthComposedName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Agrees for this vector only by luck of the alphabet: U+00E9 is one UTF-16 code unit, so the web's code-POINT cap and this app's code-UNIT cap coincide at 64. They part company on astral characters - 64 emoji is 64 code points (web accepts) and 128 code units (this app rejects NAME_TOO_LONG). Sec13 says '<= 64 chars' and settles nothing."
+    }
+  ]
+}

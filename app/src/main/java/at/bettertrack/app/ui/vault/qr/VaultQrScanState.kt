@@ -96,13 +96,18 @@ data class VaultQrChecks(
  * property is a unit test and not a code review: *no input reaches
  * [VaultQrVerification.Verified] on this build.*
  *
- * The real chain is: fetch the vault's header doc → derive `K_wrap` from the
- * words → unwrap `keySlots[0]` → the AES-GCM open succeeds → compare `f` when
- * the code carried one → only then may custody persist the phrase. This build
- * has neither half of it: the platform's per-vault blind store (epic E1) is not
- * deployed, so [VaultHeaderProbe] cannot fetch, and the per-vault derivation
- * chain (epic E3) does not exist in this package, so even a fetched header could
- * not be turned into a proof.
+ * The real chain is: fetch the vault's header envelope → derive `K_wrap` from
+ * the words → unwrap `keySlots[0]` to recover `K_c` → compare `f` against
+ * `fingerprint(K_c)` when the code carried one → decrypt the header body → only
+ * then may custody persist the phrase.
+ *
+ * The *cryptographic* half of that chain now exists in this app — E3's
+ * derivation chain (`vault.pv.keys`) and `decryptPvDoc` landed with the E1/E3
+ * tick — so the missing piece is no longer the maths. It is the seam: no
+ * [VaultHeaderProbe] is bound to a real medium (`NotAvailableVaultHeaderProbe`
+ * is still the only implementation in the tree), and the header→unwrap→compare
+ * steps are not wired into this function. Until both land, every input reaches
+ * the same honest dead end.
  *
  * Both dead ends answer [VaultQrVerification.Unavailable] — the honest,
  * stores-nothing state — rather than defaulting to success. That default is the
@@ -118,7 +123,7 @@ suspend fun verifyScannedPhrase(
         // Bytes came back — and bytes are not a proof. Returning Verified here
         // because "the server answered" would store unverified words, which is
         // exactly the bug this function exists to make impossible. The arm stays
-        // written out so that landing E3 is a compile-guided edit at this line.
+        // written out so that wiring a real probe is a compile-guided edit here.
         else -> VaultQrVerification.Unavailable
     }
 }
