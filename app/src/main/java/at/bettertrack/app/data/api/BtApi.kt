@@ -187,8 +187,25 @@ import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionResponse
 import at.bettertrack.app.data.api.dto.ValuePointsResponse
 import at.bettertrack.app.data.api.dto.VersionResponse
+// ── Paranoid vaults E1 (per-vault blind blob store, live 2026-08-23) ────────
+import at.bettertrack.app.data.api.dto.CreateVaultRequest
+import at.bettertrack.app.data.api.dto.DeleteVaultRequest
+import at.bettertrack.app.data.api.dto.DeleteVaultResponse
+import at.bettertrack.app.data.api.dto.PatchVaultRequest
+import at.bettertrack.app.data.api.dto.PerVaultMediaStateResponse
+import at.bettertrack.app.data.api.dto.PerVaultMediaTransitionRequest
+import at.bettertrack.app.data.api.dto.PerVaultMediaTransitionResponse
+import at.bettertrack.app.data.api.dto.PerVaultRetiredServerPurgeChallengeRequest
+import at.bettertrack.app.data.api.dto.PerVaultRetiredServerPurgeChallengeResponse
+import at.bettertrack.app.data.api.dto.PerVaultRetiredServerPurgeRequest
+import at.bettertrack.app.data.api.dto.PerVaultRetiredServerPurgeResponse
+import at.bettertrack.app.data.api.dto.PerVaultServerCandidateDto
+import at.bettertrack.app.data.api.dto.VaultConfigResponse
+import at.bettertrack.app.data.api.dto.VaultHistoryListResponse
+import at.bettertrack.app.data.api.dto.VaultListResponse
 import at.bettertrack.app.data.api.dto.WorkboardItemDto
 import at.bettertrack.app.data.api.dto.WorkboardListResponse
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -1951,4 +1968,223 @@ interface BtApi {
      */
     @DELETE("feedback/{id}")
     suspend fun deleteFeedback(@Path("id") id: String): Response<Unit>
+
+    // ── Paranoid vaults E1: the per-vault blind blob store ───────────────────
+    //
+    // Live on production 2026-08-23. Every path, parameter, header and body
+    // below is transcribed from the DEPLOYED `openapi.json`, read on 2026-08-23.
+    // Where the announcing tick and the deployed schema disagreed the schema
+    // won: the server-candidate read-back is a `GET` that returns the candidate
+    // bytes plus a verification receipt, not the `DELETE` the tick described.
+    //
+    // Dormant behind `ParanoidVaultsFlags.enabled` — the only caller is
+    // `at.bettertrack.app.vault.pv.store.PvBlobStore`, which nothing outside
+    // `vault/pv/…` and its tests constructs.
+    //
+    // Auth, as the schema declares it: the OPAQUE surfaces (doc read/write, doc
+    // history, media read) and the vault delete carry `apiKeyBearer` beside the
+    // session cookie — the `vault:sync` bearer exception of §6, re-keyed per
+    // vault. Vault CRUD, the media PATCH, candidate staging and the purge pair
+    // are session-cookie only, so on this app's bearer they answer
+    // `403 API_KEY_FORBIDDEN` by design. They are modelled anyway: a client that
+    // knows the shape can be proven to agree with the contract, and the refusal
+    // is then a designed state rather than a surprise.
+
+    /** `GET /vaults` — the caller's cleartext vault storage configurations. */
+    @GET("vaults")
+    suspend fun pvVaults(): Response<VaultListResponse>
+
+    /**
+     * `POST /vaults` — "create a vault configuration with **client-minted
+     * singleton doc ids** and an immutable retirement verifier".
+     *
+     * `headerDocId` and `commonDocId` come from the client and are registered on
+     * the vault row; they are what later makes a doc id resolvable to a kind
+     * without a lookup table. `keyFingerprint` and `retirementProofPublicKey`
+     * are derived from key material the server never sees.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("vaults")
+    suspend fun pvCreateVault(@Body body: CreateVaultRequest): Response<VaultConfigResponse>
+
+    /** `GET /vaults/{vaultId}` — another owner's id is not found, never forbidden. */
+    @GET("vaults/{vaultId}")
+    suspend fun pvVault(@Path("vaultId") vaultId: String): Response<VaultConfigResponse>
+
+    /** `PATCH /vaults/{vaultId}` — rename only; media transition state untouched. */
+    @Headers("Content-Type: application/json")
+    @PATCH("vaults/{vaultId}")
+    suspend fun pvPatchVault(
+        @Path("vaultId") vaultId: String,
+        @Body body: PatchVaultRequest,
+    ): Response<VaultConfigResponse>
+
+    /**
+     * `DELETE /vaults/{vaultId}` — "delete an unreferenced vault only after
+     * in-request password, TOTP, or recovery-code step-up" (§15).
+     *
+     * DELETE with a body needs `@HTTP`, exactly as [deleteAccount] does. The
+     * server also refuses while any retirement row still exists, so a vault whose
+     * `server` medium was removed cannot be deleted around the §7 purge gate.
+     */
+    @Headers("Content-Type: application/json")
+    @HTTP(method = "DELETE", path = "vaults/{vaultId}", hasBody = true)
+    suspend fun pvDeleteVault(
+        @Path("vaultId") vaultId: String,
+        @Body body: DeleteVaultRequest,
+    ): Response<DeleteVaultResponse>
+
+    /**
+     * `GET /vaults/{vaultId}/docs/{docId}` — one opaque document, byte for byte,
+     * with its per-document `ETag`.
+     *
+     * The response is [ResponseBody] rather than a modelled type because it *is*
+     * opaque: envelope v2 ciphertext the server never interprets. `Response<T>`
+     * is what exposes the `ETag`, and the `ETag` is the whole point — it is the
+     * CAS token the next write has to carry.
+     *
+     * [ifNoneMatch] makes it conditional; a match answers `304` with no
+     * ciphertext. Null is omitted by Retrofit, so an unconditional read is the
+     * default.
+     * [vault:sync]
+     */
+    @GET("vaults/{vaultId}/docs/{docId}")
+    suspend fun pvReadVaultDoc(
+        @Path("vaultId") vaultId: String,
+        @Path("docId") docId: String,
+        @Header("If-None-Match") ifNoneMatch: String?,
+    ): Response<ResponseBody>
+
+    /**
+     * `PUT /vaults/{vaultId}/docs/{docId}` — **first creation only**.
+     *
+     * `If-None-Match: *` is a static `@Headers` annotation rather than a
+     * parameter on purpose: the wildcard has exactly one legal value, so making
+     * it a parameter would only create the opportunity to pass a different one.
+     * A `PUT` with no precondition is refused `428`, and between this method and
+     * [pvReplaceVaultDoc] there is no way to express one.
+     *
+     * Answers `204` with the new `ETag`.
+     * [vault:sync]
+     */
+    @Headers("If-None-Match: *")
+    @PUT("vaults/{vaultId}/docs/{docId}")
+    suspend fun pvCreateVaultDoc(
+        @Path("vaultId") vaultId: String,
+        @Path("docId") docId: String,
+        @Body envelope: RequestBody,
+    ): Response<Unit>
+
+    /**
+     * `PUT /vaults/{vaultId}/docs/{docId}` — **replace exactly one version**.
+     *
+     * [ifMatch] is a non-null `String`, so Kotlin's null-safety makes omitting it
+     * a compile error rather than a `428` discovered in production. The value is
+     * the `ETag` a read returned, repeated verbatim: the server compares
+     * validators, not integers, and this client never re-derives one.
+     *
+     * `412` on a lost race — or on a `writeId` already bound to different bytes.
+     * `PvBlobStore` is what tells those two apart, because their remedies differ.
+     * [vault:sync]
+     */
+    @PUT("vaults/{vaultId}/docs/{docId}")
+    suspend fun pvReplaceVaultDoc(
+        @Path("vaultId") vaultId: String,
+        @Path("docId") docId: String,
+        @Header("If-Match") ifMatch: String,
+        @Body envelope: RequestBody,
+    ): Response<Unit>
+
+    /** `GET /vaults/{vaultId}/docs/{docId}/history` — the restore picker's index. [vault:sync] */
+    @GET("vaults/{vaultId}/docs/{docId}/history")
+    suspend fun pvVaultDocHistory(
+        @Path("vaultId") vaultId: String,
+        @Path("docId") docId: String,
+        @Query("cursor") cursor: Int?,
+        @Query("limit") limit: Int?,
+    ): Response<VaultHistoryListResponse>
+
+    /**
+     * `GET /vaults/{vaultId}/docs/{docId}/history/{version}` — one retained
+     * ciphertext, byte-identical, for restore. [vault:sync]
+     */
+    @GET("vaults/{vaultId}/docs/{docId}/history/{version}")
+    suspend fun pvVaultDocHistoryVersion(
+        @Path("vaultId") vaultId: String,
+        @Path("docId") docId: String,
+        @Path("version") version: Int,
+    ): Response<ResponseBody>
+
+    /** `GET /vaults/{vaultId}/media` — media set, attestation, candidates, retirement. [vault:sync] */
+    @GET("vaults/{vaultId}/media")
+    suspend fun pvVaultMedia(@Path("vaultId") vaultId: String): Response<PerVaultMediaStateResponse>
+
+    /**
+     * `PATCH /vaults/{vaultId}/media` — commit one verified full-document-set
+     * media transition. Removing `server` retires the bytes into the recovery
+     * set instead of purging them (§7). Session-cookie only.
+     */
+    @Headers("Content-Type: application/json")
+    @PATCH("vaults/{vaultId}/media")
+    suspend fun pvPatchVaultMedia(
+        @Path("vaultId") vaultId: String,
+        @Body body: PerVaultMediaTransitionRequest,
+    ): Response<PerVaultMediaTransitionResponse>
+
+    /**
+     * `GET /vaults/{vaultId}/media/server-candidate/{candidateId}` — read one
+     * staged candidate back and receive its verification receipt in
+     * `X-BetterTrack-Vault-Candidate-Readback`.
+     *
+     * **Drift:** the tick announcing E1 described this path as a `DELETE`. The
+     * deployed schema declares a `GET` and no `DELETE` at all. Session-cookie only.
+     */
+    @GET("vaults/{vaultId}/media/server-candidate/{candidateId}")
+    suspend fun pvReadVaultServerCandidate(
+        @Path("vaultId") vaultId: String,
+        @Path("candidateId") candidateId: String,
+    ): Response<ResponseBody>
+
+    /**
+     * `PUT /vaults/{vaultId}/media/server-candidate/{transitionId}/docs/{docId}`
+     * — stage one opaque candidate inside a client-chosen transition.
+     *
+     * No precondition here, and correctly so: a candidate is not a live doc, and
+     * re-staging deliberately ROTATES `candidateId` so an old receipt is not
+     * reusable. The CAS discipline belongs to the commit, which only accepts a
+     * set in which every live doc carries a candidate under this same
+     * `transitionId`. Session-cookie only.
+     */
+    @PUT("vaults/{vaultId}/media/server-candidate/{transitionId}/docs/{docId}")
+    suspend fun pvStageVaultServerCandidate(
+        @Path("vaultId") vaultId: String,
+        @Path("transitionId") transitionId: String,
+        @Path("docId") docId: String,
+        @Body envelope: RequestBody,
+    ): Response<PerVaultServerCandidateDto>
+
+    /**
+     * `POST /vaults/{vaultId}/media/retired/purge/challenge` — a short-lived
+     * challenge bound to one retirement generation and version-set hash (§7).
+     * Session-cookie only.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("vaults/{vaultId}/media/retired/purge/challenge")
+    suspend fun pvVaultRetiredPurgeChallenge(
+        @Path("vaultId") vaultId: String,
+        @Body body: PerVaultRetiredServerPurgeChallengeRequest,
+    ): Response<PerVaultRetiredServerPurgeChallengeResponse>
+
+    /**
+     * `POST /vaults/{vaultId}/media/retired/purge` — destroy a retained server
+     * set, only after the retention floor and a valid Ed25519 transcript proof
+     * made with the key that lives inside the encrypted common doc (§7).
+     * Session-cookie only.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("vaults/{vaultId}/media/retired/purge")
+    suspend fun pvVaultRetiredPurge(
+        @Path("vaultId") vaultId: String,
+        @Body body: PerVaultRetiredServerPurgeRequest,
+    ): Response<PerVaultRetiredServerPurgeResponse>
 }

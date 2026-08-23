@@ -48,34 +48,49 @@ import at.bettertrack.app.vault.v2.hkdfSha256
  *  - `accountBinding` is a plain digest, `base64url(sha256(prefix + accountId))`
  *    — already built, in `pv/envelope/PvDocCrypto.kt`, and not repeated here.
  *
- * ## What is still NOT proven, stated plainly
+ * ## Cross-client byte-identity: PROVEN, as of 2026-08-23
  *
- * The chain is implemented and self-consistent; **cross-client byte-identity is
- * not yet demonstrated against the platform's own numbers**. Epic E3's
- * conformance fixture has not shipped. What exists instead, and what each thing
- * is worth, is spelled out on [PV_E3_PINNED] and in `PvVaultKeyDerivationTest`.
+ * The earlier revision of this file said the chain was implemented and
+ * self-consistent but had never been checked against another client's numbers.
+ * That is no longer the case: the platform's E3 conformance vectors shipped and
+ * are replayed here. What they pin, and by whose bytes, is on [PV_E3_PINNED].
  */
 
 /**
  * Whether the E3 derivation is pinned against the **platform's** E3 vectors.
  *
- * Still `false`, and deliberately so — it does not mean "unimplemented", it
- * means "not yet proven byte-identical to another client". Three things are
- * true at once and only the third is missing:
+ * `true` since 2026-08-23. It does not mean "the chain compiles" — it means the
+ * bytes below are the PLATFORM's, transcribed from
+ * `apps/web/src/user/vault/keys/keys.test.ts` (`chris-dev-at/BetterTrack`,
+ * `origin/main` `970a5f1f`), and that this client reproduces every one of them:
+ *
+ * ```
+ * mnemonic  "abandon ×11 about"        vaultId 018f6a3e-1111-…-0001
+ * K_wrap    d7b530f6785808e62075af39ad66ea65a7bdcfe1748f3f414d94020f3b5b68c6
+ * K_c       000102…1e1f                (their injected CSPRNG: bytes from 0x00)
+ * wrappedKc ICEiIyQlJicoKSorbDGcHk22PjwIQXq5rfPlReFkaqQjhKeWqpg-euSE-1bKKmTWvYTDSRd1nfSCRbjQ
+ * fingerprint SGn1pC05gjstkyjs
+ * accountBinding uInyTdYZ_BcxUihO_Kmd3mZqzL1pf0oTqk_xezqrWX4
+ * envelope  the complete 921-byte BTVAULT1 v2 header document
+ * ```
+ *
+ * The fixture is `vault-vectors/pv-derivation.e3.fixture.json`, whose `_source`
+ * block names the tick, the platform file and the commit. The self-derived
+ * stand-in it replaced (`pv-derivation.selfderived.fixture.json`) is DELETED —
+ * its own marker read "replace, never merge", and
+ * `PvVaultKeyDerivationTest` now fails if that file ever reappears next to this
+ * one, because a self-derived fixture sitting beside an authored one is exactly
+ * how a future author would mistake the first for the second.
+ *
+ * Three layers of proof now hold at once, and the third is no longer missing:
  *
  *  1. every parameter of the chain is RULED (see the file KDoc) and written;
  *  2. the HKDF primitive underneath it is pinned against the **public RFC 5869**
  *    vectors (A.1–A.3, the SHA-256 set — `PvHkdfVectorTest`), and the BIP-39
  *    step against the published Trezor set, so the machinery is not self-checked;
- *  3. the FULL chain — mnemonic → seed → K_wrap → fingerprint → slot wrap — is
- *    covered only by a **self-derived** fixture
- *    (`vault-vectors/pv-derivation.selfderived.fixture.json`), which proves this
- *    client agrees with itself over time and with an independent WebCrypto
- *    implementation of the same spec. It is NOT the platform's authored data and
- *    is not treated as such: it says so in its own `_provenance`.
- *
- * Flip this the day `vault-vectors/pv-derivation.fixture.json` lands from the
- * platform, not before, and delete the self-derived file in the same change.
+ *  3. the FULL chain — mnemonic → seed → K_wrap → K_c → slot wrap → fingerprint
+ *    → document envelope — reproduces the platform's authored bytes exactly
+ *    (`PvVaultKeyDerivationTest`, `PvKeySlotWrapTest`, `PvE3EnvelopeVectorTest`).
  *
  * `val`, not `const val`, for the reason
  * [at.bettertrack.app.vault.pv.ParanoidVaultsFlags] gives for the same choice: a
@@ -83,7 +98,7 @@ import at.bettertrack.app.vault.v2.hkdfSha256
  * warns about, and those warnings push the next author to delete the guard
  * instead of answering the question behind it.
  */
-internal val PV_E3_PINNED: Boolean = false
+internal val PV_E3_PINNED: Boolean = true
 
 /** K_wrap is a 256-bit AES key — the platform's answer, 2026-08-20. */
 internal const val PV_WRAP_KEY_BYTES: Int = 32
@@ -182,12 +197,32 @@ internal fun pvRequireVaultId(vaultId: String) {
     }
 }
 
-/** K_c is AES-256. */
+/**
+ * K_c is AES-256, **and it is never all zero**.
+ *
+ * The length half is obvious. The second half is the literal translation of the
+ * platform's `requireContentKey` (`keys/keyValidation.ts`): all-zero is the
+ * SENTINEL a wiped K_c leaves behind, because zeroization overwrites the buffer
+ * in place rather than freeing it. Without this check a caller that used a key
+ * after locking the vault would not fail — it would encrypt real rows under a
+ * constant, publicly known key and write them to the server, and the format
+ * gives no later opportunity to notice. The platform pins the refusal with its
+ * own vector ("rejects a zeroized content key before key-slot encryption
+ * begins"), including that no CSPRNG draw happens first.
+ */
 internal fun pvRequireContentKey(contentKey: ByteArray) {
     if (contentKey.size != PV_WRAP_KEY_BYTES) {
         throw VaultCryptoError(
             VaultCryptoErrorCode.KDF_FAILED,
             "The vault content key must be $PV_WRAP_KEY_BYTES bytes.",
+        )
+    }
+    var aggregate = 0
+    for (byte in contentKey) aggregate = aggregate or byte.toInt()
+    if (aggregate == 0) {
+        throw VaultCryptoError(
+            VaultCryptoErrorCode.KDF_FAILED,
+            "The vault content key must not be all zero.",
         )
     }
 }

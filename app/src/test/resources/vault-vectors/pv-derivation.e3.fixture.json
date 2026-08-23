@@ -1,0 +1,101 @@
+{
+  "_source": {
+    "provenance": "PLATFORM E3 conformance vectors - authored by the web client and transcribed here byte for byte. Nothing in the 'chain', 'accountBinding' or 'envelope' blocks was computed by this app.",
+    "tick": "2026-08-23 coordinator tick: \"the platform finally shipped the E3 conformance vectors\".",
+    "file": "apps/web/src/user/vault/keys/keys.test.ts",
+    "repo": "chris-dev-at/BetterTrack",
+    "commit": "970a5f1f3ab2e0faa0f39d7aa7c7e89fd2342121 (origin/main, fetched 2026-08-23)",
+    "tests": [
+      "seed phrase key derivation and document vectors > 'pins K_wrap, random K_c, wrapped slot, fingerprint, and a full envelope'",
+      "seed phrase key derivation and document vectors > 'authenticates exact noncanonical wire header bytes instead of reserializing'",
+      "seed phrase key derivation and document vectors > 'fails closed for every binding header tamper and format rollback'",
+      "seed phrase key derivation and document vectors > 'domain-separates a reused phrase and independent random content keys by vault'",
+      "seed phrase key derivation and document vectors > 'rejects a zeroized content key before key-slot encryption begins'"
+    ],
+    "replaces": "pv-derivation.selfderived.fixture.json, DELETED in the same change. Its own marker read \"self-derived pending platform E3 fixture - replace, never merge\", so it does not survive alongside this file.",
+    "csprng": "The platform test injects incrementingRandom(0): a CSPRNG stub returning 0x00,0x01,0x02,... across ONE stream shared by K_c (32 bytes -> 0x00..0x1f), then the key-slot IV (12 bytes -> 0x20..0x2b), then the document IV (12 bytes -> 0x2c..0x37). Production draws from SecureRandom; the injection point is the RandomBytes seam only.",
+    "mnemonics": "Public BIP-39 specification phrases (128-bit entropy). They are not real phrases and open no real vault.",
+    "parameters": {
+      "bip39": "PBKDF2-HMAC-SHA512(NFKD(mnemonic), NFKD(\"mnemonic\" + passphrase), 2048) -> 64 bytes, EMPTY passphrase",
+      "hkdfSalt": "EMPTY / ABSENT - the RFC 5869 default (HashLen zero bytes), for BOTH uses",
+      "wrapInfo": "bettertrack-vault-wrap-v1:${vaultId}",
+      "wrapLength": 32,
+      "fingerprintInfo": "bettertrack-vault-fingerprint-v1",
+      "fingerprintChars": "16 base64url CHARACTERS, not 16 bytes",
+      "slotAad": "bettertrack-vault-key-slot-v1:${vaultId}:${keyId}",
+      "slotLayout": "base64url(IV(12) || CT || TAG(16)), unpadded, AES-256-GCM under K_wrap",
+      "accountBinding": "base64url(sha256(\"bettertrack-vault-owner-v1:\" + accountId)), unpadded",
+      "docAad": "the EXACT wire header bytes, never a re-serialization"
+    }
+  },
+  "chain": [
+    {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "entropy": "00000000000000000000000000000000",
+      "seed": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+      "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+      "keyId": "018f6a3e-3333-7000-8000-000000000001",
+      "kWrap": "d7b530f6785808e62075af39ad66ea65a7bdcfe1748f3f414d94020f3b5b68c6",
+      "contentKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "slotIv": "202122232425262728292a2b",
+      "slotAad": "bettertrack-vault-key-slot-v1:018f6a3e-1111-7000-8000-000000000001:018f6a3e-3333-7000-8000-000000000001",
+      "wrappedKc": "ICEiIyQlJicoKSorbDGcHk22PjwIQXq5rfPlReFkaqQjhKeWqpg-euSE-1bKKmTWvYTDSRd1nfSCRbjQ",
+      "keyFingerprint": "SGn1pC05gjstkyjs",
+      "seedSource": "The published BIP-39 empty-passphrase seed for the all-zero-entropy phrase; the platform derives it rather than pinning it. Kept so the chain has an intermediate checkpoint."
+    }
+  ],
+  "accountBinding": {
+    "accountId": "vector-account",
+    "binding": "uInyTdYZ_BcxUihO_Kmd3mZqzL1pf0oTqk_xezqrWX4",
+    "note": "The platform test hard-codes the binding; the account id it hashes was recovered from deriveAccountBinding(\"vector-account\") in the same file and re-verified against the constant."
+  },
+  "envelope": {
+    "docId": "018f6a3e-2222-7000-8000-000000000001",
+    "docKind": "header",
+    "docVersion": 1,
+    "schemaVersion": 1,
+    "deviceId": "018f6a3e-4444-7000-8000-000000000001",
+    "writeId": "018f6a3e-5555-7000-8000-000000000001",
+    "writtenAt": "2026-08-20T12:00:00.000Z",
+    "ivHex": "2c2d2e2f3031323334353637",
+    "iv": "LC0uLzAxMjM0NTY3",
+    "headerJson": "{\"formatVersion\":2,\"cipher\":\"A256GCM\",\"iv\":\"LC0uLzAxMjM0NTY3\",\"keyId\":\"018f6a3e-3333-7000-8000-000000000001\",\"keySlots\":[{\"keyId\":\"018f6a3e-3333-7000-8000-000000000001\",\"slot\":\"seed-v1\",\"wrappedKc\":\"ICEiIyQlJicoKSorbDGcHk22PjwIQXq5rfPlReFkaqQjhKeWqpg-euSE-1bKKmTWvYTDSRd1nfSCRbjQ\"}],\"vaultId\":\"018f6a3e-1111-7000-8000-000000000001\",\"docId\":\"018f6a3e-2222-7000-8000-000000000001\",\"docKind\":\"header\",\"accountBinding\":\"uInyTdYZ_BcxUihO_Kmd3mZqzL1pf0oTqk_xezqrWX4\",\"docVersion\":1,\"schemaVersion\":1,\"deviceId\":\"018f6a3e-4444-7000-8000-000000000001\",\"writeId\":\"018f6a3e-5555-7000-8000-000000000001\",\"writtenAt\":\"2026-08-20T12:00:00.000Z\"}",
+    "documentJson": "{\"schemaVersion\":1,\"name\":\"TEST VECTOR vault\",\"portfolios\":[],\"keySlots\":[{\"keyId\":\"018f6a3e-3333-7000-8000-000000000001\",\"slot\":\"seed-v1\",\"wrappedKc\":\"ICEiIyQlJicoKSorbDGcHk22PjwIQXq5rfPlReFkaqQjhKeWqpg-euSE-1bKKmTWvYTDSRd1nfSCRbjQ\"}],\"driveConnection\":null,\"created\":{\"at\":\"2026-08-20T12:00:00.000Z\",\"deviceId\":\"018f6a3e-4444-7000-8000-000000000001\"}}",
+    "envelope": "QlRWQVVMVDEAAAJ4eyJmb3JtYXRWZXJzaW9uIjoyLCJjaXBoZXIiOiJBMjU2R0NNIiwiaXYiOiJMQzB1THpBeE1qTTBOVFkzIiwia2V5SWQiOiIwMThmNmEzZS0zMzMzLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJrZXlTbG90cyI6W3sia2V5SWQiOiIwMThmNmEzZS0zMzMzLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJzbG90Ijoic2VlZC12MSIsIndyYXBwZWRLYyI6IklDRWlJeVFsSmljb0tTb3JiREdjSGsyMlBqd0lRWHE1cmZQbFJlRmthcVFqaEtlV3FwZy1ldVNFLTFiS0ttVFd2WVREU1JkMW5mU0NSYmpRIn1dLCJ2YXVsdElkIjoiMDE4ZjZhM2UtMTExMS03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwiZG9jSWQiOiIwMThmNmEzZS0yMjIyLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJkb2NLaW5kIjoiaGVhZGVyIiwiYWNjb3VudEJpbmRpbmciOiJ1SW55VGRZWl9CY3hVaWhPX0ttZDNtWnF6TDFwZjBvVHFrX3hlenFyV1g0IiwiZG9jVmVyc2lvbiI6MSwic2NoZW1hVmVyc2lvbiI6MSwiZGV2aWNlSWQiOiIwMThmNmEzZS00NDQ0LTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJ3cml0ZUlkIjoiMDE4ZjZhM2UtNTU1NS03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwid3JpdHRlbkF0IjoiMjAyNi0wOC0yMFQxMjowMDowMC4wMDBaIn0ncu544dHoiUntB9No7s5VxFFql6zHxg7xZ-etFwOZhCyi-TBhL_DgOEqyWuX6Y1lyS91Y76UcQbelXTn9uvZXNktu_K7arsqrW8wTNatRX9QIfvFdfe2qIF8J_eaOm-vttgWPFdJ2S-D7j7nFBfhP8d81h2KJJosRChtl5kpo5HsFMS-EaV5bAdYMIreQF-RpdEgFgH0DqXhbTWMAPh5OqtYPEe7ZfGdVWKgFhOMTxOoYvjRLQfWkOta2owwtl80WEFZXW5V_jyxtp1WhtD5eCzMUt6Is-aAqXN6ZQiZJy8yqxBmGXQCgKaFcsXeCOzRYE0fSt17R2ZoliNcKosGT3Bz1MNvIhJEhFj-Wy_Vnneg2Lzpc",
+    "note": "BTVAULT1 || uint32BE(headerLength) || headerJson || ciphertext||tag. The plaintext is rawDeflate(utf8(documentJson)) (fflate 0.8.3), encrypted AES-256-GCM under K_c with the exact headerJson bytes as AAD."
+  },
+  "tampers": [
+    {
+      "field": "formatVersion",
+      "value": 1
+    },
+    {
+      "field": "vaultId",
+      "value": "018f6a3e-1111-7000-8000-000000000002"
+    },
+    {
+      "field": "docId",
+      "value": "018f6a3e-2222-7000-8000-000000000002"
+    },
+    {
+      "field": "accountBinding",
+      "value": "ZAVeQn9PIT12cJzwvJdiZ2g3ivQQsEOhwvMoK6oWRwI"
+    },
+    {
+      "field": "docVersion",
+      "value": 2
+    },
+    {
+      "field": "keyId",
+      "value": "018f6a3e-3333-7000-8000-000000000002"
+    }
+  ],
+  "otherAccountId": "other-account",
+  "tampersNote": "The platform's 'fails closed for every binding header tamper and format rollback' set. Each entry replaces ONE header member and the GCM tag must refuse the envelope.",
+  "rotationSecondLeg": {
+    "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+    "vaultId": "018f6a3e-1111-7000-8000-000000000002",
+    "keyId": "018f6a3e-3333-7000-8000-000000000002",
+    "note": "The platform names this phrase as the rotation second leg but pins no bytes for it. Nothing is pinned here either - only the PROPERTIES the platform asserts (a different phrase and a different vault id derive a different K_wrap, and a different K_c derives a different fingerprint)."
+  }
+}

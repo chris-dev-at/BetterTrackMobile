@@ -31,9 +31,9 @@ import org.junit.Test
  * access to a header can move, duplicate or roll back, and every one of those
  * moves has to end as an authentication failure rather than as a key.
  *
- * The pinned bytes come from `pv-derivation.selfderived.fixture.json`, whose
- * `wrappedKc` values were produced by an independent WebCrypto implementation
- * with a fixed IV. They are NOT the platform's numbers — see [PV_E3_PINNED].
+ * The pinned bytes come from `pv-derivation.e3.fixture.json` — the PLATFORM's
+ * E3 conformance vectors, transcribed from `keys/keys.test.ts` at `970a5f1f`.
+ * The self-derived stand-in they replaced is deleted; see [PV_E3_PINNED].
  */
 class PvKeySlotWrapTest {
 
@@ -240,11 +240,12 @@ class PvKeySlotWrapTest {
         )
     }
 
-    // ── the cross-checked bytes ─────────────────────────────────────────────
+    // ── the platform's bytes ────────────────────────────────────────────────
 
-    private val selfChain: List<JsonObject> by lazy {
-        val stream = javaClass.getResourceAsStream("/vault-vectors/pv-derivation.selfderived.fixture.json")
-            ?: error("vault-vectors/pv-derivation.selfderived.fixture.json missing from test resources")
+    private val platformChain: List<JsonObject> by lazy {
+        val path = "/vault-vectors/pv-derivation.e3.fixture.json"
+        val stream = javaClass.getResourceAsStream(path)
+            ?: error("$path missing from test resources")
         Json.parseToJsonElement(stream.bufferedReader().use { it.readText() })
             .jsonObject["chain"]!!
             .jsonArray
@@ -254,8 +255,8 @@ class PvKeySlotWrapTest {
     private fun JsonObject.str(key: String): String = this[key]!!.jsonPrimitive.content
 
     @Test
-    fun `every fixture row wraps to its cross-checked bytes and unwraps back`() {
-        selfChain.forEach { row ->
+    fun `every fixture row wraps to the platform's bytes and unwraps back`() {
+        platformChain.forEach { row ->
             val wrapKeyBytes = unhex(row.str("kWrap"))
             val kc = unhex(row.str("contentKey"))
             val produced = pvWrapContentKey(
@@ -265,7 +266,11 @@ class PvKeySlotWrapTest {
                 keyId = row.str("keyId"),
                 iv = unhex(row.str("slotIv")),
             )
-            assertEquals("wrappedKc for ${row.str("vaultId")}", row.str("wrappedKc"), produced.wrappedKc)
+            assertEquals(
+                "wrappedKc for ${row.str("vaultId")} — this is the PLATFORM's byte string",
+                row.str("wrappedKc"),
+                produced.wrappedKc,
+            )
             assertEquals(
                 "the fixture's own AAD",
                 row.str("slotAad"),
@@ -276,13 +281,13 @@ class PvKeySlotWrapTest {
                 hex(pvUnwrapContentKey(produced, wrapKeyBytes, row.str("vaultId"))),
             )
         }
-        assertEquals(3, selfChain.size)
+        assertEquals("the E3 chain lost rows", 1, platformChain.size)
     }
 
     @Test
     fun `the fixture's phrase opens the fixture's slot end to end`() {
         // The whole §4 chain in one statement: words in, K_c out.
-        val row = selfChain.first()
+        val row = platformChain.first()
         val seed = pvBip39Seed(row.str("mnemonic"))
         val derivedWrapKey = pvVaultWrapKey(seed, row.str("vaultId"))
         val stored = PvKeySlot(

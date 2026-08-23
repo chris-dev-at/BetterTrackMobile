@@ -22,10 +22,12 @@ import org.junit.Test
  *
  * ## Why this test exists next to the §4 chain
  *
- * The paranoid-vaults derivation (`PvVaultKeyDerivation.kt`) is HKDF twice, and
- * the platform's E3 conformance fixture has not shipped. Without an external
- * oracle the whole chain would be self-checked: this app agreeing with this app.
- * These vectors move the *primitive* out of that circle. What they prove:
+ * The paranoid-vaults derivation (`PvVaultKeyDerivation.kt`) is HKDF twice.
+ * These vectors move the *primitive* out of the app's own circle — they are
+ * public data, owned by neither client, so they still say something the
+ * platform's E3 fixture cannot: that the machinery underneath the chain is
+ * RFC 5869 and not merely two implementations of the same mistake. What they
+ * prove:
  *
  *  - Bouncy Castle's `HKDFBytesGenerator`, which is what the phone runs, computes
  *    RFC 5869 exactly — so it computes what WebCrypto's `deriveBits` computes,
@@ -36,8 +38,9 @@ import org.junit.Test
  *    HashLen zero bytes would fail A.3 and nothing else.
  *
  * What they do NOT prove is that the BetterTrack-specific `info` strings, output
- * lengths and truncations match the platform's. That is E3's fixture, and
- * [PV_E3_PINNED] stays false until it lands.
+ * lengths and truncations match the platform's. That is E3's fixture
+ * (`vault-vectors/pv-derivation.e3.fixture.json`), which landed on 2026-08-23
+ * and set [PV_E3_PINNED].
  *
  * The primitive is shared with the shipped v2 rail (`vault/v2/VaultHkdf.kt`), so
  * this covers that rail too; `VaultV2ConformanceTest` pins A.1 inline as well,

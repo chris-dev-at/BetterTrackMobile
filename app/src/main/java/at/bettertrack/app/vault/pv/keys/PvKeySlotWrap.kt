@@ -178,6 +178,93 @@ internal fun pvUnwrapContentKey(slot: PvKeySlot, wrapKey: ByteArray, vaultId: St
     }
 }
 
+/**
+ * **The creation ceremony's key material, in one act** — `createVaultKeyMaterial`
+ * (`keys/keyCore.ts`), translated literally.
+ *
+ * ```
+ * K_wrap  = HKDF(seed(mnemonic), vaultId)      derived, then wiped
+ * K_c     = randomBytes(32)                    CSPRNG, kept — the caller owns it
+ * keySlot = wrap(K_c under K_wrap, aad(vaultId, keyId))
+ * fingerprint = HKDF(K_c)[0..16]
+ * ```
+ *
+ * It exists as a composite rather than as three call sites for one reason that
+ * is not tidiness: **[randomBytes] is drawn from ONE stream, K_c first and the
+ * slot IV second.** The platform's E3 vector is authored against exactly that
+ * order — with its CSPRNG stubbed to incrementing bytes from `0x00`, K_c is
+ * `0x00..0x1f` and the slot IV is `0x20..0x2b` — so two clients that split the
+ * draw differently would produce different `wrappedKc` bytes from the same
+ * stub and the vector would silently stop meaning anything. Pinning the order
+ * requires a function that owns it.
+ *
+ * ## The seam, and what it is not
+ *
+ * [randomBytes] defaults to [secureRandomBytes], the platform CSPRNG, and the
+ * ONLY caller that passes anything else is a conformance test replaying an
+ * authored vector. This is the same narrow seam `generateVaultKey`,
+ * `newKdfParams` and [pvWrapContentKey] already carry on the shipped v1 rail
+ * (`vault/VaultCrypto.kt`) — an injection point for determinism, never a
+ * production knob. Nothing reads it from configuration, and there is no code
+ * path that reaches it from the UI.
+ *
+ * The BIP-39 seed and `K_wrap` are both wiped before returning: neither is
+ * needed again until the vault is next opened, and both reconstruct from the
+ * words. `K_c` is NOT wiped — it is the return value, and the caller owns its
+ * lifetime (and its zeroization on lock).
+ *
+ * @param mnemonic the 12 words, exactly as the user wrote them down.
+ * @param vaultId the vault being created; domain-separates `K_wrap`.
+ * @param keyId the new key's uuid; rides in the slot AAD.
+ */
+internal fun pvCreateVaultKeyMaterial(
+    mnemonic: String,
+    vaultId: String,
+    keyId: String,
+    randomBytes: RandomBytes = secureRandomBytes,
+): PvVaultKeyMaterial {
+    var seed: ByteArray? = null
+    var wrapKey: ByteArray? = null
+    try {
+        seed = pvBip39Seed(mnemonic)
+        wrapKey = pvVaultWrapKey(seed, vaultId)
+        val contentKey = randomBytes(PV_WRAP_KEY_BYTES)
+        pvRequireContentKey(contentKey)
+        val keySlot = pvWrapContentKey(contentKey, wrapKey, vaultId, keyId, randomBytes)
+        return PvVaultKeyMaterial(
+            vaultId = vaultId,
+            keyId = keyId,
+            contentKey = contentKey,
+            keySlot = keySlot,
+            keyFingerprint = pvKeyFingerprint(contentKey),
+        )
+    } finally {
+        seed?.let { zeroBytes(it) }
+        wrapKey?.let { zeroBytes(it) }
+    }
+}
+
+/**
+ * `VaultContentKeyMaterial` — what a freshly created (or freshly opened) vault
+ * key consists of.
+ *
+ * A plain class, not a `data class`, for the reason [PvIssuedMnemonic] gives:
+ * [contentKey] is a live secret, a synthesised `toString()` is the shortest path
+ * from a secret to logcat, and a synthesised `equals` over a `ByteArray` would
+ * compare references while looking like it compared bytes.
+ */
+class PvVaultKeyMaterial internal constructor(
+    val vaultId: String,
+    val keyId: String,
+    /** `K_c`. The caller owns it and must zero it when the vault locks. */
+    val contentKey: ByteArray,
+    val keySlot: PvKeySlot,
+    val keyFingerprint: String,
+) {
+    /** A constant. See the class KDoc: K_c must not be printable by accident. */
+    override fun toString(): String = "PvVaultKeyMaterial(redacted)"
+}
+
 /** `K_wrap` is AES-256, exactly like `K_c`; named separately so failures say which. */
 private fun pvRequireWrapKey(wrapKey: ByteArray) {
     if (wrapKey.size != PV_WRAP_KEY_BYTES) {
