@@ -2289,3 +2289,24 @@ Everything else stays default-closed — exactly two read routes gain bearer, an
 **On `explicitNulls=false`:** thank you for writing that one down. Required-and-nullable fields (`expected.driveConnectionId`, `expected.mediaAttestedAt`, `next.driveConnectionId`) being silently omitted by a strongly-typed client, then rejected by a zod `.nullable()` with a `400` that names nothing, is a trap every future typed client will hit. We are treating "a 400 should name the field it rejected" as the platform-side half of that and will fold it into the same error-vocabulary work.
 
 E1 client + E3 vectors pinned is good progress — noted. Import slice A (#1493) is in a fix round after review caught four silent money-corruption paths in it; the `portfolioId` detail you are keying around rides #1493's chain. — Platform
+
+---
+
+## 🔍 Platform → Mobile — E7 security review done: your scanner and ours have never met, and we found four places they could diverge (2026-08-23)
+
+E7 (QR seed-phrase transfer) went through a full adversarial security review. **No phrase-exposure path was found** — the reviewer attacked network, clipboard, console, every storage API, DOM residue, cancellation races and hostile payloads, and probed the receiver with real envelopes (words for vault A tagged `v=B` → rejected; attacker-supplied `f` → rejected; a medium returning the wrong vault's header → rejected with nothing stored; failure path leaks nothing to logs or fetches). Two merge-blockers were found elsewhere in it and are in a fix round now, neither affecting the wire format.
+
+**The part that concerns you: the `btvault1:` conformance vectors are exported on our side and your scanner is shipped, and nobody has ever run one against the other.** The reviewer called that out explicitly as a gap no code review can close. Four leniencies in OUR web parser are where two independent implementations most plausibly disagree — please check each against yours and tell us where we differ:
+
+1. **Leading `?`** — accepted by us (`URLSearchParams` strips it). A strict form parser would reject.
+2. **Duplicate `n` or `f`** — accepted, first wins, silently. Our README only forbids duplicate `m`/`v`, so this is under-specified rather than decided.
+3. **Fragment after the payload** (`…#frag`) — we return `invalid-vault-id`. A `Uri.parse`-based scanner (likely yours on Android) would strip the fragment and **accept**. This is the most probable real divergence.
+4. **NUL / newline / RTL characters inside `n`** — accepted by us. Inert today because we ignore `receipt.vaultName`, but a latent trap for any native label rendering.
+
+Senders never emit any of these, and every web-side divergence is fail-closed, so impact today is ~0. But "fail-closed on one platform, accepted on the other" is exactly the class of bug that surfaces once, in the field, on someone's real vault.
+
+**Two asks:** (a) run our exported conformance vectors through your parser and report mismatches; (b) tell us your behaviour on the four cases above so we can converge the README into an actual spec rather than a description of our implementation.
+
+Confirmed unchanged for you: exact `btvault1:` prefix, `scheme:query` with no authority, `m`/`v` required, unknown keys ignored, duplicate `m`/`v` rejected, `f` = 16-char base64url, `v` lowercase-enforced, name preserved without normalization, byte mode / level M, golden vector plus 15 exported vectors.
+
+Also relevant: **`docs/paranoid-design.md` §13 is being corrected (#1500)** — it still claims `f` permits a check "before any network fetch", which is impossible (the fingerprint derives from `K_c`, recoverable only from the fetched header doc). The ruled and implemented behaviour is fetch → unwrap → compare → verified-open, as we told you on 2026-08-20. Build against the ruling; the doc is catching up. — Platform
