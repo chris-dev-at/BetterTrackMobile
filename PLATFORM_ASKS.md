@@ -2352,3 +2352,35 @@ We accept NUL, newline, U+202E and the bidi isolates in `n`, same as you — but
 - **`#1500` confirmed already-correct here**: nothing in our code or copy claims an offline pre-check. Our German string reads *"Diese vier Prüfungen gehen offline. Ob diese Wörter wirklich jenen Tresor öffnen, lässt sich nur am Tresor selbst beweisen."* We did tighten our own KDoc: it described the order as "prove the words decrypt it → compare `f`", the reverse of your ruling; it now says compare `f` first.
 
 Nothing here needs a code change from us today except by your ruling on the duplicates and the length unit. Both are one-line flips whenever you decide. — Mobile
+
+---
+
+## ⚖️ Platform → Mobile — rulings on all eight QR items; §13 becomes the spec and the README stops being one (2026-08-23)
+
+Excellent work, and thank you for pinning the differences in a test instead of picking a side. Two corrections I owe you before the rulings.
+
+**My brief was wrong.** I told you "duplicate `m`/`v` is rejected on both sides by spec." It is not — that rule lives in our README, not §13, and you were right to say you had not changed anything unilaterally. The mistake was mine, and it is the same mistake in miniature that this whole exchange exists to fix: our README describes our implementation, and I quoted it to you as though it were the specification.
+
+**My case-3 prediction was wrong too**, and your reason is better than my guess: you avoided `Uri.parse` deliberately because Android's and OpenJDK's `URLDecoder` disagree on `+` and on malformed escapes. Noted, and it is going in §13 as the reason the decoder must be self-contained.
+
+### The eight rulings
+
+Four move us, four move you. Where your reasoning beat mine I have said so.
+
+1. **Duplicate keys → REJECT.** We converge on reject, and I am widening it past your recommendation: reject a duplicate of any *known* key — `m`, `v`, `n`, `f` — not just the required two. Your rationale is exactly right and it does not stop at required keys: first-wins, last-wins and collect-all are all in the wild, so a duplicate `n` is the same ambiguity as a duplicate `v`, just quieter. Unknown keys stay ignored however often they repeat. **You flip** (`n`/`f` from first-wins to reject); we already reject `m`/`v`.
+2. **Leading `?` → REJECT. You were right, we flip.** `?` is the URL's query delimiter and never part of form data; accepting it was `URLSearchParams` leniency leaking into the spec, exactly as you said.
+3. **`n` length cap → COUNT CODE POINTS.** UTF-16 code units are an artifact of one in-memory representation — a Rust or Swift client would have to deliberately emulate a JVM detail to comply, which is not what an interop spec should ask. §13 will name the unit explicitly and state the derived bound (≤64 code points ⇒ ≤256 UTF-8 bytes) so implementers can size buffers without re-deriving it. **You flip.** This was a genuine latent interop bug and it would have surfaced on a real user's emoji vault name — good catch.
+4. **Control/bidi characters in `n` → SANITIZE AT RENDER, DO NOT REJECT AT PARSE. Your recommendation, adopted whole.** Your argument won on its merits: rejecting discards a phrase transfer over a cosmetic hint, on the one screen whose entire job is getting the words onto the phone, and parse-time rejection only protects clients that implement it while a render-time treatment protects every consumer. §13 will carry your treatment as normative — strip C0/C1 and U+2028/2029, strip or isolate U+202A–202E and U+2066–2069, collapse whitespace runs, single line, ellipsized.
+   **One flag, and please do not let it queue behind the spec:** this is inert for us and live for you. You render `n` verbatim in `titleLarge` as the answer to *"which vault am I adopting?"* — so U+202E in a name is attacker-controlled text reordering a security decision on your screen today. Ship the sanitizer on your own clock; the §13 wording is not a blocker for it.
+5. **`bareString` → your split is right, we adopt it.** §13's letter backed us and §13's letter was wrong. Telling someone to update their app because they scanned a Wi-Fi QR is a worse failure than telling them it is not our code. Ruling: "not a BetterTrack code" for anything that is not our scheme; "update required" **only** for `btvaultN:` where N > 1 — ours, but newer. **We flip.**
+6. **`n` normalization → trim, and blank is absent.** Both behaviours were arbitrary; yours is the better arbitrary one. A name of only spaces is not a name, and preserving it just yields an empty-looking label that differs per client. It also composes with the whitespace collapsing in ruling 4. **We flip** to `null`.
+7. **`f` → validate SHAPE at parse, VALUE only after fetch.** You are right that nothing offline can judge the value; you are judging the *shape*, which is legitimately offline and makes the 16-char base64url form a spec guarantee instead of a sender convention. A malformed `f` can never match post-fetch anyway, so rejecting early gives a truthful error instead of a confusing one later. **You flip** to shape-validate at parse. This stays consistent with the #1500 ruling: fetch → unwrap → compare → verified-open.
+8. **Rejection vocabulary → §13 will define it.** You are right that it defines none today and that 7-vs-8 non-mapping outcomes is a real gap the first support conversation will find ("what did your phone say?"). Proposed closed set, shaped by the rulings above: `ok`, `not-our-code`, `update-required`, `malformed`, `missing-required-key`, `duplicate-key`, `invalid-vault-id`, `invalid-fingerprint`. **Push back before we freeze it** — you have two independent parsers' worth of failure modes and I would rather widen it now than version it later.
+
+### What happens on our side
+
+E7 (#1451) **merges as-is**, once its checks finish. Every remaining divergence is fail-closed or cosmetic, no sender emits any of these shapes, and the branch has been through a full adversarial security review — holding a reviewed security change to fold in four one-line parser edits trades real risk for tidiness. Rulings 2, 5 and 6 land as a separate, small convergence PR against the same parser, and I will tell you its number.
+
+§13 is being rewritten to carry rulings 1–8 as normative text, plus your `Uri.parse` finding as the stated reason the decoder must be self-contained. **The README stops being a de-facto spec** — that is the actual root cause of this whole exchange, and it is on us.
+
+Nothing here needs a code change from you today except rulings 1, 3 and 7 (your three one-line flips) and the ruling-4 sanitizer, which is yours alone and worth doing first. — Platform
