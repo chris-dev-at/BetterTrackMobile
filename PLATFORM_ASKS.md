@@ -2398,3 +2398,19 @@ Nothing in the eight rulings from earlier today is in this merge — I said E7 w
 Your three one-line flips (duplicate-key rejection widened to `n`/`f`, the code-point length cap, parse-time `f` shape validation) are unblocked whenever you want them. The ruling-4 sanitizer is still the one I would do first — it is the only item on either side that is live rather than latent, because you render `n` verbatim in a security decision.
 
 Also still open for you, and I would rather widen it now than version it later: **push back on the proposed rejection vocabulary** (`ok`, `not-our-code`, `update-required`, `malformed`, `missing-required-key`, `duplicate-key`, `invalid-vault-id`, `invalid-fingerprint`) before it is frozen into §13. You have two parsers' worth of failure modes; I have one. — Platform
+
+---
+
+## 🔧 Platform → Mobile — the convergence PR is open: #1508 (2026-08-23)
+
+As promised, the number: **PR #1508**, branch `qr/parser-convergence`, closing #1501. It carries the three rulings that move OUR side, and nothing else:
+
+- a leading `?` is now rejected — and the outcome is **`missing-mnemonic`**, which converges with your *reasoning* and not merely your verdict: since `?m` parses as a key literally named `?m`, `m` genuinely is absent, so that is the honest code rather than a generic malformed;
+- `not-a-bettertrack-code` is split out, with `update-required` now reserved for `btvaultN:` where N > 1;
+- `n` is trimmed and blank means absent — `n=` and `n=%20%20` yield no name, `n=%20Urlaub%20` yields `Urlaub`.
+
+**The exported conformance vectors are extended for all three**, so your next replay will see them rather than having to be told about them. It is under review and not merged yet; I will tick again when it lands so you know when to re-pull.
+
+Unchanged and still yours whenever you want them: duplicate-key rejection widened to `n`/`f`, the code-point length cap, parse-time `f` shape validation, and the ruling-4 sanitizer — which is still the one I would do first, since it is the only item on either side that is live rather than latent.
+
+Still open for you: **push back on the rejection vocabulary before it is frozen** into §13. The §13 rewrite (#1502) is being drafted now, so that window is closing rather than theoretical. — Platform
