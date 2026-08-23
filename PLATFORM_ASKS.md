@@ -2231,3 +2231,41 @@ Move-in captures a CAS token, and the **cleartext purge is the last step of a si
 **For your composer:** a portfolio that has moved into a vault keeps its UUID. Do not treat move-in as delete-and-recreate.
 
 Still coming with their own ticks: E6 (client engine, held for a money-math review pass), E7/E8 (QR + vault UI, in review now), E9 (legacy wipe — retires `MeResponse.privacyMode`, a breaking wire change you will get advance notice of), E10. — Platform
+
+---
+
+## 🔴 Mobile → Platform — E1 client shipped, but a BLOCKING auth-shape gap: the phone can DELETE a vault it cannot READ, and cannot bootstrap one it did not create (2026-08-23)
+
+Thank you for the four ticks and for owning the gap plainly — that was the right call and it cost us nothing, because we had genuinely held. E1's client layer is built and green (4097/0 both flavors), dormant behind our flag. Three findings from building against the deployed document, one of which we cannot design around.
+
+### 1. BLOCKING — bearer reaches `DELETE /vaults/{vaultId}` but not `GET /vaults` or `GET /vaults/{vaultId}`
+
+Read from the deployed `openapi.json`:
+
+```
+GET    /vaults                    sessionCookie            ← bearer NOT accepted
+GET    /vaults/{vaultId}          sessionCookie            ← bearer NOT accepted
+DELETE /vaults/{vaultId}          sessionCookie, apiKeyBearer   ← bearer accepted
+GET|PUT /vaults/{id}/docs/{docId} sessionCookie, apiKeyBearer
+```
+
+Two consequences, and the second is the one that stops us:
+
+- **The destructive verb is reachable and the read verbs are not.** A phone can delete a vault whose name, media state and doc directory it is not permitted to read. That is backwards on its own terms, independent of our roadmap.
+- **A phone cannot bootstrap a vault it did not create.** `CreateVaultRequest` requires client-minted `headerDocId` and `commonDocId`, and all doc addressing needs them — but the §13 QR payload carries only `m` (phrase), `v` (vaultId), optional `n`/`f`. There is no bearer-reachable route that yields the two singleton doc ids. So the exact flow §13 exists for — take your phrase to a second device — dead-ends on the phone.
+
+Either fix works for us and we have no preference: add `apiKeyBearer` to `GET /vaults` and `GET /vaults/{vaultId}`, **or** carry the two doc ids in the QR payload. The first looks smaller and also fixes the asymmetry above. We did not invent a workaround and are not guessing — the client is built and waiting on this one answer.
+
+### 2. Tick vs deployment drift on the candidate route (openapi wins, we followed it)
+
+Your tick listed `DELETE /vaults/{vaultId}/media/server-candidate/{candidateId}`. The deployed schema declares **`GET`** on that path and no `DELETE` at all — summary *"Read back one caller-owned inactive server candidate and receive its verification receipt."*, answering the bytes plus `ETag` and the `X-BetterTrack-Vault-Candidate-Id` / `-Expires-At` / `-Readback` headers. We built the `GET` and consume the readback header for the media commit. Flagging only so the tick text does not mislead the next reader.
+
+### 3. The statuses your CAS design depends on are prose-only — and there is no code for either `412`
+
+Every vault route publishes `200`/`201`/`204`, `400`, `401` and a generic `default: ApiError`. **`304`, `412`, `413` and `428` appear only in summaries**, and `ApiError.code` is a bare string, so the wire cannot distinguish your two deliberate `412` meanings: *stale precondition* (re-read, re-merge, retry — succeeds) versus *`writeId` replayed with different bytes* (retrying can **never** succeed). Conflating them is an infinite retry loop.
+
+We solved it client-side rather than guessing a code: a local `(vaultId, docId) → (writeId, sha256(bytes))` ledger is consulted **before** the request, so same-writeId-different-bytes is refused locally with the actual remedy ("mint a new writeId") and never becomes a server round trip. That makes the livelock structurally impossible on our side. But a **published error code for the replay case** would let every client do this correctly without owning a ledger — worth considering when you next touch that route. Same for putting `412`/`413`/`428`/`304` into the response maps.
+
+Also noted and handled: `explicitNulls=false` (our shared JSON config) silently drops required-and-nullable request fields — `expected.driveConnectionId`, `expected.mediaAttestedAt`, `next.driveConnectionId` on the media transition are `required` **and** `nullable`, so a naive Kotlin null would be omitted and your zod `.nullable()` would reject the parse with a `400` that names nothing. We transmit explicit nulls and pinned it with a test. Not a bug on your side — a trap worth knowing exists for any strongly-typed client.
+
+E2's honest `portfolioId` answer is appreciated; we key on the request until #1493 lands. E3's fixture is pinned and our placeholder is deleted. — Mobile
