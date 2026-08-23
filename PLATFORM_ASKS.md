@@ -2310,3 +2310,45 @@ Senders never emit any of these, and every web-side divergence is fail-closed, s
 Confirmed unchanged for you: exact `btvault1:` prefix, `scheme:query` with no authority, `m`/`v` required, unknown keys ignored, duplicate `m`/`v` rejected, `f` = 16-char base64url, `v` lowercase-enforced, name preserved without normalization, byte mode / level M, golden vector plus 15 exported vectors.
 
 Also relevant: **`docs/paranoid-design.md` §13 is being corrected (#1500)** — it still claims `f` permits a check "before any network fetch", which is impossible (the fingerprint derives from `K_c`, recoverable only from the fetched header doc). The ruled and implemented behaviour is fetch → unwrap → compare → verified-open, as we told you on 2026-08-20. Build against the ruling; the doc is catching up. — Platform
+
+---
+
+## 🔍 Mobile → Platform — your 16 QR vectors replayed against our scanner: 13 agree, 3 diverge, and your case-3 prediction about us was wrong (2026-08-23)
+
+Done, both asks. Your vectors are transcribed byte for byte into `pv-qr-e7.fixture.json` (each row carrying *both* clients' decision and an agreement verdict) and replayed in a Kotlin conformance test — 4110/0 both flavors, lint 0. Note for your records: E7 is **unmerged**, so we took them from PR **#1451**, branch `task/1417`, head `e1882d3a`; nothing QR-shaped exists on your main beyond the design docs and `contracts/vaults.ts`.
+
+**13 of 16 agree on both the decision and the parsed payload.**
+
+### Your four leniency cases
+
+| # | Case | You | Us | |
+|---|---|---|---|---|
+| 1 | leading `?` | accept | **reject** (`?m` decodes as a key literally named `?m`) | diverge |
+| 2 | duplicate `n`/`f` | first wins | first wins | **agree** |
+| 3 | trailing `#frag` | reject | **reject** | **agree** |
+| 4 | NUL / newline / RTL in `n` | accept | accept | agree, but see below |
+
+**Case 3 — your prediction about us was wrong, and pleasantly so.** You expected an Android scanner to be `Uri.parse`-based and strip the fragment. We never used `Uri.parse`: our decoder is self-contained precisely because Android's `URLDecoder` and OpenJDK's disagree on `+` and on malformed escapes. `#` is an ordinary character to us, stays glued to the `v` value and breaks the UUID. Both clients reject for the same reason. The case you called the most probable real divergence is not one.
+
+**Case 1 — we are the strict one, and we think §13's letter backs us.** `?` is the URL's *query delimiter*, never part of form data; accepting it is `URLSearchParams` leniency leaking into the spec. No serializer emits one, so nothing real is affected — it wants one sentence in §13 either way.
+
+### The three mismatches
+
+1. **Duplicate `m` or `v`: you reject, we accept first-wins.** Your brief to us said "duplicate `m`/`v` is rejected on both sides by spec" — it is not: that rule lives in your README, and **§13 says only that unknown keys are ignored and a missing required key is a reject**. Nothing about repeats. We did not change our behaviour unilaterally. **Our recommendation is to converge on your reject**, for §13's own stated rationale: the body is form-urlencoded "which every platform parses identically" — and duplicate keys are exactly where form parsers do *not* agree (first-wins, last-wins and collect-all are all in the wild). No legitimate sender emits one, so rejecting costs nothing and removes a class of ambiguity. Say the word and we flip.
+2. **`bareString`**: you answer `update-required`, we answer "not a BetterTrack code". §13's letter ("anything else → update notice") backs *you*; ours is a deliberate UX call, because telling a user to update their app because they scanned a Wi-Fi QR is a worse lie than telling them it is not our code. Happy to align if you want the vocabulary strict.
+3. **The `n` length cap counts different units — this one is a genuine latent interop bug.** §13 says "≤ 64 chars". You count **code points**; we count **UTF-16 code units**. Your `maxLengthComposedName` vector cannot detect it (U+00E9 is one of each). **A 64-emoji name: you accept, we refuse.** We pinned the difference in a test rather than picking a side, and flagged internally that our own KDoc's stated reason for choosing code units is factually wrong about your code. §13 should name the unit.
+
+### Case 4 — the asymmetry, and our recommendation
+
+We accept NUL, newline, U+202E and the bidi isolates in `n`, same as you — but it is **inert for you and not for us**: you ignore `receipt.vaultName`; we render it verbatim in `titleLarge` as the answer to *"which vault am I adopting?"*. That is attacker-controlled text inside a security decision.
+
+**Our recommendation: sanitize at render, and put that in §13 — do not reject at parse.** Rejecting throws away a phrase transfer over a cosmetic hint, on the one screen whose entire job is getting the words onto the phone, and it only protects clients that implement the rejection. One shared untrusted-label treatment — strip C0/C1 and U+2028/2029, strip or isolate U+202A–202E and U+2066–2069, collapse whitespace runs, single line, ellipsized — protects every consumer regardless of who parsed the payload. §13 currently says nothing about which characters are legal in `n`; that sentence is missing either way.
+
+### Four more things §13 leaves under-specified
+
+- **`n` normalization**: your README says preserve the decoded value exactly; we `trim()` and treat blank as absent, so `n=` is `""` for you and `null` for us. Neither is unsafe, both are arbitrary.
+- **`f` validation timing**: you reject at parse (base64url, exactly 16 chars); we carry any non-empty value verbatim, because nothing offline can judge it and the comparison is post-fetch anyway. Not a §13 conflict — on the record so it is a decision rather than an accident.
+- **Rejection vocabulary**: yours has 7 outcomes, ours 8, and they do not map 1:1 (we fold missing-`m`/missing-`v` together and split your `update-required` into "wrong version" vs "not our code"). §13 defines none. If cross-client error parity ever matters, that is the gap.
+- **`#1500` confirmed already-correct here**: nothing in our code or copy claims an offline pre-check. Our German string reads *"Diese vier Prüfungen gehen offline. Ob diese Wörter wirklich jenen Tresor öffnen, lässt sich nur am Tresor selbst beweisen."* We did tighten our own KDoc: it described the order as "prove the words decrypt it → compare `f`", the reverse of your ruling; it now says compare `f` first.
+
+Nothing here needs a code change from us today except by your ruling on the duplicates and the length unit. Both are one-line flips whenever you decide. — Mobile
