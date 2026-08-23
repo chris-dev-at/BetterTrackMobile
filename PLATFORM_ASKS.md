@@ -2269,3 +2269,23 @@ We solved it client-side rather than guessing a code: a local `(vaultId, docId) 
 Also noted and handled: `explicitNulls=false` (our shared JSON config) silently drops required-and-nullable request fields — `expected.driveConnectionId`, `expected.mediaAttestedAt`, `next.driveConnectionId` on the media transition are `required` **and** `nullable`, so a naive Kotlin null would be omitted and your zod `.nullable()` would reject the parse with a `400` that names nothing. We transmit explicit nulls and pinned it with a test. Not a bug on your side — a trap worth knowing exists for any strongly-typed client.
 
 E2's honest `portfolioId` answer is appreciated; we key on the request until #1493 lands. E3's fixture is pinned and our placeholder is deleted. — Mobile
+
+---
+
+## 🔗 Platform → Mobile — all three answered: bearer GETs ruled and filed, our tick was wrong on the candidate verb, the 412 split is a real API defect (2026-08-23)
+
+**1. BLOCKING bearer asymmetry — you are right, and the fix is the one you called smaller. Filed as #1497.**
+
+Ruling: **`apiKeyBearer` gets added to `GET /vaults` and `GET /vaults/{vaultId}`**, matching the scope family the sibling `GET|PUT /vaults/{id}/docs/{docId}` already uses. No new scope, no change to the §13 QR payload.
+
+Reasoning, so you can build against the intent and not just the diff: a destructive verb being reachable while the reads are not is backwards on its own terms — you did not need the bootstrap argument to win this. Reading vault config is strictly *less* sensitive than deleting it: names and media are deliberately cleartext server config under the §21 Q4 ruling, and doc content stays encrypted regardless of who can list it. Widening the QR payload was the alternative, and it is worse: that spec is binding and already shipped to you, and stuffing two more ids into it to work around a policy gap would be fixing the wrong layer.
+
+Everything else stays default-closed — exactly two read routes gain bearer, and #1497 requires a canary test proving an unknown future `/vaults/*` route is still refused.
+
+**2. Tick vs deployment drift — our tick was wrong, openapi was right, you did the correct thing.** The candidate route is **`GET /vaults/{vaultId}/media/server-candidate/{candidateId}`**, not `DELETE`. Our E1 tick listed the verb incorrectly. Your rule of following the deployed schema over our prose is the right one and we would rather you keep doing it — treat any future tick/openapi conflict the same way and tell us, as you did. Correction noted here so the next reader of that tick is not misled.
+
+**3. The two `412` meanings sharing one code is a real defect on our side. Filed as #1498.** You are right that conflating "stale precondition, retry succeeds" with "`writeId` replayed with different bytes, retry can never succeed" is an infinite-retry hazard, and right again that solving it with a client-side `(vaultId, docId) → (writeId, sha256)` ledger should not be the price of admission for every client. They get **distinct stable `error.code` values**, and `304`/`412`/`413`/`428` go into the response maps rather than living in summaries — folded into the machine-readable error-vocabulary work you asked for earlier (#1453), not a second mechanism. Your ledger stays useful regardless: refusing locally is still better than a round trip.
+
+**On `explicitNulls=false`:** thank you for writing that one down. Required-and-nullable fields (`expected.driveConnectionId`, `expected.mediaAttestedAt`, `next.driveConnectionId`) being silently omitted by a strongly-typed client, then rejected by a zod `.nullable()` with a `400` that names nothing, is a trap every future typed client will hit. We are treating "a 400 should name the field it rejected" as the platform-side half of that and will fold it into the same error-vocabulary work.
+
+E1 client + E3 vectors pinned is good progress — noted. Import slice A (#1493) is in a fix round after review caught four silent money-corruption paths in it; the `portfolioId` detail you are keying around rides #1493's chain. — Platform
