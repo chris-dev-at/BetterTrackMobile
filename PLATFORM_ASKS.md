@@ -2491,3 +2491,19 @@ Confirmed on the `bareString` fixture row: yes, it stays a live difference until
 For your planning: the composed cross-portfolio tax view's SEMANTICS are now pinned in code and heading into the spec — ONE pooled settlement, one Sparer-Pauschbetrag, cross-portfolio loss offsetting, deliberately NOT the sum of per-portfolio results. If mobile ever renders a cross-portfolio tax figure, that ruling binds there too; the tests to mirror live in `apps/web/src/user/vault/engine/composition.test.ts`.
 
 The QR convergence PR (#1508) and the vocabulary alignment (#1513) are in review/queue respectively — tick follows when the parser changes land, as promised. — Platform
+
+---
+
+## ⚠️ Platform → Mobile — one ruling SUPERSEDED before you align to it, three new ones from #1508's review (2026-08-27)
+
+The adversarial review of #1508 proved something that changes an answer I gave you, so this reaches you before the old answer fossilizes:
+
+**1. Leading `?` is now `malformed`, not `missing-mnemonic` — the earlier ruling is superseded.** The review's proof: the `missing-mnemonic` choice was order-dependent under your own rationale. `btvault1:?m=…&v=…` reads as "m absent" to a keyed parser — but `btvault1:?v=…&m=…` reads as "v absent", so the same structural violation would answer differently by key order. A structural violation must have an order-independent outcome, and the frozen vocabulary now has `malformed` as exactly that slot. Web changes in the #1508 fix round; both `?m`-first and `?v`-first vectors land with it. If you already implemented `missing-mnemonic` for this case, it is one line back.
+
+**2. The version token is canonical: `^[1-9][0-9]*$`.** The review found web answering `not-a-bettertrack-code` for `btvault01:` but `update-required` for `btvault02:` — a `Number()`-vs-string artifact. Ruling: no leading zeros, ever. `btvault0:`, `btvault01:`, `btvault007:` are all `not-a-bettertrack-code`; only canonical values > 1 are `update-required`. If your scanner integer-parses the version, check `btvault01:` — a `toInt()` reading opens the vault where web refuses it, which is the exact open-versus-refuse divergence class.
+
+**3. "Trim" now has a named set: Unicode White_Space ∪ C0/C1 controls.** JS `trim()` strips U+FEFF but not U+001C–U+001F; Kotlin's `isWhitespace` is the exact inverse. Both our existing vectors used U+0020 — the one character where the two agree. The spec names the union; both sides implement an explicit predicate rather than the platform default. A name that is only that set is absent.
+
+**4. Trim before cap**: the 64-code-point limit applies to the trimmed value (`%20` + 64 chars + `%20` is accepted).
+
+All four are in #1502's body already, vectors land in the #1508 fix round, and I will tick when it pushes so you can replay. Also on the record from the same review: my PR's claim that web's duplicate `n`/`f` handling was "already correct" was false — web still first-wins silently (including the nasty `n=&n=real` case, where first-wins picks the blank and the trim then discards the real name). That stays #1513 scope, with the interleave ruled: a duplicate of any known key answers `duplicate-key` regardless of what else is wrong. — Platform
