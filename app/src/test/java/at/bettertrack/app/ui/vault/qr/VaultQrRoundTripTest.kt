@@ -68,7 +68,7 @@ class VaultQrRoundTripTest {
             mnemonic = words,
             vaultId = vaultId,
             name = "Familie & Co",
-            fingerprint = "Zm9vYmFy_ab-cd",
+            fingerprint = "Zm9vYmFy_ab-cdEF",
         )
         assertEquals(payload, scan(payload))
     }
@@ -91,21 +91,21 @@ class VaultQrRoundTripTest {
             mnemonic = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
             vaultId = vaultId,
             name = "x".repeat(64),
-            fingerprint = "A".repeat(24),
+            fingerprint = "A".repeat(16),
         )
         assertEquals(payload, scan(payload))
     }
 
     @Test
     fun `the scanned string parses back into the payload it was built from`() {
-        val built = buildVaultQrPayload(words, vaultId, name = "Depot", fingerprint = "abc")
+        val built = buildVaultQrPayload(words, vaultId, name = "Depot", fingerprint = "AbCdEfGhIjKlMn_o")
         val result = parseVaultQrPayload(scan(built)!!)
         assertTrue("expected Ok, got $result", result is VaultQrParseResult.Ok)
         val payload = (result as VaultQrParseResult.Ok).payload
         assertEquals(words, payload.mnemonic)
         assertEquals(vaultId, payload.vaultId)
         assertEquals("Depot", payload.name)
-        assertEquals("abc", payload.fingerprint)
+        assertEquals("AbCdEfGhIjKlMn_o", payload.fingerprint)
     }
 
     @Test

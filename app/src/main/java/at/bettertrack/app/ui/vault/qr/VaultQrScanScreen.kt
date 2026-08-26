@@ -61,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -69,6 +70,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.format.btSanitizeUntrustedLabel
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.vault.pv.NotAvailableVaultHeaderProbe
@@ -98,6 +100,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * cannot fetch anything because the platform's per-vault blind store is not
  * deployed. The screen says exactly that instead of pretending, and keeps
  * nothing.
+ *
+ * ## The vault name on the result card is attacker text
+ *
+ * The card answers "which vault am I adopting?" with the `n` hint out of the
+ * scanned code — a string a hostile QR fully controls, rendered in `titleLarge`
+ * inside a security decision. It is therefore never painted raw: every render
+ * goes through [btSanitizeUntrustedLabel], which strips the C0/C1, line-separator
+ * and bidi-control set and isolates the remainder so a planted U+202E can neither
+ * reverse the label nor reach the text around it (platform ruling 4, 2026-08-26).
+ * `VaultQrDisciplineTest` fails the build if a later edit bypasses it.
  *
  * ## One failure message
  *
@@ -455,8 +467,14 @@ private fun ScanResult(
     onManualEntry: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val name = state.payload.name?.takeIf { it.isNotBlank() }
-        ?: stringResource(R.string.bt_pv_qr_result_unnamed)
+    // The scanned hint is attacker-controlled text answering "which vault am I
+    // adopting?", so it never reaches a Text() raw: btSanitizeUntrustedLabel
+    // strips the control/bidi set and isolates what is left (platform ruling 4,
+    // 2026-08-26). A hint made only of controls sanitizes to "" and falls back to
+    // the trusted placeholder rather than painting a blank line where a vault
+    // name belongs. VaultQrDisciplineTest fails the build if this is bypassed.
+    val sanitized = btSanitizeUntrustedLabel(state.payload.name)
+    val name = sanitized.ifEmpty { stringResource(R.string.bt_pv_qr_result_unnamed) }
 
     Surface(
         color = bt.surface,
@@ -477,6 +495,11 @@ private fun ScanResult(
                 name,
                 style = MaterialTheme.typography.titleLarge,
                 color = bt.textPrimary,
+                // Belt to the sanitizer's braces: the string is already single
+                // line by construction, and this bounds the LAYOUT too, so an
+                // over-wide label cannot push the check rows out of view.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             val checks = VaultQrChecks.ALL_PASSED
             CheckRow(stringResource(R.string.bt_pv_qr_check_prefix), checks.prefix)

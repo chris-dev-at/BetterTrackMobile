@@ -1,6 +1,7 @@
 package at.bettertrack.app.vault.pv
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -26,6 +27,9 @@ class VaultQrPayloadTest {
 
     private val vaultId = "018f3c2a-7b41-7c3e-9f21-0a1b2c3d4e5f"
 
+    /** A schema-valid `f`: exactly 16 base64url characters (ruling 7, 2026-08-26). */
+    private val fingerprint = "AbCdEfGhIjKlMn_o"
+
     private fun ok(value: String): VaultQrPayload {
         val result = parseVaultQrPayload(value)
         assertTrue("expected Ok, got $result", result is VaultQrParseResult.Ok)
@@ -50,12 +54,12 @@ class VaultQrPayloadTest {
                 "abandon+abandon+abandon+about" +
                 "&v=018f3c2a-7b41-7c3e-9f21-0a1b2c3d4e5f" +
                 "&n=Familie+%26+Co" +
-                "&f=Zm9vYmFy_ab-cd",
+                "&f=Zm9vYmFy_ab-cdEF",
             buildVaultQrPayload(
                 mnemonic = words,
                 vaultId = vaultId,
                 name = "Familie & Co",
-                fingerprint = "Zm9vYmFy_ab-cd",
+                fingerprint = "Zm9vYmFy_ab-cdEF",
             ),
         )
     }
@@ -96,17 +100,33 @@ class VaultQrPayloadTest {
         assertThrows(IllegalArgumentException::class.java) {
             buildVaultQrPayload(words, vaultId, name = "x".repeat(65))
         }
+        // Ruling 7 (2026-08-26): `f` has a shape, and the builder must not be
+        // able to emit a code this app's own parser would refuse.
+        assertThrows(IllegalArgumentException::class.java) {
+            buildVaultQrPayload(words, vaultId, fingerprint = "short")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildVaultQrPayload(words, vaultId, fingerprint = "AbCdEfGhIjKlMn_o!")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            buildVaultQrPayload(words, vaultId, fingerprint = "AbCdEfGh IjKlMno")
+        }
     }
 
     @Test
     fun `build and parse round trip every field`() {
         val payload = ok(
-            buildVaultQrPayload(words, vaultId, name = "Öl & Gas – Depot", fingerprint = "aGVsbG8"),
+            buildVaultQrPayload(
+                words,
+                vaultId,
+                name = "Öl & Gas – Depot",
+                fingerprint = "aGVsbG8-_AbCdEfG",
+            ),
         )
         assertEquals(words, payload.mnemonic)
         assertEquals(vaultId, payload.vaultId)
         assertEquals("Öl & Gas – Depot", payload.name)
-        assertEquals("aGVsbG8", payload.fingerprint)
+        assertEquals("aGVsbG8-_AbCdEfG", payload.fingerprint)
     }
 
     // ── accepted shapes ─────────────────────────────────────────────────────
@@ -141,23 +161,38 @@ class VaultQrPayloadTest {
 
     @Test
     fun `key order does not matter and a trailing separator is tolerated`() {
-        val payload = ok("btvault1:v=$vaultId&f=abc&m=${words.replace(" ", "+")}&")
+        val payload = ok("btvault1:v=$vaultId&f=$fingerprint&m=${words.replace(" ", "+")}&")
         assertEquals(words, payload.mnemonic)
-        assertEquals("abc", payload.fingerprint)
+        assertEquals(fingerprint, payload.fingerprint)
     }
 
     @Test
-    fun `a duplicate key takes the first value, like URLSearchParams get`() {
+    fun `an unknown key may repeat as often as it likes`() {
+        // The other half of ruling 1, and the half that keeps the format
+        // additively extensible: only KNOWN keys are policed.
         val payload = ok(
-            "btvault1:m=${words.replace(" ", "+")}&m=${otherWords.replace(" ", "+")}&v=$vaultId",
+            "btvault1:x=1&x=2&x=3&m=${words.replace(" ", "+")}&v=$vaultId&future=a&future=b",
         )
         assertEquals(words, payload.mnemonic)
+        assertEquals(vaultId, payload.vaultId)
     }
 
     @Test
     fun `a name at exactly the cap is accepted`() {
         val name = "x".repeat(64)
         assertEquals(name, ok("btvault1:m=${words.replace(" ", "+")}&v=$vaultId&n=$name").name)
+    }
+
+    @Test
+    fun `the name cap counts code points, so 64 emoji fit`() {
+        // Ruling 3 (2026-08-26). 64 astral characters are 64 code points and 128
+        // UTF-16 code units; the earlier code-unit reading rejected this.
+        // §13's cap is 64 code points ⇒ at most 256 UTF-8 bytes.
+        val emoji = "😀".repeat(64)
+        val m = words.replace(" ", "+")
+        assertEquals(emoji, ok("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(64)}").name)
+        assertEquals(64, emoji.codePointCount(0, emoji.length))
+        assertEquals(256, emoji.toByteArray(Charsets.UTF_8).size)
     }
 
     @Test
@@ -267,10 +302,66 @@ class VaultQrPayloadTest {
     fun `a name over the cap is refused rather than truncated`() {
         // Truncating would change what the receiver shows the user about which
         // vault they are adopting, silently.
+        val m = words.replace(" ", "+")
         assertEquals(
             VaultQrRejection.NAME_TOO_LONG,
-            rejected("btvault1:m=${words.replace(" ", "+")}&v=$vaultId&n=${"x".repeat(65)}"),
+            rejected("btvault1:m=$m&v=$vaultId&n=${"x".repeat(65)}"),
         )
+        // The cap is code points, so the astral boundary is 65 emoji — not 33.
+        assertEquals(
+            VaultQrRejection.NAME_TOO_LONG,
+            rejected("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(65)}"),
+        )
+    }
+
+    @Test
+    fun `a duplicate of any known key is refused`() {
+        // INVERTED 2026-08-26, platform ruling 1. This case used to pin
+        // first-wins ("a duplicate key takes the first value, like
+        // URLSearchParams get") on the reasoning that §13 was silent. It is no
+        // longer silent: a repeated KNOWN key is a reject, and the ruling widened
+        // that past our own recommendation to cover `n` and `f` as well as the
+        // two required keys. Duplicate keys are the one construction where
+        // mainstream form parsers genuinely disagree, so one payload could
+        // otherwise read as two different vaults on two clients.
+        val m = words.replace(" ", "+")
+        val other = otherWords.replace(" ", "+")
+        listOf(
+            "btvault1:m=$m&m=$other&v=$vaultId",
+            "btvault1:m=$m&v=$vaultId&v=018f3c2a-7b41-7c3e-9f21-0a1b2c3d4e50",
+            "btvault1:m=$m&v=$vaultId&n=first&n=second",
+            "btvault1:m=$m&v=$vaultId&f=$fingerprint&f=$fingerprint",
+            // Identical repeats are refused too — the ambiguity is the defect,
+            // not the disagreement between the two values.
+            "btvault1:m=$m&m=$m&v=$vaultId",
+        ).forEach {
+            assertEquals("for <$it>", VaultQrRejection.DUPLICATE_KEY, rejected(it))
+        }
+    }
+
+    @Test
+    fun `a malformed fingerprint is refused at parse, shape only`() {
+        // Ruling 7 (2026-08-26). SHAPE is decidable offline — exactly 16
+        // base64url characters — and a malformed one is certain to fail the
+        // post-fetch comparison, so refusing it here costs a user nothing. The
+        // VALUE still needs the fetch; see VaultQrPayload's KDoc.
+        val m = words.replace(" ", "+")
+        listOf(
+            "aaaa", // too short
+            "AbCdEfGhIjKlMn_oX", // one too long
+            "AbCdEfGhIjKlMn+o", // '+' decodes to a space, not base64url
+            "AbCdEfGhIjKlMn%3Do", // '=' padding is not in the base64url alphabet here
+            "x".repeat(400),
+        ).forEach {
+            assertEquals(
+                "for <$it>",
+                VaultQrRejection.FINGERPRINT_INVALID,
+                rejected("btvault1:m=$m&v=$vaultId&f=$it"),
+            )
+        }
+        // Absent and blank both mean "no fingerprint", so neither is malformed.
+        assertNull(ok("btvault1:m=$m&v=$vaultId&f=").fingerprint)
+        assertNull(ok("btvault1:m=$m&v=$vaultId").fingerprint)
     }
 
     // ── the "never throws" property ─────────────────────────────────────────
@@ -303,7 +394,13 @@ class VaultQrPayloadTest {
         assertEquals("v", VaultQrContract.KEY_VAULT_ID)
         assertEquals("n", VaultQrContract.KEY_NAME)
         assertEquals("f", VaultQrContract.KEY_FINGERPRINT)
+        // 64 CODE POINTS since ruling 3 (2026-08-26) — see the constant's KDoc.
         assertEquals(64, VaultQrContract.MAX_NAME_LENGTH)
+        // The platform's VAULT_KEY_FINGERPRINT_CHARS (ruling 7).
+        assertEquals(16, VaultQrContract.FINGERPRINT_LENGTH)
+        assertTrue(VaultQrContract.FINGERPRINT_SHAPE.matches("AbCdEfGhIjKlMn_o"))
+        assertFalse(VaultQrContract.FINGERPRINT_SHAPE.matches("AbCdEfGhIjKlMn_"))
+        assertFalse(VaultQrContract.FINGERPRINT_SHAPE.matches("AbCdEfGhIjKlMn_oo"))
         // §13's TTL. The 120 s of the retired v2 handoff is dead.
         assertEquals(60, VaultQrContract.DISPLAY_TTL_SECONDS)
     }
@@ -316,21 +413,25 @@ class VaultQrPayloadTest {
             mnemonic = otherWords,
             vaultId = vaultId,
             name = "x".repeat(64),
-            fingerprint = "A".repeat(24),
+            fingerprint = fingerprint,
         )
         assertTrue("payload got long: ${longest.length}", longest.length <= 260)
         assertTrue(buildVaultQrPayload(words, vaultId).length in 100..200)
     }
 
     @Test
-    fun `the fingerprint is carried but never validated offline`() {
-        // The spec's own `f` bullet implies a pre-fetch check; it is a known
-        // wording defect (see VaultQrPayload's KDoc). Any non-empty value is
-        // accepted here precisely because nothing offline can judge it — the
-        // comparison happens after the header fetch or not at all.
-        listOf("aaaa", "!!!not-base64!!!", "x".repeat(400)).forEach { f ->
-            val payload = ok("btvault1:m=${words.replace(" ", "+")}&v=$vaultId&f=$f")
-            assertEquals(f, payload.fingerprint)
+    fun `a well-shaped fingerprint is carried, and its VALUE is still never judged offline`() {
+        // INVERTED 2026-08-26, platform ruling 7. This case used to accept ANY
+        // non-empty `f` ("the fingerprint is carried but never validated
+        // offline") on the reasoning that nothing offline can judge it. The
+        // ruling split the question: the SHAPE is decidable offline and is now
+        // checked (see `a malformed fingerprint is refused at parse`); the VALUE
+        // still is not, and the fetch→unwrap→compare→verified-open order is
+        // untouched. So a schema-valid fingerprint that opens no vault is still
+        // accepted here — it can only fail after the header fetch.
+        val m = words.replace(" ", "+")
+        listOf("AbCdEfGhIjKlMn_o", "aaaaaaaaaaaaaaaa", "----____--------").forEach { f ->
+            assertEquals(f, ok("btvault1:m=$m&v=$vaultId&f=$f").fingerprint)
         }
     }
 }

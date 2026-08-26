@@ -8,10 +8,18 @@
     "repo": "chris-dev-at/BetterTrack",
     "branch": "task/1417 - PR #1451 [PARANOID-E7], NOT yet merged to origin/main as of this transcription",
     "commit": "e1882d3a5ac173c6dd6fc3db1c359a44d3cea2c1 (fetched 2026-08-23)",
-    "outcomeVocabulary": "Theirs: update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection. The two vocabularies are deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
+    "outcomeVocabulary": "Theirs: update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection, which gained DUPLICATE_KEY and FINGERPRINT_INVALID with the 2026-08-26 rulings. The two vocabularies are deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
     "mnemonics": "The public BIP-39 all-zero-entropy phrase (128 bits). Not a real phrase; opens no real vault.",
-    "nameCap": "The web caps `n` at 64 Unicode CODE POINTS ([...value].length); this app caps it at 64 UTF-16 CODE UNITS (String.length). Sec13 says '<= 64 chars'. See the maxLengthComposedName note.",
-    "fingerprint": "The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint; this app carries any non-empty `f` verbatim because nothing offline can judge it and the comparison happens after the header fetch (Sec13 fetch-then-compare). Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none."
+    "nameCap": "CONVERGED 2026-08-26 (ruling 3). The web always capped `n` at 64 Unicode CODE POINTS ([...value].length in apps/web/src/user/vault/qr/payload.ts). This app capped it at 64 UTF-16 CODE UNITS (String.length) and justified it with a claim about the web's code that was factually wrong. Sec13 now says 64 code points (=> <= 256 UTF-8 bytes) and this app counts codePointCount, so a 64-emoji hint flipped from NAME_TOO_LONG to accepted. Their vectors cannot see any of this - maxLengthComposedName uses U+00E9, one code unit and one code point at once - so it is pinned in VaultQrE7ConformanceTest instead. Their SENDER additionally drops the hint past a 220-wire-byte budget; that is scannability, not the wire cap.",
+    "fingerprint": "CONVERGED 2026-08-26 (ruling 7). The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint. This app used to carry any non-empty `f` verbatim, because nothing offline can judge its VALUE and the comparison happens after the header fetch (Sec13 fetch-then-compare). The ruling split the two questions: SHAPE is now checked at parse on both sides (VaultQrRejection.FINGERPRINT_INVALID here), the VALUE is still only checkable after the fetch, and the fetch->unwrap->compare->verified-open order is untouched. Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none.",
+    "rulingsApplied": {
+      "date": "2026-08-26",
+      "what": "The platform ruled on the eight items left open by the cross-client convergence round. Four moved this app's side. Recorded here so a reader can tell a verdict that CHANGED from one that was always this way - the earlier divergence report was correct when it was written and is not being rewritten out of the record.",
+      "ruling1DuplicateKeys": "Reject a duplicate of any KNOWN key - m, v, n, f - not just the required two; unknown keys stay ignored however often they repeat. New rejection DUPLICATE_KEY. This widened past this app's own recommendation, which had asked only for the required pair. For duplicateMnemonic and duplicateVaultId the recorded agreement was 'different-decision' when this file was first written on 2026-08-23 (this app took the first value and accepted, the web rejected); it is now 'same-decision-same-cause' and their `android` blocks were RE-RECORDED from accept to reject. The web's own flip for n and f is in their PR #1508, which is NOT merged - until it lands, `n=a&n=b` is accepted there and rejected here, a new temporary difference in the ruled direction that their vectors do not cover.",
+      "ruling3NameCodePoints": "The Sec13 name cap counts code points, not UTF-16 code units. No vector's verdict changed - maxLengthComposedName cannot see the difference - but see the nameCap note and the retitled pinning test in VaultQrE7ConformanceTest.",
+      "ruling4UntrustedLabel": "`n` is untrusted display text; a renderer must neutralize formatting controls. Adopted from this app's recommendation as normative and explicitly NOT queued behind the Sec13 rewrite, because the scan-result card renders the scanned name in titleLarge today. PARSE behaviour is unchanged - the leniency-case-4 vectors still carry their control characters through - and the treatment lives at the render site in at.bettertrack.app.ui.format.btSanitizeUntrustedLabel.",
+      "ruling7FingerprintShape": "Validate `f`'s SHAPE at parse (exactly 16 base64url characters); its VALUE only after the fetch, unchanged. New rejection FINGERPRINT_INVALID. No vector's verdict changed - every exported vector carries a schema-valid fingerprint or none."
+    }
   },
   "golden": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
   "vectors": [
@@ -101,16 +109,11 @@
         "outcome": "invalid-mnemonic"
       },
       "android": {
-        "accepts": true,
-        "payload": {
-          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
-          "name": "Phone vault",
-          "fingerprint": "AbCdEfGhIjKlMn_o"
-        }
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
       },
-      "agreement": "different-decision",
-      "note": "DIVERGENCE. The web rejects a repeated `m` (invalid-mnemonic). This app takes the FIRST value, like URLSearchParams.get(), and accepts. Sec13's letter is silent on repeated keys; its stated rationale ('parsed as one application/x-www-form-urlencoded query string, which every platform parses identically') points at reject, because duplicate keys are exactly where platform form parsers do NOT agree. Not changed unilaterally: silent in Sec13 -> board question."
+      "agreement": "same-decision-same-cause",
+      "note": "CONVERGED 2026-08-26 by ruling 1; was 'different-decision' when this fixture was first recorded on 2026-08-23. History: the web rejected a repeated `m` (invalid-mnemonic) while this app took the FIRST value like URLSearchParams.get() and accepted, and Sec13's letter was silent on repeated keys, so the split was pinned as a board question rather than fixed on one side. Sec13's stated rationale is what settled it - the body is one form-urlencoded query 'which every platform parses identically', and duplicate keys are exactly where platform form parsers do NOT agree. Both clients now reject; the reason tokens differ in spelling only (invalid-mnemonic vs DUPLICATE_KEY), the same way badChecksum's do."
     },
     {
       "name": "duplicateVaultId",
@@ -120,16 +123,11 @@
         "outcome": "invalid-vault-id"
       },
       "android": {
-        "accepts": true,
-        "payload": {
-          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
-          "name": "Phone vault",
-          "fingerprint": "AbCdEfGhIjKlMn_o"
-        }
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
       },
-      "agreement": "different-decision",
-      "note": "DIVERGENCE, same cause as duplicateMnemonic: the web rejects a repeated `v` (invalid-vault-id), this app takes the first value and accepts."
+      "agreement": "same-decision-same-cause",
+      "note": "CONVERGED 2026-08-26 by ruling 1, same story as duplicateMnemonic; was 'different-decision' on 2026-08-23. The web rejects a repeated `v` (invalid-vault-id), this app used to take the first value and accept, and both now reject."
     },
     {
       "name": "unknownExtraKey",
@@ -307,7 +305,7 @@
         }
       },
       "agreement": "same-decision-same-cause",
-      "note": "Agrees for this vector only by luck of the alphabet: U+00E9 is one UTF-16 code unit, so the web's code-POINT cap and this app's code-UNIT cap coincide at 64. They part company on astral characters - 64 emoji is 64 code points (web accepts) and 128 code units (this app rejects NAME_TOO_LONG). Sec13 says '<= 64 chars' and settles nothing."
+      "note": "Agreed before and after ruling 3, but for different reasons. When this fixture was recorded the agreement was luck of the alphabet: U+00E9 is one UTF-16 code unit, so the web's code-POINT cap and this app's code-UNIT cap coincided at exactly 64. They parted company on astral characters - 64 emoji is 64 code points (web accepted) and 128 code units (this app rejected NAME_TOO_LONG). Sec13 said '<= 64 chars' and settled nothing. It now says 64 code points and this app counts them, so the two caps are the same rule and the emoji boundary agrees too. Their vectors still cannot see the difference; the astral boundary is pinned in VaultQrE7ConformanceTest."
     }
   ]
 }

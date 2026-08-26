@@ -37,8 +37,33 @@ class VaultQrScanStateTest {
             VaultQrRejection.PHRASE_INVALID,
             VaultQrRejection.VAULT_ID_INVALID,
             VaultQrRejection.NAME_TOO_LONG,
+            // The two reasons the 2026-08-26 rulings added. They earned no copy
+            // of their own: "you sent `m` twice" or "that fingerprint is the
+            // wrong length" tells a bystander how close the code was.
+            VaultQrRejection.DUPLICATE_KEY,
+            VaultQrRejection.FINGERPRINT_INVALID,
         ).map { vaultQrRejectionMessage(it) }.toSet()
         assertEquals("these must be indistinguishable on screen", 1, generic.size)
+    }
+
+    @Test
+    fun `only the provenance reasons may ever have their own copy`() {
+        // Stated as a property over the whole enum rather than a list, so a
+        // rejection reason added later is generic by default and gets its own
+        // message only by a deliberate edit here.
+        val ownCopy = setOf(
+            VaultQrRejection.NOT_A_VAULT_CODE,
+            VaultQrRejection.UNSUPPORTED_VERSION,
+            VaultQrRejection.LEGACY_CODE,
+        )
+        val generic = vaultQrRejectionMessage(VaultQrRejection.PHRASE_INVALID)
+        VaultQrRejection.entries.filterNot { it in ownCopy }.forEach {
+            assertEquals(
+                "$it must not be distinguishable from any other content-level failure",
+                generic,
+                vaultQrRejectionMessage(it),
+            )
+        }
     }
 
     @Test

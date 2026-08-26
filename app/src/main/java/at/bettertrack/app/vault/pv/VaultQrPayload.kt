@@ -36,8 +36,15 @@ import kotlinx.serialization.json.JsonObject
  *   human-recoverable payload; and there is no entropy-encoding / endianness /
  *   checksum-recompute step where two implementations can silently diverge.
  * - **`v`** is the vault UUID, lowercase hyphenated.
- * - **`n`** is an optional display-name hint, ≤ 64 characters.
- * - **`f`** is the optional vault key fingerprint.
+ * - **`n`** is an optional display-name hint, ≤ 64 **code points**, and it is
+ *   **untrusted display text**: a renderer must neutralize formatting controls
+ *   before it paints it (platform ruling 4, 2026-08-26 — see
+ *   `at.bettertrack.app.ui.format.btSanitizeUntrustedLabel`).
+ * - **`f`** is the optional vault key fingerprint. Its SHAPE is checked here
+ *   (exactly 16 base64url characters); its VALUE is only checkable after the
+ *   header fetch.
+ * - **A repeated KNOWN key is a reject** ([VaultQrRejection.DUPLICATE_KEY]).
+ *   Unknown keys may repeat freely — they are ignored either way.
  *
  * ## The `f` bullet is a known spec defect — read this before "fixing" it
  *
@@ -62,11 +69,15 @@ import kotlinx.serialization.json.JsonObject
  *        phrase to the endpoint keystore
  * ```
  *
- * `f` is therefore carried verbatim and used as a *confirmation* after the
- * fetch, never as a gate before it. A mis-scan can never store dead words
- * because nothing is stored until the decryption proof succeeds.
+ * `f`'s VALUE is therefore used as a *confirmation* after the fetch, never as a
+ * gate before it. A mis-scan can never store dead words because nothing is
+ * stored until the decryption proof succeeds. Its SHAPE is a different question
+ * and is settled offline — see the validation list below.
  *
- * ## Offline validation is exactly four things
+ * ## Offline validation
+ *
+ * §13 names four checks, and they are the four the scan-result card lists back
+ * to the user:
  *
  * 1. the `btvault1:` prefix,
  * 2. both required keys (`m`, `v`) present,
@@ -74,6 +85,13 @@ import kotlinx.serialization.json.JsonObject
  *    [checkVaultPassphrase] — the wordlist is digest-pinned there and is not
  *    duplicated here),
  * 4. the UUID shape of `v`.
+ *
+ * Two further checks are pure structural rejects from the 2026-08-26 rulings.
+ * They get no row on the result card because they can never coexist with an
+ * accepted payload — there is no "passed" state to show:
+ *
+ * 5. no KNOWN key (`m`, `v`, `n`, `f`) appears twice (ruling 1), and
+ * 6. `f`, when present, is exactly 16 base64url characters (ruling 7).
  *
  * Nothing else can be decided without the network, and the UI says so.
  *
@@ -111,19 +129,49 @@ object VaultQrContract {
     /** Optional — display-name hint. */
     const val KEY_NAME: String = "n"
 
-    /** Optional — the vault key fingerprint; verifiable only AFTER the header fetch. */
+    /** Optional — the vault key fingerprint; its VALUE is verifiable only AFTER the header fetch. */
     const val KEY_FINGERPRINT: String = "f"
 
     /**
-     * §13's cap on `n`, measured in UTF-16 code units.
+     * The keys this version knows.
      *
-     * Code units and not code points on purpose: the web renderer's natural
-     * check is JavaScript's `String.prototype.length`, which counts UTF-16 code
-     * units, and a sender and a receiver that disagree about what "64
-     * characters" means is exactly the class of silent divergence this contract
-     * exists to remove.
+     * A duplicate of any of them is a reject ([VaultQrRejection.DUPLICATE_KEY],
+     * platform ruling 1 of 2026-08-26). An unknown key is ignored however often
+     * it repeats — that asymmetry is the point: ignoring unknown keys is what
+     * makes the format additively extensible, while a repeated *known* key is
+     * the one construction where mainstream form parsers genuinely disagree
+     * (first-wins, last-wins and collect-all are all in the wild), so a hostile
+     * code could aim one payload at two clients and have them read different
+     * vault ids out of it.
+     */
+    internal val KNOWN_KEYS: Set<String> =
+        setOf(KEY_MNEMONIC, KEY_VAULT_ID, KEY_NAME, KEY_FINGERPRINT)
+
+    /**
+     * §13's cap on `n`: **64 Unicode code points** — and therefore at most 256
+     * UTF-8 bytes on the wire.
+     *
+     * Code points, not UTF-16 code units. The unit is load-bearing, because a
+     * sender and a receiver that disagree about what "64 characters" means is
+     * exactly the class of silent divergence this contract exists to remove.
+     *
+     * An earlier revision of this file counted code UNITS and justified it with
+     * a claim about the other implementation that was simply false — that the
+     * web renderer's natural check is JavaScript's `String.prototype.length`. It
+     * is not: `apps/web/src/user/vault/qr/payload.ts` writes
+     * `[...value].length > VAULT_TRANSFER_NAME_MAX_CHARS`, and the array spread
+     * iterates code POINTS. The platform ruled on 2026-08-26 (ruling 3) that §13
+     * says code points; this constant now means the same thing on both sides,
+     * and a 64-emoji hint — 64 code points, 128 code units — that this app used
+     * to reject is accepted.
      */
     const val MAX_NAME_LENGTH: Int = 64
+
+    /**
+     * `f`'s length, in base64url characters — the platform's
+     * `VAULT_KEY_FINGERPRINT_CHARS`.
+     */
+    const val FINGERPRINT_LENGTH: Int = 16
 
     /**
      * §13's display TTL in seconds. The sender blanks the code after this and
@@ -136,6 +184,18 @@ object VaultQrContract {
     val VAULT_ID_SHAPE: Regex =
         Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
+    /**
+     * `f`'s SHAPE — exactly [FINGERPRINT_LENGTH] base64url characters, the same
+     * `vaultKeyFingerprintSchema` the platform validates against.
+     *
+     * Shape is not value. A well-shaped `f` still proves nothing offline (see the
+     * class KDoc); it is checked here only because a malformed one is *certain*
+     * to fail the post-fetch comparison, so refusing it at parse costs a user
+     * nothing and refuses it before a network round trip (platform ruling 7,
+     * 2026-08-26).
+     */
+    val FINGERPRINT_SHAPE: Regex = Regex("^[A-Za-z0-9_-]{$FINGERPRINT_LENGTH}$")
+
     /** `btvault<n>:` for any decimal n — used only to tell "wrong version" from "not ours". */
     internal val SCHEME_FAMILY: Regex = Regex("^btvault[0-9]+:")
 }
@@ -146,6 +206,12 @@ object VaultQrContract {
  * [mnemonic] is always the NORMALIZED phrase (NFKD, lowercase, single spaces) —
  * the same bytes the KDF will see — so no call site has to remember to normalize
  * again. [name] and [fingerprint] are `null` when absent or blank.
+ *
+ * **[name] is untrusted display text.** It arrived from a camera, it is capped
+ * and trimmed here and otherwise carried through exactly as sent — control and
+ * bidi characters included. Anything that paints it must run it through
+ * `at.bettertrack.app.ui.format.btSanitizeUntrustedLabel` first; a raw render is
+ * a spoofing surface, and `VaultQrDisciplineTest` fails the build over one.
  */
 data class VaultQrPayload(
     val mnemonic: String,
@@ -171,6 +237,12 @@ enum class VaultQrRejection {
     /** The query could not be decoded (bad percent escape, unparseable body). */
     MALFORMED,
 
+    /**
+     * A key in [VaultQrContract.KNOWN_KEYS] appeared more than once (ruling 1,
+     * 2026-08-26). Unknown keys may repeat — they are ignored either way.
+     */
+    DUPLICATE_KEY,
+
     /** `m` or `v` missing or empty. */
     MISSING_REQUIRED_KEY,
 
@@ -180,8 +252,15 @@ enum class VaultQrRejection {
     /** `v` is not a lowercase hyphenated UUID. */
     VAULT_ID_INVALID,
 
-    /** `n` exceeds [VaultQrContract.MAX_NAME_LENGTH]. */
+    /** `n` exceeds [VaultQrContract.MAX_NAME_LENGTH] code points. */
     NAME_TOO_LONG,
+
+    /**
+     * `f` is present but does not match [VaultQrContract.FINGERPRINT_SHAPE]
+     * (ruling 7, 2026-08-26). Shape only — a well-shaped `f` is still unproven
+     * until the header fetch.
+     */
+    FINGERPRINT_INVALID,
 }
 
 /** The result of [parseVaultQrPayload]. Parsing NEVER throws — a camera feeds it arbitrary bytes. */
@@ -208,7 +287,9 @@ sealed interface VaultQrParseResult {
  * @param mnemonic the 12 words; normalized here, so any spacing/casing the
  *   caller holds is fine, but the words themselves must pass the BIP-39 check.
  * @param name optional display hint; blank is treated as absent.
- * @param fingerprint optional `key_fingerprint`; carried verbatim.
+ * @param fingerprint optional `key_fingerprint`; carried verbatim, but its shape
+ *   is required to be [VaultQrContract.FINGERPRINT_SHAPE] so this builder can
+ *   never emit a code this app's own parser refuses.
  */
 fun buildVaultQrPayload(
     mnemonic: String,
@@ -225,10 +306,24 @@ fun buildVaultQrPayload(
         "The transfer QR needs a lowercase hyphenated vault UUID."
     }
     val trimmedName = name?.trim()?.takeIf { it.isNotEmpty() }
-    require(trimmedName == null || trimmedName.length <= VaultQrContract.MAX_NAME_LENGTH) {
-        "A vault name hint is at most ${VaultQrContract.MAX_NAME_LENGTH} characters."
+    require(
+        trimmedName == null ||
+            trimmedName.codePointCount(0, trimmedName.length) <= VaultQrContract.MAX_NAME_LENGTH,
+    ) {
+        "A vault name hint is at most ${VaultQrContract.MAX_NAME_LENGTH} code points."
     }
     val trimmedFingerprint = fingerprint?.trim()?.takeIf { it.isNotEmpty() }
+    // Symmetric with the vault id: the sender's own fingerprint comes from our
+    // unlocked vault, so a bad one is a programming error — and emitting a code
+    // that this app's OWN parser would reject with FINGERPRINT_INVALID is the
+    // build/parse divergence this file exists to make impossible.
+    require(
+        trimmedFingerprint == null ||
+            VaultQrContract.FINGERPRINT_SHAPE.matches(trimmedFingerprint),
+    ) {
+        "A vault key fingerprint is exactly ${VaultQrContract.FINGERPRINT_LENGTH} " +
+            "base64url characters."
+    }
 
     return buildString {
         append(VaultQrContract.PREFIX)
@@ -250,7 +345,7 @@ fun buildVaultQrPayload(
  * Parse a scanned string. Never throws; every failure is a
  * [VaultQrParseResult.Failed] with a reason.
  *
- * A success means the four offline checks passed and nothing more — in
+ * A success means the offline checks passed and nothing more — in
  * particular it does NOT mean these words open that vault. That proof is the
  * receiver's fetch-then-compare step ([VaultHeaderProbe]).
  */
@@ -278,7 +373,14 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
         )
     }
 
-    val fields = decodeFormQuery(body) ?: return VaultQrParseResult.Failed(VaultQrRejection.MALFORMED)
+    val decoded = decodeFormQuery(body) ?: return VaultQrParseResult.Failed(VaultQrRejection.MALFORMED)
+
+    // Ruling 1: a repeated KNOWN key is a reject, decided on the WHOLE body so
+    // the verdict does not depend on which duplicate came first.
+    if (decoded.duplicateKnownKey) {
+        return VaultQrParseResult.Failed(VaultQrRejection.DUPLICATE_KEY)
+    }
+    val fields = decoded.fields
 
     // Unknown keys are ignored on purpose — that is the format's forward
     // compatibility, and the reason `f` could be added after the fact.
@@ -303,11 +405,17 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
     }
 
     val name = fields[VaultQrContract.KEY_NAME]?.takeIf { it.isNotBlank() }
-    if (name != null && name.length > VaultQrContract.MAX_NAME_LENGTH) {
+    if (name != null && name.codePointCount(0, name.length) > VaultQrContract.MAX_NAME_LENGTH) {
         return VaultQrParseResult.Failed(VaultQrRejection.NAME_TOO_LONG)
     }
 
+    // Blank reads as absent, exactly as for `n` — this app trims where the web
+    // preserves. Not a security difference: an absent `f` simply skips the
+    // post-fetch confirmation, which is the same thing omitting the key does.
     val fingerprint = fields[VaultQrContract.KEY_FINGERPRINT]?.takeIf { it.isNotBlank() }
+    if (fingerprint != null && !VaultQrContract.FINGERPRINT_SHAPE.matches(fingerprint)) {
+        return VaultQrParseResult.Failed(VaultQrRejection.FINGERPRINT_INVALID)
+    }
 
     return VaultQrParseResult.Ok(
         VaultQrPayload(
@@ -361,16 +469,34 @@ private fun StringBuilder.appendFormEncoded(value: String) {
 }
 
 /**
+ * One decoded query, plus the single fact a plain map cannot carry: whether a
+ * key in [VaultQrContract.KNOWN_KEYS] was repeated.
+ *
+ * It is a flag rather than a multimap because the *value* of a duplicate is
+ * never used — the payload is refused outright — and a multimap would invite a
+ * later "just take the first one" edit that quietly undoes ruling 1.
+ */
+private class DecodedQuery(
+    val fields: Map<String, String>,
+    val duplicateKnownKey: Boolean,
+)
+
+/**
  * Decode one form-urlencoded query into its fields, or `null` when it is not
  * decodable at all.
  *
- * Duplicate keys: the FIRST wins, matching `URLSearchParams.get()`. Empty
- * segments (`a=1&&b=2`, a trailing `&`) are skipped rather than treated as an
- * error — every mainstream parser does that, and a stricter reading would reject
- * codes that decode identically everywhere else.
+ * Duplicate keys: [duplicateKnownKey][DecodedQuery.duplicateKnownKey] is raised
+ * for a repeated `m`, `v`, `n` or `f` and the caller refuses the payload
+ * (platform ruling 1, 2026-08-26). Unknown keys keep the old first-wins
+ * behaviour, which is unobservable anyway because they are ignored.
+ *
+ * Empty segments (`a=1&&b=2`, a trailing `&`) are skipped rather than treated as
+ * an error — every mainstream parser does that, and a stricter reading would
+ * reject codes that decode identically everywhere else.
  */
-private fun decodeFormQuery(body: String): Map<String, String>? {
+private fun decodeFormQuery(body: String): DecodedQuery? {
     val out = LinkedHashMap<String, String>()
+    var duplicateKnownKey = false
     for (segment in body.split('&')) {
         if (segment.isEmpty()) continue
         val eq = segment.indexOf('=')
@@ -379,9 +505,12 @@ private fun decodeFormQuery(body: String): Map<String, String>? {
         val key = decodeFormComponent(rawKey) ?: return null
         val value = decodeFormComponent(rawValue) ?: return null
         if (key.isEmpty()) continue
-        out.putIfAbsent(key, value)
+        val previous = out.putIfAbsent(key, value)
+        if (previous != null && key in VaultQrContract.KNOWN_KEYS) {
+            duplicateKnownKey = true
+        }
     }
-    return out
+    return DecodedQuery(out, duplicateKnownKey)
 }
 
 /**

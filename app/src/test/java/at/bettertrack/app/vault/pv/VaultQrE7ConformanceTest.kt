@@ -32,16 +32,26 @@ import org.junit.Test
  *  - `android` — what THIS parser does with those exact bytes, recorded beside
  *    theirs so neither side can drift without a red test.
  *
- * ## Divergence is recorded, not silently reconciled
+ * ## Divergence is recorded, not silently reconciled — and then it was ruled on
  *
- * Two vectors genuinely disagree (`duplicateMnemonic`, `duplicateVaultId`) and
- * one agrees on the decision but not on the reason (`bareString`). They are
- * pinned as divergences with the §13 verdict in the fixture's `note`, and the
- * divergence set itself is a tripwire: "fix" this parser to match theirs and the
- * test goes red until the fixture is updated in the same change. §13 does not
- * settle the duplicate-key question, so
- * matching them here would be a unilateral spec decision wearing a bug fix's
- * clothes — the board decides, not this file.
+ * The first pass of this file recorded three divergences: two genuine
+ * accept/reject splits (`duplicateMnemonic`, `duplicateVaultId`, where this
+ * parser took the first value and theirs rejected) and one same-decision,
+ * different-cause (`bareString`). They were pinned rather than "fixed", because
+ * §13 was silent on repeated keys and matching them unilaterally would have been
+ * a spec decision wearing a bug fix's clothes.
+ *
+ * **The platform ruled on 2026-08-26 and the two accept/reject splits are gone.**
+ * Ruling 1 makes a repeated *known* key a reject on both sides — widened past
+ * this app's own recommendation to cover `n` and `f`, not just the two required
+ * keys — so those vectors now agree. The fixture keeps their history in the
+ * vectors' `note` and in `_source.rulingsApplied`; it is not rewritten as though
+ * the split never happened. `bareString` is untouched and still the only
+ * recorded difference.
+ *
+ * The divergence set stays a tripwire in both directions: converge or diverge,
+ * the behaviour and this file's expectations change in the SAME edit or the
+ * build goes red.
  *
  * ## The four leniency questions, answered by execution
  *
@@ -51,7 +61,8 @@ import org.junit.Test
  * the one they predicted this app would accept — reasoning that an Android
  * scanner is probably built on `Uri.parse`, which strips fragments. It is not:
  * [parseVaultQrPayload] does its own form decoding for exactly this class of
- * reason, so the fragment stays glued to the last value and is rejected.
+ * reason, so the fragment stays glued to the last value and is rejected. Cases 2
+ * and 4 were both ruled on and the tests below now pin the ruled behaviour.
  */
 class VaultQrE7ConformanceTest {
 
@@ -117,6 +128,26 @@ class VaultQrE7ConformanceTest {
         assertFalse(
             "a platform fixture must never describe itself as self-derived",
             source.str("provenance").contains("self-derived", ignoreCase = true),
+        )
+    }
+
+    @Test
+    fun `the fixture records which rulings moved it, rather than quietly restating history`() {
+        // A vector whose verdict changed and whose file says nothing about why is
+        // indistinguishable from one that was always recorded that way — and the
+        // next reader would conclude the earlier divergence report was wrong.
+        val rulings = fixture["_source"]!!.jsonObject["rulingsApplied"]!!.jsonObject
+        assertTrue(
+            "the rulings block must be dated so a later reader can find the decision",
+            rulings.str("date") == "2026-08-26",
+        )
+        listOf("ruling1DuplicateKeys", "ruling3NameCodePoints", "ruling4UntrustedLabel", "ruling7FingerprintShape")
+            .forEach {
+                assertTrue("the rulings block is missing $it", rulings.containsKey(it))
+            }
+        assertTrue(
+            "the duplicate-key ruling note must say the two vectors' verdicts were RE-recorded",
+            rulings.str("ruling1DuplicateKeys").contains("was 'different-decision'"),
         )
     }
 
@@ -217,10 +248,11 @@ class VaultQrE7ConformanceTest {
         // is a wire-contract decision; whichever way it goes, this list changes
         // in the SAME change as the behaviour, or the change is not finished.
         assertEquals(
-            "§13 is silent on repeated required keys, so the duplicate-key split is a board " +
-                "question, not a bug to be fixed on one side unilaterally. If the board rules, " +
-                "update the fixture and this list together.",
-            listOf("duplicateMnemonic", "duplicateVaultId"),
+            "No vector may split on accept/reject any more. duplicateMnemonic and " +
+                "duplicateVaultId were the two that did, until ruling 1 of 2026-08-26 made a " +
+                "repeated known key a reject on both sides. A name reappearing here means a " +
+                "parser change went in without the fixture — or a real new divergence to report.",
+            emptyList<String>(),
             vectors.filter { it.str("agreement") == "different-decision" }.map { it.str("name") },
         )
         assertEquals(
@@ -285,37 +317,53 @@ class VaultQrE7ConformanceTest {
     }
 
     /**
-     * **Case 2 — a duplicate key.** For the OPTIONAL keys both clients agree:
-     * first occurrence wins, silently (`URLSearchParams.get()` on their side,
-     * `putIfAbsent` on ours).
+     * **Case 2 — a duplicate key. RULED, and this test is inverted.**
      *
-     * For the REQUIRED keys they diverge, and this is the one place the coordinator's
-     * brief was wrong about this app: the web rejects a repeated `m` or `v`, while
-     * this app applies the same first-wins rule and accepts — a behaviour
-     * [VaultQrPayloadTest] already pins deliberately for `m`
-     * (`a duplicate key takes the first value, like URLSearchParams get`).
+     * What this file recorded on 2026-08-23: both clients took the first value
+     * for the OPTIONAL keys (`URLSearchParams.get()` on their side, `putIfAbsent`
+     * on ours), and for the REQUIRED keys they split — the web rejected a
+     * repeated `m` or `v`, this app accepted the first value. This app's
+     * recommendation was to converge on reject for the required pair, and to
+     * leave the decision to the board because §13's letter was silent.
      *
-     * §13's letter is silent on repeated keys. §13's stated *rationale* is not:
-     * the format is form-urlencoded "which every platform parses identically",
-     * and duplicate keys are precisely where platform form parsers do NOT agree
-     * (first-wins, last-wins and collect-all are all in the wild). Rejecting
-     * costs nothing — no legitimate sender emits a duplicate — and removes an
-     * ambiguity a hostile code could aim at two clients at once. That is a
-     * recommendation, not a licence: the change belongs to the board.
+     * **Ruling 1 of 2026-08-26 went further than the recommendation:** reject a
+     * duplicate of any *known* key — `m`, `v`, `n` and `f` — while unknown keys
+     * stay ignored however often they repeat. §13's stated rationale is what
+     * carried it: the body is form-urlencoded "which every platform parses
+     * identically", and duplicate keys are the one construction where platform
+     * form parsers do NOT agree (first-wins, last-wins and collect-all are all in
+     * the wild), so one hostile payload could read as two different vaults on two
+     * clients. No legitimate sender emits a duplicate, so rejecting costs nothing.
+     *
+     * This app now rejects all four with [VaultQrRejection.DUPLICATE_KEY]. Note
+     * that the web's own flip for `n`/`f` rides in their PR #1508, which is not
+     * merged: until it lands, `n=a&n=b` is accepted there and rejected here — a
+     * *new*, temporary, ruled-direction difference their vectors do not cover.
      */
     @Test
-    fun `leniency case 2 - duplicate keys take the first value, required ones included`() {
+    fun `leniency case 2 - a duplicate of any known key is refused, unknown keys may repeat`() {
         val m = words.replace(" ", "+")
-        // Optional keys: both clients agree, first wins.
-        assertEquals("first", ok("btvault1:m=$m&v=$vaultId&n=first&n=second").name)
-        assertEquals("first", ok("btvault1:m=$m&v=$vaultId&f=first&f=second").fingerprint)
-        // Required keys: the web rejects both of these; this app does not.
         val otherWords = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong"
-        assertEquals(words, ok("btvault1:m=$m&m=${otherWords.replace(" ", "+")}&v=$vaultId").mnemonic)
+        // The two the web already rejects — the recorded divergence, now closed.
         assertEquals(
-            vaultId,
-            ok("btvault1:m=$m&v=$vaultId&v=018f6a3e-1111-7000-8000-000000000002").vaultId,
+            VaultQrRejection.DUPLICATE_KEY,
+            rejected("btvault1:m=$m&m=${otherWords.replace(" ", "+")}&v=$vaultId"),
         )
+        assertEquals(
+            VaultQrRejection.DUPLICATE_KEY,
+            rejected("btvault1:m=$m&v=$vaultId&v=018f6a3e-1111-7000-8000-000000000002"),
+        )
+        // The two the ruling widened to — ahead of the web's #1508.
+        assertEquals(
+            VaultQrRejection.DUPLICATE_KEY,
+            rejected("btvault1:m=$m&v=$vaultId&n=first&n=second"),
+        )
+        assertEquals(
+            VaultQrRejection.DUPLICATE_KEY,
+            rejected("btvault1:m=$m&v=$vaultId&f=AbCdEfGhIjKlMn_o&f=AbCdEfGhIjKlMn_o"),
+        )
+        // Unknown keys are untouched by the ruling: still ignored, still repeatable.
+        assertEquals(words, ok("btvault1:m=$m&v=$vaultId&zz=1&zz=2&zz=3").mnemonic)
     }
 
     /**
@@ -371,26 +419,35 @@ class VaultQrE7ConformanceTest {
      * label is attacker-controlled text in a security decision — the exact shape
      * of a spoofing surface.
      *
-     * Recommendation (spec, not a unilateral change): **sanitize at render, and
-     * say so in §13.** Rejecting at parse throws away a phrase transfer over a
-     * cosmetic hint, which is the wrong trade for the one screen whose job is to
-     * get the words onto the phone; and a parser that rejects protects only the
-     * clients that implement the rejection. Rendering the hint through one
-     * shared "untrusted label" treatment — strip C0/C1 and U+2028/U+2029, strip
-     * or isolate the bidi control range U+202A–U+202E and U+2066–U+2069, collapse
-     * runs of whitespace, single line, ellipsized — protects every consumer of
-     * the field regardless of who parsed it. §13 should state that `n` is
-     * untrusted display text and that a renderer must neutralize formatting
-     * controls; that sentence is missing today.
+     * **Ruling 4 of 2026-08-26 adopted this app's recommendation as normative**,
+     * and asked for it not to be queued behind the §13 rewrite: sanitize at
+     * render rather than reject at parse. Rejecting at parse throws away a phrase
+     * transfer over a cosmetic hint, which is the wrong trade on the one screen
+     * whose job is to get the words onto the phone; and a parser that rejects
+     * protects only the clients that implement the rejection.
+     *
+     * So **the parse behaviour below is unchanged and stays correct** — the hint
+     * is carried through with its control characters intact — and the fix lives
+     * one layer up in [at.bettertrack.app.ui.format.btSanitizeUntrustedLabel]:
+     * strip C0/C1 and U+2028/U+2029, strip the bidi controls U+202A–U+202E and
+     * U+2066–U+2069, then isolate the remainder in a balanced U+2068…U+2069 pair,
+     * collapse whitespace, single line, ellipsized. `UntrustedLabelTest` proves
+     * the two properties that matter (a planted override is inert; a legitimate
+     * Hebrew name is untouched) and `VaultQrDisciplineTest` proves the scan card
+     * cannot bypass it. §13 still wants the sentence saying `n` is untrusted
+     * display text.
      */
     @Test
     fun `leniency case 4 - control and bidi characters survive parsing into the rendered name`() {
         val m = words.replace(" ", "+")
         // NUL: not whitespace, so neither isNotBlank() nor trim() drops it.
         assertEquals("\u0000pwn", ok("btvault1:m=$m&v=$vaultId&n=%00pwn").name)
-        // Newline: kept when interior. The scan card renders it as a real break.
+        // Newline: kept when interior. The scan card no longer renders it as a
+        // real break — btSanitizeUntrustedLabel folds it to one space — but that
+        // is a RENDER property; the parse contract below is unchanged.
         assertEquals("Phone\nvault", ok("btvault1:m=$m&v=$vaultId&n=Phone%0Avault").name)
-        // RIGHT-TO-LEFT OVERRIDE: the spoofing primitive. Parsed, kept, rendered.
+        // RIGHT-TO-LEFT OVERRIDE: the spoofing primitive. Still parsed and still
+        // kept — it is stripped at the render site, not here.
         assertEquals("safe‮tluav", ok("btvault1:m=$m&v=$vaultId&n=safe%E2%80%AEtluav").name)
         // Bidi isolates too - U+2066..U+2069 are equally effective and equally kept.
         assertEquals("a⁦b⁩c", ok("btvault1:m=$m&v=$vaultId&n=a%E2%81%A6b%E2%81%A9c").name)
@@ -407,22 +464,45 @@ class VaultQrE7ConformanceTest {
     }
 
     /**
-     * The name cap is measured in different units on the two sides. Their vectors
-     * cannot see it — `maxLengthComposedName` uses U+00E9, one code unit and one
-     * code point at the same time — so it is pinned here on purpose.
+     * **The name cap, converged. INVERTED 2026-08-26, ruling 3.**
+     *
+     * This test used to be titled *"the name cap is 64 UTF-16 code units here and
+     * 64 code points on the web"* and existed to pin a real unit mismatch that
+     * the platform's own vectors could not see: `maxLengthComposedName` uses
+     * U+00E9, which is one code unit and one code point at the same time, so the
+     * two readings coincide at exactly the boundary they exported.
+     *
+     * §13 now says **64 code points** (⇒ ≤ 256 UTF-8 bytes) and this app counts
+     * them, so the same test is now the convergence proof: the 64-emoji hint that
+     * used to be [VaultQrRejection.NAME_TOO_LONG] here and accepted there is
+     * accepted on both sides, and the boundary is the same character on both
+     * sides.
+     *
+     * The web's *sender* additionally drops the hint when the payload would
+     * exceed 220 wire bytes (`serializeVaultTransferPayloadWithinBudget`). That
+     * is a sender-side scannability budget, not the wire cap — a receiver must
+     * still parse any 64-code-point `n` another client sent, which is what this
+     * pins.
      */
     @Test
-    fun `the name cap is 64 UTF-16 code units here and 64 code points on the web`() {
+    fun `the name cap is 64 code points on both clients, which is where they converged`() {
         val m = words.replace(" ", "+")
-        // Their own vector's boundary, agreed.
+        // Their own vector's boundary, agreed before and after the ruling.
         assertEquals("é".repeat(64), ok("btvault1:m=$m&v=$vaultId&n=${"%C3%A9".repeat(64)}").name)
-        // The boundary their vector cannot reach: 64 astral characters are 64 code
-        // points (the web accepts) and 128 UTF-16 code units (this app refuses).
+        // The boundary their vector cannot reach, and the one that flipped: 64
+        // astral characters are 64 code points and 128 UTF-16 code units. The web
+        // always accepted this; this app used to refuse it.
+        assertEquals(
+            "😀".repeat(64),
+            ok("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(64)}").name,
+        )
+        // And the cap still bites one code point later, on both sides.
         assertEquals(
             VaultQrRejection.NAME_TOO_LONG,
-            rejected("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(64)}"),
+            rejected("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(65)}"),
         )
-        // 32 astral characters = 64 code units: the last length this app accepts.
+        // 32 astral characters used to be the last length this app accepted; the
+        // old code-unit ceiling has no meaning any more.
         assertEquals(
             "😀".repeat(32),
             ok("btvault1:m=$m&v=$vaultId&n=${"%F0%9F%98%80".repeat(32)}").name,
@@ -430,16 +510,31 @@ class VaultQrE7ConformanceTest {
     }
 
     /**
-     * `f` is validated at parse time on the web (base64url, exactly 16 chars) and
-     * carried verbatim here. Not a §13 conflict: §13 gives `f` no offline job at
-     * all once its "before any network fetch" wording is corrected (#1500), and a
-     * junk fingerprint simply fails the post-fetch comparison. Pinned so the
-     * asymmetry is on the record rather than discovered later.
+     * **`f` shape validation, converged. INVERTED 2026-08-26, ruling 7.**
+     *
+     * This test used to be titled *"an f that the web would reject as malformed
+     * is carried through here"* and recorded the asymmetry: the web validated `f`
+     * against `vaultKeyFingerprintSchema` (base64url, exactly 16 characters) at
+     * parse time, this app carried any non-empty value because nothing offline
+     * can judge it.
+     *
+     * The ruling split the question the old test conflated. SHAPE is decidable
+     * offline and is now checked on both sides; VALUE is not, and the
+     * fetch → unwrap → compare → verified-open order is untouched — §13 still
+     * gives `f` no offline *job* once its "before any network fetch" wording is
+     * corrected (#1500). A malformed `f` is simply certain to fail the post-fetch
+     * comparison, so refusing it at parse costs a user nothing and saves a
+     * network round trip.
      */
     @Test
-    fun `an f that the web would reject as malformed is carried through here`() {
+    fun `an f the web rejects as malformed is now rejected here too, on shape alone`() {
         val m = words.replace(" ", "+")
-        assertEquals("short", ok("btvault1:m=$m&v=$vaultId&f=short").fingerprint)
+        assertEquals(
+            VaultQrRejection.FINGERPRINT_INVALID,
+            rejected("btvault1:m=$m&v=$vaultId&f=short"),
+        )
+        // Well-shaped still means unproven, not verified — nothing about this
+        // value has been compared against anything.
         assertEquals("AbCdEfGhIjKlMn_o", ok("btvault1:m=$m&v=$vaultId&f=AbCdEfGhIjKlMn_o").fingerprint)
     }
 

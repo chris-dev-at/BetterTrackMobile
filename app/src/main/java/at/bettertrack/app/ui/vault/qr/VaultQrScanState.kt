@@ -134,8 +134,12 @@ suspend fun verifyScannedPhrase(
  * **This mapping is deliberately lossy.** §13's discipline is that a bystander
  * watching the screen must not learn whether a failed code was nearly right, so
  * every reason that touches the payload's *content* — a wrong BIP-39 checksum, a
- * truncated phrase, a corrupt percent escape, a missing key, a bad vault id, an
- * over-long name — resolves to ONE generic message. Only the three reasons that
+ * truncated phrase, a corrupt percent escape, a missing key, a repeated key, a
+ * bad vault id, an over-long name, a malformed fingerprint — resolves to ONE
+ * generic message. The two 2026-08-26 rulings added reasons, not copy: naming
+ * "you sent `m` twice" or "that fingerprint is the wrong length" would tell a
+ * bystander how close a failed code was, which is precisely the leak the collapse
+ * exists to prevent. Only the three reasons that
  * say something about the code's *provenance* rather than its content get their
  * own text, because each has a different next action:
  *
@@ -152,9 +156,11 @@ fun vaultQrRejectionMessage(reason: VaultQrRejection): Int = when (reason) {
     VaultQrRejection.UNSUPPORTED_VERSION -> R.string.bt_pv_qr_reject_update
     VaultQrRejection.LEGACY_CODE -> R.string.bt_pv_qr_reject_legacy
     VaultQrRejection.MALFORMED,
+    VaultQrRejection.DUPLICATE_KEY,
     VaultQrRejection.MISSING_REQUIRED_KEY,
     VaultQrRejection.PHRASE_INVALID,
     VaultQrRejection.VAULT_ID_INVALID,
     VaultQrRejection.NAME_TOO_LONG,
+    VaultQrRejection.FINGERPRINT_INVALID,
     -> R.string.bt_pv_qr_reject_generic
 }

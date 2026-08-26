@@ -117,6 +117,54 @@ class VaultQrDisciplineTest {
         assertTrue(offenders.joinToString("\n"), offenders.isEmpty())
     }
 
+    // ── the scanned vault name is attacker text ─────────────────────────────
+
+    /**
+     * Platform ruling 4 (2026-08-26). The scan-result card answers "which vault
+     * am I adopting?" with the `n` hint out of the scanned code — a string a
+     * hostile QR fully controls — and renders it in `titleLarge`. A raw render is
+     * a spoofing surface: U+202E reorders the label, `%0A` turns it into three
+     * lines.
+     *
+     * This is a *structural* guard rather than a behavioural one on purpose. The
+     * behaviour is already covered by
+     * [at.bettertrack.app.ui.format.UntrustedLabelTest]; what a unit test cannot
+     * catch is a future edit that adds a second render of the same field and
+     * forgets the treatment, which is exactly the kind of regression that would
+     * survive a code review of a diff about something else.
+     */
+    @Test
+    fun `the scan screen can never render the scanned vault name raw`() {
+        val sanitizer = "btSanitizeUntrustedLabel"
+        val text = qrSources().first { it.first == "VaultQrScanScreen.kt" }.second
+        val stripped = code(text)
+
+        assertTrue(
+            "VaultQrScanScreen no longer sanitizes the scanned name at all. The `n` hint " +
+                "is attacker-controlled text inside a security decision — route it through " +
+                "$sanitizer before it reaches a Text().",
+            stripped.contains("$sanitizer("),
+        )
+
+        // Every single read of the field must be an argument to the treatment.
+        val reads = Regex("""payload\.name""").findAll(stripped).count()
+        val treated = Regex("""$sanitizer\(\s*[\w.]*payload\.name""").findAll(stripped).count()
+        assertEquals(
+            "one or more reads of the scanned name bypass $sanitizer in VaultQrScanScreen.kt " +
+                "($reads read(s), $treated sanitized)",
+            reads,
+            treated,
+        )
+        assertTrue("the scanned name is not read at all any more — has the card changed?", reads >= 1)
+
+        // The sanitizer already guarantees a single line; this bounds the LAYOUT,
+        // so an over-wide label cannot push the four check rows off the card.
+        assertTrue(
+            "the vault-name Text must stay one ellipsized line",
+            stripped.contains("maxLines = 1") && stripped.contains("TextOverflow.Ellipsis"),
+        )
+    }
+
     @Test
     fun `both legs hold the secure-screen flag`() {
         // §13 names FLAG_SECURE on the show AND the scan screen; forgetting one
