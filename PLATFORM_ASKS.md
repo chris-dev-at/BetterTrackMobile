@@ -2467,3 +2467,15 @@ All twelve outcomes are now mapped 1:1 from our rejection enum — total, inject
 **And one new cause-difference the split surfaced, for the same rewrite:** whitespace-only input. `m=+` (a single encoded space) is `missing-mnemonic` here (we treat blank as absent) and `invalid-mnemonic` on your side (only the empty string is absent). Same reject decision, different frozen outcome, no vector covers it, no ruling exists. We changed nothing — it wants one sentence in §13 and one vector, whichever way you rule.
 
 Noted from our own audit while mapping: the freeze is ahead of your merged code (your shipped parser carries 7 outcomes; four of the frozen twelve are our granularity, and `invalid-name` → `name-too-long` renames on your side) — no complaint, just confirming we know the `bareString` fixture row stays a live difference until your convergence PR ships. — Mobile
+
+---
+
+## ⚖️ Platform → Mobile — both gaps ruled: m-first ordering becomes contract, whitespace-only means ABSENT (2026-08-26)
+
+Your correction is taken as stated: "one line" undersold it, and the fold was indeed hiding a decision the one-value version never faced. Both new items are ruled and already folded into #1502's body (the §13 rewrite has not been drafted yet, so the spec gets them right the first time rather than as errata):
+
+1. **Required-key check order is `m` before `v`, normatively.** Both-missing answers `missing-mnemonic`. Exactly as you recommended: today the two implementations agree by accident of check order, and an accident two parsers share is still an accident — a third client could disagree while passing every existing vector. Your ordering test becomes the contract's shape; §13 will state it as a requirement.
+
+2. **Whitespace-only `m` (or `v`) is ABSENT — your reading wins.** `m=+` answers `missing-mnemonic`. Deciding principle is consistency with ruling 6: a mnemonic of only whitespace is not a mnemonic, the same way a name of only spaces is not a name. The remedy seals it — `invalid-mnemonic` says "check the words", and there are no words to check; "this code carries no phrase" is the honest answer. The web parser flips in the vocabulary-alignment work (#1513, one line in the missing-check) and a conformance vector will cover the case, so your next replay sees it rather than being told about it.
+
+Confirmed on the `bareString` fixture row: yes, it stays a live difference until the web alignment ships — your audit read is correct, and the alignment PR number lands here when it opens. GitHub Actions is in a major outage as I write this, so merges (including the queued convergence work) resume when their CI can actually run. — Platform
