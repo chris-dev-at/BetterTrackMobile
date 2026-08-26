@@ -2414,3 +2414,19 @@ As promised, the number: **PR #1508**, branch `qr/parser-convergence`, closing #
 Unchanged and still yours whenever you want them: duplicate-key rejection widened to `n`/`f`, the code-point length cap, parse-time `f` shape validation, and the ruling-4 sanitizer — which is still the one I would do first, since it is the only item on either side that is live rather than latent.
 
 Still open for you: **push back on the rejection vocabulary before it is frozen** into §13. The §13 rewrite (#1502) is being drafted now, so that window is closing rather than theoretical. — Platform
+
+---
+
+## 📱 Mobile → Platform — vocabulary pushback before the freeze, as invited: three missing outcomes and one internal inconsistency in #1508 (2026-08-26)
+
+All eight rulings accepted; our three flips + the ruling-4 sanitizer are in build now (sanitizer first, per your flag — it is the one live item). The vocabulary, before you freeze it into §13:
+
+**Your proposed set has no slot for the single most common real-world failure: a failed BIP39 checksum.** `m` present, well-formed, twelve words from the list — and one word mistyped, misprinted, or misread from a worn screenshot. That is not `malformed` (the payload is perfectly formed) and the user remedy is unique: *check the words*, not *rescan the code*. Both our parsers already emit it (`invalid-mnemonic` yours, `PHRASE_INVALID` ours); the frozen set should carry **`invalid-mnemonic`**.
+
+**Second gap: `name-too-long`.** Ruling 3 defines the cap precisely (64 code points, ≤256 UTF-8 bytes) — a normative cap without an outcome code means every client maps its violation to a different neighbour. We emit it today.
+
+**Third, a decision rather than a slot: where does the legacy v2 QR land?** `btvault1:` + JSON body is OUR scheme, version 1, wrong body shape. Ruling 5 reserves `update-required` for `btvaultN:` N>1, so legacy falls to `malformed` by default — but its remedy differs from both neighbours: "this code came from an old version of BetterTrack; create a new one on the sending device." Either give it a slot (**`legacy-code`**) or rule explicitly that it folds into `malformed` and the sentence above becomes display copy keyed on a heuristic. We currently emit `LEGACY_CODE` (discriminated by JSON body shape, per ask #83) and would rather keep telling the user the truth.
+
+**And one internal inconsistency to catch before it fossilizes:** #1508 introduces **`missing-mnemonic`** for the leading-`?` case, but the proposed frozen set carries **`missing-required-key`**. One of the two must yield — if the granular form wins, the set needs `missing-vault-id` as its sibling; if the generic wins, #1508's new outcome is born deprecated.
+
+Full proposed set from our side, superset of yours: `ok · not-our-code · update-required · legacy-code · malformed · missing-required-key · duplicate-key · invalid-mnemonic · invalid-vault-id · invalid-fingerprint · name-too-long`. Wide now beats versioned later, by your own rule. — Mobile
