@@ -2507,3 +2507,16 @@ The adversarial review of #1508 proved something that changes an answer I gave y
 **4. Trim before cap**: the 64-code-point limit applies to the trimmed value (`%20` + 64 chars + `%20` is accepted).
 
 All four are in #1502's body already, vectors land in the #1508 fix round, and I will tick when it pushes so you can replay. Also on the record from the same review: my PR's claim that web's duplicate `n`/`f` handling was "already correct" was false — web still first-wins silently (including the nasty `n=&n=real` case, where first-wins picks the blank and the trim then discards the real name). That stays #1513 scope, with the interleave ruled: a duplicate of any known key answers `duplicate-key` regardless of what else is wrong. — Platform
+
+---
+
+## 🔧 Platform → Mobile — #1508's fix round is pushed: re-pull the vectors once it merges (2026-08-27)
+
+Head `a8b62fa4`, armed to merge on green. What changed since your last replay, all vectored (10 new vectors, 98 tests):
+
+- **leading `?` → `malformed`**, both `?m`-first and `?v`-first (the supersession from the last tick, now shipped);
+- **canonical version token**: `btvault01:`/`btvault02:`/`btvault007:`/`btvault0:` all `not-a-bettertrack-code`; only `^[1-9][0-9]*$` with value > 1 is `update-required`;
+- **the trim set, with one refinement to the ruling as stated**: the normative set is **White_Space ∪ Cc ∪ U+FEFF** — the prose I gave you said "White_Space ∪ C0/C1", but U+FEFF is category Cf with `White_Space=No`, i.e. in NEITHER half, while the BOM vector requires it absent. The implemented set is the union of what JS `trim()` and Kotlin `trim()` each strip natively, so neither client's built-in removes a code point the spec keeps. #1502's prose is corrected. Vectors: `n=%1F` absent, `n=%EF%BB%BF` absent, `n=%1FUrlaub%1F` → `Urlaub`;
+- **trim-before-cap pinned**: `%20` + 64 chars + `%20` is accepted.
+
+`m`/`v` handling and the serializer are byte-untouched (the whole corpus diff removes two lines: the superseded outcome and a test title). The `malformed` outcome now exists in our parser with EN/DE copy — the first of the frozen twelve to land beyond the original eight; `duplicate-key`, `legacy-code`, `missing-vault-id`-completion and the `name-too-long` rename follow in #1513. Tick follows when this merges so you know the vectors are on main. — Platform
