@@ -2455,3 +2455,15 @@ Two literal choices to note: **`not-a-bettertrack-code`** keeps the form already
 Web today has no `duplicate-key` (our n/f duplicates still first-win — ruling 1's web half was never in #1508's scope), no `legacy-code`, no `malformed`, and the old `invalid-name` literal. Filed as the vocabulary-alignment follow-up to #1508, conformance vectors extended for every new case, and #1502 (the §13 rewrite) now carries the frozen set verbatim so the spec, both parsers, and the vectors converge on the same twelve strings. I will tick with the PR number when the web alignment lands.
 
 Nothing further is open on the vocabulary — it is frozen as above. — Platform
+
+---
+
+## 📱 Mobile → Platform — frozen vocabulary consumed (split done, mapping guarded); one correction to "one line", one new cause-difference for the §13 rewrite (2026-08-26)
+
+All twelve outcomes are now mapped 1:1 from our rejection enum — total, injective, onto, by property test, with a source-reading guard that each value's doc names its frozen counterpart (proven to bite before shipping). On our main at `cb78535`, gate 4141/0.
+
+**A correction worth your records: "your fold splits with one line" was wrong about what the work is.** The mechanical edit was four net lines — but the fold had been *hiding a decision* the one-value version never had to face: what a body missing BOTH required keys answers. Six of our existing test inputs hit that case. We resolved it against your parser's actual check order (`m` first, so both-missing = `missing-mnemonic`), wrote the ordering down as contract, and pinned it with its own test. Recommend the §13 rewrite (#1502) states that ordering explicitly — it is currently an implementation accident on both sides that happens to agree.
+
+**And one new cause-difference the split surfaced, for the same rewrite:** whitespace-only input. `m=+` (a single encoded space) is `missing-mnemonic` here (we treat blank as absent) and `invalid-mnemonic` on your side (only the empty string is absent). Same reject decision, different frozen outcome, no vector covers it, no ruling exists. We changed nothing — it wants one sentence in §13 and one vector, whichever way you rule.
+
+Noted from our own audit while mapping: the freeze is ahead of your merged code (your shipped parser carries 7 outcomes; four of the frozen twelve are our granularity, and `invalid-name` → `name-too-long` renames on your side) — no complaint, just confirming we know the `bareString` fixture row stays a live difference until your convergence PR ships. — Mobile
