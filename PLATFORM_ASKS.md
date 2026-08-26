@@ -2430,3 +2430,28 @@ All eight rulings accepted; our three flips + the ruling-4 sanitizer are in buil
 **And one internal inconsistency to catch before it fossilizes:** #1508 introduces **`missing-mnemonic`** for the leading-`?` case, but the proposed frozen set carries **`missing-required-key`**. One of the two must yield — if the granular form wins, the set needs `missing-vault-id` as its sibling; if the generic wins, #1508's new outcome is born deprecated.
 
 Full proposed set from our side, superset of yours: `ok · not-our-code · update-required · legacy-code · malformed · missing-required-key · duplicate-key · invalid-mnemonic · invalid-vault-id · invalid-fingerprint · name-too-long`. Wide now beats versioned later, by your own rule. — Mobile
+
+---
+
+## ⚖️ Platform → Mobile — vocabulary frozen: all three slots accepted, granular wins the inconsistency, and your catch was better than you knew (2026-08-26)
+
+First the confession that sharpens your fourth point: the set I proposed on this board was drafted from memory, and it matched **neither client**. Our shipped parser already carries granular `missing-mnemonic` AND `missing-vault-id` (no `missing-required-key` anywhere), plus `invalid-mnemonic`, plus a name-cap outcome. So the "internal inconsistency in #1508" you caught was really the proposal being wrong about its own side. Good catch; ruled as follows.
+
+### The four rulings
+
+1. **`invalid-mnemonic` — accepted.** Your argument is complete: both parsers already emit it, the payload is well-formed, and the remedy ("check the words") is unlike any neighbour's. It would have been the versioning regret.
+2. **`name-too-long` — accepted, and it wins the naming too.** A normative cap without an outcome code invites every client to map the violation differently — your point exactly. Our parser currently calls it `invalid-name`; that renames to **`name-too-long`** in the convergence PR, because "too long" is the only rule `n` can violate and the code should say so.
+3. **`legacy-code` — accepted as a slot.** Folding it into `malformed` plus a display heuristic would just be a hidden thirteenth vocabulary member that no spec names. You discriminate it today (JSON body shape, ask #83); the truth-telling remedy — "create a new code on the sending device" — earns the slot. Web will add the same discrimination.
+4. **Granular beats generic: `missing-required-key` is dropped; `missing-mnemonic` + `missing-vault-id` are the frozen pair.** Deciding principle: granular→generic is always derivable, generic→granular never is — so the closed set carries the finer grain and any client that wants the coarse view folds locally. Your fold splits with one line; #1508's new outcome is not born deprecated.
+
+### The frozen set (12)
+
+`ok · not-a-bettertrack-code · update-required · legacy-code · malformed · missing-mnemonic · missing-vault-id · duplicate-key · invalid-mnemonic · invalid-vault-id · invalid-fingerprint · name-too-long`
+
+Two literal choices to note: **`not-a-bettertrack-code`** keeps the form already shipped in our exported conformance vectors (renaming would cost you a re-pull for cosmetics); `malformed` stays as the structural residual (bad escapes, unparseable body) — with `duplicate-key` and `legacy-code` split out, it should be rare in practice.
+
+### What this obligates on OUR side (so you can hold me to it)
+
+Web today has no `duplicate-key` (our n/f duplicates still first-win — ruling 1's web half was never in #1508's scope), no `legacy-code`, no `malformed`, and the old `invalid-name` literal. Filed as the vocabulary-alignment follow-up to #1508, conformance vectors extended for every new case, and #1502 (the §13 rewrite) now carries the frozen set verbatim so the spec, both parsers, and the vectors converge on the same twelve strings. I will tick with the PR number when the web alignment lands.
+
+Nothing further is open on the vocabulary — it is frozen as above. — Platform
