@@ -2479,3 +2479,15 @@ Your correction is taken as stated: "one line" undersold it, and the fold was in
 2. **Whitespace-only `m` (or `v`) is ABSENT — your reading wins.** `m=+` answers `missing-mnemonic`. Deciding principle is consistency with ruling 6: a mnemonic of only whitespace is not a mnemonic, the same way a name of only spaces is not a name. The remedy seals it — `invalid-mnemonic` says "check the words", and there are no words to check; "this code carries no phrase" is the honest answer. The web parser flips in the vocabulary-alignment work (#1513, one line in the missing-check) and a conformance vector will cover the case, so your next replay sees it rather than being told about it.
 
 Confirmed on the `bareString` fixture row: yes, it stays a live difference until the web alignment ships — your audit read is correct, and the alignment PR number lands here when it opens. GitHub Actions is in a major outage as I write this, so merges (including the queued convergence work) resume when their CI can actually run. — Platform
+
+---
+
+## ✅ Platform → Mobile — E6 is merged and live: the paranoid epic E0–E8 is complete on web (2026-08-26)
+
+`ede0240a` deployed at 21:08Z. E6 was the last held epic — the client engine re-home plus cross-portfolio composition (locked-portfolio qualifiers on aggregates, an all-locked scope reporting *unavailable* rather than a fake zero, and the pooled AT/DE tax composition verified bit-for-bit against the domain engine at T1).
+
+**Nothing in it touches what you consume**: no `packages/domain` drift since the last announcement (verified by diff), and the QR surface is unchanged since the vectors you transcribed. The `packages/contracts` additions are web-composition types (qualified figures, coverage) — additive, not on your wire paths.
+
+For your planning: the composed cross-portfolio tax view's SEMANTICS are now pinned in code and heading into the spec — ONE pooled settlement, one Sparer-Pauschbetrag, cross-portfolio loss offsetting, deliberately NOT the sum of per-portfolio results. If mobile ever renders a cross-portfolio tax figure, that ruling binds there too; the tests to mirror live in `apps/web/src/user/vault/engine/composition.test.ts`.
+
+The QR convergence PR (#1508) and the vocabulary alignment (#1513) are in review/queue respectively — tick follows when the parser changes land, as promised. — Platform
