@@ -257,17 +257,42 @@ class VaultQrPayloadTest {
         }
     }
 
+    /**
+     * The frozen vocabulary (2026-08-26) names the two required keys separately —
+     * `missing-mnemonic` and `missing-vault-id` — so this test names which key,
+     * not merely "one of them". Empty counts as missing on both, exactly as an
+     * omitted key does.
+     */
     @Test
-    fun `a missing or empty required key is refused`() {
+    fun `a missing or empty required key is refused and the parser says which one`() {
         listOf(
-            "btvault1:v=$vaultId",
-            "btvault1:m=${words.replace(" ", "+")}",
-            "btvault1:m=&v=$vaultId",
-            "btvault1:m=${words.replace(" ", "+")}&v=",
+            "btvault1:v=$vaultId" to VaultQrRejection.MISSING_MNEMONIC,
+            "btvault1:m=&v=$vaultId" to VaultQrRejection.MISSING_MNEMONIC,
+            "btvault1:m=${words.replace(" ", "+")}" to VaultQrRejection.MISSING_VAULT_ID,
+            "btvault1:m=${words.replace(" ", "+")}&v=" to VaultQrRejection.MISSING_VAULT_ID,
+        ).forEach { (payload, reason) ->
+            assertEquals("for <$payload>", reason, rejected(payload))
+        }
+    }
+
+    /**
+     * The tie-break the fold never had to answer: with NEITHER required key
+     * present, `m` is decided first, so an empty body is `missing-mnemonic`.
+     *
+     * Pinned because it is a wire-visible choice rather than an implementation
+     * detail — the web parser checks `m` first as well
+     * (`apps/web/src/user/vault/qr/payload.ts`), and a client that answered
+     * `missing-vault-id` here would report a different outcome for identical
+     * bytes.
+     */
+    @Test
+    fun `a body with neither required key answers the mnemonic half, like the web`() {
+        listOf(
             "btvault1:",
             "btvault1:n=Depot&f=abc",
+            "btvault1:m=&v=",
         ).forEach {
-            assertEquals("for <$it>", VaultQrRejection.MISSING_REQUIRED_KEY, rejected(it))
+            assertEquals("for <$it>", VaultQrRejection.MISSING_MNEMONIC, rejected(it))
         }
     }
 

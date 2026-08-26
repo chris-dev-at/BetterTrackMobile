@@ -139,7 +139,11 @@ suspend fun verifyScannedPhrase(
  * generic message. The two 2026-08-26 rulings added reasons, not copy: naming
  * "you sent `m` twice" or "that fingerprint is the wrong length" would tell a
  * bystander how close a failed code was, which is precisely the leak the collapse
- * exists to prevent. Only the three reasons that
+ * exists to prevent. The same holds for the frozen vocabulary's
+ * `missing-mnemonic` / `missing-vault-id` split of the same date: the parser
+ * names which required key was absent, this mapping does not, because "the words
+ * were there, the vault id was not" is a fact about the code on the screen.
+ * Only the three reasons that
  * say something about the code's *provenance* rather than its content get their
  * own text, because each has a different next action:
  *
@@ -157,7 +161,11 @@ fun vaultQrRejectionMessage(reason: VaultQrRejection): Int = when (reason) {
     VaultQrRejection.LEGACY_CODE -> R.string.bt_pv_qr_reject_legacy
     VaultQrRejection.MALFORMED,
     VaultQrRejection.DUPLICATE_KEY,
-    VaultQrRejection.MISSING_REQUIRED_KEY,
+    // The parser tells `m` missing from `v` missing (frozen vocabulary,
+    // 2026-08-26). The screen deliberately does not: which half was absent is a
+    // fact about the code the bystander watched fail, so both collapse here.
+    VaultQrRejection.MISSING_MNEMONIC,
+    VaultQrRejection.MISSING_VAULT_ID,
     VaultQrRejection.PHRASE_INVALID,
     VaultQrRejection.VAULT_ID_INVALID,
     VaultQrRejection.NAME_TOO_LONG,

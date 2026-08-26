@@ -33,7 +33,12 @@ class VaultQrScanStateTest {
         // truncated payload therefore say the identical sentence.
         val generic = listOf(
             VaultQrRejection.MALFORMED,
-            VaultQrRejection.MISSING_REQUIRED_KEY,
+            // Both halves of the frozen vocabulary's missing-key split
+            // (2026-08-26). The split is semantic, for the parser and the
+            // cross-client record; the copy stays collapsed, so the screen never
+            // tells a bystander which half of the code was there.
+            VaultQrRejection.MISSING_MNEMONIC,
+            VaultQrRejection.MISSING_VAULT_ID,
             VaultQrRejection.PHRASE_INVALID,
             VaultQrRejection.VAULT_ID_INVALID,
             VaultQrRejection.NAME_TOO_LONG,

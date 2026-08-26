@@ -300,16 +300,22 @@ class VaultQrE7ConformanceTest {
      * leaking through the spec. Nothing is unsafe either way and no serializer on
      * either side emits a `?`, so no real code is affected; it wants one sentence
      * in §13.
+     *
+     * Since the frozen vocabulary split the missing-key outcome (2026-08-26) the
+     * two orderings below are no longer the same verdict: the `?` swallows
+     * whichever key it is glued to, so `?m=…&v=…` is `missing-mnemonic` and
+     * `?v=…&m=…` is `missing-vault-id`. That is the split doing exactly what it
+     * is for — the outcome now says which key the `?` ate.
      */
     @Test
     fun `leniency case 1 - a leading question mark is rejected here and accepted on the web`() {
         assertEquals(
-            VaultQrRejection.MISSING_REQUIRED_KEY,
+            VaultQrRejection.MISSING_MNEMONIC,
             rejected("btvault1:?m=${words.replace(" ", "+")}&v=$vaultId"),
         )
         // Not a prefix problem and not a malformed body: the ? is inside the key.
         assertEquals(
-            VaultQrRejection.MISSING_REQUIRED_KEY,
+            VaultQrRejection.MISSING_VAULT_ID,
             rejected("btvault1:?v=$vaultId&m=${words.replace(" ", "+")}"),
         )
         // A ? anywhere else is just a character in a value, exactly as on the web.

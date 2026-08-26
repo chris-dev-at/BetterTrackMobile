@@ -8,7 +8,8 @@
     "repo": "chris-dev-at/BetterTrack",
     "branch": "task/1417 - PR #1451 [PARANOID-E7], NOT yet merged to origin/main as of this transcription",
     "commit": "e1882d3a5ac173c6dd6fc3db1c359a44d3cea2c1 (fetched 2026-08-23)",
-    "outcomeVocabulary": "Theirs: update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection, which gained DUPLICATE_KEY and FINGERPRINT_INVALID with the 2026-08-26 rulings. The two vocabularies are deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
+    "outcomeVocabulary": "As transcribed (their VAULT_TRANSFER_PAYLOAD_ERROR_OUTCOMES at commit e1882d3a): update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection, which gained DUPLICATE_KEY and FINGERPRINT_INVALID with the 2026-08-26 rulings. The two vocabularies were deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
+    "outcomeVocabularyFreeze": "FROZEN 2026-08-26, twelve outcomes, one shared vocabulary for both clients: ok | not-a-bettertrack-code | update-required | legacy-code | malformed | missing-mnemonic | missing-vault-id | duplicate-key | invalid-mnemonic | invalid-vault-id | invalid-fingerprint | name-too-long. The freeze took the GRANULAR side of every open question, which moved both vocabularies: this app split MISSING_REQUIRED_KEY into MISSING_MNEMONIC and MISSING_VAULT_ID (the missingMnemonic/missingVaultId rows below were re-recorded), and the frozen list carries four outcomes their merged parser still does not have - not-a-bettertrack-code (this app's bareString split, i.e. the recorded divergence resolved in this app's direction, though their payload.ts at d7fdd5ee still answers update-required for it), legacy-code, malformed and duplicate-key - plus name-too-long in place of their invalid-name. VaultQrRejection's mapping onto the eleven non-ok outcomes is pinned 1:1 by VaultQrRejectionVocabularyTest.",
     "mnemonics": "The public BIP-39 all-zero-entropy phrase (128 bits). Not a real phrase; opens no real vault.",
     "nameCap": "CONVERGED 2026-08-26 (ruling 3). The web always capped `n` at 64 Unicode CODE POINTS ([...value].length in apps/web/src/user/vault/qr/payload.ts). This app capped it at 64 UTF-16 CODE UNITS (String.length) and justified it with a claim about the web's code that was factually wrong. Sec13 now says 64 code points (=> <= 256 UTF-8 bytes) and this app counts codePointCount, so a 64-emoji hint flipped from NAME_TOO_LONG to accepted. Their vectors cannot see any of this - maxLengthComposedName uses U+00E9, one code unit and one code point at once - so it is pinned in VaultQrE7ConformanceTest instead. Their SENDER additionally drops the hint past a 220-wire-byte budget; that is scannability, not the wire cap.",
     "fingerprint": "CONVERGED 2026-08-26 (ruling 7). The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint. This app used to carry any non-empty `f` verbatim, because nothing offline can judge its VALUE and the comparison happens after the header fetch (Sec13 fetch-then-compare). The ruling split the two questions: SHAPE is now checked at parse on both sides (VaultQrRejection.FINGERPRINT_INVALID here), the VALUE is still only checkable after the fetch, and the fetch->unwrap->compare->verified-open order is untouched. Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none.",
@@ -82,10 +83,10 @@
       },
       "android": {
         "accepts": false,
-        "reason": "MISSING_REQUIRED_KEY"
+        "reason": "MISSING_MNEMONIC"
       },
       "agreement": "same-decision-same-cause",
-      "note": "Same decision; this app's reason is one step coarser (it does not name WHICH required key is missing) because the UI collapses phrase-adjacent reasons anyway."
+      "note": "RE-RECORDED 2026-08-26 with the vocabulary freeze: this app answered the coarser MISSING_REQUIRED_KEY when the fixture was written (it did not name WHICH required key was absent, because the UI collapses phrase-adjacent reasons anyway). The frozen vocabulary keeps both halves, so VaultQrRejection split and the causes are now identical, not merely compatible."
     },
     {
       "name": "missingVaultId",
@@ -96,10 +97,10 @@
       },
       "android": {
         "accepts": false,
-        "reason": "MISSING_REQUIRED_KEY"
+        "reason": "MISSING_VAULT_ID"
       },
       "agreement": "same-decision-same-cause",
-      "note": "Same decision, coarser reason - see missingMnemonic."
+      "note": "RE-RECORDED 2026-08-26 with the vocabulary freeze - see missingMnemonic. Was MISSING_REQUIRED_KEY, the coarser fold of the two halves."
     },
     {
       "name": "duplicateMnemonic",

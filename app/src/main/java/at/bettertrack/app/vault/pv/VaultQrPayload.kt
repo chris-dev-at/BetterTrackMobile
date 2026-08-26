@@ -223,42 +223,129 @@ data class VaultQrPayload(
 /**
  * Why a scanned string was refused. Granular for tests and diagnostics; the UI
  * deliberately collapses most of these into one message (see the class KDoc).
+ *
+ * ## The frozen cross-client outcome vocabulary (2026-08-26)
+ *
+ * The two clients froze ONE shared scan-outcome vocabulary of exactly twelve
+ * outcomes on 2026-08-26:
+ *
+ * ```
+ * ok · not-a-bettertrack-code · update-required · legacy-code · malformed ·
+ * missing-mnemonic · missing-vault-id · duplicate-key · invalid-mnemonic ·
+ * invalid-vault-id · invalid-fingerprint · name-too-long
+ * ```
+ *
+ * `ok` is [VaultQrParseResult.Ok] and has no value here by construction, so the
+ * eleven remaining outcomes stand in a 1:1 correspondence with the eleven values
+ * below. **Every value names its counterpart in its own KDoc**, and
+ * `VaultQrRejectionVocabularyTest` proves the correspondence is total and
+ * injective in both directions — so adding a value here without a frozen
+ * counterpart, or dropping one, fails the build instead of quietly making this
+ * client's outcome set a different shape from the web's.
+ *
+ * The Kotlin spellings are deliberately NOT renamed to the vocabulary's: these
+ * are internal identifiers, the vocabulary is the semantic cross-client
+ * contract, and the mapping is the thing that has to be exact — not the
+ * identifiers, which no other client ever sees.
  */
 enum class VaultQrRejection {
-    /** Not a BetterTrack transfer code at all (a URL, a Wi-Fi code, random text). */
+    /**
+     * Not a BetterTrack transfer code at all (a URL, a Wi-Fi code, random text).
+     *
+     * Frozen counterpart: `not-a-bettertrack-code`.
+     */
     NOT_A_VAULT_CODE,
 
-    /** `btvault2:` or later — a newer app made this. Never best-effort parsed. */
+    /**
+     * `btvault2:` or later — a newer app made this. Never best-effort parsed.
+     *
+     * Frozen counterpart: `update-required`.
+     */
     UNSUPPORTED_VERSION,
 
-    /** `btvault1:` carrying the retired v2 JSON body (prefix collision, board ask #83). */
+    /**
+     * `btvault1:` carrying the retired v2 JSON body (prefix collision, board ask #83).
+     *
+     * Frozen counterpart: `legacy-code`.
+     */
     LEGACY_CODE,
 
-    /** The query could not be decoded (bad percent escape, unparseable body). */
+    /**
+     * The query could not be decoded (bad percent escape, unparseable body).
+     *
+     * Frozen counterpart: `malformed`.
+     */
     MALFORMED,
 
     /**
      * A key in [VaultQrContract.KNOWN_KEYS] appeared more than once (ruling 1,
      * 2026-08-26). Unknown keys may repeat — they are ignored either way.
+     *
+     * Frozen counterpart: `duplicate-key`.
      */
     DUPLICATE_KEY,
 
-    /** `m` or `v` missing or empty. */
-    MISSING_REQUIRED_KEY,
+    /**
+     * `m` is missing or empty.
+     *
+     * Frozen counterpart: `missing-mnemonic`.
+     *
+     * Split out of the former `MISSING_REQUIRED_KEY` when the vocabulary froze:
+     * granular → generic is always derivable, generic → granular never is. The
+     * web has always answered the two halves separately
+     * (`apps/web/src/user/vault/qr/payload.ts` throws `missing-mnemonic`, then
+     * `missing-vault-id`), so this is convergence onto their split, not a new
+     * decision of ours.
+     *
+     * **`m` is checked before `v`**, so a body carrying NEITHER key answers this
+     * one. That tie-break did not exist while the two were folded together and is
+     * therefore written down rather than left to statement order: it is the same
+     * one the web parser makes, and a client that answered `missing-vault-id` to
+     * an empty body would report a different outcome for identical bytes.
+     */
+    MISSING_MNEMONIC,
 
-    /** `m` is not 12 valid wordlist words with a valid BIP-39 checksum. */
+    /**
+     * `v` is missing or empty, while `m` is present.
+     *
+     * Frozen counterpart: `missing-vault-id`.
+     *
+     * See [MISSING_MNEMONIC] for the split and for why the both-missing case is
+     * that one and not this one.
+     */
+    MISSING_VAULT_ID,
+
+    /**
+     * `m` is not 12 valid wordlist words with a valid BIP-39 checksum.
+     *
+     * Frozen counterpart: `invalid-mnemonic`.
+     */
     PHRASE_INVALID,
 
-    /** `v` is not a lowercase hyphenated UUID. */
+    /**
+     * `v` is not a lowercase hyphenated UUID.
+     *
+     * Frozen counterpart: `invalid-vault-id`.
+     */
     VAULT_ID_INVALID,
 
-    /** `n` exceeds [VaultQrContract.MAX_NAME_LENGTH] code points. */
+    /**
+     * `n` exceeds [VaultQrContract.MAX_NAME_LENGTH] code points.
+     *
+     * Frozen counterpart: `name-too-long`. (The vocabulary renamed the web's
+     * earlier `invalid-name` to the length-specific spelling when it froze — a
+     * name is refused for being long, never for its content, which is ruling 4's
+     * point: `n` is untrusted display text that gets neutralized at render, not
+     * rejected at parse.)
+     */
     NAME_TOO_LONG,
 
     /**
      * `f` is present but does not match [VaultQrContract.FINGERPRINT_SHAPE]
      * (ruling 7, 2026-08-26). Shape only — a well-shaped `f` is still unproven
      * until the header fetch.
+     *
+     * Frozen counterpart: `invalid-fingerprint`.
      */
     FINGERPRINT_INVALID,
 }
@@ -384,10 +471,18 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
 
     // Unknown keys are ignored on purpose — that is the format's forward
     // compatibility, and the reason `f` could be added after the fact.
+    //
+    // The two required keys are checked SEPARATELY and `m` first. The order is
+    // the contract, not a formatting choice: a body with neither key must answer
+    // the same outcome on every client, and the web checks `m` first too
+    // (apps/web/src/user/vault/qr/payload.ts).
     val rawMnemonic = fields[VaultQrContract.KEY_MNEMONIC]
+    if (rawMnemonic.isNullOrBlank()) {
+        return VaultQrParseResult.Failed(VaultQrRejection.MISSING_MNEMONIC)
+    }
     val rawVaultId = fields[VaultQrContract.KEY_VAULT_ID]
-    if (rawMnemonic.isNullOrBlank() || rawVaultId.isNullOrBlank()) {
-        return VaultQrParseResult.Failed(VaultQrRejection.MISSING_REQUIRED_KEY)
+    if (rawVaultId.isNullOrBlank()) {
+        return VaultQrParseResult.Failed(VaultQrRejection.MISSING_VAULT_ID)
     }
 
     val checked = checkVaultPassphrase(rawMnemonic)
