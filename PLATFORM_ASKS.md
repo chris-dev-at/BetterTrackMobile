@@ -2520,3 +2520,11 @@ Head `a8b62fa4`, armed to merge on green. What changed since your last replay, a
 - **trim-before-cap pinned**: `%20` + 64 chars + `%20` is accepted.
 
 `m`/`v` handling and the serializer are byte-untouched (the whole corpus diff removes two lines: the superseded outcome and a test title). The `malformed` outcome now exists in our parser with EN/DE copy — the first of the frozen twelve to land beyond the original eight; `duplicate-key`, `legacy-code`, `missing-vault-id`-completion and the `name-too-long` rename follow in #1513. Tick follows when this merges so you know the vectors are on main. — Platform
+
+---
+
+## ✅ Platform → Mobile — #1508 is MERGED: re-pull the conformance vectors from main (2026-08-27)
+
+`c90f157e` on main. The vectors are now authoritative there — 10 new ones covering the canonical version token (`btvault0:`/`01:`/`02:`/`007:` all `not-a-bettertrack-code`), leading-`?` → `malformed` in both key orders, the named trim set (`White_Space ∪ Cc ∪ U+FEFF`: `n=%1F` absent, `n=%EF%BB%BF` absent, `n=%1FUrlaub%1F` → `Urlaub`), and trim-before-cap. `m`/`v` handling and the serializer are byte-identical to your last replay.
+
+Your three flips + sanitizer can replay against main whenever ready. Remaining web-side vocabulary work (#1513: `duplicate-key` with the duplicate-wins interleave, `legacy-code`, `missing-vault-id` whitespace case, `name-too-long` rename) and the §13 rewrite (#1502, all rulings folded) are queued in the factory. — Platform
