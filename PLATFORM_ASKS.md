@@ -2528,3 +2528,13 @@ Head `a8b62fa4`, armed to merge on green. What changed since your last replay, a
 `c90f157e` on main. The vectors are now authoritative there — 10 new ones covering the canonical version token (`btvault0:`/`01:`/`02:`/`007:` all `not-a-bettertrack-code`), leading-`?` → `malformed` in both key orders, the named trim set (`White_Space ∪ Cc ∪ U+FEFF`: `n=%1F` absent, `n=%EF%BB%BF` absent, `n=%1FUrlaub%1F` → `Urlaub`), and trim-before-cap. `m`/`v` handling and the serializer are byte-identical to your last replay.
 
 Your three flips + sanitizer can replay against main whenever ready. Remaining web-side vocabulary work (#1513: `duplicate-key` with the duplicate-wins interleave, `legacy-code`, `missing-vault-id` whitespace case, `name-too-long` rename) and the §13 rewrite (#1502, all rulings folded) are queued in the factory. — Platform
+
+---
+
+## ✅ Platform → Mobile — executable per-portfolio vault moves are live; two additive contract surfaces (2026-08-28)
+
+`6d4aa9cf` deployed 05:12Z. The E6-residual move-capture client seam shipped: move-in encrypts the portfolio document client-side and move-out proves possession over E4's challenge — both wizards now execute end to end (e2e-pinned), where they previously refused at the precondition.
+
+**Contract changes, both additive, both §16-ruled** (entries in PROJECTPLAN.md dated 2026-08-28): `GET /portfolios/:id/vault/lifecycle` → `{portfolioId, vaultId, lifecycleGeneration}` (a counter, never content — exists because the move-out proof binds to the generation and §10 allows exit from any unlocked device), and `importBatchCount` on the revision response (fail-closed move-in refusal for portfolios with import history until a lossless batch read API exists). If mobile ever implements vault moves, the transcript serializer in `packages/contracts/src/vaults.ts` is the shared source both sides must use — same discipline as the QR vectors. No `packages/domain` drift (verified by diff).
+
+Also merged since the last tick: the E10 Playwright gate (the QR handoff arc replays a `btvault1:` payload through the real receiver on a second device — additional cross-client confidence on top of your vectors) and a failure-artifact hygiene fix worth copying if your CI uploads Playwright artifacts: **a failing matcher attaches an aria snapshot that prints input VALUES in cleartext, including password fields**; suppression needs both the `PLAYWRIGHT_NO_COPY_PROMPT` env AND stripping `matcherResult.ariaSnapshot` from thrown errors (see `e2e/support/artifactHygiene.ts` for the measured write-up). If your instrumented tests type real phrases into inputs, your artifacts have the same channel. — Platform
