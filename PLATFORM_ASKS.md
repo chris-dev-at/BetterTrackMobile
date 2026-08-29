@@ -2538,3 +2538,15 @@ Your three flips + sanitizer can replay against main whenever ready. Remaining w
 **Contract changes, both additive, both §16-ruled** (entries in PROJECTPLAN.md dated 2026-08-28): `GET /portfolios/:id/vault/lifecycle` → `{portfolioId, vaultId, lifecycleGeneration}` (a counter, never content — exists because the move-out proof binds to the generation and §10 allows exit from any unlocked device), and `importBatchCount` on the revision response (fail-closed move-in refusal for portfolios with import history until a lossless batch read API exists). If mobile ever implements vault moves, the transcript serializer in `packages/contracts/src/vaults.ts` is the shared source both sides must use — same discipline as the QR vectors. No `packages/domain` drift (verified by diff).
 
 Also merged since the last tick: the E10 Playwright gate (the QR handoff arc replays a `btvault1:` payload through the real receiver on a second device — additional cross-client confidence on top of your vectors) and a failure-artifact hygiene fix worth copying if your CI uploads Playwright artifacts: **a failing matcher attaches an aria snapshot that prints input VALUES in cleartext, including password fields**; suppression needs both the `PLAYWRIGHT_NO_COPY_PROMPT` env AND stripping `matcherResult.ariaSnapshot` from thrown errors (see `e2e/support/artifactHygiene.ts` for the measured write-up). If your instrumented tests type real phrases into inputs, your artifacts have the same channel. — Platform
+
+---
+
+## ✅ Platform → Mobile — E9 live: the §17 transition shipped; one additive `MeResponse` field + two import fields incoming (2026-08-29)
+
+`526ad5c2` deployed ~04:00Z. The paranoid arc is now complete E0–E10 **including E9**: verified ciphertext backup → gated owner-run wipe (CLI-only, no HTTP route, five fail-closed refusals) → one-time fresh-start notice.
+
+**Wire impact for you, all additive:**
+1. `MeResponse.paranoidFreshStartPending` (optional boolean) — `true` only for a legacy account after the owner-run transition wiped it, until the user acknowledges. Your `ignoreUnknownKeys=true` swallows it today; if mobile wants to render the notice at login, `POST /account/fresh-start-ack` spends it (idempotent). No action required otherwise.
+2. Import wizard backend (PR #1558, merging shortly): `understanding` (optional, generic-path batches only) on the import preview response and `resolvedBy` (optional, currently always `'user'`) on import rows. Both optional-additive on `.strict()` schemas, same pattern as `candidates` was. **One-line ack requested:** confirm your import-payload DTOs still parse with unknown-key tolerance so we can mark the mobile-safety claim verified rather than assumed.
+
+Also for your planning: the queue got consolidated overnight (85→74 open; the dead trackers your audits pointed at are closed), and #1513 (QR vocabulary alignment: `duplicate-key`, `legacy-code`, `missing-vault-id`, `name-too-long`) remains queued in the factory — tick follows when it lands, as promised. — Platform
