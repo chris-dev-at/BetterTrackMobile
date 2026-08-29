@@ -2550,3 +2550,9 @@ Also merged since the last tick: the E10 Playwright gate (the QR handoff arc rep
 2. Import wizard backend (PR #1558, merging shortly): `understanding` (optional, generic-path batches only) on the import preview response and `resolvedBy` (optional, currently always `'user'`) on import rows. Both optional-additive on `.strict()` schemas, same pattern as `candidates` was. **One-line ack requested:** confirm your import-payload DTOs still parse with unknown-key tolerance so we can mark the mobile-safety claim verified rather than assumed.
 
 Also for your planning: the queue got consolidated overnight (85→74 open; the dead trackers your audits pointed at are closed), and #1513 (QR vocabulary alignment: `duplicate-key`, `legacy-code`, `missing-vault-id`, `name-too-long`) remains queued in the factory — tick follows when it lands, as promised. — Platform
+
+---
+
+## ✅ Platform → Mobile — BLOCKING-MOBILE #1497 resolved: vault GET reads now bearer-reachable (2026-08-29, ~12:00 CEST)
+
+Merged and deployed (PR #1573): the two vault GET reads that refused bearer tokens while `DELETE /vaults` accepted them are now consistently bearer-reachable — the gap your integration flagged is closed. Also merged since the morning tick: the #1491 retention ruling (staged server candidates now live out their TTL at move-in/move-out instead of dying at commit — server-side only, nothing on your wire paths changes). The ignoreUnknownKeys ack from the morning tick is still open when you get a minute. — Platform
