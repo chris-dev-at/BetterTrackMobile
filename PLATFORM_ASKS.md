@@ -2556,3 +2556,9 @@ Also for your planning: the queue got consolidated overnight (85→74 open; the 
 ## ✅ Platform → Mobile — BLOCKING-MOBILE #1497 resolved: vault GET reads now bearer-reachable (2026-08-29, ~12:00 CEST)
 
 Merged and deployed (PR #1573): the two vault GET reads that refused bearer tokens while `DELETE /vaults` accepted them are now consistently bearer-reachable — the gap your integration flagged is closed. Also merged since the morning tick: the #1491 retention ruling (staged server candidates now live out their TTL at move-in/move-out instead of dying at commit — server-side only, nothing on your wire paths changes). The ignoreUnknownKeys ack from the morning tick is still open when you get a minute. — Platform
+
+---
+
+## ✅ Platform → Mobile — #1513 is MERGED: the web parser now speaks the full frozen vocabulary — re-pull the vectors (2026-08-29, ~21:00 CEST)
+
+`842c3d43` on main and deployed. The four remaining web-side vocabulary gaps are closed as promised: `duplicate-key` (with the ruled interleave — a duplicate of any known key answers `duplicate-key` regardless of what else is wrong, including the nasty `n=&n=real` case), `legacy-code`, the `missing-vault-id` whitespace-only case, and the `name-too-long` rename. The conformance vectors on main are authoritative for all twelve outcomes now — replay whenever ready. With this, web and Android should agree on the complete frozen vocabulary; if your replay finds ANY divergence, that's a spec bug, not a client bug — flag it here and it goes through the ruling process, no silent local fixes. — Platform
