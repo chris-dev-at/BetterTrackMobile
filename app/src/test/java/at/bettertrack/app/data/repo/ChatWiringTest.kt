@@ -166,22 +166,47 @@ class ChatWiringTest {
         assertTrue(dto.toDomain("me").sentAtMs > 0L)
     }
 
+    /**
+     * The preview arrives as PIECES, not as a finished English sentence.
+     *
+     * Device QA 2026-09-01 #8: this used to assert `"You: 📎 Shared a portfolio"`
+     * — three English phrases assembled in a layer that has no `Context` and
+     * therefore no way to translate them, which is exactly what a German phone
+     * rendered. The row's wording now lives in `ui/chat/chatPreviewText`; what the
+     * data layer owes it is the chip KIND (never the item's name), who sent it,
+     * and the body.
+     */
     @Test
-    fun conversation_preview_from_chip_kind_is_i18n_safe() {
+    fun conversation_preview_carries_the_chip_kind_never_the_name() {
         val prev = ChatMessagePreviewDto(senderId = "me", body = null, chipKind = "portfolio", createdAt = "2026-07-09T20:00:00.000Z")
         val dto = ChatConversationDto("c1", SocialUserDto("u1", "anna"), unreadCount = 3, lastMessage = prev, lastMessageAt = "2026-07-09T20:00:00.000Z")
         val c = dto.toDomain("me")
         assertEquals("u1", c.friendUserId)
         assertEquals("anna", c.friendUsername)
         assertEquals(3, c.unread)
-        assertEquals("You: 📎 Shared a portfolio", c.lastPreview) // never the item's name
+        assertEquals(ShareChipKind.Portfolio, c.lastChipKind)
+        assertTrue(c.lastFromMe)
+        // The body is empty for a chip message and, crucially, no name is carried.
+        assertEquals("", c.lastPreview)
+    }
+
+    @Test
+    fun conversation_preview_marks_an_unmodelled_chip_kind_unknown() {
+        val prev = ChatMessagePreviewDto(senderId = "u1", body = null, chipKind = "idea", createdAt = "2026-07-09T20:00:00.000Z")
+        val dto = ChatConversationDto("c1", SocialUserDto("u1", "anna"), unreadCount = 0, lastMessage = prev, lastMessageAt = "2026-07-09T20:00:00.000Z")
+        val c = dto.toDomain("me")
+        assertEquals(ShareChipKind.Unknown, c.lastChipKind)
+        assertFalse(c.lastFromMe)
     }
 
     @Test
     fun conversation_incoming_text_preview_plain() {
         val prev = ChatMessagePreviewDto(senderId = "u1", body = "hey there", chipKind = null, createdAt = "2026-07-09T20:00:00.000Z")
         val dto = ChatConversationDto("c1", SocialUserDto("u1", "anna"), unreadCount = 1, lastMessage = prev, lastMessageAt = "2026-07-09T20:00:00.000Z")
-        assertEquals("hey there", dto.toDomain("me").lastPreview)
+        val c = dto.toDomain("me")
+        assertEquals("hey there", c.lastPreview)
+        assertNull(c.lastChipKind)
+        assertFalse(c.lastFromMe)
     }
 
     @Test
@@ -189,19 +214,9 @@ class ChatWiringTest {
         val dto = ChatConversationDto("c1", SocialUserDto("u1", "anna"), unreadCount = 0, lastMessage = null, lastMessageAt = null)
         val c = dto.toDomain("me")
         assertEquals("", c.lastPreview)
+        assertNull(c.lastChipKind)
+        assertFalse(c.lastFromMe)
         assertTrue(c.lastAtMs > 0L) // sorts as "just now" rather than epoch 0
-    }
-
-    @Test
-    fun chip_kind_phrase_never_leaks_name() {
-        assertEquals("a portfolio", chipKindPhrase("portfolio"))
-        assertEquals("an asset", chipKindPhrase("asset"))
-        assertEquals("a watchlist", chipKindPhrase("watchlist"))
-        assertEquals("a basket", chipKindPhrase("conglomerate"))
-        assertEquals("an item", chipKindPhrase("something-new"))
-        // An unknown kind's list preview stays the generic "an item".
-        assertEquals("an item", chipKindPhrase("idea"))
-        assertEquals("an item", chipKindPhrase(ShareChipKind.Unknown.wire))
     }
 
     // ── iso parsing ──────────────────────────────────────────────────────────────

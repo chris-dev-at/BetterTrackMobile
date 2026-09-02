@@ -220,6 +220,10 @@ fun HeatmapScreen(
                             )
                         },
                         changeText = { pct -> formatPercent(pct, locale) },
+                        // A custom asset has no quote, and a tile that prints only
+                        // a name beside tiles that print percentages reads as a
+                        // rendering failure (device QA 2026-09-01, defect #28).
+                        missingChangeText = stringResource(R.string.bt_value_dash),
                         emptyText = stringResource(R.string.bt_heatmap_empty_positions),
                         // Equal-weight tiles have no order worth squarifying for;
                         // the ordered mosaic keeps the watchlist's own sequence,

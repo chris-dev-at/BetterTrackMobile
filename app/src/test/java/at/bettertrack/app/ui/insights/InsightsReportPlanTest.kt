@@ -156,4 +156,29 @@ class InsightsReportPlanTest {
         assertTrue(one > 0)
         assertTrue(five > one)
     }
+
+    /**
+     * The estimate is checked against a REAL report now (device QA 2026-09-01,
+     * defect #23).
+     *
+     * The footer promised `ca. 8 Seiten · 1,8 MB` for a five-insight report and
+     * the file that came out was 259 kB — seven times over, which is not "coarse"
+     * but wrong in the direction that makes a user on a metered connection cancel
+     * a report they could easily afford. The old per-page constant was borrowed
+     * from the cash PDF, which rasterises; this one is pure vector.
+     *
+     * The tolerance is deliberately loose (±25 %) — this is an estimate and must
+     * stay free to move — but it is now anchored to an observation instead of to
+     * a guess, so no future edit can drift it by a multiple again.
+     */
+    @Test
+    fun `the size estimate lands within a quarter of the measured report`() {
+        val measuredBytes = 259_000L // 5 insights, 8 pages, owner's device
+        val estimate = reportEstimateBytes(5)
+        assertEquals(8, reportPageCount(5))
+        assertTrue(
+            "estimate $estimate is more than 25 % off the measured $measuredBytes",
+            kotlin.math.abs(estimate - measuredBytes) <= measuredBytes / 4,
+        )
+    }
 }

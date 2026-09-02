@@ -150,8 +150,21 @@ fun reportSections(selected: List<BtInsight>): List<BtReportSection> =
  *
  * Deliberately coarse and deliberately labelled as an estimate: the real size
  * depends on how many vector marks each chart emits, and promising an exact
- * figure before rendering would be a number we cannot keep. The constants come
- * from measuring the shipped cash PDF's per-page cost and rounding up.
+ * figure before rendering would be a number we cannot keep.
+ *
+ * ## Re-measured against a real report (device QA 2026-09-01, defect #23)
+ *
+ * The footer said `ca. 8 Seiten · 1,8 MB`; the file that came out was **259 kB**
+ * — the estimate was ~7× the truth, which is not "coarse", it is wrong in a way
+ * that would make a user on a metered connection cancel a report they could
+ * easily afford. The old per-page constant was borrowed from the cash PDF, and
+ * that borrowing was the bug: the cash export rasterises, this one is pure
+ * vector ([at.bettertrack.app.ui.insights.InsightsPdfExport] draws into a
+ * `PdfDocument` canvas), so its pages cost a fraction as much.
+ *
+ * The measurement: 5 insights ⇒ 8 pages ⇒ 259 kB, i.e. ~29.4 kB per page once
+ * the base is taken out. [REPORT_PAGE_BYTES] rounds that up to 30 kB, which puts
+ * the same report at 264 kB against an observed 259 kB.
  */
 fun reportEstimateBytes(selectedCount: Int): Long {
     if (selectedCount <= 0) return 0L
@@ -160,4 +173,9 @@ fun reportEstimateBytes(selectedCount: Int): Long {
 }
 
 private const val REPORT_BASE_BYTES = 24_000L
-private const val REPORT_PAGE_BYTES = 220_000L
+
+/**
+ * Per-page cost of a VECTOR page, measured on the owner's device 2026-09-01
+ * (8 pages, 259 kB). Rounded up, so the estimate errs generous by ~2 %.
+ */
+private const val REPORT_PAGE_BYTES = 30_000L

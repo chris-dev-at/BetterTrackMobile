@@ -79,6 +79,8 @@ import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.theme.BtShapes
+import at.bettertrack.app.ui.format.btFormatIsoInstantDay
+import at.bettertrack.app.ui.util.rememberBtLocale
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -368,8 +370,10 @@ fun FriendOverviewScreen(
                     BtAvatar(name = username, iconId = ui.profileIcon, size = 72.dp)
                     Spacer(Modifier.height(10.dp))
                     Text("@$username", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight_SemiBold(), color = bt.textPrimary)
-                    ui.since?.let {
-                        Text(stringResource(R.string.bt_social_friends_since, it.take(10)), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
+                    // Localized, not `.take(10)` — see the friends list (device QA
+                    // 2026-09-01 #11).
+                    btFormatIsoInstantDay(ui.since, rememberBtLocale())?.let {
+                        Text(stringResource(R.string.bt_social_friends_since, it), style = MaterialTheme.typography.bodyMedium, color = bt.textMuted)
                     }
                 }
             }

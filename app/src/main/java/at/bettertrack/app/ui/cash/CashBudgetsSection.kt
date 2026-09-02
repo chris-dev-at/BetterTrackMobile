@@ -207,6 +207,15 @@ fun CashBudgetRow(
  * The bar itself. Hand-drawn rather than `LinearProgressIndicator` so the track
  * and fill take the app's own surface/accent colours and rounded pill geometry
  * without fighting Material's defaults.
+ *
+ * ## The zero mark (device QA 2026-09-01, defect #12)
+ *
+ * A 0 % bar used to draw nothing at all inside the track, which made it
+ * indistinguishable from a bar whose data had not arrived. It now draws a short
+ * dimmed stub at the left end — visibly the fill's own colour, visibly not a
+ * measurable length. That says "this bar is loaded and sits at zero" without
+ * claiming any spend: [BUDGET_BAR_ZERO_MARK] is a fixed 8dp, not a fraction, so
+ * it can never be read off the track as an amount.
  */
 @Composable
 private fun BudgetBar(fraction: Float, fill: Color, modifier: Modifier = Modifier) {
@@ -226,9 +235,23 @@ private fun BudgetBar(fraction: Float, fill: Color, modifier: Modifier = Modifie
                     .clip(BtShapes.pill)
                     .background(fill),
             )
+        } else {
+            Box(
+                Modifier
+                    .width(BUDGET_BAR_ZERO_MARK)
+                    .height(6.dp)
+                    .clip(BtShapes.pill)
+                    .background(fill.copy(alpha = BUDGET_BAR_ZERO_ALPHA)),
+            )
         }
     }
 }
+
+/** The fixed-width stub a 0 % bar draws — a state, never a measurement. */
+private val BUDGET_BAR_ZERO_MARK = 8.dp
+
+/** Dimmed, so the zero mark cannot be mistaken for a real (tiny) fill. */
+private const val BUDGET_BAR_ZERO_ALPHA = 0.35f
 
 /**
  * The month stepper above the budget list. Kept deliberately plain — two arrows
@@ -280,15 +303,31 @@ fun CashMonthStepper(
 
 /**
  * The overview's BRIEF budget line (owner order 2026-08-16: *"one compact
- * used-up bar per budget, nothing more"*): tag dot + name + the bar. No
- * figures, no recurring badge, no menu — all of that lives on the budgets
- * subpage this block links to. The bar keeps the full row's colour rule
- * (gold, loss the moment `exceeded` flips) so the glance still carries the
- * one fact that matters.
+ * used-up bar per budget, nothing more"*): tag dot + name + ONE figure on the
+ * same line, then the bar. Still no recurring badge, no menu, no second figures
+ * row — all of that lives on the budgets subpage this block links to.
+ *
+ * ## Why the figure came back (device QA 2026-09-01, defect #12)
+ *
+ * The row shipped as name + bar, and on the owner's phone it read as "Essen"
+ * beside an entirely featureless grey rail: no numbers, no fill, nothing. The
+ * bar was arithmetically right — `0,00 € von 400,00 €` is 0 %, and 0 % draws no
+ * fill — but a control that renders identically for *nothing spent* and
+ * *nothing loaded* is not communicating, and the standing design rule is that a
+ * configuration must never produce an illegible result.
+ *
+ * Two changes, neither of which reopens the crowded block he rejected:
+ *
+ *  · **One compact figure**, `0,00 € / 400,00 €`, right-aligned on the line the
+ *    tag name already occupies — no new row, and it is the same pair the
+ *    subpage leads with.
+ *  · **An explicit zero mark** in the bar ([BudgetBar]), so an empty fill reads
+ *    as a live bar sitting at zero rather than as an unpainted one.
  */
 @Composable
 fun CashBudgetBriefRow(
     budget: CashBudgetProgressDto,
+    locale: Locale,
     modifier: Modifier = Modifier,
 ) {
     val bt = BtTheme.colors
@@ -309,6 +348,17 @@ fun CashBudgetBriefRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = stringResource(
+                    R.string.bt_budgets_brief_progress,
+                    formatEur(budget.spent, locale),
+                    formatEur(budget.amount, locale),
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (budget.exceeded) bt.loss else bt.textMuted,
+                maxLines = 1,
             )
         }
         Spacer(Modifier.height(5.dp))

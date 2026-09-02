@@ -253,6 +253,16 @@ fun BtVizChart(
 private val VIZ_TILE_GAP = 3.dp
 
 /**
+ * Narrowest tile that still prints its amount — one type step down (defect #19).
+ * A German `2.078,95 €` at `labelSmall` measures ~60dp, so 68dp leaves the padding
+ * its 14dp and still resolves the figure without ellipsis at phone densities.
+ */
+private val VIZ_TILE_AMOUNT_MIN_W = 68.dp
+
+/** At or above this the amount prints at full caption size. */
+private val VIZ_TILE_AMOUNT_FULL_W = 92.dp
+
+/**
  * The corner radius of a data mark.
  *
  * Deliberately NOT [BtShapes.cardSmall]. A card radius is 10dp, which is a
@@ -362,8 +372,20 @@ private fun VizAreaTile(
         // Concatenating them fitted the widest tiles and ellipsised the rest
         // ("11,08 % · 2.26…"), and a truncated amount is worse than no amount:
         // the whole reason to print money inside a mark is that it is exact.
-        val showAmount = showName && !compact && h >= 72.dp && w >= 92.dp &&
+        //
+        // ── The narrow tier (device QA 2026-09-01, defect #19) ──────────────
+        //
+        // The width floor used to be a cliff: at 91dp the "Krypto" tile printed
+        // its name and its share and simply dropped its € — the only tile on the
+        // card missing a value, which reads as missing DATA, not as a layout
+        // decision. Between [VIZ_TILE_AMOUNT_MIN_W] and [VIZ_TILE_AMOUNT_FULL_W]
+        // the amount is now drawn one type step down instead of being dropped:
+        // smaller type is a legibility cost the reader can absorb, an absent
+        // figure is information they cannot recover. Below the narrow floor there
+        // is genuinely no room and the tap-through still has it.
+        val showAmount = showName && !compact && h >= 72.dp && w >= VIZ_TILE_AMOUNT_MIN_W &&
             labels != BtVizLabels.SHARES
+        val amountTight = w < VIZ_TILE_AMOUNT_FULL_W
 
         Box(
             modifier = Modifier
@@ -398,7 +420,11 @@ private fun VizAreaTile(
                     if (showAmount) {
                         Text(
                             text = amountText,
-                            style = BtTheme.type.numberCaption,
+                            style = if (amountTight) {
+                                MaterialTheme.typography.labelSmall
+                            } else {
+                                BtTheme.type.numberCaption
+                            },
                             color = ink,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1119,19 +1145,15 @@ private fun VizEmpty(form: BtVizForm, canvas: BtVizCanvas, text: String, modifie
                     )
                 }
 
-                BtVizForm.RANKED_BARS -> Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    repeat(3) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(bt.border),
-                        )
-                    }
-                }
+                // Nothing at all (device QA 2026-09-01, defect #20). This drew
+                // three full-width rules above "Noch keine Daten", and three
+                // rules over an empty plot are indistinguishable from three bars
+                // of length zero — the picture said "the values are all nil"
+                // where the sentence beneath it said "there are no values".
+                // Every other empty form here draws a GHOST of its own geometry
+                // (an outlined waffle, a dot-plot axis) that cannot be misread as
+                // data; a ranked-bar chart has no such ghost, so it draws none.
+                BtVizForm.RANKED_BARS -> Unit
 
                 else -> VizGhostPanes(border = BorderStroke(1.dp, bt.border))
             }
@@ -1215,6 +1237,19 @@ fun BtVizHeatmap(
     modifier: Modifier = Modifier,
     squarified: Boolean = true,
     selectedKey: String? = null,
+    /**
+     * What a tile prints when the asset has NO quote — typically an em dash.
+     *
+     * Opt-in, and null by default, because "no move to report" is two different
+     * facts on two different surfaces. On the watchlist heatmap a quote-less
+     * custom asset ("Anthropic") printed a bare name while every neighbour
+     * printed a percentage, which reads as a rendering failure rather than as
+     * missing data (device QA 2026-09-01, defect #28). On the widget preview the
+     * folded `Andere` bucket carries a null change ON PURPOSE — it is an
+     * aggregate that HAS no single move — and stamping a dash on it would invent
+     * an absence. The caller knows which it is; this composable cannot.
+     */
+    missingChangeText: String? = null,
     onSelect: (String?) -> Unit = {},
 ) {
     val bt = BtTheme.colors
@@ -1245,6 +1280,7 @@ fun BtVizHeatmap(
                     fill = fill,
                     ink = bt.chartInk(fill),
                     changeText = changeText,
+                    missingChangeText = missingChangeText,
                     selected = cell.key == selectedKey,
                     onClick = { onSelect(if (cell.key == selectedKey) null else cell.key) },
                 )
@@ -1313,11 +1349,12 @@ private fun VizHeatTile(
     fill: Color,
     ink: Color,
     changeText: (Double) -> String,
+    missingChangeText: String?,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
     val bt = BtTheme.colors
-    val change = cell.changePct?.let(changeText).orEmpty()
+    val change = cell.changePct?.let(changeText) ?: missingChangeText.orEmpty()
     val cd = listOf(cell.label, change).filter { it.isNotEmpty() }.joinToString(" · ")
     BoxWithConstraints(Modifier.fillMaxSize().padding(VIZ_TILE_GAP / 2)) {
         val showName = maxWidth >= 40.dp && maxHeight >= 22.dp

@@ -285,6 +285,107 @@ class AccountWealthLogicTest {
         assertTrue(state is AccountSeriesState.Curve)
     }
 
+    // ── Never a void: the skeleton has to be able to end (defect #3) ────────
+
+    @Test
+    fun `a settled window with nothing cached is empty, not a permanent skeleton`() {
+        // Device 2026-09-01: on 1D the portfolio *Main* rendered a bare dark
+        // rectangle — the loading skeleton — with no curve, no words and no
+        // percentage, while its neighbours drew. The fan-out had already finished;
+        // that id's series simply never reached Room, and `history == null` looked
+        // exactly like "the first Room emission has not arrived yet".
+        assertEquals(
+            AccountSeriesState.Empty,
+            accountSeriesState(null, failed = false, settled = true),
+        )
+    }
+
+    @Test
+    fun `an unsettled window with nothing cached is still loading`() {
+        assertEquals(
+            AccountSeriesState.Loading,
+            accountSeriesState(null, failed = false, settled = false),
+        )
+    }
+
+    @Test
+    fun `a failed slot names its failure even once the window has settled`() {
+        // "Couldn't load this curve" outranks "nothing to draw": the user can retry
+        // the first and can do nothing about the second.
+        assertEquals(
+            AccountSeriesState.Failed,
+            accountSeriesState(null, failed = true, settled = true),
+        )
+    }
+
+    @Test
+    fun `a series whose values are not finite is empty rather than an unpainted canvas`() {
+        // A NaN maps to a NaN pixel and a path with a NaN vertex rasterises to
+        // nothing, so this would otherwise take the Curve branch and then draw the
+        // very void the empty state exists to replace.
+        val nan = history(points = 2).copy(
+            points = listOf(HistoryPoint(0L, Double.NaN), HistoryPoint(1L, Double.NaN)),
+        )
+        assertEquals(AccountSeriesState.Empty, accountSeriesState(nan, settled = true))
+    }
+
+    @Test
+    fun `non-finite points are dropped from a curve that still has two real ones`() {
+        val mixed = history(points = 3).copy(
+            points = listOf(
+                HistoryPoint(0L, 100.0),
+                HistoryPoint(1L, Double.POSITIVE_INFINITY),
+                HistoryPoint(2L, 120.0),
+            ),
+        )
+        val state = accountSeriesState(mixed, settled = true) as AccountSeriesState.Curve
+        assertEquals(2, state.points.size)
+        assertTrue(state.points.all { it.valueEur.isFinite() })
+    }
+
+    @Test
+    fun `an all-finite series is handed through untouched`() {
+        val h = history(points = 4)
+        val state = accountSeriesState(h) as AccountSeriesState.Curve
+        assertEquals(h.points, state.points)
+    }
+
+    // ── Defect #2: the percentage is the SERVER's, even when it looks wrong ──
+
+    @Test
+    fun `a rising curve still reports the server's negative performance`() {
+        // Device 2026-09-01: portfolio *penischain* drew a flat-then-rising MAX
+        // curve and labelled it −32,73 %. This test pins WHERE that figure comes
+        // from, so the next reader does not "fix" it into a client-side
+        // (last − first) / first, which would print +9 110 891 % here.
+        //
+        // Both readings are legitimate arithmetic and they disagree by design: the
+        // points series is net worth (deposits move it) and the performance series
+        // is a chain-linked time-weighted return (deposits do not). §7.1 says the
+        // server owns the second one, so the app reads it and never derives it.
+        val rising = PortfolioHistory(
+            portfolioId = "penischain",
+            range = HistoryRange.MAX,
+            baseCurrency = "EUR",
+            points = listOf(
+                HistoryPoint(0L, 1.0),
+                HistoryPoint(86_400_000L, 2.0),
+                HistoryPoint(172_800_000L, 91_109.91),
+            ),
+            performance = listOf(
+                PerformancePoint(0L, 0.0),
+                PerformancePoint(86_400_000L, -50.0),
+                PerformancePoint(172_800_000L, -32.73),
+            ),
+            syncedAtMs = 1_000L,
+        )
+        val state = accountSeriesState(rising, settled = true) as AccountSeriesState.Curve
+        assertEquals(-32.73, state.rangePerformancePct!!, 1e-9)
+        // …and specifically the LAST performance point, not the first and not an
+        // average of them.
+        assertEquals(rising.performance.last().pct, state.rangePerformancePct!!, 1e-9)
+    }
+
     // ── The "as of" stamp ───────────────────────────────────────────────────
 
     @Test

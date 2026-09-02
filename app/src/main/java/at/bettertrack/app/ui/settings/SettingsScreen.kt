@@ -91,6 +91,7 @@ import at.bettertrack.app.data.prefs.BtThemeMode
 import at.bettertrack.app.data.prefs.themeModeFromName
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originLabel
+import at.bettertrack.app.ui.format.btFormatIsoInstantDay
 import at.bettertrack.app.ui.components.BtChoiceSheet
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtFormError
@@ -134,11 +135,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.profileIconLabelRes
-import java.time.Instant
-import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
@@ -1119,17 +1116,7 @@ internal fun formatMemberSince(
     iso: String?,
     locale: Locale,
     zone: ZoneId = ZoneId.systemDefault(),
-): String? {
-    val raw = iso?.trim().orEmpty()
-    if (raw.isEmpty()) return null
-    val instant = runCatching { Instant.parse(raw) }
-        .recoverCatching { OffsetDateTime.parse(raw).toInstant() }
-        .getOrNull() ?: return null
-    return runCatching {
-        instant.atZone(zone)
-            .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
-    }.getOrNull()
-}
+): String? = btFormatIsoInstantDay(iso, locale, zone)
 
 /**
  * A settings row's current value, sitting where the chevron would be — with the

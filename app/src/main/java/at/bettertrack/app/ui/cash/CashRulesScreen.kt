@@ -782,7 +782,7 @@ private fun CashRuleSheet(
             ) {
                 tags.forEach { tag ->
                     CashTagChip(
-                        name = tag.name,
+                        name = cashTagDisplayName(tag),
                         color = tag.color,
                         selected = selectedTagIds.contains(tag.id),
                         onClick = {

@@ -518,26 +518,14 @@ private fun HoldingContent(
                 val dayEur = holding.dayChangeEur
                 if (dayEur != null) {
                     Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MoneyText(
-                            value = dayEur,
-                            style = BtTheme.type.numberCaption,
-                            colorMode = MoneyColorMode.GainLoss,
-                            showSign = true,
-                        )
-                        holding.dayChangePct?.let { pct ->
-                            Text(
-                                text = " (${formatPercent(pct, locale)})",
-                                style = BtTheme.type.numberCaption,
-                                color = deltaColor(pct),
-                            )
-                        }
-                        Text(
-                            text = " · " + stringResource(R.string.bt_overview_today),
-                            style = BtTheme.type.numberCaption,
-                            color = bt.textMuted,
-                        )
-                    }
+                    // The app's ONE delta-line shape (owner order, device QA
+                    // 2026-09-01 #14): `€ (%) · Wort`, identical on the portfolio
+                    // detail and the Übersicht sheet.
+                    DeltaLine(
+                        eur = dayEur,
+                        pct = holding.dayChangePct,
+                        span = stringResource(R.string.bt_overview_today),
+                    )
                 }
             }
         }

@@ -1308,7 +1308,7 @@ fun CashScreen(
                                 } else {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         b.rows.forEach { row ->
-                                            CashBudgetBriefRow(budget = row)
+                                            CashBudgetBriefRow(budget = row, locale = locale)
                                         }
                                     }
                                 }

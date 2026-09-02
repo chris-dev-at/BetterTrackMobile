@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,7 @@ import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.ChatRepository
 import at.bettertrack.app.data.repo.Conversation
 import at.bettertrack.app.data.repo.Friend
+import at.bettertrack.app.data.repo.ShareChipKind
 import at.bettertrack.app.data.repo.SocialRepository
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BT_FAB_CONTENT_CLEARANCE
@@ -70,6 +72,7 @@ import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.resolveListSurface
+import at.bettertrack.app.ui.format.btTimeAgoLabel
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -290,12 +293,12 @@ private fun ConversationRow(c: Conversation, onClick: () -> Unit) {
                         color = if (deleted) bt.textSecondary else bt.textPrimary,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(relativeTime(c.lastAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    Text(btTimeAgoLabel(c.lastAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
                 }
                 Spacer(Modifier.size(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        c.lastPreview,
+                        chatPreviewText(c),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (c.unread > 0) bt.textSecondary else bt.textMuted,
                         fontWeight = if (c.unread > 0) FontWeight.Medium else FontWeight.Normal,
@@ -381,14 +384,38 @@ private fun ChatListSkeleton() {
     }
 }
 
-internal fun relativeTime(ms: Long): String {
-    val diff = System.currentTimeMillis() - ms
-    val min = diff / 60_000
-    return when {
-        min < 1 -> "now"
-        min < 60 -> "${min}m"
-        min < 60 * 24 -> "${min / 60}h"
-        min < 60 * 24 * 7 -> "${min / (60 * 24)}d"
-        else -> "${min / (60 * 24 * 7)}w"
-    }
+/**
+ * A conversation row's preview sentence, composed HERE rather than in the
+ * repository (device QA 2026-09-01 #8: the data layer has no `Context`, so its
+ * hardcoded `"You: "` and `"📎 Shared …"` reached a German phone untranslated).
+ *
+ * A share chip takes precedence over any accompanying body — the chip is what the
+ * message is — and only its KIND is ever named, never the item, so the list cannot
+ * leak the identity of something that was not shared with the reader.
+ *
+ * An own message with nothing to preview stays empty rather than becoming a bare
+ * "Du:", which would be a prefix with no sentence behind it.
+ */
+@Composable
+internal fun chatPreviewText(c: Conversation): String {
+    val base = c.lastChipKind
+        ?.let { stringResource(R.string.bt_chat_preview_shared, stringResource(chatPreviewKindRes(it))) }
+        ?: c.lastPreview
+    if (base.isEmpty()) return ""
+    return if (c.lastFromMe) stringResource(R.string.bt_chat_preview_you, base) else base
+}
+
+/**
+ * The indefinite phrase a chip kind is previewed as ("eine Anlage", "ein
+ * Portfolio"). Separate from `bt_chat_kind_*`, which are the thread chip's
+ * standalone NOUNS — a preview needs the phrase in the case the sentence puts it
+ * in, and German declines where English does not.
+ */
+@StringRes
+internal fun chatPreviewKindRes(kind: ShareChipKind): Int = when (kind) {
+    ShareChipKind.Asset -> R.string.bt_chat_preview_kind_asset
+    ShareChipKind.Portfolio -> R.string.bt_chat_preview_kind_portfolio
+    ShareChipKind.Watchlist -> R.string.bt_chat_preview_kind_watchlist
+    ShareChipKind.Conglomerate -> R.string.bt_chat_preview_kind_conglomerate
+    ShareChipKind.Unknown -> R.string.bt_chat_preview_kind_unknown
 }

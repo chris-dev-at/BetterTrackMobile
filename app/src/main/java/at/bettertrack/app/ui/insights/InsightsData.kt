@@ -885,8 +885,18 @@ private fun buildSpending(
 
     val items = withStableColorIndices(byTag)
     val total = items.sumOf { it.value }
+    // "Tightest budget" needs something to BE tight (device QA 2026-09-01, #20).
+    //
+    // With budgets defined and nothing spent in the window, the guard above lets
+    // this card through with an empty datum list — deliberately, because the
+    // budgets themselves are still a fact worth carrying. But the summary tiles
+    // then printed "Knappstes Budget: Essen · Bereits genutzt 0,00 %" beside a
+    // chart that says "Noch keine Daten", which asserts a superlative over an
+    // empty set: with nothing spent, no budget is tighter than any other, and
+    // naming one invites the reader to act on a ranking that does not exist.
+    // So the tiles degrade to silence and the empty chart speaks for the card.
     val tightest = source.budgets
-        .filter { it.limitEur > 0.0 }
+        .filter { it.limitEur > 0.0 && it.spentEur > 0.0 }
         .maxByOrNull { it.spentEur / it.limitEur }
 
     return base(BtInsight.BUDGETS_SPENDING, window).copy(

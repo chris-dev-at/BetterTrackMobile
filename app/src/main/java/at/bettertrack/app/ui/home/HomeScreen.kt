@@ -72,6 +72,7 @@ import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.format.BtDiscreetMode
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
+import at.bettertrack.app.ui.portfolio.DeltaLine
 import at.bettertrack.app.ui.portfolio.deltaColor
 import at.bettertrack.app.ui.prices.NetWorthState
 import at.bettertrack.app.ui.prices.NoPricesHero
@@ -559,26 +560,13 @@ private fun HomeHero(
                     )
                     if (state.showDayChange) {
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            MoneyText(
-                                value = state.dayChangeEur,
-                                style = BtTheme.type.numberCaption,
-                                colorMode = MoneyColorMode.GainLoss,
-                                showSign = true,
-                            )
-                            state.dayChangePct?.let { pct ->
-                                Text(
-                                    text = " (${formatPercent(pct, locale)})",
-                                    style = BtTheme.type.numberCaption,
-                                    color = deltaColor(pct),
-                                )
-                            }
-                            Text(
-                                text = " · " + stringResource(R.string.bt_overview_today),
-                                style = BtTheme.type.numberCaption,
-                                color = bt.textMuted,
-                            )
-                        }
+                        // The app's ONE delta-line shape (owner order, device QA
+                        // 2026-09-01 #14).
+                        DeltaLine(
+                            eur = state.dayChangeEur,
+                            pct = state.dayChangePct,
+                            span = stringResource(R.string.bt_overview_today),
+                        )
                     }
                 }
             }

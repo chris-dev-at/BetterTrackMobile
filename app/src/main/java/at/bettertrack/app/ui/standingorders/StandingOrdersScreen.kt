@@ -102,6 +102,7 @@ import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.customassets.dialogFieldColors
+import at.bettertrack.app.ui.format.btFormatNamedDay
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
 import at.bettertrack.app.ui.portfolio.formatQuantity
 import at.bettertrack.app.ui.portfolio.formatTxDate
@@ -117,7 +118,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -232,14 +232,17 @@ val StandingOrderEditIntent.hasChanges: Boolean
     ) != null
 
 /**
- * A schedule day (`YYYY-MM-DD`) as "5 Jun 2026" — the same shape the ledger uses
- * for transaction dates. A day this app can't parse is shown verbatim rather than
- * swallowed: a future server day format should degrade, not disappear.
+ * A schedule day (`YYYY-MM-DD`) as `5. Juni 2026` / `5 Jun 2026` — the same shape
+ * the ledger uses for transaction dates, from the same formatter
+ * ([btFormatNamedDay]) rather than from a second copy of its pattern, which is how
+ * this one shipped without German's ordinal period (device QA 2026-09-01 #11).
+ * A day this app can't parse is shown verbatim rather than swallowed: a future
+ * server day format should degrade, not disappear.
  */
 fun formatIsoDay(iso: String?, locale: Locale): String? {
     if (iso.isNullOrBlank()) return null
     return try {
-        LocalDate.parse(iso).format(DateTimeFormatter.ofPattern("d MMM yyyy", locale))
+        btFormatNamedDay(LocalDate.parse(iso), locale)
     } catch (_: Exception) {
         iso
     }

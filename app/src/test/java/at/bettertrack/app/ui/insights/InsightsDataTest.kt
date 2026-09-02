@@ -147,6 +147,54 @@ class InsightsDataTest {
         assertEquals(today.toEpochDay(), window.asOfEpochDay)
     }
 
+    /**
+     * A superlative needs something to be superlative ABOUT (device QA
+     * 2026-09-01, defect #20).
+     *
+     * With budgets defined and nothing spent, the card kept its summary tiles and
+     * printed "Knappstes Budget: Essen · Bereits genutzt 0,00 %" beside a chart
+     * reading "Noch keine Daten". Nothing is tighter than anything when nothing
+     * has been spent, so naming one budget invites the reader to act on a ranking
+     * that does not exist. The tiles degrade to silence instead.
+     */
+    @Test
+    fun `an unspent budget names no tightest budget`() {
+        val snapshot = build(
+            BtInsight.BUDGETS_SPENDING,
+            source().copy(
+                budgets = listOf(
+                    BtInsightBudget(tagId = "t1", tagName = "Essen", limitEur = 400.0, spentEur = 0.0),
+                    BtInsightBudget(tagId = "t2", tagName = "Sprit", limitEur = 200.0, spentEur = 0.0),
+                ),
+            ),
+        )
+        assertTrue(
+            "no spending means no budget facts: ${snapshot.facts.map { it.labelRes }}",
+            snapshot.facts.none {
+                it.labelRes == at.bettertrack.app.R.string.bt_insight_fact_budget_tight ||
+                    it.labelRes == at.bettertrack.app.R.string.bt_insight_fact_budget_used
+            },
+        )
+    }
+
+    @Test
+    fun `a budget with real spending is still named as the tightest`() {
+        val snapshot = build(
+            BtInsight.BUDGETS_SPENDING,
+            source().copy(
+                budgets = listOf(
+                    BtInsightBudget(tagId = "t1", tagName = "Essen", limitEur = 400.0, spentEur = 40.0),
+                    BtInsightBudget(tagId = "t2", tagName = "Sprit", limitEur = 200.0, spentEur = 120.0),
+                ),
+            ),
+        )
+        val tight = snapshot.facts.firstOrNull {
+            it.labelRes == at.bettertrack.app.R.string.bt_insight_fact_budget_tight
+        }
+        assertNotNull("a budget that IS tight must still be named", tight)
+        assertEquals(BtInsightValue.Text("Sprit"), tight!!.value)
+    }
+
     // ── Fixtures ────────────────────────────────────────────────────────────
 
     private fun portfolio(

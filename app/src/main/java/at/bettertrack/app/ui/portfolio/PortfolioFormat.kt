@@ -1,10 +1,8 @@
 package at.bettertrack.app.ui.portfolio
 
+import at.bettertrack.app.ui.format.btFormatNamedDay
 import at.bettertrack.app.ui.format.btFormatPercentCore
 import at.bettertrack.app.ui.format.btFormatQuantityCore
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -49,11 +47,17 @@ fun weightPct(partEur: Double?, totalEur: Double?): Double? {
     return partEur / totalEur * 100.0
 }
 
-/** Ledger row date: "5 Jun 2026" (locale month name). */
+/**
+ * Ledger row date: `5. Juni 2026` (de) / `5 Jun 2026` (en).
+ *
+ * Delegates to the app's one named-day formatter rather than carrying its own
+ * pattern — this function IS what printed the German `5 Juni 2026` without its
+ * ordinal period on the owner's phone (device QA 2026-09-01 #11), because a
+ * hand-written `"d MMM yyyy"` cannot know that German writes the period and
+ * English does not. See [btFormatNamedDay].
+ */
 fun formatTxDate(epochMs: Long, locale: Locale): String =
-    Instant.ofEpochMilli(epochMs)
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("d MMM yyyy", locale))
+    btFormatNamedDay(epochMs, locale)
 
 /**
  * Strips the interim `[bt:<uuid>]` sync-reconcile marker (see SyncEntities)

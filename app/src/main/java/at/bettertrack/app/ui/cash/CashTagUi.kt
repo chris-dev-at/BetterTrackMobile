@@ -14,7 +14,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import at.bettertrack.app.R
+import at.bettertrack.app.data.api.dto.CashSystemTagKeys
 import at.bettertrack.app.data.db.CashTagEntity
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -143,7 +147,7 @@ fun CashTagChipRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        shown.forEach { CashTagChip(name = it.name, color = it.color) }
+        shown.forEach { CashTagChip(name = cashTagDisplayName(it), color = it.color) }
         if (overflow > 0) {
             val bt = BtTheme.colors
             Surface(
@@ -161,4 +165,63 @@ fun CashTagChipRow(
             }
         }
     }
+}
+
+// ── Built-in tag names: what the user READS vs what the server STORES ───────
+
+/**
+ * The localized display name of a built-in tag identity, or null for a user tag
+ * and for a `systemKey` this build has never heard of.
+ *
+ * ## Why this exists (device QA 2026-09-01, defect #10)
+ *
+ * A German ledger row showed the chip **"Withdrawal"** beside German ones. It was
+ * not the cash-KIND map failing — that one is complete and correct, and it renders
+ * the row's title ("Bezahlt"). The chip is a TAG, and a tag's name is server data:
+ * the platform seeds nine built-in tags with English names, so every account gets
+ * an English chip in a German list, and no amount of app-side vocabulary work
+ * touches it because nothing in the app was allowed to.
+ *
+ * The stable identity is [at.bettertrack.app.data.api.dto.CashSystemTagKeys], not
+ * the name, which is exactly what makes a display-side translation safe: the app
+ * shows German, the wire keeps English, the auto-tag engine keys off neither.
+ *
+ * Distinct from `CASH_SYSTEM_TAG_DEFAULT_NAMES`, which is the WRITE path (restore
+ * writes the canonical English name back over the wire) and must stay English —
+ * a German name PATCHed from this phone would follow the account to the web.
+ */
+@StringRes
+fun cashSystemTagNameRes(systemKey: String?): Int? = when (systemKey) {
+    CashSystemTagKeys.INVESTMENT -> R.string.bt_tags_builtin_name_investment
+    CashSystemTagKeys.SALE_PROCEEDS -> R.string.bt_tags_builtin_name_sale_proceeds
+    CashSystemTagKeys.DIVIDEND -> R.string.bt_tags_builtin_name_dividend
+    CashSystemTagKeys.INTEREST -> R.string.bt_tags_builtin_name_interest
+    CashSystemTagKeys.FEES -> R.string.bt_tags_builtin_name_fees
+    CashSystemTagKeys.TAX -> R.string.bt_tags_builtin_name_tax
+    CashSystemTagKeys.TRANSFER -> R.string.bt_tags_builtin_name_transfer
+    CashSystemTagKeys.DEPOSIT -> R.string.bt_tags_builtin_name_deposit
+    CashSystemTagKeys.WITHDRAWAL -> R.string.bt_tags_builtin_name_withdrawal
+    else -> null
+}
+
+/**
+ * What a tag chip says: the localized built-in name when the tag is a seeded one
+ * the user has NOT renamed, and the stored name otherwise.
+ *
+ * The rename check ([cashSystemTagIsAtDefault]) is the load-bearing half. A user
+ * who deliberately renamed the "Fees" tag to "Broker-Kosten" must keep seeing
+ * their own word — replacing it with "Gebühren" would silently overrule a choice
+ * they made, which is a worse bug than the English one this fixes.
+ *
+ * The tags MANAGEMENT screen deliberately does not use this: that screen is about
+ * the stored name (it renames it, restores it, and prints the canonical default
+ * beside it), and showing a translation where a wire value is being edited would
+ * make the rename field disagree with its own row.
+ */
+@Composable
+fun cashTagDisplayName(tag: CashTagEntity): String {
+    if (!tag.system) return tag.name
+    if (!cashSystemTagIsAtDefault(tag)) return tag.name
+    val res = cashSystemTagNameRes(tag.systemKey) ?: return tag.name
+    return stringResource(res)
 }

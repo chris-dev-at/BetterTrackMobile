@@ -220,9 +220,11 @@ fun CashLedgerScreen(
     val hasUntagged = remember(movements) { movements.any { decodeTagIds(it.tagIds).isEmpty() } }
 
     val untaggedLabel = stringResource(R.string.bt_cash_summary_untagged)
-    val tagLabels = remember(tagsInLedger, untaggedLabel) {
-        tagsInLedger.associate { it.id to it.name } + (CASH_UNTAGGED_KEY to untaggedLabel)
-    }
+    // Not `remember`ed: a built-in tag's label is a string resource now (device QA
+    // 2026-09-01 #10), so it has to be read in composition and re-read when the
+    // locale changes. The list is one entry per tag USED in the ledger — small.
+    val tagLabels = tagsInLedger.associate { it.id to cashTagDisplayName(it) } +
+        (CASH_UNTAGGED_KEY to untaggedLabel)
     val selectedSourceNames = selection.sourceIds.mapNotNull { sourceNames[it] }.sorted()
     val selectedTagNames = selection.tagIds.map { tagLabels[it] ?: it }.sorted()
 

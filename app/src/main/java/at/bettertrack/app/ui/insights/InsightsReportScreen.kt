@@ -445,6 +445,10 @@ fun InsightsReportScreen(
             family = insight.spec.family?.let { familyConfigs[it.name] } ?: BtVizConfig(),
             snapshot = snapshot,
             portfolioNames = allPortfolios.associate { it.id to it.name },
+            // In the BUILDER the report's frame replaces every card override
+            // ([insightForReport]), so the frame period IS what this card is
+            // rendered with — the sheet must say that, not guess (defect #17).
+            effectivePeriod = framePeriod,
             onApply = { vm.setCardConfig(insight, it) },
             onDismiss = { configuring = null },
         )

@@ -61,6 +61,7 @@ import at.bettertrack.app.ui.components.BtRangeSegmented
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
+import at.bettertrack.app.ui.portfolio.DeltaLine
 import at.bettertrack.app.ui.portfolio.deltaColor
 import at.bettertrack.app.ui.portfolio.formatChartScrubDate
 import at.bettertrack.app.ui.portfolio.rangeDeltaEur
@@ -114,8 +115,13 @@ import kotlinx.coroutines.launch
  *
  *  · **Signed out** — a 401 on the fan-out. Nothing here can be true after that,
  *    so the whole body is replaced by the session-expired error.
- *  · **Empty** — no active portfolio, so there is no account history to draw.
- *  · **Loading** — skeletons, per slot, never a flat line at zero.
+ *  · **Empty** — no active portfolio, so there is no account history to draw; or a
+ *    slot whose window has been fetched and simply has no shape to show. The
+ *    second case is what [AccountWealthViewModel.settledRange] exists to
+ *    distinguish from the first: before it, a missing series is still loading.
+ *  · **Loading** — skeletons, per slot, never a flat line at zero, and never once
+ *    the window's fan-out has finished (device QA 2026-09-01 #3: an unresolvable
+ *    slot sat on its skeleton forever, which is a blank void with extra steps).
  *  · **Error** — a slot whose fetch failed with nothing cached says so on its own;
  *    the other slots keep drawing, because one portfolio's failure is not the
  *    account's.
@@ -151,6 +157,10 @@ fun AccountWealthSheet(
     val failed by vm.failed.collectAsStateWithLifecycle()
     val signedOut by vm.signedOut.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
+    val settledRange by vm.settledRange.collectAsStateWithLifecycle()
+    // "The attempt for the window on screen is over." Anything still missing after
+    // that is missing, not pending — see [accountSeriesState]'s `settled`.
+    val settled = settledRange == range
 
     // The fetch is driven from HERE, not from the view model's `init`, so it is
     // bound to the sheet being on screen: the fan-out starts when the sheet opens,
@@ -211,6 +221,7 @@ fun AccountWealthSheet(
                         hero = hero,
                         history = series[s.portfolio.id],
                         failed = s.portfolio.id in failed,
+                        settled = settled,
                         range = range,
                         onRange = vm::setRange,
                     )
@@ -220,6 +231,7 @@ fun AccountWealthSheet(
                         hero = hero,
                         series = series,
                         failed = failed,
+                        settled = settled,
                         range = range,
                         onRange = vm::setRange,
                         maxBodyHeight = maxBodyHeight,
@@ -244,12 +256,13 @@ private fun SinglePortfolioWealth(
     hero: HomeHeroState,
     history: PortfolioHistory?,
     failed: Boolean,
+    settled: Boolean,
     range: HistoryRange,
     onRange: (HistoryRange) -> Unit,
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
-    val state = remember(history, failed) { accountSeriesState(history, failed) }
+    val state = remember(history, failed, settled) { accountSeriesState(history, failed, settled) }
 
     // The scrub owns the headline while a finger is down — the same contract the
     // portfolio hero has, on the same gesture, so it is learned once.
@@ -318,6 +331,7 @@ private fun MultiPortfolioWealth(
     hero: HomeHeroState,
     series: Map<String, PortfolioHistory>,
     failed: Set<String>,
+    settled: Boolean,
     range: HistoryRange,
     onRange: (HistoryRange) -> Unit,
     maxBodyHeight: Dp,
@@ -357,7 +371,7 @@ private fun MultiPortfolioWealth(
                 val portfolio = scope.charted[index]
                 PortfolioSmallMultiple(
                     portfolio = portfolio,
-                    state = accountSeriesState(series[portfolio.id], portfolio.id in failed),
+                    state = accountSeriesState(series[portfolio.id], portfolio.id in failed, settled),
                     range = range,
                 )
             }
@@ -497,41 +511,23 @@ private fun AccountHeadline(hero: HomeHeroState, scrubEur: Double?) {
 }
 
 /**
- * "+120,00 € · +2,1 % · past month" for the single-portfolio headline.
+ * "+120,00 € (+2,1 %) · letzter Monat" for the single-portfolio headline.
  *
  * The € is [rangeDeltaEur] — the server series' last point minus its first, the
  * same display subtraction of two rendered server values the portfolio hero makes
- * — and the % is the server's own `rangePerformancePct`. The two are separated by
- * a middot rather than written as `€ (%)` because outside a same-basis window they
- * are two measurements that merely share a span, which is the distinction
- * `samePairBasis` exists to make on the portfolio hero.
+ * — and the % is the server's own `rangePerformancePct`. The shape is
+ * [at.bettertrack.app.ui.portfolio.DeltaLine]'s, so this sheet cannot drift from
+ * the portfolio detail it mirrors (owner order, device QA 2026-09-01 #14).
+ *
+ * When there is nothing drawable there is nothing to say: the state is not a curve,
+ * this returns without composing, and the reserved 18dp box stays quiet rather than
+ * printing a zero (defect #3 — never a void, never an invented delta).
  */
 @Composable
 private fun RangeDeltaLine(state: AccountSeriesState, range: HistoryRange) {
-    val bt = BtTheme.colors
-    val locale = rememberBtLocale()
     val curve = state as? AccountSeriesState.Curve ?: return
     val deltaEur = remember(curve.points) { rangeDeltaEur(curve.points) } ?: return
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        MoneyText(
-            value = deltaEur,
-            style = BtTheme.type.numberCaption,
-            color = deltaColor(deltaEur),
-            showSign = true,
-        )
-        curve.rangePerformancePct?.let { pct ->
-            Text(
-                text = " · " + formatPercent(pct, locale),
-                style = BtTheme.type.numberCaption,
-                color = deltaColor(pct),
-            )
-        }
-        Text(
-            text = " · " + rangeWord(range),
-            style = BtTheme.type.numberCaption,
-            color = bt.textMuted,
-        )
-    }
+    DeltaLine(eur = deltaEur, pct = curve.rangePerformancePct, span = rangeWord(range))
 }
 
 /**
@@ -662,6 +658,23 @@ class AccountWealthViewModel(
     val failed: StateFlow<Set<String>> = _failed.asStateFlow()
 
     /**
+     * The window whose fan-out has finished — success, failure or "not even
+     * possible" (offline, nothing charted).
+     *
+     * Device QA 2026-09-01 #3: without this, a slot whose series never reaches Room
+     * is indistinguishable from a slot whose first Room emission has not arrived
+     * yet, and it sits on the loading skeleton forever — the blank rectangle the
+     * owner reported on 1D. Comparing this against the selected range is what lets
+     * [accountSeriesState] say "this window has nothing to draw" instead of
+     * "still working".
+     *
+     * It is the RANGE and not a boolean so that switching windows re-arms it for
+     * free: the new window is not settled until its own fan-out returns.
+     */
+    private val _settledRange = MutableStateFlow<HistoryRange?>(null)
+    val settledRange: StateFlow<HistoryRange?> = _settledRange.asStateFlow()
+
+    /**
      * A 401 came back. Distinct from a failed slot because it is not about one
      * portfolio: no call on this surface can succeed until the user signs in
      * again, so the whole body says so instead of twelve slots each saying it.
@@ -682,8 +695,15 @@ class AccountWealthViewModel(
      */
     fun refresh() {
         val ids = scope.value.chartedIds()
-        if (ids.isEmpty() || !isOnline.value) return
         val window = _range.value
+        if (ids.isEmpty() || !isOnline.value) {
+            // Nothing will arrive: no ids to ask about, or no network to ask over.
+            // The window is settled all the same, so a slot with no cache states
+            // that rather than spinning a skeleton against a request that will
+            // never be made. The offline banner above says why.
+            _settledRange.value = window
+            return
+        }
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             val results = coroutineScope {
@@ -694,6 +714,9 @@ class AccountWealthViewModel(
             // set would keep a curve hidden behind an error that no longer exists.
             _failed.value = results.mapNotNull { (id, r) -> id.takeIf { r is BtResult.Err } }.toSet()
             _signedOut.value = results.any { (_, r) -> r is BtResult.Err && r.error.isUnauthorized }
+            // Last, and only on a job that ran to completion: a cancelled fan-out
+            // (a range switch mid-flight) must leave the new window unsettled.
+            _settledRange.value = window
         }
     }
 
@@ -705,5 +728,8 @@ class AccountWealthViewModel(
         // The failed set describes the PREVIOUS window; carrying it over would
         // show an error slot for a call that has not been made yet.
         _failed.value = emptySet()
+        // Same for the settled stamp: the new window has not been fetched yet, so
+        // its slots are legitimately loading again.
+        _settledRange.value = null
     }
 }

@@ -79,6 +79,17 @@ fun InsightConfigSheet(
     family: BtVizConfig,
     snapshot: BtInsightSnapshot,
     portfolioNames: Map<String, String>,
+    /**
+     * The period the card is ACTUALLY rendered with right now — its own override
+     * when it has one, else the page frame's.
+     *
+     * Passed in rather than guessed. Device QA 2026-09-01 #17: this sheet used to
+     * fall back to `insightPeriodKinds(insight).first()` for a card with no
+     * override, so it announced `Zeitraum: 1 Monat` while the page chip said
+     * `1 Jahr` and the live preview two rows above rendered
+     * `02.09.2025 – 02.09.2026`. The sheet simply had no way to know the frame.
+     */
+    effectivePeriod: BtInsightPeriod,
     onApply: (BtInsightConfig) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -158,7 +169,7 @@ fun InsightConfigSheet(
             ConfigValueRow(
                 label = stringResource(R.string.bt_insight_period),
                 value = stringResource(
-                    insightPeriodRes(draft.period?.kind ?: periodKinds.first()),
+                    insightPeriodRes(draft.period?.kind ?: effectivePeriod.kind),
                 ),
                 onClick = { picker = ConfigPicker.Period },
             )
@@ -338,7 +349,9 @@ fun InsightConfigSheet(
             title = stringResource(R.string.bt_insight_period),
             options = insightPeriodKinds(insight),
             label = { stringResource(insightPeriodRes(it)) },
-            selected = draft.period?.kind,
+            // The EFFECTIVE kind, so the open picker check-marks what is in force
+            // rather than nothing at all (device QA 2026-09-01 #17).
+            selected = draft.period?.kind ?: effectivePeriod.kind,
             onSelect = { kind ->
                 draft = draft.copy(
                     period = BtInsightPeriod(

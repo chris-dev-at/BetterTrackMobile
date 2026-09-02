@@ -51,11 +51,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.dto.BT_PROFILE_ICONS
 import at.bettertrack.app.data.repo.BtPortfolioKind
 import at.bettertrack.app.debug.DebugPreviewState
@@ -89,6 +91,7 @@ import at.bettertrack.app.ui.components.rememberBtPinnedHeaderBehavior
 import at.bettertrack.app.ui.portfolio.BtPortfolioChip
 import at.bettertrack.app.ui.portfolio.BtPortfolioChipSize
 import at.bettertrack.app.ui.portfolio.BtPortfolioChipSizeLarge
+import at.bettertrack.app.ui.portfolio.DeltaLine
 import at.bettertrack.app.ui.portfolio.portfolioKindLabel
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.data.prefs.BtThemeMode
@@ -460,19 +463,15 @@ private fun HomeCardsSection() {
                 color = bt.textMuted,
             )
             Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MoneyText(
-                    value = 1_204.20,
-                    style = BtTheme.type.numberCaption,
-                    colorMode = MoneyColorMode.GainLoss,
-                    showSign = true,
-                )
-                Text(
-                    " (${formatPercent(0.95, locale)}) · today",
-                    style = BtTheme.type.numberCaption,
-                    color = bt.gain,
-                )
-            }
+            // The real component, not a replica: the gallery drifted from the
+            // shipped line once already (it hardcoded an English " · today" that
+            // never translated), and a specimen that is not the thing it specifies
+            // is worse than no specimen.
+            DeltaLine(
+                eur = 1_204.20,
+                pct = 0.95,
+                span = stringResource(R.string.bt_overview_today),
+            )
         }
         // The actionable row, gold-led: the one Home card that can be about money
         // moving without the user.

@@ -89,6 +89,7 @@ import at.bettertrack.app.ui.components.BtInlineEmpty
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.LocalBtSnackbar
+import at.bettertrack.app.ui.format.btTimeAgoLabel
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.Job
@@ -483,7 +484,7 @@ private fun MessageBubble(m: at.bettertrack.app.data.repo.ChatMessage, onOpenChi
                 }
                 Spacer(Modifier.size(2.dp))
                 Text(
-                    relativeTime(m.sentAtMs),
+                    btTimeAgoLabel(m.sentAtMs),
                     style = MaterialTheme.typography.labelSmall,
                     color = bt.textMuted,
                     modifier = Modifier.align(Alignment.End),

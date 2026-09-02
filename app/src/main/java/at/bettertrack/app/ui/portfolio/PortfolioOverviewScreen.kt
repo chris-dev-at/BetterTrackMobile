@@ -689,11 +689,10 @@ private fun OverviewContent(
                         //    `weightPct` has (§7.1: no derived performance, and
                         //    this derives none).
                         //
-                        // Sign-coloured by owner order ("money and percent
-                        // colored emerald/red"), deliberately NOT `deltaTint`:
-                        // this line is the page's one verdict and keeps it in
-                        // every chart mode. The window is a WORD ([rangeWord]),
-                        // never the picker's `1M` shorthand.
+                        // The SHAPE — and the fact that the two numbers have
+                        // different bases outside 1D — lives in one place now:
+                        // [DeltaLine]. This site only chooses which pair of
+                        // server figures the window asks for.
                         //
                         // W6 guard unchanged: with nothing priced, a delta of
                         // summed zeroes would claim "no movement" when the truth
@@ -711,30 +710,11 @@ private fun OverviewContent(
                                 deltaPct = history?.rangePerformancePct
                             }
                             if (deltaEur != null) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    MoneyText(
-                                        value = deltaEur,
-                                        style = BtTheme.type.numberCaption,
-                                        color = deltaColor(deltaEur),
-                                        showSign = true,
-                                    )
-                                    deltaPct?.let { pct ->
-                                        Text(
-                                            text = if (samePairBasis(range)) {
-                                                " (${formatPercent(pct, locale)})"
-                                            } else {
-                                                " · " + formatPercent(pct, locale)
-                                            },
-                                            style = BtTheme.type.numberCaption,
-                                            color = deltaColor(pct),
-                                        )
-                                    }
-                                    Text(
-                                        text = " · " + rangeWord(range),
-                                        style = BtTheme.type.numberCaption,
-                                        color = bt.textMuted,
-                                    )
-                                }
+                                DeltaLine(
+                                    eur = deltaEur,
+                                    pct = deltaPct,
+                                    span = rangeWord(range),
+                                )
                             }
                         }
                     }
@@ -1336,45 +1316,6 @@ internal fun balanceAt(points: List<HistoryPoint>, epochMillis: Long): Double? =
  */
 internal fun rangeDeltaEur(points: List<HistoryPoint>): Double? =
     if (points.size < 2) null else points.last().valueEur - points.first().valueEur
-
-/**
- * Whether the delta line's € and % are two views of ONE quantity — and may
- * therefore be written as `+12,30 € (+0,8 %)` — or two different measurements
- * that merely share a window.
- *
- * ## The bug this closes
- *
- * The line shipped as `€ (%)` for every window, and for every window except 1D
- * that parenthesis was a false claim. The two numbers come from different server
- * series with **different bases**:
- *
- *  · The € is the change in the `points` series, which is NET WORTH — holdings
- *    plus cash. A deposit moves it by exactly the amount deposited.
- *  · The % is the last value of the `performance` series, which the platform
- *    computes as a chain-linked daily **time-weighted return** over external
- *    cash flows: a 1 000 € deposit causes no jump at all, by design.
- *
- * So a portfolio that received 3 000 € and barely moved reads `+3 004 €` beside
- * `+0,85 %`, and the bracket asserts that the first is the second expressed
- * differently. It is not. Roughly 3 000 € of that was contributed, not earned.
- *
- * ## Why the fix is punctuation and not arithmetic
- *
- * The two obvious "make them agree" repairs are both worse. Deriving the € from
- * the return would invent money the platform never computed — it publishes no
- * per-range EUR figure on any endpoint. Deriving the % from the balance series
- * would have the app publish a performance number that CONTRADICTS the server's
- * own, and contradicts the very curve the chart draws in % mode; the server owns
- * that answer (§7.1) and overriding it is the worse sin, not the lesser one.
- *
- * So both numbers stay exactly as the server reported them and the punctuation
- * stops lying: `+3 004,07 € · +0,85 % · letzter Monat` — three statements about
- * one window, in the same separator the window itself already uses. 1D keeps the
- * bracket, because there the pair really is one quantity: `dayChangePct` is
- * `dayChangeEur` over the same holdings' prior close, computed together by the
- * server.
- */
-internal fun samePairBasis(range: HistoryRange): Boolean = range == HistoryRange.D1
 
 /**
  * The display modes in picker order: **combined → € → %** (owner order

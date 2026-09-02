@@ -8,9 +8,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -68,6 +70,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -116,6 +119,8 @@ import at.bettertrack.app.ui.components.fabVisibleForList
 import at.bettertrack.app.ui.mirrorchain.MirrorInvitesCard
 import at.bettertrack.app.ui.shell.LocalBtTabChrome
 import at.bettertrack.app.ui.theme.BtShapes
+import at.bettertrack.app.ui.format.btFormatIsoInstantDay
+import at.bettertrack.app.ui.util.rememberBtLocale
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -553,15 +558,29 @@ private fun SegmentedTabs(
     requestCount: Int,
     mySharesCount: Int,
 ) {
+    // `IntrinsicSize.Min` + `fillMaxHeight` on the pills: the row is as tall as
+    // the label that needs the most room, and the other two grow to match.
+    //
+    // The alternative was the one that shipped, and the owner's 2026-09-01 pass
+    // rejected it: three EQUAL widths and a one-line label meant DE
+    // "Meine Freigaben" read *"Meine Frei…"* at ~88dp of pill (#21). Shortening
+    // the German was the other way out, and it costs the distinction the label
+    // exists to draw — "Geteilt" is what others shared with me, "Meine
+    // Freigaben" is what I shared with them, and a shortened one blurs into the
+    // other. So the pill takes a second line instead. Equal widths stay: the
+    // three are one control, and a segmented control with segments of different
+    // sizes stops reading as a segmented control.
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Segment(stringResource(R.string.bt_social_tab_friends), requestCount, selected == SocialSection.Friends, Modifier.weight(1f)) { onSelect(SocialSection.Friends) }
-        Segment(stringResource(R.string.bt_social_tab_shared), sharedCount, selected == SocialSection.SharedWithMe, Modifier.weight(1f)) { onSelect(SocialSection.SharedWithMe) }
-        Segment(stringResource(R.string.bt_social_tab_my_shares), mySharesCount, selected == SocialSection.MyShares, Modifier.weight(1f)) { onSelect(SocialSection.MyShares) }
+        val cell = Modifier.weight(1f).fillMaxHeight()
+        Segment(stringResource(R.string.bt_social_tab_friends), requestCount, selected == SocialSection.Friends, cell) { onSelect(SocialSection.Friends) }
+        Segment(stringResource(R.string.bt_social_tab_shared), sharedCount, selected == SocialSection.SharedWithMe, cell) { onSelect(SocialSection.SharedWithMe) }
+        Segment(stringResource(R.string.bt_social_tab_my_shares), mySharesCount, selected == SocialSection.MyShares, cell) { onSelect(SocialSection.MyShares) }
     }
 }
 
@@ -581,19 +600,25 @@ private fun Segment(label: String, badge: Int, selected: Boolean, modifier: Modi
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // `weight(fill = false)` + ellipsis: the label takes what it needs and
-            // no more, and yields to the badge when the pill is too narrow for
-            // both. Without this the badge is the thing that gets pushed out —
-            // the label had no bound, so a long one (DE "Meine Freigaben") ran to
-            // the pill edge and clipped the count off the screen. The number is
-            // the part that cannot be inferred, so it is the part that must
-            // survive; a truncated word still reads.
+            // `weight(fill = false)`: the label takes what it needs and no more,
+            // and yields to the badge when the pill is too narrow for both.
+            // Without it the badge is the thing that gets pushed out — the label
+            // had no bound, so a long one ran to the pill edge and clipped the
+            // count off the screen. The number is the part that cannot be
+            // inferred, so it is the part that must survive.
+            //
+            // TWO lines, since 2026-09-02 (#21): yielding used to mean an
+            // ellipsis, and DE "Meine Freigaben" spent every pass of it reading
+            // *"Meine Frei…"*. The pill wraps instead, and the row it lives in
+            // is measured at `IntrinsicSize.Min` so all three grow together. The
+            // ellipsis stays as the backstop for a label longer than two lines.
             Text(
                 label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Medium,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f, fill = false),
             )
             if (badge > 0) {
@@ -832,7 +857,13 @@ private fun FriendRow(f: Friend, onOpen: () -> Unit, onChat: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("@${f.username}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                Text(stringResource(R.string.bt_social_friends_since, f.since.take(10)), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                // The wire instant, localized — never `.take(10)`, which printed a
+                // raw ISO `2026-07-04` on a German phone (device QA 2026-09-01 #11).
+                // A date this app cannot parse says nothing rather than showing the
+                // reader a wire string.
+                btFormatIsoInstantDay(f.since, rememberBtLocale())?.let { since ->
+                    Text(stringResource(R.string.bt_social_friends_since, since), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
+                }
             }
             IconButton(onClick = onChat) {
                 Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = stringResource(R.string.bt_social_message_friend_cd, f.username), tint = bt.textSecondary)

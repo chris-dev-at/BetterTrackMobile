@@ -67,7 +67,7 @@ import at.bettertrack.app.data.repo.SocialThreadRepository
 import at.bettertrack.app.data.repo.ThreadOutcome
 import at.bettertrack.app.data.repo.orderReactions
 import at.bettertrack.app.di.AppGraph
-import at.bettertrack.app.ui.chat.relativeTime
+import at.bettertrack.app.ui.format.btTimeAgoLabel
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
@@ -681,7 +681,7 @@ private fun CommentRow(
                             )
                             Spacer(Modifier.width(8.dp))
                             commentTimeMillis(comment.createdAt)?.let {
-                                Text(relativeTime(it), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                                Text(btTimeAgoLabel(it), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
                             }
                         }
                         // Read the server's flag; never re-derive it. It covers both

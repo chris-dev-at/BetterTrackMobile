@@ -109,6 +109,7 @@ import at.bettertrack.app.ui.shell.BtSheetRefreshBox
 import at.bettertrack.app.ui.shell.btRefreshAttempt
 import at.bettertrack.app.ui.shell.btRefreshTimedOutMessage
 import at.bettertrack.app.ui.theme.BtShapes
+import at.bettertrack.app.ui.format.btTimeAgoLabel
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -666,7 +667,7 @@ private fun NotificationRow(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(inboxRelativeTime(notification.createdAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    Text(btTimeAgoLabel(notification.createdAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
                     if (notification.isUnread) {
                         Spacer(Modifier.width(8.dp))
                         BtUnreadDot()
@@ -867,14 +868,4 @@ private fun notifKindBodyRes(kind: NotifKind): Int = when (kind) {
     NotifKind.System -> R.string.bt_notif_type_system_sub
 }
 
-private fun inboxRelativeTime(ms: Long): String {
-    val diff = System.currentTimeMillis() - ms
-    val min = diff / 60_000
-    return when {
-        min < 1 -> "now"
-        min < 60 -> "${min}m"
-        min < 60 * 24 -> "${min / 60}h"
-        min < 60 * 24 * 7 -> "${min / (60 * 24)}d"
-        else -> "${min / (60 * 24 * 7)}w"
-    }
-}
+

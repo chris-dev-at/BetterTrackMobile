@@ -392,10 +392,23 @@ class InsightsStudioViewModel(
      * the data cannot support. [insightResolveWindow] owns that rule so the card,
      * the configurator and the report all apply it identically.
      */
-    fun windowFor(insight: BtInsight, today: LocalDate = LocalDate.now()): BtInsightWindow {
-        val period = configFor(insight).period ?: takeFramePeriodFor(insight, today)
-        return insightResolveWindow(insight, period, today)
-    }
+    fun windowFor(insight: BtInsight, today: LocalDate = LocalDate.now()): BtInsightWindow =
+        insightResolveWindow(insight, effectivePeriodFor(insight, today), today)
+
+    /**
+     * The period this insight is ACTUALLY rendered with: its own override when it
+     * has one, otherwise the page frame's, coerced by [takeFramePeriodFor].
+     *
+     * Public because the configurator has to be able to state the truth. Device QA
+     * 2026-09-01 #17: the config sheet's "Zeitraum" row read `draft.period?.kind ?:
+     * insightPeriodKinds(insight).first()` — i.e. it invented `1 Monat` for every
+     * pristine card, while the chip above said `1 Jahr` and the live preview inside
+     * the same sheet rendered a one-year window. Nothing downstream ever consulted
+     * that `.first()`; it was a display-only lie, and this is the value it should
+     * have been showing.
+     */
+    fun effectivePeriodFor(insight: BtInsight, today: LocalDate = LocalDate.now()): BtInsightPeriod =
+        configFor(insight).period ?: takeFramePeriodFor(insight, today)
 
     /**
      * The frame period, coerced to something this insight can honestly answer.

@@ -199,17 +199,60 @@ sealed interface AccountSeriesState {
  * screen from Room must keep drawing when a refresh fails, because the offline
  * banner already says how old it is and blanking a real curve to announce a failed
  * request would be strictly less information.
+ *
+ * ## Why [settled] exists (device QA 2026-09-01, defect #3)
+ *
+ * On the owner's phone the 1D window left one portfolio's slot as a bare dark
+ * rectangle — no curve, no words, no percentage — while its neighbours drew. That
+ * rectangle was [AccountSeriesState.Loading]'s skeleton, and it had nothing left to
+ * wait for: the fan-out had already finished, but this id's series never landed in
+ * Room (an unparseable cached blob, a response the write never reached, a job
+ * cancelled by a range switch), and `history == null` is indistinguishable from
+ * "the first Room emission has not arrived yet". A skeleton with no pending work
+ * behind it is exactly the blank void the design rules forbid.
+ *
+ * [settled] closes that: it is the caller's statement that the attempt for THIS
+ * window is over. Before it, a missing series is still loading; after it, a missing
+ * series is a window with nothing to draw and says so. Defaulting to `false`
+ * preserves the old reading for any caller that cannot know.
  */
-fun accountSeriesState(history: PortfolioHistory?, failed: Boolean = false): AccountSeriesState = when {
-    history == null && failed -> AccountSeriesState.Failed
-    history == null -> AccountSeriesState.Loading
-    history.points.size < 2 -> AccountSeriesState.Empty
-    else -> AccountSeriesState.Curve(
-        points = history.points,
+fun accountSeriesState(
+    history: PortfolioHistory?,
+    failed: Boolean = false,
+    settled: Boolean = false,
+): AccountSeriesState {
+    if (history == null) {
+        return when {
+            failed -> AccountSeriesState.Failed
+            !settled -> AccountSeriesState.Loading
+            else -> AccountSeriesState.Empty
+        }
+    }
+    val drawable = accountDrawablePoints(history.points)
+    if (drawable.size < 2) return AccountSeriesState.Empty
+    return AccountSeriesState.Curve(
+        points = drawable,
         rangePerformancePct = history.rangePerformancePct,
         syncedAtMs = history.syncedAtMs,
     )
 }
+
+/**
+ * The points a curve can actually be stroked through.
+ *
+ * Two of them is the shape floor (see [AccountSeriesState.Empty]); the finiteness
+ * filter is the other half of "never a void". A NaN or infinite `valueEur` maps to
+ * a NaN pixel, and a path with a NaN vertex rasterises to nothing at all — so a
+ * series carrying one would take the `Curve` branch and then draw an empty box,
+ * which is the exact failure mode this function exists to make impossible.
+ *
+ * Dropping such a point is not editing the server's answer: a non-finite balance is
+ * not a value the user could read off the chart anyway, and the alternative is a
+ * canvas that silently paints nothing. The common case — every point finite —
+ * returns the original list unchanged, so nothing is copied on the hot path.
+ */
+internal fun accountDrawablePoints(points: List<HistoryPoint>): List<HistoryPoint> =
+    if (points.all { it.valueEur.isFinite() }) points else points.filter { it.valueEur.isFinite() }
 
 /**
  * The "as of" stamp for a set of cached series — the OLDEST sync among them.

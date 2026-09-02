@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.insights
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,6 +115,19 @@ fun InsightsStudioScreen(
     val dataAsOfMs by vm.dataAsOfMs.collectAsStateWithLifecycle()
 
     var editing by remember { mutableStateOf(false) }
+    // ── Edit-mode chrome (owner device pass 2026-09-01, #6) ──────────────────
+    // *"Insights edit mode has no exit control … Back leaves Insights
+    // entirely."* Edit mode is a MODE, and a mode needs a door. The two the
+    // owner expects both live here and nowhere else in this file:
+    //
+    //  - system back ends the mode instead of the screen. Registered inside the
+    //    sheet's content, so it out-ranks the sheet layer's own handler; a
+    //    SECOND back then leaves Insights, which is the behaviour he described
+    //    wanting from the first one.
+    //  - a "Fertig" action in the top bar, below — a mode you can only leave
+    //    with the back arrow is a mode with no visible way out, and the arrow
+    //    reads as "leave the screen" everywhere else in the app.
+    BackHandler(enabled = editing) { editing = false }
     var catalogOpen by remember { mutableStateOf(false) }
     var configuring by remember { mutableStateOf<BtInsight?>(null) }
     var sharing by remember { mutableStateOf<BtInsight?>(null) }
@@ -182,13 +197,31 @@ fun InsightsStudioScreen(
                 // enforces: creating a report is the page's export verb, and
                 // `Insights anpassen` is a page-editing mode that belongs with
                 // the other page-editing affordance at the foot of the list.
-                action = {
-                    IconButton(onClick = { onOpenReport(null) }) {
-                        Icon(
-                            Icons.Outlined.Description,
-                            contentDescription = stringResource(R.string.bt_insight_report_create),
-                            tint = bt.textSecondary,
-                        )
+                //
+                // While EDITING that one slot becomes the mode's exit (owner
+                // device pass #6). It is a swap and not an addition, for the
+                // same directive: the report verb does not apply to a page whose
+                // layout is being rearranged, and two actions in a corner that
+                // holds one is how the corner stopped being an address.
+                action = if (editing) {
+                    {
+                        TextButton(onClick = { editing = false }) {
+                            Text(
+                                text = stringResource(R.string.bt_insight_done),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = bt.goldEmphasis,
+                            )
+                        }
+                    }
+                } else {
+                    {
+                        IconButton(onClick = { onOpenReport(null) }) {
+                            Icon(
+                                Icons.Outlined.Description,
+                                contentDescription = stringResource(R.string.bt_insight_report_create),
+                                tint = bt.textSecondary,
+                            )
+                        }
                     }
                 },
             )
@@ -282,6 +315,7 @@ fun InsightsStudioScreen(
                     ?: at.bettertrack.app.ui.charts.viz.BtVizConfig(),
                 snapshot = snapshot,
                 portfolioNames = allPortfolios.associate { it.id to it.name },
+                effectivePeriod = vm.effectivePeriodFor(insight, today),
                 onApply = { vm.setCardConfig(insight, it) },
                 onDismiss = { configuring = null },
             )

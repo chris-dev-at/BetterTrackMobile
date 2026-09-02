@@ -110,9 +110,29 @@ data class Conversation(
      * (row title, avatar seed, nav argument).
      */
     val friendUsername: String,
+    /**
+     * The last message's BODY, verbatim — no prefix, no chip wording.
+     *
+     * It used to be the finished row string, assembled here as
+     * `"You: 📎 Shared a portfolio"`. That put three English phrases in the data
+     * layer, where there is no `Context` and therefore no way to translate them,
+     * and the German chat list duly rendered "You:" (device QA 2026-09-01 #8).
+     * The row's sentence is now composed at render time from this plus
+     * [lastFromMe] and [lastChipKind]; see `chatPreviewText`.
+     */
     val lastPreview: String,
     val lastAtMs: Long,
     val unread: Int,
+    /** Whether the last message was the caller's own — the row prefixes "Du: ". */
+    val lastFromMe: Boolean = false,
+    /**
+     * The last message's share-chip kind, or null for a plain text message.
+     *
+     * The KIND and never the item's name: for previews the server sends only the
+     * kind, precisely so a conversation list cannot leak the identity of something
+     * that was never shared with the reader.
+     */
+    val lastChipKind: ShareChipKind? = null,
     /**
      * The other participant's curated-avatar id (`SocialUserDto.profileIcon` on
      * `ChatConversationDto.user`). Null when they never picked one — and also
@@ -150,29 +170,6 @@ data class ThreadState(
 )
 
 // ── Pure helpers (unit-tested; Context/Android-free) ─────────────────────────
-
-/**
- * Pure preview text for a conversation row: a share chip renders as "📎 Shared …"
- * (chip takes precedence over any accompanying body), and my own messages are
- * prefixed "You: ".
- */
-internal fun chatMessagePreview(fromMe: Boolean, body: String?, chipLabel: String?): String {
-    val base = if (chipLabel != null) "📎 Shared $chipLabel" else body.orEmpty()
-    return if (fromMe) "You: $base" else base
-}
-
-/**
- * The i18n-safe phrase for a chip preview in the conversation list — the server
- * sends only the chip KIND for previews (never the resolved name), so this never
- * leaks a non-shared item's identity.
- */
-internal fun chipKindPhrase(kind: String?): String = when (kind) {
-    ShareChipKind.Asset.wire -> "an asset"
-    ShareChipKind.Portfolio.wire -> "a portfolio"
-    ShareChipKind.Watchlist.wire -> "a watchlist"
-    ShareChipKind.Conglomerate.wire -> "a basket"
-    else -> "an item"
-}
 
 /** Tolerant ISO-8601 → epoch-ms (server sends `…Z` datetimes). 0 on failure. */
 internal fun isoToEpochMs(iso: String?): Long {
@@ -212,13 +209,7 @@ internal fun ChatMessageDto.toDomain(myUserId: String?): ChatMessage = ChatMessa
 )
 
 internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
-    val preview = lastMessage?.let {
-        chatMessagePreview(
-            fromMe = it.senderId == myUserId,
-            body = it.body,
-            chipLabel = it.chipKind?.let { k -> chipKindPhrase(k) },
-        )
-    }.orEmpty()
+    val last = lastMessage
     // A freshly-opened, empty thread (null lastMessageAt) sorts as "just now".
     val at = lastMessageAt?.let { isoToEpochMs(it) }?.takeIf { it > 0L } ?: System.currentTimeMillis()
     // `user` is null when the other participant deleted their account (#362):
@@ -227,7 +218,9 @@ internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
         id = id,
         friendUserId = user?.id.orEmpty(),
         friendUsername = user?.username.orEmpty(),
-        lastPreview = preview,
+        lastPreview = last?.body.orEmpty(),
+        lastFromMe = last != null && last.senderId == myUserId,
+        lastChipKind = last?.chipKind?.let { ShareChipKind.fromWire(it) },
         lastAtMs = at,
         unread = unreadCount,
         friendProfileIcon = user?.profileIcon,
@@ -594,12 +587,15 @@ class DefaultChatRepository(
         val idx = list.indexOfFirst { it.id == conversationId }
         if (idx < 0) return
         val c = list.removeAt(idx)
-        val preview = chatMessagePreview(
-            fromMe = msg.fromMe,
-            body = msg.body,
-            chipLabel = msg.chip?.let { chipKindPhrase(it.kind.wire) },
+        list.add(
+            0,
+            c.copy(
+                lastPreview = msg.body.orEmpty(),
+                lastFromMe = msg.fromMe,
+                lastChipKind = msg.chip?.kind,
+                lastAtMs = msg.sentAtMs,
+            ),
         )
-        list.add(0, c.copy(lastPreview = preview, lastAtMs = msg.sentAtMs))
         val sorted = sortConversations(list)
         _conversations.value = sorted
         _totalUnread.value = conversationsToTotalUnread(sorted)
