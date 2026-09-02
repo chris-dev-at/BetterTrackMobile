@@ -76,21 +76,50 @@ class PvSyncDisciplineTest {
 
     // ── 1. Dormancy ─────────────────────────────────────────────────────────
 
+    /**
+     * The names no ordinary file may say.
+     *
+     * Extended in S2 slice 2 with the parts that round the rail out: the Room
+     * store, the key registry and the bootstrap that assembles them.
+     */
+    private val gated = listOf(
+        "PvVaultSyncEngine",
+        "PvVaultSyncScheduler",
+        "PvVaultSyncWorker",
+        "PvVaultSyncRuntime",
+        "PvVaultSyncState",
+        "PvServerDocMedium",
+        "PvDocCursorStore",
+        "PvVaultLocalStore",
+        "PvVaultKeys",
+        "PvVaultKeyRegistry",
+        "PvVaultsBootstrap",
+        "PvVaultsSession",
+        "RoomPvDocTransactions",
+    )
+
+    /**
+     * The two doors, and there are exactly two.
+     *
+     * Slice 1 could assert that NOTHING outside `vault/pv/` named the rail,
+     * because the rail had no callers at all. Slice 2 gives it the two it needs —
+     * a graph that starts it and a chip that renders it — so the rule sharpens
+     * rather than loosens: this list is closed, and
+     * [every gated caller refuses to act while the flag is off] requires each
+     * entry to carry the flag guard IN THE SAME FILE. A third door cannot be cut
+     * without editing this test, which is the point of it.
+     */
+    private val gatedCallers = mapOf(
+        "di/AppGraph.kt" to "if (!at.bettertrack.app.vault.pv.ParanoidVaultsFlags.enabled) return",
+        "ui/storage/PvVaultSyncChip.kt" to "if (!ParanoidVaultsFlags.enabled) return",
+    )
+
     @Test
     fun `nothing outside the paranoid-vaults package reaches the sync engine`() {
-        val gated = listOf(
-            "PvVaultSyncEngine",
-            "PvVaultSyncScheduler",
-            "PvVaultSyncWorker",
-            "PvVaultSyncRuntime",
-            "PvVaultSyncState",
-            "PvServerDocMedium",
-            "PvDocCursorStore",
-            "PvVaultLocalStore",
-            "PvVaultKeys",
-        )
+        val allowed = gatedCallers.keys.map { it.substringAfterLast('/') }.toSet()
         val offenders = mainSources()
             .filterNot { it.path.replace(File.separatorChar, '/').contains("/vault/pv/") }
+            .filterNot { it.name in allowed }
             .mapNotNull { file ->
                 val text = codeOf(file)
                 gated.filter { it in text }.takeIf { it.isNotEmpty() }?.let { file.name to it }
@@ -99,6 +128,64 @@ class PvSyncDisciplineTest {
             "the per-vault sync rail must stay unreachable while ParanoidVaultsFlags.enabled is false",
             emptyList<Pair<String, List<String>>>(),
             offenders,
+        )
+    }
+
+    @Test
+    fun `every gated caller refuses to act while the flag is off`() {
+        gatedCallers.forEach { (relative, guard) ->
+            val code = codeOf(source(relative))
+            assertTrue(
+                "$relative reaches the paranoid rail without `$guard`",
+                guard in code,
+            )
+        }
+    }
+
+    /**
+     * The graph's mention is ONE line and it is inside the guard.
+     *
+     * A `by lazy` property would make the engine part of a shipped build's
+     * surface, and "dormant" would then rest on nobody happening to touch it.
+     */
+    @Test
+    fun `the app graph builds the rail in one guarded place and holds no reference to it`() {
+        val graph = codeOf(source("di/AppGraph.kt"))
+        assertEquals(
+            "PvVaultsBootstrap must be named exactly once in the graph",
+            1,
+            Regex("PvVaultsBootstrap").findAll(graph).count(),
+        )
+        val guarded = Regex(
+            """if \(!at\.bettertrack\.app\.vault\.pv\.ParanoidVaultsFlags\.enabled\) return\s+""" +
+                """at\.bettertrack\.app\.vault\.pv\.PvVaultsBootstrap\.start\(""",
+        )
+        assertTrue(
+            "the bootstrap call must sit immediately behind the flag guard",
+            guarded.containsMatchIn(graph),
+        )
+    }
+
+    /**
+     * The chip's mount point adds exactly one call and nothing else.
+     *
+     * The flag-off promise for the storage screen is byte identity: the spacer,
+     * the divider and every emission live INSIDE the gated composable, so with
+     * the flag off the card emits the tree it emitted before this file existed.
+     */
+    @Test
+    fun `the storage screen mounts the per-vault chip with one call and no chrome of its own`() {
+        val screen = codeOf(source("ui/storage/WhereYourDataLivesScreen.kt"))
+        val mentions = Regex("Pv[A-Za-z]+").findAll(screen).map { it.value }.toSet()
+        assertEquals(
+            "the only paranoid symbol the v1 screen may name is the gated section itself",
+            setOf("PvVaultSyncSection"),
+            mentions,
+        )
+        assertEquals(
+            "one mount point, no second surface",
+            1,
+            Regex("""PvVaultSyncSection\(\)""").findAll(screen).count(),
         )
     }
 

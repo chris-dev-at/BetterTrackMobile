@@ -3956,4 +3956,78 @@
     <string name="bt_auth_reconnecting">Verbindung zu deinem Konto wird wiederhergestellt…</string>
     <string name="bt_auth_reconnecting_retry">Jetzt erneut verbinden</string>
     <!-- ===== END auth diagnostics ===== -->
+    <!-- ===== paranoid vaults · §14 per-vault sync chip (S2 slice 2) ===== -->
+    <string name="bt_pv_sync_aggregate_synced">Alle Tresore synchronisiert</string>
+    <string name="bt_pv_sync_aggregate_syncing">Deine Tresore werden synchronisiert…</string>
+    <string name="bt_pv_sync_aggregate_merging">Änderungen von einem anderen Gerät werden zusammengeführt…</string>
+    <string name="bt_pv_sync_aggregate_attention">Aktion erforderlich: %1$s</string>
+    <plurals name="bt_pv_sync_aggregate_locked">
+        <item quantity="one">%1$d Tresor gesperrt</item>
+        <item quantity="other">%1$d Tresore gesperrt</item>
+    </plurals>
+    <string name="bt_pv_sync_sheet_title">Tresor-Speicher</string>
+    <string name="bt_pv_sync_sheet_empty">Noch keine Tresore auf diesem Telefon.</string>
+    <string name="bt_pv_sync_state_idle">Synchronisiert</string>
+    <string name="bt_pv_sync_state_pushing">Wird synchronisiert</string>
+    <string name="bt_pv_sync_state_merging">Wird zusammengeführt</string>
+    <string name="bt_pv_sync_state_error">Aktion erforderlich</string>
+    <string name="bt_pv_sync_saved_locked">Gesperrt – Änderungen bleiben auf diesem Telefon</string>
+    <string name="bt_pv_sync_saved_no_medium">Kein Speicherort – Änderungen bleiben auf diesem Telefon</string>
+    <string name="bt_pv_sync_saved_offline">Offline – Änderungen bleiben auf diesem Telefon</string>
+    <string name="bt_pv_sync_saved_retry">Auf diesem Telefon gespeichert, wartet auf Synchronisierung</string>
+    <string name="bt_pv_sync_fail_too_large">Ein Dokument ist größer, als der Speicherort annimmt.</string>
+    <string name="bt_pv_sync_fail_update_required">Eine neuere BetterTrack-Version hat dieses Dokument geschrieben. Aktualisiere die App, um es zu lesen.</string>
+    <string name="bt_pv_sync_fail_candidate_kept">Es kam eine Kopie an, die dieses Telefon nicht übernommen hat. Sie wird aufgehoben, nicht verworfen.</string>
+    <string name="bt_pv_sync_fail_precondition_missing">Der Speicherort hat die Sicherheitsprüfung für diesen Schreibvorgang nie erhalten.</string>
+    <string name="bt_pv_sync_fail_unmergeable">Zwei Kopien eines Dokuments ließen sich nicht automatisch zusammenführen.</string>
+    <string name="bt_pv_sync_fail_conflict_unresolved">Ein anderes Gerät hat dieses Dokument laufend geändert. Die nächste Synchronisierung beginnt von vorn.</string>
+    <string name="bt_pv_sync_fail_refused">Der Speicherort hat diesen Schreibvorgang abgelehnt.</string>
+    <string name="bt_pv_sync_fail_not_writable">Dieses Dokument konnte nicht für die Speicherung vorbereitet werden.</string>
+    <string name="bt_pv_sync_medium_server">BetterTrack-Speicher</string>
+    <string name="bt_pv_sync_medium_drive">Google Drive</string>
+    <string name="bt_pv_sync_last">Zuletzt synchronisiert %1$s</string>
+    <string name="bt_pv_sync_retry_done">Gerade synchronisiert.</string>
+    <plurals name="bt_pv_sync_candidates">
+        <item quantity="one">%1$d aufgehobene Kopie</item>
+        <item quantity="other">%1$d aufgehobene Kopien</item>
+    </plurals>
+    <string name="bt_pv_sync_candidates_none">Für diesen Tresor wurde nichts aufgehoben.</string>
+    <string name="bt_pv_sync_candidates_note">Diese Kopien werden aufgehoben, damit nichts verloren geht. Das Wiederherstellen daraus kommt mit der Wiederherstellungsauswahl.</string>
+    <string name="bt_pv_sync_candidate_version">Version %1$d</string>
+    <string name="bt_pv_sync_candidate_version_unknown">Unlesbare Version</string>
+    <string name="bt_pv_doc_kind_header">Tresordetails</string>
+    <string name="bt_pv_doc_kind_common">Gemeinsame Daten</string>
+    <string name="bt_pv_doc_kind_portfolio">Portfolio-Dokument</string>
+    <string name="bt_pv_doc_kind_unknown">Unbekanntes Dokument</string>
+    <!-- ===== END paranoid vaults · §14 per-vault sync chip ===== -->
+    <!-- ===== QA fix round B (device pass 2026-09-01) ===== -->
+    <!-- #27: the watchlist row's inline trash icon now asks first. -->
+    <string name="bt_watchlist_remove_confirm_title">Aus Watchlist entfernen?</string>
+    <string name="bt_watchlist_remove_confirm_body">„%1$s“ wird aus „%2$s“ entfernt. Du kannst den Wert jederzeit wieder hinzufügen.</string>
+    <!-- ===== END QA fix round B ===== -->
+
+    <!-- ===== QA fix round A (device pass 2026-09-01) ===== -->
+    <string name="bt_chat_preview_you">Du: %1$s</string>
+    <string name="bt_chat_preview_shared">📎 %1$s geteilt</string>
+    <string name="bt_chat_preview_kind_asset">eine Anlage</string>
+    <string name="bt_chat_preview_kind_portfolio">ein Portfolio</string>
+    <string name="bt_chat_preview_kind_watchlist">eine Watchlist</string>
+    <string name="bt_chat_preview_kind_conglomerate">einen Korb</string>
+    <string name="bt_chat_preview_kind_unknown">ein Element</string>
+    <string name="bt_time_ago_now">jetzt</string>
+    <string name="bt_time_ago_minutes">%1$d Min.</string>
+    <string name="bt_time_ago_hours">%1$d Std.</string>
+    <string name="bt_time_ago_days">%1$d T.</string>
+    <string name="bt_time_ago_weeks">%1$d Wo.</string>
+    <string name="bt_tags_builtin_name_investment">Investition</string>
+    <string name="bt_tags_builtin_name_sale_proceeds">Verkaufserlös</string>
+    <string name="bt_tags_builtin_name_dividend">Dividende</string>
+    <string name="bt_tags_builtin_name_interest">Zinsen</string>
+    <string name="bt_tags_builtin_name_fees">Gebühren</string>
+    <string name="bt_tags_builtin_name_tax">Steuer</string>
+    <string name="bt_tags_builtin_name_transfer">Umbuchung</string>
+    <string name="bt_tags_builtin_name_deposit">Einzahlung</string>
+    <string name="bt_tags_builtin_name_withdrawal">Auszahlung</string>
+    <string name="bt_budgets_brief_progress">%1$s / %2$s</string>
+    <!-- ===== END QA fix round A ===== -->
 </resources>

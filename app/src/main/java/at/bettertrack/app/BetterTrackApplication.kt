@@ -72,6 +72,11 @@ class BetterTrackApplication : Application() {
         // there is one timer and one mental model rather than two competing ones.
         startupStep("vaultLockLink") { AppGraph.linkVaultLockToAppLock() }
 
+        // The paranoid-vaults rail (`paranoid-design.md` §6/§14). A no-op — not a
+        // cheap one, an actual return — while `ParanoidVaultsFlags.enabled` is
+        // false, which is what keeps this line from being a behaviour change.
+        startupStep("paranoidVaults") { AppGraph.startParanoidVaults() }
+
         // In-app update install (owner ask 2026-07-12): sweep cacheDir/updates on
         // every start — removes the APK left by a successful install (that install
         // killed the previous process) and any partial download from a mid-stream kill.

@@ -75,8 +75,9 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         PvVaultRow::class,
         PvVaultDocRow::class,
         PvVaultDocCursorRow::class,
+        PvVaultDocCandidateRow::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -95,9 +96,10 @@ abstract class BtDatabase : RoomDatabase() {
     abstract fun priceCacheDao(): PriceCacheDao
 
     /**
-     * The per-vault sync rail's cursors. Dormant with the rest of the paranoid
-     * epic — the only caller is `vault/pv/sync`, which nothing constructs while
-     * `ParanoidVaultsFlags.enabled` is `false`.
+     * The per-vault rail's config mirror, doc set, kept candidates and cursors.
+     * Dormant with the rest of the paranoid epic — the only caller is
+     * `vault/pv/…`, which nothing constructs while `ParanoidVaultsFlags.enabled`
+     * is `false`.
      */
     abstract fun pvVaultSyncDao(): PvVaultSyncDao
 
@@ -429,6 +431,47 @@ abstract class BtDatabase : RoomDatabase() {
         }
 
         /**
+         * v13 → v14: the kept-candidate table (§6/§16) and the two singleton doc
+         * ids on the config mirror.
+         *
+         * Additive on both counts, and its own step for [MIGRATION_PV_DOC_CURSORS]'
+         * reason: v13 has shipped, so editing it in place would stamp two
+         * different physical schemas under one `user_version`.
+         *
+         * The two `ALTER`s land `NOT NULL DEFAULT ''` while [PvVaultRow] declares
+         * no default. That asymmetry is deliberate and Room tolerates it (a
+         * default is compared only where the ENTITY declares one): a fresh
+         * install's `CREATE TABLE` carries no default and cannot, because the
+         * column has no honest fallback — every row this app writes mirrors a
+         * server configuration that always names both ids. The `''` exists only
+         * so `ADD COLUMN … NOT NULL` is legal on an upgrade, and `vaults` is
+         * empty on every install in existence, so no row is ever born with it.
+         */
+        internal val MIGRATION_PV_DOC_CANDIDATES = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vault_doc_candidates` (" +
+                        "`vaultId` TEXT NOT NULL, " +
+                        "`docId` TEXT NOT NULL, " +
+                        "`medium` TEXT NOT NULL, " +
+                        "`reason` TEXT NOT NULL, " +
+                        "`docKind` TEXT, " +
+                        "`docVersion` INTEGER, " +
+                        "`formatVersion` INTEGER, " +
+                        "`envelope` BLOB, " +
+                        "`keptAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`vaultId`, `docId`, `medium`, `reason`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_doc_candidates_vaultId` " +
+                        "ON `vault_doc_candidates` (`vaultId`)",
+                )
+                db.addColumnIfMissing("vaults", "headerDocId", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfMissing("vaults", "commonDocId", "TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
          * The whole chain, in one place, so [create] and the migration regression
          * suite can never disagree about what ships. Room resolves the path itself;
          * the order here is documentation.
@@ -450,6 +493,7 @@ abstract class BtDatabase : RoomDatabase() {
             MIGRATION_PORTFOLIO_KIND,
             MIGRATION_PARANOID_VAULTS,
             MIGRATION_PV_DOC_CURSORS,
+            MIGRATION_PV_DOC_CANDIDATES,
         )
 
         fun create(context: Context): BtDatabase =

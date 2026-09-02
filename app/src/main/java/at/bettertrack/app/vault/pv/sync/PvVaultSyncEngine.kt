@@ -538,13 +538,19 @@ class PvVaultSyncEngine(
             )
         }
 
-        // The cursor names what the MEDIUM holds, which is still the remote
-        // version — the successor has not been written yet. Recording it here is
-        // what turns the retry into a legitimate replace instead of a second
-        // blind create.
-        advance(vaultId, remote.medium, doc.ref.docId, read.etag, read.header.docVersion, read.header.writeId)
+        // Adopt FIRST, advance second — the order is a safety property, not a
+        // style. The cursor about to be written names the remote version, which
+        // is what turns the retry into a legitimate replace instead of a second
+        // blind create; but a cursor that moves while the successor did NOT
+        // reach local storage (the store cannot seal a merge into a vault that
+        // locked mid-pass, so it throws) would leave this device claiming to
+        // hold a version it does not, and its next push would overwrite the
+        // remote's changes with pre-merge bytes. Adopting first makes the
+        // failure a repeat of the same merge next pass, which §6 guarantees is
+        // idempotent, instead of silent data loss.
         val successor = PvLocalDoc(doc.ref, merged.document, merged.docVersion)
         local.adopt(vaultId, successor)
+        advance(vaultId, remote.medium, doc.ref.docId, read.etag, read.header.docVersion, read.header.writeId)
         return Resolution.Merged(successor)
     }
 

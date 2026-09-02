@@ -1110,6 +1110,36 @@ object AppGraph {
         }
     }
 
+    /**
+     * **The paranoid-vaults rail (`paranoid-design.md`), started or not started.**
+     *
+     * This is the ONE line of this graph that knows the epic exists, and it is
+     * inside the flag on purpose. Nothing here is a `by lazy` property: a lazily
+     * reachable engine would exist as part of a shipped build's surface, and the
+     * flag's promise is that a build with it off is *behaviourally identical to a
+     * build without the code*. With the flag off this method constructs nothing,
+     * publishes nothing, and the scheduled worker — the only other door — finds
+     * no engine and returns success.
+     *
+     * Everything it would build lives in
+     * [at.bettertrack.app.vault.pv.PvVaultsBootstrap]; `PvSyncDisciplineTest`
+     * holds that this stays the graph's only mention and that the guard stays on
+     * it.
+     */
+    fun startParanoidVaults() {
+        if (!at.bettertrack.app.vault.pv.ParanoidVaultsFlags.enabled) return
+        at.bettertrack.app.vault.pv.PvVaultsBootstrap.start(
+            scope = appScope,
+            api = btApi,
+            json = json,
+            dao = database.pvVaultSyncDao(),
+            transactions = at.bettertrack.app.vault.pv.sync.RoomPvDocTransactions(database),
+            custody = at.bettertrack.app.vault.pv.custody.PvDeviceCustody.create(appContext),
+            deviceId = { vaultStore.deviceId() },
+            hasSession = { tokenManager.hasTokens() },
+        )
+    }
+
     val syncDebugController: SyncDebugController by lazy {
         SyncDebugController(
             db = database,

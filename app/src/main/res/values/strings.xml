@@ -4159,4 +4159,89 @@
     <string name="bt_auth_reconnecting">Reconnecting to your account…</string>
     <string name="bt_auth_reconnecting_retry">Try reconnecting now</string>
     <!-- ===== END auth diagnostics ===== -->
+    <!-- ===== paranoid vaults · §14 per-vault sync chip (S2 slice 2) ===== -->
+    <string name="bt_pv_sync_aggregate_synced">All vaults synced</string>
+    <string name="bt_pv_sync_aggregate_syncing">Syncing your vaults…</string>
+    <string name="bt_pv_sync_aggregate_merging">Merging changes from another device…</string>
+    <string name="bt_pv_sync_aggregate_attention">Needs attention: %1$s</string>
+    <plurals name="bt_pv_sync_aggregate_locked">
+        <item quantity="one">%1$d vault locked</item>
+        <item quantity="other">%1$d vaults locked</item>
+    </plurals>
+    <string name="bt_pv_sync_sheet_title">Vault storage</string>
+    <string name="bt_pv_sync_sheet_empty">No vaults on this phone yet.</string>
+    <string name="bt_pv_sync_state_idle">Synced</string>
+    <string name="bt_pv_sync_state_pushing">Syncing</string>
+    <string name="bt_pv_sync_state_merging">Merging</string>
+    <string name="bt_pv_sync_state_error">Needs attention</string>
+    <string name="bt_pv_sync_saved_locked">Locked — changes stay on this phone</string>
+    <string name="bt_pv_sync_saved_no_medium">No storage place — changes stay on this phone</string>
+    <string name="bt_pv_sync_saved_offline">Offline — changes stay on this phone</string>
+    <string name="bt_pv_sync_saved_retry">Saved on this phone, waiting to sync</string>
+    <string name="bt_pv_sync_fail_too_large">One document is larger than its storage place accepts.</string>
+    <string name="bt_pv_sync_fail_update_required">A newer version of BetterTrack wrote this document. Update the app to read it.</string>
+    <string name="bt_pv_sync_fail_candidate_kept">A copy arrived that this phone would not adopt. It is kept, not discarded.</string>
+    <string name="bt_pv_sync_fail_precondition_missing">The storage place never received the safety check for this write.</string>
+    <string name="bt_pv_sync_fail_unmergeable">Two copies of a document could not be merged automatically.</string>
+    <string name="bt_pv_sync_fail_conflict_unresolved">Another device kept changing this document. The next sync starts over.</string>
+    <string name="bt_pv_sync_fail_refused">The storage place refused this write.</string>
+    <string name="bt_pv_sync_fail_not_writable">This document could not be prepared for storage.</string>
+    <string name="bt_pv_sync_medium_server">BetterTrack storage</string>
+    <string name="bt_pv_sync_medium_drive">Google Drive</string>
+    <string name="bt_pv_sync_last">Last synced %1$s</string>
+    <string name="bt_pv_sync_retry_done">Synced just now.</string>
+    <plurals name="bt_pv_sync_candidates">
+        <item quantity="one">%1$d kept copy</item>
+        <item quantity="other">%1$d kept copies</item>
+    </plurals>
+    <string name="bt_pv_sync_candidates_none">Nothing was kept for this vault.</string>
+    <string name="bt_pv_sync_candidates_note">These copies are kept so nothing is lost. Restoring from one arrives with the restore picker.</string>
+    <string name="bt_pv_sync_candidate_version">Version %1$d</string>
+    <string name="bt_pv_sync_candidate_version_unknown">Unreadable version</string>
+    <string name="bt_pv_doc_kind_header">Vault details</string>
+    <string name="bt_pv_doc_kind_common">Shared data</string>
+    <string name="bt_pv_doc_kind_portfolio">Portfolio document</string>
+    <string name="bt_pv_doc_kind_unknown">Unknown document</string>
+    <!-- ===== END paranoid vaults · §14 per-vault sync chip ===== -->
+    <!-- ===== QA fix round B (device pass 2026-09-01) ===== -->
+    <!-- #27: the watchlist row's inline trash icon now asks first. -->
+    <string name="bt_watchlist_remove_confirm_title">Remove from watchlist?</string>
+    <string name="bt_watchlist_remove_confirm_body">“%1$s” is removed from “%2$s”. You can add it back at any time.</string>
+    <!-- ===== END QA fix round B ===== -->
+
+    <!-- ===== QA fix round A (device pass 2026-09-01) ===== -->
+    <!-- #8: the conversation-row preview is composed in the UI now, so its three
+         phrases can finally be translated. The chip is named by KIND only — the
+         server never sends the item's name for a preview, deliberately. -->
+    <string name="bt_chat_preview_you">You: %1$s</string>
+    <string name="bt_chat_preview_shared">📎 Shared %1$s</string>
+    <string name="bt_chat_preview_kind_asset">an asset</string>
+    <string name="bt_chat_preview_kind_portfolio">a portfolio</string>
+    <string name="bt_chat_preview_kind_watchlist">a watchlist</string>
+    <string name="bt_chat_preview_kind_conglomerate">a basket</string>
+    <string name="bt_chat_preview_kind_unknown">an item</string>
+    <!-- #8/#9: the COMPACT relative stamp, for a list row's corner. Deliberately
+         terser than the bt_intel_age_* family, which is prose for running text. -->
+    <string name="bt_time_ago_now">now</string>
+    <string name="bt_time_ago_minutes">%1$dm</string>
+    <string name="bt_time_ago_hours">%1$dh</string>
+    <string name="bt_time_ago_days">%1$dd</string>
+    <string name="bt_time_ago_weeks">%1$dw</string>
+    <!-- #10: DISPLAY names for the platform's seeded cash tags. The names on the
+         wire are English and stay English (they follow the account to the web —
+         see CASH_SYSTEM_TAG_DEFAULT_NAMES); these are what the app shows for a
+         built-in tag the user has not renamed. -->
+    <string name="bt_tags_builtin_name_investment">Investment</string>
+    <string name="bt_tags_builtin_name_sale_proceeds">Sale proceeds</string>
+    <string name="bt_tags_builtin_name_dividend">Dividend</string>
+    <string name="bt_tags_builtin_name_interest">Interest</string>
+    <string name="bt_tags_builtin_name_fees">Fees</string>
+    <string name="bt_tags_builtin_name_tax">Tax</string>
+    <string name="bt_tags_builtin_name_transfer">Transfer</string>
+    <string name="bt_tags_builtin_name_deposit">Deposit</string>
+    <string name="bt_tags_builtin_name_withdrawal">Withdrawal</string>
+    <!-- #12: the compact budget row on the cash overview states one figure, so a
+         0 % bar reads as "nothing spent" rather than "nothing loaded". -->
+    <string name="bt_budgets_brief_progress">%1$s / %2$s</string>
+    <!-- ===== END QA fix round A ===== -->
 </resources>

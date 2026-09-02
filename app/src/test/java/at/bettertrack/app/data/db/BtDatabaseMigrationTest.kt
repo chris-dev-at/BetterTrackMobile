@@ -226,7 +226,7 @@ class BtDatabaseMigrationTest {
             assertEquals(
                 "migrating past 12 must leave the committed 12.json tables untouched",
                 emptyList<String>(),
-                diffSchemas(schemaFrom(exportedStatements(12)), readSchema(conn)),
+                diffSchemas(schemaFrom(exportedStatements(12)), readSchema(conn), allowLaterAdditions = true),
             )
         }
     }
@@ -239,8 +239,77 @@ class BtDatabaseMigrationTest {
             assertEquals(
                 "migrating 12→13 must reproduce the committed 13.json exactly",
                 emptyList<String>(),
-                diffSchemas(schemaFrom(exportedStatements(13)), readSchema(conn)),
+                diffSchemas(schemaFrom(exportedStatements(13)), readSchema(conn), allowLaterAdditions = true),
             )
+        }
+    }
+
+    /** The v13→v14 step, from the committed v13 export to the committed v14 one. */
+    @Test
+    fun theCommittedV13SchemaMigratesToTheCommittedV14Schema() {
+        withMigratedDb(exportedStatements(13), fromVersion = 13) { conn ->
+            assertSchemaMatchesRoomExpectation(conn, "committed schemas/13.json")
+            assertEquals(
+                "migrating 13→14 must reproduce the committed 14.json exactly",
+                emptyList<String>(),
+                diffSchemas(schemaFrom(exportedStatements(14)), readSchema(conn), allowLaterAdditions = true),
+            )
+        }
+    }
+
+    /**
+     * The kept-candidate table arrives empty, the config mirror gains its two
+     * doc-id columns, and no existing row moves.
+     *
+     * The composite key is asserted against real SQLite rather than against the
+     * entity declaration: `(vaultId, docId, medium, reason)` is what makes a
+     * repeated identical refusal an UPDATE — without it, a medium serving bytes
+     * this build refuses would add a doc-sized row on every single pass.
+     */
+    @Test
+    fun theVaultDocCandidateMigrationIsPurelyAdditive() {
+        val db = newDbFile()
+        openJdbc(db).use { conn ->
+            conn.applyAll(exportedStatements(13))
+            conn.exec("PRAGMA user_version = 13")
+            conn.applyAll(SAMPLE_ROWS_V7)
+            val before = conn.rowCounts(COUNTED_TABLES)
+
+            runMigrations(conn, from = 13)
+
+            assertEquals("migration 13→14 must not touch a single user row", before, conn.rowCounts(COUNTED_TABLES))
+            assertEquals(
+                "`vault_doc_candidates` arrives empty",
+                mapOf("vault_doc_candidates" to 0),
+                conn.rowCounts(listOf("vault_doc_candidates")),
+            )
+            fun keep(reason: String) = conn.exec(
+                "INSERT OR REPLACE INTO `vault_doc_candidates` (`vaultId`, `docId`, `medium`, `reason`, " +
+                    "`docKind`, `docVersion`, `formatVersion`, `envelope`, `keptAtMs`) " +
+                    "VALUES ('v1', 'd1', 'server', '$reason', 'portfolio', 3, 2, NULL, 1)",
+            )
+            keep("Corrupt.")
+            keep("Corrupt.")
+            assertEquals(
+                "the same refusal at the same address is ONE candidate",
+                mapOf("vault_doc_candidates" to 1),
+                conn.rowCounts(listOf("vault_doc_candidates")),
+            )
+            keep("Foreign vault.")
+            assertEquals(
+                "a different refusal is a different candidate and must survive",
+                mapOf("vault_doc_candidates" to 2),
+                conn.rowCounts(listOf("vault_doc_candidates")),
+            )
+            // The two additive columns exist and read as "no address recorded"
+            // — which the store treats as no directory, never as a doc id.
+            conn.exec(
+                "INSERT INTO `vaults` (`id`, `name`, `media`, `driveConnectionId`, `keyFingerprint`, " +
+                    "`retirementProofPublicKey`, `createdAt`, `updatedAt`, `syncedAtMs`) " +
+                    "VALUES ('v1', 'Household', 'server', NULL, 'f', 'k', '', '', 0)",
+            )
+            assertEquals("", conn.single("SELECT `headerDocId` FROM `vaults` LIMIT 1"))
+            assertEquals("", conn.single("SELECT `commonDocId` FROM `vaults` LIMIT 1"))
         }
     }
 
@@ -402,6 +471,18 @@ class BtDatabaseMigrationTest {
     private fun diffSchemas(
         expected: Map<String, TableShape>,
         actual: Map<String, TableShape>,
+        /**
+         * Tolerate columns and indices the expectation does not know about.
+         *
+         * Only ever true when the EXPECTATION is a historical export: `runMigrations`
+         * always walks to the declared version, so comparing the result against
+         * (say) 12.json asks "is every table 12 declared still exactly as 12
+         * declared it" — and a later purely-additive step must be allowed to have
+         * added a column since. The comparison that actually protects production
+         * is [assertSchemaMatchesRoomExpectation]'s, whose expectation is Room's
+         * own `createAllTables`, and that one stays strict in both directions.
+         */
+        allowLaterAdditions: Boolean = false,
     ): List<String> = buildList {
         expected.forEach { (table, expectedShape) ->
             val actualShape = actual[table]
@@ -413,7 +494,8 @@ class BtDatabaseMigrationTest {
                 val want = expectedShape.columns[column]
                 val got = actualShape.columns[column]
                 when {
-                    want == null -> add("`$table`.`$column` exists but no entity declares it")
+                    want == null ->
+                        if (!allowLaterAdditions) add("`$table`.`$column` exists but no entity declares it")
                     got == null -> add("`$table`.`$column` is missing")
                     else -> {
                         if (want.affinity != got.affinity) add("`$table`.`$column` affinity ${want.affinity} != ${got.affinity}")
@@ -431,7 +513,8 @@ class BtDatabaseMigrationTest {
                 val want = expectedShape.indices[index]
                 val got = actualShape.indices[index]
                 when {
-                    want == null -> add("`$table` has index `$index` that no entity declares")
+                    want == null ->
+                        if (!allowLaterAdditions) add("`$table` has index `$index` that no entity declares")
                     got == null -> add("`$table` is missing index `$index`")
                     want != got -> add("`$table` index `$index` $want != $got")
                 }

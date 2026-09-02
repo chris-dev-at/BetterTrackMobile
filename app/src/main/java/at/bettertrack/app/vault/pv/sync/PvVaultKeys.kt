@@ -39,6 +39,44 @@ class PvUnlockedVault(
  */
 interface PvVaultKeys {
 
-    /** `null` when the vault is locked on this device. */
+    /**
+     * `null` when the vault is locked on this device.
+     *
+     * Every call hands back a **fresh** [PvUnlockedVault] whose [PvUnlockedVault
+     * .contentKey] is the caller's to zero. An implementation that holds key
+     * material must therefore hand out a copy: the caller closes what it was
+     * given at the end of its pass, and an implementation that returned its own
+     * buffer would be zeroed out from under itself by its first user.
+     */
     suspend fun unlocked(vaultId: String): PvUnlockedVault?
+}
+
+/**
+ * **The three cleartext facts a vault's own documents carry about its keys**
+ * (§4/§8) — the reason a device with nothing but the twelve words can open a
+ * vault from any medium.
+ *
+ * `keySlots`, `keyId` and `accountBinding` all ride in the envelope's CLEARTEXT
+ * header, which is the only way the chain can start: `K_c` is wrapped inside a
+ * slot, so a device must be able to read the slots BEFORE it holds any key. This
+ * seam is where they come from — a locally held document, or (later) a header
+ * doc pulled from a medium.
+ */
+data class PvVaultKeyFacts(
+    val keyId: String,
+    val keySlots: List<PvKeySlot>,
+    val accountBinding: String,
+)
+
+/**
+ * Where [PvVaultKeyFacts] come from.
+ *
+ * An interface for [PvVaultKeys]' reason: the key registry has no business
+ * knowing whether the facts were read out of the local doc cache, a QR payload
+ * or a just-completed creation ceremony.
+ */
+interface PvVaultHeaderFacts {
+
+    /** `null` when this device holds nothing readable for the vault. */
+    suspend fun facts(vaultId: String): PvVaultKeyFacts?
 }

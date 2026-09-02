@@ -10,7 +10,11 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import at.bettertrack.app.vault.pv.PvVaultsSession
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * **Where the running engine is found from outside a coroutine.**
@@ -28,15 +32,25 @@ import java.util.concurrent.TimeUnit
  */
 object PvVaultSyncRuntime {
 
-    @Volatile
-    private var current: PvVaultSyncEngine? = null
+    private val current = MutableStateFlow<PvVaultsSession?>(null)
+
+    /**
+     * The running rail, or `null` — which is the state of every build that has
+     * `ParanoidVaultsFlags.enabled` off, and the state after logout.
+     *
+     * A `StateFlow` because the §14 chip is a Compose surface: it has to
+     * re-render when the session appears, and polling a `@Volatile` field would
+     * make "the chip showed up eventually" a scheduling accident.
+     */
+    val session: StateFlow<PvVaultsSession?> = current.asStateFlow()
 
     /** Published by the paranoid-vaults bootstrap; cleared on logout/teardown. */
-    fun publish(engine: PvVaultSyncEngine?) {
-        current = engine
+    fun publish(session: PvVaultsSession?) {
+        current.value = session
     }
 
-    fun engine(): PvVaultSyncEngine? = current
+    /** The worker's half: an engine, or nothing to do. */
+    fun engine(): PvVaultSyncEngine? = current.value?.engine
 }
 
 /**

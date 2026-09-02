@@ -458,6 +458,12 @@ private fun VaultSyncCard() {
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                 )
             }
+            // §14: the SAME chip, data source generalized — one aggregate line
+            // for the per-vault rail plus a row per vault behind one tap. It
+            // emits nothing at all (not even the spacer, which is inside it)
+            // while `ParanoidVaultsFlags.enabled` is false, so everything above
+            // this line is the card exactly as it shipped.
+            PvVaultSyncSection()
         }
     }
 }

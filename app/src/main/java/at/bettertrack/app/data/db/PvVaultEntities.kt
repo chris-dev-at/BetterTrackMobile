@@ -12,12 +12,16 @@ import androidx.room.Query
  * **Dormant** local tables for the redefined paranoid vaults
  * (`paranoid-design.md` §3/§5/§6, platform epic E0 #1410).
  *
- * `vaults` and `vault_docs` are still read and written by nothing. The third
- * table, [PvVaultDocCursorRow], arrived with the per-vault sync engine
- * (`vault/pv/sync`) and has the one DAO in this file — the engine is itself
- * dormant behind `ParanoidVaultsFlags.enabled`, so the whole set is still
- * behaviourally invisible: the tables are empty, nothing outside `vault/pv/…`
- * constructs a caller, and an upgrade costs one `CREATE TABLE` each.
+ * All four tables are read and written only by `vault/pv/…`, which nothing
+ * constructs while `ParanoidVaultsFlags.enabled` is `false`, so the whole set is
+ * behaviourally invisible: the tables stay empty, and an upgrade costs one
+ * `CREATE TABLE` each.
+ *
+ * `vault_docs` and the config mirror gained their first caller with S2 slice 2
+ * ([at.bettertrack.app.vault.pv.sync.RoomPvVaultLocalStore]); the fourth table,
+ * [PvVaultDocCandidateRow], arrived with it because §6's *"corrupt candidates
+ * kept for the restore picker, never silently discarded"* needs somewhere to
+ * keep them that is not the local doc set.
  *
  * They land NOW, in their own migration, for one reason: schema changes are the
  * one thing that cannot be added late without a user-visible cost. Two devices
@@ -34,8 +38,9 @@ import androidx.room.Query
  *
  * - `vaults` mirrors the server's config row — id, the CLEARTEXT-BY-DESIGN label
  *   (§21 Q4: a vault is account config and the UI needs its name while locked),
- *   the media set, the bound Drive connection, the non-secret `key_fingerprint`
- *   and the per-vault retirement-proof verifier.
+ *   the two singleton doc ids the client minted at creation, the media set, the
+ *   bound Drive connection, the non-secret `key_fingerprint` and the per-vault
+ *   retirement-proof verifier.
  * - `vault_docs` mirrors `vault_blobs` keyed `(vault_id, doc_id)` — the envelope
  *   metadata the CAS protocol needs plus, optionally, the last-known ciphertext.
  *   That copy is a CACHE, never a medium (§6): a phone-local-only medium is
@@ -58,6 +63,20 @@ data class PvVaultRow(
     @PrimaryKey val id: String,
     /** User-visible label. Cleartext by design (§21 Q4); the TRUE name is in the header doc. */
     val name: String,
+    /**
+     * The vault's `header` doc id — client-minted at creation, registered on the
+     * server row (`CreateVaultRequest.headerDocId`).
+     *
+     * Mirrored HERE rather than inferred from the docs this device happens to
+     * hold, because the inference is circular: the first pull of a freshly
+     * adopted vault has no local docs and still has to know which address the
+     * header lives at. `''` is impossible in a row this app writes — the
+     * configuration it mirrors always carries both — and reads treat it as
+     * "no directory", never as an address.
+     */
+    val headerDocId: String = "",
+    /** The vault's `common` doc id. Same provenance and the same `''` rule. */
+    val commonDocId: String = "",
     /** The media set, comma-joined in the client's chosen order — e.g. `server,drive`. */
     val media: String,
     /** Non-null exactly when `drive ∈ media` (§3). */
@@ -187,12 +206,149 @@ data class PvVaultDocCursorRow(
 )
 
 /**
- * The one DAO of the per-vault rail. Cursors only: `vaults` and `vault_docs`
- * stay caller-less until the epic that needs them lands, and a DAO that exists
- * before its caller is an invitation to wire it up early.
+ * **A document that arrived and was NOT adopted** — §6's *"corrupt candidates
+ * kept for the restore picker, never silently discarded"*.
+ *
+ * ## Why it is not a `vault_docs` row
+ *
+ * `vault_docs` is keyed `(vaultId, docId)` and holds what this device BELIEVES
+ * about a doc. A candidate is the opposite: bytes at that same address that the
+ * device refused to believe. Parking one in `vault_docs` would either overwrite
+ * the local doc (the one thing §6 forbids) or need a second, shadow meaning for
+ * the same primary key. It is a different fact, so it is a different table.
+ *
+ * ## Why the reason is part of the key
+ *
+ * A medium that serves bytes this build will not adopt serves them again on the
+ * very next pass. With `(vaultId, docId, medium)` alone, the same refusal would
+ * either be rejected as a duplicate or grow the table by one row — carrying up
+ * to a doc-sized ciphertext — per pass, forever. Including [reason] makes a
+ * repeat of the SAME refusal at the SAME address an UPDATE of the same
+ * candidate (newest bytes, newest [keptAtMs]) while two genuinely different
+ * refusals stay two rows. Nothing distinct is ever discarded; nothing identical
+ * is ever accumulated.
+ *
+ * [docKind] / [docVersion] / [formatVersion] are read from the envelope's
+ * CLEARTEXT header when it has one — the restore picker's whole job is to say
+ * *which* version of *which* document is on offer, and that stays legible even
+ * for bytes whose payload will not open. They are null when the medium refused
+ * the bytes before handing them over, or when the framing itself is unreadable.
+ */
+@Entity(
+    tableName = "vault_doc_candidates",
+    primaryKeys = ["vaultId", "docId", "medium", "reason"],
+    indices = [Index("vaultId")],
+)
+data class PvVaultDocCandidateRow(
+    val vaultId: String,
+    val docId: String,
+    /** `server` | `drive` — the medium's wire name (§3 `media`). */
+    val medium: String,
+    /** Why it was not adopted, in the words of whoever refused it. */
+    val reason: String,
+    val docKind: String?,
+    val docVersion: Int?,
+    val formatVersion: Int?,
+    /** The refused bytes, or null when the medium never handed any over. */
+    val envelope: ByteArray?,
+    val keptAtMs: Long,
+) {
+    // Spelled out for [PvVaultDocRow]'s reason: a ByteArray member makes the
+    // generated equals/hashCode reference-based.
+    override fun equals(other: Any?): Boolean =
+        this === other || (
+            other is PvVaultDocCandidateRow &&
+                vaultId == other.vaultId &&
+                docId == other.docId &&
+                medium == other.medium &&
+                reason == other.reason &&
+                docKind == other.docKind &&
+                docVersion == other.docVersion &&
+                formatVersion == other.formatVersion &&
+                keptAtMs == other.keptAtMs &&
+                (envelope?.contentEquals(other.envelope ?: ByteArray(0)) ?: (other.envelope == null))
+            )
+
+    override fun hashCode(): Int {
+        var result = vaultId.hashCode()
+        result = 31 * result + docId.hashCode()
+        result = 31 * result + medium.hashCode()
+        result = 31 * result + reason.hashCode()
+        result = 31 * result + (docKind?.hashCode() ?: 0)
+        result = 31 * result + (docVersion ?: 0)
+        result = 31 * result + (formatVersion ?: 0)
+        result = 31 * result + (envelope?.contentHashCode() ?: 0)
+        return 31 * result + keptAtMs.hashCode()
+    }
+}
+
+/**
+ * The one DAO of the per-vault rail — the config mirror, the local doc set, the
+ * kept candidates and the per-medium cursors.
+ *
+ * They share a DAO on purpose rather than for tidiness. §6's cursor rule is
+ * *"anything that discards a vault's local state discards its cursors in the
+ * same breath"*, and a store that can only reach the docs would leave that rule
+ * to whoever calls it. Here the delete paths are
+ * [at.bettertrack.app.vault.pv.sync.RoomPvVaultLocalStore]'s, they run inside one
+ * transaction, and there is no method that drops a vault's docs without dropping
+ * its cursors — the rule is unbreakable rather than remembered.
  */
 @Dao
 interface PvVaultSyncDao {
+
+    // ── The server-visible config mirror ────────────────────────────────────
+
+    @Query("SELECT * FROM vaults WHERE id = :vaultId")
+    suspend fun vault(vaultId: String): PvVaultRow?
+
+    @Query("SELECT * FROM vaults ORDER BY `name` COLLATE NOCASE, `id`")
+    suspend fun vaults(): List<PvVaultRow>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putVault(row: PvVaultRow)
+
+    @Query("DELETE FROM vaults WHERE id = :vaultId")
+    suspend fun deleteVault(vaultId: String)
+
+    @Query("DELETE FROM vaults")
+    suspend fun clearVaults()
+
+    // ── The local doc set ───────────────────────────────────────────────────
+
+    @Query("SELECT * FROM vault_docs WHERE vaultId = :vaultId ORDER BY docId")
+    suspend fun docs(vaultId: String): List<PvVaultDocRow>
+
+    @Query("SELECT * FROM vault_docs WHERE vaultId = :vaultId AND docId = :docId")
+    suspend fun doc(vaultId: String, docId: String): PvVaultDocRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putDoc(row: PvVaultDocRow)
+
+    @Query("DELETE FROM vault_docs WHERE vaultId = :vaultId")
+    suspend fun forgetVaultDocs(vaultId: String)
+
+    @Query("DELETE FROM vault_docs")
+    suspend fun clearDocs()
+
+    // ── Kept candidates (§6 / §16) ──────────────────────────────────────────
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putCandidate(row: PvVaultDocCandidateRow)
+
+    @Query("SELECT * FROM vault_doc_candidates WHERE vaultId = :vaultId ORDER BY keptAtMs DESC, docId")
+    suspend fun candidates(vaultId: String): List<PvVaultDocCandidateRow>
+
+    @Query("SELECT COUNT(*) FROM vault_doc_candidates WHERE vaultId = :vaultId")
+    suspend fun candidateCount(vaultId: String): Int
+
+    @Query("DELETE FROM vault_doc_candidates WHERE vaultId = :vaultId")
+    suspend fun forgetVaultCandidates(vaultId: String)
+
+    @Query("DELETE FROM vault_doc_candidates")
+    suspend fun clearCandidates()
+
+    // ── Cursors ─────────────────────────────────────────────────────────────
 
     @Query("SELECT * FROM vault_doc_cursors WHERE vaultId = :vaultId AND medium = :medium AND docId = :docId")
     suspend fun cursor(vaultId: String, medium: String, docId: String): PvVaultDocCursorRow?
