@@ -62,6 +62,7 @@ import at.bettertrack.app.debug.DebugPreviewState
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
+import at.bettertrack.app.ui.components.BtBrandmark
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtSettingsGear
@@ -229,6 +230,10 @@ object ColumnScopeAlias
 private fun WordmarkSection() {
     val bt = BtTheme.colors
     GallerySection("Wordmark §3.2") {
+        // The monogram first, at the login screen's size — both marks take the
+        // theme's on-background ink for their non-gold half, so the gallery's
+        // light/dark matrix is where that is actually checkable.
+        BtBrandmark(size = 72.dp)
         Wordmark(fontSize = 20.sp)
         Wordmark(fontSize = 28.sp, edition = "App")
         Wordmark(fontSize = 36.sp, edition = "App")

@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,11 @@ fun PasswordChangeRequiredScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // The app's page, not the system's window background — see the same
+            // note on [at.bettertrack.app.ui.auth.LoginScreen]. This is the other
+            // root that painted nothing, and it is reached in the same logged-out
+            // moment, so it had the same theme/window mismatch.
+            .background(bt.bg)
             .safeDrawingPadding()
             .padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

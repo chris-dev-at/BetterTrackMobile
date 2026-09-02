@@ -34,9 +34,17 @@
       moment before a light app is a normal, deliberate pattern; an invisible
       wordmark is a bug.
 
-      The honest fix is a light-ground variant of the artwork, which lives in
-      res/drawable* — package B2-C's territory this batch. Until it exists this
-      name states the constraint instead of hiding it.
+      That stays true for THIS name, and only for this name. The splash frame is
+      drawn by the window manager before Compose exists, so it cannot read the
+      app's theme preference at all — it gets a fixed brand ground and the baked
+      raster, which is correct for it.
+
+      Everywhere INSIDE the app the raster is gone (2026-09-02, owner order): the
+      login screen's monogram is `BtBrandmark`, which tints two colourless alpha
+      masks split from this same artwork — the silhouette in the theme's
+      on-background ink, the "T" in the brand gold on top. That is the
+      "light-ground variant" this comment used to ask for, generalised: it is
+      every ground, including true black, rather than a second baked file.
     -->
     <color name="bt_splash_bg">#FF0A0D12</color>
 

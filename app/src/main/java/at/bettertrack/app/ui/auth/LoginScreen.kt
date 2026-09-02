@@ -3,7 +3,7 @@ package at.bettertrack.app.ui.auth
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.LoginError
 import at.bettertrack.app.data.auth.LoginPhase
+import at.bettertrack.app.ui.components.BtBrandmark
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -119,7 +119,19 @@ fun LoginScreen(
 
     var showSettings by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    // The page ground is the APP's, not the system's.
+    //
+    // This screen used to paint no background at all, so what showed through was
+    // `android:windowBackground` — and that resource is picked by the SYSTEM's
+    // day/night configuration while everything drawn on top of it comes from the
+    // user's in-app theme choice. The two disagree the moment someone forces one
+    // of them, and the screenshot from the owner's phone on 2026-09-01 is exactly
+    // that state: the dark table's near-white inks on the day config's white
+    // window, which is why the wordmark's "Better" was invisible. Every other
+    // root in the app (the wizard scaffold, the app lock, the vault gate, the
+    // shell's Scaffold) already paints `bt.bg`; this one and the forced-password
+    // wall were the two that did not.
+    Box(modifier = modifier.fillMaxSize().background(bt.bg)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -147,11 +159,11 @@ fun LoginScreen(
                 Spacer(Modifier.weight(1f))
 
                 // ── Brand block ─────────────────────────────────────────────
-                Image(
-                    painter = painterResource(R.drawable.splash_bt_glyph),
-                    contentDescription = null,
-                    modifier = Modifier.size(72.dp),
-                )
+                // The monogram takes the theme's ink for its non-gold half, the
+                // same way the wordmark under it does — see [BtBrandmark]. It
+                // used to be the raw splash raster, whose "B" is baked white and
+                // therefore invisible on the light page.
+                BtBrandmark(size = 72.dp)
                 Spacer(Modifier.height(22.dp))
                 // Long-press = the hidden dev-backend screen on debug builds (V5
                 // S1). Inert in release: BtRoot ignores the callback outside
