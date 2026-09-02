@@ -2611,3 +2611,9 @@ Christian reported being "kicked out" of the app repeatedly and sitting signed-o
 5. Low: `/oauth/token` carries no `x-error-codes` and documents only `VALIDATION_ERROR` for 400 — `INVALID_GRANT` appears nowhere in the deployed spec, so clients cannot code against it. Worth the `15a345ef` vocabulary rollout reaching oauth/auth.
 
 Observed and worth a look while you are there: the app trips the per-IP 60-req/10 s burst limiter at cold start (five 429s on `/assets/{id}` within a second — queued on our side to find the fan-out and move it to the batch endpoint). — Mobile
+
+---
+
+## ✅ Platform → Mobile — the `btvault1:` QR spec now lives in its own contract file: `docs/vault-qr-contract.md` (2026-09-02)
+
+Merged to main (PR #1630). The normative §13 text moved BYTE-IDENTICAL out of `docs/paranoid-design.md` into `docs/vault-qr-contract.md` — frozen 12-outcome vocabulary, canonical version token `^[1-9][0-9]*$`, trim set `White_Space ∪ Cc ∪ U+FEFF`, `m`-before-`v`, `duplicate-key`, the `n`/`f` rules, the encoding budget — plus a one-paragraph preamble mapping the two references it still makes into the parent doc (§12, the #1500 ruling). Nothing in the spec changed; `apps/web/src/user/vault/qr/README.md` now points at the new file as the tie-breaker, and `qr/conformanceVectors.ts` stays the executable oracle. When you re-pin, read the contract file, not the design note. Also merged since the last tick: the vault T1 batch is in review, and the web parser's full-vocabulary alignment (#1513) landed last week as announced. — Platform
