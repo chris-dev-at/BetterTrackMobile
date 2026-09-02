@@ -1309,6 +1309,16 @@
     <!-- Top bar of the explainer when it replaces a PUSHED route (S6 P0-1). -->
     <string name="bt_paranoid_topbar">Paranoid-Modus</string>
 
+    <!-- PARANOID E9 — the one-time fresh-start notice (paranoid-design.md §17 step 3).
+         Stated calmly, as §21 ruling 4 asks of this feature's copy: a plain account of
+         what happened and what it means, no alarm, no conversion ceremony. -->
+    <string name="bt_fresh_start_title">Der Paranoid-Modus hat eine neue Form</string>
+    <string name="bt_fresh_start_what">Der kontoweite Paranoid-Modus wurde stillgelegt. Deine verschlüsselten Daten wurden in eine geprüfte Sicherung geschrieben und danach vom Server entfernt, und dieses Konto wurde auf ein normales Konto zurückgesetzt. Die alte Passphrase und das alte Wiederherstellungs-Kit öffnen nichts mehr.</string>
+    <string name="bt_fresh_start_means">Sonst hat sich am Konto nichts geändert, und alles funktioniert wieder normal. Der Paranoid-Modus arbeitet jetzt pro Portfolio: Du legst einen Tresor an und verschiebst die gewünschten Portfolios hinein.</string>
+    <string name="bt_fresh_start_web_title">Paranoid-Tresor einrichten</string>
+    <string name="bt_fresh_start_web_sub">Tresore anlegen und verwalten geht vorerst in der Web-App.</string>
+    <string name="bt_fresh_start_ack">Verstanden</string>
+
     <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
     <string name="bt_notif_type_dividend">Dividende</string>
     <string name="bt_notif_type_dividend_sub">Wenn eine Dividende gebucht wird</string>

@@ -75,6 +75,24 @@ data class SessionUser(
      * the same pre-flight discipline [privacyMode] uses.
      */
     val firstRun: FirstRunState = FirstRunState.UNKNOWN,
+    /**
+     * Whether the account still owes the one-time paranoid fresh-start notice
+     * (§17 step 3), as last seen on `/auth/me`.
+     *
+     * Persisted with the rest of the session for the reason [privacyMode] is: the
+     * app refreshes `/auth/me` at login and when Settings opens, so a COLD START
+     * has nothing else to read. Without it the notice could only ever appear
+     * after a detour through Settings, which is not "at next login".
+     *
+     * `null`-defaulted so a session blob written by a build that had no such
+     * field keeps deserializing, and so "the server never said" stays distinct
+     * from a declared `false` — only a declared `true` shows the notice.
+     *
+     * A stale `true` (the notice was acknowledged in a browser meanwhile) is
+     * self-healing rather than a bug: acknowledging is idempotent, so the first
+     * tap answers `200` with the fresh body and the flag settles to `false`.
+     */
+    val paranoidFreshStartPending: Boolean? = null,
 ) {
     companion object {
         /** Placeholder used when a valid token exists but /auth/me hasn't resolved yet. */
@@ -89,6 +107,7 @@ data class SessionUser(
             privacyMode = null,
             memberSince = null,
             firstRun = FirstRunState.UNKNOWN,
+            paranoidFreshStartPending = null,
         )
     }
 }
@@ -104,6 +123,7 @@ fun MeResponse.toSessionUser(): SessionUser = SessionUser(
     privacyMode = privacyMode,
     memberSince = createdAt,
     firstRun = firstRunState,
+    paranoidFreshStartPending = paranoidFreshStartPending,
 )
 
 /**

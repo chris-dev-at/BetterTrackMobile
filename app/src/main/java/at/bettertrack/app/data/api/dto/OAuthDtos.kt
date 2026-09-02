@@ -90,6 +90,29 @@ data class MeResponse(
     @Serializable(with = at.bettertrack.app.data.auth.FirstRunStampSerializer::class)
     val firstRunCompletedAt: at.bettertrack.app.data.auth.FirstRunStamp =
         at.bettertrack.app.data.auth.FirstRunStamp.Absent,
+    /**
+     * The one-time **fresh-start notice** owed to a legacy account-level paranoid
+     * account (PARANOID E9, platform tick 2026-08-29; `docs/paranoid-design.md`
+     * §17 step 3).
+     *
+     * §17 ruled the transition as *(C) backup + wipe*: an owner-run verified
+     * ciphertext backup, then a migration that retires the account-level rows and
+     * flips `privacy_mode` back to `normal`. The affected account comes back whole
+     * and empty of previously vaulted content, so it is owed one calm explanation
+     * of what happened — and exactly one.
+     *
+     * `true` means that explanation is still owed. Acknowledging spends it
+     * server-side (set-once, guarded on `notice_acknowledged_at IS NULL`), so the
+     * server — not a local "seen" bit — is what decides whether the notice comes
+     * back. See [at.bettertrack.app.data.auth.freshStartNoticeDue].
+     *
+     * Nullable with a null default, for the same reason [privacyMode] is: the
+     * property is optional on the contract (absent from `MeResponse.required` in
+     * the deployed `openapi.json`), and a server that does not send it has said
+     * *nothing* — which must never be read as "a notice is owed". Only a declared
+     * `true` shows anything, exactly like the web's `!== true` guard.
+     */
+    val paranoidFreshStartPending: Boolean? = null,
     val createdAt: String? = null,
 )
 

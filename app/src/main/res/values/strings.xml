@@ -1396,6 +1396,16 @@
     <!-- Top bar of the explainer when it replaces a PUSHED route (S6 P0-1). -->
     <string name="bt_paranoid_topbar">Paranoid mode</string>
 
+    <!-- PARANOID E9 — the one-time fresh-start notice (paranoid-design.md §17 step 3).
+         Stated calmly, as §21 ruling 4 asks of this feature's copy: a plain account of
+         what happened and what it means, no alarm, no conversion ceremony. -->
+    <string name="bt_fresh_start_title">Paranoid mode has a new shape</string>
+    <string name="bt_fresh_start_what">Account-wide paranoid mode has been retired. Your encrypted data was written to a verified backup and then removed from the server, and this account was reset to a normal account. The old passphrase and recovery kit no longer open anything.</string>
+    <string name="bt_fresh_start_means">Nothing else about the account changed, and everything works normally again. Paranoid mode now works per portfolio: you create a vault and move the portfolios you want into it.</string>
+    <string name="bt_fresh_start_web_title">Set up a paranoid vault</string>
+    <string name="bt_fresh_start_web_sub">Creating and managing vaults is on the web app for now.</string>
+    <string name="bt_fresh_start_ack">Got it</string>
+
     <!-- V5 notification kinds (dividend, budget, mirrorchain, digest) -->
     <string name="bt_notif_type_dividend">Dividend</string>
     <string name="bt_notif_type_dividend_sub">When a dividend is booked</string>

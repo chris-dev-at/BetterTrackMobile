@@ -292,6 +292,43 @@ class AuthRepository(
             }
         }
 
+    // ── The one-time paranoid fresh-start notice (§17 step 3) ─────────────────
+
+    /**
+     * Acknowledge the fresh-start notice, spending it server-side.
+     *
+     * Modelled on [completeFirstRun] down to the last line, because the platform
+     * modelled the route on `/auth/first-run/complete`: no payload, set-once, and
+     * it answers the fresh `/auth/me` body — so the stored session is rebuilt
+     * from the server's own `paranoidFreshStartPending` instead of an optimistic
+     * local `false`. That is the whole guarantee that a failed acknowledgement
+     * cannot hide an unacknowledged server state: nothing local ever writes the
+     * flag down as spent.
+     *
+     * NOT best-effort-silent like [refreshUser]: the sheet renders this result
+     * inline (progress, then error + retry). A silent failure would look like a
+     * dismissal and bring the notice back next launch with no explanation.
+     */
+    suspend fun acknowledgeFreshStartNotice(): BtResult<SessionUser> =
+        when (val r = apiCall(json) { btApi.acknowledgeFreshStartNotice() }) {
+            is BtResult.Ok -> {
+                val user = r.value.toSessionUser()
+                store.saveUser(user)
+                _authState.value = if (user.mustChangePassword) {
+                    AuthState.PasswordChangeRequired(user)
+                } else {
+                    AuthState.LoggedIn(user)
+                }
+                Log.i(TAG, "Fresh-start notice acknowledged (pending=${user.paranoidFreshStartPending}).")
+                BtResult.Ok(user)
+            }
+
+            is BtResult.Err -> {
+                Log.w(TAG, "acknowledgeFreshStartNotice failed: ${r.error.message}")
+                r
+            }
+        }
+
     // ── Logout ────────────────────────────────────────────────────────────────
 
     /** Fire-and-forget logout for UI callers. */

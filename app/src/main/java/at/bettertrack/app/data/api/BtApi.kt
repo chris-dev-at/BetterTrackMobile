@@ -262,6 +262,37 @@ interface BtApi {
     suspend fun completeFirstRun(): Response<MeResponse>
 
     /**
+     * Spend the one-time paranoid fresh-start notice (`paranoid-design.md` §17
+     * step 3, PARANOID E9 — platform tick 2026-08-29).
+     *
+     * Deliberately shaped like [completeFirstRun], which the platform's own route
+     * comment says it mirrors: no payload, set-once (`notice_acknowledged_at IS
+     * NULL`), touches only the caller's own receipt, and answers the **fresh**
+     * [MeResponse] so the session user is rebuilt from the server's own body
+     * rather than from an optimistic local edit. A replay is harmless.
+     *
+     * ## Path
+     * `auth/fresh-start-notice/acknowledge`, taken from the deployed
+     * `openapi.json` — the 2026-08-29 tick prose said `POST
+     * /account/fresh-start-ack`, which does not exist on the deployment. The
+     * openapi wins, per the standing rule.
+     *
+     * ## Not callable yet — see [at.bettertrack.app.data.auth.FreshStartNoticeFlags]
+     * The deployed spec declares this route `security: [{ sessionCookie: [] }]`
+     * ONLY, while every sibling the app already calls (`/auth/me`,
+     * `/auth/first-run/complete`, `/auth/pin/…`) declares `sessionCookie` **and**
+     * `apiKeyBearer`. That list is generated from the real middleware policy, so
+     * it is a statement about enforcement, not about documentation: the route is
+     * absent from the `/auth/…` bearer carve-outs and falls through to the
+     * module's `session-only` default, i.e. a bearer is refused. The method is
+     * declared so the wiring is complete and tested; the surface that would call
+     * it stays behind the flag until the platform widens the allowlist the same
+     * one line it widened for `/auth/first-run/complete`.
+     */
+    @POST("auth/fresh-start-notice/acknowledge")
+    suspend fun acknowledgeFreshStartNotice(): Response<MeResponse>
+
+    /**
      * Does the signed-in account have a web PIN? The dedicated, lightweight gate
      * for the "use my BetterTrack PIN" app-lock option (§5) — the option is
      * offered only when `pinSet == true`. Read-only; never sets or changes the PIN.

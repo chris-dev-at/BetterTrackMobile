@@ -182,7 +182,19 @@ private fun AuthGate(
                 )
                 when (gate) {
                     FirstRunGate.WIZARD -> FirstRunWizard()
-                    FirstRunGate.APP -> BtApp()
+                    FirstRunGate.APP -> {
+                        BtApp()
+                        // PARANOID E9 (§17 step 3): the one-time fresh-start
+                        // notice. It sits HERE — the last gate, beside the app
+                        // itself — for the same ordering reason every gate above
+                        // it does: "here is what happened to your account" is
+                        // only worth saying to someone who is signed in, past the
+                        // app lock and actually looking at their app. It is not
+                        // a gate of its own; the shell is fully usable behind it,
+                        // and the notice is a sheet over it. No-op while
+                        // `FreshStartNoticeFlags.enabled` is false.
+                        at.bettertrack.app.ui.paranoid.FreshStartNoticeHost(user = user)
+                    }
                 }
             }
         }
