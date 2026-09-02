@@ -98,6 +98,14 @@ fun BtGroup(
  * @param trailing replaces the default chevron. A chevron is drawn only when the
  *   row navigates AND nothing else claims the end of the row, so a toggle row
  *   never shows a chevron that lies about where the tap goes.
+ * @param subtitleMaxLines how much of the second line to show. Two by default —
+ *   a settings list is scanned, and rows of wildly different heights are harder
+ *   to scan than rows that end in an ellipsis. A row whose subtitle is a
+ *   SENTENCE the user has to finish reading passes `Int.MAX_VALUE` and wraps:
+ *   the owner's 2026-09-01 pass found the mute row clipped at
+ *   *"…Deine Auswahl ble…"*, which is a rule ending mid-word (report #21).
+ *   Opt-in rather than a new default, because 130-odd rows are scanning aids
+ *   whose height is worth keeping even.
  */
 @Composable
 fun BtGroupRow(
@@ -109,6 +117,7 @@ fun BtGroupRow(
     titleColor: androidx.compose.ui.graphics.Color? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    subtitleMaxLines: Int = 2,
 ) {
     val bt = BtTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -148,7 +157,7 @@ fun BtGroupRow(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = bt.textMuted,
-                    maxLines = 2,
+                    maxLines = subtitleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

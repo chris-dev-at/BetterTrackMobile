@@ -257,6 +257,12 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                             iconTint = if (muted) bt.goldEmphasis else null,
                             title = stringResource(R.string.bt_notif_mute_all_title),
                             subtitle = stringResource(R.string.bt_notif_mute_all_sub),
+                            // The subtitle is a RULE, not a hint: "nothing is
+                            // delivered on any channel; your choices are kept"
+                            // is the whole reason the switch is safe to flip.
+                            // Two lines beside a Switch clipped it mid-word on
+                            // the owner's phone (#21) — so this one wraps.
+                            subtitleMaxLines = Int.MAX_VALUE,
                             onClick = { write(scope, { repo.setAccountMuted(!muted) }) { muteFailure = it } },
                             trailing = {
                                 Switch(

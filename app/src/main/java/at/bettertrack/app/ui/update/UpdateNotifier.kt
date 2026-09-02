@@ -189,36 +189,41 @@ private fun OfferBody(
         onClick = onGitHub,
         modifier = Modifier.fillMaxWidth().height(48.dp),
     )
-    // Tertiary actions side by side (owner ask 2026-07-12): remind ▸ ignore.
-    Row(
+    // Tertiary actions: remind ▸ ignore.
+    //
+    // STACKED since 2026-09-02, having been side by side since the 2026-07-12
+    // ask. Two `weight(1f)` halves of a dialog leave each label ~120dp, and DE
+    // "Diese Version ignorieren" does not fit in it — the owner's device pass
+    // caught it wrapping across into the label beside it, so the two reads as
+    // one run-on phrase (#21). Shortening the German was the alternative and it
+    // only moves the cliff: the next locale, or a larger font scale, walks off
+    // it again. A full-width row per action cannot wrap into anything.
+    //
+    // The half of the original ask that mattered is intact: these are still the
+    // quiet pair below the two real buttons, still in remind ▸ ignore order.
+    TextButton(
+        onClick = onRemind,
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
     ) {
-        TextButton(
-            onClick = onRemind,
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.bt_update_remind_later),
-                color = bt.textSecondary,
-                style = MaterialTheme.typography.labelLarge,
-                textAlign = TextAlign.Center,
-            )
-        }
-        TextButton(
-            onClick = onIgnore,
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.bt_update_ignore),
-                color = bt.textMuted,
-                style = MaterialTheme.typography.labelLarge,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text(
+            stringResource(R.string.bt_update_remind_later),
+            color = bt.textSecondary,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+        )
+    }
+    TextButton(
+        onClick = onIgnore,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+    ) {
+        Text(
+            stringResource(R.string.bt_update_ignore),
+            color = bt.textMuted,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

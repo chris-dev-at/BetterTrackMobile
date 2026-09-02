@@ -89,9 +89,18 @@ import at.bettertrack.app.ui.theme.BtTheme
  *   Passed only where the setting exists (the `github` flavor).
  * @param onOpenServer opens the Server screen, from the **sheet's** Server row.
  *   Null where the flavor has no server setting, which is what removes that row.
+ * @param preLogin the pre-login back stack ([PreLoginNav]). Defaulted so a
+ *   caller that owns no swap of its own gets a private one and behaves exactly
+ *   as this screen always did; the logged-out gate passes its OWN, because the
+ *   Server screen replaces this composable and a `remember` in here cannot
+ *   survive that — which is precisely the defect it fixes (owner report #4).
  */
+// `internal`, since 2026-09-02: the screen now takes the pre-login back stack
+// ([PreLoginNav]), which is module-private plumbing. Nothing outside this module
+// ever composed it — the two callers are the logged-out gate and the first-run
+// wizard's login step, both in `at.bettertrack.app`.
 @Composable
-fun LoginScreen(
+internal fun LoginScreen(
     phase: LoginPhase,
     onLogin: () -> Unit,
     onNeedAccount: () -> Unit,
@@ -102,6 +111,7 @@ fun LoginScreen(
     onBack: (() -> Unit)? = null,
     serverHost: String? = null,
     onOpenServer: (() -> Unit)? = null,
+    preLogin: PreLoginNav = rememberPreLoginNav(),
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -116,8 +126,6 @@ fun LoginScreen(
         animationSpec = tween(durationMillis = 460, easing = FastOutSlowInEasing),
         label = "loginEntrance",
     )
-
-    var showSettings by remember { mutableStateOf(false) }
 
     // The page ground is the APP's, not the system's.
     //
@@ -303,7 +311,7 @@ fun LoginScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 IconButton(
-                    onClick = { showSettings = true },
+                    onClick = { preLogin.open(PreLoginStep.Settings) },
                     enabled = !inProgress,
                 ) {
                     Icon(
@@ -320,9 +328,12 @@ fun LoginScreen(
             }
         }
 
-        if (showSettings) {
+        if (preLoginSheetOpen(preLogin.current)) {
             PreLoginSettingsSheet(
-                onDismiss = { showSettings = false },
+                diagnostics = preLogin.current == PreLoginStep.Diagnostics,
+                onOpenDiagnostics = { preLogin.open(PreLoginStep.Diagnostics) },
+                onCloseDiagnostics = { preLogin.back() },
+                onDismiss = { preLogin.sheetDismissed() },
                 onOpenServer = onOpenServer,
             )
         }

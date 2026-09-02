@@ -90,6 +90,35 @@
         </intent>
     </queries>
 
+    <!--
+      PREDICTIVE BACK (android:enableOnBackInvokedCallback, below).
+
+      Turned ON 2026-09-02, after the owner's device pass found logcat repeating
+      `OnBackInvokedCallback is not enabled for the application` on every back
+      press. That line is not a warning about a mistake — it is the platform
+      saying it is running the LEGACY back path, and the legacy path has no
+      progress events. `PredictiveBackHandler` in `ui/shell/BtSheetStack.kt` is
+      the whole of the sheet layer's back preview (SHEET_BACK_PREVIEW: the sheet
+      slides under the finger as you swipe and springs back if you let go), and
+      without the flag it degrades to a single committed press — the animation
+      was dead code on device for the life of the app.
+
+      The audit the flag needs, done before enabling it: every back handler in
+      this app is Compose-side and rides androidx.activity's
+      `OnBackPressedDispatcher`, which is exactly what the flag hands to the
+      platform. There is no `onBackPressed()` override anywhere (MainActivity has
+      none), no hand-built `OnBackPressedCallback`, and no `OnBackInvokedCallback`
+      registered directly — so nothing changes hands. In full, app-wide:
+        - `BackHandler` in `ui/shell/AppShell.kt` (tab != 0 → first tab),
+        - `BackHandler` in `ui/firstrun/FirstRunWizard.kt`,
+        - `BackHandler` in `ui/auth/PreLoginSettingsSheet.kt` (the diagnostics
+          level inside the pre-login sheet) and `ui/shell/BtRoot.kt` (the
+          pre-login Server screen),
+        - `PredictiveBackHandler` in `ui/shell/BtSheetStack.kt`,
+        - the NavController's own callback, registered by `NavHost`.
+      Material3 `ModalBottomSheet`s and Compose `Dialog`s run in their own dialog
+      windows with their own back handling, which this flag does not touch.
+    -->
     <application
         android:name=".BetterTrackApplication"
         android:allowBackup="true"
@@ -100,7 +129,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.BetterTrack"
-        tools:targetApi="31">
+        tools:targetApi="31"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

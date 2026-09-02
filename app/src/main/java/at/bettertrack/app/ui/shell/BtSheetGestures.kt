@@ -168,6 +168,66 @@ internal fun sheetPendingSlide(depth: Int, lastDepth: Int): Float? = when {
     else -> 0f
 }
 
+// ── Who owns a system back press ────────────────────────────────────────────
+
+/** What a system-back press means to the sheet layer at this instant. */
+internal enum class SheetBack {
+    /** Nothing is stacked. Back belongs to the shell, and then to the system. */
+    NOT_OURS,
+
+    /**
+     * A dismissal is already travelling. The press is CONSUMED and dropped: one
+     * back is one level, and the level this one would take is already leaving.
+     */
+    SWALLOW,
+
+    /** Preview the travel under the finger, and pop ONE page when it commits. */
+    TAKE,
+}
+
+/**
+ * Which of the three a back press is right now.
+ *
+ * ## The defect this exists to prevent (owner device pass 2026-09-01, #5)
+ *
+ * *"One Back collapses two stacked sheet levels: Portfolio → Bargeld →
+ * Transaktionen, a single Back returns to the portfolio detail, skipping
+ * Bargeld."*
+ *
+ * The sheet layer's back handler used to be **disabled** for the whole of a
+ * dismissal (`enabled = depth > 0 && !leaving`), which is a quarter of a second
+ * in which the layer is not claiming back at all. The `NavController`'s own
+ * `OnBackPressedCallback` sits directly underneath it in the dispatcher and is
+ * enabled the entire time, so any second back event arriving inside that window
+ * — a bouncy edge swipe, an impatient second press — reached the graph directly
+ * and popped the NEXT entry with no animation whatsoever. Two levels gone, the
+ * second of them instantly, which is indistinguishable from one back having
+ * eaten both.
+ *
+ * So the layer now claims back for as long as anything is stacked, and decides
+ * what to DO with it here. Swallowing is the deliberate half: a press that
+ * arrives while a page is mid-flight is answered by the page that is already
+ * leaving, not by the one underneath it.
+ */
+internal fun sheetBackAction(depth: Int, leaving: Boolean): SheetBack = when {
+    depth <= 0 -> SheetBack.NOT_OURS
+    leaving -> SheetBack.SWALLOW
+    else -> SheetBack.TAKE
+}
+
+/**
+ * Whether a dismissal that began on page [startedOn] may still pop, given
+ * whichever page is on top by the time its travel has finished.
+ *
+ * The other half of "one back is one level", from the far side of the
+ * animation. `popBackStack()` pops *whatever is on top*, so a dismissal that
+ * takes 260ms to play out is a 260ms promise to delete a page by position
+ * rather than by name. If anything else pops in the meantime the promise now
+ * points at an innocent page. Addressing it makes the late pop a no-op instead.
+ */
+internal fun sheetPopIsAddressed(startedOn: String?, topNow: String?): Boolean =
+    startedOn != null && startedOn == topNow
+
 /**
  * Whether a rightward swipe on a depth->=2 sheet commits to going back.
  *

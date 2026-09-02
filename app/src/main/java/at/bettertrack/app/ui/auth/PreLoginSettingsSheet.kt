@@ -1,6 +1,7 @@
 package at.bettertrack.app.ui.auth
 
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,12 +96,19 @@ import at.bettertrack.app.ui.theme.BtTheme
  * this surface's own dismissal. The user gets the identical grabber, scrim,
  * pull-down and predictive-back behaviour as everywhere else in the app.
  *
+ * @param diagnostics whether the sign-out history is showing INSIDE this sheet.
+ *   Hoisted (see [PreLoginNav]) rather than remembered here, so that back at
+ *   this level pops exactly one thing — the history — instead of the whole
+ *   sheet, which is what it did until the owner's 2026-09-01 pass (#4).
  * @param onOpenServer opens the Server screen — the host swaps it in for the
  *   login screen, exactly as the retired bottom-line button did. Null where the
  *   flavor has no server setting.
  */
 @Composable
 internal fun PreLoginSettingsSheet(
+    diagnostics: Boolean,
+    onOpenDiagnostics: () -> Unit,
+    onCloseDiagnostics: () -> Unit,
     onDismiss: () -> Unit,
     onOpenServer: (() -> Unit)? = null,
 ) {
@@ -117,10 +125,17 @@ internal fun PreLoginSettingsSheet(
     val host = remember {
         BtSheetHostState(
             pop = {
-                onDismissState.value()
+                // The hand-off REPLACES the dismissal rather than following it.
+                // Both would mean "close the sheet, then open the Server screen",
+                // and closing the sheet is a POP — it would take the Settings
+                // level off the stack that the Server screen is about to be
+                // pushed onto, and back from the Server screen would then land
+                // on the bare login screen. Which is exactly what it did.
                 if (handOff) {
                     handOff = false
                     onOpenServerState.value?.invoke()
+                } else {
+                    onDismissState.value()
                 }
             },
         )
@@ -128,6 +143,9 @@ internal fun PreLoginSettingsSheet(
 
     BtSheet(host) {
         PreLoginSettingsContent(
+            diagnostics = diagnostics,
+            onOpenDiagnostics = onOpenDiagnostics,
+            onCloseDiagnostics = onCloseDiagnostics,
             onClose = { host.dismissTop() },
             onOpenServer = if (ServerOrigins.settingEnabled && onOpenServer != null) {
                 {
@@ -149,6 +167,9 @@ internal fun PreLoginSettingsSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PreLoginSettingsContent(
+    diagnostics: Boolean,
+    onOpenDiagnostics: () -> Unit,
+    onCloseDiagnostics: () -> Unit,
     onClose: () -> Unit,
     onOpenServer: (() -> Unit)?,
 ) {
@@ -156,7 +177,6 @@ private fun PreLoginSettingsContent(
     val context = LocalContext.current
     val activity = context as? Activity
     var picker by remember { mutableStateOf<PreLoginPicker?>(null) }
-    var diagnostics by remember { mutableStateOf(false) }
     val themeMode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
 
     // The diagnostics history REPLACES this sheet's content rather than opening
@@ -164,7 +184,13 @@ private fun PreLoginSettingsContent(
     // there is no route to push, and stacking sheets to show a list would put two
     // grabbers and two scrims on screen for one linear drill-down.
     if (diagnostics) {
-        AuthDiagnosticsScreen(onClose = { diagnostics = false })
+        // ...which is exactly why back needs saying out loud here. The sheet
+        // layer's own PredictiveBackHandler would take a press and dismiss the
+        // WHOLE sheet — two levels for one back. This composable is composed
+        // inside that layer, so its handler is registered after the layer's and
+        // wins the dispatcher (owner report #4).
+        BackHandler(onBack = onCloseDiagnostics)
+        AuthDiagnosticsScreen(onClose = onCloseDiagnostics)
         return
     }
 
@@ -235,7 +261,7 @@ private fun PreLoginSettingsContent(
                     icon = Icons.Outlined.MonitorHeart,
                     title = stringResource(R.string.bt_prelogin_diagnostics),
                     subtitle = stringResource(R.string.bt_prelogin_diagnostics_sub),
-                    onClick = { diagnostics = true },
+                    onClick = onOpenDiagnostics,
                 )
             }
         }

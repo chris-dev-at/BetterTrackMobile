@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -55,6 +58,7 @@ import at.bettertrack.app.ui.components.BtCard
 import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtErrorState
+import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtOfflineState
 import at.bettertrack.app.ui.components.BtSkeleton
@@ -71,6 +75,7 @@ import at.bettertrack.app.data.storage.MARKET_QUOTE_FANOUT
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -108,6 +113,13 @@ class WatchlistViewModel(
      * and this class keeps its single dependency direction.
      */
     private val noLivePrices: () -> Boolean = { false },
+    /**
+     * The pause before the ONE automatic quote retry (owner device pass #18).
+     * A parameter for the same reason [noLivePrices] is one: it is the only part
+     * of the retry that a test cannot make instant, and the rule it serves lives
+     * in [quoteSweepOutcome].
+     */
+    private val retryBackoffMs: Long = BT_QUOTE_SWEEP_BACKOFF_MS,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = connectivity.isOnline
@@ -195,6 +207,56 @@ class WatchlistViewModel(
         if (list.isEmpty()) return
         val ids = list.map { it.assetId }.distinct()
         val resolved = LinkedHashMap<String, WatchQuote>()
+        var attempt = 0
+        while (true) {
+            // Only the rows still without a price are re-asked: a retry is for
+            // what failed, not a second bill for what worked.
+            val pending = ids.filterNot { resolved.containsKey(it) }
+            resolved.putAll(sweepQuotes(pending))
+            _quotes.value = _quotes.value + resolved
+            // W6: in a mode with no live prices, a failed quote is not a refresh
+            // problem — it is the mode working as designed. Raising "couldn't
+            // refresh" on every row every time would make a permanent banner out
+            // of a permanent condition, and a warning that is always on is a
+            // warning nobody reads on the day it means something. The rows
+            // themselves already carry the honest per-asset state.
+            if (noLivePrices()) return
+            when (quoteSweepOutcome(resolved.size, ids.size, attempt)) {
+                QuoteSweep.SETTLED -> {
+                    _refreshNotice.value = _refreshNotice.value.onSuccess()
+                    return
+                }
+
+                // The ONE automatic retry (owner device pass #18). Deliberately
+                // silent: the notice is left exactly as it was, so a sweep that
+                // recovers never flashes a failure the user has to read and
+                // dismiss. See [QuoteSweep].
+                QuoteSweep.RETRY -> {
+                    attempt++
+                    delay(retryBackoffMs)
+                }
+
+                QuoteSweep.FAILED -> {
+                    // Any row that failed to quote makes the panel's prices
+                    // partly stale — one honest notice beats a silently frozen
+                    // number on a live-looking row.
+                    _refreshNotice.value = _refreshNotice.value.onFailure()
+                    return
+                }
+            }
+        }
+    }
+
+    /**
+     * One pass: batch first, per-row second, and whatever came back.
+     *
+     * Split out of [fetchQuotes] so the retry above re-runs the request work and
+     * nothing else — the accumulation, the notice and the loop bound all stay in
+     * the one place that owns them.
+     */
+    private suspend fun sweepQuotes(ids: List<String>): Map<String, WatchQuote> {
+        if (ids.isEmpty()) return emptyMap()
+        val resolved = LinkedHashMap<String, WatchQuote>()
         val perRow = mutableListOf<String>()
 
         when (val batch = market.quotes(ids)) {
@@ -226,22 +288,7 @@ class WatchlistViewModel(
                 }
             }
         }
-
-        _quotes.value = _quotes.value + resolved
-        // W6: in a mode with no live prices, a failed quote is not a refresh
-        // problem — it is the mode working as designed. Raising "couldn't
-        // refresh" on every row every time would make a permanent banner out of
-        // a permanent condition, and a warning that is always on is a warning
-        // nobody reads on the day it means something. The rows themselves
-        // already carry the honest per-asset state.
-        if (noLivePrices()) return
-        // Any row that failed to quote makes the panel's prices partly stale —
-        // one honest notice beats a silently frozen number on a live-looking row.
-        _refreshNotice.value = if (resolved.size == ids.size) {
-            _refreshNotice.value.onSuccess()
-        } else {
-            _refreshNotice.value.onFailure()
-        }
+        return resolved
     }
 
     /** Pull the boards + their rows, keeping the outcome instead of dropping it. */
@@ -274,8 +321,24 @@ class WatchlistViewModel(
         _selectedBoardId.value = boards.value.firstOrNull()?.id
     }
 
+    /**
+     * Whether the last row removal failed, as the sentence to print.
+     *
+     * The result of `removeAsset` used to be dropped, so a refused delete was a
+     * row that simply stayed put with nothing said. Deletions report their
+     * verdict INLINE (standing design rule — a snackbar over a sheet is the one
+     * place a verdict goes unread), so it lands here and the panel prints it
+     * above the list.
+     */
+    private val _removeFailure = MutableStateFlow<BtMessage?>(null)
+    val removeFailure: StateFlow<BtMessage?> = _removeFailure.asStateFlow()
+
     fun removeAsset(boardId: String, assetId: String) = viewModelScope.launch {
-        watchlist.removeAsset(boardId, assetId)
+        _removeFailure.value = (watchlist.removeAsset(boardId, assetId) as? BtResult.Err)?.asMessage()
+    }
+
+    fun clearRemoveFailure() {
+        _removeFailure.value = null
     }
 }
 
@@ -317,10 +380,12 @@ fun WatchlistPanel(
     val refreshNotice by vm.refreshNotice.collectAsStateWithLifecycle()
     val loadFailure by vm.loadFailure.collectAsStateWithLifecycle()
     val firstLoadDone by vm.firstLoadDone.collectAsStateWithLifecycle()
+    val removeFailure by vm.removeFailure.collectAsStateWithLifecycle()
 
     var createOpen by remember { mutableStateOf(false) }
     var renameBoard by remember { mutableStateOf<WatchlistBoard?>(null) }
     var deleteBoardConfirm by remember { mutableStateOf<WatchlistBoard?>(null) }
+    var removeConfirm by remember { mutableStateOf<WatchlistItemEntity?>(null) }
 
     val selectedBoard = boards.firstOrNull { it.id == selectedId }
 
@@ -330,6 +395,21 @@ fun WatchlistPanel(
             RefreshFailedBanner(
                 onDismiss = { vm.dismissRefreshNotice() },
                 onRetry = { vm.refresh() },
+            )
+        }
+
+        // A removal that the server refused, said out loud and IN LINE — the
+        // standing rule for verdict-shaped outcomes. Retry here clears the
+        // sentence and re-reads the lists, rather than replaying the delete: a
+        // tap labelled "try again" must not risk removing a second row.
+        removeFailure?.let { message ->
+            BtInlineError(
+                message = message,
+                onRetry = {
+                    vm.clearRemoveFailure()
+                    vm.refresh()
+                },
+                modifier = Modifier.padding(vertical = 4.dp),
             )
         }
 
@@ -433,7 +513,11 @@ fun WatchlistPanel(
                         quote = quotes[item.assetId],
                         locale = locale,
                         onOpen = { onOpenAsset(item.assetId) },
-                        onRemove = { selectedId?.let { vm.removeAsset(it, item.assetId) } },
+                        // A one-tap icon that deletes is a one-tap icon that
+                        // deletes by accident (owner device pass #27). It asks
+                        // first now, from the bottom edge like every other
+                        // confirmation in the app.
+                        onRemove = { removeConfirm = item },
                     )
                 }
                 item(key = "add") {
@@ -488,6 +572,93 @@ fun WatchlistPanel(
                 }
             },
         )
+    }
+    removeConfirm?.let { item ->
+        WatchlistRemoveConfirmSheet(
+            symbol = item.assetSymbol,
+            listName = selectedBoard?.name.orEmpty(),
+            onConfirm = {
+                selectedId?.let { vm.removeAsset(it, item.assetId) }
+                removeConfirm = null
+            },
+            onDismiss = { removeConfirm = null },
+        )
+    }
+}
+
+/**
+ * "Remove this row?" — the confirmation the inline trash icon never had.
+ *
+ * A bottom sheet, not a centre dialog: everything transient in this app arrives
+ * from the bottom edge (owner order 2026-08-16). The destructive verb is the
+ * filled loss-coloured button and Cancel is the quiet one underneath, so the
+ * dangerous choice is the one that has to be aimed at — the same shape the
+ * notification-channel and trusted-device confirmations use.
+ *
+ * The board delete beside it already confirmed; only the ROW delete fired on one
+ * tap, which is what the owner's 2026-09-01 pass found (#27) and deliberately
+ * did not test on his live account.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun WatchlistRemoveConfirmSheet(
+    symbol: String,
+    listName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+    )
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = bt.surfaceHigh,
+        contentColor = bt.textPrimary,
+        dragHandle = {
+            androidx.compose.material3.BottomSheetDefaults.DragHandle(color = bt.textMuted)
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.bt_watchlist_remove_confirm_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = bt.textPrimary,
+            )
+            Text(
+                text = stringResource(R.string.bt_watchlist_remove_confirm_body, symbol, listName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = bt.textSecondary,
+            )
+            Spacer(Modifier.height(4.dp))
+            androidx.compose.material3.Button(
+                onClick = onConfirm,
+                shape = at.bettertrack.app.ui.theme.BtShapes.control,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = bt.loss,
+                    contentColor = bt.bg,
+                ),
+                elevation = null,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) {
+                Text(stringResource(R.string.bt_watchlist_remove_item))
+            }
+            androidx.compose.material3.TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.bt_action_cancel), color = bt.textSecondary)
+            }
+        }
     }
 }
 

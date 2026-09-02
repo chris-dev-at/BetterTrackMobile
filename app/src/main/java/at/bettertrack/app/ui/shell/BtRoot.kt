@@ -1,12 +1,10 @@
 package at.bettertrack.app.ui.shell
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +18,8 @@ import at.bettertrack.app.data.auth.SignOutReason
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
+import at.bettertrack.app.ui.auth.PreLoginStep
+import at.bettertrack.app.ui.auth.rememberPreLoginNav
 import at.bettertrack.app.ui.firstrun.FirstRunWizard
 import at.bettertrack.app.ui.auth.PasswordChangeRequiredScreen
 import at.bettertrack.app.data.prefs.ServerOrigins
@@ -124,19 +124,38 @@ private fun AuthGate(
             // NavHost, so this is a plain state swap rather than a route — and
             // that is also why the sheet drives `BtSheet` directly instead of
             // being a `btSheet<>` registration.
-            var showServer by remember { mutableStateOf(false) }
+            //
+            // The swap is driven by [PreLoginNav] and not by a local boolean, for
+            // the two reasons the owner's 2026-09-01 pass found (report #4): a
+            // boolean has no back handler, so system back fell through to the
+            // activity and finished the task with the "route" still set; and the
+            // sheet's own open-state lived inside the login screen this swap
+            // destroys, so coming back skipped it. One stack answers both.
+            val preLogin = rememberPreLoginNav()
             val serverEnabled = ServerOrigins.settingEnabled
-            if (serverEnabled && showServer) {
-                ServerScreen(onBack = { showServer = false })
+            val goBack = { preLogin.back(); Unit }
+            if (serverEnabled && preLogin.current == PreLoginStep.Server) {
+                // Nothing else claims back here: the login screen is outside the
+                // NavHost and no sheet is composed while this screen is up, so
+                // without this handler the press reaches the activity.
+                BackHandler(onBack = goBack)
+                ServerScreen(onBack = goBack)
             } else {
                 LoginScreen(
                     phase = phase,
                     onLogin = onStartLogin,
                     onNeedAccount = { onOpenUrl(auth.needAccountUrl()) },
                     onForgotPassword = { onOpenUrl(auth.forgotPasswordUrl()) },
-                    onLongPressWordmark = { if (BuildConfig.DEBUG && serverEnabled) showServer = true },
+                    onLongPressWordmark = {
+                        if (BuildConfig.DEBUG && serverEnabled) preLogin.open(PreLoginStep.Server)
+                    },
                     serverHost = if (serverEnabled) originLabel(ServerOrigins.webOrigin) else null,
-                    onOpenServer = if (serverEnabled) ({ showServer = true }) else null,
+                    onOpenServer = if (serverEnabled) {
+                        ({ preLogin.open(PreLoginStep.Server) })
+                    } else {
+                        null
+                    },
+                    preLogin = preLogin,
                 )
             }
         }

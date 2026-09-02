@@ -135,6 +135,9 @@ internal fun BtSheetStack(
     val topKey = pages.lastOrNull()?.key
     val stacked = depth >= 2
     val stackedNow by rememberUpdatedState(stacked)
+    // Which page is on top RIGHT NOW, readable from inside a dismissal that
+    // started a quarter of a second ago. See [sheetPopIsAddressed].
+    val topKeyNow = rememberUpdatedState(topKey)
     val reducedNow by rememberUpdatedState(reducedMotion)
     val hostNow by rememberUpdatedState(host)
     val hapticsNow by rememberUpdatedState(rememberBtHaptics())
@@ -210,6 +213,12 @@ internal fun BtSheetStack(
         {
             if (!leaving) {
                 leaving = true
+                // The page this dismissal is FOR. `popBackStack()` deletes by
+                // position, and this promise is not kept until the travel ends —
+                // so the promise is addressed, and a stack that moved underneath
+                // it (owner device pass #5) cancels it instead of costing an
+                // innocent page. See [sheetPopIsAddressed].
+                val startedOn = topKeyNow.value
                 scope.launch {
                     if (!reducedNow) {
                         if (stackedNow) {
@@ -220,7 +229,7 @@ internal fun BtSheetStack(
                             travel.animateTo(1f, SheetExit)
                         }
                     }
-                    hostNow.pop()
+                    if (sheetPopIsAddressed(startedOn, topKeyNow.value)) hostNow.pop()
                 }
             }
             Unit
@@ -252,17 +261,28 @@ internal fun BtSheetStack(
 
     // System and predictive back drive the same travel the finger does, on
     // whichever axis this depth uses, so a back swipe previews the real motion.
-    PredictiveBackHandler(enabled = depth > 0 && !leaving) { progress ->
+    //
+    // `enabled` is the DEPTH alone — deliberately not `&& !leaving` any more. The
+    // layer claims back for as long as anything is stacked, including the quarter
+    // second a dismissal is in flight, because the callback directly beneath this
+    // one in the dispatcher is the NavController's and it pops with no animation
+    // at all. See [sheetBackAction] for the two levels that used to vanish
+    // together (owner device pass 2026-09-01, #5).
+    PredictiveBackHandler(enabled = depth > 0) { progress ->
+        // Decided ONCE, on the frame the gesture starts, and held for the whole
+        // of it: a press cannot change what it meant halfway through.
+        val action = sheetBackAction(depth, leaving)
         try {
             progress.collect { event ->
+                if (action != SheetBack.TAKE) return@collect
                 val preview = (event.progress * SHEET_BACK_PREVIEW).coerceIn(0f, 1f)
                 if (stackedNow) slide.snap(preview) else travel.snap(preview)
             }
-            backOne()
+            if (action == SheetBack.TAKE) backOne()
         } catch (cancelled: CancellationException) {
             // The animation has to run on the composition's scope: this coroutine
             // is already dead.
-            if (!leaving) settle()
+            if (action == SheetBack.TAKE && !leaving) settle()
             throw cancelled
         }
     }
