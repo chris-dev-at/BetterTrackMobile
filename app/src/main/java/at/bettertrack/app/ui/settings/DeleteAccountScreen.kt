@@ -53,6 +53,7 @@ import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.auth.AuthState
+import at.bettertrack.app.data.auth.SignOutReason
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtTextField
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -210,7 +211,7 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
                         submitting = true
                         scope.launch {
                             when (val r = repo.deleteAccount(typed, password)) {
-                                is BtResult.Ok -> { submitting = false; AppGraph.authRepository.requestLogout() }
+                                is BtResult.Ok -> { submitting = false; AppGraph.authRepository.requestLogout(SignOutReason.ACCOUNT_DELETED) }
                                 is BtResult.Err -> { serverError = r.error.asMessage(); submitting = false }
                             }
                         }

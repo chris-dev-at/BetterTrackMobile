@@ -137,7 +137,16 @@ object AppGraph {
             }
         }
 
-    val secureStore: SecureStore by lazy { SecureStore(appContext, json) }
+    /**
+     * Why the app last returned to the login screen — see
+     * [at.bettertrack.app.data.auth.SignOutLedger]. Constructed before
+     * [secureStore] because the store itself records into it.
+     */
+    val signOutLedger: at.bettertrack.app.data.auth.SignOutLedger by lazy {
+        at.bettertrack.app.data.auth.PrefsSignOutLedger(appContext, json)
+    }
+
+    val secureStore: SecureStore by lazy { SecureStore(appContext, json, signOutLedger) }
 
     // ── Bare token client ──────────────────────────────────────────────────────
     private val tokenClient: OkHttpClient by lazy {
@@ -254,6 +263,7 @@ object AppGraph {
                 val demoted = at.bettertrack.app.data.storage.modeAfterLogout(storageModeStore.modeNow())
                 if (demoted != storageModeStore.modeNow()) storageModeStore.set(demoted)
             },
+            ledger = signOutLedger,
         )
     }
 
@@ -749,7 +759,10 @@ object AppGraph {
                     .getOrDefault(false)
             }
             storageModeStore.grandfather(
-                hasTokens = tokenManager.hasTokens(),
+                // "cannot read the store right now" must never be reported as
+                // "this install never had a session" — that would demote the
+                // storage mode on a Keystore hiccup.
+                hasTokens = tokenManager.sessionPresence() !is at.bettertrack.app.data.auth.TokenRead.None,
                 hasCachedUser = secureStore.loadUser() != null,
                 hasDbOwner = hasDbOwner,
             )
@@ -1050,7 +1063,7 @@ object AppGraph {
             deleteRemoteVault = { deleteRemoteVaultBestEffort() },
             forgetVaultKey = { vaultKeyCustody.forget() },
             wipeVaultTables = { vaultStore.wipe() },
-            logoutServer = { authRepository.logout() },
+            logoutServer = { authRepository.logout(at.bettertrack.app.data.auth.SignOutReason.STORAGE_MODE_SWITCH) },
             capabilities = { transitionCapabilities() },
         )
     }

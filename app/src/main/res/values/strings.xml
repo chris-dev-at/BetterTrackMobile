@@ -4138,4 +4138,25 @@
     <string name="bt_pv_create_done_pending_title">Not activated yet</string>
     <string name="bt_pv_create_done_pending">Vaults switch on as soon as the server supports them. Nothing has been created and nothing has been sent anywhere yet.</string>
     <!-- ===== END paranoid vaults · §21 creation ceremony (A4) ===== -->
+    <!-- ===== Auth diagnostics · sign-out reason ledger (2026-09-02) ===== -->
+    <string name="bt_prelogin_diagnostics">Diagnostics</string>
+    <string name="bt_prelogin_diagnostics_sub">Why this phone was signed out</string>
+    <string name="bt_diag_title">Sign-out history</string>
+    <string name="bt_diag_intro">Every time this app returned to the login screen, it wrote down why. Nothing here identifies you or your account.</string>
+    <string name="bt_diag_empty">Nothing recorded yet</string>
+    <string name="bt_diag_empty_sub">This phone has not been signed out since the app started keeping track.</string>
+    <string name="bt_diag_reason_user_logout">You logged out</string>
+    <string name="bt_diag_reason_forgot_pin">Signed out after \"Forgot PIN\"</string>
+    <string name="bt_diag_reason_account_deleted">Account deleted</string>
+    <string name="bt_diag_reason_storage_switch">Storage was switched</string>
+    <string name="bt_diag_reason_account_gate">This account may not use the app</string>
+    <string name="bt_diag_reason_refresh_rejected">The server ended this device\'s session</string>
+    <string name="bt_diag_reason_refresh_lost">Session lost after a broken connection</string>
+    <string name="bt_diag_reason_store_unavailable">Encrypted storage could not be read</string>
+    <string name="bt_diag_reason_store_recreated">Encrypted storage was rebuilt</string>
+    <string name="bt_diag_reason_decode_failed">The stored session could not be read</string>
+    <string name="bt_diag_reason_unknown">Unrecognised reason</string>
+    <string name="bt_auth_reconnecting">Reconnecting to your account…</string>
+    <string name="bt_auth_reconnecting_retry">Try reconnecting now</string>
+    <!-- ===== END auth diagnostics ===== -->
 </resources>

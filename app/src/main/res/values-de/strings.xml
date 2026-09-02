@@ -3935,4 +3935,25 @@
     <string name="bt_pv_create_done_pending_title">Noch nicht aktiviert</string>
     <string name="bt_pv_create_done_pending">Tresore werden aktiviert, sobald der Server bereit ist. Es wurde nichts angelegt und nichts irgendwohin gesendet.</string>
     <!-- ===== END paranoid vaults · §21 creation ceremony (A4) ===== -->
+    <!-- ===== Auth diagnostics · sign-out reason ledger (2026-09-02) ===== -->
+    <string name="bt_prelogin_diagnostics">Diagnose</string>
+    <string name="bt_prelogin_diagnostics_sub">Warum dieses Telefon abgemeldet wurde</string>
+    <string name="bt_diag_title">Abmeldeverlauf</string>
+    <string name="bt_diag_intro">Jedes Mal, wenn die App zum Anmeldebildschirm zurückgekehrt ist, hat sie den Grund notiert. Nichts davon verrät dich oder dein Konto.</string>
+    <string name="bt_diag_empty">Noch nichts aufgezeichnet</string>
+    <string name="bt_diag_empty_sub">Dieses Telefon wurde nicht abgemeldet, seit die App mitschreibt.</string>
+    <string name="bt_diag_reason_user_logout">Du hast dich abgemeldet</string>
+    <string name="bt_diag_reason_forgot_pin">Abgemeldet nach \"PIN vergessen\"</string>
+    <string name="bt_diag_reason_account_deleted">Konto gelöscht</string>
+    <string name="bt_diag_reason_storage_switch">Speicherort wurde gewechselt</string>
+    <string name="bt_diag_reason_account_gate">Dieses Konto darf die App nicht nutzen</string>
+    <string name="bt_diag_reason_refresh_rejected">Der Server hat die Sitzung dieses Geräts beendet</string>
+    <string name="bt_diag_reason_refresh_lost">Sitzung nach abgebrochener Verbindung verloren</string>
+    <string name="bt_diag_reason_store_unavailable">Verschlüsselter Speicher war nicht lesbar</string>
+    <string name="bt_diag_reason_store_recreated">Verschlüsselter Speicher wurde neu angelegt</string>
+    <string name="bt_diag_reason_decode_failed">Die gespeicherte Sitzung war nicht lesbar</string>
+    <string name="bt_diag_reason_unknown">Unbekannter Grund</string>
+    <string name="bt_auth_reconnecting">Verbindung zu deinem Konto wird wiederhergestellt…</string>
+    <string name="bt_auth_reconnecting_retry">Jetzt erneut verbinden</string>
+    <!-- ===== END auth diagnostics ===== -->
 </resources>

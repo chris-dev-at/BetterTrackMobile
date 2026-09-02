@@ -5,8 +5,10 @@ import android.util.Log
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
+import at.bettertrack.app.data.api.dto.OAuthGrant
 import at.bettertrack.app.data.db.LocalAccountData
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +34,7 @@ import kotlinx.serialization.json.Json
 class AuthRepository(
     private val tokenManager: TokenManager,
     private val btApi: BtApi,
-    private val store: SecureStore,
+    private val store: SessionStore,
     private val json: Json,
     private val webOrigin: String,
     private val clientId: String,
@@ -53,6 +55,13 @@ class AuthRepository(
      * this class stays about sessions.
      */
     private val onAfterLogout: () -> Unit = {},
+    /**
+     * Where every transition to signed-out is written down. The owner was being
+     * returned to the login screen with no explanation and no way to find one
+     * after the fact; this is that record. See [SignOutLedger].
+     */
+    private val ledger: SignOutLedger = NoopSignOutLedger,
+    private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -61,20 +70,64 @@ class AuthRepository(
     val loginPhase: StateFlow<LoginPhase> = _loginPhase.asStateFlow()
 
     init {
-        _authState.value = resolveInitialState()
+        val presence = tokenManager.sessionPresence()
+        _authState.value = resolveInitialState(presence)
         // Confirm local-data ownership for a restored session (no-op when same user).
         (authState.value as? AuthState.LoggedIn)?.let { s ->
             scope.launch { localAccountData.onSessionEstablished(s.user.id) }
         }
         // Any downstream refresh rejection wipes the session ⇒ drop to login.
         scope.launch {
-            tokenManager.sessionInvalidated.collect { forceLoggedOut() }
+            tokenManager.sessionInvalidated.collect { forceLoggedOut(it) }
+        }
+        // The store said "I cannot read myself right now" (a busy Keystore, a
+        // data directory that was not ready). The bytes are still there and
+        // SecureStore no longer deletes them, so keep asking: a session that
+        // comes back within a few seconds never reaches the user as a logout.
+        if (presence is TokenRead.Unavailable) scope.launch { recoverUnreadableStore() }
+    }
+
+    private suspend fun recoverUnreadableStore() {
+        repeat(STORE_RECOVERY_ATTEMPTS) { attempt ->
+            delay(STORE_RECOVERY_DELAY_MS * (attempt + 1))
+            if (_authState.value !is AuthState.LoggedOut) return
+            if (!store.reopen()) return@repeat
+            val recovered = resolveInitialState(tokenManager.sessionPresence())
+            if (recovered !is AuthState.LoggedOut) {
+                Log.i(TAG, "Encrypted store came back; session restored without a re-login.")
+                _authState.value = recovered
+                (recovered as? AuthState.LoggedIn)?.let {
+                    localAccountData.onSessionEstablished(it.user.id)
+                }
+                return
+            }
         }
     }
 
     /** Startup routing (spec §4): a stored token = still logged in across restarts. */
-    private fun resolveInitialState(): AuthState {
-        if (!tokenManager.hasTokens()) return AuthState.LoggedOut
+    private fun resolveInitialState(presence: TokenRead): AuthState {
+        when (presence) {
+            is TokenRead.Present -> Unit
+
+            TokenRead.None -> return AuthState.LoggedOut
+
+            is TokenRead.Unavailable -> {
+                // NOT a logout in any meaningful sense — nothing was revoked and
+                // nothing was deleted. It only LOOKS like one, which is exactly
+                // why it has to be written down.
+                Log.w(TAG, "Session storage unreadable at startup (${presence.cause}); showing login.")
+                ledger.record(
+                    SignOutEvent(
+                        at = nowMs(),
+                        reason = SignOutReason.SECURE_STORE_UNAVAILABLE.name,
+                        errorCode = presence.cause,
+                        trigger = SignOutTrigger.STARTUP.name,
+                        caller = "AuthRepository.resolveInitialState",
+                    ),
+                )
+                return AuthState.LoggedOut
+            }
+        }
         val user = store.loadUser() ?: SessionUser.unknown()
         // Cold start: route a paranoid account to the explainer from the PERSISTED
         // privacyMode, before /auth/me has answered — that is the whole point of
@@ -331,9 +384,16 @@ class AuthRepository(
 
     // ── Logout ────────────────────────────────────────────────────────────────
 
-    /** Fire-and-forget logout for UI callers. */
-    fun requestLogout() {
-        scope.launch { logout() }
+    /**
+     * Fire-and-forget logout for UI callers.
+     *
+     * [reason] is recorded in the sign-out ledger so the login screen can tell a
+     * deliberate logout apart from a forced one — the whole point of the ledger
+     * is that "why am I here again?" has an answer, and "because you tapped Log
+     * out" is one of the answers.
+     */
+    fun requestLogout(reason: SignOutReason = SignOutReason.USER_LOGOUT) {
+        scope.launch { logout(reason) }
     }
 
     /**
@@ -347,7 +407,15 @@ class AuthRepository(
      * reach; the local wipe is the part the user actually asked for, so it runs
      * whatever the rest did.
      */
-    suspend fun logout() {
+    suspend fun logout(reason: SignOutReason = SignOutReason.USER_LOGOUT) {
+        ledger.record(
+            SignOutEvent(
+                at = nowMs(),
+                reason = reason.name,
+                trigger = SignOutTrigger.USER.name,
+                caller = "AuthRepository.logout",
+            ),
+        )
         // Deregister the FCM device token FIRST, while the bearer is still valid
         // (bounded + fail-soft inside the hook — logout never blocks on it).
         bestEffort("deregister device token") { onBeforeLogout() }
@@ -398,14 +466,17 @@ class AuthRepository(
      * Still best-effort in every direction: a refusal, a network failure or a
      * 5xx is logged and the local wipe proceeds regardless. A logout that cannot
      * reach the server must still leave the phone with nothing on it.
+     *
+     * **Which grant** is decided by [grantToRevoke], not by `clientId`. See that
+     * function for why the old `firstOrNull { clientId == ours }` was a guess.
      */
     private suspend fun revokeGrantBestEffort() {
         try {
             when (val grants = apiCall(json) { btApi.oauthGrants() }) {
                 is BtResult.Ok -> {
-                    val grant = grants.value.grants.firstOrNull { it.clientId == clientId }
+                    val grant = grantToRevoke(grants.value.grants, clientId)
                     if (grant == null) {
-                        Log.i(TAG, "No matching OAuth grant to revoke (client=$clientId).")
+                        Log.i(TAG, "No unambiguously-own OAuth grant to revoke; skipping.")
                         return
                     }
                     val resp = btApi.revokeOAuthGrant(grant.id)
@@ -421,6 +492,15 @@ class AuthRepository(
     }
 
     private fun wipeAndFail(error: LoginError) {
+        ledger.record(
+            SignOutEvent(
+                at = nowMs(),
+                reason = SignOutReason.ACCOUNT_GATE.name,
+                errorCode = error.name,
+                trigger = SignOutTrigger.ACCOUNT_GATE.name,
+                caller = "AuthRepository.wipeAndFail",
+            ),
+        )
         // A gated account (admin / disabled) must leave no local data behind.
         scope.launch { localAccountData.wipeAll() }
         store.wipeAll()
@@ -428,7 +508,17 @@ class AuthRepository(
         _loginPhase.value = LoginPhase.Failed(error)
     }
 
-    private fun forceLoggedOut() {
+    private fun forceLoggedOut(invalidation: SessionInvalidation) {
+        ledger.record(
+            SignOutEvent(
+                at = nowMs(),
+                reason = invalidation.reason.name,
+                httpStatus = invalidation.httpStatus,
+                errorCode = invalidation.errorCode,
+                trigger = SignOutTrigger.REFRESH.name,
+                caller = invalidation.caller,
+            ),
+        )
         // Session expiry — NOT a logout: tokens go, but the Room caches and the
         // outbound queue survive so a re-login of the same user resumes the
         // drain with nothing lost (§7.3). The owner gate at next login wipes if
@@ -438,6 +528,9 @@ class AuthRepository(
         _loginPhase.value = LoginPhase.Idle
     }
 
+    /** The sign-out history, newest first — rendered by the login screen. */
+    fun signOutHistory(): List<SignOutEvent> = ledger.recent()
+
     // ── Web links (open in the browser, spec §4) ───────────────────────────────
     fun webHomeUrl(): String = webOrigin.trimEnd('/')
     fun needAccountUrl(): String = "${webOrigin.trimEnd('/')}/register"
@@ -445,5 +538,41 @@ class AuthRepository(
 
     private companion object {
         const val TAG = "BtAuth"
+
+        /** How persistently a momentarily-unreadable Keystore is re-tried. */
+        const val STORE_RECOVERY_ATTEMPTS = 4
+        const val STORE_RECOVERY_DELAY_MS = 500L
     }
+}
+
+/**
+ * Which OAuth grant, if any, a logout is allowed to revoke.
+ *
+ * The old rule was `firstOrNull { it.clientId == ourClientId }`, which is not an
+ * identity check but a family-name check: every install of this app on every
+ * device the user owns carries the same `clientId`, so the row it picked was
+ * whichever the server happened to list first.
+ *
+ * The platform now answers the actual question. `GET /settings/oauth-grants`
+ * returns a **required** `current: boolean`, computed server-side by comparing
+ * each grant to the credential the calling request is riding
+ * (`oauthService.ts:610-625`, `current: grant.id === currentGrantId`; live on
+ * prod — `current` is in `OAuthGrantListResponse`'s `required` list in the
+ * deployed `openapi.json`). So the grant this device holds is a fact we can read
+ * rather than infer.
+ *
+ * When the server does not say (a `null` from an older deployment), the fallback
+ * is deliberately timid: revoke only when exactly one grant carries our
+ * `clientId` and the server expressed no opinion about it. Two candidates and no
+ * marker means we cannot tell our own grant from another device's, and the
+ * correct move is to revoke nothing — a logout that also signs out the user's
+ * tablet is a worse failure than a logout that leaves a server-side grant
+ * standing, which the user can still remove from the web.
+ */
+internal fun grantToRevoke(grants: List<OAuthGrant>, clientId: String): OAuthGrant? {
+    grants.firstOrNull { it.current == true }?.let { return it }
+    // The server spoke and said "none of these is yours" — believe it.
+    if (grants.any { it.current != null }) return null
+    val ours = grants.filter { it.clientId == clientId }
+    return ours.singleOrNull()
 }

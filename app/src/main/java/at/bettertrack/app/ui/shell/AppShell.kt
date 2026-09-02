@@ -871,11 +871,20 @@ fun BtApp() {
                     val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
                     val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
                         .collectAsStateWithLifecycle(initialValue = null)
+                    val sessionDegraded by AppGraph.tokenManager.sessionDegraded
+                        .collectAsStateWithLifecycle()
                     if (!online || DebugPreviewState.showOfflineBanner) {
                         // §7.4: the indicator opens the Pending-sync sheet.
                         OfflineBanner(
                             asOfMs = dataAgeMs,
                             onClick = { navController.navigate(PendingSyncRoute) },
+                        )
+                    } else if (sessionDegraded) {
+                        // Online, but the session cannot be renewed right now.
+                        // This is the state that used to be a forced logout.
+                        val retryScope = rememberCoroutineScope()
+                        AuthReconnectBanner(
+                            onRetry = { retryScope.launch { AppGraph.tokenManager.retryRefreshNow() } },
                         )
                     }
                     // The four pages. All of them, all the time.

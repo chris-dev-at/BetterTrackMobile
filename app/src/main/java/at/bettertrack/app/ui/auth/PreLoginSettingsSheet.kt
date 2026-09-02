@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -155,7 +156,17 @@ private fun PreLoginSettingsContent(
     val context = LocalContext.current
     val activity = context as? Activity
     var picker by remember { mutableStateOf<PreLoginPicker?>(null) }
+    var diagnostics by remember { mutableStateOf(false) }
     val themeMode by AppGraph.devicePrefs.themeMode.collectAsStateWithLifecycle()
+
+    // The diagnostics history REPLACES this sheet's content rather than opening
+    // a second sheet on top of it: the login screen is outside the NavHost, so
+    // there is no route to push, and stacking sheets to show a list would put two
+    // grabbers and two scrims on screen for one linear drill-down.
+    if (diagnostics) {
+        AuthDiagnosticsScreen(onClose = { diagnostics = false })
+        return
+    }
 
     Scaffold(
         containerColor = bt.bg,
@@ -216,6 +227,15 @@ private fun PreLoginSettingsContent(
                     title = stringResource(R.string.bt_dest_settings_language),
                     subtitle = stringResource(languageLabelRes(LocaleManager.current(context))),
                     onClick = { picker = PreLoginPicker.Language },
+                )
+                // Its own labelled row, not folded into anything: someone who has
+                // just been thrown back to this screen needs to find the answer
+                // without knowing the word for what happened to them.
+                BtGroupRow(
+                    icon = Icons.Outlined.MonitorHeart,
+                    title = stringResource(R.string.bt_prelogin_diagnostics),
+                    subtitle = stringResource(R.string.bt_prelogin_diagnostics_sub),
+                    onClick = { diagnostics = true },
                 )
             }
         }

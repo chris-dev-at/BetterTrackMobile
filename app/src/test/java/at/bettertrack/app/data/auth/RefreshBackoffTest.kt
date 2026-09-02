@@ -12,6 +12,13 @@ import org.junit.Test
  *    actually SENT (400/401) may end the session; a transport failure carries
  *    `httpStatus == 0` and a maintenance proxy sends 5xx, and neither is proof
  *    that the refresh token died.
+ *
+ *    Note that `isAuthHardFailure` NO LONGER governs the refresh path — since
+ *    2026-09-02 that path asks [refreshRefusalIsDefinitive], which is narrower
+ *    still (only `400 INVALID_GRANT`, the platform's single token-death answer)
+ *    because "every 400 and 401" was itself a cause of forced sign-outs. See
+ *    `ForcedSignOutTest`. What is asserted below is the property the rest of the
+ *    app still reads it for, e.g. the `/auth/me` gate in `AuthRepository`.
  * 2. **A dead server must not be re-discovered once per request.** The proactive
  *    refresh runs ahead of every authenticated call once the access token is past
  *    its skew window, so with an unreachable origin it multiplies one connect

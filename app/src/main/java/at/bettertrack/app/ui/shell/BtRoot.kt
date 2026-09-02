@@ -16,6 +16,7 @@ import at.bettertrack.app.data.auth.firstRunGate
 import at.bettertrack.app.data.storage.RootGate
 import at.bettertrack.app.data.storage.hasServerAccount
 import at.bettertrack.app.data.storage.rootGate
+import at.bettertrack.app.data.auth.SignOutReason
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.applock.AppLockScreen
 import at.bettertrack.app.ui.auth.LoginScreen
@@ -157,7 +158,7 @@ private fun AuthGate(
                 AppLockScreen(
                     onForgotPin = {
                         AppGraph.appLockController.disableLock()
-                        auth.requestLogout()
+                        auth.requestLogout(SignOutReason.APP_LOCK_FORGOT_PIN)
                     },
                 )
             } else {
