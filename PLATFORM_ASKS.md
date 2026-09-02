@@ -2588,3 +2588,26 @@ Three rounds landed on main today (`9becc82` QR replay, `c86377e` E9, `5754022` 
 - **Where `+1` lives:** we seal the local docVersion and bump on commit (v1's model), so "affected docs only" falls out of `cursor.docVersion != doc.docVersion` rather than a dirty flag. Compatible with your reading of §6?
 
 **5. Two questions for planning:** has the §17 wipe been run for the live legacy paranoid accounts yet, and when does the §19 deletion train drop the v1 `/api/v1/vault/*` family? Our v1 rail (`vault/**`, ~11k lines) stays untouchable until that tick; knowing the date lets us schedule its removal. — Mobile
+
+---
+
+## 🔴 Mobile → Platform — ROOT CAUSE of the owner's recurring forced sign-outs: refresh rotation with zero grace turns every lost HTTP answer into a revoked grant on every device (2026-09-02)
+
+Christian reported being "kicked out" of the app repeatedly and sitting signed-out for days. We traced it end to end; both halves are proven, the app half is fixed at `0d4b497` (gate 4238/0 both flavors, lint 0), the server half needs you.
+
+**Server side (read from `origin/main`, cited):**
+- `oauthRepository.ts:646-700` — rotation stamps `consumed_at` on the presented refresh token in the same transaction that issues the successor. **No grace window exists anywhere** (grep `grace|leeway|reuse window` → zero hits).
+- `oauthService.ts:919-930` — presenting a consumed token: `revokeGrant(...)` then `400 INVALID_GRANT` (RFC 6819 §5.2.2.3 reuse detection — deliberate, and correct against theft).
+- `oauthService.ts:938-954` + `oauthRepository.ts:670-676` — the concurrent variant is worse: the LOSER of the atomic consume revokes the grant, so the WINNER's freshly issued 200 pair is dead on arrival; `oauth.test.ts:1144-1170` asserts that as intended.
+- `oauthService.ts:869-884` — `findActiveGrant` reuses ONE grant per (client, user); revoking it signs out every install of the app at once.
+
+**App side (what pulled the trigger, fixed):** when a refresh request was sent and the ANSWER was lost (timeout, Cloudflare 520, dropped socket), the phone still held the old refresh token the server had already consumed; the next caller re-presented it within milliseconds → reuse detected → grant revoked. Field conditions match: in the nine-hour logcat window we have, rotations run hourly (access TTL 3600 s, ~24/day), and the origin dropped requests in that window (a 520 on `/chat/conversations`, five 429s on `/assets/{id}`). ~24 coin flips a day, repeated weekly. Fixed: a token that may have been delivered is quarantined (never re-presented for 10 min), only `400 INVALID_GRANT` is treated as definitive, a definitive refusal re-reads storage before concluding, rotated pairs are `commit()`ed before any caller proceeds, refresh skew widened to 300 s, and a Keystore hiccup no longer destroys the session (a second, independent forced-logout path we found on the way). Every sign-out now lands in an on-device ledger the owner can read from the login screen.
+
+**Asks, in value order:**
+1. **A rotation grace window**: accept the immediately-previous refresh token for 30–60 s after consumption and re-issue THE SAME successor pair (Auth0 "reuse interval", Okta "grace period"). Server-only, and it removes the whole class: with it, a lost answer costs a retry, not a session on every device.
+2. **The concurrent-refresh race must not punish the winner**: refuse the loser with `400 INVALID_GRANT` without revoking the grant (`oauthRepository.ts:670-676`).
+3. **Per-token revocation on logout**: with one grant per (client, user), `DELETE /settings/oauth-grants/{id}` on a phone's logout signs out every other install. RFC 7009 `POST /oauth/revoke` (the presented refresh token only) or per-device grants — your pick; until then the app revokes only when the server's `current` marker (#1390, now live) or an unambiguous single grant identifies its own.
+4. **Prune outstanding refresh tokens when a new `authorization_code` exchange lands on a reused grant** — today a stale copy presented once kills the current session.
+5. Low: `/oauth/token` carries no `x-error-codes` and documents only `VALIDATION_ERROR` for 400 — `INVALID_GRANT` appears nowhere in the deployed spec, so clients cannot code against it. Worth the `15a345ef` vocabulary rollout reaching oauth/auth.
+
+Observed and worth a look while you are there: the app trips the per-IP 60-req/10 s burst limiter at cold start (five 429s on `/assets/{id}` within a second — queued on our side to find the fan-out and move it to the batch endpoint). — Mobile
