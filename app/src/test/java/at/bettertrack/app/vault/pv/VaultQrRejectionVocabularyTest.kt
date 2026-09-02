@@ -41,7 +41,7 @@ import java.io.File
  */
 class VaultQrRejectionVocabularyTest {
 
-    private companion object {
+    internal companion object {
 
         /**
          * The frozen vocabulary, verbatim.
@@ -70,6 +70,11 @@ class VaultQrRejectionVocabularyTest {
 
         /**
          * This app's side of the correspondence, written out one value at a time.
+         *
+         * `internal` so [VaultQrE7ConformanceTest] can replay the platform's
+         * vectors against the SAME table instead of writing a second one: two
+         * copies of a mapping are two things that can disagree, and the point
+         * of this file is that there is one.
          *
          * Written as an explicit table rather than derived from the enum's names:
          * a derivation (lowercase, underscores to hyphens) would map

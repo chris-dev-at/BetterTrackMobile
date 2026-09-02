@@ -46,8 +46,27 @@ import org.junit.Test
  * this app's own recommendation to cover `n` and `f`, not just the two required
  * keys — so those vectors now agree. The fixture keeps their history in the
  * vectors' `note` and in `_source.rulingsApplied`; it is not rewritten as though
- * the split never happened. `bareString` is untouched and still the only
- * recorded difference.
+ * the split never happened.
+ *
+ * **The final vectors landed on 2026-09-01** with the merge of the platform's
+ * #1508 and #1513 — 16 vectors became 38, and the platform declared `origin/main`
+ * authoritative for all twelve frozen outcomes. Four more rulings came with them
+ * (`_source.rulingsAppliedRound2`), all four moving this app:
+ *
+ *  1. a leading `?` is `malformed`, order-independent — this supersedes the
+ *     missing-key reading pinned below as leniency case 1;
+ *  2. the version token is a canonical decimal integer (`^[1-9][0-9]*$`), so
+ *     `btvault0:`/`btvault01:`/`btvault02:`/`btvault007:` are not our codes at
+ *     all rather than "update the app";
+ *  3. `n`'s trim set is the named union Unicode `White_Space` ∪ `Cc` ∪ U+FEFF,
+ *     never a host built-in;
+ *  4. the 64-code-point cap applies to the TRIMMED name.
+ *
+ * `bareString`, the file's oldest open item, closed in this app's direction: a
+ * string with no `btvault<N>:` prefix is `not-a-bettertrack-code` on their side
+ * too, and their new `wifiQr` vector is the example this app argued it with. For
+ * the first time both divergence lists are empty — 38 of 38 agree on the
+ * decision, the parsed value and the outcome.
  *
  * The divergence set stays a tripwire in both directions: converge or diverge,
  * the behaviour and this file's expectations change in the SAME edit or the
@@ -61,8 +80,9 @@ import org.junit.Test
  * the one they predicted this app would accept — reasoning that an Android
  * scanner is probably built on `Uri.parse`, which strips fragments. It is not:
  * [parseVaultQrPayload] does its own form decoding for exactly this class of
- * reason, so the fragment stays glued to the last value and is rejected. Cases 2
- * and 4 were both ruled on and the tests below now pin the ruled behaviour.
+ * reason, so the fragment stays glued to the last value and is rejected. Cases
+ * 1, 2 and 4 have all since been ruled on and the tests below pin the ruled
+ * behaviour.
  */
 class VaultQrE7ConformanceTest {
 
@@ -113,17 +133,25 @@ class VaultQrE7ConformanceTest {
             source.str("file"),
         )
         assertTrue(
-            "the fixture must carry the platform commit it was read at",
-            source.str("commit").startsWith("e1882d3a"),
+            "the fixture must carry the platform commit it was read at - 21ec6be0 is the " +
+                "merged origin/main the platform declared authoritative on 2026-09-01",
+            source.str("commit").startsWith("21ec6be0"),
         )
         assertTrue(
-            "E7 is not on origin/main yet - the fixture must say which branch it came off, " +
-                "so a later reader does not go looking for it in main and conclude it was withdrawn",
-            source.str("branch").contains("task/1417"),
+            "the fixture must say which branch it came off. The vectors are MERGED now, so " +
+                "this says origin/main - and it keeps the superseded task/1417 provenance " +
+                "beside it, because a reader of the old record must be able to place it",
+            source.str("branch").startsWith("origin/main") &&
+                source.str("branch").contains("task/1417"),
         )
         assertTrue(
             "the fixture must say, in writing, that the payload/web bytes are the platform's",
             source.str("provenance").contains("PLATFORM E7 conformance vectors"),
+        )
+        assertTrue(
+            "the transcription is REPLACE, never MERGE: the platform file is the one source, " +
+                "so a vector they retired must disappear here instead of surviving as ours",
+            source.str("provenance").contains("REPLACED, NEVER MERGED"),
         )
         assertFalse(
             "a platform fixture must never describe itself as self-derived",
@@ -152,10 +180,50 @@ class VaultQrE7ConformanceTest {
     }
 
     @Test
+    fun `the second ruling round is recorded beside the first, not on top of it`() {
+        // History-preserving is the property, and it is worth a test of its own:
+        // round 1's note still says PR #1508 is unmerged, which was TRUE on
+        // 2026-08-26 and is why the temporary difference it describes is now
+        // closed rather than deleted. A reader who cannot see the old record
+        // cannot tell a verdict that changed from one that was always this way.
+        val source = fixture["_source"]!!.jsonObject
+        val round1 = source["rulingsApplied"]!!.jsonObject
+        val round2 = source["rulingsAppliedRound2"]!!.jsonObject
+        assertEquals("2026-09-01", round2.str("date"))
+        assertTrue(
+            "round 1 must still carry its own, now-superseded, statement of the world",
+            round1.str("ruling1DuplicateKeys").contains("PR #1508, which is NOT merged"),
+        )
+        listOf(
+            "ruling1LeadingQuestionMark",
+            "ruling2CanonicalVersionToken",
+            "ruling3NameTrimSet",
+            "ruling4TrimBeforeCap",
+            "bareStringResolved",
+        ).forEach {
+            assertTrue("the 2026-09-01 rulings block is missing $it", round2.containsKey(it))
+        }
+        // Each ruling that moved this app must name what this app did BEFORE,
+        // or the fixture cannot be used to review the change that applied it.
+        listOf(
+            "ruling1LeadingQuestionMark" to "was MISSING_MNEMONIC",
+            "ruling2CanonicalVersionToken" to "were UNSUPPORTED_VERSION",
+            "ruling3NameTrimSet" to "was accepted here",
+            "ruling4TrimBeforeCap" to "was NAME_TOO_LONG",
+        ).forEach { (key, before) ->
+            assertTrue(
+                "$key must record this app's previous verdict, not only the new rule",
+                round2.str(key).contains(before),
+            )
+        }
+    }
+
+    @Test
     fun `the exported vector set is complete and the golden is one of them`() {
         assertEquals(
-            "the platform exported 16 vectors; a missing one is a hole in the cross-check",
-            16,
+            "the platform exported 38 vectors at 21ec6be0 (16 at the first transcription); a " +
+                "missing one is a hole in the cross-check",
+            38,
             vectors.size,
         )
         val golden = fixture.str("golden")
@@ -256,8 +324,11 @@ class VaultQrE7ConformanceTest {
             vectors.filter { it.str("agreement") == "different-decision" }.map { it.str("name") },
         )
         assertEquals(
-            "one vector agrees on the decision but not on the reason shown to the user",
-            listOf("bareString"),
+            "bareString was the last vector that agreed on the decision but not on the reason " +
+                "shown to the user, and their merged parser closed it in this app's direction on " +
+                "2026-09-01. Nothing may reappear here without a board answer: a reason " +
+                "difference is what the user is TOLD about a code, so 'both reject' is not enough.",
+            emptyList<String>(),
             vectors.filter { it.str("agreement") == "same-decision-different-cause" }
                 .map { it.str("name") },
         )
@@ -265,6 +336,31 @@ class VaultQrE7ConformanceTest {
             assertNotNull(
                 "[${it.str("name")}] a divergence without a written §13 verdict is a landmine",
                 it["note"],
+            )
+        }
+    }
+
+    /**
+     * Same-cause, checked rather than asserted in prose.
+     *
+     * Until 2026-09-01 the two clients' rejection vocabularies were different
+     * *shapes*, so `agreement` could only compare the decision and the parsed
+     * value and had to name the cause difference in a `note`. Their merged
+     * parser answers the frozen eleven exactly, so every rejected vector's
+     * recorded outcome and this app's recorded reason must now be the same
+     * outcome in two spellings — and the spelling map is
+     * [VaultQrRejectionVocabularyTest]'s, not a fresh one invented here.
+     */
+    @Test
+    fun `every rejected vector's web outcome is this app's reason under the frozen mapping`() {
+        val outcomeOf = OUTCOME_BY_REJECTION
+        vectors.filterNot { it["web"]!!.jsonObject.bool("accepts") }.forEach { vector ->
+            val name = vector.str("name")
+            val reason = VaultQrRejection.valueOf(vector["android"]!!.jsonObject.str("reason"))
+            assertEquals(
+                "[$name] this app's reason must be the platform's outcome in Kotlin spelling",
+                vector["web"]!!.jsonObject.str("outcome"),
+                outcomeOf[reason],
             )
         }
     }
@@ -289,33 +385,34 @@ class VaultQrE7ConformanceTest {
     // ── Part 2: the four leniency questions, settled by execution ───────────
 
     /**
-     * **Case 1 — a leading `?`.** The web accepts it (`URLSearchParams` strips a
-     * leading `?` before parsing). This app REJECTS: `?m` is decoded as a key
-     * literally named `?m`, so the required `m` is simply absent.
+     * **Case 1 — a leading `?`. RULED 2026-09-01, and this test is inverted.**
      *
-     * §13 says everything after the first `:` is *one
-     * `application/x-www-form-urlencoded` query string* — and a `?` is the URL's
-     * query DELIMITER, never part of the form data itself. So the strict reading
-     * is this app's, and the web's acceptance is `URLSearchParams` leniency
-     * leaking through the spec. Nothing is unsafe either way and no serializer on
-     * either side emits a `?`, so no real code is affected; it wants one sentence
-     * in §13.
+     * What this file recorded before: the web ACCEPTED it (`URLSearchParams`
+     * strips a leading `?` before parsing) and this app rejected it as a missing
+     * key, because `?m` decodes as a key literally named `?m`. The strict
+     * reading was this app's — §13 makes the body *one
+     * `application/x-www-form-urlencoded` query string*, and `?` is the URL's
+     * query DELIMITER, never form data — and the case was sent to the board
+     * asking for one sentence in §13.
      *
-     * Since the frozen vocabulary split the missing-key outcome (2026-08-26) the
-     * two orderings below are no longer the same verdict: the `?` swallows
-     * whichever key it is glued to, so `?m=…&v=…` is `missing-mnemonic` and
-     * `?v=…&m=…` is `missing-vault-id`. That is the split doing exactly what it
-     * is for — the outcome now says which key the `?` ate.
+     * **The board went further than "who is right".** A missing-key answer made
+     * the verdict depend on the sender's key order: after the vocabulary froze
+     * the two halves apart, `?m=…&v=…` answered `missing-mnemonic` and
+     * `?v=…&m=…` answered `missing-vault-id` — identical structural damage,
+     * two outcomes. The `?` is a break in the body GRAMMAR, so it is `malformed`
+     * whichever key follows, and both orderings are exported as vectors to pin
+     * it. Their words: *"if you implemented missing-mnemonic for this case, it
+     * is one line back."*
      */
     @Test
-    fun `leniency case 1 - a leading question mark is rejected here and accepted on the web`() {
+    fun `leniency case 1 - a leading question mark is malformed on both sides, either key order`() {
         assertEquals(
-            VaultQrRejection.MISSING_MNEMONIC,
+            VaultQrRejection.MALFORMED,
             rejected("btvault1:?m=${words.replace(" ", "+")}&v=$vaultId"),
         )
-        // Not a prefix problem and not a malformed body: the ? is inside the key.
+        // The whole point of the ruling: the same verdict with the keys swapped.
         assertEquals(
-            VaultQrRejection.MISSING_VAULT_ID,
+            VaultQrRejection.MALFORMED,
             rejected("btvault1:?v=$vaultId&m=${words.replace(" ", "+")}"),
         )
         // A ? anywhere else is just a character in a value, exactly as on the web.
@@ -341,10 +438,18 @@ class VaultQrE7ConformanceTest {
      * the wild), so one hostile payload could read as two different vaults on two
      * clients. No legitimate sender emits a duplicate, so rejecting costs nothing.
      *
-     * This app now rejects all four with [VaultQrRejection.DUPLICATE_KEY]. Note
-     * that the web's own flip for `n`/`f` rides in their PR #1508, which is not
-     * merged: until it lands, `n=a&n=b` is accepted there and rejected here — a
-     * *new*, temporary, ruled-direction difference their vectors do not cover.
+     * This app now rejects all four with [VaultQrRejection.DUPLICATE_KEY]. The
+     * web's own flip for `n`/`f` rode in their PR #1508, which was unmerged when
+     * the ruling landed — so `n=a&n=b` was rejected here and accepted there, a
+     * temporary difference in the ruled direction. **#1508 merged on
+     * 2026-09-01** and the closing vectors came with it: `duplicateName`,
+     * `duplicateFingerprint`, plus the two this app had no way to pin from a
+     * reading alone — `duplicateNameBlankFirst` (`n=&n=real`, where a first-wins
+     * parser picks the blank, trims it away and silently discards the real
+     * name) and `duplicateVaultIdMissingMnemonic`, which fixes the PRECEDENCE:
+     * duplicate beats missing, so `v=x&v=x` with no `m` at all is still
+     * `duplicate-key`. The last case is why the duplicate scan runs on the whole
+     * decoded body before either required-key check, and it is pinned below.
      */
     @Test
     fun `leniency case 2 - a duplicate of any known key is refused, unknown keys may repeat`() {
@@ -370,6 +475,37 @@ class VaultQrE7ConformanceTest {
         )
         // Unknown keys are untouched by the ruling: still ignored, still repeatable.
         assertEquals(words, ok("btvault1:m=$m&v=$vaultId&zz=1&zz=2&zz=3").mnemonic)
+    }
+
+    /**
+     * **Duplicate beats everything else — the precedence, pinned separately.**
+     *
+     * The `duplicate*` vectors above are all well-formed apart from the repeat,
+     * so they cannot see WHERE the check runs. These can: the payload is
+     * untrustworthy as a whole, so a duplicate answers `duplicate-key` no matter
+     * what else is wrong with it — a missing required key, a blank first
+     * occurrence, an unparseable phrase, a broken UUID. A parser that checked
+     * `m` first would answer `missing-mnemonic` to the platform's
+     * `duplicateVaultIdMissingMnemonic` vector.
+     */
+    @Test
+    fun `a duplicate key wins over every other defect in the same payload`() {
+        val m = words.replace(" ", "+")
+        listOf(
+            // The platform's vector: a repeated `v` with no `m` at all.
+            "btvault1:v=$vaultId&v=$vaultId",
+            // A blank first occurrence — the first-wins hazard their #1508
+            // review proved live: the blank would be picked, the trim would drop
+            // it, and the real name would be discarded without a word.
+            "btvault1:m=$m&v=$vaultId&n=&n=real",
+            // Duplicates that are also individually invalid.
+            "btvault1:m=nonsense&m=nonsense&v=$vaultId",
+            "btvault1:m=$m&v=NOT-A-UUID&v=NOT-A-UUID",
+            "btvault1:m=$m&v=$vaultId&f=short&f=short",
+            "btvault1:m=$m&v=$vaultId&n=${"x".repeat(65)}&n=${"x".repeat(65)}",
+        ).forEach {
+            assertEquals("for <$it>", VaultQrRejection.DUPLICATE_KEY, rejected(it))
+        }
     }
 
     /**
@@ -446,26 +582,36 @@ class VaultQrE7ConformanceTest {
     @Test
     fun `leniency case 4 - control and bidi characters survive parsing into the rendered name`() {
         val m = words.replace(" ", "+")
-        // NUL: not whitespace, so neither isNotBlank() nor trim() drops it.
-        assertEquals("\u0000pwn", ok("btvault1:m=$m&v=$vaultId&n=%00pwn").name)
+        // A NUL at the EDGE is trimmed since the 2026-09-01 trim-set ruling —
+        // U+0000 is Cc, and the named set is White_Space \u222A Cc \u222A U+FEFF. What
+        // case 4 is about is the INTERIOR, which that ruling does not touch.
+        assertEquals("pwn", ok("btvault1:m=$m&v=$vaultId&n=%00pwn").name)
+        assertEquals("p\u0000wn", ok("btvault1:m=$m&v=$vaultId&n=p%00wn").name)
         // Newline: kept when interior. The scan card no longer renders it as a
         // real break — btSanitizeUntrustedLabel folds it to one space — but that
         // is a RENDER property; the parse contract below is unchanged.
         assertEquals("Phone\nvault", ok("btvault1:m=$m&v=$vaultId&n=Phone%0Avault").name)
         // RIGHT-TO-LEFT OVERRIDE: the spoofing primitive. Still parsed and still
-        // kept — it is stripped at the render site, not here.
-        assertEquals("safe‮tluav", ok("btvault1:m=$m&v=$vaultId&n=safe%E2%80%AEtluav").name)
+        // kept — it is Cf, so not even an EDGE one is trimmed; it is stripped at
+        // the render site, not here. (Written as an escape on purpose: a raw
+        // U+202E in this file reverses the rest of the line in every editor and
+        // makes the source ungreppable.)
+        assertEquals("safe\u202Etluav", ok("btvault1:m=$m&v=$vaultId&n=safe%E2%80%AEtluav").name)
+        assertEquals("\u202Etluav", ok("btvault1:m=$m&v=$vaultId&n=%E2%80%AEtluav").name)
         // Bidi isolates too - U+2066..U+2069 are equally effective and equally kept.
-        assertEquals("a⁦b⁩c", ok("btvault1:m=$m&v=$vaultId&n=a%E2%81%A6b%E2%81%A9c").name)
+        assertEquals("a\u2066b\u2069c", ok("btvault1:m=$m&v=$vaultId&n=a%E2%81%A6b%E2%81%A9c").name)
 
-        // Two places where this app is stricter than the web, both from trimming:
-        // a hint that is nothing but whitespace becomes "absent" rather than a
-        // present empty/blank name, and surrounding spaces are dropped. The web
-        // preserves the decoded value exactly (their README: "preserve its
-        // decoded value exactly without normalization"), so `n=` yields "" there
-        // and null here. §13 is silent; neither behaviour is unsafe.
+        // Trimming to absence is the RULED behaviour on both sides since
+        // 2026-09-01, not this app being stricter than the web: a hint made only
+        // of trim-set code points is absent, and only the edges are trimmed.
+        // (The record it replaces: the web used to preserve the decoded value
+        // exactly — their README's "preserve its decoded value exactly without
+        // normalization" — so `n=` yielded "" there and null here, and §13 was
+        // silent.)
         assertNull(ok("btvault1:m=$m&v=$vaultId&n=%0A").name)
         assertNull(ok("btvault1:m=$m&v=$vaultId&n=").name)
+        assertNull(ok("btvault1:m=$m&v=$vaultId&n=%00").name)
+        assertNull(ok("btvault1:m=$m&v=$vaultId&n=%EF%BB%BF").name)
         assertEquals("pad", ok("btvault1:m=$m&v=$vaultId&n=%20pad%20").name)
     }
 
@@ -546,5 +692,12 @@ class VaultQrE7ConformanceTest {
 
     private companion object {
         const val E7_FIXTURE = "/vault-vectors/pv-qr-e7.fixture.json"
+
+        /**
+         * The one frozen-vocabulary mapping, borrowed rather than copied — see
+         * [VaultQrRejectionVocabularyTest.MAPPING].
+         */
+        val OUTCOME_BY_REJECTION: Map<VaultQrRejection, String> =
+            VaultQrRejectionVocabularyTest.MAPPING
     }
 }

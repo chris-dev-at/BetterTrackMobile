@@ -16,11 +16,18 @@ import kotlinx.serialization.json.JsonObject
  *
  * ## Shape, and why it is this shape
  *
- * - **The version is the scheme prefix.** `btvault1:` is the version marker. An
- *   unknown prefix is REJECTED with an "update the app" reason and never
- *   best-effort parsed ([VaultQrRejection.UNSUPPORTED_VERSION]); inside
- *   `btvault1:` an unknown query key is IGNORED, which is what makes the format
- *   additively extensible; a missing required key is a reject.
+ * - **The version is the scheme prefix.** `btvault1:` is the version marker,
+ *   and the digits are a CANONICAL decimal integer — see
+ *   [VaultQrContract.VERSION_TOKEN] for why the shape is checked before any
+ *   integer conversion. A canonical token above 1 is REJECTED with an "update
+ *   the app" reason and never best-effort parsed
+ *   ([VaultQrRejection.UNSUPPORTED_VERSION]); a non-canonical one
+ *   (`btvault0:`, `btvault01:`, `btvault007:`) is not a code any client ever
+ *   minted, so it is [VaultQrRejection.NOT_A_VAULT_CODE]. Inside `btvault1:` an
+ *   unknown query key is IGNORED, which is what makes the format additively
+ *   extensible; a missing required key is a reject; a body that begins with the
+ *   query delimiter `?` breaks the grammar and is
+ *   [VaultQrRejection.MALFORMED], whichever key follows it.
  * - **`scheme:query`, deliberately no `//` authority.** Platform URL parsers
  *   disagree about authorities under a custom scheme, so everything after the
  *   first `:` is exactly one `application/x-www-form-urlencoded` query string,
@@ -39,7 +46,11 @@ import kotlinx.serialization.json.JsonObject
  * - **`n`** is an optional display-name hint, ≤ 64 **code points**, and it is
  *   **untrusted display text**: a renderer must neutralize formatting controls
  *   before it paints it (platform ruling 4, 2026-08-26 — see
- *   `at.bettertrack.app.ui.format.btSanitizeUntrustedLabel`).
+ *   `at.bettertrack.app.ui.format.btSanitizeUntrustedLabel`). Its edges are
+ *   trimmed against a NAMED set ([isVaultQrTrimCodePoint], not Kotlin's
+ *   `trim()`), a hint that is only trim-set code points is ABSENT, and the trim
+ *   runs BEFORE the cap so a name already at 64 code points survives being
+ *   padded on the wire.
  * - **`f`** is the optional vault key fingerprint. Its SHAPE is checked here
  *   (exactly 16 base64url characters); its VALUE is only checkable after the
  *   header fetch.
@@ -196,8 +207,32 @@ object VaultQrContract {
      */
     val FINGERPRINT_SHAPE: Regex = Regex("^[A-Za-z0-9_-]{$FINGERPRINT_LENGTH}$")
 
-    /** `btvault<n>:` for any decimal n — used only to tell "wrong version" from "not ours". */
-    internal val SCHEME_FAMILY: Regex = Regex("^btvault[0-9]+:")
+    /**
+     * The version token, and the reason it is matched as a SHAPE before it is
+     * ever read as a number.
+     *
+     * `btvault<N>:` where `N` is a **canonical decimal integer** —
+     * `^[1-9][0-9]*$`, so no leading zeros and no zero. [VERSION] is the one
+     * this app speaks; a canonical token above it is a newer BetterTrack
+     * ([VaultQrRejection.UNSUPPORTED_VERSION]); anything else — `btvault0:`,
+     * `btvault01:`, `btvault02:`, `btvault007:`, or no `btvault<N>:` prefix at
+     * all — is simply not a BetterTrack code
+     * ([VaultQrRejection.NOT_A_VAULT_CODE]).
+     *
+     * **Shape before value** is the whole point (platform ruling, 2026-09-01,
+     * pinned by the `versionZero`/`versionPadded*` conformance vectors). A
+     * parser that converts first accepts the padded forms no client ever mints:
+     * Kotlin's `"007".toInt()` is 7 and JavaScript's `Number('02')` is 2, so
+     * `btvault02:` would send this user to the app store for a code that does
+     * not exist, while `btvault01:` read as foreign — two spellings of the same
+     * non-existent thing answered two different ways. This regex has no integer
+     * conversion behind it at all: the capture is compared as a STRING to
+     * [VERSION], and everything else that matched the shape is "newer".
+     */
+    internal val VERSION_TOKEN: Regex = Regex("^btvault([1-9][0-9]*):$")
+
+    /** The single version token this app speaks, as it appears in [VERSION_TOKEN]. */
+    internal const val VERSION: String = "1"
 }
 
 /**
@@ -250,14 +285,20 @@ data class VaultQrPayload(
  */
 enum class VaultQrRejection {
     /**
-     * Not a BetterTrack transfer code at all (a URL, a Wi-Fi code, random text).
+     * Not a BetterTrack transfer code at all (a URL, a Wi-Fi code, random
+     * text) — and also a `btvault<N>:` whose N is not canonical (`btvault0:`,
+     * `btvault01:`, `btvault02:`, `btvault007:`), because no client has ever
+     * minted one, so telling this user to update the app would send them
+     * looking for a version that does not exist. See
+     * [VaultQrContract.VERSION_TOKEN].
      *
      * Frozen counterpart: `not-a-bettertrack-code`.
      */
     NOT_A_VAULT_CODE,
 
     /**
-     * `btvault2:` or later — a newer app made this. Never best-effort parsed.
+     * A CANONICAL version token above 1 — `btvault2:`, `btvault10:` — so a
+     * newer app made this. Never best-effort parsed.
      *
      * Frozen counterpart: `update-required`.
      */
@@ -271,7 +312,10 @@ enum class VaultQrRejection {
     LEGACY_CODE,
 
     /**
-     * The query could not be decoded (bad percent escape, unparseable body).
+     * The body does not obey the grammar: a bad percent escape, an unparseable
+     * body, or a leading `?` — the URL query delimiter is never part of form
+     * data, and naming it a missing key would make the verdict depend on which
+     * key the sender wrote first (platform ruling, 2026-09-01).
      *
      * Frozen counterpart: `malformed`.
      */
@@ -392,14 +436,17 @@ fun buildVaultQrPayload(
     require(VaultQrContract.VAULT_ID_SHAPE.matches(vaultId)) {
         "The transfer QR needs a lowercase hyphenated vault UUID."
     }
-    val trimmedName = name?.trim()?.takeIf { it.isNotEmpty() }
+    // The same named trim set the parser uses, and the same trim-then-cap
+    // order: a builder that trimmed a different set could emit a hint its own
+    // parser reads as a different string, or refuse one the wire accepts.
+    val trimmedName = name?.let { trimVaultQrName(it) }?.takeIf { it.isNotEmpty() }
     require(
         trimmedName == null ||
             trimmedName.codePointCount(0, trimmedName.length) <= VaultQrContract.MAX_NAME_LENGTH,
     ) {
         "A vault name hint is at most ${VaultQrContract.MAX_NAME_LENGTH} code points."
     }
-    val trimmedFingerprint = fingerprint?.trim()?.takeIf { it.isNotEmpty() }
+    val trimmedFingerprint = fingerprint?.let { trimVaultQrName(it) }?.takeIf { it.isNotEmpty() }
     // Symmetric with the vault id: the sender's own fingerprint comes from our
     // unlocked vault, so a bad one is a programming error — and emitting a code
     // that this app's OWN parser would reject with FINGERPRINT_INVALID is the
@@ -437,19 +484,27 @@ fun buildVaultQrPayload(
  * receiver's fetch-then-compare step ([VaultHeaderProbe]).
  */
 fun parseVaultQrPayload(value: String): VaultQrParseResult {
-    if (!value.startsWith(VaultQrContract.PREFIX)) {
-        // "btvault7:" is a code from a future app → say "update"; anything else
-        // is simply not ours → say so, rather than blaming the app version.
-        return VaultQrParseResult.Failed(
-            if (VaultQrContract.SCHEME_FAMILY.containsMatchIn(value)) {
-                VaultQrRejection.UNSUPPORTED_VERSION
-            } else {
-                VaultQrRejection.NOT_A_VAULT_CODE
-            },
-        )
+    // Split at the FIRST colon and match the token that precedes it against
+    // VERSION_TOKEN's shape — never an integer conversion, and never a
+    // "starts with btvault" family test. "btvault7:" is a code from a future
+    // app → say "update"; "btvault007:" is a code no client ever minted → say
+    // it is not ours, rather than sending the user to the app store for it.
+    val separator = value.indexOf(':')
+    val version = if (separator < 0) {
+        null
+    } else {
+        VaultQrContract.VERSION_TOKEN.matchEntire(value.substring(0, separator + 1))
+            ?.groupValues
+            ?.get(1)
+    }
+    if (version == null) {
+        return VaultQrParseResult.Failed(VaultQrRejection.NOT_A_VAULT_CODE)
+    }
+    if (version != VaultQrContract.VERSION) {
+        return VaultQrParseResult.Failed(VaultQrRejection.UNSUPPORTED_VERSION)
     }
 
-    val body = value.substring(VaultQrContract.PREFIX.length)
+    val body = value.substring(separator + 1)
 
     // Prefix collision with the retired v2 handoff (board ask #83): its body is
     // a JSON object. Discriminate by body shape and name the version, so the
@@ -458,6 +513,17 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
         return VaultQrParseResult.Failed(
             if (parsesAsJsonObject(body)) VaultQrRejection.LEGACY_CODE else VaultQrRejection.MALFORMED,
         )
+    }
+
+    // A leading `?` is a break in the body GRAMMAR, not a missing key: the
+    // query delimiter is never part of form data, and a parser built on
+    // URLSearchParams/Uri would silently strip it and accept a URL-shaped body.
+    // Answering with whichever key the `?` happened to swallow made the outcome
+    // depend on the sender's key order, so both orderings are one verdict here
+    // (platform ruling, 2026-09-01 — it supersedes the earlier reading that
+    // called this a missing key).
+    if (body.startsWith("?")) {
+        return VaultQrParseResult.Failed(VaultQrRejection.MALFORMED)
     }
 
     val decoded = decodeFormQuery(body) ?: return VaultQrParseResult.Failed(VaultQrRejection.MALFORMED)
@@ -476,12 +542,19 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
     // the contract, not a formatting choice: a body with neither key must answer
     // the same outcome on every client, and the web checks `m` first too
     // (apps/web/src/user/vault/qr/payload.ts).
+    //
+    // "Present but blank" is ABSENT for both of them (`m=+` is
+    // `missing-mnemonic`, not `invalid-mnemonic`): the sender wrote nothing
+    // meaningful, so the answer names what is missing rather than what failed
+    // to validate. Blank is decided by [isVaultQrTrimCodePoint], the same named
+    // set that trims `n` — not by Kotlin's `isBlank()`, which would call `%00`
+    // a value.
     val rawMnemonic = fields[VaultQrContract.KEY_MNEMONIC]
-    if (rawMnemonic.isNullOrBlank()) {
+    if (rawMnemonic == null || isBlankVaultQrToken(rawMnemonic)) {
         return VaultQrParseResult.Failed(VaultQrRejection.MISSING_MNEMONIC)
     }
     val rawVaultId = fields[VaultQrContract.KEY_VAULT_ID]
-    if (rawVaultId.isNullOrBlank()) {
+    if (rawVaultId == null || isBlankVaultQrToken(rawVaultId)) {
         return VaultQrParseResult.Failed(VaultQrRejection.MISSING_VAULT_ID)
     }
 
@@ -499,7 +572,12 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
         return VaultQrParseResult.Failed(VaultQrRejection.VAULT_ID_INVALID)
     }
 
-    val name = fields[VaultQrContract.KEY_NAME]?.takeIf { it.isNotBlank() }
+    // TRIM, then CAP — the order is the contract, not an implementation detail
+    // (platform ruling, 2026-09-01, pinned by the `paddedMaxLengthName`
+    // vector). A name that is already at the 64-code-point limit must survive
+    // being padded on the wire; capping first would count the padding, see 66
+    // code points and refuse the whole phrase transfer over two spaces.
+    val name = trimVaultQrName(fields[VaultQrContract.KEY_NAME] ?: "").takeIf { it.isNotEmpty() }
     if (name != null && name.codePointCount(0, name.length) > VaultQrContract.MAX_NAME_LENGTH) {
         return VaultQrParseResult.Failed(VaultQrRejection.NAME_TOO_LONG)
     }
@@ -516,10 +594,102 @@ fun parseVaultQrPayload(value: String): VaultQrParseResult {
         VaultQrPayload(
             mnemonic = mnemonic,
             vaultId = rawVaultId,
-            name = name?.trim(),
+            name = name,
             fingerprint = fingerprint,
         ),
     )
+}
+
+// ── the named trim set, spelled out because neither host's built-in is it ───
+
+/**
+ * **The normative trim set for the optional `n` display hint: Unicode
+ * `White_Space` ∪ the C0/C1 controls (`Cc`) ∪ U+FEFF.**
+ *
+ * Deliberately NOT Kotlin's `String.trim()` / `Char.isWhitespace()`, and
+ * deliberately not a `\p{…}` regex either. The two clients' built-ins trim
+ * *different* sets, and each is missing part of the other's:
+ *
+ *  - Kotlin's `Char.isWhitespace()` strips U+001C–U+001F but leaves U+FEFF;
+ *  - ECMAScript's `String.prototype.trim` strips U+FEFF but leaves
+ *    U+001C–U+001F.
+ *
+ * So whichever built-in each side reached for, the two would disagree about
+ * whether a scanned code carries a name **at all** — a hint that is nothing but
+ * U+FEFF is absent on the web and a one-character name here. §13 therefore
+ * names the set explicitly and every client implements it (platform ruling,
+ * 2026-09-01; vectors `controlOnlyName`, `byteOrderMarkName`,
+ * `controlPaddedName`). The named set is a strict superset of both built-ins,
+ * so nothing either runtime already trimmed survives it.
+ *
+ * The identity this implementation rests on: `White_Space` is exactly
+ * `{U+0009–U+000D, U+0085}` (all `Cc`) ∪ `Zs` ∪ `Zl` ∪ `Zp`, so
+ *
+ * ```
+ * White_Space ∪ Cc ∪ {U+FEFF}  ==  Cc ∪ Zs ∪ Zl ∪ Zp ∪ {U+FEFF}
+ * ```
+ *
+ * and the right-hand side is two `Character` category queries plus one literal
+ * — data-driven from the platform's Unicode tables rather than a hand-copied
+ * code-point list that would go stale, and identical on the JVM and on Android
+ * because both answer from the same `Character` general categories. (A
+ * `\p{IsWhite_Space}` regex would NOT be: Android's `java.util.regex` is
+ * ICU-backed and does not accept the same property spellings OpenJDK does, so
+ * the unit test would prove something the device does not do — the same trap
+ * that keeps `java.net.URLDecoder` out of this file.)
+ *
+ * U+FEFF is listed by hand because no property covers it: it is category `Cf`
+ * with `White_Space=No`. It is in the set because it is what ECMAScript trims,
+ * and because a zero-width no-break space is never legitimate name content at
+ * the boundary — the same reasoning as the render sanitizer.
+ */
+internal fun isVaultQrTrimCodePoint(codePoint: Int): Boolean =
+    Character.getType(codePoint) == Character.CONTROL.toInt() || // Cc: U+0000–U+001F, U+007F–U+009F
+        Character.isSpaceChar(codePoint) || // Zs | Zl | Zp — White_Space's non-Cc half
+        codePoint == BYTE_ORDER_MARK
+
+/** U+FEFF ZERO WIDTH NO-BREAK SPACE — `Cf`, so no Unicode property includes it. */
+private const val BYTE_ORDER_MARK: Int = 0xFEFF
+
+/**
+ * Trim only the EDGES of `n`, counted in CODE POINTS — the same unit as the
+ * 64-code-point cap.
+ *
+ * Interior code points are preserved verbatim: the wire carries what the sender
+ * wrote, and stripping controls out of the middle is the render sanitizer's job
+ * (`at.bettertrack.app.ui.format.btSanitizeUntrustedLabel`), not the parser's.
+ * A name made only of trim-set code points comes back empty and is therefore
+ * ABSENT.
+ */
+internal fun trimVaultQrName(value: String): String {
+    var start = 0
+    var end = value.length
+    while (start < end) {
+        val codePoint = value.codePointAt(start)
+        if (!isVaultQrTrimCodePoint(codePoint)) break
+        start += Character.charCount(codePoint)
+    }
+    while (end > start) {
+        val codePoint = value.codePointBefore(end)
+        if (!isVaultQrTrimCodePoint(codePoint)) break
+        end -= Character.charCount(codePoint)
+    }
+    return value.substring(start, end)
+}
+
+/**
+ * The same blank-is-absent principle applied to the two REQUIRED values: a
+ * token made only of [isVaultQrTrimCodePoint] code points is missing, not
+ * invalid. Empty is blank by construction.
+ */
+private fun isBlankVaultQrToken(value: String): Boolean {
+    var i = 0
+    while (i < value.length) {
+        val codePoint = value.codePointAt(i)
+        if (!isVaultQrTrimCodePoint(codePoint)) return false
+        i += Character.charCount(codePoint)
+    }
+    return true
 }
 
 // ── form-urlencoded, implemented here so both sides agree byte for byte ─────

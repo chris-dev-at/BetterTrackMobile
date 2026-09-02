@@ -230,10 +230,60 @@ class VaultQrPayloadTest {
         listOf(
             "btvault2:m=${words.replace(" ", "+")}&v=$vaultId",
             "btvault10:m=${words.replace(" ", "+")}&v=$vaultId",
-            "btvault0:anything",
+            "btvault99:anything",
         ).forEach {
             assertEquals("for <$it>", VaultQrRejection.UNSUPPORTED_VERSION, rejected(it))
         }
+    }
+
+    /**
+     * **The version token is a canonical decimal integer — platform ruling,
+     * 2026-09-01.** `^[1-9][0-9]*$`: no zero, no leading zeros.
+     *
+     * This test exists because the shape must be decided BEFORE any integer
+     * conversion. This app never converted (it matched the family regex
+     * `^btvault[0-9]+:`), but the effect was the same class of bug from the
+     * other direction: every padded spelling answered
+     * [VaultQrRejection.UNSUPPORTED_VERSION], i.e. "update the app" for a code
+     * no BetterTrack client has ever minted. A client that *did* convert would
+     * read `btvault007:` as version 7 and land in the same place, which is why
+     * the platform pinned all four spellings as vectors.
+     */
+    @Test
+    fun `a non-canonical version token is not our code at all, never an update prompt`() {
+        val tail = "m=${words.replace(" ", "+")}&v=$vaultId"
+        listOf(
+            "btvault0:$tail", // zero is not a version anyone minted
+            "btvault01:$tail", // zero-padded 1 — an integer parse would read it as ours
+            "btvault02:$tail", // zero-padded 2 — an integer parse would say "update"
+            "btvault007:$tail", // Kotlin's "007".toInt() is 7
+            "btvault00:$tail",
+        ).forEach {
+            assertEquals("for <$it>", VaultQrRejection.NOT_A_VAULT_CODE, rejected(it))
+        }
+        // And the canonical neighbours still answer the way they always did.
+        assertEquals(words, ok("btvault1:$tail").mnemonic)
+        assertEquals(VaultQrRejection.UNSUPPORTED_VERSION, rejected("btvault2:$tail"))
+    }
+
+    /**
+     * **A leading `?` is `malformed` — platform ruling, 2026-09-01**, which
+     * supersedes the earlier reading that answered with whichever required key
+     * the `?` had swallowed.
+     *
+     * The `?` is the URL's query DELIMITER and is never part of form data, so
+     * this is a break in the body grammar rather than a missing key — and a
+     * missing-key answer made the verdict depend on which key the sender wrote
+     * first, which is exactly the kind of order-dependence the wire contract
+     * exists to remove. Both orderings are pinned.
+     */
+    @Test
+    fun `a body starting with the query delimiter is malformed, whichever key leads`() {
+        val m = words.replace(" ", "+")
+        assertEquals(VaultQrRejection.MALFORMED, rejected("btvault1:?m=$m&v=$vaultId"))
+        assertEquals(VaultQrRejection.MALFORMED, rejected("btvault1:?v=$vaultId&m=$m"))
+        // A `?` anywhere else is an ordinary character in the value it lands in.
+        assertEquals("Where?", ok("btvault1:m=$m&v=$vaultId&n=Where?").name)
     }
 
     @Test
@@ -339,6 +389,89 @@ class VaultQrPayloadTest {
         )
     }
 
+    /**
+     * **The named trim set — platform ruling, 2026-09-01.**
+     *
+     * `n`'s edges are trimmed against Unicode `White_Space` ∪ `Cc` ∪ U+FEFF,
+     * spelled out as [isVaultQrTrimCodePoint] rather than delegated to a host
+     * built-in. The two runtimes' built-ins each miss part of the other's set —
+     * Kotlin's `trim()` strips U+001C–U+001F and leaves U+FEFF, ECMAScript's
+     * does the exact opposite — so the built-ins would have made the two
+     * clients disagree about whether a scanned code carries a name at all.
+     * U+FEFF is the case that actually diverged here: this app used to accept
+     * it as a one-character name.
+     */
+    @Test
+    fun `the name trim set is the named union, not Kotlin's trim`() {
+        val m = words.replace(" ", "+")
+        fun name(encoded: String) = ok("btvault1:m=$m&v=$vaultId&n=$encoded").name
+
+        // Only trim-set code points ⇒ the hint is ABSENT, not a blank name.
+        assertNull("U+001F alone", name("%1F"))
+        assertNull("U+FEFF alone — Kotlin's trim() would have kept this", name("%EF%BB%BF"))
+        assertNull("NUL alone", name("%00"))
+        assertNull("U+0085 NEL alone", name("%C2%85"))
+        assertNull("U+00A0 NBSP alone — Character.isWhitespace() would have kept this", name("%C2%A0"))
+        assertNull("U+2028 LINE SEPARATOR alone", name("%E2%80%A8"))
+        assertNull("U+3000 IDEOGRAPHIC SPACE alone", name("%E3%80%80"))
+        assertNull("mixed trim-set code points", name("%20%1F%EF%BB%BF%0A"))
+
+        // Edges only. The interior is the wire's business and the render
+        // sanitizer's problem, never the parser's.
+        assertEquals("Urlaub", name("%1FUrlaub%1F"))
+        assertEquals("Urlaub", name("%EF%BB%BFUrlaub%EF%BB%BF"))
+        assertEquals("Urlaub", name("%00%20Urlaub%20%00"))
+        assertEquals("Ur\u001Flaub", name("Ur%1Flaub"))
+        assertEquals("Ur\uFEFFlaub", name("Ur%EF%BB%BFlaub"))
+
+        // U+200B ZERO WIDTH SPACE is Cf with White_Space=No and is NOT U+FEFF,
+        // so it is not in the set — a name is not silently reshaped by it.
+        assertEquals("\u200BUrlaub\u200B", name("%E2%80%8BUrlaub%E2%80%8B"))
+        // Neither is the RTL override; it is stripped at render, not at parse.
+        assertEquals("\u202EUrlaub", name("%E2%80%AEUrlaub"))
+    }
+
+    /**
+     * **Trim before cap — platform ruling, 2026-09-01.** The 64-code-point
+     * limit applies to the TRIMMED value. Capping first would count the padding
+     * a sender put on the wire, see 66 code points and refuse the whole phrase
+     * transfer over two spaces.
+     */
+    @Test
+    fun `the cap applies to the trimmed name, so padding a full-length name is fine`() {
+        val m = words.replace(" ", "+")
+        val full = "a".repeat(64)
+        assertEquals(full, ok("btvault1:m=$m&v=$vaultId&n=%20$full%20").name)
+        assertEquals(full, ok("btvault1:m=$m&v=$vaultId&n=%1F$full%EF%BB%BF").name)
+        // 65 real code points is still too long, padded or not.
+        assertEquals(
+            VaultQrRejection.NAME_TOO_LONG,
+            rejected("btvault1:m=$m&v=$vaultId&n=%20${"a".repeat(65)}%20"),
+        )
+    }
+
+    /**
+     * The same named set decides "blank" for the two REQUIRED keys: a
+     * whitespace-only `m` or `v` is MISSING, not invalid. Kotlin's `isBlank()`
+     * would have called `%00` a value and answered `invalid-mnemonic`.
+     */
+    @Test
+    fun `a required value made only of trim-set code points is missing, not invalid`() {
+        val m = words.replace(" ", "+")
+        listOf("+", "%20%20", "%00", "%1F", "%EF%BB%BF").forEach {
+            assertEquals(
+                "for m=<$it>",
+                VaultQrRejection.MISSING_MNEMONIC,
+                rejected("btvault1:m=$it&v=$vaultId"),
+            )
+            assertEquals(
+                "for v=<$it>",
+                VaultQrRejection.MISSING_VAULT_ID,
+                rejected("btvault1:m=$m&v=$it"),
+            )
+        }
+    }
+
     @Test
     fun `a duplicate of any known key is refused`() {
         // INVERTED 2026-08-26, platform ruling 1. This case used to pin
@@ -396,7 +529,7 @@ class VaultQrPayloadTest {
         val fuzz = buildList {
             add("btvault1:" + "%".repeat(500))
             add("btvault1:" + "&".repeat(500))
-            add("btvault1:m=" + " ￿😀")
+            add("btvault1:m=" + "\u0000\uFFFF😀")
             add("btvault1:=" )
             add("btvault1:====")
             add("btvault1:m")

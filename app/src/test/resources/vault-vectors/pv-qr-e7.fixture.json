@@ -1,18 +1,20 @@
 {
   "_source": {
-    "provenance": "PLATFORM E7 conformance vectors - authored by the web client and transcribed here byte for byte. The 'payload' and 'web' members of every vector are theirs and were NOT computed by this app; the 'android' member is THIS app's observed behaviour, recorded beside theirs so a divergence cannot change silently in either direction.",
+    "provenance": "PLATFORM E7 conformance vectors - authored by the web client and transcribed here byte for byte. The 'payload' and 'web' members of every vector are theirs and were NOT computed by this app; the 'android' member is THIS app's observed behaviour, recorded beside theirs so a divergence cannot change silently in either direction. REPLACED, NEVER MERGED: the 2026-09-01 replay discarded the 16-vector transcription wholesale and re-transcribed all 38 from the merged file, so this app can never keep a vector the platform has retired or edited. The only shaping applied is that an absent optional member of their `expected` object is written as an explicit null here, on both sides, so the web and android payload blocks can be compared as whole objects.",
     "tick": "2026-08-23 coordinator tick: the platform's E7 security review found no phrase-exposure path and flagged the one gap no code review can close - their vectors and our scanner had never been run against each other. This file closes it.",
+    "tick20260901": "2026-09-01 coordinator tick: the platform merged #1508 and #1513 and declared the vectors on origin/main authoritative for all twelve outcomes - 'replay whenever ready; if your replay finds ANY divergence, that's a spec bug, not a client bug'. This is that replay: 38 vectors, 38 in agreement, four rulings consumed.",
     "file": "apps/web/src/user/vault/qr/conformanceVectors.ts",
     "readme": "apps/web/src/user/vault/qr/README.md",
     "parser": "apps/web/src/user/vault/qr/payload.ts",
     "repo": "chris-dev-at/BetterTrack",
-    "branch": "task/1417 - PR #1451 [PARANOID-E7], NOT yet merged to origin/main as of this transcription",
-    "commit": "e1882d3a5ac173c6dd6fc3db1c359a44d3cea2c1 (fetched 2026-08-23)",
-    "outcomeVocabulary": "As transcribed (their VAULT_TRANSFER_PAYLOAD_ERROR_OUTCOMES at commit e1882d3a): update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint. Ours: VaultQrRejection, which gained DUPLICATE_KEY and FINGERPRINT_INVALID with the 2026-08-26 rulings. The two vocabularies were deliberately different shapes, so 'agreement' compares the DECISION (accept/reject) and the parsed value, and names the cause difference separately.",
-    "outcomeVocabularyFreeze": "FROZEN 2026-08-26, twelve outcomes, one shared vocabulary for both clients: ok | not-a-bettertrack-code | update-required | legacy-code | malformed | missing-mnemonic | missing-vault-id | duplicate-key | invalid-mnemonic | invalid-vault-id | invalid-fingerprint | name-too-long. The freeze took the GRANULAR side of every open question, which moved both vocabularies: this app split MISSING_REQUIRED_KEY into MISSING_MNEMONIC and MISSING_VAULT_ID (the missingMnemonic/missingVaultId rows below were re-recorded), and the frozen list carries four outcomes their merged parser still does not have - not-a-bettertrack-code (this app's bareString split, i.e. the recorded divergence resolved in this app's direction, though their payload.ts at d7fdd5ee still answers update-required for it), legacy-code, malformed and duplicate-key - plus name-too-long in place of their invalid-name. VaultQrRejection's mapping onto the eleven non-ok outcomes is pinned 1:1 by VaultQrRejectionVocabularyTest.",
+    "branch": "origin/main - MERGED. (Superseded: this file's first transcription came off task/1417, PR #1451 [PARANOID-E7], which was not yet on main. PR #1508 and PR #1513 have since merged and the platform declared main authoritative for all twelve outcomes.)",
+    "commit": "21ec6be0 (origin/main, fetched 2026-09-01). Previously e1882d3a5ac173c6dd6fc3db1c359a44d3cea2c1 on task/1417, read 2026-08-23.",
+    "transcribed": "2026-09-01",
+    "outcomeVocabulary": "As transcribed (their VAULT_TRANSFER_PAYLOAD_ERROR_OUTCOMES at commit 21ec6be0): not-a-bettertrack-code | update-required | legacy-code | malformed | missing-mnemonic | missing-vault-id | duplicate-key | invalid-mnemonic | invalid-vault-id | invalid-fingerprint | name-too-long. That is the frozen vocabulary's eleven non-ok outcomes exactly, so the two clients now speak one list and 'agreement' compares the DECISION, the parsed value AND the outcome, with only the Kotlin identifier spelling differing (VaultQrRejection.PHRASE_INVALID <-> invalid-mnemonic, and so on; the 1:1 mapping is pinned by VaultQrRejectionVocabularyTest). HISTORY: at e1882d3a their list was update-required | missing-mnemonic | missing-vault-id | invalid-mnemonic | invalid-vault-id | invalid-name | invalid-fingerprint, and the two vocabularies were deliberately different shapes.",
+    "outcomeVocabularyFreeze": "FROZEN 2026-08-26, twelve outcomes, one shared vocabulary for both clients: ok | not-a-bettertrack-code | update-required | legacy-code | malformed | missing-mnemonic | missing-vault-id | duplicate-key | invalid-mnemonic | invalid-vault-id | invalid-fingerprint | name-too-long. The freeze took the GRANULAR side of every open question, which moved both vocabularies: this app split MISSING_REQUIRED_KEY into MISSING_MNEMONIC and MISSING_VAULT_ID (the missingMnemonic/missingVaultId rows below were re-recorded), and the frozen list carried four outcomes their parser did not yet have - not-a-bettertrack-code (this app's bareString split, i.e. the recorded divergence resolved in this app's direction, though their payload.ts at d7fdd5ee still answered update-required for it), legacy-code, malformed and duplicate-key - plus name-too-long in place of their invalid-name. CLOSED 2026-09-01: their merged parser at 21ec6be0 implements all eleven, and vectors exist for every one of them except invalid-vault-id, invalid-fingerprint and name-too-long, which stay pinned by this app's own unit tests. VaultQrRejection's mapping onto the eleven non-ok outcomes is pinned 1:1 by VaultQrRejectionVocabularyTest.",
     "mnemonics": "The public BIP-39 all-zero-entropy phrase (128 bits). Not a real phrase; opens no real vault.",
-    "nameCap": "CONVERGED 2026-08-26 (ruling 3). The web always capped `n` at 64 Unicode CODE POINTS ([...value].length in apps/web/src/user/vault/qr/payload.ts). This app capped it at 64 UTF-16 CODE UNITS (String.length) and justified it with a claim about the web's code that was factually wrong. Sec13 now says 64 code points (=> <= 256 UTF-8 bytes) and this app counts codePointCount, so a 64-emoji hint flipped from NAME_TOO_LONG to accepted. Their vectors cannot see any of this - maxLengthComposedName uses U+00E9, one code unit and one code point at once - so it is pinned in VaultQrE7ConformanceTest instead. Their SENDER additionally drops the hint past a 220-wire-byte budget; that is scannability, not the wire cap.",
-    "fingerprint": "CONVERGED 2026-08-26 (ruling 7). The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint. This app used to carry any non-empty `f` verbatim, because nothing offline can judge its VALUE and the comparison happens after the header fetch (Sec13 fetch-then-compare). The ruling split the two questions: SHAPE is now checked at parse on both sides (VaultQrRejection.FINGERPRINT_INVALID here), the VALUE is still only checkable after the fetch, and the fetch->unwrap->compare->verified-open order is untouched. Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none.",
+    "nameCap": "CONVERGED 2026-08-26 (ruling 3). The web always capped `n` at 64 Unicode CODE POINTS ([...value].length in apps/web/src/user/vault/qr/payload.ts). This app capped it at 64 UTF-16 CODE UNITS (String.length) and justified it with a claim about the web's code that was factually wrong. Sec13 now says 64 code points (=> <= 256 UTF-8 bytes) and this app counts codePointCount, so a 64-emoji hint flipped from NAME_TOO_LONG to accepted. Their vectors cannot see any of this - maxLengthComposedName uses U+00E9, one code unit and one code point at once - so it is pinned in VaultQrE7ConformanceTest instead. Their SENDER additionally drops the hint past a 220-wire-byte budget; that is scannability, not the wire cap. EXTENDED 2026-09-01: the cap now applies to the TRIMMED name (paddedMaxLengthName), which is a separate ruling from the unit it counts in.",
+    "fingerprint": "CONVERGED 2026-08-26 (ruling 7). The web validates `f` against vaultKeyFingerprintSchema (base64url, exactly 16 chars) at parse time and rejects with invalid-fingerprint. This app used to carry any non-empty `f` verbatim, because nothing offline can judge its VALUE and the comparison happens after the header fetch (Sec13 fetch-then-compare). The ruling split the two questions: SHAPE is now checked at parse on both sides (VaultQrRejection.FINGERPRINT_INVALID here), the VALUE is still only checkable after the fetch, and the fetch->unwrap->compare->verified-open order is untouched. Not exercised by their vectors - all of them carry a schema-valid 16-char fingerprint or none. OPEN 2026-09-01, uncovered by any vector: an EMPTY `f` (`btvault1:m=..&v=..&f=`) is absent here and invalid-fingerprint on their merged parser, which applies blank-is-absent to m, v and n but not to f. Left as recorded rather than changed, because no vector and no ruling covers it; reported to the board with the replay.",
     "rulingsApplied": {
       "date": "2026-08-26",
       "what": "The platform ruled on the eight items left open by the cross-client convergence round. Four moved this app's side. Recorded here so a reader can tell a verdict that CHANGED from one that was always this way - the earlier divergence report was correct when it was written and is not being rewritten out of the record.",
@@ -20,6 +22,22 @@
       "ruling3NameCodePoints": "The Sec13 name cap counts code points, not UTF-16 code units. No vector's verdict changed - maxLengthComposedName cannot see the difference - but see the nameCap note and the retitled pinning test in VaultQrE7ConformanceTest.",
       "ruling4UntrustedLabel": "`n` is untrusted display text; a renderer must neutralize formatting controls. Adopted from this app's recommendation as normative and explicitly NOT queued behind the Sec13 rewrite, because the scan-result card renders the scanned name in titleLarge today. PARSE behaviour is unchanged - the leniency-case-4 vectors still carry their control characters through - and the treatment lives at the render site in at.bettertrack.app.ui.format.btSanitizeUntrustedLabel.",
       "ruling7FingerprintShape": "Validate `f`'s SHAPE at parse (exactly 16 base64url characters); its VALUE only after the fetch, unchanged. New rejection FINGERPRINT_INVALID. No vector's verdict changed - every exported vector carries a schema-valid fingerprint or none."
+    },
+    "rulingsAppliedRound2": {
+      "date": "2026-09-01",
+      "what": "The final round, delivered with the merge of PR #1508 and PR #1513. Four rulings, all four of them moving this app's side, and eight vectors changed verdict here. Round 1 above is left exactly as it was written on 2026-08-26 - including the sentence about #1508 being unmerged, which was true then and is the reason the temporary n/f difference it describes is now closed rather than deleted.",
+      "ruling1LeadingQuestionMark": "A leading `?` is `malformed`, and it SUPERSEDES the earlier missing-mnemonic reading this app pinned as leniency case 1. Order-independent: `btvault1:?m=..&v=..` and `btvault1:?v=..&m=..` are both MALFORMED. The `?` is the URL query delimiter and is never part of form data, so it breaks the body grammar; answering with whichever key it swallowed made the verdict depend on the sender's key order. Moved: leadingQuestionMark (was MISSING_MNEMONIC), leadingQuestionMarkVaultIdFirst (was MISSING_VAULT_ID).",
+      "ruling2CanonicalVersionToken": "The version token is a canonical decimal integer, ^[1-9][0-9]*$, and its SHAPE is decided before any integer conversion. `btvault0:`, `btvault01:`, `btvault02:` and `btvault007:` are all not-a-bettertrack-code; only a canonical token above 1 is update-required. This app never ran an integer parse - it matched the family regex ^btvault[0-9]+: - so `btvault01:` never OPENED here, but the family regex reached the same wrong answer from the other side and told the user to update for a code no client mints. Moved: versionZero, versionPaddedOne, versionPaddedTwo, versionPaddedSeven (all were UNSUPPORTED_VERSION, all now NOT_A_VAULT_CODE).",
+      "ruling3NameTrimSet": "The trim set for `n` is Unicode White_Space u Cc u U+FEFF, applied as an EXPLICIT predicate - never Kotlin trim()/isWhitespace() and never JS trim(), because each strips part of what the other leaves (Kotlin takes U+001C-U+001F and leaves U+FEFF; JS the reverse). A name that is only trim-set code points is absent; only the edges are trimmed. Implemented as isVaultQrTrimCodePoint in VaultQrPayload.kt, as Cc | Zs | Zl | Zp | U+FEFF - the identity that makes it exactly the named union, sourced from Character's Unicode tables rather than a hand-copied code-point list. Moved: byteOrderMarkName (was accepted here with a one-character invisible name). controlOnlyName and controlPaddedName already agreed, but only because Kotlin's built-in happens to cover U+001F - the same predicate now decides all three. The set also decides blank for the required pair, so `m=%00` is missing-mnemonic rather than invalid-mnemonic.",
+      "ruling4TrimBeforeCap": "The 64-code-point cap applies to the TRIMMED name. Moved: paddedMaxLengthName (was NAME_TOO_LONG here - the cap ran on the untrimmed value, counted the padding and refused the whole transfer).",
+      "bareStringResolved": "Not a new ruling but the closure of the file's oldest open item: their merged parser answers not-a-bettertrack-code for a string with no btvaultN: prefix, which is the split this app diverged onto on 2026-08-23 and argued for with the Wi-Fi example. The wifiQr vector is now theirs. 'same-decision-different-cause' is empty for the first time."
+    },
+    "openUncoveredDifferences": {
+      "what": "Found by the 2026-09-01 replay, NOT by a vector: three inputs where this parser and their merged parser answer differently and no exported vector looks. Recorded rather than 'fixed' - the platform's instruction with the final vectors was that a divergence is a spec bug, so these go to the board and this app's behaviour stays where it is until one is ruled on.",
+      "badPercentEscape": "`n=%zz` (or any truncated/non-hex escape): this app answers MALFORMED and REFUSES the transfer; the web accepts it with the name literally \"%zz\", because URLSearchParams leaves an invalid escape standing instead of failing. Verified against node's URLSearchParams, not assumed. This is an accept/reject split, the class the vectors exist to remove. Inside `m` or `v` the two still both reject, but with different outcomes (malformed here, invalid-mnemonic / invalid-vault-id there). Reading: for `m`/`v` refusing a corrupt payload is right and their outcome is the odd one; for `n` the platform's own trim-before-cap and untrusted-label rulings both say a cosmetic hint must not cost the user a phrase transfer, which argues for their leniency. Wants one sentence in Sec13.",
+      "nonJsonBraceBody": "`btvault1:{not json at all`: the web's legacy-code heuristic is the SHAPE /^\\s*\\{/ alone, so it answers legacy-code; this app additionally requires the body to parse as a JSON object and answers MALFORMED when it does not. Their payload.ts comment says the heuristic 'mirrors the Android heuristic (#83) so both clients agree', which is not quite true - it is the shape half of it. Both reject either way, so this is a reason difference, not a decision one.",
+      "blankFingerprint": "`f=` with an empty value: absent here (accepted), invalid-fingerprint there. Their parser applies blank-is-absent to `m`, `v` and `n` but not to `f`. See the `fingerprint` note above.",
+      "vaultIdShape": "`v` is a hand-written lowercase-hex UUID regex here and z.string().uuid() plus a lowercase test there (packages/contracts/src/vaults.ts:309, zod ^3.24). They agree on every id the platform mints (UUIDv7) and on the nil UUID; they can only differ on a hex string whose version nibble is 0 or 9-f, which no real vault id has. Noted for completeness, not as a defect."
     }
   },
   "golden": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
@@ -61,18 +79,284 @@
       "agreement": "same-decision-same-cause"
     },
     {
-      "name": "bareString",
-      "payload": "m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "name": "versionZero",
+      "payload": "btvault0:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
       "web": {
         "accepts": false,
-        "outcome": "update-required"
+        "outcome": "not-a-bettertrack-code"
       },
       "android": {
         "accepts": false,
         "reason": "NOT_A_VAULT_CODE"
       },
-      "agreement": "same-decision-different-cause",
-      "note": "Both reject. The web collapses every non-`btvault1:` string into 'update-required'; this app splits it: a `btvault<n>:` prefix means UNSUPPORTED_VERSION ('update the app'), anything else means NOT_A_VAULT_CODE ('that is not a BetterTrack code'). Sec13's letter says 'anything else' gets the update notice; telling a user who scanned a Wi-Fi code to update the app is the reason this app diverged. Board question."
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01 (canonical-version-token ruling). Was UNSUPPORTED_VERSION here: this app matched the family regex ^btvault[0-9]+: and called every other digit string a newer app, so `btvault0:` told the user to go and update for a version no client has ever minted. The token is now matched as a SHAPE - ^btvault([1-9][0-9]*):$ - before anything reads it as a number, and a non-canonical token is NOT_A_VAULT_CODE."
+    },
+    {
+      "name": "versionPaddedOne",
+      "payload": "btvault01:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "not-a-bettertrack-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01, same ruling as versionZero. `btvault01:` never opened here - the old code compared the literal prefix `btvault1:` and this is not it - but it answered UNSUPPORTED_VERSION, i.e. the same wrong 'update the app' prompt. A client that ran an integer parse first would have gone the other way and OPENED it as version 1, which is the divergence class the four version vectors exist to close."
+    },
+    {
+      "name": "versionPaddedTwo",
+      "payload": "btvault02:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "not-a-bettertrack-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01, same ruling. The interesting one: an integer parse reads `btvault02:` as 2 and says 'update the app', which sounds right and is wrong - only a CANONICAL token above 1 is update-required. Was UNSUPPORTED_VERSION here, now NOT_A_VAULT_CODE."
+    },
+    {
+      "name": "versionPaddedSeven",
+      "payload": "btvault007:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "not-a-bettertrack-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01, same ruling. Kotlin's \"007\".toInt() is 7; this app never converted, but its family regex reached the same wrong verdict (UNSUPPORTED_VERSION). Now NOT_A_VAULT_CODE."
+    },
+    {
+      "name": "bareString",
+      "payload": "m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "not-a-bettertrack-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "RESOLVED 2026-09-01 IN THIS APP'S DIRECTION. The 2026-08-23 record read: 'Both reject. The web collapses every non-`btvault1:` string into update-required; this app splits it: a `btvault<n>:` prefix means UNSUPPORTED_VERSION (\"update the app\"), anything else means NOT_A_VAULT_CODE (\"that is not a BetterTrack code\"). Sec13's letter says \"anything else\" gets the update notice; telling a user who scanned a Wi-Fi code to update the app is the reason this app diverged. Board question.' The board answered: input carrying no btvaultN: prefix at all is not-a-bettertrack-code, the web parser moved, and this was the last same-decision-different-cause row in the file. The wifiQr vector was added on their side as the case that made the argument."
+    },
+    {
+      "name": "wifiQr",
+      "payload": "WIFI:T:WPA;S:CafeGlockenspiel;P:hunter2;;",
+      "web": {
+        "accepts": false,
+        "outcome": "not-a-bettertrack-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "NOT_A_VAULT_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01. The example this app used to argue the bareString split with, now a platform vector: a Wi-Fi code must never produce an 'update BetterTrack' prompt. Note the first colon is the one in `WIFI:`, so the version token is matched against `WIFI:` and simply does not match."
+    },
+    {
+      "name": "leadingQuestionMark",
+      "payload": "btvault1:?m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "malformed"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MALFORMED"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01 (leading-? ruling), and it supersedes the earlier missing-mnemonic reading this app pinned as leniency case 1. Was MISSING_MNEMONIC here (the `?` is decoded as part of a key literally named `?m`, so the required `m` was absent). The ruling calls it a break in the body GRAMMAR: reporting a missing key made the verdict depend on which key the sender wrote first."
+    },
+    {
+      "name": "leadingQuestionMarkVaultIdFirst",
+      "payload": "btvault1:?v=018f6a3e-1111-7000-8000-000000000001&m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about",
+      "web": {
+        "accepts": false,
+        "outcome": "malformed"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MALFORMED"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01, same ruling - and this is the vector that shows why. Was MISSING_VAULT_ID here purely because `v` came first, so identical structural damage answered two different outcomes depending on key order. Both orderings are now MALFORMED."
+    },
+    {
+      "name": "blankName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Unchanged. Blank `n` reads as absent on both sides; the web's trimTransferName returns '' and the hint is dropped, this app's trim does the same."
+    },
+    {
+      "name": "whitespaceName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%20%20",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Unchanged, and now for the same reason on both sides: U+0020 is in the named trim set."
+    },
+    {
+      "name": "paddedName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%20Phone+vault%20",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Phone vault",
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Unchanged. Edge trim, interior preserved."
+    },
+    {
+      "name": "controlOnlyName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%1F",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Unchanged here, but only by accident until 2026-09-01: Kotlin's isBlank()/trim() happen to treat U+001C-U+001F as whitespace, so this app dropped the hint for the right reason by the wrong route. It is now decided by the named trim set (isVaultQrTrimCodePoint), which is the rule both clients implement. JS trim() does NOT strip U+001F, which is why the web could not use its built-in either."
+    },
+    {
+      "name": "byteOrderMarkName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%EF%BB%BF",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": null,
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01 (named-trim-set ruling). Was ACCEPTED here with name = \"\\uFEFF\", a one-character name made of an invisible code point: Kotlin's Char.isWhitespace() is false for U+FEFF, so neither isBlank() nor trim() touched it. The named set is Unicode White_Space u Cc u U+FEFF, so the hint is now ABSENT - the same answer the web gives, where trim() strips U+FEFF but would have left the U+001F of controlOnlyName. Neither built-in is the set; that is the ruling."
+    },
+    {
+      "name": "controlPaddedName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%1FUrlaub%1F",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Urlaub",
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "Urlaub",
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "Unchanged here, again by accident before 2026-09-01 (Kotlin trims U+001F). Now by the named set."
+    },
+    {
+      "name": "paddedMaxLengthName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=%20aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%20",
+      "web": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "fingerprint": null
+        }
+      },
+      "android": {
+        "accepts": true,
+        "payload": {
+          "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "vaultId": "018f6a3e-1111-7000-8000-000000000001",
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "fingerprint": null
+        }
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "MOVED THIS APP 2026-09-01 (trim-before-cap ruling). Was NAME_TOO_LONG here: the cap ran on the UNTRIMMED value, saw 66 code points and refused the whole phrase transfer over two wire spaces. The trim now runs first and the cap applies to its result."
     },
     {
       "name": "missingMnemonic",
@@ -107,28 +391,140 @@
       "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about",
       "web": {
         "accepts": false,
-        "outcome": "invalid-mnemonic"
+        "outcome": "duplicate-key"
       },
       "android": {
         "accepts": false,
         "reason": "DUPLICATE_KEY"
       },
       "agreement": "same-decision-same-cause",
-      "note": "CONVERGED 2026-08-26 by ruling 1; was 'different-decision' when this fixture was first recorded on 2026-08-23. History: the web rejected a repeated `m` (invalid-mnemonic) while this app took the FIRST value like URLSearchParams.get() and accepted, and Sec13's letter was silent on repeated keys, so the split was pinned as a board question rather than fixed on one side. Sec13's stated rationale is what settled it - the body is one form-urlencoded query 'which every platform parses identically', and duplicate keys are exactly where platform form parsers do NOT agree. Both clients now reject; the reason tokens differ in spelling only (invalid-mnemonic vs DUPLICATE_KEY), the same way badChecksum's do."
+      "note": "CONVERGED 2026-08-26 by ruling 1; was 'different-decision' when this fixture was first recorded on 2026-08-23. History: the web rejected a repeated `m` (invalid-mnemonic) while this app took the FIRST value like URLSearchParams.get() and accepted, and Sec13's letter was silent on repeated keys, so the split was pinned as a board question rather than fixed on one side. Sec13's stated rationale is what settled it - the body is one form-urlencoded query 'which every platform parses identically', and duplicate keys are exactly where platform form parsers do NOT agree. Both clients now reject. FINAL 2026-09-01: their merged parser answers the frozen `duplicate-key` literal here, not the older invalid-mnemonic spelling, so the two reason tokens now differ in spelling only in the same way every other row does."
     },
     {
       "name": "duplicateVaultId",
       "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&v=018f6a3e-1111-7000-8000-000000000001",
       "web": {
         "accepts": false,
-        "outcome": "invalid-vault-id"
+        "outcome": "duplicate-key"
       },
       "android": {
         "accepts": false,
         "reason": "DUPLICATE_KEY"
       },
       "agreement": "same-decision-same-cause",
-      "note": "CONVERGED 2026-08-26 by ruling 1, same story as duplicateMnemonic; was 'different-decision' on 2026-08-23. The web rejects a repeated `v` (invalid-vault-id), this app used to take the first value and accept, and both now reject."
+      "note": "CONVERGED 2026-08-26 by ruling 1, same story as duplicateMnemonic; was 'different-decision' on 2026-08-23. The web rejects a repeated `v` (invalid-vault-id), this app used to take the first value and accept, and both now reject. FINAL 2026-09-01: their merged parser answers `duplicate-key` for it too."
+    },
+    {
+      "name": "duplicateName",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&n=Phone+vault",
+      "web": {
+        "accepts": false,
+        "outcome": "duplicate-key"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01. The half of ruling 1 this app implemented on 2026-08-26 while the web's own flip was still unmerged in their PR #1508 - the fixture recorded it as a temporary ruled-direction difference their vectors did not cover. #1508 is merged; the vector exists; the difference is gone."
+    },
+    {
+      "name": "duplicateFingerprint",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=Phone+vault&f=AbCdEfGhIjKlMn_o&f=AbCdEfGhIjKlMn_o",
+      "web": {
+        "accepts": false,
+        "outcome": "duplicate-key"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01, see duplicateName. Same ruled-direction difference, same closure."
+    },
+    {
+      "name": "duplicateNameBlankFirst",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=018f6a3e-1111-7000-8000-000000000001&n=&n=real",
+      "web": {
+        "accepts": false,
+        "outcome": "duplicate-key"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01, and the vector with teeth: a first-wins parser picks the BLANK `n`, the trim drops it, and the real name is silently discarded - the scan card would then name no vault at all while the sender believes it named one. Rejecting the whole payload is the only answer that cannot be read two ways. This app already answered DUPLICATE_KEY (its duplicate detection compares against the previously stored value, blank or not)."
+    },
+    {
+      "name": "duplicateVaultIdMissingMnemonic",
+      "payload": "btvault1:v=018f6a3e-1111-7000-8000-000000000001&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "duplicate-key"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "DUPLICATE_KEY"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01. Pins the PRECEDENCE the other duplicate vectors cannot see: duplicate beats missing. Already this app's behaviour - the duplicate check runs on the whole decoded body before either required-key check - and now pinned by a vector rather than by our reading of it."
+    },
+    {
+      "name": "blankMnemonic",
+      "payload": "btvault1:m=+&v=018f6a3e-1111-7000-8000-000000000001",
+      "web": {
+        "accepts": false,
+        "outcome": "missing-mnemonic"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MISSING_MNEMONIC"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01. Already this app's behaviour (blank-is-absent for the required pair). The blank test is now the named trim set rather than Kotlin's isBlank(), which matters for `m=%00`: isBlank() called a NUL a value and would have answered invalid-mnemonic. No vector covers that spelling; the unit test does."
+    },
+    {
+      "name": "blankVaultId",
+      "payload": "btvault1:m=abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+abandon+about&v=+",
+      "web": {
+        "accepts": false,
+        "outcome": "missing-vault-id"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "MISSING_VAULT_ID"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01, see blankMnemonic."
+    },
+    {
+      "name": "legacyJsonBody",
+      "payload": "btvault1:{\"m\":\"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\",\"v\":\"018f6a3e-1111-7000-8000-000000000001\"}",
+      "web": {
+        "accepts": false,
+        "outcome": "legacy-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "LEGACY_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01 as a platform vector, and it is board ask #83 answered in this app's direction: a `btvault1:` body that is JSON is OUR scheme in its pre-form-encoding shape, so it is legacy-code rather than malformed or foreign. This app has discriminated by body shape since the parser was written; the web now does the same."
+    },
+    {
+      "name": "legacyJsonBodyLeadingWhitespace",
+      "payload": "btvault1: {\"m\":\"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\",\"v\":\"018f6a3e-1111-7000-8000-000000000001\"}",
+      "web": {
+        "accepts": false,
+        "outcome": "legacy-code"
+      },
+      "android": {
+        "accepts": false,
+        "reason": "LEGACY_CODE"
+      },
+      "agreement": "same-decision-same-cause",
+      "note": "NEW 2026-09-01. The whitespace-tolerant half of the same heuristic - this app trims the body's leading whitespace before the `{` test, their regex is /^\\s*\\{/."
     },
     {
       "name": "unknownExtraKey",
