@@ -74,8 +74,9 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         PriceCacheRow::class,
         PvVaultRow::class,
         PvVaultDocRow::class,
+        PvVaultDocCursorRow::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -92,6 +93,13 @@ abstract class BtDatabase : RoomDatabase() {
     abstract fun metaDao(): MetaDao
     abstract fun vaultDao(): VaultDao
     abstract fun priceCacheDao(): PriceCacheDao
+
+    /**
+     * The per-vault sync rail's cursors. Dormant with the rest of the paranoid
+     * epic — the only caller is `vault/pv/sync`, which nothing constructs while
+     * `ParanoidVaultsFlags.enabled` is `false`.
+     */
+    abstract fun pvVaultSyncDao(): PvVaultSyncDao
 
     companion object {
         /** v1 → v2 (Step 6): the portfolio_history cache table. */
@@ -386,6 +394,41 @@ abstract class BtDatabase : RoomDatabase() {
         }
 
         /**
+         * v12 → v13: the per-`(vault, doc, medium)` CAS cursor table the
+         * per-vault sync engine (`vault/pv/sync`) reads before every write.
+         *
+         * Purely additive, exactly like [MIGRATION_PARANOID_VAULTS]: one new
+         * table, no column touched, no row rewritten. It is separate from the
+         * v12 step rather than folded into it because v12 has SHIPPED — an
+         * install already at `user_version = 12` will never run that migration
+         * again, and editing it in place is how this project twice ended up with
+         * two different physical schemas under one version number.
+         *
+         * The medium is part of the primary key on purpose (§6, and the v1
+         * `vaultLastPushedKey` lesson): one cursor shared across media would let
+         * a landed Drive write claim the server had the bytes too.
+         */
+        internal val MIGRATION_PV_DOC_CURSORS = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `vault_doc_cursors` (" +
+                        "`vaultId` TEXT NOT NULL, " +
+                        "`docId` TEXT NOT NULL, " +
+                        "`medium` TEXT NOT NULL, " +
+                        "`etag` TEXT NOT NULL, " +
+                        "`docVersion` INTEGER NOT NULL, " +
+                        "`lastWriteId` TEXT NOT NULL, " +
+                        "`syncedAtMs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`vaultId`, `docId`, `medium`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_doc_cursors_vaultId_medium` " +
+                        "ON `vault_doc_cursors` (`vaultId`, `medium`)",
+                )
+            }
+        }
+
+        /**
          * The whole chain, in one place, so [create] and the migration regression
          * suite can never disagree about what ships. Room resolves the path itself;
          * the order here is documentation.
@@ -406,6 +449,7 @@ abstract class BtDatabase : RoomDatabase() {
             MIGRATION_SYNC_ERROR_CODE,
             MIGRATION_PORTFOLIO_KIND,
             MIGRATION_PARANOID_VAULTS,
+            MIGRATION_PV_DOC_CURSORS,
         )
 
         fun create(context: Context): BtDatabase =

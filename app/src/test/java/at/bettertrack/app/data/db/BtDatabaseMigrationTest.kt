@@ -213,15 +213,74 @@ class BtDatabaseMigrationTest {
      * reconstruction: this is the closest a JVM test gets to `MigrationTestHelper`
      * (which needs an instrumented device, and this project's whole migration
      * suite is deliberately device-free so CI gates on it).
+     *
+     * `runMigrations` runs the whole registered chain from 11, so the database it
+     * leaves behind is at the DECLARED version — the 12.json comparison below is
+     * therefore "every table 12 declared is still exactly as 12 declared it",
+     * which is the property that matters: later steps may ADD, never reshape.
      */
     @Test
     fun theCommittedV11SchemaMigratesToTheCommittedV12Schema() {
         withMigratedDb(exportedStatements(11), fromVersion = 11) { conn ->
             assertSchemaMatchesRoomExpectation(conn, "committed schemas/11.json")
             assertEquals(
-                "migrating 11→12 must reproduce the committed 12.json exactly",
+                "migrating past 12 must leave the committed 12.json tables untouched",
                 emptyList<String>(),
                 diffSchemas(schemaFrom(exportedStatements(12)), readSchema(conn)),
+            )
+        }
+    }
+
+    /** The v12→v13 step, from the committed v12 export to the committed v13 one. */
+    @Test
+    fun theCommittedV12SchemaMigratesToTheCommittedV13Schema() {
+        withMigratedDb(exportedStatements(12), fromVersion = 12) { conn ->
+            assertSchemaMatchesRoomExpectation(conn, "committed schemas/12.json")
+            assertEquals(
+                "migrating 12→13 must reproduce the committed 13.json exactly",
+                emptyList<String>(),
+                diffSchemas(schemaFrom(exportedStatements(13)), readSchema(conn)),
+            )
+        }
+    }
+
+    /**
+     * The per-vault CAS cursor table arrives empty, and no existing row moves.
+     *
+     * The same shape as [theParanoidVaultMigrationIsPurelyAdditive], and for the
+     * same reason: a schema step that touches user rows is the one kind of
+     * migration bug that cannot be undone by shipping a fix.
+     */
+    @Test
+    fun theVaultDocCursorMigrationIsPurelyAdditive() {
+        val db = newDbFile()
+        openJdbc(db).use { conn ->
+            conn.applyAll(exportedStatements(12))
+            conn.exec("PRAGMA user_version = 12")
+            conn.applyAll(SAMPLE_ROWS_V7)
+            val before = conn.rowCounts(COUNTED_TABLES)
+
+            runMigrations(conn, from = 12)
+
+            assertEquals("migration 12→13 must not touch a single user row", before, conn.rowCounts(COUNTED_TABLES))
+            assertEquals(
+                "`vault_doc_cursors` arrives empty",
+                mapOf("vault_doc_cursors" to 0),
+                conn.rowCounts(listOf("vault_doc_cursors")),
+            )
+            // The medium is part of the key, so one vault+doc can hold a row per
+            // medium — the §6 rule, asserted against real SQLite rather than
+            // against the entity declaration.
+            listOf("server", "drive").forEach { medium ->
+                conn.exec(
+                    "INSERT INTO `vault_doc_cursors` (`vaultId`, `docId`, `medium`, `etag`, " +
+                        "`docVersion`, `lastWriteId`, `syncedAtMs`) " +
+                        "VALUES ('v1', 'd1', '$medium', '\"3\"', 3, 'w1', 0)",
+                )
+            }
+            assertEquals(
+                mapOf("vault_doc_cursors" to 2),
+                conn.rowCounts(listOf("vault_doc_cursors")),
             )
         }
     }

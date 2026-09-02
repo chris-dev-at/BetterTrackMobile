@@ -1,19 +1,23 @@
 package at.bettertrack.app.data.db
 
+import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Index
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
+import androidx.room.Query
 
 /**
  * **Dormant** local tables for the redefined paranoid vaults
  * (`paranoid-design.md` §3/§5/§6, platform epic E0 #1410).
  *
- * Nothing reads or writes these. There is deliberately **no DAO**: the epic that
- * owns the sync rail (E1/E5) adds one when there is a real store to talk to, and
- * a DAO that exists before its caller is an invitation to wire it up early. The
- * whole program is gated by `ParanoidVaultsFlags.enabled`, which is `false`, so
- * this build is behaviourally identical to a build without these two tables —
- * they are empty, unreferenced, and cost one `CREATE TABLE` each at upgrade.
+ * `vaults` and `vault_docs` are still read and written by nothing. The third
+ * table, [PvVaultDocCursorRow], arrived with the per-vault sync engine
+ * (`vault/pv/sync`) and has the one DAO in this file — the engine is itself
+ * dormant behind `ParanoidVaultsFlags.enabled`, so the whole set is still
+ * behaviourally invisible: the tables are empty, nothing outside `vault/pv/…`
+ * constructs a caller, and an upgrade costs one `CREATE TABLE` each.
  *
  * They land NOW, in their own migration, for one reason: schema changes are the
  * one thing that cannot be added late without a user-visible cost. Two devices
@@ -37,6 +41,10 @@ import androidx.room.PrimaryKey
  *   That copy is a CACHE, never a medium (§6): a phone-local-only medium is
  *   reserved and unbuilt, and promoting this table to one is exactly the move
  *   §22 forbids.
+ * - `vault_doc_cursors` is not a server mirror at all — it is this device's
+ *   per-`(vault, doc, medium)` CAS bookmark, because §6 gives every medium its
+ *   OWN cursor and a shared one would let a landed Drive write claim the server
+ *   had the bytes too.
  *
  * **No seed phrase, no `K_c`, no device password, no unlock state lives here** —
  * those are the endpoint keystore's business (`vault/pv/custody`), never the
@@ -121,4 +129,88 @@ data class PvVaultDocRow(
         result = 31 * result + (envelope?.contentHashCode() ?: 0)
         return 31 * result + cachedAtMs.hashCode()
     }
+}
+
+/**
+ * **One medium's CAS bookmark for one doc** — the per-`(vault, doc, medium)`
+ * cursor the sync engine reads before every write and advances after every
+ * landed one (`paranoid-design.md` §6).
+ *
+ * ## Why the medium is part of the key
+ *
+ * §6 gives each medium its own cursor on purpose, and the live v1 rail learned
+ * the same lesson the expensive way: `vaultLastPushedKey` suffixes the meta key
+ * per medium because *"sharing one cursor across media would make a successful
+ * Drive push claim the server had the bytes too."* Here that is structural — the
+ * medium is a primary-key column, so a row for `server` cannot be mistaken for a
+ * row for `drive`.
+ *
+ * ## What a row asserts, and why every column is NOT NULL
+ *
+ * A row means: *"at this address, on this medium, version [docVersion] under
+ * validator [etag] is a version this device has already adopted or written."*
+ * The three facts are useless apart — an ETag with no version cannot address
+ * history, a version with no ETag cannot build an `If-Match` — so the row is
+ * complete or it does not exist. That is the shipped
+ * `ServerVaultEtagCache` discipline ("validator and payload live and die
+ * together") re-keyed: what the validator is paired with here is not a cached
+ * body but the **claim that local state already contains that version**, which
+ * is exactly what makes a `304` answerable as a no-op instead of an empty read.
+ *
+ * The corollary is a rule the engine owns: anything that discards local vault
+ * state must discard these rows with it, or a stale validator would tell the
+ * server to skip sending data this device no longer holds.
+ *
+ * [lastWriteId] is the idempotency key of the write this cursor came from — the
+ * remote header's `writeId` on an adopted pull, this device's own on a landed
+ * push. It is what lets a later `412` be recognised as *this device's own
+ * earlier write having landed after all* rather than as another device's edit.
+ */
+@Entity(
+    tableName = "vault_doc_cursors",
+    primaryKeys = ["vaultId", "docId", "medium"],
+    indices = [Index("vaultId", "medium")],
+)
+data class PvVaultDocCursorRow(
+    val vaultId: String,
+    val docId: String,
+    /** `server` | `drive` — the medium's wire name (§3 `media`). */
+    val medium: String,
+    /** The `ETag` VERBATIM, quotes included: the server compares validators, not integers. */
+    val etag: String,
+    /** The envelope `docVersion` the validator names. */
+    val docVersion: Int,
+    /** The `writeId` of the write this cursor came from. */
+    val lastWriteId: String,
+    /** Wall-clock ms this cursor last advanced. */
+    val syncedAtMs: Long,
+)
+
+/**
+ * The one DAO of the per-vault rail. Cursors only: `vaults` and `vault_docs`
+ * stay caller-less until the epic that needs them lands, and a DAO that exists
+ * before its caller is an invitation to wire it up early.
+ */
+@Dao
+interface PvVaultSyncDao {
+
+    @Query("SELECT * FROM vault_doc_cursors WHERE vaultId = :vaultId AND medium = :medium AND docId = :docId")
+    suspend fun cursor(vaultId: String, medium: String, docId: String): PvVaultDocCursorRow?
+
+    @Query("SELECT * FROM vault_doc_cursors WHERE vaultId = :vaultId AND medium = :medium")
+    suspend fun cursors(vaultId: String, medium: String): List<PvVaultDocCursorRow>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putCursor(row: PvVaultDocCursorRow)
+
+    @Query("DELETE FROM vault_doc_cursors WHERE vaultId = :vaultId AND medium = :medium AND docId = :docId")
+    suspend fun forgetCursor(vaultId: String, medium: String, docId: String)
+
+    /** A vault left the account, or its local state was discarded. */
+    @Query("DELETE FROM vault_doc_cursors WHERE vaultId = :vaultId")
+    suspend fun forgetVault(vaultId: String)
+
+    /** Account teardown: no validator may outlive the state it claims. */
+    @Query("DELETE FROM vault_doc_cursors")
+    suspend fun clearCursors()
 }

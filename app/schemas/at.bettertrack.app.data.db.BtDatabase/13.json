@@ -1,0 +1,1569 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 13,
+    "identityHash": "d72184ea191bfc37a8828163501c942d",
+    "entities": [
+      {
+        "tableName": "portfolios",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `visibility` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `isDefault` INTEGER NOT NULL, `defaultPayFromCash` INTEGER NOT NULL, `kind` TEXT, `archivedAt` TEXT, `baseCurrency` TEXT, `detailSyncedAtMs` INTEGER, `vaultId` TEXT, `vaultAlias` TEXT, `totals_marketValueEur` REAL, `totals_investedEur` REAL, `totals_unrealizedPnlEur` REAL, `totals_unrealizedPnlPct` REAL, `totals_dayChangeEur` REAL, `totals_dayChangePct` REAL, `totals_cashEur` REAL, `totals_totalValueEur` REAL, `mirrorChainId` TEXT, `mirrorChainName` TEXT, `mirrorRole` TEXT, `mirrorMemberCount` INTEGER, `mirrorSyncPercent` INTEGER, `mirrorSynced` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visibility",
+            "columnName": "visibility",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "defaultPayFromCash",
+            "columnName": "defaultPayFromCash",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archivedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "baseCurrency",
+            "columnName": "baseCurrency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "detailSyncedAtMs",
+            "columnName": "detailSyncedAtMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "vaultId",
+            "columnName": "vaultId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "vaultAlias",
+            "columnName": "vaultAlias",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "totals.marketValueEur",
+            "columnName": "totals_marketValueEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.investedEur",
+            "columnName": "totals_investedEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.unrealizedPnlEur",
+            "columnName": "totals_unrealizedPnlEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.unrealizedPnlPct",
+            "columnName": "totals_unrealizedPnlPct",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.dayChangeEur",
+            "columnName": "totals_dayChangeEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.dayChangePct",
+            "columnName": "totals_dayChangePct",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.cashEur",
+            "columnName": "totals_cashEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totals.totalValueEur",
+            "columnName": "totals_totalValueEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "mirror.mirrorChainId",
+            "columnName": "mirrorChainId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorChainName",
+            "columnName": "mirrorChainName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorRole",
+            "columnName": "mirrorRole",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorMemberCount",
+            "columnName": "mirrorMemberCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "mirror.mirrorSyncPercent",
+            "columnName": "mirrorSyncPercent",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "mirror.mirrorSynced",
+            "columnName": "mirrorSynced",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "holdings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`portfolioId` TEXT NOT NULL, `assetId` TEXT NOT NULL, `assetSymbol` TEXT NOT NULL, `assetName` TEXT NOT NULL, `assetExchange` TEXT, `assetCurrency` TEXT NOT NULL, `assetType` TEXT NOT NULL, `assetIsCustom` INTEGER NOT NULL, `quantity` REAL NOT NULL, `avgCost` REAL NOT NULL, `realizedPnl` REAL NOT NULL, `price` REAL, `marketValueEur` REAL, `costBasisEur` REAL, `unrealizedPnlEur` REAL, `unrealizedPnlPct` REAL, `dayChangeEur` REAL, `dayChangePct` REAL, PRIMARY KEY(`portfolioId`, `assetId`))",
+        "fields": [
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetSymbol",
+            "columnName": "assetSymbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetName",
+            "columnName": "assetName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetExchange",
+            "columnName": "assetExchange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetCurrency",
+            "columnName": "assetCurrency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetType",
+            "columnName": "assetType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetIsCustom",
+            "columnName": "assetIsCustom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity",
+            "columnName": "quantity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avgCost",
+            "columnName": "avgCost",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "realizedPnl",
+            "columnName": "realizedPnl",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "marketValueEur",
+            "columnName": "marketValueEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "costBasisEur",
+            "columnName": "costBasisEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "unrealizedPnlEur",
+            "columnName": "unrealizedPnlEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "unrealizedPnlPct",
+            "columnName": "unrealizedPnlPct",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dayChangeEur",
+            "columnName": "dayChangeEur",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dayChangePct",
+            "columnName": "dayChangePct",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "portfolioId",
+            "assetId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_holdings_portfolioId",
+            "unique": false,
+            "columnNames": [
+              "portfolioId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_holdings_portfolioId` ON `${TABLE_NAME}` (`portfolioId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `portfolioId` TEXT NOT NULL, `assetId` TEXT NOT NULL, `side` TEXT NOT NULL, `quantity` REAL NOT NULL, `price` REAL NOT NULL, `fee` REAL NOT NULL, `executedAt` TEXT NOT NULL, `executedAtMs` INTEGER NOT NULL, `note` TEXT, `assetSymbol` TEXT NOT NULL, `assetName` TEXT NOT NULL, `assetExchange` TEXT, `assetCurrency` TEXT NOT NULL, `assetType` TEXT NOT NULL, `assetIsCustom` INTEGER NOT NULL, `source` TEXT NOT NULL DEFAULT 'manual', `mirrorId` TEXT, `mirrorVersion` INTEGER, `mirrorAddedByName` TEXT, `mirrorAddedByIcon` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "side",
+            "columnName": "side",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantity",
+            "columnName": "quantity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fee",
+            "columnName": "fee",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executedAt",
+            "columnName": "executedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executedAtMs",
+            "columnName": "executedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetSymbol",
+            "columnName": "assetSymbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetName",
+            "columnName": "assetName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetExchange",
+            "columnName": "assetExchange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetCurrency",
+            "columnName": "assetCurrency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetType",
+            "columnName": "assetType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetIsCustom",
+            "columnName": "assetIsCustom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'manual'"
+          },
+          {
+            "fieldPath": "mirror.mirrorId",
+            "columnName": "mirrorId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorVersion",
+            "columnName": "mirrorVersion",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "mirror.mirrorAddedByName",
+            "columnName": "mirrorAddedByName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorAddedByIcon",
+            "columnName": "mirrorAddedByIcon",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_portfolioId",
+            "unique": false,
+            "columnNames": [
+              "portfolioId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_portfolioId` ON `${TABLE_NAME}` (`portfolioId`)"
+          },
+          {
+            "name": "index_transactions_portfolioId_executedAtMs",
+            "unique": false,
+            "columnNames": [
+              "portfolioId",
+              "executedAtMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_portfolioId_executedAtMs` ON `${TABLE_NAME}` (`portfolioId`, `executedAtMs`)"
+          }
+        ]
+      },
+      {
+        "tableName": "portfolio_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`portfolioId` TEXT NOT NULL, `range` TEXT NOT NULL, `baseCurrency` TEXT NOT NULL, `pointsJson` TEXT NOT NULL, `performanceJson` TEXT NOT NULL, `syncedAtMs` INTEGER NOT NULL, PRIMARY KEY(`portfolioId`, `range`))",
+        "fields": [
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "range",
+            "columnName": "range",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseCurrency",
+            "columnName": "baseCurrency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointsJson",
+            "columnName": "pointsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "performanceJson",
+            "columnName": "performanceJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncedAtMs",
+            "columnName": "syncedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "portfolioId",
+            "range"
+          ]
+        }
+      },
+      {
+        "tableName": "cash_sources",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `portfolioId` TEXT NOT NULL, `name` TEXT NOT NULL, `kind` TEXT NOT NULL, `isMain` INTEGER NOT NULL, `balanceEur` REAL NOT NULL, `archivedAt` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isMain",
+            "columnName": "isMain",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balanceEur",
+            "columnName": "balanceEur",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archivedAt",
+            "columnName": "archivedAt",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_cash_sources_portfolioId",
+            "unique": false,
+            "columnNames": [
+              "portfolioId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cash_sources_portfolioId` ON `${TABLE_NAME}` (`portfolioId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "cash_movements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `portfolioId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `kind` TEXT NOT NULL, `amountEur` REAL NOT NULL, `transactionId` TEXT, `transferId` TEXT, `counterpartSourceId` TEXT, `dividendId` TEXT, `executedAt` TEXT NOT NULL, `executedAtMs` INTEGER NOT NULL, `note` TEXT, `createdAt` TEXT NOT NULL, `source` TEXT NOT NULL DEFAULT 'manual', `tagIds` TEXT NOT NULL DEFAULT '', `mirrorId` TEXT, `mirrorVersion` INTEGER, `mirrorAddedByName` TEXT, `mirrorAddedByIcon` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountEur",
+            "columnName": "amountEur",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionId",
+            "columnName": "transactionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transferId",
+            "columnName": "transferId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "counterpartSourceId",
+            "columnName": "counterpartSourceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dividendId",
+            "columnName": "dividendId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "executedAt",
+            "columnName": "executedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "executedAtMs",
+            "columnName": "executedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'manual'"
+          },
+          {
+            "fieldPath": "tagIds",
+            "columnName": "tagIds",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "mirror.mirrorId",
+            "columnName": "mirrorId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorVersion",
+            "columnName": "mirrorVersion",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "mirror.mirrorAddedByName",
+            "columnName": "mirrorAddedByName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mirror.mirrorAddedByIcon",
+            "columnName": "mirrorAddedByIcon",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_cash_movements_portfolioId",
+            "unique": false,
+            "columnNames": [
+              "portfolioId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cash_movements_portfolioId` ON `${TABLE_NAME}` (`portfolioId`)"
+          },
+          {
+            "name": "index_cash_movements_portfolioId_executedAtMs",
+            "unique": false,
+            "columnNames": [
+              "portfolioId",
+              "executedAtMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_cash_movements_portfolioId_executedAtMs` ON `${TABLE_NAME}` (`portfolioId`, `executedAtMs`)"
+          }
+        ]
+      },
+      {
+        "tableName": "cash_tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color` TEXT NOT NULL, `system` INTEGER NOT NULL, `systemKey` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "system",
+            "columnName": "system",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "systemKey",
+            "columnName": "systemKey",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "custom_assets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT, `currency` TEXT NOT NULL, `smoothing` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "smoothing",
+            "columnName": "smoothing",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "custom_asset_value_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`assetId` TEXT NOT NULL, `date` TEXT NOT NULL, `value` REAL NOT NULL, PRIMARY KEY(`assetId`, `date`))",
+        "fields": [
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "assetId",
+            "date"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_custom_asset_value_points_assetId",
+            "unique": false,
+            "columnNames": [
+              "assetId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_custom_asset_value_points_assetId` ON `${TABLE_NAME}` (`assetId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "watchlists",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "watchlist_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `watchlistId` TEXT NOT NULL, `assetId` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `note` TEXT, `assetSymbol` TEXT NOT NULL, `assetName` TEXT NOT NULL, `assetExchange` TEXT, `assetCurrency` TEXT NOT NULL, `assetType` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchlistId",
+            "columnName": "watchlistId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetSymbol",
+            "columnName": "assetSymbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetName",
+            "columnName": "assetName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetExchange",
+            "columnName": "assetExchange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assetCurrency",
+            "columnName": "assetCurrency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetType",
+            "columnName": "assetType",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_watchlist_items_watchlistId",
+            "unique": false,
+            "columnNames": [
+              "watchlistId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_watchlist_items_watchlistId` ON `${TABLE_NAME}` (`watchlistId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "conglomerates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `status` TEXT NOT NULL, `visibility` TEXT NOT NULL, `positionCount` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visibility",
+            "columnName": "visibility",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionCount",
+            "columnName": "positionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "conglomerate_positions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`conglomerateId` TEXT NOT NULL, `assetId` TEXT NOT NULL, `weightPct` REAL NOT NULL, `sortOrder` INTEGER NOT NULL, `assetSymbol` TEXT NOT NULL, `assetName` TEXT NOT NULL, `assetCurrency` TEXT NOT NULL, `assetType` TEXT NOT NULL, PRIMARY KEY(`conglomerateId`, `assetId`))",
+        "fields": [
+          {
+            "fieldPath": "conglomerateId",
+            "columnName": "conglomerateId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weightPct",
+            "columnName": "weightPct",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetSymbol",
+            "columnName": "assetSymbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetName",
+            "columnName": "assetName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetCurrency",
+            "columnName": "assetCurrency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assetType",
+            "columnName": "assetType",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "conglomerateId",
+            "assetId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_conglomerate_positions_conglomerateId",
+            "unique": false,
+            "columnNames": [
+              "conglomerateId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conglomerate_positions_conglomerateId` ON `${TABLE_NAME}` (`conglomerateId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_ops",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `clientId` TEXT NOT NULL, `opType` TEXT NOT NULL, `portfolioId` TEXT, `payloadJson` TEXT NOT NULL, `status` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAtMs` INTEGER NOT NULL, `serverError` TEXT, `serverResultJson` TEXT, `accountKey` TEXT NOT NULL, `createdAtMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, `firstAttemptAtMs` INTEGER NOT NULL, `backendTag` TEXT NOT NULL, `errorCode` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientId",
+            "columnName": "clientId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "opType",
+            "columnName": "opType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payloadJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAtMs",
+            "columnName": "nextAttemptAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverError",
+            "columnName": "serverError",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serverResultJson",
+            "columnName": "serverResultJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountKey",
+            "columnName": "accountKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "createdAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMs",
+            "columnName": "updatedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstAttemptAtMs",
+            "columnName": "firstAttemptAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backendTag",
+            "columnName": "backendTag",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_ops_clientId",
+            "unique": true,
+            "columnNames": [
+              "clientId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_ops_clientId` ON `${TABLE_NAME}` (`clientId`)"
+          },
+          {
+            "name": "index_sync_ops_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_ops_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      },
+      {
+        "tableName": "meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        }
+      },
+      {
+        "tableName": "vault_entities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`kind` TEXT NOT NULL, `id` TEXT NOT NULL, `rev` INTEGER NOT NULL, `editedAt` TEXT NOT NULL, `editedBy` TEXT NOT NULL, `deletedAt` TEXT, `dataJson` TEXT NOT NULL, PRIMARY KEY(`kind`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rev",
+            "columnName": "rev",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editedAt",
+            "columnName": "editedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editedBy",
+            "columnName": "editedBy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dataJson",
+            "columnName": "dataJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "kind",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vault_entities_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vault_entities_kind` ON `${TABLE_NAME}` (`kind`)"
+          }
+        ]
+      },
+      {
+        "tableName": "vault_meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        }
+      },
+      {
+        "tableName": "price_cache",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`assetId` TEXT NOT NULL, `date` TEXT NOT NULL, `close` REAL NOT NULL, `currency` TEXT NOT NULL, `syncedAtMs` INTEGER NOT NULL, PRIMARY KEY(`assetId`, `date`))",
+        "fields": [
+          {
+            "fieldPath": "assetId",
+            "columnName": "assetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "close",
+            "columnName": "close",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncedAtMs",
+            "columnName": "syncedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "assetId",
+            "date"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_price_cache_assetId",
+            "unique": false,
+            "columnNames": [
+              "assetId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_price_cache_assetId` ON `${TABLE_NAME}` (`assetId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "vaults",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `media` TEXT NOT NULL, `driveConnectionId` TEXT, `keyFingerprint` TEXT NOT NULL, `retirementProofPublicKey` TEXT NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `syncedAtMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "media",
+            "columnName": "media",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "driveConnectionId",
+            "columnName": "driveConnectionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "keyFingerprint",
+            "columnName": "keyFingerprint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retirementProofPublicKey",
+            "columnName": "retirementProofPublicKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncedAtMs",
+            "columnName": "syncedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "vault_docs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`vaultId` TEXT NOT NULL, `docId` TEXT NOT NULL, `docKind` TEXT NOT NULL, `portfolioId` TEXT, `docVersion` INTEGER NOT NULL, `formatVersion` INTEGER NOT NULL, `sizeBytes` INTEGER NOT NULL, `envelope` BLOB, `cachedAtMs` INTEGER NOT NULL, PRIMARY KEY(`vaultId`, `docId`))",
+        "fields": [
+          {
+            "fieldPath": "vaultId",
+            "columnName": "vaultId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "docId",
+            "columnName": "docId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "docKind",
+            "columnName": "docKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "portfolioId",
+            "columnName": "portfolioId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "docVersion",
+            "columnName": "docVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "formatVersion",
+            "columnName": "formatVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "envelope",
+            "columnName": "envelope",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "cachedAtMs",
+            "columnName": "cachedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "vaultId",
+            "docId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vault_docs_vaultId",
+            "unique": false,
+            "columnNames": [
+              "vaultId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vault_docs_vaultId` ON `${TABLE_NAME}` (`vaultId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "vault_doc_cursors",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`vaultId` TEXT NOT NULL, `docId` TEXT NOT NULL, `medium` TEXT NOT NULL, `etag` TEXT NOT NULL, `docVersion` INTEGER NOT NULL, `lastWriteId` TEXT NOT NULL, `syncedAtMs` INTEGER NOT NULL, PRIMARY KEY(`vaultId`, `docId`, `medium`))",
+        "fields": [
+          {
+            "fieldPath": "vaultId",
+            "columnName": "vaultId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "docId",
+            "columnName": "docId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "medium",
+            "columnName": "medium",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "etag",
+            "columnName": "etag",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "docVersion",
+            "columnName": "docVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastWriteId",
+            "columnName": "lastWriteId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncedAtMs",
+            "columnName": "syncedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "vaultId",
+            "docId",
+            "medium"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vault_doc_cursors_vaultId_medium",
+            "unique": false,
+            "columnNames": [
+              "vaultId",
+              "medium"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vault_doc_cursors_vaultId_medium` ON `${TABLE_NAME}` (`vaultId`, `medium`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd72184ea191bfc37a8828163501c942d')"
+    ]
+  }
+}
