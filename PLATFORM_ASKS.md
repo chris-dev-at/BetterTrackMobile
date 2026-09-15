@@ -2657,3 +2657,25 @@ Landed on main: `cd1d345` (S2 slice 2), `dfa8a09` + `723325f` (28-finding device
 ## 🖥️ Platform → Mobile — `moneyWeightedPct` on portfolio history (#1669 landed, prod 2e99bbc) (2026-09-15)
 
 `GET /api/v1/portfolios/:id/history` now carries `moneyWeightedPct: number | null` (optional, additive — `.strict()` schemas unchanged otherwise) on EVERY range: the Modified Dietz money-weighted return of the served window, computed from the same points and external flows the TWR uses. `null` means the window has no capital (nothing invested, or withdrawals outweighing the start value) — render a dash, never 0. Absent means "not computed" (older server). The `performance` curve stays the time-weighted return and is unchanged; the web overview shows both on the summary line ("Time-weighted · Money-weighted", explainer on MAX). For the MAX headline the owner's ruling (§16 2026-09-14) is: show the money-weighted figure beside the TWR, render the server value verbatim, 2 dp per §7.1. Full spec and the five design decisions are in the PROJECTPLAN §16 row dated 2026-09-14 and `docs/`… §6.8. No action needed beyond rendering the field when present. — Platform
+
+---
+
+## 🖥️ Platform → Mobile — `PUT /social/audience` now REFUSES a named recipient who is not an active friend (#1949, in review) (2026-09-15)
+
+Heads-up ahead of the merge, not a landed change: PR #1956 (`chief/1949-active-friend-hardening`, lands after #1917) changes one wire-visible outcome on `PUT /api/v1/social/audience/:kind/:subjectId`.
+
+**What changes.** On the `specific_friends` rung, a `friendIds` entry that does not resolve to an **active accepted friend** is now refused instead of silently filtered. Previously the server dropped the unusable name and answered **200** with an audience that reached nobody (or reached fewer people than the client listed). It now answers:
+
+```
+400  { "error": { "code": "GROUP_MEMBER_NOT_FRIEND", ... } }
+```
+
+and writes **nothing** — the subject keeps the audience it already had. This is the same code `POST /social/groups/:groupId/members` has always returned for the same question, so the two paths no longer disagree about whether a name may be used.
+
+**Three different causes produce the identical response**, deliberately (§6.9 forbids an existence oracle): the id belongs to a friend whose account was **disabled**, the id belongs to a real user who is **not your friend**, or the id is **nobody at all**. Status and body are byte-identical in all three cases — do not try to distinguish them.
+
+**What this means for the app.** A **stale cached friend list is the realistic trigger**: if the app holds a friends snapshot and lets the user tick someone who has since been disabled or unfriended, the save now fails where it used to appear to succeed. Please (a) expect `GROUP_MEMBER_NOT_FRIEND` on this endpoint, (b) surface it as a recoverable "that person can no longer be added" rather than a generic save error, and (c) re-fetch `GET /api/v1/social/friends` on that failure and re-render the picker — that list is already scoped to active friends, so the refreshed selection will save. The whole request is refused atomically: naming three good friends and one bad id saves none of them, so retry with the corrected set rather than assuming a partial write.
+
+**Also in the same PR, harmless but worth knowing:** naming the same friend twice in `friendIds` used to be a **500** (it hit the membership unique index). The set is now de-duplicated server-side and saves normally — if you ever worked around that, the workaround is no longer needed.
+
+**Nothing else on the wire changes.** No schema change, no new field, no contract/OpenAPI change, and the other rungs (`private`, `all_friends`, `group`, `public_link`) are untouched. `GET /social/audience/...` already stopped naming disabled friends in #1897, so the value the picker reads back is safe to re-submit as-is. — Platform
