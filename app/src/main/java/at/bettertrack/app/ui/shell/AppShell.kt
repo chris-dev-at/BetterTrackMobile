@@ -10,10 +10,19 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -139,6 +148,8 @@ import at.bettertrack.app.navigation.TransactionsRoute
 import at.bettertrack.app.navigation.TwoFactorRoute
 import at.bettertrack.app.navigation.owningTab
 import at.bettertrack.app.navigation.tabTapAction
+import at.bettertrack.app.ui.adaptive.BtContentColumn
+import at.bettertrack.app.ui.adaptive.LocalBtWindow
 import at.bettertrack.app.ui.applock.AppLockSetupScreen
 import at.bettertrack.app.ui.cash.CashScreen
 import at.bettertrack.app.ui.chat.ChatListScreen
@@ -192,8 +203,13 @@ import at.bettertrack.app.ui.workboard.WorkboardEntry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Which shell-level signal lights this tab's badge dot (R-arc mandate §1). */
-private enum class TabBadge {
+/**
+ * Which shell-level signal lights this tab's badge dot (R-arc mandate §1).
+ *
+ * `internal` since T1 (2026-10-29) only so [BtNavRail] can take the same
+ * [TabSpec]s the bottom bar does — one tab model, two presentations.
+ */
+internal enum class TabBadge {
     /** No dot, ever. */
     None,
 
@@ -239,7 +255,7 @@ private enum class TabBadge {
  * shell therefore draws no top bar at all, and the flag that used to say which
  * tabs were exceptions had no `false` left to describe.
  */
-private data class TabSpec(
+internal data class TabSpec(
     val tab: BtTab,
     val labelRes: Int,
     val icon: ImageVector,
@@ -359,6 +375,11 @@ private fun headerFaceOf(tab: BtTab?, chrome: BtTabChrome): BtTabHeaderFace = wh
 fun BtApp() {
     val bt = BtTheme.colors
     val scope = rememberCoroutineScope()
+    // T1 large-screen foundation: Medium and Expanded windows navigate from a
+    // left rail instead of the bottom bar. ONE tab model either way — the same
+    // `visibleTabs`, selection, pager, badges and `onTabSelect` feed both
+    // presentations; this flag only decides which one draws.
+    val railShell = LocalBtWindow.current.usesRail
     // The subpages' own navigator. Registered BEFORE the graph is built, because
     // that is when its destinations are instantiated. See [BtSheetNavigator] for
     // why the sheets left ComposeNavigator: a NavHost composes one destination at
@@ -706,6 +727,29 @@ fun BtApp() {
     // overlay at the bottom of this Box — see there for why it cannot be a
     // constant.
     var bottomBarPx by remember { mutableIntStateOf(0) }
+    // The rail's width, measured the same way, so the snackbar can centre over
+    // the content beside the rail instead of over the rail itself.
+    var railPx by remember { mutableIntStateOf(0) }
+
+    // The badges the top bar used to carry, on the tabs that own them. Both are
+    // dots, not counts — see [BtTabBadgeDot]. Shared by the bar and the rail.
+    val hasTabBadge: (TabSpec) -> Boolean = { tab ->
+        when (tab.badge) {
+            TabBadge.None -> false
+            TabBadge.Chat -> showSocialSurfaces && chatUnread > 0
+            TabBadge.Alerts -> showNotificationSurfaces && triggeredAlerts > 0
+        }
+    }
+    // Owner directive 2026-08-07: tapping Portfolio while the Portfolio tab IS
+    // the current screen opens the switcher sheet instead of re-navigating to
+    // where you already are. A swipe never reaches this path, so a page change
+    // can never be mistaken for a re-tap. Shared by the bar and the rail.
+    val onTabSelect: (TabSpec) -> Unit = { tab ->
+        when (tabTapAction(tab.tab, exactTab)) {
+            TabTap.OpenPortfolioSwitcher -> PortfolioTabEntry.requestSwitcher()
+            TabTap.Switch -> switchToTab(tab.tab)
+        }
+    }
 
     // The shell is a Box, not just a Scaffold, because the sheet layer has to be
     // able to cover the bottom bar as well as the pages. A full-screen sheet that
@@ -752,157 +796,199 @@ fun BtApp() {
             // Overview's — the last one the shell used to draw — now travels with
             // the Portfolio tab that hosts it.
             bottomBar = {
-                // Drawn UNCONDITIONALLY now, where it used to be gated on
-                // `isTopLevel`. A sheet covers it, so hiding it would buy nothing
-                // and cost the thing that gating always costs: the page area
-                // changing height the moment a sheet opens, which reflows all four
-                // live pages and is visible in the strip above the sheet and again
-                // on the way out. The bar is simply always there, and sometimes
-                // something is in front of it.
-                BtBottomBar(
-                    tabs = visibleTabs,
-                    // The ink and the selected weight, as 0f/1f. A tap latches this
-                    // to its target on the tap's own frame; otherwise it follows
-                    // the pager's `currentPage`, which flips at the halfway mark of
-                    // a drag — the point at which the incoming page is the one you
-                    // are mostly looking at.
-                    //
-                    // The PILL does not read this. It reads the pager's continuous
-                    // position in the draw phase, so it travels with the pages
-                    // instead of stepping between them — see [tabPillX]. Splitting
-                    // the two is what lets the ink be cheap (a couple of
-                    // recompositions per hop) while the travel stays frame-exact.
-                    selectedIndex = tapCommit ?: pagerState.currentPage,
-                    pager = pagerState,
-                    // Pinned while a tap is travelling: the tap's whole promise is
-                    // that the bar answers immediately, and a pill that set off on
-                    // its own journey would arrive after the page did.
-                    pinnedIndex = tapCommit,
-                    // The badges the top bar used to carry, on the tabs that own
-                    // them. Both are dots, not counts — see [BtTabBadgeDot].
-                    hasBadge = { tab ->
-                        when (tab.badge) {
-                            TabBadge.None -> false
-                            TabBadge.Chat -> showSocialSurfaces && chatUnread > 0
-                            TabBadge.Alerts -> showNotificationSurfaces && triggeredAlerts > 0
-                        }
-                    },
-                    // Owner directive 2026-08-07: tapping Portfolio while the
-                    // Portfolio tab IS the current screen opens the switcher
-                    // sheet instead of re-navigating to where you already are.
-                    // A swipe never reaches this path, so a page change can never
-                    // be mistaken for a re-tap.
-                    onSelect = { tab ->
-                        when (tabTapAction(tab.tab, exactTab)) {
-                            TabTap.OpenPortfolioSwitcher -> PortfolioTabEntry.requestSwitcher()
-                            TabTap.Switch -> switchToTab(tab.tab)
-                        }
-                    },
-                    // Measured, not assumed: the snackbar overlay at the bottom of
-                    // this Box has to clear this bar while the tabs are what the
-                    // user is looking at, and `ShortNavigationBar`'s height is an
-                    // M3 token plus whatever gesture inset the bar consumed. A
-                    // hardcoded dp would be wrong on the next token change and on
-                    // any device in a different navigation mode.
-                    modifier = Modifier.onSizeChanged { bottomBarPx = it.height },
-                )
+                // Compact only (T1): on Medium and Expanded the same tabs are the
+                // rail beside the content below, and a bottom bar as well would
+                // be the phone layout stacked on top of the Samsung taskbar.
+                //
+                // Within Compact it is drawn UNCONDITIONALLY, where it used to be
+                // gated on `isTopLevel`. A sheet covers it, so hiding it would buy
+                // nothing and cost the thing that gating always costs: the page
+                // area changing height the moment a sheet opens, which reflows all
+                // four live pages and is visible in the strip above the sheet and
+                // again on the way out. The bar is simply always there, and
+                // sometimes something is in front of it.
+                if (!railShell) {
+                    BtBottomBar(
+                        tabs = visibleTabs,
+                        // The ink and the selected weight, as 0f/1f. A tap latches
+                        // this to its target on the tap's own frame; otherwise it
+                        // follows the pager's `currentPage`, which flips at the
+                        // halfway mark of a drag — the point at which the incoming
+                        // page is the one you are mostly looking at.
+                        //
+                        // The PILL does not read this. It reads the pager's
+                        // continuous position in the draw phase, so it travels with
+                        // the pages instead of stepping between them — see
+                        // [tabPillX]. Splitting the two is what lets the ink be
+                        // cheap (a couple of recompositions per hop) while the
+                        // travel stays frame-exact.
+                        selectedIndex = tapCommit ?: pagerState.currentPage,
+                        pager = pagerState,
+                        // Pinned while a tap is travelling: the tap's whole promise
+                        // is that the bar answers immediately, and a pill that set
+                        // off on its own journey would arrive after the page did.
+                        pinnedIndex = tapCommit,
+                        hasBadge = hasTabBadge,
+                        onSelect = onTabSelect,
+                        // Measured, not assumed: the snackbar overlay at the bottom
+                        // of this Box has to clear this bar while the tabs are what
+                        // the user is looking at, and `ShortNavigationBar`'s height
+                        // is an M3 token plus whatever gesture inset the bar
+                        // consumed. A hardcoded dp would be wrong on the next token
+                        // change and on any device in a different navigation mode.
+                        modifier = Modifier.onSizeChanged { bottomBarPx = it.height },
+                    )
+                }
             },
         ) { innerPadding ->
             CompositionLocalProvider(
                 LocalBtSnackbar provides snackbar.controller,
                 LocalBtTabChrome provides chrome,
             ) {
-                Column(
+                // The insets the rail pays (status bar, taskbar, a landscape
+                // phone's side navigation bar on the START edge) and the ones the
+                // content beside it must pay instead (bottom, and the END edge).
+                // Read here, in composition, because the getters are composable.
+                val railStartInsets = WindowInsets.systemBars
+                    .union(WindowInsets.displayCutout)
+                    .only(WindowInsetsSides.Start)
+                val railContentInsets = WindowInsets.navigationBars
+                    .union(WindowInsets.displayCutout)
+                    .only(WindowInsetsSides.End + WindowInsetsSides.Bottom)
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
-                    // ── The ONE tab bar (owner report 2026-08-07) ─────────────
-                    //
-                    // *"Since the header is consistent in all the main pages it
-                    // shouldn't scroll [with the swipe]."*
-                    //
-                    // It sits HERE — above the paged area, outside everything that
-                    // moves — which is the whole fix: the bar is static during a
-                    // gesture because it is not in the thing being dragged. It is
-                    // also above the offline banner, which it has to be: this bar
-                    // consumes the status-bar inset (the shell's Scaffold zeroes
-                    // its own), so anything drawn before it lands under the clock.
-                    //
-                    // Drawn unconditionally, for the same reason as the bottom bar.
-                    BtTabHeader(
-                        // Every tab's face at once, in bar order. The bar can now
-                        // show a face for a page it is only partway onto — which is
-                        // what the frozen-bitmap era could not do at all, and is
-                        // why the faces were data rather than slots in the first
-                        // place. See [BtTabHeader].
-                        faces = remember(
-                            tabOrder,
-                            chrome.portfolioSelector,
-                            chrome.portfolioIsOverview,
-                        ) { tabOrder.map { headerFaceOf(it, chrome) } },
-                        pager = pagerState,
-                        scrollBehavior = headerBehavior,
-                        onLongPressWordmark = {
-                            if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
-                        },
-                        // The shell cannot reach the Portfolio view model, and does
-                        // not need to: the switcher already has a shell-visible
-                        // door, opened for the bottom bar's re-tap. One signal, two
-                        // affordances, one implementation.
-                        onOpenSwitcher = { PortfolioTabEntry.requestSwitcher() },
-                        onAction = { action ->
-                            when (action) {
-                                BtTabHeaderAction.Search -> navController.navigate(SearchRoute)
-                                BtTabHeaderAction.Messages -> navController.navigate(ChatListRoute)
-                                BtTabHeaderAction.None -> Unit
-                            }
-                        },
-                        // The bell, restored to the chrome (owner 2026-08-09). Same
-                        // count the Portfolio tab's dot used to carry — that dot is
-                        // retired, see [TabBadge].
-                        unreadNotifications = notifUnread,
-                        showInbox = showNotificationSurfaces,
-                        onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
-                        onOpenSettings = { navController.navigate(SettingsRoute) },
-                    )
-                    // Global offline banner (§7.4): real connectivity + cached-data
-                    // age. The gallery's debug toggle can still force it.
-                    val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
-                    val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
-                        .collectAsStateWithLifecycle(initialValue = null)
-                    val sessionDegraded by AppGraph.tokenManager.sessionDegraded
-                        .collectAsStateWithLifecycle()
-                    if (!online || DebugPreviewState.showOfflineBanner) {
-                        // §7.4: the indicator opens the Pending-sync sheet.
-                        OfflineBanner(
-                            asOfMs = dataAgeMs,
-                            onClick = { navController.navigate(PendingSyncRoute) },
-                        )
-                    } else if (sessionDegraded) {
-                        // Online, but the session cannot be renewed right now.
-                        // This is the state that used to be a forced logout.
-                        val retryScope = rememberCoroutineScope()
-                        AuthReconnectBanner(
-                            onRetry = { retryScope.launch { AppGraph.tokenManager.retryRefreshNow() } },
+                    // The rail (Medium / Expanded): the same tabs, selection, pager,
+                    // badges and tap handler as the bottom bar above — see
+                    // [BtNavRail]. Inside the Scaffold, so the occlusion clip culls it
+                    // under a settled full-width sheet exactly as it culls the bar.
+                    if (railShell) {
+                        BtNavRail(
+                            tabs = visibleTabs,
+                            selectedIndex = tapCommit ?: pagerState.currentPage,
+                            pager = pagerState,
+                            pinnedIndex = tapCommit,
+                            hasBadge = hasTabBadge,
+                            onSelect = onTabSelect,
+                            modifier = Modifier.onSizeChanged { railPx = it.width },
                         )
                     }
-                    // The four pages. All of them, all the time.
-                    BtTabPager(
-                        tabs = tabOrder,
-                        state = pagerState,
-                        scopes = tabScopes,
-                        live = live,
-                        modifier = Modifier.fillMaxSize(),
-                    ) { tab ->
-                        BtTabContent(
-                            tab = tab,
-                            navController = navController,
-                            onDeepLink = navigateDeepLink,
-                            onSwitchTab = switchToTab,
-                            discreetMode = discreetMode,
-                            onToggleDiscreet = toggleDiscreet,
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .then(
+                                if (railShell) {
+                                    // Beside the rail there is no bottom bar to stand
+                                    // on: the column itself must stop above the
+                                    // taskbar (and clear an END-side navigation bar),
+                                    // or every page's last row and FAB would sit
+                                    // behind it. The START inset was the rail's to
+                                    // pay; consuming it here keeps the header from
+                                    // paying it a second time.
+                                    Modifier
+                                        .consumeWindowInsets(railStartInsets)
+                                        .windowInsetsPadding(railContentInsets)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
+                        // ── The ONE tab bar (owner report 2026-08-07) ─────────────
+                        //
+                        // *"Since the header is consistent in all the main pages it
+                        // shouldn't scroll [with the swipe]."*
+                        //
+                        // It sits HERE — above the paged area, outside everything that
+                        // moves — which is the whole fix: the bar is static during a
+                        // gesture because it is not in the thing being dragged. It is
+                        // also above the offline banner, which it has to be: this bar
+                        // consumes the status-bar inset (the shell's Scaffold zeroes
+                        // its own), so anything drawn before it lands under the clock.
+                        //
+                        // Drawn unconditionally, for the same reason as the bottom bar.
+                        BtTabHeader(
+                            // Every tab's face at once, in bar order. The bar can now
+                            // show a face for a page it is only partway onto — which is
+                            // what the frozen-bitmap era could not do at all, and is
+                            // why the faces were data rather than slots in the first
+                            // place. See [BtTabHeader].
+                            faces = remember(
+                                tabOrder,
+                                chrome.portfolioSelector,
+                                chrome.portfolioIsOverview,
+                            ) { tabOrder.map { headerFaceOf(it, chrome) } },
+                            pager = pagerState,
+                            scrollBehavior = headerBehavior,
+                            onLongPressWordmark = {
+                                if (BuildConfig.DEBUG) navController.navigate(GalleryRoute)
+                            },
+                            // The shell cannot reach the Portfolio view model, and does
+                            // not need to: the switcher already has a shell-visible
+                            // door, opened for the bottom bar's re-tap. One signal, two
+                            // affordances, one implementation.
+                            onOpenSwitcher = { PortfolioTabEntry.requestSwitcher() },
+                            onAction = { action ->
+                                when (action) {
+                                    BtTabHeaderAction.Search -> navController.navigate(SearchRoute)
+                                    BtTabHeaderAction.Messages -> navController.navigate(ChatListRoute)
+                                    BtTabHeaderAction.None -> Unit
+                                }
+                            },
+                            // The bell, restored to the chrome (owner 2026-08-09). Same
+                            // count the Portfolio tab's dot used to carry — that dot is
+                            // retired, see [TabBadge].
+                            unreadNotifications = notifUnread,
+                            showInbox = showNotificationSurfaces,
+                            onOpenInbox = { navController.navigate(NotificationsInboxRoute) },
+                            onOpenSettings = { navController.navigate(SettingsRoute) },
                         )
+                        // Global offline banner (§7.4): real connectivity + cached-data
+                        // age. The gallery's debug toggle can still force it.
+                        val online by AppGraph.connectivityMonitor.isOnline.collectAsStateWithLifecycle()
+                        val dataAgeMs by AppGraph.portfolioRepository.portfolioDataAgeMs
+                            .collectAsStateWithLifecycle(initialValue = null)
+                        val sessionDegraded by AppGraph.tokenManager.sessionDegraded
+                            .collectAsStateWithLifecycle()
+                        if (!online || DebugPreviewState.showOfflineBanner) {
+                            // §7.4: the indicator opens the Pending-sync sheet.
+                            OfflineBanner(
+                                asOfMs = dataAgeMs,
+                                onClick = { navController.navigate(PendingSyncRoute) },
+                            )
+                        } else if (sessionDegraded) {
+                            // Online, but the session cannot be renewed right now.
+                            // This is the state that used to be a forced logout.
+                            val retryScope = rememberCoroutineScope()
+                            AuthReconnectBanner(
+                                onRetry = { retryScope.launch { AppGraph.tokenManager.retryRefreshNow() } },
+                            )
+                        }
+                        // The four pages. All of them, all the time.
+                        BtTabPager(
+                            tabs = tabOrder,
+                            state = pagerState,
+                            scopes = tabScopes,
+                            live = live,
+                            modifier = Modifier.fillMaxSize(),
+                        ) { tab ->
+                            // The content column (T1): full width on Compact, centred
+                            // and capped on Medium / Expanded — applied HERE, around
+                            // the page, so no screen's rows change and a full-width
+                            // LazyColumn is simply laid out against a narrower box.
+                            BtContentColumn {
+                                BtTabContent(
+                                    tab = tab,
+                                    navController = navController,
+                                    onDeepLink = navigateDeepLink,
+                                    onSwitchTab = switchToTab,
+                                    discreetMode = discreetMode,
+                                    onToggleDiscreet = toggleDiscreet,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -956,12 +1042,23 @@ fun BtApp() {
         // `sheetsClosed` is a composition read of the nav graph's floor, not of
         // [BtOcclusion]: it flips once per sheet open/close rather than once per
         // frame of a drag, so it costs one recomposition of this one node.
+        //
+        // On the rail shell (T1) there is no bottom bar, so the tabs-showing case
+        // is the nav inset alone — and `bottomBarPx` is deliberately ignored
+        // there rather than trusted, because it keeps the last height the bar
+        // measured before a rotation took the bar away. With the tabs showing
+        // the host also steps right by the rail's width, so it centres over the
+        // content and not over the rail; a sheet covers the rail, so then it
+        // centres over the window like the sheet does.
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val barInset = with(LocalDensity.current) { bottomBarPx.toDp() }
+        val density = LocalDensity.current
+        val barInset = if (railShell) 0.dp else with(density) { bottomBarPx.toDp() }
+        val railInset = if (railShell && sheetsClosed) with(density) { railPx.toDp() } else 0.dp
         BtSnackbarHost(
             hostState = snackbar.hostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .padding(start = railInset)
                 .padding(bottom = if (sheetsClosed) barInset.coerceAtLeast(navInset) else navInset),
         )
     }
@@ -1172,8 +1269,8 @@ private fun BtTabContent(
  * (People, 17.9dp) by 15dp a side. The height is untouched: 32dp is set by the
  * 64dp bar's icon+label stack, not by the glyph.
  */
-private val NAV_INDICATOR_WIDTH: Dp = 48.dp
-private val NAV_INDICATOR_HEIGHT: Dp = 32.dp
+internal val NAV_INDICATOR_WIDTH: Dp = 48.dp
+internal val NAV_INDICATOR_HEIGHT: Dp = 32.dp
 
 /**
  * The bottom bar — the backbone the mandate keeps (§2), rebuilt to B2 §6.
