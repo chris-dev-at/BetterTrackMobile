@@ -152,6 +152,38 @@ const val CASH_EPSILON: Double = 1e-9
 const val CASH_DECIMALS: Int = 2
 
 /**
+ * Magnitude bound of the cent quantizer — `2^42` € (≈ €4.4 trillion), #1523.
+ *
+ * The formula in [floorCents] is trustworthy only while (a) its `×100`
+ * intermediate stays well inside the exact-integer range below `2^53` and
+ * (b) the `1 + 8ε` representation nudge stays below one cent. Both hold up to
+ * `2^42` (product ≤ 4.4e14, nudge ≤ 0.79 of a cent). Past it the nudge itself
+ * crosses whole cents (a €5e13 amount used to round UP ~9 cents), and past
+ * `2^53 / 100 ≈ 9e13` the product drifts off the integer grid entirely
+ * (`floorCents(1e14)` returned `100000000000000.19`). At these magnitudes the
+ * float64 grid is coarser than ~€0.001, too coarse to tell an intended decimal
+ * from genuine sub-cent residue — so quantization degrades to the identity:
+ * the amount passes through unchanged rather than being nudged onto a cent it
+ * may never have meant. Every admissible money *input* sits far below this
+ * bound (`MAX_CASH_AMOUNT_EUR` = 1e12), and vault-report figures up to the
+ * 1e15 row bound (#1514) pass through exact instead of gaining fabricated
+ * cents.
+ *
+ * The degradation applies to accumulations too, not only to single inputs:
+ * [floorCents] is also called on summed balances and tax pools, so enough
+ * near-ceiling rows can push a *total* past `2^42` and quantization becomes
+ * the identity there. That is the intended behavior at that magnitude — the
+ * float64 spacing is already ~€0.001, so there is no cent left to floor to.
+ *
+ * Contract constant (plan §3.3 rule 7): the TypeScript spells it `2 ** 42`; a
+ * Kotlin `const val` cannot call `pow`, so this is the exact double that
+ * expression evaluates to. `CashLedgerHandPortedTest` pins it against
+ * `2.0.pow(42)`, and `tax.ts`'s mirror of it is [TAX_FLOOR_CENTS_EXACT_LIMIT_EUR]
+ * (the bare name marks the origin module, as with the epsilon/quantum pair).
+ */
+const val FLOOR_CENTS_EXACT_LIMIT_EUR: Double = 4_398_046_511_104.0
+
+/**
  * JavaScript's `Number.EPSILON` — the gap between 1 and the next representable
  * double. Reproduced as its exact literal rather than re-derived (§3.3 rule 7),
  * because it is a *contract* input to [floorCents]' boundary nudge.
@@ -193,13 +225,19 @@ private const val NUMBER_EPSILON: Double = 2.220446049250313e-16
  * suite pins that with `Object.is(floorCents(-0.005), 0)`. This is also why
  * `floorCents` is NOT shared with `tax.ts`'s same-named helper (plan §3.3 rule 3):
  * that one is a different function and gets its own port.
+ *
+ * Quantization is bounded (#1523): at and above [FLOOR_CENTS_EXACT_LIMIT_EUR]
+ * the amount is returned unchanged — see the constant for why float64 cannot
+ * quantize cents there.
  */
 fun floorCents(amountEur: Double): Double {
     if (!amountEur.isFinite()) {
         throw CashLedgerError("Cannot floor a non-finite EUR amount, got ${jsNum(amountEur)}.")
     }
+    val abs = abs(amountEur)
+    if (abs >= FLOOR_CENTS_EXACT_LIMIT_EUR) return amountEur
     val sign = if (amountEur < 0) -1 else 1
-    val cents = floor(abs(amountEur) * 100 * (1 + NUMBER_EPSILON * 8))
+    val cents = floor(abs * 100 * (1 + NUMBER_EPSILON * 8))
     return if (cents == 0.0) 0.0 else (sign * cents) / 100
 }
 

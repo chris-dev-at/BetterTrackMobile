@@ -1,9 +1,9 @@
-commit  = 8884c5cb3aa643e8ce6a175973c4518e7191898a
-date    = 2026-08-10 07:44:07 +0000 (fetched 2026-08-10)
+commit  = ef73d282d487ff4c4b177d7462fc090e4a0d96e5
+date    = 2026-09-16 06:12:45 +0000 (fetched 2026-10-29)
 repo    = BetterTrack platform monorepo (apps/web + packages/*)
 ref     = origin/main
-copied  = 2026-08-10
-previous= fc970e8a84ce70d35a095316aefdc7e0ac2ec72e (2026-08-05)
+copied  = 2026-10-29
+previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 
 # Paths vendored under vendor/ (read-only snapshot, `git show origin/main:<path>`)
 #
@@ -25,17 +25,33 @@ previous= fc970e8a84ce70d35a095316aefdc7e0ac2ec72e (2026-08-05)
 #   apps/web/src/user/vault/mirrorProvenance.test.ts            -> vendor/web-vault/
 #   apps/web/src/user/vault/vault.test.ts                       -> vendor/web-vault/
 #   packages/contracts/src/vault.ts                             -> vendor/web-vault/contracts-vault.ts
+#
+# W4 — data-home reference (vendored 2026-08-04 by W4, first listed here at the
+#      ef73d282 re-pin; the Drive file RELOCATED upstream at that re-pin)
+#   apps/web/src/user/vault/dataHome.ts                         -> vendor/web-vault/
+#   apps/web/src/user/vault/localDataHome.ts                    -> vendor/web-vault/
+#   apps/web/src/user/vault/drive/driveDataHome.ts              -> vendor/web-vault/drive/
+#     (was apps/web/src/user/vault/driveDataHome.ts -> vendor/web-vault/ until 8884c5cb)
+#
+#   [RETIRED UPSTREAM at 3852d739 (#1392), dropped from vendor/ at the ef73d282
+#    re-pin — see that re-pin's section at the bottom of this file:
+#      was packages/contracts/src/vaultV2.ts              -> vendor/web-vault/contracts-vaultV2.ts
+#      was apps/web/src/user/vault/v2/*.ts                -> vendor/web-vault/v2/
+#      was apps/web/src/user/vault/v2/vectors/*.ts        -> vendor/web-vault/v2/vectors/
+#      was packages/domain/src/vaultVectors/v2.{ts,fixture.json} (via packages/domain/**)]
 #   [RELOCATED at 8884c5cb — the v1 oracle now lives in packages/domain and so
 #    arrives through the `packages/domain/**` line above; see the re-pin note
 #    at the bottom of this file:
 #      was apps/web/src/user/vault/vectors.ts          -> vendor/web-vault/
 #      was apps/web/src/user/vault/vectors.fixture.json-> vendor/web-vault/
-#      now packages/domain/src/vaultVectors/{v1,v2}.{ts,fixture.json}]
+#      now packages/domain/src/vaultVectors/v1.{ts,fixture.json}]
 #
 # The published fixtures are ALSO copied byte-identically into the app's test
 # resources, because they are replayed directly rather than reshaped:
 #   app/src/test/resources/vault-vectors/vectors.fixture.json  (= v1.fixture.json)
-#   app/src/test/resources/vault-vectors/v2.fixture.json
+#   app/src/test/resources/vault-vectors/v2.fixture.json       (FROZEN: the last
+#     published v2 oracle, 8884c5cb; no upstream source exists any more — see
+#     the ef73d282 re-pin section)
 #   app/src/test/resources/vault-vectors/clientMoney.fixture.json
 #
 # NOT from the monorepo — a third-party npm package, vendored for the same
@@ -222,3 +238,200 @@ previous= fc970e8a84ce70d35a095316aefdc7e0ac2ec72e (2026-08-05)
 #    `canonicalJson` moved verbatim into the new `canonicalJson.ts` so the merge
 #    tie-breaks and the r3 §21 header MAC share one definition. `VaultJson.kt`'s
 #    `canonicalJson` already IS that function and needed no change.
+
+# ── RE-PIN 8884c5cb → ef73d282 (2026-10-29): #1542 / #1626 / #1781 / #1918 ──
+#
+# WHY: the engine moved four times in the 37 days after the previous pin and
+# the app's literal port had silently fallen behind on all four — a bounded
+# cent quantizer (#1542), the shared row-engine classifier that decides which
+# tax engine a frozen row settles under (#1626), the contribution-free return a
+# forecast samples (#1781), and the money-weighted (Modified Dietz) headline
+# (#1918). Platform commits touching packages/domain between the pins:
+#   2e99bbc1 2026-09-14  #1918 money-weighted headline (+ #1920 in the same lap —
+#                        #1920's merger silent-drop fix touched NOTHING under
+#                        packages/domain; it is an API-side change)
+#   5f48367e 2026-09-05  #1781 Forecast factors: computeTwrStats
+#   aff474ae 2026-09-02  #1626 regime parity / FI rows / row-engine classifier
+#   7ce07a07 2026-08-29  #1542 money-quantizer precision past 2^53/100
+#   c870f20e 2026-08-20  #1452 hardening residuals (tax.ts: one KDoc path)
+#   3852d739 2026-08-19  #1392 REMOVED the vault v2 surface (vaultVectors/v2.*)
+#   050a588f, d955c87d   #1303 / #1272 holdings.ts storage-quantum PROSE only
+#
+# NOTE on the pin vs. the platform working tree: their checkout was stale/dirty
+# again when this snapshot was taken; every path was vendored with
+# `git show origin/main:<path>` (ef73d282 IS the tip of origin/main), exactly
+# as the README prescribes. Nothing was checked out or modified over there.
+#
+# CHANGED under packages/domain between the two commits (14 files, +1484/−359):
+#   package.json                          export-map entry for ./taxVectors (no port impact)
+#   src/cashLedger.ts                     NEW FLOOR_CENTS_EXACT_LIMIT_EUR = 2 ** 42; floorCents
+#                                         returns |x| ≥ 2^42 unchanged (#1542)   → PORTED
+#   src/tax.ts                            mirrored FLOOR_CENTS_EXACT_LIMIT_EUR + floorCents bound
+#                                         (#1542); NEW row-engine section (#1626): TaxRowMode,
+#                                         TaxRowEngine, TaxRowEngineFacts, TaxRowClassificationError,
+#                                         frozenTaxCountryEngine, taxEngineForRow,
+#                                         costBasisStrategyForEngine; one KDoc path (#1452) → PORTED
+#   src/seriesStats.ts                    NEW isoDayToMs, TwrStats + computeTwrStats (#1781),
+#                                         DietzFlow/DietzWindow/modifiedDietz, DietzAnchor,
+#                                         modifiedDietzReturn (#1918); header prose; a type-only
+#                                         import of holdings' ValuePoint/FlowPoint            → PORTED
+#   src/holdings.ts                       COMMENT-ONLY (#1272/#1303: "per stored row since the
+#                                         last close, including non-contributing sells") — no code
+#                                         moved; the KDoc/inline prose is mirrored          → PORTED (prose)
+#   src/taxVectors/index.ts, rowEngine.ts NEW — #1512's committed row-engine truth table
+#                                         (12 row families × 6 living regimes)              → VECTORED
+#   src/vaultVectors/index.ts             dropped the v2 export; prose                       → re-vendored
+#   src/vaultVectors/v2.ts, v2.fixture.json DELETED upstream (#1392)                        → dropped from vendor/
+#   src/__tests__/cashLedger.test.ts      +49: the three #1523 floorCents boundary cases    → vectors + hand-port
+#   src/__tests__/tax.test.ts             +29: floorCents parity on 9 large values, the limit mirror → vectors + hand-port
+#   src/__tests__/seriesStats.test.ts     +121: the computeTwrStats suite (#1759)           → vectors + hand-port
+#   src/__tests__/modifiedDietz.test.ts   NEW 476: the whole Dietz suite                    → vectors + hand-port
+#   src/__tests__/taxRowEngine.test.ts    NEW 104: classifier + truth-table replay          → vectors + hand-port
+#
+# THE HARNESS WENT RED FIRST. Re-vendoring, extending the generator for the new
+# surfaces and regenerating against the ef73d282 engine — with the Kotlin
+# untouched — produced 173 failures out of 1523 scoped tests (domain.* + vault.*;
+# 838 vectors now, up from 622, plus 56 hand-ported skips, up from 46):
+#   75 taxEngineForRow, 29 modifiedDietzReturn, 15 computeTwrStats,
+#    8 modifiedDietz, 10 frozenTaxCountryEngine, 8 costBasisStrategyForEngine,
+#   17 cashLedger floorCents (#1523 identity cases) + 1 FLOOR_CENTS_EXACT_LIMIT_EUR,
+#    8 tax floorCents (#1523), 1 TAX_CONSTANTS (the new key),
+#    1 computeSeriesStats on the #1759 saver fixture (see the Math.pow note).
+# Every pre-existing vector regenerated byte-identically (proved by diffing all
+# 622 by (fn, case) against HEAD) and all 16 new timeWeightedReturn companion
+# vectors passed untouched — the holdings/TWR port needed nothing.
+#
+# AFTER THE LITERAL PORT: 1536 scoped tests, 0 failures (domain.* + vault.*,
+# githubDebug flavour; 1523 → 1536 = the 13 new hand-ported cases). Per runner:
+# DomainVectorTest 229 (holdings 104, seriesStats 112, settingsScope 9,
+# serverTwrParity 4), CashLedgerVectorTest 231, TaxVectorTest 378; the
+# hand-ported suites CashLedger 12 / Domain 17 / Tax 18 / StorageDrift 8 /
+# DeTaxFixtures 16 + TaxRowEngineHandPortedTest 6 (new); the frozen
+# VaultV2ConformanceTest 17. 837 of the 838 vectors assert at exactly 0.0.
+#
+# THE ONE EXCEPTION — documented, not silent: `computeSeriesStats — #1759
+# saver: the OLD statistic …` (cagrPct). V8 37.024375910503714 vs JVM
+# 37.02437591050369: 2.1e-14 apart = exactly 3 ulps at the output, i.e. ONE ulp
+# of the ≈1.37 Math.pow result (2.2e-16) carried through the `− 1` and `× 100`
+# (`pow(4.829…, 365.25/1826)`). This is the class DomainVectorTest.TOLERANCES
+# has documented since W2 (both engines are within spec on `pow`, neither is
+# required to agree in the last bit, StrictMath.pow gives the JVM answer too),
+# so the vector joins that map at the same RELATIVE 1e-15 (≈4.5 ulp — tight
+# enough that any formula or operation-order error still fails) rather than
+# being @Ignored, which would assert nothing. The Kotlin IS the literal mirror;
+# nothing in the formula differs, and all 15 computeTwrStats vectors — whose
+# own `pow` calls go through the same code path — land bit-identically.
+# Reported to the coordinator as the only non-exact vector of this re-pin;
+# flipping it to red-and-ignored is a one-entry change if preferred.
+#
+# GENERATOR PROCEDURE CHANGE (README updated): the loader flag is now
+# `--experimental-transform-types`. tax.ts's new TaxRowClassificationError uses a
+# TypeScript parameter property (`constructor(message, readonly taxCountry)`),
+# which Node's strip-only mode refuses (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX). The
+# vendored source is read-only, so the loader moved, not the source; transform
+# mode is the same built-in, dependency-free loader and reproduced all 622
+# pre-existing vectors byte-identically. taxVectors/index.ts re-exports with an
+# extension-less specifier Node ESM cannot resolve, so the generator imports
+# taxVectors/rowEngine.ts directly (same data, same literals).
+#
+# KOTLIN FILES TOUCHED (each hunk mirrors the TS hunk named above):
+#   domain/CashLedger.kt        FLOOR_CENTS_EXACT_LIMIT_EUR (4_398_046_511_104.0 — the double
+#                               `2 ** 42` is; a const val cannot call pow; pinned against 2.0.pow(42)
+#                               by the hand-ported suite); floorCents early identity return
+#   domain/Tax.kt               TAX_FLOOR_CENTS_EXACT_LIMIT_EUR + taxFloorCents bound; the whole
+#                               row-engine section; TaxRowClassificationError(message, taxCountry)
+#   domain/SeriesStats.kt       ISO_DAY/isoDayToMs, TwrStats, computeTwrStats, DietzFlow,
+#                               DietzWindow, modifiedDietz, DietzAnchor (enum, wire literals),
+#                               modifiedDietzReturn; header prose
+#   domain/DomainTypes.kt       jsJsonStringify — the JSON.stringify(<string>) shim the new
+#                               isoDayToMs message interpolates its date through
+#   domain/Holdings.kt          the #1272/#1303 prose only (no code moved upstream)
+#   test …/DomainVectors.kt     decodePerfPoints, decodeDietzWindow, decodeDietzAnchor, encodeTwrStats
+#   test …/DomainVectorTest.kt  runners for computeTwrStats / modifiedDietz / modifiedDietzReturn
+#   test …/CashLedgerVectorTest.kt   FLOOR_CENTS_EXACT_LIMIT_EUR runner
+#   test …/TaxVectorTest.kt     TAX_CONSTANTS key, taxEngineForRow / frozenTaxCountryEngine /
+#                               costBasisStrategyForEngine runners, TaxRowClassificationError name map
+#   test …/DomainHandPortedTest.kt      #1759 relations, Dietz non-finite inputs, non-mutation
+#   test …/CashLedgerHandPortedTest.kt  the #1523 sweep relations + the 2 ** 42 pin
+#   test …/TaxHandPortedTest.kt         9 new parity values, the limit-mirror equality
+#   test …/TaxRowEngineHandPortedTest.kt NEW — the truth table against its DECLARED outcomes
+#   test …/vault/v2/VaultV2ConformanceTest.kt  header: upstream retirement notice (frozen replay)
+#   resources domain-vectors/*.json      regenerated; NEW taxRowEngineVectors.json
+#
+# NAMING DECISIONS (the PINNED_AT prefix convention, continued):
+#   - cashLedger.ts owns FLOOR_CENTS_EXACT_LIMIT_EUR (bare name); tax.ts's mirror
+#     is TAX_FLOOR_CENTS_EXACT_LIMIT_EUR — exactly the epsilon/quantum rule.
+#   - TaxRowMode / TaxRowEngine are String typealiases (the TaxMode precedent):
+#     taxEngineForRow has a live error path for an unknown mode ('flat_rate').
+#   - DietzAnchor is an enum with the TS literals as `wire` (the ComparisonMetric
+#     precedent for a closed union with no error path).
+#   - Two one-field TS option bags are flattened, the CurrencyConverter
+#     precedent: modifiedDietzReturn(values, flows, anchor) for `window: { anchor }`
+#     and costBasisStrategyForEngine(engine, customCostBasis) for
+#     `custom: { costBasis } | null`. The vector inputs keep the TS shapes.
+#   - TaxRowClassificationError's `readonly taxCountry` is a `val taxCountry`;
+#     TaxVectorTest maps the class to the TS `Error.name` the way it does for
+#     TaxComputationError.
+#
+# OUT OF SCOPE — vendored paths OUTSIDE packages/domain that drifted. Re-vendored
+# so the snapshot is honest; NOT ported (the app's live vault work is the
+# per-portfolio paranoid `vault/pv/` package with its own board-pinned fixtures):
+#   packages/contracts/src/vault.ts (+~600): portfolioRow's `alias` RENAMED to
+#     `vaultAlias` (the E0 locked-stub label, #1410) and `vaultId` re-gained its
+#     server column — both `.default(null)`, always NULL in a v1 document;
+#     expense/cash rule `pattern` now bounded (`EXPENSE_RULE_PATTERN_MAX` /
+#     `CASH_RULE_PATTERN_MAX`); the strict document schema gained a
+#     `.superRefine(refineRestoredCashSets)` (cash tag/rule set limits on
+#     restore); new import-batch/row sub-schemas (understanding, candidates,
+#     ruleTagIds, resolvedBy, kindUndecided); PARANOID_KILLED_CAPABILITIES,
+#     PARANOID_CLIENT_ROUTE_DECISIONS, PARANOID_REHYDRATION_HANDLERS; a new
+#     `legacyWiped: 'PARANOID_LEGACY_WIPED'` error code; `drive` is now "the
+#     user's visible BetterTrack Vaults folder" (was appdata). VaultContracts.kt
+#     keeps entity `data` opaque, so most of this has no port surface — the
+#     `.superRefine` on the strict document and the `alias`→`vaultAlias` rename
+#     are the two items a vault pass must look at.
+#   apps/web/src/user/vault/dataHome.ts: two new failure reasons, 'revoked' and
+#     'identity-mismatch' (DataHome.kt's reason vocabulary lacks both).
+#   apps/web/src/user/vault/hkdf.ts: PROSE only — "CURRENTLY UNUSED IN
+#     PRODUCTION"; the RFC 5869 primitive and its test are kept. No port impact.
+#   apps/web/src/user/vault/vault.test.ts: the v1 "keep unlocked on this device"
+#     custody was RETIRED (§12, #1640): no custody seam on the lock core, the old
+#     `bettertrack-vault-custody` IndexedDB store is erased on sight
+#     (`purgeRetiredDeviceCustody`). The app's VaultKeyCustodyTest / vault key
+#     custody is the mobile counterpart — a vault pass must rule on it.
+#   apps/web/src/user/vault/drive/driveDataHome.ts (1048 → 1616 lines, MOVED from
+#     vault/driveDataHome.ts and rewritten): visible "BetterTrack Vaults" folder
+#     (DRIVE_FOLDER_MARKER 'bettertrack-vaults-v1'), owner digest + vault digest
+#     appProperties (DRIVE_OWNER_CONTEXT / DRIVE_VAULT_DIGEST_CONTEXT), a 'doc'
+#     address mode next to 'legacy' (DRIVE_VAULT_DOC_FILE_CONTEXT
+#     'bettertrack-drive-vault-v2:', VaultDocKind), `trashed` in FILE_FIELDS,
+#     paged listing (DRIVE_LIST_PAGE_SIZE) with DRIVE_ADDRESS_OBJECT_LIMIT 1000,
+#     account-binding via inspectVaultDocEnvelope. The app's vault/drive/
+#     DriveDataHome was ported from the OLD file.
+#   DELETED upstream and dropped from vendor/: packages/contracts/src/vaultV2.ts,
+#     apps/web/src/user/vault/v2/** (20 files), packages/domain/src/vaultVectors/
+#     v2.{ts,fixture.json}. Last vendored copies: `git show c96b3e8:tools/domain-
+#     vectors/vendor/web-vault/v2/<file>` (and …/contracts-vaultV2.ts,
+#     …/domain/src/vaultVectors/v2.*).
+#   UNCHANGED: bytes.ts, canonicalJson.ts, crypto.ts, envelope.ts, errors.ts,
+#     hkdf.test.ts, localDataHome.ts, merge.ts, merge.test.ts, mirrorProvenance.ts,
+#     mirrorProvenance.test.ts, recovery.ts, rekey.ts, both engine fixtures
+#     (serverTwrParity, clientMoney), fflate.
+#
+# THE V2 FREEZE (coordinator decision for this pass): the platform retired the
+# per-portfolio vault v2 surface at 3852d739 ("one paranoid implementation";
+# vaultVectors/index.ts now says "The mobile repo must drop its matching v2
+# replay"). The app's `vault/v2/` port, `VaultV2ConformanceTest` and the
+# byte-identical `app/src/test/resources/vault-vectors/v2.fixture.json`
+# (sha256 5b6e447bd7455fe8c1c1c9325ed4e19946739462864da1804b547bf6ab6e0509) are
+# kept FROZEN and still pass against those bytes; the test header records the
+# retirement. Removing `vault/v2/` is a pending coordinator decision
+# (docs/TODO.md, 2026-10-29).
+#
+# A PRE-EXISTING DIVERGENCE NOTICED, NOT TOUCHED (outside this diff, no vector
+# exercises it): V8's Date.parse rolls an impossible day-of-month over
+# ("2023-02-29T00:00:00Z" → 2023-03-01, "2024-02-30" → 2024-03-01; month 13 →
+# NaN) while the port's jsDateOnlyToMs (LocalDate.parse) returns NaN for both.
+# Every date-shaped input that reaches dateToMs/isoDayToMs through the vectors
+# is a real calendar day, so nothing here is red — but a platform suite that
+# ever feeds a Feb-30 would go red on this side. Flagged for a follow-up.

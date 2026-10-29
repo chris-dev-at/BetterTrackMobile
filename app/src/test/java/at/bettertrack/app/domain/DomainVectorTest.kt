@@ -52,11 +52,25 @@ class DomainVectorTest(
          * server-generated TWR goldens, is asserted at 0.0.
          *
          * `computeSeriesStats` / `indexAveragePctPerYear` also call `Math.pow`,
-         * but their vectors' exponents happen to land on identical doubles on
-         * both engines and are asserted exactly.
+         * and their vectors' exponents happened to land on identical doubles on
+         * both engines until the ef73d282 re-pin (2026-10-29) brought the #1759
+         * saver fixture: `computeSeriesStats` on five years of monthly values from
+         * €10,000 + €500/month at 6 %/yr. Its `cagrPct` is
+         * `(pow(4.829…, 365.25/1826) − 1) · 100`; V8 says `37.024375910503714`,
+         * the JVM `37.02437591050369` — 2.1e-14 apart, exactly 3 ulps at the
+         * output, i.e. ONE ulp of the ≈1.37 `pow` result (2.2e-16) carried
+         * through the `− 1` and `× 100`, a relative 5.8e-16. The SAME tolerance
+         * applies, for the same documented
+         * reason; the other 837 vectors — including all 15 `computeTwrStats`
+         * vectors, whose own `pow` calls land identically — are asserted at 0.0.
+         * Every entry here is reported in `tools/domain-vectors/PINNED_AT`; a
+         * new one is never added silently.
          */
         private val TOLERANCES: Map<Pair<String, String>, Double> = mapOf(
             ("deflateSeries" to "flat: slopes a flat nominal series downward at 10 %/yr over ~2 years")
+                to 1e-15,
+            ("computeSeriesStats" to
+                "#1759 saver: the OLD statistic — the value curve's CAGR reads the user's own deposits back as performance")
                 to 1e-15,
         )
 
@@ -228,6 +242,24 @@ class DomainVectorTest(
                     input.s("baselineId"),
                 ),
             )
+
+        "computeTwrStats" -> encodeTwrStats(
+            computeTwrStats(
+                decodePerfPoints(input.a("performance")),
+                input.oOrNull("deflator")?.let { decodeDeflator(it) },
+            ),
+        )
+
+        "modifiedDietz" -> numOrNull(modifiedDietz(decodeDietzWindow(input.o("window"))))
+
+        // The TS takes `window: { anchor }`; the port flattens the one-field bag.
+        "modifiedDietzReturn" -> numOrNull(
+            modifiedDietzReturn(
+                decodeValuePoints(input.a("values")),
+                decodeFlowPoints(input.a("flows")),
+                decodeDietzAnchor(input.o("window").s("anchor")),
+            ),
+        )
 
         // ---- settingsScope ----
         // The layer values are arbitrary JSON, so the generic function is driven

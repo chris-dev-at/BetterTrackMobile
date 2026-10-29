@@ -91,6 +91,8 @@ class CashLedgerVectorTest(
         "EXTERNAL_CASH_MOVEMENT_KINDS" ->
             buildJsonArray { EXTERNAL_CASH_MOVEMENT_KINDS.forEach { add(JsonPrimitive(it)) } }
 
+        "FLOOR_CENTS_EXACT_LIMIT_EUR" -> num(FLOOR_CENTS_EXACT_LIMIT_EUR)
+
         // ---- scalars ----
         "floorCents" -> num(floorCents(input.d("amountEur")))
 

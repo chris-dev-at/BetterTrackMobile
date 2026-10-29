@@ -108,6 +108,7 @@ class TaxVectorTest(
             put("TAX_YEAR_TIME_ZONE", JsonPrimitive(TAX_YEAR_TIME_ZONE))
             put("QTY_EPSILON", num(TAX_QTY_EPSILON))
             put("QTY_STORAGE_QUANTUM", num(QTY_STORAGE_QUANTUM))
+            put("FLOOR_CENTS_EXACT_LIMIT_EUR", num(TAX_FLOOR_CENTS_EXACT_LIMIT_EUR))
             put("AT_AS_CUSTOM_PARAMS", encodeCustomParams(AT_AS_CUSTOM_PARAMS))
         }
 
@@ -118,6 +119,21 @@ class TaxVectorTest(
 
         "costBasisStrategyForCountry" ->
             JsonPrimitive(costBasisStrategyForCountry(input.sOrNull("country")))
+
+        // ---- the row-engine classifier (#1512 via #1626) ----
+        "taxEngineForRow" ->
+            JsonPrimitive(taxEngineForRow(decodeTaxRowFacts(input.o("row")), input.s("living")))
+
+        "frozenTaxCountryEngine" ->
+            JsonPrimitive(frozenTaxCountryEngine(input.sOrNull("taxCountry")))
+
+        // The TS takes `custom: { costBasis } | null`; the port flattens the one-field snapshot.
+        "costBasisStrategyForEngine" -> JsonPrimitive(
+            costBasisStrategyForEngine(
+                input.s("engine"),
+                input.oOrNull("custom")?.s("costBasis"),
+            ),
+        )
 
         "atYearTargetEur" -> num(atYearTargetEur(input.d("poolEur")))
 
@@ -259,6 +275,11 @@ internal fun decodeTaxableTransaction(o: JsonObject) = TaxableTransaction(
 internal fun decodeTaxableTransactions(a: JsonArray): List<TaxableTransaction> =
     a.map { decodeTaxableTransaction(it.jsonObject) }
 
+internal fun decodeTaxRowFacts(o: JsonObject) = TaxRowEngineFacts(
+    taxMode = o.sOrNull("taxMode"),
+    taxCountry = o.sOrNull("taxCountry"),
+)
+
 internal fun encodeRealizations(list: List<SellRealizationEur>): JsonElement = buildJsonArray {
     list.forEach { r ->
         add(
@@ -373,8 +394,12 @@ internal fun assertTaxThrewLike(expected: JsonObject, thrown: Throwable?) {
         fail("expected $expectedName(\"$expectedMessage\") but nothing was thrown")
         return
     }
-    // Mirrors the TypeScript `Error.name` the class sets in its constructor.
-    val actualName = if (thrown is TaxComputationError) "TaxComputationError" else "Error"
+    // Mirrors the TypeScript `Error.name` each class sets in its constructor.
+    val actualName = when (thrown) {
+        is TaxComputationError -> "TaxComputationError"
+        is TaxRowClassificationError -> "TaxRowClassificationError"
+        else -> "Error"
+    }
     assertEquals("error class", expectedName, actualName)
     assertEquals("error message", expectedMessage, thrown.message)
 }

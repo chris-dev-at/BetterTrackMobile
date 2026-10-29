@@ -170,7 +170,7 @@ class DeTaxFixturesHandPortedTest {
                 .getResourceAsStream("/domain-vectors/deTaxFixtures.json")
                 ?: error(
                     "Missing /domain-vectors/deTaxFixtures.json — regenerate with " +
-                        "`node --experimental-strip-types tools/domain-vectors/generate.ts`",
+                        "`node --experimental-transform-types tools/domain-vectors/generate.ts`",
                 )
             val text = stream.bufferedReader().use { it.readText() }
             VECTOR_JSON.parseToJsonElement(text)

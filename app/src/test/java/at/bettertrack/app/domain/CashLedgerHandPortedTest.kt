@@ -7,6 +7,8 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.pow
 
 /**
  * The `cashLedger` vitest cases the vector generator deliberately skipped,
@@ -224,5 +226,43 @@ class CashLedgerHandPortedTest {
         assertEquals("buy", movements[0].kind)
         assertEquals("deposit", movements[1].kind)
         assertNotNull(entries)
+    }
+
+    // =======================================================================
+    // 4. Relations between calls — the #1523 quantization bound
+    // =======================================================================
+
+    /**
+     * `cashLedger.test.ts` → "never fabricates a cent and stays idempotent across
+     * the limit (#1523)". Every call of the sweep travels as a vector; the three
+     * RELATIONS the case asserts between calls cannot, so they live here:
+     * bounded by the sub-cent nudge below the limit and exact at/above it,
+     * idempotent, and odd-symmetric in the sign.
+     */
+    @Test
+    fun `floorCents never fabricates a cent and stays idempotent across the #1523 limit`() {
+        // "still quantizes exactly just below the 2^42 limit" opens with
+        // `expect(FLOOR_CENTS_EXACT_LIMIT_EUR).toBe(2 ** 42)` — the literal the
+        // port spells is pinned against the expression the TypeScript spells.
+        assertEquals(2.0.pow(42), FLOOR_CENTS_EXACT_LIMIT_EUR, 0.0)
+
+        val sweep = listOf(
+            1234.56,
+            1000000000000.004,
+            4398046511103.0009765625,
+            4398046511103.25,
+            FLOOR_CENTS_EXACT_LIMIT_EUR,
+            FLOOR_CENTS_EXACT_LIMIT_EUR + 0.25,
+            9e13,
+            1e14 + 0.25,
+            1e15,
+        )
+        for (value in sweep) {
+            val floored = floorCents(value)
+            // Bounded by the sub-cent nudge below the limit; exact at/above it.
+            assertTrue("|floorCents($value) - $value| < 0.01", abs(floored - value) < 0.01)
+            assertEquals("idempotent at $value", floored, floorCents(floored), 0.0)
+            assertEquals("odd-symmetric at $value", -floored, floorCents(-value), 0.0)
+        }
     }
 }

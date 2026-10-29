@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.pow
 
 /**
  * The `tax` vitest cases the vector generator deliberately skipped, hand-ported
@@ -50,6 +51,18 @@ class TaxHandPortedTest {
             0.1 + 0.2,
             123.456,
             -76.545,
+            // Large-magnitude cases across the 2^42 quantization limit (#1523):
+            // just below (still quantized), at, and far above (identity), including
+            // the 2^53/100 ≈ 9e13 boundary and the 1e15 vault-report row bound.
+            4398046511103.0009765625,
+            4398046511103.25,
+            2.0.pow(42),
+            2.0.pow(42) + 0.0068359375,
+            50000000000000.0078125,
+            9007199254740991.0 / 100,
+            1e14,
+            -1e14,
+            1e15,
         )
         for (value in cases) {
             assertEquals(
@@ -109,6 +122,18 @@ class TaxHandPortedTest {
         assertEquals(QTY_EPSILON, TAX_QTY_EPSILON, 0.0)
         assertEquals(1e-9, TAX_QTY_EPSILON, 0.0)
         assertEquals(1e-8, QTY_STORAGE_QUANTUM, 0.0)
+    }
+
+    /**
+     * `tax.test.ts` → "mirrors the cashLedger quantization limit exactly (#1523)".
+     * The three values of the case travel as vectors; the constant EQUALITY
+     * across the two modules is a two-declaration relation and lives here, the
+     * epsilon/quantum precedent one more time.
+     */
+    @Test
+    fun `the tax quantization limit mirrors the cashLedger one`() {
+        assertEquals(FLOOR_CENTS_EXACT_LIMIT_EUR, TAX_FLOOR_CENTS_EXACT_LIMIT_EUR, 0.0)
+        assertEquals(2.0.pow(42), TAX_FLOOR_CENTS_EXACT_LIMIT_EUR, 0.0)
     }
 
     // =======================================================================

@@ -131,6 +131,44 @@ internal fun jsNumberToString(value: Double): String {
 internal fun jsNum(value: Double): String = jsNumberToString(value)
 
 /**
+ * `JSON.stringify(<string>)` — the string as a JSON literal: wrapped in double
+ * quotes, with `"`, `\` and every code unit below U+0020 escaped the way
+ * ECMAScript's `QuoteJSONString` escapes them (`\b \f \n \r \t`, the rest as
+ * `\u00xx`), and — ES2019 well-formed stringify — a lone surrogate as `\udxxx`.
+ *
+ * Needed because `seriesStats.isoDayToMs` interpolates the offending date into
+ * its message through `JSON.stringify`, and that message is part of the audited
+ * contract the vectors assert verbatim (`got "2024/09/01"`, quotes included).
+ */
+internal fun jsJsonStringify(value: String): String {
+    val sb = StringBuilder(value.length + 2)
+    sb.append('"')
+    var i = 0
+    while (i < value.length) {
+        val ch = value[i]
+        when {
+            ch == '"' -> sb.append("\\\"")
+            ch == '\\' -> sb.append("\\\\")
+            ch == '\b' -> sb.append("\\b")
+            ch == '\u000C' -> sb.append("\\f")
+            ch == '\n' -> sb.append("\\n")
+            ch == '\r' -> sb.append("\\r")
+            ch == '\t' -> sb.append("\\t")
+            ch < ' ' -> sb.append(String.format(Locale.ROOT, "\\u%04x", ch.code))
+            ch.isHighSurrogate() && i + 1 < value.length && value[i + 1].isLowSurrogate() -> {
+                sb.append(ch).append(value[i + 1])
+                i += 1
+            }
+            ch.isSurrogate() -> sb.append(String.format(Locale.ROOT, "\\u%04x", ch.code))
+            else -> sb.append(ch)
+        }
+        i += 1
+    }
+    sb.append('"')
+    return sb.toString()
+}
+
+/**
  * `Date.parse("<date>T00:00:00Z")` — UTC midnight epoch-ms of an ISO
  * `YYYY-MM-DD` date, or `NaN` when the date does not exist.
  *

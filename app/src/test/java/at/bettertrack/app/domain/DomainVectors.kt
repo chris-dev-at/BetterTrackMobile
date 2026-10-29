@@ -35,7 +35,7 @@ internal fun loadVectorFile(module: String): List<JsonObject> {
     val stream = object {}.javaClass.getResourceAsStream("/domain-vectors/$module.json")
         ?: error(
             "Missing /domain-vectors/$module.json — regenerate with " +
-                "`node --experimental-strip-types tools/domain-vectors/generate.ts`",
+                "`node --experimental-transform-types tools/domain-vectors/generate.ts`",
         )
     val text = stream.bufferedReader().use { it.readText() }
     return VECTOR_JSON.parseToJsonElement(text).jsonObject["vectors"]!!.jsonArray.map { it.jsonObject }
@@ -445,3 +445,33 @@ internal fun decodeFlowPoints(a: JsonArray) =
 
 internal fun decodePerformancePoints(a: JsonArray) =
     a.map { PerformancePoint(it.jsonObject.s("date"), it.jsonObject.d("pct")) }
+
+// ---------------------------------------------------------------------------
+// seriesStats: computeTwrStats (#1759) and the Modified Dietz window (#1669)
+// ---------------------------------------------------------------------------
+
+/** `PerfPoint` is seriesStats' own point type (the TWR curve's `PerformancePoint` twin). */
+internal fun decodePerfPoints(a: JsonArray) =
+    a.map { PerfPoint(it.jsonObject.s("date"), it.jsonObject.d("pct")) }
+
+internal fun decodeDietzWindow(o: JsonObject) = DietzWindow(
+    startMs = o.d("startMs"),
+    endMs = o.d("endMs"),
+    startValue = o.d("startValue"),
+    endValue = o.d("endValue"),
+    flows = o.a("flows").map { DietzFlow(it.jsonObject.d("atMs"), it.jsonObject.d("amount")) },
+)
+
+/** The TS string union travels as its literal; an unknown literal fails loud. */
+internal fun decodeDietzAnchor(wire: String): DietzAnchor =
+    DietzAnchor.entries.firstOrNull { it.wire == wire } ?: error("unknown DietzAnchor $wire")
+
+internal fun encodeTwrStats(s: TwrStats?): JsonElement =
+    if (s == null) {
+        JsonNull
+    } else {
+        buildJsonObject {
+            put("totalReturnPct", num(s.totalReturnPct))
+            put("cagrPct", numOrNull(s.cagrPct))
+        }
+    }

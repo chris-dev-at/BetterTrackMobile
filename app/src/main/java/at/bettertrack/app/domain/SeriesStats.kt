@@ -9,11 +9,15 @@ import kotlin.math.pow
  * `tools/domain-vectors/PINNED_AT`.
  *
  * Side-by-side compare stats (total %, CAGR, max drawdown, best/worst day), the
- * performance-% display mode, real-terms (inflation) deflation, the per-asset
- * contribution table, and the N-series comparison.
+ * performance-% display mode, real-terms (inflation) deflation, the
+ * time-weighted window statistics a forecast samples as its return factor
+ * (§13.5 V5-P6b), the money-weighted (Modified Dietz) headline (#1669), the
+ * per-asset contribution table, and the N-series comparison.
  *
  * Like the rest of the domain this is money-critical code and a **pure** module:
- * it reads no clock (`dateToMs` is a deterministic parse of a *passed-in* ISO
+ * it depends on nothing but the value/flow point types of `Holdings.kt` (so the
+ * money-weighted window reads the very series the TWR curve is built from),
+ * reads no clock (`dateToMs` is a deterministic parse of a *passed-in* ISO
  * string), performs no I/O, and never mutates its inputs. No rounding happens
  * here — every figure is returned at full `Double` precision.
  *
@@ -41,6 +45,24 @@ private const val EPSILON: Double = 1e-9
 
 /** UTC midnight epoch-ms of an ISO `YYYY-MM-DD` date (no clock read; deterministic). */
 private fun dateToMs(date: String): Double = jsDateOnlyToMs(date)
+
+/** The `/^\d{4}-\d{2}-\d{2}$/` of `isoDayToMs` (same literal as `Holdings.kt`'s `ISO_DATE`). */
+private val ISO_DAY = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+
+/**
+ * UTC midnight epoch-ms of an ISO `YYYY-MM-DD` date that MUST parse — the
+ * money-weighted window throws on a malformed date rather than weighting a
+ * flow by `NaN` (the TWR's `assertIsoDate` discipline, `Holdings.kt`).
+ */
+private fun isoDayToMs(date: String, what: String): Double {
+    val ms = if (ISO_DAY.matches(date)) dateToMs(date) else Double.NaN
+    if (!ms.isFinite()) {
+        throw DomainException(
+            "Invalid $what: expected ISO YYYY-MM-DD, got ${jsJsonStringify(date)}",
+        )
+    }
+    return ms
+}
 
 /** Elapsed calendar years from ISO date `a` to ISO date `b` (signed, ACT/365.25). */
 private fun yearsBetween(a: String, b: String): Double =
@@ -297,6 +319,298 @@ fun indexAveragePctPerYear(monthly: List<MonthlyIndexPoint>): Double? {
     if (months <= 0) return null
     val years = months / 12
     return ((last.value / first.value).pow(1 / years) - 1) * 100
+}
+
+// ---------------------------------------------------------------------------
+// Time-weighted return statistics
+// ---------------------------------------------------------------------------
+
+/**
+ * The window statistics of a **time-weighted** return series (#1759): the
+ * flow-neutral counterpart of [SeriesStats]'s `totalReturnPct`/`cagrPct`.
+ */
+data class TwrStats(
+    /** TWR over the window, percent, rebased so the first point is 0 %. */
+    val totalReturnPct: Double,
+    /** Annualised TWR (ACT/365.25); `null` when no calendar time elapsed. */
+    val cagrPct: Double?,
+)
+
+/**
+ * Window statistics of a cumulative **time-weighted** return series — the
+ * annualised figure a forecast may sample as "the return this portfolio has
+ * historically earned" (§13.5 V5-P6b, #1759).
+ *
+ * The CAGR of a portfolio's *value* series is not a rate of return: every
+ * deposit raises the value, so a saver who contributes monthly reads their own
+ * contributions back as performance. A TWR series carries no such inflation —
+ * it links each period's return across the flows — so annualising IT answers
+ * the question the value CAGR only appeared to.
+ *
+ * The input is the cumulative-percent curve the portfolio already computes
+ * (`timeWeightedReturn`, `Holdings.kt`): `pct` is the compounded return since
+ * the curve's own anchor. It is rebased here onto the FIRST point of whatever
+ * window is passed in (compounding, never subtraction — percentages don't add
+ * across time), so slicing a since-inception curve to a 1Y/3Y/5Y window and
+ * handing it over states that window's return. An optional [Deflator]
+ * expresses the result in real terms, exactly as [deflateSeries] does for a
+ * value series.
+ *
+ * The rebased index is then measured by [computeSeriesStats] itself, so the
+ * total-return and ACT/365.25 CAGR formulas have ONE definition in this
+ * module: for a portfolio with no external flows the TWR index is `V/V₀` point
+ * for point, and this function therefore returns exactly the value series'
+ * `totalReturnPct`/`cagrPct` — the no-flows case cannot diverge between the two
+ * statistics.
+ *
+ * `null` when the window cannot state a return at all: an empty series, or a
+ * base point at or below −100 % (a non-positive index, which a well-formed TWR
+ * curve never reaches).
+ *
+ * The TypeScript's `ReadonlyArray<PerfPoint>` is this module's own point type;
+ * a `timeWeightedReturn` curve (`PerformancePoint`, structurally identical) is
+ * mapped onto it by the caller.
+ */
+fun computeTwrStats(
+    performance: List<PerfPoint>,
+    deflator: Deflator? = null,
+): TwrStats? {
+    val first = performance.firstOrNull() ?: return null
+    val base = 1 + first.pct / 100
+    if (!base.isFinite() || base <= 0) return null
+    val index: List<StatSeriesPoint> = performance.map { pt ->
+        StatSeriesPoint(pt.date, (1 + pt.pct / 100) / base)
+    }
+    val stats = computeSeriesStats(if (deflator != null) deflateSeries(index, deflator) else index)
+    return TwrStats(totalReturnPct = stats.totalReturnPct, cagrPct = stats.cagrPct)
+}
+
+// ---------------------------------------------------------------------------
+// Money-weighted return — Modified Dietz (#1669)
+// ---------------------------------------------------------------------------
+
+/** One external cash flow inside a Modified Dietz window, at an exact instant. */
+data class DietzFlow(
+    /** Epoch-ms instant the money was put to work (positive) or taken out (negative). */
+    val atMs: Double,
+    /** Signed amount in the window's currency: into the portfolio positive, out negative. */
+    val amount: Double,
+)
+
+/** The ingredients of one Modified Dietz window — see [modifiedDietz]. */
+data class DietzWindow(
+    /** Epoch-ms instant the window opens; `startValue` is the capital at work then. */
+    val startMs: Double,
+    /** Epoch-ms instant the window closes (never before `startMs`); `endValue` is the value then. */
+    val endMs: Double,
+    val startValue: Double,
+    val endValue: Double,
+    /** External flows; those outside `[startMs, endMs]` are ignored (see [modifiedDietz]). */
+    val flows: List<DietzFlow>,
+)
+
+/**
+ * Modified Dietz return of one window, percent (#1669, §16 2026-09-14):
+ *
+ *     MD = (V_end − V_start − Σ F_i) / (V_start + Σ w_i · F_i)
+ *     w_i = (t_end − t_i) / (t_end − t_start)   — the fraction of the window
+ *                                                 remaining after flow i
+ *
+ * — the gain the window produced, over the capital that was at work in it,
+ * each flow counting for the share of the window it was invested for. This is
+ * the **money-weighted** counterpart of the time-weighted curve
+ * ([computeTwrStats], `timeWeightedReturn`): a deposit made just before a rally
+ * raises it and the same deposit made just after a crash barely moves it,
+ * whereas the TWR — by design — ignores both. That is exactly why the two are
+ * served side by side: a tiny early stake that lost two thirds before the real
+ * money arrived drags the TWR deep into the red while the money-weighted figure
+ * reports what the money actually earned. Exact XIRR is deliberately not
+ * attempted (the headline is a summary; Dietz is what the reference tools print
+ * for "your money's return").
+ *
+ *  - Flows before `startMs` are already inside `startValue` and flows after
+ *    `endMs` have not happened yet: both are ignored. A flow AT `startMs`
+ *    weighs 1, a flow AT `endMs` weighs 0. A zero-length window
+ *    (`startMs == endMs`) has no time to weight by: a flow at that instant
+ *    weighs 1 — it IS the capital.
+ *  - `null` when the window has no capital to measure against: a denominator
+ *    within [EPSILON] of zero or below it (nothing invested, or withdrawals
+ *    that outweigh the start value — the known Dietz blind spot, which the
+ *    ruling maps to "no figure", never to a sign flip).
+ *  - Throws on a non-finite input or a window that runs backwards: this is
+ *    the money path, and a silent `NaN` would surface as a wrong headline.
+ *  - Full precision (§5.4); the display layer rounds.
+ *
+ * Epoch instants are `Double`s, as every `Date.parse` result in this port is.
+ */
+fun modifiedDietz(window: DietzWindow): Double? {
+    val startMs = window.startMs
+    val endMs = window.endMs
+    val startValue = window.startValue
+    val endValue = window.endValue
+    val flows = window.flows
+    for ((label, n) in listOf(
+        "startMs" to startMs,
+        "endMs" to endMs,
+        "startValue" to startValue,
+        "endValue" to endValue,
+    )) {
+        if (!n.isFinite()) {
+            throw DomainException("modifiedDietz: $label must be finite, got ${jsNum(n)}")
+        }
+    }
+    if (endMs < startMs) {
+        throw DomainException(
+            "modifiedDietz: window runs backwards (${jsNum(startMs)} → ${jsNum(endMs)})",
+        )
+    }
+    val span = endMs - startMs
+
+    var netFlow = 0.0
+    var weightedFlow = 0.0
+    for (flow in flows) {
+        if (!flow.atMs.isFinite() || !flow.amount.isFinite()) {
+            throw DomainException(
+                "modifiedDietz: flow must be finite, got ${jsNum(flow.atMs)} / ${jsNum(flow.amount)}",
+            )
+        }
+        if (flow.atMs < startMs || flow.atMs > endMs) continue
+        val weight = if (span > 0) (endMs - flow.atMs) / span else 1.0
+        netFlow += flow.amount
+        weightedFlow += weight * flow.amount
+    }
+
+    val denominator = startValue + weightedFlow
+    if (denominator <= EPSILON) return null
+    return ((endValue - startValue - netFlow) / denominator) * 100
+}
+
+/**
+ * Where a daily-series Dietz window opens relative to its first point — the
+ * two anchors the served TWR curve already uses (§6.8, #125), so the two
+ * headline figures of a range always measure the same window:
+ *
+ *  - [INCEPTION] — the MAX / since-inception anchor. The window opens just
+ *    BEFORE the first day's own flows with no capital at all, so the money
+ *    that opened the position is the first flow (weight 1) and day one's
+ *    execution→close move counts as return — exactly as `timeWeightedReturn`
+ *    anchors its index at 1 before day one (never re-based to the first
+ *    plotted point).
+ *  - [FIRST_POINT] — the re-based range slice (1W … 5Y). The window opens
+ *    at the first point's close, that value is the starting capital and the
+ *    first day's flows are already inside it (they are not counted) — exactly
+ *    as `rebasePerformance` divides the curve by its first point.
+ *
+ * The TypeScript is the string union `'inception' | 'first-point'`; [wire] is
+ * that literal (the `ComparisonMetric` precedent).
+ */
+enum class DietzAnchor(val wire: String) {
+    INCEPTION("inception"),
+    FIRST_POINT("first-point"),
+}
+
+/**
+ * Money-weighted (Modified Dietz) return of a daily value series over the
+ * window its points span, percent, or `null` when the window has no capital
+ * (#1669). Consumes the SAME `values`/`flows` the time-weighted curve is
+ * built from (`timeWeightedReturn` — `flows` are the external
+ * deposits/withdrawals `externalCashFlowsForTwr` classifies, never cash-funded
+ * buys, sell proceeds or internal transfers), so the two figures can never
+ * disagree about what counts as money crossing the portfolio boundary.
+ *
+ * Daily flows are placed on the clock by the TWR's own hybrid convention: the
+ * day's NET flow counts as an **inflow at the start of its day** (the previous
+ * close — the new money is at work for that whole day's move) or as an
+ * **outflow at its close** (the money left with the day's move already
+ * earned). Over a single day this makes the Dietz figure equal the TWR's
+ * daily link `r_d − 1` exactly, for either sign — the two headlines start from
+ * one definition of "when did the money arrive" and diverge only in how they
+ * chain across days.
+ *
+ *  - [anchor] picks the start, see [DietzAnchor]. Under [DietzAnchor.INCEPTION]
+ *    a first day that brings no measurable money in (net flow not positive — a
+ *    series whose history starts before its FX pair's, say, V3-P10d) has
+ *    nothing to anchor at; the window then opens at the first point like a
+ *    slice does, which is what `timeWeightedReturn` effectively does when its
+ *    day-one link is flat.
+ *  - A flow dated inside the window counts whether or not that day carries a
+ *    value point; flows before the window are inside its start value, flows
+ *    after it have not happened yet (a future-dated transaction), and both are
+ *    ignored — the TWR ignores the latter the same way.
+ *  - Empty series ⇒ `null`. A single-point [DietzAnchor.FIRST_POINT] window has
+ *    no elapsed time and no counted flows, so it reads 0 % on any positive
+ *    value (and `null` on none), exactly like the re-based one-point TWR.
+ *  - Unsorted input is tolerated (sorted on a copy); nothing is mutated.
+ *    Throws on a non-finite value/flow or a malformed date, as the TWR does.
+ *
+ * The TypeScript takes `window: { readonly anchor: DietzAnchor }`; the
+ * one-field bag is flattened to [anchor] (the `CurrencyConverter` precedent).
+ */
+fun modifiedDietzReturn(
+    values: List<ValuePoint>,
+    flows: List<FlowPoint>,
+    anchor: DietzAnchor,
+): Double? {
+    if (values.isEmpty()) return null
+    val sorted = values.sortedWith { a, b ->
+        if (a.date < b.date) -1 else if (a.date > b.date) 1 else 0
+    }
+    val first = sorted[0]
+    val last = sorted[sorted.size - 1]
+    for (point in sorted) {
+        isoDayToMs(point.date, "value point date")
+        if (!point.valueEur.isFinite()) {
+            throw DomainException(
+                "Value on ${point.date} must be a finite number, got ${jsNum(point.valueEur)}",
+            )
+        }
+    }
+
+    // The day's NET external flow, as the TWR links it (one bucket per day).
+    val netByDate = LinkedHashMap<String, Double>()
+    for (flow in flows) {
+        isoDayToMs(flow.date, "flow point date")
+        if (!flow.flowEur.isFinite()) {
+            throw DomainException(
+                "Flow on ${flow.date} must be a finite number, got ${jsNum(flow.flowEur)}",
+            )
+        }
+        netByDate[flow.date] = (netByDate[flow.date] ?: 0.0) + flow.flowEur
+    }
+
+    // A point's instant stands in for its close; only differences matter, so
+    // UTC midnight is as good a close as any. An inflow on day d is at work from
+    // the previous close (d − 1 day), an outflow leaves at d's own close.
+    val firstMs = isoDayToMs(first.date, "value point date")
+    val endMs = isoDayToMs(last.date, "value point date")
+    val resolvedAnchor: DietzAnchor =
+        if (anchor == DietzAnchor.INCEPTION && (netByDate[first.date] ?: 0.0) > EPSILON) {
+            DietzAnchor.INCEPTION
+        } else {
+            DietzAnchor.FIRST_POINT
+        }
+    val startMs = if (resolvedAnchor == DietzAnchor.INCEPTION) firstMs - MS_PER_DAY else firstMs
+    val startValue = if (resolvedAnchor == DietzAnchor.INCEPTION) 0.0 else first.valueEur
+
+    val dietzFlows = ArrayList<DietzFlow>()
+    for ((date, net) in netByDate) {
+        if (net == 0.0) continue
+        val inWindow =
+            if (resolvedAnchor == DietzAnchor.INCEPTION) date >= first.date else date > first.date
+        if (!inWindow || date > last.date) continue
+        val dayMs = isoDayToMs(date, "flow point date")
+        dietzFlows.add(DietzFlow(atMs = if (net > 0) dayMs - MS_PER_DAY else dayMs, amount = net))
+    }
+
+    return modifiedDietz(
+        DietzWindow(
+            startMs = startMs,
+            endMs = endMs,
+            startValue = startValue,
+            endValue = last.valueEur,
+            flows = dietzFlows,
+        ),
+    )
 }
 
 // ---------------------------------------------------------------------------

@@ -23,6 +23,21 @@ import org.junit.Test
  * The six Vaults v2 conformance families (`docs/VAULTS_V2_DESIGN.md` r3 §25),
  * replayed against the app's own v2 port.
  *
+ * **FROZEN REPLAY — the upstream oracle was retired (re-pin 2026-10-29).** The
+ * platform removed the per-portfolio vault v2 surface in `3852d739` (#1392,
+ * owner ruling 2026-08-19, "one paranoid implementation"): at the re-pinned
+ * platform commit `ef73d282` (2026-09-16) `packages/domain/src/vaultVectors/
+ * v2.{ts,fixture.json}`, `packages/contracts/src/vaultV2.ts` and
+ * every file under `apps/web/src/user/vault/v2/` no longer exist, and their copies under
+ * `tools/domain-vectors/vendor/` went with them (the vendor tree mirrors the
+ * pin; the last vendored copies are recoverable from this repo's history at
+ * `c96b3e8`). The fixture replayed here is the app's own byte-identical copy of
+ * the LAST published oracle (`8884c5cb`, sha256 `5b6e447b…6509`), kept on
+ * purpose so this suite keeps proving the app's `vault/v2/` port against the
+ * bytes it was built for. Whether `vault/v2/` (port, this replay, the fixture)
+ * is removed to follow the platform is a PENDING COORDINATOR DECISION
+ * (`docs/TODO.md`, 2026-10-29 ledger entry); until then nothing here changes.
+ *
  * `v2.fixture.json` is the platform's published byte-exact oracle, vendored from
  * `packages/domain/src/vaultVectors/v2.fixture.json` at platform pin `8884c5cb`
  * and copied byte-identically into this module's test resources. The bytes were

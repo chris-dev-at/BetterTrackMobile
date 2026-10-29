@@ -7,6 +7,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.pow
 
 /**
  * The vitest cases the vector generator deliberately skipped, hand-ported
@@ -409,5 +411,146 @@ class DomainHandPortedTest {
         assertEquals(1.0, e.requested, 0.0)
         assertEquals(0.0, e.held, 0.0)
         assertEquals("Cannot sell 1 units of A: only 0 held.", e.message)
+    }
+
+    // =======================================================================
+    // 4. computeTwrStats (#1759) and the Modified Dietz window (#1669) — the
+    //    relations between two calls, the non-finite inputs, the non-mutation
+    // =======================================================================
+
+    /** vitest `toBeCloseTo(expected, digits)`: `|expected − actual| < 10^−digits / 2`. */
+    private fun assertCloseTo(expected: Double, actual: Double, digits: Int) {
+        assertTrue(
+            "expected $actual to be within 10^-$digits / 2 of $expected",
+            abs(expected - actual) < 10.0.pow(-digits) / 2,
+        )
+    }
+
+    /** seriesStats.test.ts `monthlyRate()` — geometric monthly equivalent of an annual rate (%/yr). */
+    private fun monthlyRate(annualPct: Double): Double = (1 + annualPct / 100).pow(1.0 / 12) - 1
+
+    /** seriesStats.test.ts `monthStart()` — first-of-month ISO day, `months` after 2021-01. */
+    private fun monthStart(months: Int): String {
+        val zeroBased = 2021 * 12 + months
+        val year = zeroBased / 12
+        val month = (zeroBased % 12) + 1
+        return "$year-${month.toString().padStart(2, '0')}-01"
+    }
+
+    /**
+     * seriesStats.test.ts `savingsFixture()` — five years of month-end points from
+     * €10,000 earning a TRUE 6 %/yr with €500/month paid in at the start of each
+     * month; `contribution = 0` is the no-flows control. Built here with the JVM's
+     * `pow` because these tests assert RELATIONS with the suite's own
+     * `toBeCloseTo` tolerances; the exact replay of the same fixture is the
+     * generated vector (whose values the TS `pow` produced).
+     */
+    private fun savingsFixture(contribution: Double): Pair<List<ValuePoint>, List<FlowPoint>> {
+        val m = monthlyRate(6.0)
+        val values = mutableListOf(ValuePoint(monthStart(0), 10_000.0))
+        val flows = mutableListOf<FlowPoint>()
+        for (step in 1..60) {
+            val previous = values[step - 1].valueEur
+            values.add(ValuePoint(monthStart(step), (previous + contribution) * (1 + m)))
+            if (contribution != 0.0) flows.add(FlowPoint(monthStart(step), contribution))
+        }
+        return values to flows
+    }
+
+    /** `computeTwrStats(timeWeightedReturn(values, flows))!` — the curve mapped onto seriesStats' point type. */
+    private fun twrOf(values: List<ValuePoint>, flows: List<FlowPoint>): TwrStats =
+        computeTwrStats(timeWeightedReturn(values, flows).map { PerfPoint(it.date, it.pct) })!!
+
+    /**
+     * `seriesStats.test.ts` → "reads the market return out of a portfolio the user
+     * kept paying into": the OLD statistic (the value curve's CAGR, ≈ 37 %/yr)
+     * is mostly the user's own salary; the NEW one is the 6 %/yr the market
+     * delivered. The inequality between the two calls is the point of the case.
+     */
+    @Test
+    fun `computeTwrStats reads a return, not value growth`() {
+        val (values, flows) = savingsFixture(500.0)
+        assertEquals(30_000.0, flows.sumOf { it.flowEur }, 0.0)
+        assertCloseTo(48_294.26, values[60].valueEur, 2)
+
+        val valueCagrPct = computeSeriesStats(values.map { StatSeriesPoint(it.date, it.valueEur) }).cagrPct!!
+        assertCloseTo(37.02, valueCagrPct, 1)
+
+        val twr = twrOf(values, flows)
+        assertCloseTo(6.0, twr.cagrPct!!, 2)
+        assertCloseTo(33.82, twr.totalReturnPct, 2) // 1.06^5 − 1
+        assertTrue(twr.cagrPct!! < valueCagrPct / 5)
+    }
+
+    /**
+     * `seriesStats.test.ts` → "agrees with the value CAGR exactly when the portfolio
+     * has no flows": with nothing paid in the TWR index IS V/V₀ point for point,
+     * so the two statistics are the same number (to 12 places — the two calls
+     * reach it along different arithmetic paths).
+     */
+    @Test
+    fun `computeTwrStats agrees with the value CAGR when nothing was paid in`() {
+        val (values, flows) = savingsFixture(0.0)
+        assertTrue(flows.isEmpty())
+
+        val valueCagrPct = computeSeriesStats(values.map { StatSeriesPoint(it.date, it.valueEur) }).cagrPct!!
+        val twr = twrOf(values, flows)
+
+        assertCloseTo(valueCagrPct, twr.cagrPct!!, 12)
+        assertCloseTo(6.0, twr.cagrPct!!, 2)
+    }
+
+    /** `modifiedDietz.test.ts` → "fails loud on the money path: NaN start value / infinite flow". */
+    @Test
+    fun `modifiedDietz rejects a non-finite window`() {
+        val nanStart = assertThrows(DomainException::class.java) {
+            modifiedDietz(DietzWindow(0.0, 1.0, Double.NaN, 1.0, emptyList()))
+        }
+        assertEquals("modifiedDietz: startValue must be finite, got NaN", nanStart.message)
+
+        val infiniteFlow = assertThrows(DomainException::class.java) {
+            modifiedDietz(DietzWindow(0.0, 1.0, 1.0, 1.0, listOf(DietzFlow(0.0, Double.POSITIVE_INFINITY))))
+        }
+        assertEquals("modifiedDietz: flow must be finite, got 0 / Infinity", infiniteFlow.message)
+    }
+
+    /** `modifiedDietz.test.ts` → "throws on non-finite value / non-finite flow". */
+    @Test
+    fun `modifiedDietzReturn rejects a non-finite value and a non-finite flow`() {
+        val badValue = assertThrows(DomainException::class.java) {
+            modifiedDietzReturn(
+                listOf(ValuePoint("2024-09-01", Double.NaN)),
+                emptyList(),
+                DietzAnchor.FIRST_POINT,
+            )
+        }
+        assertEquals("Value on 2024-09-01 must be a finite number, got NaN", badValue.message)
+
+        val badFlow = assertThrows(DomainException::class.java) {
+            modifiedDietzReturn(
+                listOf(ValuePoint("2024-09-01", 1.0)),
+                listOf(FlowPoint("2024-09-01", Double.POSITIVE_INFINITY)),
+                DietzAnchor.INCEPTION,
+            )
+        }
+        assertEquals("Flow on 2024-09-01 must be a finite number, got Infinity", badFlow.message)
+    }
+
+    /**
+     * `modifiedDietz.test.ts` → "sorts on a copy and mutates nothing". The result
+     * on the unsorted input is a vector; that the CALLER's list keeps its order is
+     * a property of the call and lives here.
+     */
+    @Test
+    fun `modifiedDietzReturn sorts on a copy and mutates nothing`() {
+        val values = listOf(
+            ValuePoint("2024-09-03", 1210.0),
+            ValuePoint("2024-09-01", 1000.0),
+            ValuePoint("2024-09-02", 1100.0),
+        )
+        val flows = listOf(FlowPoint("2024-09-02", 0.0))
+        val md = modifiedDietzReturn(values, flows, DietzAnchor.FIRST_POINT)
+        assertCloseTo(21.0, md!!, 9)
+        assertEquals(listOf("2024-09-03", "2024-09-01", "2024-09-02"), values.map { it.date })
     }
 }

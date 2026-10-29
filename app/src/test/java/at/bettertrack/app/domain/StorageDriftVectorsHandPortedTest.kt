@@ -88,7 +88,7 @@ class StorageDriftVectorsHandPortedTest {
                 .getResourceAsStream("/domain-vectors/storageDriftVectors.json")
                 ?: error(
                     "Missing /domain-vectors/storageDriftVectors.json — regenerate with " +
-                        "`node --experimental-strip-types tools/domain-vectors/generate.ts`",
+                        "`node --experimental-transform-types tools/domain-vectors/generate.ts`",
                 )
             val root = VECTOR_JSON
                 .parseToJsonElement(stream.bufferedReader().use { it.readText() })

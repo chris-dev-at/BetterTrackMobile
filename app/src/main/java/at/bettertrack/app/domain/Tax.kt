@@ -147,6 +147,129 @@ val COST_BASIS_STRATEGIES: List<CostBasisStrategy> = listOf("moving-average", "f
 fun costBasisStrategyForCountry(country: String?): CostBasisStrategy =
     if (country == TAX_COUNTRY_DE || country == TAX_COUNTRY_FI) "fifo" else "moving-average"
 
+// ---------------------------------------------------------------------------
+// Row-engine classification (#1512) — ONE classifier for both tax engines
+// ---------------------------------------------------------------------------
+
+/**
+ * The tax modes a persisted sell/dividend row can be frozen under
+ * (`transactions.tax_mode` / `dividends.tax_mode`); `null` on a buy or a row
+ * recorded before the tax engine existed.
+ *
+ * §3.3 rule 1: a `String`, not an enum — [taxEngineForRow] has a live error path
+ * for an unknown frozen mode (`'flat_rate'`), which an enum could not accept.
+ */
+typealias TaxRowMode = String
+
+/**
+ * The engine a row settles under: no engine, the user's own stated fact, one
+ * of the shipped country engines, or the custom parameter engine. This is
+ * also the vocabulary of a LIVING regime (what the portfolio's current
+ * settings put every derivable row under). A `String` for the same reason as
+ * [TaxRowMode]; the values are `none`, `manual`, a [SupportedTaxCountry], `custom`.
+ */
+typealias TaxRowEngine = String
+
+/** The frozen facts the classifier reads off a row — nothing else. */
+data class TaxRowEngineFacts(
+    val taxMode: TaxRowMode?,
+    val taxCountry: String?,
+)
+
+/**
+ * A row the classifier refuses to place: a `country_specific` row frozen under
+ * a country no engine is wired for, or an unknown mode. Both sides fail LOUD
+ * on it (server: `rowEngineCountry`, #669; client: `TAX_MODE_UNSUPPORTED`) —
+ * a row that cannot be classified must never fall through into the AT pool.
+ *
+ * Port of the TypeScript `class TaxRowClassificationError extends Error` whose
+ * constructor sets `this.name = 'TaxRowClassificationError'` and keeps the
+ * offending country as a `readonly taxCountry` field — the vectors assert the
+ * name, `TaxRowEngineHandPortedTest` the field (plan §3.3 rule 6).
+ */
+class TaxRowClassificationError(
+    message: String,
+    val taxCountry: String?,
+) : DomainException(message)
+
+/**
+ * Narrow a frozen `tax_country` to a shipped engine. Legacy V3-P4 rows carry
+ * `null` and settle as AT; the three shipped countries are themselves; any
+ * OTHER value — including a re-cased or padded spelling — throws.
+ *
+ * This is the SINGLE narrowing both engines use (`rowEngineCountry` on the
+ * server, the frozen-row branch of the client `taxRegimeForRow`).
+ */
+fun frozenTaxCountryEngine(taxCountry: String?): SupportedTaxCountry {
+    if (taxCountry == null || taxCountry == TAX_COUNTRY_AT) return TAX_COUNTRY_AT
+    if (taxCountry == TAX_COUNTRY_DE || taxCountry == TAX_COUNTRY_FI) return taxCountry
+    throw TaxRowClassificationError(
+        "Tax engine: no settlement component for frozen tax country \"$taxCountry\" — " +
+            "wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules",
+        taxCountry,
+    )
+}
+
+/**
+ * Which engine one row settles under against the living regime — the single
+ * source of truth for the server report/derivation router and the paranoid
+ * client engine (#1512). The committed truth table lives in
+ * `taxVectors/rowEngine.ts`; both engines replay it (here:
+ * `taxRowEngineVectors.json` through `TaxRowEngineHandPortedTest`).
+ *
+ *  1. A `manual_per_trade` row is a user-stated fact under EVERY regime.
+ *  2. A `country_specific` row's frozen country is narrowed FIRST, in every
+ *     regime, so an unwired country fails loud even where the living regime
+ *     would have re-derived the row (the server refuses to load such a row at
+ *     all; the client refuses it at the snapshot boundary).
+ *  3. Under any living regime but `manual`, every non-manual row is re-derived
+ *     under that regime — its frozen mode is history.
+ *  4. Under the `manual` living regime the row keeps its frozen engine.
+ */
+fun taxEngineForRow(row: TaxRowEngineFacts, living: TaxRowEngine): TaxRowEngine {
+    if (row.taxMode == "manual_per_trade") return "manual"
+    val frozenCountry =
+        if (row.taxMode == "country_specific") frozenTaxCountryEngine(row.taxCountry) else null
+    if (living != "manual") return living
+    if (row.taxMode == null || row.taxMode == "none") return "none"
+    if (row.taxMode == "country_specific") return frozenCountry!!
+    if (row.taxMode == "custom") return "custom"
+    throw TaxRowClassificationError(
+        "Tax engine: unknown frozen tax mode \"${row.taxMode}\"",
+        row.taxCountry,
+    )
+}
+
+/**
+ * The cost-basis strategy a classified engine realizes sells under: DE/FI are
+ * FIFO by law, AT is the moving average, a custom engine takes the basis from
+ * its parameter snapshot, and rows outside any engine (`none`/`manual`) show
+ * the moving-average realized P/L both engines have always displayed for
+ * untaxed rows.
+ *
+ * The TypeScript takes the snapshot as `custom: { costBasis } | null`; the
+ * one-field object is flattened to [customCostBasis] (the `CurrencyConverter`
+ * option-bag precedent), where `null` means exactly what `null` meant — no
+ * parameter snapshot at all — and a caller holding a [CustomTaxParams] passes
+ * its `costBasis`.
+ */
+fun costBasisStrategyForEngine(
+    engine: TaxRowEngine,
+    customCostBasis: CostBasisStrategy?,
+): CostBasisStrategy {
+    if (engine == "custom") {
+        if (customCostBasis == null) {
+            throw TaxRowClassificationError(
+                "Tax engine: a custom-engine row has no cost-basis parameter snapshot",
+                null,
+            )
+        }
+        return customCostBasis
+    }
+    if (engine == "none" || engine == "manual") return "moving-average"
+    return costBasisStrategyForCountry(engine)
+}
+
 /**
  * The timezone whose calendar defines a tax year (§16 2026-07-08): trades are
  * bucketed by their trade date's year **in Europe/Vienna**, so a Dec-31 23:30 UTC
@@ -205,10 +328,23 @@ class TaxComputationError(message: String) : DomainException(message)
 private const val NUMBER_EPSILON: Double = 2.220446049250313e-16
 
 /**
+ * Magnitude bound of the cent quantizer — `2^42` € (≈ €4.4 trillion), #1523.
+ * Exact mirror of `cashLedger.FLOOR_CENTS_EXACT_LIMIT_EUR` (see the rationale
+ * on [FLOOR_CENTS_EXACT_LIMIT_EUR]); parity is pinned by `TaxHandPortedTest`.
+ *
+ * The Kotlin name carries the `TAX_` prefix for the reason [TAX_QTY_EPSILON]
+ * does: `tax.ts` re-declares the constant locally, Kotlin has no module scope
+ * inside a package, and the bare name marks the origin module (`cashLedger`).
+ */
+const val TAX_FLOOR_CENTS_EXACT_LIMIT_EUR: Double = 4_398_046_511_104.0
+
+/**
  * Quantize a EUR amount **down** to whole cents — floor toward zero, never round
  * up (the #370 money policy). Nudges a value a few ULPs below a cent boundary
  * (`8.61 → 860.999…9`) back onto it before truncating, so exact cents survive
- * float error while a genuine sub-cent residue still floors away.
+ * float error while a genuine sub-cent residue still floors away. At and above
+ * [TAX_FLOOR_CENTS_EXACT_LIMIT_EUR] the amount passes through unchanged —
+ * float64 is too coarse to quantize cents there (#1523).
  *
  * **This is `tax.ts`'s own `floorCents` (line 174), NOT `cashLedger.ts`'s** — plan
  * §3.3 rule 3 requires the two to be ported separately, and they genuinely differ
@@ -230,8 +366,10 @@ fun taxFloorCents(amountEur: Double): Double {
             "Cannot floor a non-finite EUR amount, got ${jsNum(amountEur)}.",
         )
     }
+    val abs = abs(amountEur)
+    if (abs >= TAX_FLOOR_CENTS_EXACT_LIMIT_EUR) return amountEur
     val sign = if (amountEur < 0) -1 else 1
-    val cents = floor(abs(amountEur) * 100 * (1 + NUMBER_EPSILON * 8))
+    val cents = floor(abs * 100 * (1 + NUMBER_EPSILON * 8))
     return if (cents == 0.0) 0.0 else (sign * cents) / 100
 }
 
