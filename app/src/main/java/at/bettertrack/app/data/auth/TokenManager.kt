@@ -9,6 +9,8 @@ import at.bettertrack.app.data.api.dto.TokenExchangeRequest
 import at.bettertrack.app.data.api.dto.TokenRefreshRequest
 import at.bettertrack.app.data.api.parseApiError
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -16,10 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.io.IOException
-import java.net.ConnectException
-import java.net.UnknownHostException
+import kotlin.random.Random
 
 /**
  * Owns the token lifecycle (spec §4): code exchange, storage, proactive +
@@ -30,14 +31,50 @@ import java.net.UnknownHostException
  * Depends only on the bare [TokenApi] + [SessionStore] — never on the
  * authenticated client — so refresh can never recurse through the 401 machinery.
  *
+ * ## One instance, one refresh in flight
+ *
+ * The app runs in ONE process (no `android:process` anywhere in the manifest)
+ * and `AppGraph.tokenManager` is that process's only instance: the foreground
+ * API client, the widget worker, the sync worker, the vault and pv sync all ride
+ * `AppGraph.authedClient`, whose [at.bettertrack.app.data.api.AuthInterceptor]
+ * and [at.bettertrack.app.data.api.TokenAuthenticator] come here; the realtime
+ * socket only READS the access token. Every refresh path takes [refreshMutex],
+ * so two refreshes can never be in flight at once.
+ *
  * ## The one rule this class exists to keep
  *
- * **Only a definitive server verdict may end a session.** Everything else —
- * a dead socket, a 5xx, a rate limit, an unreadable Keystore, a 400 the server
- * sent for a reason that has nothing to do with the token — keeps the session
- * and surfaces as [sessionDegraded]. The owner was being thrown back to the
- * login screen with no explanation; the classification below, [SecureStore]'s
- * non-destructive reads and the [SignOutLedger] are the three halves of that fix.
+ * **Only a definitive server verdict may end a session** — `400 INVALID_GRANT`
+ * or `400 INVALID_SCOPE`. Everything else — a dead socket, a 5xx, a rate limit,
+ * an unreadable Keystore, a 400 the server sent for a reason that has nothing to
+ * do with the token — keeps the session, backs off ([refreshBackoffMs]: capped,
+ * jittered, never shorter than a `Retry-After`) and surfaces as
+ * [sessionDegraded]. The full matrix is [refreshVerdictFor].
+ *
+ * ## A lost answer is replayed at once, and the replay survives process death
+ *
+ * Refresh rotates. When a refresh goes out and its answer is lost (timeout,
+ * reset, a 5xx from behind the rotation, the process dying), the token on disk
+ * may already be spent — the server holds a successor the phone never saw. Two
+ * things make that recoverable:
+ *
+ *  - **write-ahead**: a [PendingRefresh] is committed BEFORE the request leaves
+ *    the phone and cleared only on a known outcome, so a process killed mid-way
+ *    (Doze, a WorkManager stop, low memory, a force-stop) still knows on its next
+ *    start; [resumePendingRefresh] (Application start) and the proactive gate
+ *    (ahead of any API call) replay it first;
+ *  - **prompt replay**: the SAME token is presented again 1-3 s later (jittered,
+ *    inside the call, still under the mutex), then on an exponential schedule.
+ *
+ * Against the platform's rotation rules (`oauthService.ts` refresh path):
+ *  - today (zero grace) a replayed consumed token is answered `400 INVALID_GRANT`
+ *    (and the grant revoked) — exactly what the old 10-minute delayed replay got,
+ *    so this is never worse than before, and the ledger row names the network
+ *    story ([SignOutReason.REFRESH_REJECTED_AFTER_LOST_RESPONSE]);
+ *  - with PR-A (60 s grace) a replay inside the window returns the IDENTICAL
+ *    successor pair with `200`, which is simply [RefreshVerdict.ROTATED] here;
+ *  - with PR-C (first-party clients get the identical unused pair re-served for
+ *    up to 24 h) the persisted replay after a process death recovers too.
+ *  Nothing in this class flips when those ship — see [SERVER_ROTATION_GRACE_MS].
  */
 class TokenManager(
     private val tokenApi: TokenApi,
@@ -46,57 +83,28 @@ class TokenManager(
     private val clientId: String,
     private val redirectUri: String,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /** Uniform draw in `[0, 1)` for the backoff jitter. Seam for tests. */
+    private val random: () -> Double = { Random.nextDouble() },
+    /** How the in-call replay waits. Seam for tests (a virtual clock). */
+    private val sleep: suspend (Long) -> Unit = { delay(it) },
+    /** Where every refresh attempt is written down (diagnostics, survives sign-out). */
+    private val journal: RefreshJournal = NoopRefreshJournal,
 ) {
     private val refreshMutex = Mutex()
 
-    /**
-     * When the last refresh failed for a TRANSPORT reason (`httpStatus == 0`), or
-     * 0 if the last one succeeded / failed for a server reason.
-     *
-     * This exists because of what an unreachable origin does to the PROACTIVE
-     * path. Once the access token is past its skew window, every single
-     * authenticated request asks [proactiveRefreshIfNeeded] first — and with the
-     * server gone that refresh burns a full connect timeout before failing, while
-     * holding [refreshMutex] and (via `AuthInterceptor.runBlocking`) an OkHttp
-     * dispatcher thread. A screen that fires eight calls then serialises eight
-     * doomed refreshes ahead of eight doomed requests: minutes of blocked threads
-     * for a result that was known after the first one.
-     *
-     * So a transport failure suppresses the proactive attempt for
-     * [NETWORK_BACKOFF_MS]. Nothing is lost by skipping it: the request goes out
-     * with the token we have, and when the server returns, its 401 drives the
-     * REACTIVE refresh in [refreshOn401] — which is deliberately NOT gated here,
-     * because a 401 is proof the server is reachable.
-     */
+    /** The pause in force, if any. In memory on purpose: a fresh process may try at once. */
     @Volatile
-    private var networkFailureAtMs: Long = 0L
+    private var backoff: RefreshBackoff? = null
 
     /**
-     * True when the PREVIOUS refresh went out and its answer never came back.
-     *
-     * Refresh rotates: the server invalidates the presented refresh token the
-     * moment it issues the successor. If the response is lost in flight the
-     * server has rotated and the phone has not, so the token still on disk is
-     * already spent — and presenting it next time looks to the server exactly
-     * like a stolen token being replayed. Whether that costs the whole grant is
-     * the server's rule, not ours; what this flag buys is that the ledger can
-     * say **which** of the two stories happened, instead of the owner and the
-     * next engineer guessing.
+     * In-memory mirror of the persisted [PendingRefresh]; [pendingLoaded] makes
+     * the first read go to storage, so a new process inherits a dead one's record.
      */
     @Volatile
-    private var lastRefreshLostInFlight: Boolean = false
-
-    /**
-     * The refresh token whose fate is unknown, and when it was last offered.
-     *
-     * See [atRiskReplaySuppressed] — this pair is the whole guard against the
-     * app replaying a token the server has already consumed.
-     */
-    @Volatile
-    private var atRiskRefreshToken: String? = null
+    private var pending: PendingRefresh? = null
 
     @Volatile
-    private var atRiskLastAttemptMs: Long = 0L
+    private var pendingLoaded = false
 
     /**
      * `replay = 1` is load-bearing. `AuthRepository` subscribes from a coroutine
@@ -114,10 +122,15 @@ class TokenManager(
 
     /**
      * The session is intact but the app currently cannot renew it — a dead
-     * network, a 5xx, a rate limit. This is the state that used to be a logout.
-     * Cleared by the first successful refresh.
+     * network, a 5xx, a rate limit, a replay still pending. This is the state
+     * that used to be a logout. Cleared by the first successful refresh.
      */
     val sessionDegraded: StateFlow<Boolean> = _sessionDegraded.asStateFlow()
+
+    private val _status = MutableStateFlow(RefreshStatus())
+
+    /** What the refresh rail is doing right now — the developer panel renders it. No secrets. */
+    val status: StateFlow<RefreshStatus> = _status.asStateFlow()
 
     fun currentAccessToken(): String? = store.loadTokens()?.accessToken
 
@@ -126,7 +139,7 @@ class TokenManager(
 
     /**
      * What storage actually says, including "cannot tell right now". The startup
-     * router needs the difference; nothing else does.
+     * router and the widgets need the difference; nothing else does.
      */
     fun sessionPresence(): TokenRead = store.readTokens()
 
@@ -146,9 +159,13 @@ class TokenManager(
             is BtResult.Ok -> {
                 val tokens = result.value.toAuthTokens()
                 store.saveTokens(tokens)
-                lastRefreshLostInFlight = false
-                networkFailureAtMs = 0L
+                // A new session: nothing of the old one's renewal state applies.
+                store.clearPendingRefresh()
+                pending = null
+                pendingLoaded = true
+                backoff = null
                 _sessionDegraded.value = false
+                publishStatus(lastVerdict = null)
                 BtResult.Ok(tokens)
             }
 
@@ -156,50 +173,76 @@ class TokenManager(
         }
     }
 
-    /** Refresh proactively if the access token is within the skew window. */
+    /**
+     * Refresh ahead of a request: when the access token is within the skew
+     * window, OR a replay of a possibly-spent token is pending (that one runs
+     * first, whatever the expiry says — the successor it fetches is the only
+     * live pair).
+     */
     suspend fun proactiveRefreshIfNeeded() {
         val current = (store.readTokens() as? TokenRead.Present)?.tokens ?: return
-        if (!current.isExpiringWithin(REFRESH_SKEW_MS)) return
-        // The server was unreachable moments ago — do not pay another connect
-        // timeout per request to re-learn that. See [networkFailureAtMs].
-        if (inNetworkBackoff()) return
+        if (!refreshWanted(current)) return
+        // The server was unreachable / limited moments ago — do not pay another
+        // timeout per request to re-learn that.
+        if (refreshBlocked(backoff, RefreshCaller.PROACTIVE, nowMs())) return
         refreshMutex.withLock {
             val latest = (store.readTokens() as? TokenRead.Present)?.tokens ?: return
             // Another coroutine may have refreshed while we waited for the lock.
-            if (!latest.isExpiringWithin(REFRESH_SKEW_MS)) return
+            if (!refreshWanted(latest)) return
             // Re-check under the lock: the caller we queued behind may have just
             // discovered the server is gone, and this is where a burst collapses
             // from N doomed refreshes into one.
-            if (inNetworkBackoff()) return
-            doRefresh(latest.refreshToken)
+            if (refreshBlocked(backoff, RefreshCaller.PROACTIVE, nowMs())) return
+            doRefresh(latest.refreshToken, RefreshCaller.PROACTIVE)
+        }
+    }
+
+    private fun refreshWanted(tokens: AuthTokens): Boolean =
+        pendingFor(tokens.refreshToken) != null || tokens.isExpiringWithin(REFRESH_SKEW_MS, nowMs())
+
+    /**
+     * Replay a refresh a previous process left unanswered — called once at every
+     * process start (`BetterTrackApplication`), whichever entry point started it.
+     * A no-op without a [PendingRefresh] for the token on disk.
+     *
+     * @return true if a replay ran and the session is healthy afterwards.
+     */
+    suspend fun resumePendingRefresh(): Boolean {
+        val current = (store.readTokens() as? TokenRead.Present)?.tokens ?: return false
+        if (pendingFor(current.refreshToken) == null) return false
+        return refreshMutex.withLock {
+            val latest = (store.readTokens() as? TokenRead.Present)?.tokens ?: return@withLock false
+            // The interceptor may have replayed it while we waited for the lock.
+            if (pendingFor(latest.refreshToken) == null) return@withLock false
+            if (refreshBlocked(backoff, RefreshCaller.RESUME, nowMs())) return@withLock false
+            Log.i(TAG, "A previous process left a refresh unanswered; replaying it first.")
+            doRefresh(latest.refreshToken, RefreshCaller.RESUME) != null
         }
     }
 
     /**
-     * User-visible retry behind the "reconnecting" banner: refresh now, ignoring
-     * the transport backoff (the person tapping has just told us to try again).
-     *
-     * It does NOT override the at-risk quarantine. Impatience is not evidence:
-     * if the last refresh's answer was lost, sending that token again is the one
-     * move that can revoke the grant on every device the account has, and a tap
-     * cannot make it safer. The banner simply stays up until the cool-off ends.
+     * User-visible retry behind the "reconnecting" banner (and the developer
+     * "Refresh token now"): refresh now, past the transport and replay backoffs —
+     * the person tapping has just told us to try again. A `429`'s `Retry-After`
+     * still holds: a tap inside a limiter cooldown only escalates it.
      *
      * @return true if the session is healthy afterwards.
      */
     suspend fun retryRefreshNow(): Boolean = refreshMutex.withLock {
         val latest = (store.readTokens() as? TokenRead.Present)?.tokens ?: return false
-        networkFailureAtMs = 0L
-        doRefresh(latest.refreshToken) != null
+        if (refreshBlocked(backoff, RefreshCaller.MANUAL, nowMs())) {
+            Log.i(TAG, "Manual refresh held: the server asked us to wait (${backoff?.kind}).")
+            return false
+        }
+        doRefresh(latest.refreshToken, RefreshCaller.MANUAL) != null
     }
 
-    /** True while a recent transport failure suppresses the proactive refresh. */
-    private fun inNetworkBackoff(): Boolean =
-        proactiveRefreshSuppressed(networkFailureAtMs, nowMs(), NETWORK_BACKOFF_MS)
-
     /**
-     * Reactive refresh after a 401. Returns the new access token, or null if the
-     * refresh failed (session wiped) or someone else already rotated the token
-     * that the caller had — in which case we hand back the current one to retry.
+     * Reactive refresh after a 401 on an API call. Returns the new access token,
+     * or null if no refresh could be made right now (the session is KEPT unless
+     * the server refused definitively) — or, if someone else already rotated the
+     * token the caller had, the current one to retry with. A 401 on an API call
+     * never ends a session by itself.
      */
     suspend fun refreshOn401(failedAccessToken: String): String? =
         refreshMutex.withLock {
@@ -208,85 +251,209 @@ class TokenManager(
                 // Already refreshed by a concurrent caller — retry with the fresh token.
                 return current.accessToken
             }
-            doRefresh(current.refreshToken)?.accessToken
+            if (refreshBlocked(backoff, RefreshCaller.REACTIVE, nowMs())) {
+                _sessionDegraded.value = true
+                return null
+            }
+            doRefresh(current.refreshToken, RefreshCaller.REACTIVE)?.accessToken
         }
 
     /** Local wipe of tokens + any in-flight PKCE (does not touch cached user). */
     fun clear() {
         store.clearTokens()
         store.clearPending()
+        store.clearPendingRefresh()
+        pending = null
     }
 
-    private suspend fun doRefresh(presentedRefreshToken: String): AuthTokens? {
-        if (
-            atRiskReplaySuppressed(
-                atRiskToken = atRiskRefreshToken,
-                presentedToken = presentedRefreshToken,
-                lastAttemptMs = atRiskLastAttemptMs,
-                nowMs = nowMs(),
-                coolOffMs = AT_RISK_COOLOFF_MS,
+    /** The persisted pending replay for [refreshToken], if any (a stale one for another token is dropped). */
+    private fun pendingFor(refreshToken: String): PendingRefresh? {
+        if (!pendingLoaded) {
+            pending = store.readPendingRefresh()
+            pendingLoaded = true
+        }
+        val p = pending ?: return null
+        if (p.tokenFingerprint == refreshTokenFingerprint(refreshToken)) return p
+        // A record for a token that is no longer on disk: its successor landed
+        // (and the clear after it did not), or the session changed. Not ours.
+        pending = null
+        store.clearPendingRefresh()
+        return null
+    }
+
+    private fun persistPending(p: PendingRefresh?) {
+        pending = p
+        pendingLoaded = true
+        if (p == null) {
+            store.clearPendingRefresh()
+        } else if (!store.writePendingRefresh(p)) {
+            Log.w(TAG, "Pending-refresh record did not reach disk; a process death now would forget it.")
+        }
+    }
+
+    /**
+     * One refresh, start to finish — under [refreshMutex], and NON-CANCELLABLE
+     * once begun: a caller that goes away (a screen closed, a WorkManager stop,
+     * a `REPLACE` of the widget pass) must not abort a request the server may
+     * already have acted on, nor skip the commit of the pair it answered with.
+     */
+    private suspend fun doRefresh(
+        presented: String,
+        caller: RefreshCaller,
+        inlineReplayAllowed: Boolean = true,
+    ): AuthTokens? = withContext(NonCancellable) {
+        val prior = pendingFor(presented)
+        val startedAt = nowMs()
+        val sending = PendingRefresh(
+            tokenFingerprint = refreshTokenFingerprint(presented),
+            firstSentAtMs = prior?.firstSentAtMs ?: startedAt,
+            lastSentAtMs = startedAt,
+            attempts = (prior?.attempts ?: 0) + 1,
+        )
+        // Write-ahead: on disk BEFORE the bytes leave the phone.
+        persistPending(sending)
+        if (prior != null) {
+            val sinceFirst = startedAt - prior.firstSentAtMs
+            Log.i(
+                TAG,
+                "Replaying refresh (attempt ${sending.attempts}, caller=$caller, " +
+                    "+${sinceFirst} ms after the first send; inside the server's ${SERVER_ROTATION_GRACE_MS / 1000} s grace: " +
+                    "${sinceFirst in 0 until SERVER_ROTATION_GRACE_MS}).",
             )
-        ) {
-            Log.w(TAG, "Refresh token is at risk (a previous answer was lost); not replaying it yet.")
-            _sessionDegraded.value = true
-            return null
         }
-        if (presentedRefreshToken == atRiskRefreshToken) atRiskLastAttemptMs = nowMs()
 
-        return when (val attempt = postRefresh(presentedRefreshToken)) {
-            is RefreshAttempt.Rotated -> {
-                // Persisted SYNCHRONOUSLY before any caller is allowed to proceed:
-                // the pair we were just handed is the only live one, and a caller
-                // that raced ahead of the write could re-present the dead token.
-                if (!store.saveTokens(attempt.tokens)) {
-                    Log.w(TAG, "Rotated tokens could not be persisted.")
+        val attempt = postRefresh(presented)
+        when (attempt) {
+            is RefreshAttempt.Rotated -> onRotated(attempt.tokens, sending, caller)
+
+            is RefreshAttempt.Refused -> {
+                val verdict = refreshVerdictFor(attempt.error.httpStatus, attempt.error.code)
+                when (verdict) {
+                    RefreshVerdict.DEFINITIVE -> onDefinitive(attempt.error, presented, prior, sending, caller)
+                    RefreshVerdict.ANSWER_LOST ->
+                        onAnswerLost(presented, sending, caller, attempt.error.httpStatus, attempt.error.code, inlineReplayAllowed)
+                    else -> onNotConsumed(
+                        verdict = verdict,
+                        prior = prior,
+                        sending = sending,
+                        caller = caller,
+                        httpStatus = attempt.error.httpStatus,
+                        code = attempt.error.code,
+                        retryAfterMs = if (verdict == RefreshVerdict.RATE_LIMITED) {
+                            retryAfterMs(attempt.retryAfterHeader, attempt.error.details, nowMs())
+                        } else {
+                            null
+                        },
+                    )
                 }
-                networkFailureAtMs = 0L
-                lastRefreshLostInFlight = false
-                atRiskRefreshToken = null
-                _sessionDegraded.value = false
-                attempt.tokens
             }
 
-            is RefreshAttempt.Refused -> onRefused(attempt.error, presentedRefreshToken)
-
-            is RefreshAttempt.Transport -> {
-                networkFailureAtMs = nowMs()
-                lastRefreshLostInFlight = attempt.deliveryUnknown
+            is RefreshAttempt.Transport ->
                 if (attempt.deliveryUnknown) {
-                    // The bytes went out and nothing came back: assume the server
-                    // rotated. From here the token is quarantined.
-                    atRiskRefreshToken = presentedRefreshToken
-                    atRiskLastAttemptMs = nowMs()
+                    onAnswerLost(presented, sending, caller, 0, attempt.what, inlineReplayAllowed)
+                } else {
+                    onNotConsumed(RefreshVerdict.NOT_DELIVERED, prior, sending, caller, 0, attempt.what, null)
                 }
-                _sessionDegraded.value = true
-                Log.w(
-                    TAG,
-                    "Refresh failed transiently (${attempt.what}, " +
-                        "delivered=${if (attempt.deliveryUnknown) "unknown" else "no"}); session kept.",
-                )
-                null
-            }
         }
     }
 
-    private fun onRefused(error: BtApiError, presentedRefreshToken: String): AuthTokens? {
-        if (!refreshRefusalIsDefinitive(error.httpStatus, error.code)) {
-            // A 5xx, a 429, a 403, a 400 the server sent for a reason that is not
-            // "this token is dead". None of those is proof of anything about the
-            // session, so it survives.
-            Log.w(TAG, "Refresh refused transiently: HTTP ${error.httpStatus} [${error.code}]; session kept.")
-            _sessionDegraded.value = true
-            return null
+    private fun onRotated(tokens: AuthTokens, sending: PendingRefresh, caller: RefreshCaller): AuthTokens {
+        // Persisted SYNCHRONOUSLY before any caller is allowed to proceed: the
+        // pair we were just handed is the only live one, and a caller that raced
+        // ahead of the write could re-present the dead token. One retry absorbs a
+        // momentary write failure.
+        val saved = store.saveTokens(tokens) || store.saveTokens(tokens)
+        if (saved) {
+            persistPending(null)
+        } else {
+            // The disk still holds the token we just spent. Keep the record, so
+            // whoever presents that token next does so as a replay (which the
+            // server's grace / re-serve answers with this same pair).
+            Log.w(TAG, "Rotated tokens could not be persisted; the replay record stays.")
         }
+        backoff = null
+        _sessionDegraded.value = false
+        record(caller, sending.attempts, RefreshVerdict.ROTATED, 200, null, null)
+        return tokens
+    }
 
+    /**
+     * The server answered, and the answer proves it did not consume the token
+     * (`429`, a non-verdict 4xx, an origin-never-reached 5xx), or the bytes never
+     * left. If the token was ALREADY at risk before this attempt, it still is;
+     * otherwise the write-ahead record is withdrawn.
+     */
+    private fun onNotConsumed(
+        verdict: RefreshVerdict,
+        prior: PendingRefresh?,
+        sending: PendingRefresh,
+        caller: RefreshCaller,
+        httpStatus: Int,
+        code: String,
+        retryAfterMs: Long?,
+    ): AuthTokens? {
+        persistPending(prior?.copy(lastSentAtMs = sending.lastSentAtMs))
+        val kind = when (verdict) {
+            RefreshVerdict.NOT_DELIVERED -> RefreshBackoffKind.UNREACHABLE
+            RefreshVerdict.RATE_LIMITED -> RefreshBackoffKind.RATE_LIMITED
+            else -> RefreshBackoffKind.REFUSED
+        }
+        val wait = armBackoff(kind, retryAfterMs)
+        _sessionDegraded.value = true
+        Log.w(TAG, "Refresh not completed ($verdict, HTTP $httpStatus [$code]); session kept, next try in $wait ms.")
+        record(caller, sending.attempts, verdict, httpStatus.takeIf { it != 0 }, code, wait)
+        return null
+    }
+
+    /**
+     * The request may have been processed and the answer is gone: the token on
+     * disk may be spent. Keep the record and replay the SAME token — once inside
+     * this call after a short jittered pause, then on the [RefreshBackoffKind.REPLAY]
+     * schedule through whichever caller comes next.
+     */
+    private suspend fun onAnswerLost(
+        presented: String,
+        sending: PendingRefresh,
+        caller: RefreshCaller,
+        httpStatus: Int,
+        what: String,
+        inlineReplayAllowed: Boolean,
+    ): AuthTokens? {
+        _sessionDegraded.value = true
+        if (inlineReplayAllowed) {
+            val wait = refreshBackoffMs(RefreshBackoffKind.REPLAY, failures = 1, random = random())
+            Log.w(TAG, "Refresh answer lost ($what, HTTP $httpStatus); replaying the same token in $wait ms.")
+            record(caller, sending.attempts, RefreshVerdict.ANSWER_LOST, httpStatus.takeIf { it != 0 }, what, wait)
+            sleep(wait)
+            val latest = store.readTokens()
+            if (latest is TokenRead.Present && latest.tokens.refreshToken == presented) {
+                return doRefresh(presented, RefreshCaller.REPLAY, inlineReplayAllowed = false)
+            }
+            // Signed out, or rotated by a path that does not take the mutex
+            // (a fresh login) while we waited: nothing of ours to replay.
+            return (latest as? TokenRead.Present)?.tokens
+        }
+        val wait = armBackoff(RefreshBackoffKind.REPLAY, null)
+        Log.w(TAG, "Replayed refresh lost its answer again ($what, HTTP $httpStatus); next replay in $wait ms.")
+        record(caller, sending.attempts, RefreshVerdict.ANSWER_LOST, httpStatus.takeIf { it != 0 }, what, wait)
+        return null
+    }
+
+    private fun onDefinitive(
+        error: BtApiError,
+        presented: String,
+        prior: PendingRefresh?,
+        sending: PendingRefresh,
+        caller: RefreshCaller,
+    ): AuthTokens? {
         // Reuse-race safety. A definitive refusal for a token that is no longer
         // the one on disk means somebody else already rotated past it — the
         // session is fine and the refusal is stale.
         when (val latest = store.readTokens()) {
             is TokenRead.Present ->
-                if (latest.tokens.refreshToken != presentedRefreshToken) {
+                if (latest.tokens.refreshToken != presented) {
                     Log.i(TAG, "Refusal was for a superseded refresh token; keeping the rotated session.")
+                    pendingFor(latest.tokens.refreshToken) // drops the stale record
                     return latest.tokens
                 }
 
@@ -295,23 +462,27 @@ class TokenManager(
                 // that: the bytes may be perfectly good and merely unreadable now.
                 Log.w(TAG, "Definitive refusal but storage is unreadable; session kept.")
                 _sessionDegraded.value = true
+                record(caller, sending.attempts, RefreshVerdict.DEFINITIVE, error.httpStatus, error.code, null)
                 return null
             }
 
             TokenRead.None -> Unit // already gone; fall through and emit once
         }
 
-        val reason = if (lastRefreshLostInFlight) {
+        // A refusal of a token that went out before without an answer — a lost
+        // response, or a process that died mid-refresh — is the network story.
+        val reason = if (prior != null) {
             SignOutReason.REFRESH_REJECTED_AFTER_LOST_RESPONSE
         } else {
             SignOutReason.REFRESH_REJECTED
         }
-        Log.w(TAG, "Refresh rejected definitively (${error.code}); wiping session. reason=$reason")
-        networkFailureAtMs = 0L
-        lastRefreshLostInFlight = false
-        atRiskRefreshToken = null
+        Log.w(TAG, "Refresh rejected definitively (HTTP ${error.httpStatus} ${error.code}); wiping session. reason=$reason")
+        record(caller, sending.attempts, RefreshVerdict.DEFINITIVE, error.httpStatus, error.code, null)
+        backoff = null
         _sessionDegraded.value = false
+        persistPending(null)
         store.wipeAll()
+        publishStatus(RefreshVerdict.DEFINITIVE)
         _sessionInvalidated.tryEmit(
             SessionInvalidation(
                 reason = reason,
@@ -321,6 +492,54 @@ class TokenManager(
             ),
         )
         return null
+    }
+
+    /** Arm the next pause of [kind]; consecutive failures grow it. @return its length. */
+    private fun armBackoff(kind: RefreshBackoffKind, retryAfterMs: Long?): Long {
+        val failures = (backoff?.failures ?: 0) + 1
+        val wait = refreshBackoffMs(kind, failures, random(), retryAfterMs)
+        backoff = RefreshBackoff(kind = kind, failures = failures, sinceMs = nowMs(), durationMs = wait)
+        return wait
+    }
+
+    private fun record(
+        caller: RefreshCaller,
+        attempt: Int,
+        verdict: RefreshVerdict,
+        httpStatus: Int?,
+        code: String?,
+        waitMs: Long?,
+    ) {
+        journal.record(
+            RefreshJournalEntry(
+                at = nowMs(),
+                caller = caller.name,
+                attempt = attempt,
+                verdict = verdict.name,
+                httpStatus = httpStatus,
+                errorCode = code?.take(MAX_CODE_CHARS),
+                waitMs = waitMs,
+            ),
+        )
+        publishStatus(verdict)
+    }
+
+    private fun publishStatus(lastVerdict: RefreshVerdict?) {
+        _status.value = RefreshStatus(
+            degraded = _sessionDegraded.value,
+            pending = pending,
+            backoff = backoff,
+            lastVerdict = lastVerdict ?: _status.value.lastVerdict,
+            lastVerdictAtMs = if (lastVerdict != null) nowMs() else _status.value.lastVerdictAtMs,
+            accessExpiresAtMs = store.loadTokens()?.expiresAtEpochMs,
+        )
+    }
+
+    /** Re-read the panel's facts (the access-token expiry, a record a previous process left). */
+    fun refreshStatusSnapshot(): RefreshStatus {
+        store.loadTokens()?.let { pendingFor(it.refreshToken) }
+        publishStatus(lastVerdict = null)
+        return _status.value
     }
 
     /**
@@ -336,11 +555,12 @@ class TokenManager(
             )
             val body = resp.body()
             if (resp.isSuccessful && body != null) {
-                RefreshAttempt.Rotated(body.toAuthTokens())
+                RefreshAttempt.Rotated(body.toAuthTokens(nowMs()))
             } else if (resp.isSuccessful) {
-                RefreshAttempt.Refused(BtApiError(resp.code(), "EMPTY_RESPONSE"))
+                // The server rotated and we cannot read the successor: a lost answer.
+                RefreshAttempt.Refused(BtApiError(resp.code(), "EMPTY_RESPONSE"), null)
             } else {
-                RefreshAttempt.Refused(parseApiError(json, resp.code(), resp.errorBody()))
+                RefreshAttempt.Refused(parseApiError(json, resp.code(), resp.errorBody()), resp.headers()["Retry-After"])
             }
         } catch (e: CancellationException) {
             throw e
@@ -353,47 +573,51 @@ class TokenManager(
 
     private sealed interface RefreshAttempt {
         data class Rotated(val tokens: AuthTokens) : RefreshAttempt
-        data class Refused(val error: BtApiError) : RefreshAttempt
+        data class Refused(val error: BtApiError, val retryAfterHeader: String?) : RefreshAttempt
         data class Transport(val deliveryUnknown: Boolean, val what: String) : RefreshAttempt
     }
 
     private companion object {
         const val TAG = "BtTokenManager"
+        const val MAX_CODE_CHARS = 48
 
         /**
          * Refresh this long before expiry.
          *
-         * Raised from one minute to five (2026-09-02). One minute meant the
-         * rotation happened with essentially no cover: if its answer was lost,
-         * the access token expired seconds later and every queued call fell
-         * through to the 401 path at once. Five minutes of still-valid access
-         * token is the headroom the at-risk quarantine needs — the app keeps
-         * working while it waits, instead of stampeding the refresh endpoint
-         * with a token that may already be spent.
+         * Raised from one minute to five (2026-09-02): five minutes of still-valid
+         * access token is the headroom a lost answer's replay needs — the app keeps
+         * working while it recovers, instead of every queued call falling through
+         * to the 401 path at once.
          *
          * Access-token TTL is 3600 s (`OAUTH_ACCESS_TOKEN_TTL_SECONDS`,
          * `packages/contracts/src/oauth.ts:29-34`), so this is 8 % of the life
          * of the token and does not measurably raise the rotation rate.
          */
         const val REFRESH_SKEW_MS = 300_000L
-
-        /**
-         * How long a refresh token whose answer was lost is left alone before it
-         * is offered again. Long enough that a burst of queued callers cannot
-         * turn one lost response into a replay; short enough that a session
-         * recovers within one screen's patience if the token was in fact fine.
-         */
-        const val AT_RISK_COOLOFF_MS = 10 * 60_000L
-
-        /**
-         * How long a transport failure suppresses the PROACTIVE refresh. Short
-         * enough that a returning server is picked up within a screen's worth of
-         * interaction; long enough that one dead-origin burst costs one timeout
-         * instead of one per request.
-         */
-        const val NETWORK_BACKOFF_MS = 30_000L
     }
 }
+
+/**
+ * The platform's rotation grace (PR-A, in build 2026-10-29): a consumed refresh
+ * token re-presented within 60 s returns the identical successor pair.
+ *
+ * Used for the log line only — the replay policy does not branch on it. The
+ * first replay lands 1-3 s after a lost answer (and the token client's 25 s call
+ * timeout bounds how late a lost answer can be noticed), so a replay is inside
+ * this window by construction. When PR-A / PR-C are ticked live nothing here
+ * flips: a `200` to a replay is [RefreshVerdict.ROTATED] like any other.
+ */
+internal const val SERVER_ROTATION_GRACE_MS: Long = 60_000L
+
+/** The refresh rail's state, for the developer panel. Carries no token and no fingerprint. */
+data class RefreshStatus(
+    val degraded: Boolean = false,
+    val pending: PendingRefresh? = null,
+    val backoff: RefreshBackoff? = null,
+    val lastVerdict: RefreshVerdict? = null,
+    val lastVerdictAtMs: Long? = null,
+    val accessExpiresAtMs: Long? = null,
+)
 
 /** Why the session ended, carried to whoever writes it into the ledger. */
 data class SessionInvalidation(
@@ -402,21 +626,6 @@ data class SessionInvalidation(
     val errorCode: String?,
     val caller: String,
 )
-
-/**
- * Could the failed request have reached the server?
- *
- * A name that did not resolve or a port that refused the connection means the
- * bytes never left; anything else (a read timeout, a reset mid-response, a TLS
- * failure after the handshake) means the server may well have processed it. For
- * a rotating refresh token that distinction is the difference between "nothing
- * happened" and "your refresh token is already spent".
- */
-internal fun requestMayHaveBeenDelivered(e: Throwable): Boolean = when (e) {
-    is UnknownHostException, is ConnectException -> false
-    is IOException -> true
-    else -> true
-}
 
 /**
  * The single rule for *"may this refusal end the session?"*.
@@ -475,63 +684,3 @@ internal fun refreshRefusalIsDefinitive(httpStatus: Int, code: String): Boolean 
  * unexplained logout.
  */
 internal val DEFINITIVE_REFRESH_REFUSAL_CODES: Set<String> = setOf("INVALID_GRANT", "INVALID_SCOPE")
-
-/**
- * Whether an at-risk refresh token must NOT be presented right now.
- *
- * The rule that stops the app from killing its own grant. When a refresh goes
- * out and its answer never arrives, the server has very likely rotated: the
- * token still on disk is consumed, and presenting a consumed token is, to this
- * platform, an attack —
- *
- * ```
- * _source: platform repo @ origin/main
- *   oauthService.ts:1084, :1127 consumed token → revokeGrant(...) + INVALID_GRANT
- *   oauthRepository.ts:646-700 lost the atomic consume → revoke the whole grant
- * ```
- *
- * — and the grant is the ONLY one this user has for this client, so revoking it
- * signs out every install at once. There is no grace window, not one second.
- *
- * Before this guard, one lost response reliably produced a replay within
- * milliseconds: the refresh mutex released, the next queued 401 saw an unchanged
- * access token, and re-presented the very same refresh token. So the token is
- * quarantined and offered again at most once per [coolOffMs]; in between, the
- * still-valid access token keeps working and the UI shows "reconnecting".
- */
-internal fun atRiskReplaySuppressed(
-    atRiskToken: String?,
-    presentedToken: String,
-    lastAttemptMs: Long,
-    nowMs: Long,
-    coolOffMs: Long,
-): Boolean {
-    if (atRiskToken == null || atRiskToken != presentedToken) return false
-    val elapsed = nowMs - lastAttemptMs
-    // A backwards clock re-arms rather than stranding the session forever.
-    return elapsed in 0 until coolOffMs
-}
-
-/**
- * Whether the PROACTIVE token refresh should be skipped right now.
- *
- * Pure, so the rule that keeps an unreachable origin from multiplying one
- * connect timeout by every in-flight request is stated once and asserted
- * without a Keystore, a Context or a socket.
- *
- * @param networkFailureAtMs when the last refresh failed for a TRANSPORT reason
- *   (`0` = never, or the last attempt reached the server).
- * @return true while the failure is still inside [backoffMs].
- */
-internal fun proactiveRefreshSuppressed(
-    networkFailureAtMs: Long,
-    nowMs: Long,
-    backoffMs: Long,
-): Boolean {
-    if (networkFailureAtMs == 0L) return false
-    val elapsed = nowMs - networkFailureAtMs
-    // A NEGATIVE elapsed time means the wall clock moved backwards (an NTP
-    // correction, a user setting the date). Treating that as "still inside the
-    // window" would strand the refresh until the clock caught up, so it re-arms.
-    return elapsed in 0 until backoffMs
-}

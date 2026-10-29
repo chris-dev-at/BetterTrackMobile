@@ -148,13 +148,34 @@ object AppGraph {
 
     val secureStore: SecureStore by lazy { SecureStore(appContext, json, signOutLedger) }
 
+    /**
+     * The last token renewals, kept on the phone beside [signOutLedger] — see
+     * [at.bettertrack.app.data.auth.RefreshJournal].
+     */
+    val refreshJournal: at.bettertrack.app.data.auth.RefreshJournal by lazy {
+        at.bettertrack.app.data.auth.PrefsRefreshJournal(appContext, json)
+    }
+
     // ── Bare token client ──────────────────────────────────────────────────────
+    /**
+     * See [at.bettertrack.app.data.auth.tokenHttpClient] for why this client
+     * never re-sends a refresh on its own, never reuses a pooled connection and
+     * gives up after 25 s. The fault injector exists in DEBUG builds only.
+     */
     private val tokenClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .apply { if (BuildConfig.DEBUG) addInterceptor(loggingInterceptor()) }
-            .build()
+        at.bettertrack.app.data.auth.tokenHttpClient(
+            outer = if (BuildConfig.DEBUG) {
+                listOf(
+                    at.bettertrack.app.data.auth.AuthFaultInterceptor(
+                        armed = { devicePrefs.debugAuthFaultNow() },
+                        disarm = { devicePrefs.setDebugAuthFault(at.bettertrack.app.data.auth.AuthFault.NONE) },
+                    ),
+                )
+            } else {
+                emptyList()
+            },
+            logging = if (BuildConfig.DEBUG) loggingInterceptor() else null,
+        )
     }
 
     private val tokenApi: TokenApi by lazy {
@@ -173,6 +194,7 @@ object AppGraph {
             json = json,
             clientId = OAuthConfig.clientId,
             redirectUri = OAuthConfig.redirectUri,
+            journal = refreshJournal,
         )
     }
 

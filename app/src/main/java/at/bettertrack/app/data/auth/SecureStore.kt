@@ -53,6 +53,20 @@ interface SessionStore {
     fun wipeAll()
 
     /**
+     * The write-ahead record of a refresh whose answer has not (yet) been
+     * received — see [PendingRefresh]. Persisted BEFORE the refresh request
+     * leaves the phone, so a process that dies between the server consuming the
+     * token and the app committing the successor still knows, on its next
+     * start, that the token on disk may already be spent.
+     */
+    fun readPendingRefresh(): PendingRefresh?
+
+    /** @return true if the record reached disk (synchronously). */
+    fun writePendingRefresh(pending: PendingRefresh): Boolean
+
+    fun clearPendingRefresh()
+
+    /**
      * Re-attempt opening the Keystore-backed file after a failure.
      *
      * @return true once it is readable.
@@ -169,6 +183,32 @@ class SecureStore(
 
     override fun clearTokens() {
         prefsForWrite()?.edit()?.remove(KEY_TOKENS)?.commit()
+    }
+
+    // ── Pending refresh (write-ahead, see [PendingRefresh]) ────────────────────
+    override fun readPendingRefresh(): PendingRefresh? = readJson(KEY_PENDING_REFRESH, PendingRefresh.serializer())
+
+    /**
+     * `commit()`, for the same reason as [saveTokens]: this record exists to
+     * survive the process dying a moment later, and an `apply()` still sitting in
+     * memory at that moment would be no record at all.
+     */
+    override fun writePendingRefresh(pending: PendingRefresh): Boolean {
+        val p = prefs ?: return false
+        return try {
+            p.edit().putString(KEY_PENDING_REFRESH, json.encodeToString(PendingRefresh.serializer(), pending)).commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "Pending-refresh record could not be written.", e)
+            false
+        }
+    }
+
+    override fun clearPendingRefresh() {
+        try {
+            prefs?.edit()?.remove(KEY_PENDING_REFRESH)?.commit()
+        } catch (e: Exception) {
+            Log.w(TAG, "Pending-refresh record could not be cleared.", e)
+        }
     }
 
     // ── Pending authorization (PKCE verifier + state) ─────────────────────────
@@ -339,6 +379,7 @@ class SecureStore(
         const val KEY_PENDING_VERIFIER = "pending_verifier"
         const val KEY_PENDING_STATE = "pending_state"
         const val KEY_USER = "user"
+        const val KEY_PENDING_REFRESH = "refresh_in_flight"
 
         /** Enough to ride out a busy keystore daemon; short enough to not stall boot. */
         const val OPEN_ATTEMPTS = 3

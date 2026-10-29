@@ -43,27 +43,26 @@ class RefreshBackoffTest {
 
     // ── 2. one timeout, not one per request ───────────────────────────────────
 
+    private fun unreachable(since: Long, duration: Long = 30_000L, failures: Int = 1) =
+        RefreshBackoff(RefreshBackoffKind.UNREACHABLE, failures, since, duration)
+
     @Test
     fun `nothing is suppressed before a transport failure has ever happened`() {
-        assertFalse(proactiveRefreshSuppressed(networkFailureAtMs = 0L, nowMs = 10_000L, backoffMs = 30_000L))
+        assertFalse(refreshBlocked(null, RefreshCaller.PROACTIVE, nowMs = 10_000L))
     }
 
     @Test
     fun `a fresh transport failure suppresses the next proactive refresh`() {
-        assertTrue(
-            proactiveRefreshSuppressed(networkFailureAtMs = 10_000L, nowMs = 10_001L, backoffMs = 30_000L),
-        )
+        assertTrue(refreshBlocked(unreachable(since = 10_000L), RefreshCaller.PROACTIVE, 10_001L))
     }
 
     @Test
     fun `the whole burst behind one dead call is suppressed`() {
-        // Eight requests landing over the two seconds after the first failure all
-        // skip their own doomed refresh.
         val failedAt = 10_000L
         (0..8).forEach { i ->
             assertTrue(
                 "request $i should skip the refresh",
-                proactiveRefreshSuppressed(failedAt, failedAt + i * 250L, 30_000L),
+                refreshBlocked(unreachable(failedAt), RefreshCaller.PROACTIVE, failedAt + i * 250L),
             )
         }
     }
@@ -71,15 +70,13 @@ class RefreshBackoffTest {
     @Test
     fun `the suppression expires so a returning server is picked up again`() {
         val failedAt = 10_000L
-        assertTrue(proactiveRefreshSuppressed(failedAt, failedAt + 29_999L, 30_000L))
-        assertFalse("exactly at the window", proactiveRefreshSuppressed(failedAt, failedAt + 30_000L, 30_000L))
-        assertFalse("well past it", proactiveRefreshSuppressed(failedAt, failedAt + 120_000L, 30_000L))
+        assertTrue(refreshBlocked(unreachable(failedAt), RefreshCaller.PROACTIVE, failedAt + 29_999L))
+        assertFalse("exactly at the window", refreshBlocked(unreachable(failedAt), RefreshCaller.PROACTIVE, failedAt + 30_000L))
+        assertFalse("well past it", refreshBlocked(unreachable(failedAt), RefreshCaller.PROACTIVE, failedAt + 120_000L))
     }
 
     @Test
     fun `a clock that went backwards does not suppress forever`() {
-        // An NTP correction or a user-set clock must not strand the refresh: a
-        // negative elapsed time is not "inside the window".
-        assertFalse(proactiveRefreshSuppressed(networkFailureAtMs = 10_000L, nowMs = 5_000L, backoffMs = 30_000L))
+        assertFalse(refreshBlocked(unreachable(since = 10_000L), RefreshCaller.PROACTIVE, nowMs = 5_000L))
     }
 }

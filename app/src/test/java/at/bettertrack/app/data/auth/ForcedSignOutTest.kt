@@ -2,9 +2,6 @@ package at.bettertrack.app.data.auth
 
 import at.bettertrack.app.data.api.TokenApi
 import at.bettertrack.app.data.api.dto.OAuthGrant
-import at.bettertrack.app.data.api.dto.TokenExchangeRequest
-import at.bettertrack.app.data.api.dto.TokenRefreshRequest
-import at.bettertrack.app.data.api.dto.TokenResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -12,8 +9,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
@@ -22,13 +17,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The forced-sign-out rail, pinned.
@@ -49,11 +42,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * (`oauthService.ts:869-884`), that is every install the account has.
  *
  * So a refresh whose ANSWER is lost in flight leaves the phone holding a token
- * the server has already spent. The old client then re-presented it within
- * milliseconds: the refresh mutex released, the next queued 401 saw an unchanged
- * access token, and fired the same token straight back. One flaky moment, one
- * dead grant, one login screen — with `logcat` long since rotated by the time
- * anyone looked.
+ * the server has already spent. On today's server nothing the phone does after
+ * that can save the session — any presentation of the spent token is the
+ * refusal — which is why the platform is adding a 60 s grace (PR-A) and an
+ * identical-pair re-serve (PR-C). What the app owes in return, pinned here and
+ * in `RefreshReplayTest`: never end a session on anything but that refusal,
+ * replay the SAME token promptly (inside the grace) and single-flight, and keep
+ * the at-risk record on disk so a process death cannot turn the replay into a
+ * fresh, unexplained presentation hours later.
  */
 class ForcedSignOutTest {
 
@@ -104,18 +100,11 @@ class ForcedSignOutTest {
     fun `a lost answer means the request may have been delivered`() {
         assertFalse("DNS never resolved", requestMayHaveBeenDelivered(UnknownHostException()))
         assertFalse("port refused", requestMayHaveBeenDelivered(ConnectException()))
+        assertFalse("no route", requestMayHaveBeenDelivered(java.net.NoRouteToHostException()))
+        assertFalse("TLS handshake precedes the request", requestMayHaveBeenDelivered(javax.net.ssl.SSLHandshakeException("x")))
         assertTrue("sent, then silence", requestMayHaveBeenDelivered(SocketTimeoutException()))
-    }
-
-    @Test
-    fun `an at-risk token is offered again only after the cool-off`() {
-        val cool = 600_000L
-        assertTrue(atRiskReplaySuppressed("R1", "R1", lastAttemptMs = 1_000L, nowMs = 1_001L, coolOffMs = cool))
-        assertTrue(atRiskReplaySuppressed("R1", "R1", 1_000L, 1_000L + cool - 1, cool))
-        assertFalse("window over", atRiskReplaySuppressed("R1", "R1", 1_000L, 1_000L + cool, cool))
-        assertFalse("a different token", atRiskReplaySuppressed("R1", "R2", 1_000L, 1_001L, cool))
-        assertFalse("nothing at risk", atRiskReplaySuppressed(null, "R1", 1_000L, 1_001L, cool))
-        assertFalse("clock went backwards", atRiskReplaySuppressed("R1", "R1", 1_000L, 500L, cool))
+        assertTrue("reset mid-answer", requestMayHaveBeenDelivered(java.net.SocketException("Connection reset")))
+        assertTrue("a 200 we could not read", requestMayHaveBeenDelivered(kotlinx.serialization.SerializationException("x")))
     }
 
     @Test
@@ -180,30 +169,35 @@ class ForcedSignOutTest {
 
     @Test
     fun `a 5xx keeps the session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val api = FakeTokenApi { refused(503, "INTERNAL") }
-        val tm = manager(api, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val api = FakeTokenApi { refusedResponse(503, "INTERNAL") }
+        val tm = testManager(api, store)
 
         assertNull(tm.refreshOn401("A1"))
         assertFalse("not wiped", store.wiped)
         assertEquals("R1", store.tokens?.refreshToken)
         assertTrue("surfaces as reconnecting", tm.sessionDegraded.value)
+        // A 5xx may come from behind the rotation, so it is replayed like a lost
+        // answer — once, in-call — and the record of the at-risk token stays.
+        assertEquals(listOf("R1", "R1"), api.presented)
+        assertEquals(2, store.pendingRefresh?.attempts)
     }
 
     @Test
     fun `a 400 VALIDATION_ERROR keeps the session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(400, "VALIDATION_ERROR") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(400, "VALIDATION_ERROR") }, store)
 
         assertNull(tm.refreshOn401("A1"))
         assertFalse(store.wiped)
         assertEquals("R1", store.tokens?.refreshToken)
+        assertNull("the server answered before rotating: nothing at risk", store.pendingRefresh)
     }
 
     @Test
     fun `a 401 from the token endpoint keeps the session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(401, "API_KEY_INVALID") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(401, "API_KEY_INVALID") }, store)
 
         assertNull(tm.refreshOn401("A1"))
         assertFalse("a bearer artefact is not a dead token", store.wiped)
@@ -211,22 +205,23 @@ class ForcedSignOutTest {
 
     @Test
     fun `a rate limit keeps the session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(429, "RATE_LIMITED") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(429, "RATE_LIMITED", retryAfter = "20") }, store)
 
         assertNull(tm.refreshOn401("A1"))
         assertFalse(store.wiped)
+        assertNull("the limiter answered before the handler: nothing consumed", store.pendingRefresh)
     }
 
     @Test
     fun `unreadable storage never wipes, even on a definitive refusal`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
+        val store = FakeStore(testTokens("A1", "R1"))
         val api = FakeTokenApi {
             // The Keystore goes unreadable while the call is in flight.
             store.unavailable = "KeyStoreException"
-            refused(400, "INVALID_GRANT")
+            refusedResponse(400, "INVALID_GRANT")
         }
-        val tm = manager(api, store)
+        val tm = testManager(api, store)
 
         assertNull(tm.refreshOn401("A1"))
         assertFalse("the bytes may be perfectly good", store.wiped)
@@ -236,12 +231,12 @@ class ForcedSignOutTest {
 
     @Test
     fun `eight concurrent callers cause exactly one refresh`() = runBlocking(Dispatchers.Default) {
-        val store = FakeStore(tokens("A1", "R1"))
+        val store = FakeStore(testTokens("A1", "R1"))
         val api = FakeTokenApi {
             delay(40) // hold the mutex long enough for the others to queue
-            rotated("A2", "R2")
+            rotatedResponse("A2", "R2")
         }
-        val tm = manager(api, store)
+        val tm = testManager(api, store)
 
         val results = (1..8).map { async { tm.refreshOn401("A1") } }.awaitAll()
 
@@ -252,88 +247,76 @@ class ForcedSignOutTest {
 
     @Test
     fun `the rotated pair is on disk before the caller returns`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { rotated("A2", "R2") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { rotatedResponse("A2", "R2") }, store)
 
         assertEquals("A2", tm.refreshOn401("A1"))
         assertEquals("one synchronous write", 1, store.saves)
         assertEquals("A2", store.tokens?.accessToken)
         assertEquals("R2", store.tokens?.refreshToken)
+        assertNull("success clears the write-ahead record", store.pendingRefresh)
+    }
+
+    @Test
+    fun `the write-ahead record is on disk before the request leaves`() = runBlocking {
+        val store = FakeStore(testTokens("A1", "R1"))
+        var recordAtSend: PendingRefresh? = null
+        val tm = testManager(
+            FakeTokenApi {
+                recordAtSend = store.pendingRefresh
+                rotatedResponse("A2", "R2")
+            },
+            store,
+        )
+
+        tm.refreshOn401("A1")
+        assertEquals(refreshTokenFingerprint("R1"), recordAtSend?.tokenFingerprint)
+        assertEquals(1, recordAtSend?.attempts)
+    }
+
+    @Test
+    fun `a rotated pair that will not persist keeps the replay record`() = runBlocking {
+        val store = FakeStore(testTokens("A1", "R1")).apply { failSaves = 2 }
+        val tm = testManager(FakeTokenApi { rotatedResponse("A2", "R2") }, store)
+
+        assertEquals("the caller still gets the live token", "A2", tm.refreshOn401("A1"))
+        assertEquals("one retry of the commit", 2, store.saves)
+        assertEquals(
+            "the disk still holds the spent token, so its next use must be a replay",
+            refreshTokenFingerprint("R1"),
+            store.pendingRefresh?.tokenFingerprint,
+        )
     }
 
     // ── rule 3: the reuse race ────────────────────────────────────────────────
 
     @Test
     fun `a refusal for a superseded token keeps the rotated session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
+        val store = FakeStore(testTokens("A1", "R1"))
         val api = FakeTokenApi {
             // Somebody else rotated between our read and the server's answer, so
             // the refusal we are holding is about a token nobody uses any more.
-            store.tokens = tokens("A2", "R2")
-            refused(400, "INVALID_GRANT")
+            store.tokens = testTokens("A2", "R2")
+            refusedResponse(400, "INVALID_GRANT")
         }
-        val tm = manager(api, store)
+        val tm = testManager(api, store)
 
         assertEquals("A2", tm.refreshOn401("A1"))
         assertFalse("nothing was revoked that matters", store.wiped)
     }
 
     @Test
-    fun `a lost answer is not replayed, and the next caller does not fire again`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val api = FakeTokenApi { throw SocketTimeoutException("sent, no answer") }
-        val tm = manager(api, store)
-
-        assertNull(tm.refreshOn401("A1"))
-        assertEquals(1, api.calls.get())
-        assertFalse(store.wiped)
-
-        // This is the exact moment the old client killed the grant: the mutex is
-        // free, the access token is unchanged, and the next queued 401 arrives.
-        assertNull(tm.refreshOn401("A1"))
-        assertEquals("the spent token is NOT offered again", 1, api.calls.get())
-        assertTrue(tm.sessionDegraded.value)
-    }
-
-    @Test
-    fun `a connect failure is not a lost answer and may be retried at once`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        var first = true
-        val api = FakeTokenApi {
-            if (first) {
-                first = false
-                throw ConnectException("never left the phone")
-            }
-            rotated("A2", "R2")
+    fun `a connect failure is not a lost answer and a 401 may retry at once`() = runBlocking {
+        val store = FakeStore(testTokens("A1", "R1"))
+        val api = FakeTokenApi { call ->
+            if (call == 1) throw ConnectException("never left the phone")
+            rotatedResponse("A2", "R2")
         }
-        val tm = manager(api, store)
+        val tm = testManager(api, store)
 
         assertNull(tm.refreshOn401("A1"))
-        assertEquals("A2", tm.refreshOn401("A1"))
-        assertEquals(2, api.calls.get())
-    }
-
-    @Test
-    fun `the quarantined token is offered once the cool-off expires`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        var clock = 1_000_000L
-        var first = true
-        val api = FakeTokenApi {
-            if (first) {
-                first = false
-                throw SocketTimeoutException("sent, no answer")
-            }
-            rotated("A2", "R2")
-        }
-        val tm = manager(api, store) { clock }
-
-        assertNull(tm.refreshOn401("A1"))
-        clock += 9 * 60_000L
-        assertNull("still inside the cool-off", tm.refreshOn401("A1"))
-        assertEquals(1, api.calls.get())
-
-        clock += 2 * 60_000L
-        assertEquals("A2", tm.refreshOn401("A1"))
+        assertNull("the bytes never left: nothing at risk", store.pendingRefresh)
+        assertEquals("a 401 is proof of reachability", "A2", tm.refreshOn401("A1"))
         assertEquals(2, api.calls.get())
     }
 
@@ -341,8 +324,8 @@ class ForcedSignOutTest {
 
     @Test
     fun `a definitive refusal ends the session and names itself`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(400, "INVALID_GRANT") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(400, "INVALID_GRANT") }, store)
         val seen = mutableListOf<SessionInvalidation>()
         val collector = async(Dispatchers.Default) { tm.sessionInvalidated.collect { seen += it } }
 
@@ -351,6 +334,7 @@ class ForcedSignOutTest {
         collector.cancel()
 
         assertTrue("local credentials gone", store.wiped)
+        assertNull("the write-ahead record goes with them", store.pendingRefresh)
         assertEquals(1, seen.size)
         assertEquals(SignOutReason.REFRESH_REJECTED, seen.single().reason)
         assertEquals(400, seen.single().httpStatus)
@@ -365,8 +349,8 @@ class ForcedSignOutTest {
      */
     @Test
     fun `a zero-scope refusal ends the session and names itself`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(400, "INVALID_SCOPE") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(400, "INVALID_SCOPE") }, store)
         val seen = mutableListOf<SessionInvalidation>()
         val collector = async(Dispatchers.Default) { tm.sessionInvalidated.collect { seen += it } }
 
@@ -375,6 +359,7 @@ class ForcedSignOutTest {
         collector.cancel()
 
         assertTrue("local credentials gone", store.wiped)
+        assertNull(store.pendingRefresh)
         assertEquals(SignOutReason.REFRESH_REJECTED, seen.single().reason)
         assertEquals(400, seen.single().httpStatus)
         assertEquals("INVALID_SCOPE", seen.single().errorCode)
@@ -383,39 +368,40 @@ class ForcedSignOutTest {
     /** INVALID_CLIENT is a build problem (wrong/rotated client_id), not a session verdict. */
     @Test
     fun `an INVALID_CLIENT refusal keeps the session`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        val tm = manager(FakeTokenApi { refused(400, "INVALID_CLIENT") }, store)
+        val store = FakeStore(testTokens("A1", "R1"))
+        val tm = testManager(FakeTokenApi { refusedResponse(400, "INVALID_CLIENT") }, store)
         tm.refreshOn401("A1")
         assertFalse("credentials kept", store.wiped)
     }
 
+    /**
+     * Today's zero-grace server: the replay of a consumed token is answered
+     * `400 INVALID_GRANT`. The sign-out is the SERVER's verdict, and the ledger
+     * says it followed a lost answer.
+     */
     @Test
-    fun `a refusal after a lost answer is recorded as the network story`() = runBlocking {
-        val store = FakeStore(tokens("A1", "R1"))
-        var clock = 1_000_000L
-        var first = true
-        val api = FakeTokenApi {
-            if (first) {
-                first = false
-                throw SocketTimeoutException("sent, no answer")
-            }
-            refused(400, "INVALID_GRANT")
+    fun `a refusal of the replay after a lost answer is recorded as the network story`() = runBlocking {
+        val store = FakeStore(testTokens("A1", "R1"))
+        val api = FakeTokenApi { call ->
+            if (call == 1) throw SocketTimeoutException("sent, no answer")
+            refusedResponse(400, "INVALID_GRANT")
         }
-        val tm = manager(api, store) { clock }
+        val tm = testManager(api, store)
         val seen = mutableListOf<SessionInvalidation>()
         val collector = async(Dispatchers.Default) { tm.sessionInvalidated.collect { seen += it } }
 
         assertNull(tm.refreshOn401("A1"))
-        clock += 11 * 60_000L
-        assertNull(tm.refreshOn401("A1"))
         waitFor { seen.isNotEmpty() }
         collector.cancel()
 
+        assertEquals("the same token, replayed once", listOf("R1", "R1"), api.presented)
         assertEquals(
             "the difference between 'revoked' and 'a flaky network cost you your session'",
             SignOutReason.REFRESH_REJECTED_AFTER_LOST_RESPONSE,
             seen.single().reason,
         )
+        assertEquals("INVALID_GRANT", seen.single().errorCode)
+        assertNull("cleared on the definitive outcome", store.pendingRefresh)
     }
 
     // ── the 401 that must never happen ────────────────────────────────────────
@@ -426,7 +412,8 @@ class ForcedSignOutTest {
      * (`apps/api/src/app.ts:144` vs `:174`). An `Authorization` header on a
      * refresh therefore never reaches the OAuth service at all — it comes back
      * `401 API_KEY_INVALID` with a perfectly healthy refresh token. The app's
-     * refresh rides a bare client for exactly this reason; this pins the wire.
+     * refresh rides a bare client for exactly this reason; this pins the wire,
+     * on the PRODUCTION token client.
      */
     @Test
     fun `the refresh goes out with no Authorization header`() {
@@ -444,13 +431,13 @@ class ForcedSignOutTest {
             )
             val api = Retrofit.Builder()
                 .baseUrl(server.url("/api/v1/"))
-                .client(OkHttpClient.Builder().build())
-                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .client(tokenHttpClient())
+                .addConverterFactory(testJson.asConverterFactory("application/json".toMediaType()))
                 .build()
                 .create(TokenApi::class.java)
 
-            val store = FakeStore(tokens("A1", "R1"))
-            val tm = TokenManager(api, store, json, CLIENT, REDIRECT)
+            val store = FakeStore(testTokens("A1", "R1"))
+            val tm = TokenManager(api, store, testJson, TEST_CLIENT, TEST_REDIRECT)
             runBlocking { assertEquals("A2", tm.refreshOn401("A1")) }
 
             val recorded = server.takeRequest()
@@ -458,7 +445,7 @@ class ForcedSignOutTest {
             assertEquals("/api/v1/oauth/token", recorded.path)
             // `.strict()` server-side: exactly these three fields, JSON, nothing else.
             assertEquals(
-                """{"grant_type":"refresh_token","refresh_token":"R1","client_id":"$CLIENT"}""",
+                """{"grant_type":"refresh_token","refresh_token":"R1","client_id":"$TEST_CLIENT"}""",
                 recorded.body.readUtf8(),
             )
         } finally {
@@ -467,38 +454,6 @@ class ForcedSignOutTest {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
-
-    private fun manager(
-        api: TokenApi,
-        store: SessionStore,
-        clock: () -> Long = { 1_000_000L },
-    ) = TokenManager(api, store, json, CLIENT, REDIRECT, clock)
-
-    private fun tokens(access: String, refresh: String) = AuthTokens(
-        accessToken = access,
-        refreshToken = refresh,
-        scope = "portfolio:read",
-        // Far future: these tests drive the REACTIVE path on purpose.
-        expiresAtEpochMs = Long.MAX_VALUE / 2,
-    )
-
-    private fun rotated(access: String, refresh: String): Response<TokenResponse> =
-        Response.success(
-            TokenResponse(
-                accessToken = access,
-                tokenType = "Bearer",
-                expiresIn = 3600,
-                refreshToken = refresh,
-                scope = "portfolio:read",
-            ),
-        )
-
-    private fun refused(status: Int, code: String): Response<TokenResponse> =
-        Response.error(
-            status,
-            """{"error":{"code":"$code","message":"refused"}}"""
-                .toResponseBody("application/json".toMediaType()),
-        )
 
     private fun event(at: Long) = SignOutEvent(
         at = at,
@@ -523,59 +478,7 @@ class ForcedSignOutTest {
         assertTrue("condition never became true", condition())
     }
 
-    private class FakeStore(initial: AuthTokens? = null) : SessionStore {
-        var tokens: AuthTokens? = initial
-        var unavailable: String? = null
-        var wiped = false
-        var saves = 0
-
-        override fun readTokens(): TokenRead {
-            unavailable?.let { return TokenRead.Unavailable(it) }
-            return tokens?.let { TokenRead.Present(it) } ?: TokenRead.None
-        }
-
-        override fun saveTokens(tokens: AuthTokens): Boolean {
-            saves++
-            this.tokens = tokens
-            return true
-        }
-
-        override fun clearTokens() {
-            tokens = null
-        }
-
-        override fun savePending(codeVerifier: String, state: String) = Unit
-        override fun loadPending(): Pair<String, String>? = null
-        override fun clearPending() = Unit
-        override fun loadUser(): SessionUser? = null
-        override fun saveUser(user: SessionUser) = Unit
-
-        override fun wipeAll() {
-            wiped = true
-            tokens = null
-        }
-
-        override fun reopen(): Boolean = unavailable == null
-    }
-
-    private class FakeTokenApi(
-        private val answer: suspend () -> Response<TokenResponse>,
-    ) : TokenApi {
-        val calls = AtomicInteger(0)
-
-        override suspend fun exchange(body: TokenExchangeRequest): Response<TokenResponse> {
-            calls.incrementAndGet()
-            return answer()
-        }
-
-        override suspend fun refresh(body: TokenRefreshRequest): Response<TokenResponse> {
-            calls.incrementAndGet()
-            return answer()
-        }
-    }
-
     private companion object {
-        const val CLIENT = "btc_IbT1mzw_7kBiPHPkGfaE0Q"
-        const val REDIRECT = "bettertrack://oauth/callback"
+        const val CLIENT = TEST_CLIENT
     }
 }

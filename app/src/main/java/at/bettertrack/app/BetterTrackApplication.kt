@@ -52,6 +52,16 @@ class BetterTrackApplication : Application() {
 
         AppGraph.init(this)
 
+        // A refresh a previous process left unanswered (killed between the
+        // server rotating and the app committing the successor) is replayed
+        // FIRST, whichever entry point started this process — the app, the
+        // widget or sync worker, a push. Single-flight inside TokenManager, so
+        // an API call racing it waits for it rather than presenting the token
+        // a second time. A no-op without a pending record.
+        startupStep("resumePendingRefresh") {
+            appScope.launch { AppGraph.tokenManager.resumePendingRefresh() }
+        }
+
         // V5 W1 (S3/S4 plan §4.3): resolve an existing install's storage mode to
         // SERVER exactly once, so an upgrade-in-place never meets the W5
         // first-run wizard. A clean install stays UNSET and behaves as SERVER.

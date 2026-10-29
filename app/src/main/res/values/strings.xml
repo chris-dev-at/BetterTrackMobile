@@ -945,6 +945,17 @@
     <string name="bt_settings_dev_gallery_sub">Design system showcase</string>
     <string name="bt_settings_dev_sync">Sync queue</string>
     <string name="bt_settings_dev_sync_sub">Inspect the offline outbound queue</string>
+    <string name="bt_settings_dev_auth_fault">Auth faults: next refresh</string>
+    <string name="bt_settings_dev_auth_fault_none">None</string>
+    <string name="bt_settings_dev_auth_fault_lost">Lost answer (server rotates, answer dropped)</string>
+    <string name="bt_settings_dev_auth_fault_429">429 rate limit (Retry-After 20 s)</string>
+    <string name="bt_settings_dev_auth_fault_transport">Transport error (connection refused)</string>
+    <string name="bt_settings_dev_auth_fault_kill">Kill the app after send</string>
+    <string name="bt_settings_dev_auth_refresh_now">Refresh token now</string>
+    <string name="bt_settings_dev_auth_refresh_now_sub">One refresh through the real rail</string>
+    <string name="bt_settings_dev_auth_refresh_ok">Session renewed</string>
+    <string name="bt_settings_dev_auth_refresh_failed">Not renewed, see the refresh state</string>
+    <string name="bt_settings_dev_auth_state">Token refresh state</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
     <!-- %1$s, not %1$d: the app snackbar carries a single STRING format argument. -->
     <string name="bt_settings_dev_hint">%1$s more taps to unlock developer options</string>
@@ -4213,6 +4224,13 @@
     <string name="bt_diag_reason_store_recreated">Encrypted storage was rebuilt</string>
     <string name="bt_diag_reason_decode_failed">The stored session could not be read</string>
     <string name="bt_diag_reason_unknown">Unrecognised reason</string>
+    <string name="bt_diag_renewals_title">Recent session renewals</string>
+    <string name="bt_diag_renewal_rotated">Renewed</string>
+    <string name="bt_diag_renewal_definitive">Refused by the server, session ended</string>
+    <string name="bt_diag_renewal_lost">Answer lost, renewal repeated</string>
+    <string name="bt_diag_renewal_not_delivered">Server not reachable, session kept</string>
+    <string name="bt_diag_renewal_rate_limited">Server asked to wait, session kept</string>
+    <string name="bt_diag_renewal_refused">Not renewed for another reason, session kept</string>
     <string name="bt_auth_reconnecting">Reconnecting to your account…</string>
     <string name="bt_auth_reconnecting_retry">Try reconnecting now</string>
     <!-- ===== END auth diagnostics ===== -->

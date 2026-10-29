@@ -897,6 +897,8 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.bt_settings_dev_sync_sub),
                         onClick = onOpenSyncDebug,
                     )
+                    // Token refresh rail: fault injection, a manual refresh, live state.
+                    DevAuthRefreshRows()
                 }
             }
 
