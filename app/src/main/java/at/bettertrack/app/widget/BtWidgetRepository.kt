@@ -79,7 +79,9 @@ object BtWidgetRepository {
 
     private suspend fun loadOrThrow(nowMs: Long): BtWidgetSnapshot {
         val mode = currentMode()
-        if (!hasSession(mode)) return BtWidgetSnapshot.signedOut(nowMs)
+        if (btWidgetShowsSignedOut(AppGraph.tokenManager.sessionPresence(), mode.holdsVault)) {
+            return BtWidgetSnapshot.signedOut(nowMs)
+        }
 
         val db = AppGraph.database
         val portfolios = db.portfolioDao().getAll()
@@ -197,14 +199,11 @@ object BtWidgetRepository {
     }
 
     /**
-     * Is there anything this device is entitled to display?
+     * May the network half run — is there a USABLE session to call with?
      *
-     * A server session is tokens. A Drive-autonomous session is not — that mode
-     * has no server account at all — so the vault-holding modes count on their
-     * own. Getting this wrong in the safe direction just shows the sign-in CTA;
-     * getting it wrong in the other direction would render a stranger's cached
-     * figures, which is why the signed-out snapshot carries no data rather than
-     * hidden data.
+     * Stricter than "is the widget signed in" ([btWidgetShowsSignedOut]): an
+     * unreadable store keeps showing the cached figures but has no bearer to
+     * fetch fresh ones with.
      */
     private fun hasSession(mode: StorageMode = currentMode()): Boolean =
         AppGraph.tokenManager.hasTokens() || mode.holdsVault
@@ -581,3 +580,26 @@ object BtWidgetRepository {
         }
     }
 }
+
+/**
+ * Does the widget show "Sign in" instead of its figures?
+ *
+ * ONLY when storage definitively holds no session ([TokenRead.None]) and no
+ * local vault exists. A session ends on disk only through a definitive verdict —
+ * the user logged out, the account gate refused, or the server answered
+ * `400 INVALID_GRANT` / `INVALID_SCOPE` to a refresh (the `TokenManager` wipe the
+ * sign-out ledger records) — so this is exactly "signed out for real".
+ *
+ * Everything else keeps the last figures with their "as of" note:
+ *  - a refresh that is failing, backing off or waiting for its replay leaves the
+ *    pair on disk ([TokenRead.Present]);
+ *  - a Keystore that will not open right now ([TokenRead.Unavailable]) is not a
+ *    sign-out either — the bytes are still there and the next read usually works.
+ *    This used to read as signed out (`hasTokens()` is false for it), which put
+ *    "login needed" on the home screen of a phone that was still signed in. The
+ *    Room cache it renders from belongs to that same session: a sign-out of an
+ *    explicit kind wipes it, a server-forced one leaves storage at [TokenRead.None].
+ */
+internal fun btWidgetShowsSignedOut(presence: at.bettertrack.app.data.auth.TokenRead, holdsVault: Boolean): Boolean =
+    !holdsVault && presence is at.bettertrack.app.data.auth.TokenRead.None
+

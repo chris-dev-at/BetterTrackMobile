@@ -13,8 +13,8 @@ data class AuthTokens(
     /** Absolute wall-clock expiry of the access token, epoch millis. */
     val expiresAtEpochMs: Long,
 ) {
-    fun isExpiringWithin(skewMs: Long): Boolean =
-        System.currentTimeMillis() >= (expiresAtEpochMs - skewMs)
+    fun isExpiringWithin(skewMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean =
+        nowMs >= (expiresAtEpochMs - skewMs)
 }
 
 /** Turn a token response into a stored token set with an absolute expiry. */

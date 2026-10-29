@@ -290,6 +290,30 @@ class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
         _trueBlack.value = enabled
     }
 
+    // ── DEBUG ONLY: auth fault injection (Settings → Developer) ───────────────
+    private val _debugAuthFault = MutableStateFlow(
+        at.bettertrack.app.data.auth.authFaultFromName(prefs.getString(KEY_DEBUG_AUTH_FAULT, null)),
+    )
+
+    /**
+     * What the next token refresh should suffer — see
+     * [at.bettertrack.app.data.auth.AuthFault]. Only ever read by the debug-only
+     * fault interceptor; a release build never wires one.
+     */
+    val debugAuthFault: StateFlow<at.bettertrack.app.data.auth.AuthFault> = _debugAuthFault.asStateFlow()
+
+    fun debugAuthFaultNow(): at.bettertrack.app.data.auth.AuthFault = _debugAuthFault.value
+
+    /**
+     * `commit = true`: disarming happens a moment before the
+     * `KILL_AFTER_SEND` fault kills the process, and the relaunched process must
+     * find it disarmed.
+     */
+    fun setDebugAuthFault(fault: at.bettertrack.app.data.auth.AuthFault) {
+        prefs.edit(commit = true) { putString(KEY_DEBUG_AUTH_FAULT, fault.name) }
+        _debugAuthFault.value = fault
+    }
+
     /**
      * `internal`, not `private`, since 2026-08-18: the widget package reads
      * [KEY_THEME_MODE] out of [PREFS] DIRECTLY (see `btWidgetStoredThemeMode`).
@@ -308,5 +332,6 @@ class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_TRUE_BLACK = "true_black"
         const val DEFAULT_TRUE_BLACK = false
+        const val KEY_DEBUG_AUTH_FAULT = "debug_auth_fault_next_refresh"
     }
 }

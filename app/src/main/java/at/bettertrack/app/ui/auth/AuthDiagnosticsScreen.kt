@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.auth.RefreshJournalEntry
+import at.bettertrack.app.data.auth.RefreshVerdict
 import at.bettertrack.app.data.auth.SignOutEvent
 import at.bettertrack.app.data.auth.SignOutReason
 import at.bettertrack.app.di.AppGraph
@@ -59,6 +61,7 @@ import java.util.Date
 internal fun AuthDiagnosticsScreen(onClose: () -> Unit) {
     val bt = BtTheme.colors
     val events = remember { AppGraph.authRepository.signOutHistory() }
+    val renewals = remember { AppGraph.refreshJournal.recent() }
 
     Scaffold(
         containerColor = bt.bg,
@@ -117,6 +120,23 @@ internal fun AuthDiagnosticsScreen(onClose: () -> Unit) {
                     }
                 }
             }
+            // The renewals that led up to it: a session is usually decided by the
+            // refresh whose answer was lost, not by the refusal that came after.
+            if (renewals.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.bt_diag_renewals_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = bt.textPrimary,
+                )
+                BtGroup {
+                    renewals.forEach { entry ->
+                        BtGroupRow(
+                            title = stringResource(renewalLabelRes(entry.verdict)),
+                            subtitle = renewalSubtitle(entry),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -137,6 +157,25 @@ private fun eventSubtitle(event: SignOutEvent): String = buildString {
     append(event.caller)
     event.httpStatus?.let { append(" · HTTP $it") }
     event.errorCode?.let { append(" · $it") }
+}
+
+/** One renewal's machine line: when, who asked, which attempt of the token, what came back. */
+private fun renewalSubtitle(entry: RefreshJournalEntry): String = buildString {
+    append(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM).format(Date(entry.at)))
+    append(" · ").append(entry.caller).append(" · #").append(entry.attempt)
+    entry.httpStatus?.let { append(" · HTTP $it") }
+    entry.errorCode?.let { append(" · $it") }
+    entry.waitMs?.let { append(" · wait ${it / 1000} s") }
+}
+
+private fun renewalLabelRes(verdict: String): Int = when (verdict) {
+    RefreshVerdict.ROTATED.name -> R.string.bt_diag_renewal_rotated
+    RefreshVerdict.DEFINITIVE.name -> R.string.bt_diag_renewal_definitive
+    RefreshVerdict.ANSWER_LOST.name -> R.string.bt_diag_renewal_lost
+    RefreshVerdict.NOT_DELIVERED.name -> R.string.bt_diag_renewal_not_delivered
+    RefreshVerdict.RATE_LIMITED.name -> R.string.bt_diag_renewal_rate_limited
+    RefreshVerdict.REFUSED.name -> R.string.bt_diag_renewal_refused
+    else -> R.string.bt_diag_reason_unknown
 }
 
 /** Reason code → the sentence the user reads. Unknown codes still get a row. */

@@ -9,9 +9,13 @@ import okhttp3.Route
 
 /**
  * Reactive 401 handling (spec §4): when an authenticated call comes back 401,
- * refresh once (single-flighted) and retry the request with the new token. If
- * the refresh fails the token set is wiped by [TokenManager] and we return null
- * (stop) — the app then observes the session invalidation and returns to login.
+ * refresh once (single-flighted) and retry the request with the new token.
+ *
+ * A 401 on an API call is never a sign-out by itself. If no refresh can be made
+ * right now (offline, rate-limited, a replay pending) we return null and the call
+ * fails with its 401 while the session is KEPT; only a definitive refusal of the
+ * refresh itself (`400 INVALID_GRANT` / `INVALID_SCOPE`) makes [TokenManager]
+ * wipe the session, which the app observes and answers with the login screen.
  */
 class TokenAuthenticator(
     private val tokenManager: TokenManager,

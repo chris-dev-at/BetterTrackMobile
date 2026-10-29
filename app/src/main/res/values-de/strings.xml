@@ -858,6 +858,17 @@
     <string name="bt_settings_dev_gallery_sub">Schaukasten des Designsystems</string>
     <string name="bt_settings_dev_sync">Sync-Warteschlange</string>
     <string name="bt_settings_dev_sync_sub">Die Offline-Warteschlange inspizieren</string>
+    <string name="bt_settings_dev_auth_fault">Auth-Fehler: nächste Erneuerung</string>
+    <string name="bt_settings_dev_auth_fault_none">Keiner</string>
+    <string name="bt_settings_dev_auth_fault_lost">Antwort verloren (Server rotiert, Antwort verworfen)</string>
+    <string name="bt_settings_dev_auth_fault_429">429 Ratenlimit (Retry-After 20 s)</string>
+    <string name="bt_settings_dev_auth_fault_transport">Verbindungsfehler (Verbindung abgelehnt)</string>
+    <string name="bt_settings_dev_auth_fault_kill">App nach dem Senden beenden</string>
+    <string name="bt_settings_dev_auth_refresh_now">Token jetzt erneuern</string>
+    <string name="bt_settings_dev_auth_refresh_now_sub">Eine Erneuerung über den echten Pfad</string>
+    <string name="bt_settings_dev_auth_refresh_ok">Sitzung erneuert</string>
+    <string name="bt_settings_dev_auth_refresh_failed">Nicht erneuert, siehe Erneuerungsstatus</string>
+    <string name="bt_settings_dev_auth_state">Status der Token-Erneuerung</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
     <string name="bt_settings_dev_hint">Noch %1$s Mal tippen, um Entwickleroptionen freizuschalten</string>
 
@@ -3988,6 +3999,13 @@
     <string name="bt_diag_reason_store_recreated">Verschlüsselter Speicher wurde neu angelegt</string>
     <string name="bt_diag_reason_decode_failed">Die gespeicherte Sitzung war nicht lesbar</string>
     <string name="bt_diag_reason_unknown">Unbekannter Grund</string>
+    <string name="bt_diag_renewals_title">Letzte Sitzungserneuerungen</string>
+    <string name="bt_diag_renewal_rotated">Erneuert</string>
+    <string name="bt_diag_renewal_definitive">Vom Server abgelehnt, Sitzung beendet</string>
+    <string name="bt_diag_renewal_lost">Antwort verloren, Erneuerung wiederholt</string>
+    <string name="bt_diag_renewal_not_delivered">Server nicht erreichbar, Sitzung bleibt</string>
+    <string name="bt_diag_renewal_rate_limited">Server bat um Geduld, Sitzung bleibt</string>
+    <string name="bt_diag_renewal_refused">Aus anderem Grund nicht erneuert, Sitzung bleibt</string>
     <string name="bt_auth_reconnecting">Verbindung zu deinem Konto wird wiederhergestellt…</string>
     <string name="bt_auth_reconnecting_retry">Jetzt erneut verbinden</string>
     <!-- ===== END auth diagnostics ===== -->

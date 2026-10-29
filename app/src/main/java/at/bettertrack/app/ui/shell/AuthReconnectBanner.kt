@@ -30,10 +30,10 @@ import at.bettertrack.app.ui.theme.BtTheme
  *
  * The app can be online and still unable to renew its session: the origin
  * answers 5xx, the shared-IP rate limiter is in a cooldown, or a refresh went
- * out and its answer was lost so the token is quarantined
- * (`TokenManager.atRiskReplaySuppressed`). Every one of those used to end at the
- * login screen. They now keep the session and raise this line instead, with a
- * retry for the person who does not want to wait for the next attempt.
+ * out and its answer was lost and the replay of that token has not landed yet
+ * (`TokenManager`, `RefreshBackoffKind.REPLAY`). Every one of those used to end
+ * at the login screen. They now keep the session and raise this line instead,
+ * with a retry for the person who does not want to wait for the next attempt.
  *
  * Deliberately in the same slot and the same idiom as [OfflineBanner], and
  * mutually exclusive with it: offline is the more specific and more actionable
