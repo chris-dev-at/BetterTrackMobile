@@ -17,12 +17,18 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.LocalOwnersProvider
 import at.bettertrack.app.R
+import at.bettertrack.app.ui.adaptive.LocalBtWindow
 import at.bettertrack.app.ui.components.rememberBtHaptics
 import at.bettertrack.app.ui.components.rememberReducedMotion
 import at.bettertrack.app.ui.theme.BtTheme
@@ -131,6 +138,12 @@ internal fun BtSheetStack(
     val scope = rememberCoroutineScope()
     val reducedMotion = rememberReducedMotion()
 
+    // T1 large-screen foundation: on Medium / Expanded windows a page sheet is a
+    // centred 640dp surface — the cap every modal bottom sheet already wears —
+    // with the scrim on both sides, instead of the phone sheet stretched across
+    // a 1600px tablet. `null` = Compact = full width, exactly as before.
+    val sheetMaxWidth = LocalBtWindow.current.sheetMaxWidth
+
     val depth = pages.size
     val topKey = pages.lastOrNull()?.key
     val stacked = depth >= 2
@@ -149,6 +162,10 @@ internal fun BtSheetStack(
     val slide = remember { BtSheetMotion(0f) }
     var heightPx by remember { mutableFloatStateOf(0f) }
     var widthPx by remember { mutableFloatStateOf(0f) }
+    // The layer's own width — what the sheet would span uncapped. Compared with
+    // `widthPx` to tell whether the settled sheet really covers everything below
+    // its top edge; see [sheetSpansWidth].
+    var layerWidthPx by remember { mutableFloatStateOf(0f) }
     var leaving by remember { mutableStateOf(false) }
     val flingVelocityPx = with(density) { BtSheetDragTuning.FLING_VELOCITY.toPx() }
     // The vertical drag model for THIS sheet's measured height: the one-level
@@ -163,8 +180,21 @@ internal fun BtSheetStack(
     val topEdgePx = WindowInsets.statusBars.getTop(density) +
         with(density) { SHEET_TOP_GAP.toPx() }
     val cornerPx = with(density) { SHEET_CORNER.toPx() }
+    //
+    // A CAPPED sheet (T1) leaves the gutters either side of it showing, so it
+    // covers nothing whole and the shell must keep drawing the pages under the
+    // scrim: `spansWidth` turns the cull off for it. Both widths are snapshot
+    // state written only on a size change, so the derived value still flips only
+    // when coverage does.
     val exposed = remember(topEdgePx, cornerPx) {
-        derivedStateOf { sheetExposedTopPx(travel.value, topEdgePx, cornerPx) }
+        derivedStateOf {
+            sheetExposedTopPx(
+                travel.value,
+                topEdgePx,
+                cornerPx,
+                spansWidth = sheetSpansWidth(widthPx, layerWidthPx),
+            )
+        }
     }
     DisposableEffect(occlusion, exposed) {
         occlusion?.probe = { exposed.value }
@@ -361,7 +391,16 @@ internal fun BtSheetStack(
 
     if (depth == 0) return
 
-    Box(modifier.fillMaxSize()) {
+    // The horizontal safe area a CAPPED sheet is centred in. Padding it on the
+    // surface (outside its background) keeps a centred sheet clear of a
+    // landscape phone's side navigation bar, and consumes that inset so the
+    // screens' Scaffolds inside do not pay it again for an edge the sheet does
+    // not touch. Compact keeps today's edge-to-edge surface untouched.
+    val cappedSideInsets = WindowInsets.systemBars
+        .union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Horizontal)
+
+    Box(modifier.fillMaxSize().onSizeChanged { layerWidthPx = it.width.toFloat() }) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -395,6 +434,16 @@ internal fun BtSheetStack(
         )
         Surface(
             modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(
+                    if (sheetMaxWidth != null) {
+                        Modifier
+                            .windowInsetsPadding(cappedSideInsets)
+                            .widthIn(max = sheetMaxWidth)
+                    } else {
+                        Modifier
+                    },
+                )
                 .fillMaxSize()
                 // Pads AND consumes: children asking for the status bar get zero,
                 // because this boundary has already paid it.

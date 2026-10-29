@@ -25,8 +25,29 @@ import androidx.compose.runtime.setValue
  * the sheet starts to move, with no crossfade to schedule and no frame in which
  * the wrong thing is on screen.
  */
-internal fun sheetExposedTopPx(travel: Float, sheetTopPx: Float, cornerPx: Float): Float =
-    if (travel != 0f) NOT_COVERED else sheetTopPx + cornerPx
+internal fun sheetExposedTopPx(
+    travel: Float,
+    sheetTopPx: Float,
+    cornerPx: Float,
+    spansWidth: Boolean = true,
+): Float =
+    if (travel != 0f || !spansWidth) NOT_COVERED else sheetTopPx + cornerPx
+
+/**
+ * Whether a sheet [sheetWidthPx] wide covers its whole layer, [layerWidthPx]
+ * wide — the second premise of the cull above (T1 large-screen foundation).
+ *
+ * On Compact the sheet is the layer's full width and this is always true. On
+ * Medium and Expanded the sheet is a centred 640dp surface with the pages
+ * showing through the scrim on both sides of it, so "everything below the top
+ * edge is dead pixels" is false and [sheetExposedTopPx] must say [NOT_COVERED]:
+ * clipping there would paint the gutters as an empty window. A half-pixel of
+ * slack absorbs rounding between the two measurements. Before either is
+ * measured (both 0) it answers true, which is harmless — a sheet that has not
+ * been measured is still travelling in, and any travel already uncovers.
+ */
+internal fun sheetSpansWidth(sheetWidthPx: Float, layerWidthPx: Float): Boolean =
+    sheetWidthPx >= layerWidthPx - 0.5f
 
 /** "Draw everything" — no sheet, or a sheet that is not at its resting height. */
 internal const val NOT_COVERED = -1f

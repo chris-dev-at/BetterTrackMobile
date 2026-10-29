@@ -51,6 +51,44 @@ class BtOcclusionTest {
         assertEquals(NOT_COVERED, sheetExposedTopPx(1f, topEdge, corner), 0f)
     }
 
+    // ── T1: a capped (centred 640dp) sheet covers nothing whole ─────────────
+
+    @Test
+    fun `a settled sheet narrower than its layer draws everything`() {
+        // Medium / Expanded: the pages show through the scrim either side of the
+        // sheet. Clipping at its top edge would paint those gutters as an empty
+        // window — the cull's premise is false, so it must switch off.
+        assertEquals(
+            NOT_COVERED,
+            sheetExposedTopPx(0f, topEdge, corner, spansWidth = false),
+            0f,
+        )
+    }
+
+    @Test
+    fun `a full-width settled sheet still culls exactly as before`() {
+        assertEquals(topEdge + corner, sheetExposedTopPx(0f, topEdge, corner, spansWidth = true), 1e-4f)
+    }
+
+    @Test
+    fun `a sheet spans its layer only when it is as wide as the layer`() {
+        // The owner's tablet in landscape: 2560px layer, a 640dp sheet at 2.125x.
+        assertTrue(!sheetSpansWidth(sheetWidthPx = 1360f, layerWidthPx = 2560f))
+        // A phone: the sheet IS the layer.
+        assertTrue(sheetSpansWidth(sheetWidthPx = 1080f, layerWidthPx = 1080f))
+        // Rounding between two measurements is not a gutter.
+        assertTrue(sheetSpansWidth(sheetWidthPx = 1079.6f, layerWidthPx = 1080f))
+        // A real one-pixel gutter is.
+        assertTrue(!sheetSpansWidth(sheetWidthPx = 1079f, layerWidthPx = 1080f))
+    }
+
+    @Test
+    fun `an unmeasured layer does not switch the cull off by accident`() {
+        // Both widths are 0 before the first layout; the sheet is travelling in
+        // then, so the answer is NOT_COVERED through `travel` anyway.
+        assertTrue(sheetSpansWidth(0f, 0f))
+    }
+
     // ── The wiring. A correct rule read from the wrong phase buys nothing. ──
 
     private fun shellSource(name: String): String {
