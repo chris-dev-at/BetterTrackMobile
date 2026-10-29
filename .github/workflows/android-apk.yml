@@ -49,6 +49,11 @@ jobs:
       # SDK location from these env vars instead.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # `tools` (the action's default) no longer exists in Google's SDK
+          # repository (2026-10-29 CI break); platform-tools is all we need here,
+          # the next step prefetches the platform.
+          packages: platform-tools
 
       # Accept all SDK licenses so AGP 9 can auto-download the components it
       # needs (platform 37 + matching build-tools). Prefetching platform-37 is
