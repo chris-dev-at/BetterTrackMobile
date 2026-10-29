@@ -158,7 +158,7 @@ class ConglomerateListInvalidationTest {
         repo.create("ZZ-New", null)
 
         enqueueDetail("c9", "ZZ-New", positions = 2)
-        repo.replacePositions("c9", listOf("a1" to 50.0, "a2" to 50.0))
+        repo.replacePositions("c9", listOf(PositionWeight("a1", 50.0), PositionWeight("a2", 50.0)))
 
         assertEquals(listOf("c1", "c9"), repo.conglomerates.value?.map { it.id })
         assertEquals(2, repo.conglomerates.value?.last()?.positionCount)

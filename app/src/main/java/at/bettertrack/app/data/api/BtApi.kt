@@ -693,6 +693,17 @@ interface BtApi {
     @DELETE("conglomerates/{id}")
     suspend fun deleteConglomerate(@Path("id") id: String): Response<Unit>
 
+    /**
+     * The basket flattened to effective ASSET weights (V5-P6). A nested basket's
+     * stored rows include children, which are not runnable backtest positions;
+     * the web runs every backtest over this list, and so does the app whenever a
+     * child is present. [workboard:read]
+     */
+    @GET("conglomerates/{id}/resolved")
+    suspend fun conglomerateResolved(
+        @Path("id") id: String,
+    ): Response<at.bettertrack.app.data.api.dto.ConglomerateResolvedResponse>
+
     /** Replace the weighted positions (builder save; server re-validates 100%). */
     @Headers("Content-Type: application/json")
     @PUT("conglomerates/{id}/positions")

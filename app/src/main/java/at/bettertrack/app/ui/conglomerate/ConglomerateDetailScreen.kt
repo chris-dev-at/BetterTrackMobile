@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.conglomerate
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,10 +170,27 @@ class ConglomerateDetailViewModel(
     }
 
     private fun runBacktest(d: ConglomerateDetail) {
-        if (d.positions.size < 2) { _backtest.value = BacktestUiState.Empty; return }
+        val nested = d.positions.any { it.isNested }
+        // A flat basket needs two rows to backtest; a nested one is judged on
+        // what it RESOLVES to, which only the server can say.
+        if (!nested && d.positions.size < 2) { _backtest.value = BacktestUiState.Empty; return }
         viewModelScope.launch {
             _backtest.value = BacktestUiState.Loading
-            val weights = d.positions.map { it.assetId to it.weightPct }
+            // A nested basket's stored rows include children, which are not
+            // runnable positions: the backtest runs over the resolved effective
+            // asset weights, exactly as the web does (V5-P6).
+            val weights = if (nested) {
+                when (val resolved = repo.resolvedWeights(d.id)) {
+                    is BtResult.Ok -> resolved.value
+                    is BtResult.Err -> {
+                        _backtest.value = BacktestUiState.Failed(resolved.error.asMessage())
+                        return@launch
+                    }
+                }
+            } else {
+                d.positions.map { it.assetId to it.weightPct }
+            }
+            if (weights.size < 2) { _backtest.value = BacktestUiState.Empty; return@launch }
             _backtest.value = when (val r = repo.backtest(weights, _range.value)) {
                 is BtResult.Ok -> if (r.value.series.size < 2) BacktestUiState.Empty else BacktestUiState.Loaded(r.value)
                 is BtResult.Err -> BacktestUiState.Failed(r.error.asMessage())
@@ -266,6 +284,8 @@ fun ConglomerateDetailScreen(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: () -> Unit,
+    /** Open a nested child basket's own detail (V5-P6). */
+    onOpenChild: (String) -> Unit = {},
 ) {
     val vm: ConglomerateDetailViewModel = viewModel {
         ConglomerateDetailViewModel(
@@ -334,10 +354,30 @@ fun ConglomerateDetailScreen(
                         Text(stringResource(R.string.bt_conglo_composition), style = MaterialTheme.typography.titleSmall, color = bt.textSecondary)
                         Spacer(Modifier.height(8.dp))
                         d.positions.forEach { p ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(p.symbol, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = bt.textPrimary, modifier = Modifier.width(88.dp))
-                                Text(p.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Text(formatPercent(p.weightPct, locale, showSign = false), style = BtTheme.type.moneySmall, color = bt.textPrimary)
+                            if (p.isNested) {
+                                // A nested basket: its name and size instead of a
+                                // ticker, and a tap opens it (the web's nested row).
+                                val childId = p.childId!!
+                                val openCd = stringResource(R.string.bt_conglo_open_nested_cd, p.name)
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable(onClickLabel = openCd) { onOpenChild(childId) }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(p.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = bt.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(nestedBasketSubline(p.childPositionCount), style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Text(formatPercent(p.weightPct, locale, showSign = false), style = BtTheme.type.moneySmall, color = bt.textPrimary)
+                                }
+                            } else {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(p.symbol, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = bt.textPrimary, modifier = Modifier.width(88.dp))
+                                    Text(p.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Text(formatPercent(p.weightPct, locale, showSign = false), style = BtTheme.type.moneySmall, color = bt.textPrimary)
+                                }
                             }
                         }
                     }

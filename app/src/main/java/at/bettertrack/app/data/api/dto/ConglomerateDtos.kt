@@ -23,12 +23,52 @@ data class ConglomerateDetailResponse(
     val positions: List<ConglomeratePositionDto> = emptyList(),
 )
 
+/**
+ * One stored row of a basket. The wire is a `oneOf` discriminated by [kind]
+ * (platform #655, V5-P6 nesting):
+ *
+ *  - `kind: "asset"` — [assetId] + [asset];
+ *  - `kind: "conglomerate"` — a NESTED basket: [childId] + [child], no asset.
+ *
+ * Modelled as one tolerant shape rather than a polymorphic hierarchy because
+ * the app's single [kotlinx.serialization.json.Json] instance has no class
+ * discriminator configured and is shared with the sync queue's payloads; the
+ * flattened form decodes both branches without touching that setup. Before
+ * this, `assetId`/`asset` were required, and ONE child basket in a basket made
+ * the whole detail (and every write answering with it) fail with a
+ * `MissingFieldException` — latent since nesting shipped.
+ *
+ * A missing [kind] reads as `asset`: that is every row a pre-nesting server
+ * ever sent.
+ */
 @Serializable
 data class ConglomeratePositionDto(
-    val assetId: String,
+    val kind: String = CONGLOMERATE_POSITION_ASSET,
+    val assetId: String? = null,
+    val childId: String? = null,
     val weightPct: Double,
     val sortOrder: Int = 0,
-    val asset: ConglomerateAssetDto,
+    val asset: ConglomerateAssetDto? = null,
+    val child: ConglomerateChildDto? = null,
+) {
+    /** True for a nested-basket row (`kind: "conglomerate"`). */
+    val isNested: Boolean get() = kind == CONGLOMERATE_POSITION_NESTED
+}
+
+/** [ConglomeratePositionDto.kind] for an asset row. */
+const val CONGLOMERATE_POSITION_ASSET = "asset"
+
+/** [ConglomeratePositionDto.kind] for a nested-basket row. */
+const val CONGLOMERATE_POSITION_NESTED = "conglomerate"
+
+/** The child basket a nested row points at — identity only, never its rows. */
+@Serializable
+data class ConglomerateChildDto(
+    val id: String,
+    val name: String,
+    /** draft | active. */
+    val status: String = "draft",
+    val positionCount: Int = 0,
 )
 
 @Serializable
@@ -50,10 +90,39 @@ data class ReplacePositionsRequest(
     val positions: List<PositionWeightDto>,
 )
 
+/**
+ * One row of `PUT /conglomerates/{id}/positions`: EXACTLY one of [assetId] /
+ * [childId] (the request is an `anyOf` of the two `.strict()` shapes). The
+ * other stays null and — `explicitNulls = false` — never reaches the wire.
+ */
 @Serializable
 data class PositionWeightDto(
+    val assetId: String? = null,
+    val weightPct: Double,
+    val childId: String? = null,
+)
+
+// ── GET /conglomerates/{id}/resolved (flattened effective weights) ───────────
+
+/**
+ * The basket flattened to plain assets (V5-P6): what a nested basket's
+ * backtest has to run over, since its stored rows include children that are
+ * not runnable positions. [unresolvedPct] is the share an empty child left
+ * behind; the resolved weights are normalised among themselves.
+ */
+@Serializable
+data class ConglomerateResolvedResponse(
+    val conglomerateId: String,
+    val nested: Boolean = false,
+    val positions: List<ResolvedPositionDto> = emptyList(),
+    val unresolvedPct: Double = 0.0,
+)
+
+@Serializable
+data class ResolvedPositionDto(
     val assetId: String,
     val weightPct: Double,
+    val asset: ConglomerateAssetDto? = null,
 )
 
 // ── POST /conglomerates/{id}/allocate (budget calculator) ────────────────────

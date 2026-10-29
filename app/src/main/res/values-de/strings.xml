@@ -601,6 +601,11 @@
         <item quantity="one">%1$d Wert</item>
         <item quantity="other">%1$d Werte</item>
     </plurals>
+    <plurals name="bt_conglo_nested_subline">
+        <item quantity="one">Verschachteltes Konglomerat · %1$d Position</item>
+        <item quantity="other">Verschachteltes Konglomerat · %1$d Positionen</item>
+    </plurals>
+    <string name="bt_conglo_open_nested_cd">%1$s öffnen</string>
     <string name="bt_conglo_name">Name</string>
     <string name="bt_conglo_positions">Positionen</string>
     <string name="bt_conglo_total">Gesamt %1$s%%</string>

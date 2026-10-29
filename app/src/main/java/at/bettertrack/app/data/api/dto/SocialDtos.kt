@@ -375,13 +375,26 @@ data class SharedConglomerateDetailResponse(
     val positions: List<SharedConglomeratePositionDto> = emptyList(),
 )
 
+/**
+ * A shared basket's row — the same `kind`-discriminated `oneOf` as the owner's
+ * own detail ([ConglomeratePositionDto]): an asset row, or a NESTED basket
+ * (`kind: "conglomerate"`, [childId] + [child]). Tolerant for the same reason.
+ */
 @Serializable
 data class SharedConglomeratePositionDto(
-    val assetId: String,
+    val kind: String = CONGLOMERATE_POSITION_ASSET,
+    val assetId: String? = null,
+    val childId: String? = null,
     val weightPct: Double,
     val sortOrder: Int = 0,
-    val asset: SharedAssetDto,
-)
+    val asset: SharedAssetDto? = null,
+    val child: ConglomerateChildDto? = null,
+) {
+    val isNested: Boolean get() = kind == CONGLOMERATE_POSITION_NESTED
+
+    /** A stable list key across both kinds. */
+    val rowKey: String get() = (if (isNested) "child:" + childId.orEmpty() else "asset:" + assetId.orEmpty())
+}
 
 // ── Named watchlists (V3-P5): /workboard/watchlists ──────────────────────────
 

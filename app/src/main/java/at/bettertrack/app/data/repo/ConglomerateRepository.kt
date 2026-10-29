@@ -6,7 +6,9 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.AllocateRequest
 import at.bettertrack.app.data.api.dto.BacktestPreviewRequest
 import at.bettertrack.app.data.api.dto.BacktestWeightDto
+import at.bettertrack.app.data.api.dto.CONGLOMERATE_POSITION_ASSET
 import at.bettertrack.app.data.api.dto.ConglomerateDetailResponse
+import at.bettertrack.app.data.api.dto.ConglomeratePositionDto
 import at.bettertrack.app.data.api.dto.CreateConglomerateRequest
 import at.bettertrack.app.data.api.dto.PositionWeightDto
 import at.bettertrack.app.data.api.dto.ReplacePositionsRequest
@@ -25,6 +27,11 @@ data class Conglomerate(
     val positionCount: Int,
 )
 
+/**
+ * One stored row of a basket: an asset, or — [childId] non-null — a NESTED
+ * basket (V5-P6). A nested row has no asset identity: [assetId], [symbol],
+ * [currency] and [type] are empty and [name] is the child basket's name.
+ */
 data class ConglomeratePosition(
     val assetId: String,
     val symbol: String,
@@ -32,7 +39,57 @@ data class ConglomeratePosition(
     val weightPct: Double,
     val currency: String,
     val type: String,
-)
+    val childId: String? = null,
+    /** The child basket's own row count (nested rows only). */
+    val childPositionCount: Int = 0,
+) {
+    val isNested: Boolean get() = childId != null
+
+    /** The id this row is saved under: the child's for a nested row, else the asset's. */
+    val refId: String get() = childId ?: assetId
+}
+
+/**
+ * One row of a positions save: [refId] is an asset id, or a child basket's id
+ * when [nested]. Kept as its own type so a nested row can never be sent as an
+ * `assetId` (the server would 400 it, or worse, drop the child).
+ */
+data class PositionWeight(val refId: String, val weightPct: Double, val nested: Boolean = false)
+
+/** The `PUT …/positions` row for [w] — exactly one of assetId / childId. */
+fun positionWeightDto(w: PositionWeight): PositionWeightDto =
+    if (w.nested) {
+        PositionWeightDto(childId = w.refId, weightPct = w.weightPct)
+    } else {
+        PositionWeightDto(assetId = w.refId, weightPct = w.weightPct)
+    }
+
+/**
+ * Wire row → domain row, or null for a row of neither recognisable shape (a
+ * future `kind`, or a branch missing its identity) — dropped rather than
+ * rendered as a blank asset.
+ */
+fun conglomeratePositionOf(p: ConglomeratePositionDto): ConglomeratePosition? =
+    if (p.isNested) {
+        val child = p.child
+        val id = p.childId ?: child?.id
+        if (id == null) {
+            null
+        } else {
+            ConglomeratePosition(
+                assetId = "", symbol = "", name = child?.name.orEmpty(), weightPct = p.weightPct,
+                currency = "", type = "", childId = id, childPositionCount = child?.positionCount ?: 0,
+            )
+        }
+    } else {
+        val asset = p.asset
+        val id = p.assetId
+        if (p.kind != CONGLOMERATE_POSITION_ASSET || asset == null || id == null) {
+            null
+        } else {
+            ConglomeratePosition(id, asset.symbol, asset.name, p.weightPct, asset.currency, asset.type)
+        }
+    }
 
 data class ConglomerateDetail(
     val id: String,
@@ -193,17 +250,31 @@ class ConglomerateRepository(
     suspend fun detail(id: String): BtResult<ConglomerateDetail> =
         map(apiCall(json) { api.conglomerateDetail(id) })
 
-    suspend fun replacePositions(id: String, weights: List<Pair<String, Double>>): BtResult<ConglomerateDetail> =
+    /**
+     * Replace the basket's rows. Nested rows go back as `childId` — a builder
+     * save of a basket that contains a child must keep the child, not drop it.
+     */
+    suspend fun replacePositions(id: String, weights: List<PositionWeight>): BtResult<ConglomerateDetail> =
         publish(
             map(
                 apiCall(json) {
                     api.replaceConglomeratePositions(
                         id,
-                        ReplacePositionsRequest(weights.map { PositionWeightDto(it.first, it.second) }),
+                        ReplacePositionsRequest(weights.map(::positionWeightDto)),
                     )
                 },
             ),
         )
+
+    /**
+     * The basket's effective ASSET weights (`GET …/resolved`) as backtest input:
+     * a nested basket's stored rows are not runnable positions (V5-P6).
+     */
+    suspend fun resolvedWeights(id: String): BtResult<List<Pair<String, Double>>> =
+        when (val r = apiCall(json) { api.conglomerateResolved(id) }) {
+            is BtResult.Ok -> BtResult.Ok(r.value.positions.map { it.assetId to it.weightPct })
+            is BtResult.Err -> r
+        }
 
     /**
      * Turn a budget into a server-computed buy list (§7.1 — never client math).
@@ -336,9 +407,7 @@ class ConglomerateRepository(
                 name = r.value.name,
                 description = r.value.description,
                 status = r.value.status,
-                positions = r.value.positions.sortedBy { it.sortOrder }.map {
-                    ConglomeratePosition(it.assetId, it.asset.symbol, it.asset.name, it.weightPct, it.asset.currency, it.asset.type)
-                },
+                positions = r.value.positions.sortedBy { it.sortOrder }.mapNotNull(::conglomeratePositionOf),
             ),
         )
 

@@ -58,6 +58,7 @@ import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.data.repo.ConglomerateRepository
+import at.bettertrack.app.data.repo.PositionWeight
 import at.bettertrack.app.data.repo.MarketAsset
 import at.bettertrack.app.data.repo.MarketRepository
 import at.bettertrack.app.di.AppGraph
@@ -81,7 +82,18 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-data class BuilderPosition(val asset: MarketAsset, val weightText: String)
+/**
+ * One editable row. A NESTED basket (V5-P6) rides the same row with
+ * [childPositionCount] set and [asset] standing in for its identity — `id` is
+ * the child basket's id, `name` its name — so a save sends it back as a
+ * `childId` instead of silently dropping it.
+ */
+data class BuilderPosition(
+    val asset: MarketAsset,
+    val weightText: String,
+    val nested: Boolean = false,
+    val childPositionCount: Int = 0,
+)
 
 @OptIn(FlowPreview::class)
 class ConglomerateBuilderViewModel(
@@ -130,8 +142,10 @@ class ConglomerateBuilderViewModel(
                     _name.value = r.value.name
                     _positions.value = r.value.positions.map {
                         BuilderPosition(
-                            MarketAsset(it.assetId, it.symbol, it.name, null, it.type, it.currency, false),
+                            MarketAsset(it.refId, it.symbol, it.name, null, it.type, it.currency, false),
                             trimWeight(it.weightPct),
+                            nested = it.isNested,
+                            childPositionCount = it.childPositionCount,
                         )
                     }
                 }
@@ -184,7 +198,9 @@ class ConglomerateBuilderViewModel(
         viewModelScope.launch {
             _busy.value = true
             _error.value = null
-            val weights = _positions.value.map { it.asset.id to (parseLocalizedDecimal(it.weightText) ?: 0.0) }
+            val weights = _positions.value.map {
+                PositionWeight(it.asset.id, parseLocalizedDecimal(it.weightText) ?: 0.0, nested = it.nested)
+            }
             val id = if (conglomerateId != null) {
                 conglomerateId
             } else {
@@ -317,8 +333,15 @@ private fun PositionRow(p: BuilderPosition, onWeight: (String) -> Unit, onRemove
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(p.asset.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                Text(p.asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (p.nested) {
+                    // A nested basket has no ticker: its name leads, and the
+                    // subline says what it is (the web's "Nested" badge).
+                    Text(p.asset.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(nestedBasketSubline(p.childPositionCount), style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                } else {
+                    Text(p.asset.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+                    Text(p.asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             OutlinedTextField(
                 value = p.weightText,
@@ -407,3 +430,8 @@ private fun BuilderSkeleton(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** The subline of a nested-basket row: what it is, and how many rows it holds. */
+@Composable
+internal fun nestedBasketSubline(positionCount: Int): String =
+    androidx.compose.ui.res.pluralStringResource(R.plurals.bt_conglo_nested_subline, positionCount, positionCount)

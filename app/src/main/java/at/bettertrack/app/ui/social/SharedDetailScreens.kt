@@ -228,7 +228,10 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                 item {
                     Text(stringResource(R.string.bt_social_composition), style = MaterialTheme.typography.titleSmall, color = BtTheme.colors.textPrimary)
                 }
-                items(d.positions, key = { it.assetId }) { p ->
+                // Rows of neither recognisable shape (a future kind, a branch
+                // missing its identity) are dropped rather than drawn blank.
+                val rows = d.positions.filter { if (it.isNested) it.child != null else it.asset != null }
+                items(rows, key = { it.rowKey }) { p ->
                     val bt = BtTheme.colors
                     BtCard(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -236,8 +239,22 @@ fun SharedConglomerateViewScreen(conglomerateId: String, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(p.asset.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
-                                Text(p.asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1)
+                                val child = p.child
+                                val asset = p.asset
+                                if (p.isNested && child != null) {
+                                    // Read-only: the child is the OWNER's basket, and
+                                    // sharing this one does not share that one.
+                                    Text(child.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary, maxLines = 1)
+                                    Text(
+                                        at.bettertrack.app.ui.conglomerate.nestedBasketSubline(child.positionCount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = bt.textMuted,
+                                        maxLines = 1,
+                                    )
+                                } else if (asset != null) {
+                                    Text(asset.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = bt.textPrimary)
+                                    Text(asset.name, style = MaterialTheme.typography.bodySmall, color = bt.textMuted, maxLines = 1)
+                                }
                             }
                             Text(
                                 formatPercent(p.weightPct, locale, showSign = false),

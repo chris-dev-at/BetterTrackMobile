@@ -1746,6 +1746,7 @@ private fun BtSheetHost(
                 onBack = back,
                 onEdit = { id -> navController.navigate(ConglomerateBuilderRoute(id)) },
                 onDelete = back,
+                onOpenChild = { id -> navController.navigate(ConglomerateDetailRoute(id)) },
             )
         }
 
