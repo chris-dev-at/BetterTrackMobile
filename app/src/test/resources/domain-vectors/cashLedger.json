@@ -188,6 +188,364 @@
    "throws": null
   },
   {
+   "fn": "FLOOR_CENTS_EXACT_LIMIT_EUR",
+   "case": "the quantization bound: 2^42 € (#1523)",
+   "input": {},
+   "output": 4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 just below the limit: a sub-cent residue still floors away (4398046511103.0009765625)",
+   "input": {
+    "amountEur": 4398046511103.001
+   },
+   "output": 4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 just below the limit: a whole cent still survives (4398046511103.25)",
+   "input": {
+    "amountEur": 4398046511103.25
+   },
+   "output": 4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 just below the limit: a whole cent still survives, negative (-4398046511103.25)",
+   "input": {
+    "amountEur": -4398046511103.25
+   },
+   "output": -4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity at the limit (2^42)",
+   "input": {
+    "amountEur": 4398046511104
+   },
+   "output": 4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity above the limit (2^42 + 0.0068359375)",
+   "input": {
+    "amountEur": 4398046511104.007
+   },
+   "output": 4398046511104.007,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the old formula rounded 5e13 + one ULP UP ~9 cents (50000000000000.0078125)",
+   "input": {
+    "amountEur": 50000000000000.01
+   },
+   "output": 50000000000000.01,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the headline case (1e14)",
+   "input": {
+    "amountEur": 100000000000000
+   },
+   "output": 100000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the headline case, negative (-1e14)",
+   "input": {
+    "amountEur": -100000000000000
+   },
+   "output": -100000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: MAX_SAFE_INTEGER / 100",
+   "input": {
+    "amountEur": 90071992547409.9
+   },
+   "output": 90071992547409.9,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the 2^53/100 boundary itself (90000000000000.015625)",
+   "input": {
+    "amountEur": 90000000000000.02
+   },
+   "output": 90000000000000.02,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the vault-report row range, 999999999999999.875 (#1514)",
+   "input": {
+    "amountEur": 999999999999999.9
+   },
+   "output": 999999999999999.9,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 identity: the vault-report row bound, 1e15 (#1514)",
+   "input": {
+    "amountEur": 1000000000000000
+   },
+   "output": 1000000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(1234.56)",
+   "input": {
+    "amountEur": 1234.56
+   },
+   "output": 1234.56,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(1234.56)",
+   "input": {
+    "amountEur": 1234.56
+   },
+   "output": 1234.56,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-1234.56)",
+   "input": {
+    "amountEur": -1234.56
+   },
+   "output": -1234.56,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(1000000000000.004)",
+   "input": {
+    "amountEur": 1000000000000.004
+   },
+   "output": 1000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(1000000000000)",
+   "input": {
+    "amountEur": 1000000000000
+   },
+   "output": 1000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-1000000000000.004)",
+   "input": {
+    "amountEur": -1000000000000.004
+   },
+   "output": -1000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(4398046511103.001)",
+   "input": {
+    "amountEur": 4398046511103.001
+   },
+   "output": 4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(4398046511103)",
+   "input": {
+    "amountEur": 4398046511103
+   },
+   "output": 4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-4398046511103.001)",
+   "input": {
+    "amountEur": -4398046511103.001
+   },
+   "output": -4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(4398046511103.25)",
+   "input": {
+    "amountEur": 4398046511103.25
+   },
+   "output": 4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(4398046511103.25)",
+   "input": {
+    "amountEur": 4398046511103.25
+   },
+   "output": 4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-4398046511103.25)",
+   "input": {
+    "amountEur": -4398046511103.25
+   },
+   "output": -4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(4398046511104)",
+   "input": {
+    "amountEur": 4398046511104
+   },
+   "output": 4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(4398046511104)",
+   "input": {
+    "amountEur": 4398046511104
+   },
+   "output": 4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-4398046511104)",
+   "input": {
+    "amountEur": -4398046511104
+   },
+   "output": -4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(4398046511104.25)",
+   "input": {
+    "amountEur": 4398046511104.25
+   },
+   "output": 4398046511104.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(4398046511104.25)",
+   "input": {
+    "amountEur": 4398046511104.25
+   },
+   "output": 4398046511104.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-4398046511104.25)",
+   "input": {
+    "amountEur": -4398046511104.25
+   },
+   "output": -4398046511104.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(90000000000000)",
+   "input": {
+    "amountEur": 90000000000000
+   },
+   "output": 90000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(90000000000000)",
+   "input": {
+    "amountEur": 90000000000000
+   },
+   "output": 90000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-90000000000000)",
+   "input": {
+    "amountEur": -90000000000000
+   },
+   "output": -90000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(100000000000000.25)",
+   "input": {
+    "amountEur": 100000000000000.25
+   },
+   "output": 100000000000000.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(100000000000000.25)",
+   "input": {
+    "amountEur": 100000000000000.25
+   },
+   "output": 100000000000000.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-100000000000000.25)",
+   "input": {
+    "amountEur": -100000000000000.25
+   },
+   "output": -100000000000000.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: floorCents(1000000000000000)",
+   "input": {
+    "amountEur": 1000000000000000
+   },
+   "output": 1000000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: idempotence probe, floorCents(1000000000000000)",
+   "input": {
+    "amountEur": 1000000000000000
+   },
+   "output": 1000000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "#1523 sweep: sign symmetry probe, floorCents(-1000000000000000)",
+   "input": {
+    "amountEur": -1000000000000000
+   },
+   "output": -1000000000000000,
+   "throws": null
+  },
+  {
    "fn": "cashBalance",
    "case": "is the sum of signed movements across a mixed sequence",
    "input": {

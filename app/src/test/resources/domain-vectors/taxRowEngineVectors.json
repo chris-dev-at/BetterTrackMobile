@@ -1,0 +1,805 @@
+{
+ "source": "packages/domain/src/taxVectors/rowEngine.ts",
+ "livingRegimes": [
+  "none",
+  "manual",
+  "AT",
+  "DE",
+  "FI",
+  "custom"
+ ],
+ "vectors": [
+  {
+   "id": "legacy buy row (null mode) / living none",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "legacy buy row (null mode) / living manual",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "legacy buy row (null mode) / living AT",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "legacy buy row (null mode) / living DE",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "legacy buy row (null mode) / living FI",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "legacy buy row (null mode) / living custom",
+   "row": {
+    "taxMode": null,
+    "taxCountry": null
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "none-mode row / living none",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "none-mode row / living manual",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "none-mode row / living AT",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "none-mode row / living DE",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "none-mode row / living FI",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "none-mode row / living custom",
+   "row": {
+    "taxMode": "none",
+    "taxCountry": null
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "manual row / living none",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "none",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "manual row / living manual",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "manual row / living AT",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "manual row / living DE",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "manual row / living FI",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "manual row / living custom",
+   "row": {
+    "taxMode": "manual_per_trade",
+    "taxCountry": null
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "manual"
+   }
+  },
+  {
+   "id": "AT-frozen row / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "AT-frozen row / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "AT-frozen row / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "AT-frozen row / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "AT-frozen row / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "AT-frozen row / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT"
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "DE-frozen row / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "DE-frozen row / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "DE-frozen row / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "DE-frozen row / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "DE-frozen row / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "DE-frozen row / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "DE"
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "FI-frozen row / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "FI-frozen row / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "FI-frozen row / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "FI-frozen row / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "FI-frozen row / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "FI-frozen row / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "FI"
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "legacy V3-P4 country_specific row with a null country (settles as AT) / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": null
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "custom-frozen row / living none",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "none",
+   "expected": {
+    "engine": "none"
+   }
+  },
+  {
+   "id": "custom-frozen row / living manual",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "manual",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "custom-frozen row / living AT",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "AT",
+   "expected": {
+    "engine": "AT"
+   }
+  },
+  {
+   "id": "custom-frozen row / living DE",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "DE",
+   "expected": {
+    "engine": "DE"
+   }
+  },
+  {
+   "id": "custom-frozen row / living FI",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "FI",
+   "expected": {
+    "engine": "FI"
+   }
+  },
+  {
+   "id": "custom-frozen row / living custom",
+   "row": {
+    "taxMode": "custom",
+    "taxCountry": null
+   },
+   "living": "custom",
+   "expected": {
+    "engine": "custom"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "none",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "manual",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "AT",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "DE",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "FI",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row frozen under an unwired country (US) / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "US"
+   },
+   "living": "custom",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "none",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "manual",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "AT",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "DE",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "FI",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a lower-case country code (never coerced) / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "de"
+   },
+   "living": "custom",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "none",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "manual",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "AT",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "DE",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "FI",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with a padded country code (never trimmed) / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": "AT "
+   },
+   "living": "custom",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living none",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "none",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living manual",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "manual",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living AT",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "AT",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living DE",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "DE",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living FI",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "FI",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  },
+  {
+   "id": "country_specific row with an empty country string (not the legacy null) / living custom",
+   "row": {
+    "taxMode": "country_specific",
+    "taxCountry": ""
+   },
+   "living": "custom",
+   "expected": {
+    "throws": "unsupported-country"
+   }
+  }
+ ]
+}

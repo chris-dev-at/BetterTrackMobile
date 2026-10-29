@@ -1,13 +1,13 @@
 {
  "generatedFrom": "tools/domain-vectors/vendor (see PINNED_AT)",
- "pinnedAt": "cb530f7e30a2ce3502e708f4b05711d1d0bde685",
- "note": "Regenerate with: node --experimental-strip-types tools/domain-vectors/generate.ts",
+ "pinnedAt": "ef73d282d487ff4c4b177d7462fc090e4a0d96e5",
+ "note": "Regenerate with: node --experimental-transform-types tools/domain-vectors/generate.ts",
  "counts": {
   "holdings": 104,
-  "seriesStats": 41,
+  "seriesStats": 112,
   "settingsScope": 9,
-  "cashLedger": 191,
-  "tax": 273,
+  "cashLedger": 231,
+  "tax": 378,
   "serverTwrParity": 4
  },
  "byFunction": {
@@ -22,19 +22,24 @@
    "rebasePerformance": 3
   },
   "seriesStats": {
-   "computeSeriesStats": 10,
+   "computeSeriesStats": 13,
    "toPerformanceSeries": 4,
    "deflateSeries": 8,
    "indexAveragePctPerYear": 5,
    "computeContributions": 5,
-   "compareSeriesStats": 9
+   "compareSeriesStats": 9,
+   "timeWeightedReturn": 16,
+   "computeTwrStats": 15,
+   "modifiedDietz": 8,
+   "modifiedDietzReturn": 29
   },
   "settingsScope": {
    "resolvePortfolioSetting": 9
   },
   "cashLedger": {
-   "floorCents": 19,
+   "floorCents": 58,
    "cashBalance": 18,
+   "FLOOR_CENTS_EXACT_LIMIT_EUR": 1,
    "applyCashMovement": 16,
    "projectCashLedger": 24,
    "cashBalanceOverTime": 5,
@@ -57,7 +62,10 @@
    "TAX_CONSTANTS": 1,
    "initialCustomCarry": 1,
    "costBasisStrategyForCountry": 6,
-   "floorCents": 32,
+   "floorCents": 44,
+   "taxEngineForRow": 75,
+   "frozenTaxCountryEngine": 10,
+   "costBasisStrategyForEngine": 8,
    "viennaYearOf": 6,
    "realizedSellsEur": 61,
    "atYearTargetEur": 8,
@@ -78,7 +86,7 @@
    "timeWeightedReturn": 4
   }
  },
- "totalVectors": 622,
+ "totalVectors": 838,
  "skipped": [
   {
    "fn": "reducePosition",
@@ -109,6 +117,36 @@
    "fn": "deflateSeries",
    "case": "returns a FRESH array / fresh points (not.toBe identity checks)",
    "reason": "referential-identity assertion; the Kotlin port returns new lists by construction, so there is nothing to replay"
+  },
+  {
+   "fn": "computeTwrStats",
+   "case": "reads the market return out of a portfolio the user kept paying into (twr.cagrPct < valueCagrPct / 5)",
+   "reason": "an INEQUALITY between two calls (the TWR CAGR against a fifth of the value CAGR); both sides travel as vectors, the relation is hand-ported in DomainHandPortedTest (\"computeTwrStats reads a return, not value growth\")"
+  },
+  {
+   "fn": "computeTwrStats",
+   "case": "agrees with the value CAGR exactly when the portfolio has no flows (toBeCloseTo 12 between two calls)",
+   "reason": "an approximate EQUALITY between two calls (`computeTwrStats(twr).cagrPct` vs `computeSeriesStats(values).cagrPct`); both sides travel as vectors, the relation is hand-ported in DomainHandPortedTest (\"computeTwrStats agrees with the value CAGR when nothing was paid in\")"
+  },
+  {
+   "fn": "modifiedDietz",
+   "case": "fails loud on the money path: NaN start value / infinite flow",
+   "reason": "inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in DomainHandPortedTest (\"modifiedDietz rejects a non-finite window\")"
+  },
+  {
+   "fn": "modifiedDietzReturn",
+   "case": "sorts on a copy and mutates nothing (the mutation half)",
+   "reason": "asserts the CALLER’s array keeps its order, which is a property of the call, not of its output — hand-ported in DomainHandPortedTest (\"modifiedDietzReturn sorts on a copy and mutates nothing\")"
+  },
+  {
+   "fn": "modifiedDietzReturn",
+   "case": "throws on non-finite value / non-finite flow",
+   "reason": "inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in DomainHandPortedTest (\"modifiedDietzReturn rejects a non-finite value and a non-finite flow\")"
+  },
+  {
+   "fn": "floorCents",
+   "case": "never fabricates a cent and stays idempotent across the limit (#1523) — the three relations",
+   "reason": "relations between calls (|floorCents(v) − v| < 0.01, floorCents(floorCents(v)) === floorCents(v), floorCents(−v) === −floorCents(v)); every call travels as a vector above, the relations are hand-ported in CashLedgerHandPortedTest (\"floorCents never fabricates a cent and stays idempotent across the #1523 limit\")"
   },
   {
    "fn": "floorCents",
@@ -162,6 +200,11 @@
   },
   {
    "fn": "floorCents",
+   "case": "mirrors the cashLedger quantization limit exactly (#1523) — FLOOR_CENTS_EXACT_LIMIT_EUR equality",
+   "reason": "cross-module identity (tax.FLOOR_CENTS_EXACT_LIMIT_EUR === cashLedger.FLOOR_CENTS_EXACT_LIMIT_EUR): a vector records ONE module's constant (it travels inside TAX_CONSTANTS and as the cashLedger constant vector), it cannot assert the two ports agree — hand-ported in TaxHandPortedTest (\"the tax quantization limit mirrors the cashLedger one\")"
+  },
+  {
+   "fn": "floorCents",
    "case": "matches cashLedger.floorCents on the boundary cases exactly",
    "reason": "cross-module identity (tax.floorCents === cashLedger.floorCents on 12 values): a vector records ONE function's output, it cannot assert two ports agree — hand-ported in TaxHandPortedTest (\"tax floorCents matches the cashLedger floorCents on every boundary case\")"
   },
@@ -174,6 +217,21 @@
    "fn": "floorCents",
    "case": "returns POSITIVE zero for a floored-away negative",
    "reason": "signed-zero identity: JSON carries no -0 (the generator refuses to emit one) — hand-ported in TaxHandPortedTest (\"floorCents never returns negative zero\")"
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "names the offending country in the classification error and never falls through to AT (err.taxCountry / err.name)",
+   "reason": "asserts the TaxRowClassificationError's FIELDS (`taxCountry` is the offending literal, `name` is the class name), not merely that it threw with that message — hand-ported in TaxRowEngineHandPortedTest"
+  },
+  {
+   "fn": "taxRowEngine/taxEngineForRow (shared classifier)",
+   "case": "spans every living regime with every row family exactly once",
+   "reason": "taxRowEngine.test.ts asserts the committed TRUTH TABLE itself (the six living regimes in order, 12 families × 6 regimes = 72 unique ids) and replays each row against the table's own DECLARED `expected` block. The generator records what the engine RETURNED (the `taxEngineForRow` vectors above), so a vector alone could never catch the engine and the declaration drifting apart. The table is emitted verbatim as taxRowEngineVectors.json and hand-ported in TaxRowEngineHandPortedTest against the DECLARED outcomes — the storageDriftVectors precedent."
+  },
+  {
+   "fn": "taxRowEngine/taxEngineForRow (shared classifier)",
+   "case": "reproduces the committed vector (against the DECLARED expectation)",
+   "reason": "taxRowEngine.test.ts asserts the committed TRUTH TABLE itself (the six living regimes in order, 12 families × 6 regimes = 72 unique ids) and replays each row against the table's own DECLARED `expected` block. The generator records what the engine RETURNED (the `taxEngineForRow` vectors above), so a vector alone could never catch the engine and the declaration drifting apart. The table is emitted verbatim as taxRowEngineVectors.json and hand-ported in TaxRowEngineHandPortedTest against the DECLARED outcomes — the storageDriftVectors precedent."
   },
   {
    "fn": "settleAtYear",

@@ -48,14 +48,22 @@ Update `PINNED_AT` when you re-vendor.
 
 ## Regenerating the vectors
 
-Requires only Node (built-in TypeScript type-stripping, Node ≥ 22). There is
+Requires only Node (the built-in TypeScript transform, Node ≥ 22.7). There is
 **no `node_modules`, no lockfile, and nothing was installed into the platform
 monorepo.** `package.json` here declares `"type": "module"` and a script alias;
 it pulls no dependencies.
 
+Since the `ef73d282` re-pin the loader mode is `--experimental-transform-types`,
+not `--experimental-strip-types`: `tax.ts` declares `TaxRowClassificationError`
+with a TypeScript *parameter property* (`constructor(message, readonly
+taxCountry)`), which strip-only mode refuses because it has runtime meaning.
+Transform mode is the same zero-dependency built-in; it desugars that one
+construct and leaves every number literal and expression alone — regenerating
+under it reproduced all 622 pre-existing vectors byte-identically.
+
 ```sh
 cd tools/domain-vectors
-node --experimental-strip-types generate.ts     # or: npm run generate
+node --experimental-transform-types generate.ts     # or: npm run generate
 ```
 
 Outputs, all overwritten in place:
@@ -63,17 +71,21 @@ Outputs, all overwritten in place:
 | File | Contents |
 |---|---|
 | `app/src/test/resources/domain-vectors/holdings.json` | vectors for `reducePosition`, `deriveHoldings`, `dailyCloseSeries`, `valueOverTime`, `costBasisOverTime` (incl. the `costBasisOverTime` half of `dailySnapshotSeries.test.ts`), `netFlowsOverTime`, `timeWeightedReturn`, `rebasePerformance` |
-| `app/src/test/resources/domain-vectors/seriesStats.json` | vectors for `computeSeriesStats`, `toPerformanceSeries`, `deflateSeries`, `indexAveragePctPerYear`, `computeContributions`, `compareSeriesStats` |
+| `app/src/test/resources/domain-vectors/seriesStats.json` | vectors for `computeSeriesStats`, `toPerformanceSeries`, `deflateSeries`, `indexAveragePctPerYear`, `computeContributions`, `compareSeriesStats`, `computeTwrStats` (#1759), `modifiedDietz` + `modifiedDietzReturn` (#1669), and the `timeWeightedReturn` companions the two suites pin the new figures against |
 | `app/src/test/resources/domain-vectors/settingsScope.json` | vectors for `resolvePortfolioSetting` |
-| `app/src/test/resources/domain-vectors/cashLedger.json` | vectors for `floorCents`, `cashBalance`, `applyCashMovement`, `projectCashLedger`, `spendableAsOf`, `cashBalanceOverTime`, `cashBalancesBySource`, `projectCashLedgerBySource`, `cashBySourceOverTime` (the ledger half of `dailySnapshotSeries.test.ts`), `pairedTransferMovements`, `setBalanceDelta`, `setBalanceMovement`, `netWorthSeries`, `isExternalCashMovement`, `externalCashFlowsForTwr`, the three exported constants, and the `timeWeightedReturn` compositions the ledger feeds |
+| `app/src/test/resources/domain-vectors/cashLedger.json` | vectors for `floorCents`, `cashBalance`, `applyCashMovement`, `projectCashLedger`, `spendableAsOf`, `cashBalanceOverTime`, `cashBalancesBySource`, `projectCashLedgerBySource`, `cashBySourceOverTime` (the ledger half of `dailySnapshotSeries.test.ts`), `pairedTransferMovements`, `setBalanceDelta`, `setBalanceMovement`, `netWorthSeries`, `isExternalCashMovement`, `externalCashFlowsForTwr`, the four exported constants (incl. the #1523 `FLOOR_CENTS_EXACT_LIMIT_EUR` bound), and the `timeWeightedReturn` compositions the ledger feeds |
+| `app/src/test/resources/domain-vectors/tax.json` | vectors for every exported `tax.ts` function and constant (`tax.test.ts`, `deTaxEngine.test.ts`, `customTax.test.ts`, the `deTaxFixtures.ts` scenarios, and since `ef73d282` the row-engine classifier `taxEngineForRow` / `frozenTaxCountryEngine` / `costBasisStrategyForEngine` of `taxRowEngine.test.ts`) |
+| `app/src/test/resources/domain-vectors/deTaxFixtures.json` | the #576 DE fixture catalog, emitted **verbatim** — fixture-data consistency, hand-ported in `DeTaxFixturesHandPortedTest` |
+| `app/src/test/resources/domain-vectors/taxRowEngineVectors.json` | #1512's committed row-engine truth table (`taxVectors/rowEngine.ts`), emitted **verbatim** — the DECLARED outcome of every (row shape × living regime) pair, asserted in `TaxRowEngineHandPortedTest` |
 | `app/src/test/resources/domain-vectors/serverTwrParity.json` | the server-generated TWR golden, reshaped as `timeWeightedReturn` inputs |
 | `app/src/test/resources/domain-vectors/storageDriftVectors.json` | #1094's two shared storage-drift vectors, emitted **verbatim** — rows *and* the `expected` block that declares what every replay of them must produce |
 | `app/src/test/resources/domain-vectors/MANIFEST.json` | per-module counts + every case the generator deliberately skipped, with a reason |
 
 `holdings.json`, `seriesStats.json`, `settingsScope.json` and `serverTwrParity.json`
 replay through `DomainVectorTest`; `cashLedger.json` replays through its sibling
-`CashLedgerVectorTest`. Both runners share the decoding, encoding and comparison
-plumbing in `DomainVectors.kt`, so "exact" means the same thing in both.
+`CashLedgerVectorTest`, `tax.json` through `TaxVectorTest`. All three runners
+share the decoding, encoding and comparison plumbing in `DomainVectors.kt`, so
+"exact" means the same thing in each.
 
 ### Shapes JSON cannot carry natively
 
@@ -146,7 +158,16 @@ tests in `app/src/test/java/at/bettertrack/app/domain/DomainHandPortedTest.kt`
   emitted verbatim instead and asserted in `StorageDriftVectorsHandPortedTest`,
   which drives both replays (`reducePosition`, `realizedSellsEur` under both
   cost-basis strategies) against the declared values — the closing half of the
-  fixture header's "both vectors must replay identically there"
+  fixture header's "both vectors must replay identically there". The same rule
+  covers #1512's row-engine truth table (`taxVectors/rowEngine.ts`, "READ THE
+  EXPECTATIONS AS DATA, NOT AS A RULE"): the `taxEngineForRow` vectors record
+  what the engine returned, the table's own `expected` block is emitted verbatim
+  as `taxRowEngineVectors.json` and asserted in `TaxRowEngineHandPortedTest`
+- **relations between two calls** — an inequality or a `toBeCloseTo` between two
+  engine results (`computeTwrStats(twr).cagrPct < computeSeriesStats(values).cagrPct / 5`,
+  the no-flows near-equality of the two statistics, `floorCents` idempotence and
+  sign symmetry across the #1523 bound, the cross-module constant equalities).
+  Both sides travel as vectors; the relation is hand-ported
 
 ---
 

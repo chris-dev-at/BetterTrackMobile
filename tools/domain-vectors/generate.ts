@@ -9,7 +9,15 @@
  * Expected values are never typed by hand — everything in `output` / `throws`
  * comes back from the vendored engine at full double precision.
  *
- * Run:  node --experimental-strip-types generate.ts
+ * Run:  node --experimental-transform-types generate.ts
+ *
+ * (`--experimental-transform-types`, not `--experimental-strip-types`, since the
+ * ef73d282 re-pin: `tax.ts` declares `TaxRowClassificationError` with a
+ * TypeScript parameter property — `constructor(message, readonly taxCountry)` —
+ * which strip-only mode refuses as syntax with runtime meaning. Transform mode
+ * is the same zero-dependency built-in loader; it desugars that one construct
+ * and leaves every number literal and expression untouched — the regenerated
+ * pre-existing vectors are byte-identical, which is the proof.)
  */
 
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -27,22 +35,30 @@ import {
   timeWeightedReturn,
   valueOverTime,
   type CurrencyConverter,
+  type FlowPoint,
   type HoldingAssetInput,
   type PricePoint,
   type Transaction,
   type ValueOverTimeAsset,
+  type ValuePoint,
 } from './vendor/domain/src/holdings.ts';
 import {
   compareSeriesStats,
   computeContributions,
   computeSeriesStats,
+  computeTwrStats,
   deflateSeries,
   indexAveragePctPerYear,
+  modifiedDietz,
+  modifiedDietzReturn,
   toPerformanceSeries,
   type ComparisonMetricVector,
   type ComparisonSeriesInput,
   type ContributionInput,
   type Deflator,
+  type DietzAnchor,
+  type DietzWindow,
+  type PerfPoint,
   type StatSeriesPoint,
 } from './vendor/domain/src/seriesStats.ts';
 import { resolvePortfolioSetting } from './vendor/domain/src/settingsScope.ts';
@@ -67,6 +83,7 @@ import {
   cashBySourceOverTime,
   EXTERNAL_CASH_MOVEMENT_KINDS,
   externalCashFlowsForTwr,
+  FLOOR_CENTS_EXACT_LIMIT_EUR,
   floorCents,
   isExternalCashMovement,
   netWorthSeries,
@@ -88,6 +105,7 @@ import {
   atYearTargetEur,
   COST_BASIS_STRATEGIES,
   costBasisStrategyForCountry,
+  costBasisStrategyForEngine,
   customCarryForYears,
   customYearOutcome,
   DE_KAPEST_RATE,
@@ -100,7 +118,9 @@ import {
   FI_CAPITAL_INCOME_RATE,
   FI_HIGH_RATE_THRESHOLD_EUR,
   fiYearTargetEur,
+  FLOOR_CENTS_EXACT_LIMIT_EUR as TAX_FLOOR_CENTS_EXACT_LIMIT_EUR,
   floorCents as taxFloorCents,
+  frozenTaxCountryEngine,
   initialCustomCarry,
   manualTaxEur,
   QTY_EPSILON as TAX_QTY_EPSILON,
@@ -116,6 +136,7 @@ import {
   TAX_COUNTRY_FI,
   TAX_MODES,
   TAX_YEAR_TIME_ZONE,
+  taxEngineForRow,
   taxMovementForDelta,
   viennaYearOf,
   type AtYearSettlementInput,
@@ -126,7 +147,18 @@ import {
   type DeYearAggregates,
   type NewAtEvent,
   type TaxableTransaction,
+  type TaxRowEngine,
+  type TaxRowEngineFacts,
 } from './vendor/domain/src/tax.ts';
+// #1512's committed row-engine truth table (#1626). Imported from `rowEngine.ts`
+// DIRECTLY rather than through `taxVectors/index.ts`: that barrel re-exports
+// with an extension-less `'./rowEngine'` specifier, which Node's ESM loader
+// does not resolve under `--experimental-strip-types` (every other import in
+// this file spells its `.ts`). Same data, same literals.
+import {
+  TAX_ROW_ENGINE_VECTOR_LIVING_REGIMES,
+  TAX_ROW_ENGINE_VECTORS,
+} from './vendor/domain/src/taxVectors/rowEngine.ts';
 import {
   DE_TAX_FIXTURES,
   type DeTaxFixtureScenario,
@@ -1483,6 +1515,508 @@ function genSeriesStats(): void {
   cmp('rejects duplicate ids', [cmpInput('a'), cmpInput('a')], 'a');
 }
 
+
+// ===========================================================================
+// seriesStats.ts — computeTwrStats (#1759, V5-P6b) and the Modified Dietz
+// money-weighted window (#1669, §16 2026-09-14)
+// ===========================================================================
+//
+// Sources replayed here, case for case:
+//   src/__tests__/seriesStats.test.ts   describe('computeTwrStats — a return, not value growth (#1759)')
+//   src/__tests__/modifiedDietz.test.ts (the whole file)
+//
+// Both suites pin the new figure AGAINST the served TWR of the same fixture:
+// `twrPct()` runs `timeWeightedReturn(values, flows)` and, for a re-based
+// window, `computeTwrStats(curve)`. Those companions are emitted as their own
+// vectors — the same end-to-end staging the ledger compositions use — so the
+// Kotlin port replays every stage against the REAL intermediate the TS
+// produced, never against a hand-built curve. The relations the suites then
+// assert between two calls (`twr.cagrPct < valueCagrPct / 5`, `toBeCloseTo`
+// between the two statistics) are skipped here and hand-ported.
+
+const DIETZ_DAY = 86_400_000;
+
+/** modifiedDietz.test.ts `v()` — a value point (frozen there; plain here, JSON carries no freeze). */
+function vp(date: string, valueEur: number): ValuePoint {
+  return { date, valueEur };
+}
+
+/** modifiedDietz.test.ts `f()` — a flow point. */
+function fp(date: string, flowEur: number): FlowPoint {
+  return { date, flowEur };
+}
+
+/** seriesStats.test.ts `monthlyRate()` — geometric monthly equivalent of an annual rate (%/yr). */
+function monthlyRate(annualPct: number): number {
+  return Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+}
+
+/** seriesStats.test.ts `monthStart()` — first-of-month ISO day, `months` after 2021-01. */
+function monthStart(months: number): string {
+  const zeroBased = 2021 * 12 + months;
+  const year = Math.floor(zeroBased / 12);
+  const month = (zeroBased % 12) + 1;
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+/**
+ * seriesStats.test.ts `savingsFixture()` — five years of month-end points from
+ * €10,000 earning a TRUE 6 %/yr with a €500/month contribution paid in at the
+ * start of each month; `contribution: 0` is the no-flows control case. The
+ * values are produced by the TS `Math.pow` here and travel in the vector, so
+ * the Kotlin side never has to reproduce the fixture's own arithmetic.
+ */
+function savingsFixture(contribution: number): { values: ValuePoint[]; flows: FlowPoint[] } {
+  const m = monthlyRate(6);
+  const values: ValuePoint[] = [{ date: monthStart(0), valueEur: 10_000 }];
+  const flows: FlowPoint[] = [];
+  for (let step = 1; step <= 60; step += 1) {
+    const previous = values[step - 1]!.valueEur;
+    values.push({ date: monthStart(step), valueEur: (previous + contribution) * (1 + m) });
+    if (contribution !== 0) flows.push({ date: monthStart(step), flowEur: contribution });
+  }
+  return { values, flows };
+}
+
+const twrCurve = (name: string, values: ValuePoint[], flows: FlowPoint[]): void =>
+  emit('seriesStats', 'timeWeightedReturn', name, { values, flows }, () =>
+    timeWeightedReturn(values, flows),
+  );
+
+const twrStats = (name: string, performance: PerfPoint[], deflator: Deflator | null = null): void =>
+  emit('seriesStats', 'computeTwrStats', name, { performance, deflator }, () =>
+    computeTwrStats(performance, deflator),
+  );
+
+/**
+ * The two stages of modifiedDietz.test.ts `twrPct()`: the served curve, and —
+ * for a re-based range slice — `computeTwrStats` over it. Under the inception
+ * anchor the helper reads the curve's last point, which the curve vector
+ * itself pins.
+ */
+function twrPctCompanions(
+  name: string,
+  values: ValuePoint[],
+  flows: FlowPoint[],
+  anchor: DietzAnchor,
+): void {
+  twrCurve(`${name} — twrPct companion: the served curve`, values, flows);
+  if (anchor === 'first-point') {
+    twrStats(
+      `${name} — twrPct companion: computeTwrStats over the served curve`,
+      timeWeightedReturn(values, flows),
+    );
+  }
+}
+
+function genComputeTwrStats(): void {
+  const valueStats = (name: string, values: ValuePoint[]): void => {
+    const series = values.map((p) => ({ date: p.date, value: p.valueEur }));
+    emit('seriesStats', 'computeSeriesStats', name, { series }, () => computeSeriesStats(series));
+  };
+
+  // "reads the market return out of a portfolio the user kept paying into"
+  const saver = savingsFixture(500);
+  valueStats(
+    "#1759 saver: the OLD statistic — the value curve's CAGR reads the user's own deposits back as performance",
+    saver.values,
+  );
+  twrCurve('#1759 saver: €10,000 + €500/month at a true 6 %/yr for five years', saver.values, saver.flows);
+  const saverCurve = timeWeightedReturn(saver.values, saver.flows);
+  twrStats('reads the market return out of a portfolio the user kept paying into', saverCurve);
+  skip(
+    'computeTwrStats',
+    'reads the market return out of a portfolio the user kept paying into (twr.cagrPct < valueCagrPct / 5)',
+    'an INEQUALITY between two calls (the TWR CAGR against a fifth of the value CAGR); both sides travel as vectors, the relation is hand-ported in DomainHandPortedTest ("computeTwrStats reads a return, not value growth")',
+  );
+
+  // "agrees with the value CAGR exactly when the portfolio has no flows"
+  const hold = savingsFixture(0);
+  valueStats('#1759 buy-and-hold control: the value CAGR with nothing paid in', hold.values);
+  twrCurve('#1759 buy-and-hold control: the same market path with no flows at all', hold.values, hold.flows);
+  twrStats(
+    'agrees with the value CAGR exactly when the portfolio has no flows',
+    timeWeightedReturn(hold.values, hold.flows),
+  );
+  skip(
+    'computeTwrStats',
+    'agrees with the value CAGR exactly when the portfolio has no flows (toBeCloseTo 12 between two calls)',
+    'an approximate EQUALITY between two calls (`computeTwrStats(twr).cagrPct` vs `computeSeriesStats(values).cagrPct`); both sides travel as vectors, the relation is hand-ported in DomainHandPortedTest ("computeTwrStats agrees with the value CAGR when nothing was paid in")',
+  );
+
+  // "rebases a since-inception curve onto the window it is handed"
+  const sinceInception: PerfPoint[] = [
+    { date: '2023-01-01', pct: 0 },
+    { date: '2024-01-01', pct: 100 },
+    { date: '2025-01-01', pct: 120 },
+  ];
+  twrStats(
+    'rebases a since-inception curve onto the window it is handed: the 1Y slice reads its own +10 %',
+    sinceInception.slice(1),
+  );
+  twrStats(
+    'rebases a since-inception curve onto the window it is handed: the whole curve reads +120 %',
+    sinceInception,
+  );
+
+  // "states real terms when a deflator is applied, like the value series does"
+  twrStats(
+    'states real terms when a deflator is applied, like the value series does (6 %/yr nominal vs 6 %/yr inflation)',
+    saverCurve,
+    { kind: 'flat', pctPerYear: 6 },
+  );
+
+  // "is null when the window cannot state a return at all"
+  twrStats('is null when the window cannot state a return at all: an empty series', []);
+  twrStats('is null when the window cannot state a return at all: a base at -100 % is a zero index', [
+    { date: '2024-01-01', pct: -100 },
+  ]);
+  twrStats('one point is a real window with no elapsed time: a total, but no rate', [
+    { date: '2024-01-01', pct: 0 },
+  ]);
+}
+
+function genModifiedDietz(): void {
+  const md = (name: string, window: DietzWindow): void =>
+    emit('seriesStats', 'modifiedDietz', name, { window }, () => modifiedDietz(window));
+
+  // --- modifiedDietz — the instant-based core ------------------------------
+  md('weights a mid-window inflow by the fraction of the window remaining', {
+    startMs: 0,
+    endMs: 10 * DIETZ_DAY,
+    startValue: 1000,
+    endValue: 1650,
+    flows: [{ atMs: 4 * DIETZ_DAY, amount: 500 }],
+  });
+  md('a flow at the window start weighs 1, a flow at the window end weighs 0', {
+    startMs: 100,
+    endMs: 100 + 5 * DIETZ_DAY,
+    startValue: 1000,
+    endValue: 1300,
+    flows: [
+      { atMs: 100, amount: 200 },
+      { atMs: 100 + 5 * DIETZ_DAY, amount: -300 },
+    ],
+  });
+  md('ignores flows before the start (inside the start value) and after the end (not yet happened)', {
+    startMs: 10,
+    endMs: 20,
+    startValue: 100,
+    endValue: 110,
+    flows: [
+      { atMs: 9, amount: 1_000_000 },
+      { atMs: 21, amount: -1_000_000 },
+    ],
+  });
+  md('a zero-length window weighs its own instant flow as the capital (no 0/0)', {
+    startMs: 7,
+    endMs: 7,
+    startValue: 100,
+    endValue: 100,
+    flows: [{ atMs: 7, amount: 100 }],
+  });
+  md('null when the window has no capital: no capital at all', {
+    startMs: 0,
+    endMs: DIETZ_DAY,
+    startValue: 0,
+    endValue: 0,
+    flows: [],
+  });
+  md('null when the window has no capital: withdrawal outweighs the start value (denominator -50)', {
+    startMs: 0,
+    endMs: 2 * DIETZ_DAY,
+    startValue: 100,
+    endValue: 100,
+    flows: [{ atMs: DIETZ_DAY, amount: -300 }],
+  });
+  md('null when the window has no capital: float dust below EPSILON is no capital either', {
+    startMs: 0,
+    endMs: DIETZ_DAY,
+    startValue: 1e-12,
+    endValue: 5,
+    flows: [],
+  });
+  md('fails loud on the money path: window runs backwards', {
+    startMs: 5,
+    endMs: 4,
+    startValue: 1,
+    endValue: 1,
+    flows: [],
+  });
+  skip(
+    'modifiedDietz',
+    'fails loud on the money path: NaN start value / infinite flow',
+    'inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in DomainHandPortedTest ("modifiedDietz rejects a non-finite window")',
+  );
+
+  // --- modifiedDietzReturn — daily series + the TWR's own flow convention ---
+  const mdr = (name: string, values: ValuePoint[], flows: FlowPoint[], anchor: DietzAnchor): void =>
+    emit(
+      'seriesStats',
+      'modifiedDietzReturn',
+      name,
+      { values, flows, window: { anchor } },
+      () => modifiedDietzReturn(values, flows, { anchor }),
+    );
+
+  // (i) the reported shape: TWR deep red, Dietz clearly positive
+  {
+    const values = [
+      vp('2025-01-01', 100),
+      vp('2025-01-02', 34),
+      vp('2025-01-11', 100_034),
+      vp('2025-01-21', 150_051),
+    ];
+    const flows = [fp('2025-01-01', 100), fp('2025-01-11', 100_000)];
+    twrPctCompanions(
+      '(i) the since-inception TWR chains 1 · 0.34 · 1 · 1.5 = 0.51 → -49 %',
+      values,
+      flows,
+      'inception',
+    );
+    mdr('(i) the money-weighted MAX figure is +95.18 %', values, flows, 'inception');
+  }
+
+  // (ii) no flows: Dietz == total return == TWR
+  {
+    const values = [
+      vp('2024-03-01', 100),
+      vp('2024-03-02', 110),
+      vp('2024-03-03', 99),
+      vp('2024-03-04', 120.45),
+    ];
+    const series = values.map((p) => ({ date: p.date, value: p.valueEur }));
+    emit('seriesStats', 'computeSeriesStats', '(ii) no flows: the value series total return (20.45 %)', { series }, () =>
+      computeSeriesStats(series),
+    );
+    twrPctCompanions('(ii) no flows: anchor first-point', values, [], 'first-point');
+    twrPctCompanions('(ii) no flows: anchor inception', values, [], 'inception');
+    mdr('(ii) no flows: anchor first-point: (120.45 - 100) / 100 = 20.45 %', values, [], 'first-point');
+    mdr('(ii) no flows: anchor inception: (120.45 - 100) / 100 = 20.45 %', values, [], 'inception');
+  }
+  {
+    const values = [vp('2024-05-01', 104), vp('2024-05-02', 150)];
+    const flows = [fp('2024-05-01', 100)];
+    twrPctCompanions(
+      '(ii) MAX with only the inception buy: bought intraday at 100, closed 104, now 150',
+      values,
+      flows,
+      'inception',
+    );
+    twrPctCompanions(
+      '(ii) MAX with only the inception buy: the same window as a re-based slice',
+      values,
+      flows,
+      'first-point',
+    );
+    mdr(
+      '(ii) MAX with only the inception buy: bought intraday at 100, closed 104, now 150 → both +50 %',
+      values,
+      flows,
+      'inception',
+    );
+    mdr(
+      '(ii) MAX with only the inception buy: the same window as a re-based slice reads 150/104 - 1',
+      values,
+      flows,
+      'first-point',
+    );
+  }
+
+  // (iii) a withdrawal-only window
+  {
+    const values = [
+      vp('2024-01-01', 1000),
+      vp('2024-01-02', 1000),
+      vp('2024-01-03', 700),
+      vp('2024-01-04', 700),
+      vp('2024-01-05', 700),
+    ];
+    const flows = [fp('2024-01-03', -400)];
+    twrPctCompanions('(iii) a withdrawal-only window', values, flows, 'first-point');
+    mdr(
+      '(iii) 1 000 → +100 on the day 400 leaves → 700: (700 - 1 000 + 400) / (1 000 - 0.5·400) = 12.5 %',
+      values,
+      flows,
+      'first-point',
+    );
+  }
+
+  // (iv) no capital → null
+  {
+    const values = [vp('2024-02-01', 100), vp('2024-02-02', 100), vp('2024-02-03', 100)];
+    const flows = [fp('2024-02-02', -300)];
+    twrPctCompanions(
+      '(iv) a withdrawal larger than the start value (400 earned, 300 taken, denominator -50)',
+      values,
+      flows,
+      'first-point',
+    );
+    mdr(
+      '(iv) a withdrawal larger than the start value (400 earned, 300 taken, denominator -50)',
+      values,
+      flows,
+      'first-point',
+    );
+  }
+  mdr(
+    '(iv) a zero start value with nothing flowing in',
+    [vp('2024-02-01', 0), vp('2024-02-02', 0)],
+    [],
+    'first-point',
+  );
+  mdr(
+    '(iv) a zero start value that money later fills is fine: 0 → +100 → 110 = 10 %',
+    [vp('2024-02-01', 0), vp('2024-02-02', 100), vp('2024-02-03', 110)],
+    [fp('2024-02-02', 100)],
+    'first-point',
+  );
+  mdr('(iv) an empty series has no window at all', [], [], 'inception');
+
+  // single-period parity with the TWR daily link
+  {
+    const values = [vp('2024-04-01', 1000), vp('2024-04-02', 1650)];
+    const flows = [fp('2024-04-02', 500)];
+    twrPctCompanions('single-period parity: inflow', values, flows, 'first-point');
+    mdr('single-period parity: inflow: 1 000, +500 arrives, closes 1 650 → both +10 %', values, flows, 'first-point');
+  }
+  {
+    const values = [vp('2024-04-01', 1000), vp('2024-04-02', 600)];
+    const flows = [fp('2024-04-02', -500)];
+    twrPctCompanions('single-period parity: outflow', values, flows, 'first-point');
+    mdr('single-period parity: outflow: 1 000, gains 100, 500 leaves at the close → both +10 %', values, flows, 'first-point');
+  }
+  {
+    const values = [vp('2024-04-01', 1000), vp('2024-04-02', 1320)];
+    const flows = [fp('2024-04-02', 300), fp('2024-04-02', -100)];
+    twrPctCompanions('single-period parity: same-day flows net first', values, flows, 'first-point');
+    mdr(
+      'single-period parity: same-day flows net first (+300 and -100 = one +200 inflow at the day start)',
+      values,
+      flows,
+      'first-point',
+    );
+  }
+
+  // flows on the first / last day and the window edges
+  {
+    const values = [vp('2024-06-01', 1000), vp('2024-06-02', 1100), vp('2024-06-03', 1210)];
+    mdr(
+      'a first-day flow is inside the start value on a slice: with the flow',
+      values,
+      [fp('2024-06-01', 1000)],
+      'first-point',
+    );
+    mdr('a first-day flow is inside the start value on a slice: without it', values, [], 'first-point');
+  }
+  mdr(
+    'a last-day inflow is at work for one day of the window (weight 1/T)',
+    [vp('2024-06-01', 1000), vp('2024-06-02', 1000), vp('2024-06-03', 1500)],
+    [fp('2024-06-03', 500)],
+    'first-point',
+  );
+  mdr(
+    'a last-day outflow leaves at the window end (weight 0)',
+    [vp('2024-06-01', 1000), vp('2024-06-02', 1000), vp('2024-06-03', 500)],
+    [fp('2024-06-03', -500)],
+    'first-point',
+  );
+  {
+    const values = [vp('2024-06-02', 1000), vp('2024-06-03', 1100)];
+    const flows = [fp('2024-05-30', 999_999), fp('2024-06-04', -999_999)];
+    mdr(
+      'flows dated before the window or after its last point are ignored (as the TWR ignores them): first-point',
+      values,
+      flows,
+      'first-point',
+    );
+    mdr(
+      'flows dated before the window or after its last point are ignored (as the TWR ignores them): inception degrades to the first-point window',
+      values,
+      flows,
+      'inception',
+    );
+  }
+  mdr(
+    'a flow on an in-window day without a value point still counts (sparse series)',
+    [vp('2024-06-01', 1000), vp('2024-06-05', 1650)],
+    [fp('2024-06-03', 500)],
+    'first-point',
+  );
+
+  // the inception anchor
+  {
+    const values = [vp('2024-07-01', 104)];
+    const flows = [fp('2024-07-01', 100)];
+    twrPctCompanions('inception: a single MAX day', values, flows, 'inception');
+    mdr(
+      'inception: a single MAX day: bought at 100, closed at 104 → +4 % (= the TWR day-one link)',
+      values,
+      flows,
+      'inception',
+    );
+  }
+  mdr(
+    'a single-day slice has no elapsed time and no counted flow → 0 % on a positive value',
+    [vp('2024-07-01', 104)],
+    [fp('2024-07-01', 100)],
+    'first-point',
+  );
+  mdr('a single-day slice on a zero value → null', [vp('2024-07-01', 0)], [], 'first-point');
+  {
+    const values = [vp('2024-07-01', 900), vp('2024-07-02', 990)];
+    const flows = [fp('2024-07-01', 1000), fp('2024-07-01', -200)];
+    twrPctCompanions('inception: a first-day outflow leaves at that close', values, flows, 'inception');
+    mdr(
+      'inception: a first-day outflow under inception leaves at that close (weight n/(n+1)) → 23.75 %',
+      values,
+      flows,
+      'inception',
+    );
+  }
+  {
+    const values = [vp('2024-08-01', 5000), vp('2024-08-02', 5500)];
+    twrPctCompanions('inception: day one brings nothing in (FX-truncated history)', values, [], 'inception');
+    mdr(
+      'inception: degrades to the first-point window when day one brings nothing in (FX-truncated history)',
+      values,
+      [],
+      'inception',
+    );
+  }
+  {
+    const values = [vp('2024-08-01', 0), vp('2024-08-02', 0), vp('2024-08-03', 1100)];
+    const flows = [fp('2024-08-01', 1000)];
+    twrPctCompanions('inception: a pre-price buy (#218)', values, flows, 'inception');
+    mdr(
+      'inception: a pre-price buy (#218): money in before the first value point is the basis',
+      values,
+      flows,
+      'inception',
+    );
+  }
+
+  // input discipline
+  mdr(
+    'sorts on a copy and mutates nothing (unsorted input)',
+    [vp('2024-09-03', 1210), vp('2024-09-01', 1000), vp('2024-09-02', 1100)],
+    [fp('2024-09-02', 0)],
+    'first-point',
+  );
+  skip(
+    'modifiedDietzReturn',
+    'sorts on a copy and mutates nothing (the mutation half)',
+    'asserts the CALLER’s array keeps its order, which is a property of the call, not of its output — hand-ported in DomainHandPortedTest ("modifiedDietzReturn sorts on a copy and mutates nothing")',
+  );
+  skip(
+    'modifiedDietzReturn',
+    'throws on non-finite value / non-finite flow',
+    'inputs are Number.NaN / Infinity, which JSON cannot represent — hand-ported in DomainHandPortedTest ("modifiedDietzReturn rejects a non-finite value and a non-finite flow")',
+  );
+  mdr('throws on malformed value date', [vp('2024/09/01', 1)], [], 'first-point');
+  mdr('throws on malformed flow date', [vp('2024-09-01', 1)], [fp('yesterday', 1)], 'inception');
+}
+
 // ===========================================================================
 // cashLedger.ts  (+ the cashBySourceOverTime half of dailySnapshotSeries.test.ts;
 // W2 already covered that file's costBasisOverTime half under `holdings`)
@@ -1596,6 +2130,57 @@ function genFloorCents(): void {
   );
   run('makes withdraw-all safe: the reported balance', trueBalance);
   run('makes withdraw-all safe: the residue after withdrawing it', trueBalance - floorCents(trueBalance));
+
+  // #1523 (platform #1542): the quantizer is bounded at 2^42 € and degrades to
+  // the identity above it. The bound itself is a contract constant.
+  cash(
+    'FLOOR_CENTS_EXACT_LIMIT_EUR',
+    'the quantization bound: 2^42 € (#1523)',
+    {},
+    () => FLOOR_CENTS_EXACT_LIMIT_EUR,
+  );
+
+  // "still quantizes exactly just below the 2^42 limit (#1523 boundary)"
+  run('#1523 just below the limit: a sub-cent residue still floors away (4398046511103.0009765625)', 4398046511103.0009765625);
+  run('#1523 just below the limit: a whole cent still survives (4398046511103.25)', 4398046511103.25);
+  run('#1523 just below the limit: a whole cent still survives, negative (-4398046511103.25)', -4398046511103.25);
+
+  // "passes amounts at and above the limit through unchanged (#1523)"
+  run('#1523 identity at the limit (2^42)', FLOOR_CENTS_EXACT_LIMIT_EUR);
+  run('#1523 identity above the limit (2^42 + 0.0068359375)', 2 ** 42 + 0.0068359375);
+  run('#1523 identity: the old formula rounded 5e13 + one ULP UP ~9 cents (50000000000000.0078125)', 50000000000000.0078125);
+  run('#1523 identity: the headline case (1e14)', 1e14);
+  run('#1523 identity: the headline case, negative (-1e14)', -1e14);
+  run('#1523 identity: MAX_SAFE_INTEGER / 100', Number.MAX_SAFE_INTEGER / 100);
+  run('#1523 identity: the 2^53/100 boundary itself (90000000000000.015625)', 90000000000000.015625);
+  run('#1523 identity: the vault-report row range, 999999999999999.875 (#1514)', 999999999999999.875);
+  run('#1523 identity: the vault-report row bound, 1e15 (#1514)', 1e15);
+
+  // "never fabricates a cent and stays idempotent across the limit (#1523)":
+  // every call of the sweep is recorded; the three RELATIONS the suite asserts
+  // (|floored − value| < 0.01, idempotence, sign symmetry) are hand-ported.
+  const sweep = [
+    1234.56,
+    1000000000000.004,
+    4398046511103.0009765625,
+    4398046511103.25,
+    2 ** 42,
+    2 ** 42 + 0.25,
+    9e13,
+    1e14 + 0.25,
+    1e15,
+  ];
+  for (const value of sweep) {
+    const floored = floorCents(value);
+    run(`#1523 sweep: floorCents(${value})`, value);
+    run(`#1523 sweep: idempotence probe, floorCents(${floored})`, floored);
+    run(`#1523 sweep: sign symmetry probe, floorCents(${-value})`, -value);
+  }
+  skip(
+    'floorCents',
+    'never fabricates a cent and stays idempotent across the limit (#1523) — the three relations',
+    'relations between calls (|floorCents(v) − v| < 0.01, floorCents(floorCents(v)) === floorCents(v), floorCents(−v) === −floorCents(v)); every call travels as a vector above, the relations are hand-ported in CashLedgerHandPortedTest ("floorCents never fabricates a cent and stays idempotent across the #1523 limit")',
+  );
 
   skip(
     'floorCents',
@@ -2893,6 +3478,7 @@ function genTaxConstants(): void {
     TAX_YEAR_TIME_ZONE,
     QTY_EPSILON: TAX_QTY_EPSILON,
     QTY_STORAGE_QUANTUM,
+    FLOOR_CENTS_EXACT_LIMIT_EUR: TAX_FLOOR_CENTS_EXACT_LIMIT_EUR,
     AT_AS_CUSTOM_PARAMS: { ...AT_AS_CUSTOM_PARAMS },
   }));
 
@@ -2932,6 +3518,32 @@ function genTaxFloorCents(): void {
   run('parity case 0.1 + 0.2', 0.1 + 0.2);
   run('parity case 123.456', 123.456);
   run('parity case -76.545', -76.545);
+  // #1523 (platform #1542): the large-magnitude parity cases across the 2^42
+  // quantization limit — just below (still quantized), at, and far above
+  // (identity), including the 2^53/100 ≈ 9e13 boundary and the 1e15 bound.
+  run('parity case 4398046511103.0009765625 (#1523)', 4398046511103.0009765625);
+  run('parity case 4398046511103.25 (#1523)', 4398046511103.25);
+  run('parity case 2 ** 42 (#1523)', 2 ** 42);
+  run('parity case 2 ** 42 + 0.0068359375 (#1523)', 2 ** 42 + 0.0068359375);
+  run('parity case 50000000000000.0078125 (#1523)', 50000000000000.0078125);
+  run('parity case MAX_SAFE_INTEGER / 100 (#1523)', Number.MAX_SAFE_INTEGER / 100);
+  run('parity case 1e14 (#1523)', 1e14);
+  run('parity case -1e14 (#1523)', -1e14);
+  run('parity case 1e15 (#1523)', 1e15);
+
+  // "mirrors the cashLedger quantization limit exactly (#1523)" — the values;
+  // the constant equality itself is a two-module relation, hand-ported.
+  run('mirrors the cashLedger quantization limit: identity at 1e14', 1e14);
+  run(
+    'mirrors the cashLedger quantization limit: identity at the limit + 0.0068359375',
+    TAX_FLOOR_CENTS_EXACT_LIMIT_EUR + 0.0068359375,
+  );
+  run('mirrors the cashLedger quantization limit: still floors just below it', 4398046511103.0009765625);
+  skip(
+    'floorCents',
+    'mirrors the cashLedger quantization limit exactly (#1523) — FLOOR_CENTS_EXACT_LIMIT_EUR equality',
+    'cross-module identity (tax.FLOOR_CENTS_EXACT_LIMIT_EUR === cashLedger.FLOOR_CENTS_EXACT_LIMIT_EUR): a vector records ONE module\'s constant (it travels inside TAX_CONSTANTS and as the cashLedger constant vector), it cannot assert the two ports agree — hand-ported in TaxHandPortedTest ("the tax quantization limit mirrors the cashLedger one")',
+  );
 
   // "floors down (never rounds up) despite float representation".
   run('floors down: 1.005 -> 1.00', 1.005);
@@ -2974,6 +3586,83 @@ function genTaxFloorCents(): void {
     'returns POSITIVE zero for a floored-away negative',
     'signed-zero identity: JSON carries no -0 (the generator refuses to emit one) — hand-ported in TaxHandPortedTest ("floorCents never returns negative zero")',
   );
+}
+
+// --- the row-engine classifier (#1512, landed by #1626) ----------------------
+//
+// Sources replayed here, case for case:
+//   src/__tests__/taxRowEngine.test.ts  (11 it() cases incl. the 72-row it.each)
+//   src/taxVectors/rowEngine.ts         (the committed truth table it replays)
+
+function genTaxRowEngine(): void {
+  const row = (name: string, facts: TaxRowEngineFacts, living: TaxRowEngine): void =>
+    taxEmit('taxEngineForRow', name, { row: facts, living }, () => taxEngineForRow(facts, living));
+
+  // "reproduces the committed vector: %s" — every (row shape × living regime)
+  // pair of the table, recorded as what the engine RETURNED. The table's own
+  // DECLARED `expected` block is emitted verbatim (taxRowEngineVectors.json)
+  // and asserted in TaxRowEngineHandPortedTest, the storageDriftVectors precedent.
+  for (const vector of TAX_ROW_ENGINE_VECTORS) {
+    row(`committed vector: ${vector.id}`, vector.row, vector.living);
+  }
+
+  // "names the offending country in the classification error and never falls
+  // through to AT" — the throw + message travel here; the error's FIELDS
+  // (`taxCountry`, `name`) are hand-ported.
+  row(
+    'names the offending country in the classification error: "US" under living AT',
+    { taxMode: 'country_specific', taxCountry: 'US' },
+    'AT',
+  );
+  row(
+    'never falls through to AT: a lower-case "de" under living manual',
+    { taxMode: 'country_specific', taxCountry: 'de' },
+    'manual',
+  );
+  row(
+    'rejects an unknown frozen mode rather than guessing an engine (flat_rate)',
+    { taxMode: 'flat_rate' as unknown as 'none', taxCountry: null },
+    'manual',
+  );
+  skip(
+    'taxEngineForRow',
+    'names the offending country in the classification error and never falls through to AT (err.taxCountry / err.name)',
+    "asserts the TaxRowClassificationError's FIELDS (`taxCountry` is the offending literal, `name` is the class name), not merely that it threw with that message — hand-ported in TaxRowEngineHandPortedTest",
+  );
+
+  const frozen = (name: string, taxCountry: string | null): void =>
+    taxEmit('frozenTaxCountryEngine', name, { taxCountry }, () => frozenTaxCountryEngine(taxCountry));
+  frozen('legacy null settles as AT', null);
+  frozen('AT maps to itself', 'AT');
+  frozen('DE maps to itself', 'DE');
+  frozen('FI maps to itself', 'FI');
+  for (const country of ['US', 'de', 'AT ', '', 'FI\n', 'DEU']) {
+    frozen(`fails LOUD on ${JSON.stringify(country)}`, country);
+  }
+
+  const strategy = (
+    name: string,
+    engine: TaxRowEngine,
+    custom: { costBasis: CostBasisStrategy } | null,
+  ): void =>
+    taxEmit('costBasisStrategyForEngine', name, { engine, custom }, () =>
+      costBasisStrategyForEngine(engine, custom),
+    );
+  strategy('AT → moving-average without custom parameters', 'AT', null);
+  strategy('DE → fifo without custom parameters', 'DE', null);
+  strategy('FI → fifo without custom parameters', 'FI', null);
+  strategy('none → moving-average without custom parameters', 'none', null);
+  strategy('manual → moving-average without custom parameters', 'manual', null);
+  strategy('custom takes the basis from the parameter snapshot: fifo', 'custom', { costBasis: 'fifo' });
+  strategy('custom takes the basis from the parameter snapshot: moving-average', 'custom', {
+    costBasis: 'moving-average',
+  });
+  strategy('refuses a custom row without a parameter snapshot', 'custom', null);
+
+  const reason =
+    "taxRowEngine.test.ts asserts the committed TRUTH TABLE itself (the six living regimes in order, 12 families × 6 regimes = 72 unique ids) and replays each row against the table's own DECLARED `expected` block. The generator records what the engine RETURNED (the `taxEngineForRow` vectors above), so a vector alone could never catch the engine and the declaration drifting apart. The table is emitted verbatim as taxRowEngineVectors.json and hand-ported in TaxRowEngineHandPortedTest against the DECLARED outcomes — the storageDriftVectors precedent.";
+  skip('taxRowEngine/taxEngineForRow (shared classifier)', 'spans every living regime with every row family exactly once', reason);
+  skip('taxRowEngine/taxEngineForRow (shared classifier)', 'reproduces the committed vector (against the DECLARED expectation)', reason);
 }
 
 // --- viennaYearOf ----------------------------------------------------------
@@ -4095,6 +4784,8 @@ async function main(): Promise<void> {
   genTimeWeightedReturn();
   genRebasePerformance();
   genSeriesStats();
+  genComputeTwrStats();
+  genModifiedDietz();
   genFloorCents();
   genCashBalance();
   genApplyCashMovement();
@@ -4110,6 +4801,7 @@ async function main(): Promise<void> {
   genSettingsScope();
   genTaxConstants();
   genTaxFloorCents();
+  genTaxRowEngine();
   genViennaYearOf();
   genRealizedSellsEur();
   genAtEngine();
@@ -4146,6 +4838,18 @@ async function main(): Promise<void> {
     `${JSON.stringify({ source: 'packages/domain/src/__tests__/storageDriftVectors.ts', rawBuyQuantity: F1_RAW_BUY_QUANTITY, rawSellQuantity: F1_RAW_SELL_QUANTITY, vectors: STORAGE_DRIFT_VECTORS }, null, 1)}\n`,
   );
 
+  // #1512's committed row-engine truth table verbatim (#1626). The
+  // `taxEngineForRow` vectors above record what the engine RETURNED for every
+  // (row shape × living regime) pair; `rowEngine.ts` also DECLARES what each
+  // pair must yield (`expected.engine` / `expected.throws`). Asserting the
+  // Kotlin classifier against those declared outcomes, the regime order and
+  // the 12 × 6 unique-id shape is a data assertion rather than an engine call —
+  // hand-ported in TaxRowEngineHandPortedTest against this file.
+  writeFileSync(
+    join(OUT_DIR, 'taxRowEngineVectors.json'),
+    `${JSON.stringify({ source: 'packages/domain/src/taxVectors/rowEngine.ts', livingRegimes: TAX_ROW_ENGINE_VECTOR_LIVING_REGIMES, vectors: TAX_ROW_ENGINE_VECTORS }, null, 1)}\n`,
+  );
+
   // The raw server-generated golden, copied byte-identically so the Kotlin
   // golden gate reads the platform's own artifact rather than a reshaping of it.
   copyFileSync(
@@ -4168,8 +4872,8 @@ async function main(): Promise<void> {
 
   const manifest = {
     generatedFrom: 'tools/domain-vectors/vendor (see PINNED_AT)',
-    pinnedAt: 'cb530f7e30a2ce3502e708f4b05711d1d0bde685',
-    note: 'Regenerate with: node --experimental-strip-types tools/domain-vectors/generate.ts',
+    pinnedAt: 'ef73d282d487ff4c4b177d7462fc090e4a0d96e5',
+    note: 'Regenerate with: node --experimental-transform-types tools/domain-vectors/generate.ts',
     counts,
     byFunction: byFn,
     totalVectors: Object.values(counts).reduce((a, b) => a + b, 0),

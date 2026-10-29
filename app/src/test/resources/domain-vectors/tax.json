@@ -34,6 +34,7 @@
     "TAX_YEAR_TIME_ZONE": "Europe/Vienna",
     "QTY_EPSILON": 1e-9,
     "QTY_STORAGE_QUANTUM": 1e-8,
+    "FLOOR_CENTS_EXACT_LIMIT_EUR": 4398046511104,
     "AT_AS_CUSTOM_PARAMS": {
      "ratePct": 27.5,
      "lossOffset": true,
@@ -218,6 +219,114 @@
   },
   {
    "fn": "floorCents",
+   "case": "parity case 4398046511103.0009765625 (#1523)",
+   "input": {
+    "amountEur": 4398046511103.001
+   },
+   "output": 4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 4398046511103.25 (#1523)",
+   "input": {
+    "amountEur": 4398046511103.25
+   },
+   "output": 4398046511103.25,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 2 ** 42 (#1523)",
+   "input": {
+    "amountEur": 4398046511104
+   },
+   "output": 4398046511104,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 2 ** 42 + 0.0068359375 (#1523)",
+   "input": {
+    "amountEur": 4398046511104.007
+   },
+   "output": 4398046511104.007,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 50000000000000.0078125 (#1523)",
+   "input": {
+    "amountEur": 50000000000000.01
+   },
+   "output": 50000000000000.01,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case MAX_SAFE_INTEGER / 100 (#1523)",
+   "input": {
+    "amountEur": 90071992547409.9
+   },
+   "output": 90071992547409.9,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 1e14 (#1523)",
+   "input": {
+    "amountEur": 100000000000000
+   },
+   "output": 100000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case -1e14 (#1523)",
+   "input": {
+    "amountEur": -100000000000000
+   },
+   "output": -100000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "parity case 1e15 (#1523)",
+   "input": {
+    "amountEur": 1000000000000000
+   },
+   "output": 1000000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "mirrors the cashLedger quantization limit: identity at 1e14",
+   "input": {
+    "amountEur": 100000000000000
+   },
+   "output": 100000000000000,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "mirrors the cashLedger quantization limit: identity at the limit + 0.0068359375",
+   "input": {
+    "amountEur": 4398046511104.007
+   },
+   "output": 4398046511104.007,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
+   "case": "mirrors the cashLedger quantization limit: still floors just below it",
+   "input": {
+    "amountEur": 4398046511103.001
+   },
+   "output": 4398046511103,
+   "throws": null
+  },
+  {
+   "fn": "floorCents",
    "case": "floors down: 1.005 -> 1.00",
    "input": {
     "amountEur": 1.005
@@ -395,6 +504,1257 @@
    },
    "output": -1234567.89,
    "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living none",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living manual",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living AT",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living DE",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living FI",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy buy row (null mode) / living custom",
+   "input": {
+    "row": {
+     "taxMode": null,
+     "taxCountry": null
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living none",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: none-mode row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "none",
+     "taxCountry": null
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living none",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "none"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "AT"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "DE"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "FI"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: manual row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "manual_per_trade",
+     "taxCountry": null
+    },
+    "living": "custom"
+   },
+   "output": "manual",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "manual"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: AT-frozen row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT"
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "manual"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: DE-frozen row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "DE"
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "manual"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: FI-frozen row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "FI"
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: legacy V3-P4 country_specific row with a null country (settles as AT) / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": null
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living none",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "none"
+   },
+   "output": "none",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living manual",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living AT",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living DE",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living FI",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: custom-frozen row / living custom",
+   "input": {
+    "row": {
+     "taxMode": "custom",
+     "taxCountry": null
+    },
+    "living": "custom"
+   },
+   "output": "custom",
+   "throws": null
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "none"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "AT"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "DE"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "FI"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row frozen under an unwired country (US) / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "custom"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "none"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "AT"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "DE"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "FI"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a lower-case country code (never coerced) / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "custom"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "none"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "AT"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "DE"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "FI"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with a padded country code (never trimmed) / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "AT "
+    },
+    "living": "custom"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living none",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "none"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "AT"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living DE",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "DE"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living FI",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "FI"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "committed vector: country_specific row with an empty country string (not the legacy null) / living custom",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": ""
+    },
+    "living": "custom"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "names the offending country in the classification error: \"US\" under living AT",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "US"
+    },
+    "living": "AT"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "never falls through to AT: a lower-case \"de\" under living manual",
+   "input": {
+    "row": {
+     "taxMode": "country_specific",
+     "taxCountry": "de"
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "taxEngineForRow",
+   "case": "rejects an unknown frozen mode rather than guessing an engine (flat_rate)",
+   "input": {
+    "row": {
+     "taxMode": "flat_rate",
+     "taxCountry": null
+    },
+    "living": "manual"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: unknown frozen tax mode \"flat_rate\""
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "legacy null settles as AT",
+   "input": {
+    "taxCountry": null
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "AT maps to itself",
+   "input": {
+    "taxCountry": "AT"
+   },
+   "output": "AT",
+   "throws": null
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "DE maps to itself",
+   "input": {
+    "taxCountry": "DE"
+   },
+   "output": "DE",
+   "throws": null
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "FI maps to itself",
+   "input": {
+    "taxCountry": "FI"
+   },
+   "output": "FI",
+   "throws": null
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"US\"",
+   "input": {
+    "taxCountry": "US"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"US\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"de\"",
+   "input": {
+    "taxCountry": "de"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"de\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"AT \"",
+   "input": {
+    "taxCountry": "AT "
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"AT \" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"\"",
+   "input": {
+    "taxCountry": ""
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"FI\\n\"",
+   "input": {
+    "taxCountry": "FI\n"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"FI\n\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "frozenTaxCountryEngine",
+   "case": "fails LOUD on \"DEU\"",
+   "input": {
+    "taxCountry": "DEU"
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: no settlement component for frozen tax country \"DEU\" — wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules"
+   }
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "AT → moving-average without custom parameters",
+   "input": {
+    "engine": "AT",
+    "custom": null
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "DE → fifo without custom parameters",
+   "input": {
+    "engine": "DE",
+    "custom": null
+   },
+   "output": "fifo",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "FI → fifo without custom parameters",
+   "input": {
+    "engine": "FI",
+    "custom": null
+   },
+   "output": "fifo",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "none → moving-average without custom parameters",
+   "input": {
+    "engine": "none",
+    "custom": null
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "manual → moving-average without custom parameters",
+   "input": {
+    "engine": "manual",
+    "custom": null
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "custom takes the basis from the parameter snapshot: fifo",
+   "input": {
+    "engine": "custom",
+    "custom": {
+     "costBasis": "fifo"
+    }
+   },
+   "output": "fifo",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "custom takes the basis from the parameter snapshot: moving-average",
+   "input": {
+    "engine": "custom",
+    "custom": {
+     "costBasis": "moving-average"
+    }
+   },
+   "output": "moving-average",
+   "throws": null
+  },
+  {
+   "fn": "costBasisStrategyForEngine",
+   "case": "refuses a custom row without a parameter snapshot",
+   "input": {
+    "engine": "custom",
+    "custom": null
+   },
+   "output": null,
+   "throws": {
+    "name": "TaxRowClassificationError",
+    "message": "Tax engine: a custom-engine row has no cost-basis parameter snapshot"
+   }
   },
   {
    "fn": "viennaYearOf",

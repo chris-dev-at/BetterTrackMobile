@@ -98,7 +98,7 @@ export const FI_HIGH_RATE_THRESHOLD_EUR = 30_000;
 /**
  * The countries the `country_specific` engine ships (#635). Adding a country =
  * add it here + a settle function below + the service-level engine entry
- * (`services/tax/openYear.ts` documents the full checklist).
+ * (`services/tax/livingYear.ts` documents the full checklist).
  */
 export const SUPPORTED_TAX_COUNTRIES = [TAX_COUNTRY_AT, TAX_COUNTRY_DE, TAX_COUNTRY_FI] as const;
 export type SupportedTaxCountry = (typeof SUPPORTED_TAX_COUNTRIES)[number];
@@ -117,6 +117,118 @@ export type CostBasisStrategy = (typeof COST_BASIS_STRATEGIES)[number];
 /** The cost-basis strategy a tax country mandates (DE/FI = FIFO, AT = average). */
 export function costBasisStrategyForCountry(country: string | null | undefined): CostBasisStrategy {
   return country === TAX_COUNTRY_DE || country === TAX_COUNTRY_FI ? 'fifo' : 'moving-average';
+}
+
+// ---------------------------------------------------------------------------
+// Row-engine classification (#1512) — ONE classifier for both tax engines
+// ---------------------------------------------------------------------------
+
+/**
+ * The tax modes a persisted sell/dividend row can be frozen under
+ * (`transactions.tax_mode` / `dividends.tax_mode`); `null` on a buy or a row
+ * recorded before the tax engine existed.
+ */
+export type TaxRowMode = 'none' | 'manual_per_trade' | 'country_specific' | 'custom';
+
+/**
+ * The engine a row settles under: no engine, the user's own stated fact, one
+ * of the shipped country engines, or the custom parameter engine. This is
+ * also the vocabulary of a LIVING regime (what the portfolio's current
+ * settings put every derivable row under).
+ */
+export type TaxRowEngine = 'none' | 'manual' | SupportedTaxCountry | 'custom';
+
+/** The frozen facts the classifier reads off a row — nothing else. */
+export interface TaxRowEngineFacts {
+  taxMode: TaxRowMode | null;
+  taxCountry: string | null;
+}
+
+/**
+ * A row the classifier refuses to place: a `country_specific` row frozen under
+ * a country no engine is wired for, or an unknown mode. Both sides fail LOUD
+ * on it (server: `rowEngineCountry`, #669; client: `TAX_MODE_UNSUPPORTED`) —
+ * a row that cannot be classified must never fall through into the AT pool.
+ */
+export class TaxRowClassificationError extends Error {
+  constructor(
+    message: string,
+    readonly taxCountry: string | null,
+  ) {
+    super(message);
+    this.name = 'TaxRowClassificationError';
+  }
+}
+
+/**
+ * Narrow a frozen `tax_country` to a shipped engine. Legacy V3-P4 rows carry
+ * `null` and settle as AT; the three shipped countries are themselves; any
+ * OTHER value — including a re-cased or padded spelling — throws.
+ *
+ * This is the SINGLE narrowing both engines use (`rowEngineCountry` on the
+ * server, the frozen-row branch of the client `taxRegimeForRow`).
+ */
+export function frozenTaxCountryEngine(taxCountry: string | null): SupportedTaxCountry {
+  if (taxCountry === null || taxCountry === TAX_COUNTRY_AT) return TAX_COUNTRY_AT;
+  if (taxCountry === TAX_COUNTRY_DE || taxCountry === TAX_COUNTRY_FI) return taxCountry;
+  throw new TaxRowClassificationError(
+    `Tax engine: no settlement component for frozen tax country "${taxCountry}" — ` +
+      'wire it into SUPPORTED_TAX_COUNTRIES and the living-year country modules',
+    taxCountry,
+  );
+}
+
+/**
+ * Which engine one row settles under against the living regime — the single
+ * source of truth for the server report/derivation router and the paranoid
+ * client engine (#1512). The committed truth table lives in
+ * `taxVectors/rowEngine.ts`; both engines replay it.
+ *
+ *  1. A `manual_per_trade` row is a user-stated fact under EVERY regime.
+ *  2. A `country_specific` row's frozen country is narrowed FIRST, in every
+ *     regime, so an unwired country fails loud even where the living regime
+ *     would have re-derived the row (the server refuses to load such a row at
+ *     all; the client refuses it at the snapshot boundary).
+ *  3. Under any living regime but `manual`, every non-manual row is re-derived
+ *     under that regime — its frozen mode is history.
+ *  4. Under the `manual` living regime the row keeps its frozen engine.
+ */
+export function taxEngineForRow(row: TaxRowEngineFacts, living: TaxRowEngine): TaxRowEngine {
+  if (row.taxMode === 'manual_per_trade') return 'manual';
+  const frozenCountry =
+    row.taxMode === 'country_specific' ? frozenTaxCountryEngine(row.taxCountry) : null;
+  if (living !== 'manual') return living;
+  if (row.taxMode === null || row.taxMode === 'none') return 'none';
+  if (row.taxMode === 'country_specific') return frozenCountry!;
+  if (row.taxMode === 'custom') return 'custom';
+  throw new TaxRowClassificationError(
+    `Tax engine: unknown frozen tax mode "${String(row.taxMode)}"`,
+    row.taxCountry,
+  );
+}
+
+/**
+ * The cost-basis strategy a classified engine realizes sells under: DE/FI are
+ * FIFO by law, AT is the moving average, a custom engine takes the basis from
+ * its parameter snapshot, and rows outside any engine (`none`/`manual`) show
+ * the moving-average realized P/L both engines have always displayed for
+ * untaxed rows.
+ */
+export function costBasisStrategyForEngine(
+  engine: TaxRowEngine,
+  custom: { costBasis: CostBasisStrategy } | null,
+): CostBasisStrategy {
+  if (engine === 'custom') {
+    if (custom === null) {
+      throw new TaxRowClassificationError(
+        'Tax engine: a custom-engine row has no cost-basis parameter snapshot',
+        null,
+      );
+    }
+    return custom.costBasis;
+  }
+  if (engine === 'none' || engine === 'manual') return 'moving-average';
+  return costBasisStrategyForCountry(engine);
 }
 
 /**
@@ -165,18 +277,29 @@ export class TaxComputationError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
+ * Magnitude bound of the cent quantizer — `2^42` € (≈ €4.4 trillion), #1523.
+ * Exact mirror of `cashLedger.FLOOR_CENTS_EXACT_LIMIT_EUR` (see the rationale
+ * there); parity is pinned by tests.
+ */
+export const FLOOR_CENTS_EXACT_LIMIT_EUR = 2 ** 42;
+
+/**
  * Quantize a EUR amount **down** to whole cents — floor toward zero, never round
  * up (the #370 money policy). Nudges a value a few ULPs below a cent boundary
  * (`8.61 → 860.999…9`) back onto it before truncating, so exact cents survive
- * float error while a genuine sub-cent residue still floors away. Exact mirror
- * of `cashLedger.floorCents` (#322/#370); parity is pinned by tests.
+ * float error while a genuine sub-cent residue still floors away. At and above
+ * {@link FLOOR_CENTS_EXACT_LIMIT_EUR} the amount passes through unchanged —
+ * float64 is too coarse to quantize cents there (#1523). Exact mirror of
+ * `cashLedger.floorCents` (#322/#370); parity is pinned by tests.
  */
 export function floorCents(amountEur: number): number {
   if (!Number.isFinite(amountEur)) {
     throw new TaxComputationError(`Cannot floor a non-finite EUR amount, got ${amountEur}.`);
   }
+  const abs = Math.abs(amountEur);
+  if (abs >= FLOOR_CENTS_EXACT_LIMIT_EUR) return amountEur;
   const sign = amountEur < 0 ? -1 : 1;
-  const cents = Math.floor(Math.abs(amountEur) * 100 * (1 + Number.EPSILON * 8));
+  const cents = Math.floor(abs * 100 * (1 + Number.EPSILON * 8));
   return cents === 0 ? 0 : (sign * cents) / 100;
 }
 

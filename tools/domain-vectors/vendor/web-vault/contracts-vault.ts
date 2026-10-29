@@ -1,13 +1,26 @@
 import { z } from 'zod';
 
 import { MAX_PASSWORD_LENGTH } from './auth';
-import { cashRuleMatchTypeSchema } from './cash';
-import { expenseDirectionSchema, expenseRuleMatchTypeSchema } from './expenses';
 import {
+  CASH_RULE_PATTERN_MAX,
+  CASH_TAGS_PER_ITEM_MAX,
+  CASH_TAGS_PER_USER_MAX,
+  cashRuleMatchTypeSchema,
+} from './cash';
+import {
+  EXPENSE_RULE_PATTERN_MAX,
+  expenseDirectionSchema,
+  expenseRuleMatchTypeSchema,
+} from './expenses';
+import {
+  IMPORT_ROW_CANDIDATE_LIMIT,
   importBatchStatusSchema,
+  importRowCandidateSchema,
   importRowFlagSchema,
   importRowKindSchema,
+  importRowResolvedBySchema,
   importRowResultSchema,
+  importUnderstandingSchema,
 } from './imports';
 import { currencyCodeSchema } from './market';
 import { mirrorRowKindSchema } from './mirrorchain';
@@ -94,9 +107,332 @@ export const PRIVACY_MODES = ['normal', 'paranoid'] as const;
 export const privacyModeSchema = z.enum(PRIVACY_MODES);
 export type PrivacyMode = z.infer<typeof privacyModeSchema>;
 
+/** Stable server capabilities whose cleartext surfaces are absent in paranoid mode. */
+export const PARANOID_KILLED_CAPABILITIES = [
+  'publicProfile',
+  'sharing',
+  'mirrorchain',
+  'portfolioServer',
+  'imports',
+  'portfolioApiScope',
+  'standingOrderExecution',
+  'portfolioJobs',
+  'portfolioWebhooks',
+] as const;
+export type ParanoidKilledCapability = (typeof PARANOID_KILLED_CAPABILITIES)[number];
+
+export interface ParanoidServerRouteReference {
+  readonly capability: ParanoidKilledCapability;
+  readonly method?: string;
+  readonly match: 'exact' | 'prefix' | 'pattern';
+  readonly path: string;
+  readonly flags?: string;
+  readonly source?: {
+    readonly file: string;
+    readonly symbol: string;
+  };
+}
+
+export interface ParanoidClientRouteRule {
+  readonly match: 'exact' | 'prefix';
+  readonly path: string;
+  readonly destination: string;
+}
+
+export interface ParanoidClientRouteDecision {
+  readonly id: string;
+  readonly serverRoutes: readonly ParanoidServerRouteReference[];
+  readonly clientRoutes: readonly ParanoidClientRouteRule[];
+  /** Why these client routes are absent, or why no route-level gate is needed. */
+  readonly reason: string;
+}
+
+/**
+ * The shared server-to-client §8 kill decision matrix. Server route rules are
+ * references rather than executable matchers so this stays browser-safe. The
+ * API completeness test binds every reference to `PARANOID_KILL_REGISTRY`; the
+ * SPA derives its route gate and redirect destination from `clientRoutes`.
+ * An empty client list is an explicit decision, never an implicit allow.
+ */
+export const PARANOID_CLIENT_ROUTE_DECISIONS: readonly ParanoidClientRouteDecision[] = [
+  {
+    id: 'public-profiles',
+    serverRoutes: [{ capability: 'publicProfile', match: 'prefix', path: '/social/profiles/' }],
+    clientRoutes: [
+      { match: 'prefix', path: '/u', destination: '/portfolio' },
+      { match: 'prefix', path: '/people/profile', destination: '/people' },
+      // The Control Center is an overlay: land on a neighbouring panel instead
+      // of closing the popup by redirecting to `/portfolio`.
+      { match: 'prefix', path: '/control/profile', destination: '/control/account' },
+      { match: 'prefix', path: '/settings/profile', destination: '/portfolio' },
+      { match: 'prefix', path: '/social/profile', destination: '/people' },
+    ],
+    reason:
+      'Public-profile pages depend on server profile data and are absent for paranoid accounts.',
+  },
+  {
+    id: 'sharing-and-mirrorchain',
+    serverRoutes: [
+      { capability: 'sharing', match: 'prefix', path: '/social/links/' },
+      { capability: 'sharing', match: 'exact', path: '/social/groups' },
+      { capability: 'sharing', match: 'prefix', path: '/social/groups/' },
+      { capability: 'sharing', match: 'exact', path: '/social/follows' },
+      { capability: 'sharing', match: 'prefix', path: '/social/follows/' },
+      { capability: 'sharing', match: 'exact', path: '/social/followers' },
+      { capability: 'sharing', match: 'exact', path: '/social/item-follows' },
+      { capability: 'sharing', match: 'prefix', path: '/social/item-follows/' },
+      { capability: 'sharing', match: 'exact', path: '/social/shared' },
+      { capability: 'sharing', match: 'prefix', path: '/social/shared/' },
+      { capability: 'sharing', match: 'exact', path: '/social/my-shared' },
+      { capability: 'sharing', match: 'prefix', path: '/social/audience/' },
+      { capability: 'sharing', match: 'prefix', path: '/social/items/' },
+      { capability: 'sharing', match: 'prefix', path: '/social/comments/' },
+      { capability: 'sharing', match: 'exact', path: '/alerts/sharing' },
+      { capability: 'sharing', match: 'exact', path: '/workboard/sharing' },
+      {
+        capability: 'sharing',
+        match: 'pattern',
+        path: '^/ideas/[^/]+/clone$',
+      },
+      { capability: 'sharing', match: 'prefix', path: '/backtest/shared/' },
+      { capability: 'mirrorchain', match: 'prefix', path: '/mirrorchain/' },
+    ],
+    clientRoutes: [
+      { match: 'prefix', path: '/s', destination: '/portfolio' },
+      { match: 'prefix', path: '/people/shared', destination: '/people' },
+      { match: 'exact', path: '/people/following', destination: '/people' },
+      { match: 'prefix', path: '/portfolio/people', destination: '/portfolio' },
+      { match: 'prefix', path: '/social/my-shared', destination: '/people' },
+      { match: 'prefix', path: '/social/shared-with-me', destination: '/people' },
+    ],
+    reason:
+      'Sharing, following, public links, and mirror membership require server-side social rows, so their combined SPA surfaces are absent.',
+  },
+  {
+    id: 'client-backed-portfolio',
+    serverRoutes: [
+      { capability: 'portfolioServer', match: 'exact', path: '/portfolios' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/portfolios/' },
+      { capability: 'portfolioServer', match: 'exact', path: '/custom-assets' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/custom-assets/' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/analytics/' },
+    ],
+    clientRoutes: [],
+    reason:
+      'Core portfolio, custom-asset, and analytics routes stay mounted because paranoid mode serves their equivalents from the decrypted client vault.',
+  },
+  /**
+   * The expense area (V5-P9). Its `/expenses/*` endpoints are already refused
+   * server-side under the `portfolioServer` capability (the PD3b enforcement
+   * registry), so these five pages are hidden rather than left to 403 into an
+   * empty shell. The DATA is not killed: the expense tables are vault-classified,
+   * `migration.ts` carries every category/transaction/rule/budget into the blob,
+   * and the whole area returns intact on disable. Re-deriving these pages against
+   * the vault store is v6 follow-up work — recorded in PROJECTPLAN §16
+   * (2026-07-31, issue #729) and as kill-list item 11 in docs/paranoid-design.md
+   * §8, because §8's rule is that an absent surface is a documented one.
+   *
+   * `/portfolio/cash-flow/accounts` deliberately stays live: cash sources are
+   * portfolio rows served by the vault store, not expense rows.
+   *
+   * The area was renamed `/portfolio/cash` with three tabs plus setup pages
+   * (V5 cash fusion phase 2 — the fused ledger's overview/movements/budgets/
+   * labels read the SERVER cash endpoints, which the PD3b registry refuses for a
+   * paranoid account), so the SAME kill decision covers both vocabularies: the
+   * legacy names for deep links and bookmarks, the canonical names for the live
+   * router. `/portfolio/cash/accounts` stays live exactly like its legacy alias.
+   */
+  {
+    id: 'expense-and-cash-pages',
+    serverRoutes: [
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/categories' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/transactions' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/rules' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/summary' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/trends' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/expenses/budgets' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/tags' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/movements/' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/budgets' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/rules' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/summary' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/cash/trends' },
+    ],
+    clientRoutes: [
+      { match: 'exact', path: '/portfolio/cash-flow', destination: '/portfolio/cash/accounts' },
+      {
+        match: 'exact',
+        path: '/portfolio/cash-flow/transactions',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash-flow/budgets',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash-flow/categories',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash-flow/rules',
+        destination: '/portfolio/cash/accounts',
+      },
+      { match: 'exact', path: '/portfolio/cash', destination: '/portfolio/cash/accounts' },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/movements',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/transactions',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/budgets',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/labels',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/tags',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/rules',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'exact',
+        path: '/portfolio/cash/categories',
+        destination: '/portfolio/cash/accounts',
+      },
+    ],
+    reason:
+      'Expense and classified-cash pages still read refused server endpoints; only the client-backed cash accounts page remains mounted.',
+  },
+  {
+    id: 'portfolio-dividend-calendar',
+    serverRoutes: [
+      {
+        capability: 'portfolioServer',
+        match: 'exact',
+        path: '/assets/portfolio/dividend-calendar',
+      },
+    ],
+    clientRoutes: [],
+    reason:
+      'The calendar has no standalone client route; its Home widget is unreachable because paranoid Home renders the client-backed portfolio substitute.',
+  },
+  {
+    id: 'portfolio-dividend-projection',
+    serverRoutes: [
+      {
+        capability: 'portfolioServer',
+        match: 'exact',
+        path: '/assets/portfolio/dividend-projection',
+      },
+    ],
+    clientRoutes: [],
+    reason:
+      'Forecast stays mounted, but its dividend-projection query is disabled after privacy mode resolves paranoid.',
+  },
+  {
+    id: 'portfolio-news-digest',
+    serverRoutes: [
+      {
+        capability: 'portfolioServer',
+        match: 'exact',
+        path: '/assets/portfolio/news-digest',
+      },
+    ],
+    clientRoutes: [{ match: 'prefix', path: '/assets/news', destination: '/assets' }],
+    reason:
+      'The portfolio news-digest route depends on cleartext server holdings; per-asset provider news remains available.',
+  },
+  {
+    id: 'ai-insights-panel',
+    serverRoutes: [
+      {
+        capability: 'portfolioServer',
+        method: 'POST',
+        match: 'exact',
+        path: '/ai/insights',
+      },
+    ],
+    clientRoutes: [],
+    reason:
+      'AI insights are a component-level panel rather than a route and are suppressed inside the client-backed analytics surface.',
+  },
+  {
+    id: 'server-tax-settings-and-print',
+    serverRoutes: [
+      { capability: 'portfolioServer', match: 'exact', path: '/settings/taxes' },
+      { capability: 'portfolioServer', match: 'exact', path: '/settings/taxes/years' },
+    ],
+    clientRoutes: [
+      { match: 'prefix', path: '/portfolio/tax/print', destination: '/portfolio/tax' },
+    ],
+    reason:
+      'Server tax settings and printable reports are absent; the main tax surface stays live through the client tax engine.',
+  },
+  {
+    id: 'client-backed-home',
+    serverRoutes: [
+      { capability: 'portfolioServer', match: 'exact', path: '/settings/home' },
+      { capability: 'portfolioServer', match: 'prefix', path: '/settings/widget-layout/' },
+    ],
+    clientRoutes: [],
+    reason:
+      'The root route stays mounted but paranoid Home replaces the server widget board with the client-backed Portfolio page before these endpoints can run.',
+  },
+  {
+    id: 'imports',
+    serverRoutes: [
+      { capability: 'imports', match: 'exact', path: '/imports' },
+      { capability: 'imports', match: 'prefix', path: '/imports/' },
+      { capability: 'imports', match: 'prefix', path: '/expenses/import/' },
+    ],
+    clientRoutes: [
+      { match: 'prefix', path: '/portfolio/import', destination: '/portfolio' },
+      {
+        match: 'prefix',
+        path: '/portfolio/cash-flow/import',
+        destination: '/portfolio/cash/accounts',
+      },
+      {
+        match: 'prefix',
+        path: '/portfolio/cash/import',
+        destination: '/portfolio/cash/accounts',
+      },
+    ],
+    reason:
+      'Broker and expense imports execute on the server and are absent while the server has no cleartext portfolio data.',
+  },
+  {
+    id: 'client-standing-orders',
+    serverRoutes: [
+      { capability: 'standingOrderExecution', match: 'exact', path: '/standing-orders' },
+      { capability: 'standingOrderExecution', match: 'prefix', path: '/standing-orders/' },
+    ],
+    clientRoutes: [],
+    reason:
+      'The Forecast route stays mounted because paranoid standing orders are stored and materialized by the client vault runtime.',
+  },
+];
+
 /**
  * A storage medium a blob syncs to (`§4`). `server` = the BetterTrack blind
- * store; `drive` = the user's Google Drive appdata folder. Both are blind
+ * store; `drive` = the user's visible BetterTrack Vaults folder. Both are blind
  * compare-and-swap blob stores; the client picks a non-empty subset.
  */
 export const VAULT_MEDIA = ['server', 'drive'] as const;
@@ -597,6 +933,36 @@ export const vaultEntityKindSchema = z.enum(VAULT_ENTITY_KINDS);
 export type VaultEntityKind = z.infer<typeof vaultEntityKindSchema>;
 
 /**
+ * Entity kinds whose normal-account rows survive paranoid enable only through
+ * the encrypted document. This is the shared enrollment boundary for the web
+ * capture branches and the API rehydration handlers: either side adding a kind
+ * without the other must fail its completeness gate before the one-way purge
+ * can run in production.
+ */
+export const PARANOID_REHYDRATION_HANDLERS = [
+  'portfolio',
+  'transaction',
+  'dividend',
+  'cashSource',
+  'cashMovement',
+  'portfolioSetting',
+  'taxSetting',
+  'customAsset',
+  'customAssetValue',
+  'standingOrder',
+  'standingOrderRun',
+  'expenseCategory',
+  'expenseTransaction',
+  'expenseRule',
+  'expenseBudget',
+  'cashTag',
+  'cashMovementTag',
+  'cashBudget',
+  'cashRule',
+  'cashRuleTag',
+] as const satisfies readonly VaultEntityKind[];
+
+/**
  * Per-entity sync metadata (`§2`/`§4`): a uuidv7 id, a monotonic `rev` bumped on
  * every edit, an `editedAt` instant + the writing `editedBy` deviceId, and a
  * `deletedAt` tombstone (kept ≥ 180 days) so long-offline merges stay correct.
@@ -671,26 +1037,34 @@ const portfolioRowSchema = z
      */
     kind: portfolioKindSchema.nullable().optional(),
     /**
-     * Vaults v2 (`docs/VAULTS_V2_DESIGN.md`): which v2 vault this portfolio
-     * belongs to, or null. ADDITIVE within v1 and `.default(null)`, exactly like
-     * `mirrorProvenance` and `cashMovement.dedupHash` — a document written
-     * before Vaults v2 has no such key, and absent means the same as null.
+     * `vaultId` re-gained a server column with the E0 per-portfolio vaults
+     * keystone (#1410 — `portfolios.vault_id`, always NULL in any portfolio
+     * this ACCOUNT-level document can carry: a per-portfolio-vaulted portfolio
+     * is a content-free locked stub with nothing left to capture, and the two
+     * paranoid systems are mutually exclusive per account until E9 retires
+     * this one). `alias` remains VESTIGIAL: its v2 column was dropped by PR
+     * #1392 and its E0 successor is deliberately named `vault_alias` /
+     * `vaultAlias` (below) so the retired name stays retired.
      *
-     * It has to round-trip: an account-level paranoid enable purges the
-     * `portfolios` row itself, so a portfolio that lived in a v2 vault would
-     * come back from disable as an ordinary cleartext portfolio while its
-     * ciphertext still sat in `vault_docs` — the row and its documents would
-     * disagree about whether it is paranoid at all.
+     * Both keep `.default(null)` because this object is `.strict()` and
+     * describes the CLIENT-ENCRYPTED v1 document: every paranoid document
+     * written while v2 existed carries both keys (zod's `.default(null)`
+     * filled them in on parse and the client re-serialized what it parsed), so
+     * dropping either would make those documents fail validation — a paranoid
+     * account whose vault silently stops opening, with no server-side copy to
+     * fall back on. Nothing reads them. Do not repurpose `alias`; a future
+     * format version can drop it behind a document migration in
+     * `migrateVaultDocument`.
      */
     vaultId: uuidSchema.nullable().default(null),
-    /**
-     * Vaults v2 (§4): the cleartext display alias of a vaulted portfolio.
-     * ADDITIVE within v1 and `.default(null)`, for the same reason as `vaultId`
-     * above — and it round-trips for the same reason too: an account-level
-     * enable purges the `portfolios` row, and a locked row that came back
-     * without its alias would render under a name the user had renamed away.
-     */
     alias: z.string().nullable().default(null),
+    /**
+     * The E0 locked-stub label column (`portfolios.vault_alias`, #1410).
+     * Always NULL here for the same mutual-exclusion reason as `vaultId`;
+     * `.default(null)` keeps every document written before the column existed
+     * parseable (the `kind` / `dedupHash` precedent).
+     */
+    vaultAlias: z.string().nullable().default(null),
   })
   .strict();
 
@@ -846,6 +1220,20 @@ const standingOrderRunRowSchema = z
   })
   .strict();
 
+/**
+ * The `import_batches.understanding` column as it appears inside a vault
+ * document (#964) — the generic pipeline's read of the uploaded file.
+ *
+ * Exported for exactly the same single reason as
+ * {@link vaultImportRowCandidatesSchema}: it is a `ZodCatch` reachable from
+ * `PortfolioVaultMoveOutRequest`, and the OpenAPI generator needs the type hint
+ * installed on this very instance. Nothing else should import it.
+ */
+export const vaultImportBatchUnderstandingSchema = importUnderstandingSchema
+  .nullable()
+  .optional()
+  .catch(null);
+
 const importBatchRowSchema = z
   .object({
     ownerId: uuidSchema,
@@ -856,8 +1244,96 @@ const importBatchRowSchema = z
     cashSourceId: uuidSchema.nullable(),
     createdAt: timestampSchema,
     appliedAt: timestampSchema.nullable(),
+    /**
+     * The `import_batches.understanding` column (#964): what the generic
+     * pipeline worked out about the uploaded file. Enrolled because the
+     * export-completeness sweep requires every persisted column to appear in
+     * the strict payload.
+     *
+     * `.nullable().optional().catch(null)` for the same three reasons as
+     * `import_rows.candidates` below: documents written before this column
+     * existed carry no such key, and a DESCRIPTION of a short-lived staging
+     * preview must never be the reason a portfolio cannot be restored. A
+     * malformed or unknown-shaped value degrades this ONE field to null and
+     * the batch still parses.
+     */
+    understanding: vaultImportBatchUnderstandingSchema,
   })
   .strict();
+
+/**
+ * The `import_rows.candidates` column as it appears inside a vault document.
+ *
+ * Exported ONLY so the API's OpenAPI builder can reach this exact instance:
+ * zod-to-openapi 7.3.x has no `ZodCatch` transformer, and this schema is
+ * reachable from the documented `PortfolioVaultMoveOutRequest` body, so the
+ * generator needs a temporary `type` hint installed on the very instance the
+ * parent object captured (a `.openapi()` clone is never what it walks into).
+ * Same generator gap, same escape hatch as `vaultJsonSchema`'s `ZodLazy`.
+ * Nothing else should import this — parse through the entity schemas.
+ *
+ * See the field's documentation in `importRowRowSchema` for why it degrades.
+ */
+export const vaultImportRowCandidatesSchema = z
+  .array(importRowCandidateSchema)
+  .max(IMPORT_ROW_CANDIDATE_LIMIT)
+  .nullable()
+  .optional()
+  .catch(null);
+
+/**
+ * The `import_rows.rule_tag_ids` column as it appears inside a vault document
+ * (#964) — the cash-rule tags a staged row was pre-tagged with.
+ *
+ * Exported for exactly the same single reason as
+ * {@link vaultImportRowCandidatesSchema}: it is another `ZodCatch` reachable
+ * from `PortfolioVaultMoveOutRequest`, and the OpenAPI generator needs the hint
+ * installed on this very instance. Nothing else should import it.
+ *
+ * See the field's documentation in `importRowRowSchema` for why it degrades.
+ */
+export const vaultImportRowRuleTagIdsSchema = z
+  .array(uuidSchema)
+  .max(CASH_TAGS_PER_ITEM_MAX)
+  .nullable()
+  .optional()
+  .catch(null);
+
+/**
+ * The `import_rows.resolved_by` column as it appears inside a vault document
+ * (#964). Exported for the same OpenAPI-generator reason as its two siblings
+ * above; nothing else should import it.
+ */
+export const vaultImportRowResolvedBySchema = importRowResolvedBySchema
+  .nullable()
+  .optional()
+  .catch(null);
+
+/**
+ * The `import_rows.kind_undecided` column inside a vault document (§16
+ * 2026-08-29 gap (b)): true while this staged row parsed cleanly but nobody has
+ * said what KIND it is, so its other columns hold the parsed values (with
+ * `amountEur` still signed) and a person may still confirm a kind for it.
+ *
+ * `.optional()` for the `resolvedBy` reason: restore and disable strict-parse
+ * documents written BEFORE this column existed, and those carry no key at all —
+ * requiring it would lock every pre-existing vault out. Absent restores as the
+ * column's own default (false), which is exactly what such a document means:
+ * every row of it was decided. A document written since always carries the key,
+ * because capture reads a NOT NULL column.
+ *
+ * `.catch(false)` because a malformed value must not be the reason a vault
+ * fails to open — the same rule its four siblings follow — and `false` is the
+ * SAFE direction to degrade in: the row reads as a plain reported error, which
+ * is what it was before this feature existed. Catching to `true` would be the
+ * unsafe mirror, re-opening a row someone had already decided.
+ *
+ * Exported for the same OpenAPI-generator reason as its siblings above (see
+ * `GENERATOR_GAP_HINTS` in the API's `openapi/document.ts` — zod-to-openapi
+ * 7.3.x cannot walk a `ZodCatch`, and an unhinted one 500s the whole spec);
+ * nothing else should import it.
+ */
+export const vaultImportRowKindUndecidedSchema = z.boolean().optional().catch(false);
 
 const importRowRowSchema = z
   .object({
@@ -881,6 +1357,72 @@ const importRowRowSchema = z
     contentHash: z.string().nullable(),
     result: importRowResultSchema.nullable(),
     resultMessage: z.string().nullable(),
+    /**
+     * The `import_rows.candidates` column: display-only near-matches for an
+     * unresolved row (§13.4). Enrolled because the export-completeness sweep
+     * requires every persisted column to appear in the strict payload.
+     *
+     * UNBREAKABLE BY CONSTRUCTION. `.nullable().optional()` because
+     * restore/disable strict-parses documents written before this column
+     * existed and those carry no `candidates` key at all — requiring it would
+     * lock every pre-existing vault out, the same reason `portfolios.kind`
+     * below is optional. `.catch(null)` because optionality alone is not
+     * enough: this field is a "did you mean" list, and no display-only
+     * suggestion may ever be the reason a user cannot get their portfolio back.
+     * An over-cap array, an unknown inner `type`, an extra key inside a
+     * candidate, or any other malformed shape degrades this ONE field to null
+     * and the entity still parses. The alternative — a strict parse — throws
+     * away a whole portfolio's transactions over a cosmetic suggestion list.
+     *
+     * NOTE FOR WHOEVER LANDS THE E10 WRITER SEAM: nothing in this repo
+     * currently EMITS an `importRow` vault entity. Every `importRow`
+     * touchpoint on both sides (`portfolioVaultRestoreRepository`,
+     * `paranoidRehydrationService`, the web `portfolioRestoreDocument` /
+     * `vaultPortfolioStore`) is a reader. So this field is presently written by
+     * nobody, and the tolerance above is the only thing standing between a
+     * future malformed value and an unrestorable portfolio. When the writer
+     * arrives: it must be a full-row projection, because a HAND-LISTED
+     * assembler that forgets `candidates` drops it silently — `.optional()`
+     * cannot tell "absent because old document" from "absent because the
+     * assembler forgot".
+     */
+    candidates: vaultImportRowCandidatesSchema,
+    /**
+     * The `import_rows.rule_tag_ids` column: the cash-rule tag suggestion this
+     * staged row was pre-tagged with (#964). Enrolled because the
+     * export-completeness sweep requires every persisted column to appear in
+     * the strict payload.
+     *
+     * `.nullable().optional().catch(null)` for the same three reasons as
+     * `candidates` directly above: documents written before this column existed
+     * carry no such key, and a staging-time SUGGESTION must never be the reason
+     * a portfolio cannot be restored. A malformed list, an over-cap array or a
+     * non-uuid member degrades this ONE field to null and the row still parses
+     * — the import batch it belongs to is a short-lived preview, while the
+     * portfolio behind it is the user's actual money.
+     */
+    ruleTagIds: vaultImportRowRuleTagIdsSchema,
+    /**
+     * The `import_rows.resolved_by` column (#964): provenance for `assetId` —
+     * null when the pipeline matched the instrument exactly, `'user'` when a
+     * person pinned it in the wizard. Enrolled because the
+     * export-completeness sweep requires every persisted column to appear in
+     * the strict payload.
+     *
+     * `.nullable().optional().catch(null)` for the same three reasons as the
+     * two fields above. Degrading to null loses only the badge that says a
+     * human chose this asset; the `assetId` itself is a plain column and is
+     * unaffected, so no restored row can be re-pointed by this field failing.
+     */
+    resolvedBy: vaultImportRowResolvedBySchema,
+    /**
+     * Enrolled because the export-completeness sweep requires every persisted
+     * column to appear in the strict payload — and it must be, since a vault
+     * round trip that dropped it would restore a batch whose undecided rows
+     * silently came back as unconfirmable reported errors. See
+     * {@link vaultImportRowKindUndecidedSchema} for the tolerance rules.
+     */
+    kindUndecided: vaultImportRowKindUndecidedSchema,
   })
   .strict();
 
@@ -934,12 +1476,40 @@ const expenseTransactionRowSchema = z
   })
   .strict();
 
+/**
+ * A restored rule pattern is held to the SAME ceiling the HTTP write path
+ * applies (`createExpenseRuleRequestSchema` / `createCashRuleRequestSchema`),
+ * from the same constant — never a second limit (#1743).
+ *
+ * Without it the restore lane was the one way to install a pattern no request
+ * could ever create: a document is bounded only by `VAULT_MAX_BYTES_DEFAULT`
+ * (16 MB), so a multi-megabyte pattern could land in `cash_rules` /
+ * `expense_rules` and then be matched against every note, forever. RE2 makes
+ * matching linear rather than exponential, so the exposure is input size and
+ * cardinality — which is exactly what a ceiling closes.
+ *
+ * OVER-LENGTH IS REFUSED, NOT TRUNCATED: a silently shortened pattern is a
+ * DIFFERENT rule, and it would quietly tag movements the rule its owner wrote
+ * never would.
+ *
+ * `.trim()` is deliberately NOT mirrored from the request schema. The request
+ * schema trims what the user typed BEFORE it is stored, so a legitimately
+ * written row arrives here already trimmed; trimming again would rewrite a
+ * restored row rather than validate it, and a restore must give back what the
+ * document holds or refuse it. A whitespace-only pattern stays as harmless as
+ * it already is — the engine's needle is empty, so it matches nothing.
+ */
+const restoredExpenseRulePatternSchema = z.string().min(1).max(EXPENSE_RULE_PATTERN_MAX);
+
+/** As above, for cash rules — the cash lane's own constant. */
+const restoredCashRulePatternSchema = z.string().min(1).max(CASH_RULE_PATTERN_MAX);
+
 const expenseRuleRowSchema = z
   .object({
     userId: uuidSchema,
     categoryId: uuidSchema,
     matchType: expenseRuleMatchTypeSchema,
-    pattern: z.string(),
+    pattern: restoredExpenseRulePatternSchema,
     priority: z.number().int(),
     enabled: z.boolean(),
     createdAt: timestampSchema,
@@ -1016,7 +1586,7 @@ const cashRuleRowSchema = z
   .object({
     userId: uuidSchema,
     matchType: cashRuleMatchTypeSchema,
-    pattern: z.string(),
+    pattern: restoredCashRulePatternSchema,
     priority: z.number().int(),
     enabled: z.boolean(),
     createdAt: timestampSchema,
@@ -1265,6 +1835,148 @@ export function trimVaultMergeLog(mergeLog: readonly VaultMergeRecord[]): VaultM
 }
 
 /**
+ * THE CASH CLASSIFICATION SETS ARE CARDINALITIES, SO THE DOCUMENT BOUNDS THEM
+ * (#1954 the fan-out, #1963 the tag count and the link identity).
+ *
+ * Three facts about a restored cash lane that NO ROW SCHEMA CAN SEE, checked in
+ * ONE walk over the entities so a refused document costs one pass:
+ *
+ *  1. how many tags the account holds          — `CASH_TAGS_PER_USER_MAX`
+ *  2. how many tags one rule carries           — `CASH_TAGS_PER_ITEM_MAX`
+ *  3. that a `(ruleId, tagId)` link appears ONCE — `cash_rule_tags_rule_tag_unique`
+ *
+ * ── 1. THE TAG COUNT (#1963) ────────────────────────────────────────────────
+ *
+ * The HTTP path now caps it on create (`cashTagService.createTag`), and the
+ * document restates it because a restore never passes through that path. It is
+ * the supply side of the fan-out: 20 000 restorable tags are what made 20 000
+ * links to one rule reachable in the first place, and every tag is also a row in
+ * an unbounded read and a cascade target of every delete.
+ *
+ * ── 3. THE LINK IDENTITY (#1963) ────────────────────────────────────────────
+ *
+ * `cash_rule_tags` carries a UNIQUE (rule_id, tag_id) index and the restore
+ * repository inserts with no conflict handling deliberately — "a duplicate here
+ * means a malformed vault, which must fail loudly rather than be absorbed".
+ * Loudly meant a driver error inside the OPEN rehydration transaction: a 500
+ * raised after the document was proved and the write had begun. The pair is
+ * stated here so the same document is refused BEFORE any of that, as a 400 that
+ * says what is wrong.
+ *
+ * Refused rather than de-duplicated because no producer in the app can write
+ * this shape: every capture reads a rule's tag set from the table that unique
+ * index guards, so a repeated pair is a document nothing legitimate authored.
+ * Absorbing it with `onConflictDoNothing` would accept a payload we cannot
+ * explain and would make the fan-out cap count something other than what lands
+ * in the table. The pair check runs BEFORE the fan-out count, so a rule pushed
+ * past the cap BY duplicates is named as a duplicate rather than as an
+ * over-tagged rule.
+ *
+ * ── 2. A RULE'S TAG FAN-OUT IS A CARDINALITY (#1954) ────────────────────────
+ *
+ * `cash_rule_tags` is a link table: one row is `(ruleId, tagId)` and no row
+ * schema can see how many siblings it has. The HTTP path bounds the set at
+ * `CASH_TAGS_PER_ITEM_MAX` because it receives it as ONE array (`tagIdsSchema`);
+ * a restore receives the same set as N independent rows, so the bound has to be
+ * restated where the rows are together — here — or it is not restated at all.
+ *
+ * WHY IT MATTERS (§13.5: the server must not trust a vault payload). Restored
+ * rules are read back by `loadRules`, which aggregates their tags with an
+ * unbounded `array_agg`, and `applyCashRuleTags` then pushes one (movement, tag)
+ * pair PER TAG for every movement a rule matches. So the fan-out multiplies the
+ * re-apply pass and the per-batch import stamp alike: 20 000 scanned movements
+ * against a rule carrying 20 tags is 400 000 pairs, and the same rule carrying
+ * 20 000 tags is 400 million. The rule COUNT was capped in #1743 and this is the
+ * other half of the same product.
+ *
+ * REFUSES THE WHOLE DOCUMENT, never a prefix, for the reason `cashTagService`
+ * states at length: a rehydration is one transaction that loses nothing when it
+ * fails, while silently importing the first 20 links of a 500-link rule would
+ * leave the user with a rule that quietly means something else.
+ *
+ * FIRST OFFENDER WINS. The walk stops at the first rule past the ceiling rather
+ * than reporting every one: a document already refused does not become more
+ * refused, and a malformed document must not be able to make the server build an
+ * issue list proportional to its own size.
+ *
+ * COUNTS LIVE ROWS ONLY — see the tombstone note in the loop; it is the half of
+ * this refinement that keeps it in step with the service gate and keeps it off
+ * the paranoid exit path. It applies to all three checks: a soft-deleted tag is
+ * not a tag the account holds, and a tombstoned link beside a live one is an
+ * unlink followed by a relink, not a duplicate.
+ */
+function refineRestoredCashSets(
+  value: { readonly entities: readonly VaultStrictEntity[] },
+  ctx: z.RefinementCtx,
+): void {
+  const perRule = new Map<string, number>();
+  const seenLinks = new Set<string>();
+  let liveTags = 0;
+  for (const entity of value.entities) {
+    // LIVE ROWS ONLY. A tombstone is not a row the account carries: the restore
+    // service counts `liveEntities()` (`deletedAt === null`) and never writes a
+    // soft-deleted row, so counting them here would refuse documents the service
+    // accepts — two gates disagreeing about one document. It would also lock the
+    // EXIT: `paranoidDisable.ts`'s `toStrictRestoreDocument` parses every row of
+    // the unlocked vault through this schema, tombstones included, and throws
+    // `document-invalid` with no bypass. The day the client can soft-delete a
+    // `cashRuleTag` or a `cashTag` (§16 2026-08-19 item 6), a user who unlinked
+    // one tag from a fully-tagged rule — or deleted a tag — could no longer
+    // disable paranoid mode or move a portfolio out. The rows stay in the
+    // document either way — §4's merge rules key off them — they just do not
+    // count.
+    if (entity.deletedAt !== null) continue;
+
+    if (entity.kind === 'cashTag') {
+      liveTags += 1;
+      if (liveTags > CASH_TAGS_PER_USER_MAX) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_big,
+          type: 'array',
+          maximum: CASH_TAGS_PER_USER_MAX,
+          inclusive: true,
+          path: ['entities'],
+          message: `An account may hold at most ${CASH_TAGS_PER_USER_MAX} cash tags.`,
+        });
+        return;
+      }
+      continue;
+    }
+
+    if (entity.kind !== 'cashRuleTag') continue;
+
+    // The pair BEFORE the count: a rule pushed past the fan-out cap by repeats
+    // is a document with duplicate links, and saying so is the honest answer.
+    // `\u0000` cannot occur in a uuid, so the joined key is unambiguous.
+    const pair = `${entity.data.ruleId}\u0000${entity.data.tagId}`;
+    if (seenLinks.has(pair)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['entities'],
+        params: { code: 'CASH_RULE_TAG_DUPLICATE' },
+        message: 'A cash rule may link a tag only once.',
+      });
+      return;
+    }
+    seenLinks.add(pair);
+
+    const count = (perRule.get(entity.data.ruleId) ?? 0) + 1;
+    if (count > CASH_TAGS_PER_ITEM_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        type: 'array',
+        maximum: CASH_TAGS_PER_ITEM_MAX,
+        inclusive: true,
+        path: ['entities'],
+        message: `A cash rule may carry at most ${CASH_TAGS_PER_ITEM_MAX} tags.`,
+      });
+      return;
+    }
+    perRule.set(entity.data.ruleId, count);
+  }
+}
+
+/**
  * Strict v1 restore payload; newer versions are rejected without coercion.
  *
  * `mirrorProvenance` is ADDITIVE within v1 and `.default([])`: a document written
@@ -1280,7 +1992,8 @@ export const vaultStrictDocumentV1Schema = z
     mergeLog: z.array(vaultMergeRecordSchema).default([]),
     mirrorProvenance: z.array(vaultMirrorProvenanceSchema).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine(refineRestoredCashSets);
 export type VaultStrictDocumentV1 = z.infer<typeof vaultStrictDocumentV1Schema>;
 
 /**
@@ -1569,6 +2282,14 @@ export const PARANOID_TRANSITION_ERROR_CODES = {
    */
   normalDataChanged: 'PARANOID_NORMAL_DATA_CHANGED',
   invalidRehydration: 'PARANOID_REHYDRATION_INVALID',
+  /**
+   * The account already went through the §17 backup + wipe (PARANOID E9), so it
+   * may not re-enter the account-level v1 model. The wipe is idempotent on
+   * `paranoid_v1_wipe_receipts.user_id` and refuses a second run, which means
+   * anything created after a wipe could never be backed up or quarantined again.
+   * The per-portfolio vault model is where such an account goes instead.
+   */
+  legacyWiped: 'PARANOID_LEGACY_WIPED',
 } as const;
 export type ParanoidTransitionErrorCode =
   (typeof PARANOID_TRANSITION_ERROR_CODES)[keyof typeof PARANOID_TRANSITION_ERROR_CODES];
