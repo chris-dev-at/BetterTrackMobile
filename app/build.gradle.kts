@@ -296,6 +296,8 @@ dependencies {
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
+    // T1 large-screen foundation: `currentWindowAdaptiveInfo()` feeds LocalBtWindow.
+    implementation(libs.androidx.material3.adaptive)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)

@@ -30,6 +30,7 @@ import at.bettertrack.app.ui.connections.GOOGLE_LINK_DEEP_LINK_PATH
 import at.bettertrack.app.ui.connections.GoogleLinkReturnHolder
 import at.bettertrack.app.ui.connections.OAUTH_CALLBACK_DEEP_LINK_PATH
 import at.bettertrack.app.ui.connections.googleLinkReturnFor
+import at.bettertrack.app.ui.adaptive.ProvideBtWindow
 import at.bettertrack.app.ui.shell.BtRoot
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_ASSET_ID
 import at.bettertrack.app.widget.BT_WIDGET_EXTRA_INFLOW
@@ -99,10 +100,16 @@ class MainActivity : FragmentActivity() {
             val themeMode by AppGraph.devicePrefs.themeMode.collectAsState()
             val trueBlack by AppGraph.devicePrefs.trueBlack.collectAsState()
             BetterTrackTheme(mode = themeMode, trueBlack = trueBlack) {
-                BtRoot(
-                    onStartLogin = { startLogin() },
-                    onOpenUrl = { url -> openInBrowser(url) },
-                )
+                // The ONE place the window is measured (T1 large-screen
+                // foundation): everything below reads its width class from
+                // `LocalBtWindow` — the shell's rail, the content column, the
+                // page-sheet cap — and nothing re-derives it from the screen.
+                ProvideBtWindow {
+                    BtRoot(
+                        onStartLogin = { startLogin() },
+                        onOpenUrl = { url -> openInBrowser(url) },
+                    )
+                }
             }
         }
         // Cold-start OAuth callback (e.g. after process death while the tab was open).
