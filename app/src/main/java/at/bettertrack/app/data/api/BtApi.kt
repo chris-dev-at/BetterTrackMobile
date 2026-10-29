@@ -1534,49 +1534,48 @@ interface BtApi {
 
     // ── Optional delivery channels: Telegram + Discord ───────────────────────
     //
-    // ⚠️ SCOPE TRAP: these are the ONLY notification-settings routes that do NOT
-    // ride `notifications:*`. `/settings/notifications*` has an explicit rule in
-    // the bearer middleware; everything else under `/settings` falls through to
-    // the module table's `/settings` catch-all, which is
-    // `social:read` / `social:write`. Both are in the app's granted 19, so these
-    // are reachable — but a future scope trim that drops social:write would take
-    // Telegram and Discord down with it, and the reason would be very unobvious.
+    // Scope: `notifications:read` / `notifications:write`, like the rest of the
+    // notification settings. Channel setup IS notification egress — linking
+    // binds where every alert is delivered — so platform #1738 (#1730) moved
+    // these routes off the `/settings` catch-all's `social:*`
+    // (`bearerAuth.ts` settings census, `/settings/telegram` + `/settings/discord`).
     //
     // ⚠️ 404 TRAP: the deployment kill-switch (BT_TELEGRAM_DISCORD_ENABLED,
-    // default OFF) short-circuits ALL eight routes to a bare 404 before any
-    // handler runs. That is why the UI is gated on the GET's
-    // `channelsConfigurable`, never on probing these endpoints.
+    // default OFF) short-circuits ALL eight routes to a 404 before any handler
+    // runs — an envelope with code `CHANNEL_DEACTIVATED` (catalogued). That is
+    // why the UI is gated on the GET's `channelsConfigurable`, never on probing
+    // these endpoints.
 
-    /** Telegram link state for this user. [social:read] */
+    /** Telegram link state for this user. [notifications:read] */
     @GET("settings/telegram")
     suspend fun telegramSettings(): Response<TelegramSettingsDto>
 
     /**
      * Start a Telegram link. No body. The response is the ONLY place `pendingCode`
-     * is ever populated — hold it, a refetch loses it. [social:write]
+     * is ever populated — hold it, a refetch loses it. [notifications:write]
      */
     @POST("settings/telegram/link")
     suspend fun startTelegramLink(): Response<TelegramSettingsDto>
 
     /**
      * Poll for the `/start <code>` message. `200 { linked: false }` means "not
-     * yet", not a failure. No body. [social:write]
+     * yet", not a failure. No body. [notifications:write]
      */
     @POST("settings/telegram/confirm")
     suspend fun confirmTelegramLink(): Response<TelegramConfirmResponse>
 
-    /** Unlink Telegram. [social:write] */
+    /** Unlink Telegram. [notifications:write] */
     @DELETE("settings/telegram")
     suspend fun unlinkTelegram(): Response<TelegramSettingsDto>
 
-    /** Discord webhook state for this user. [social:read] */
+    /** Discord webhook state for this user. [notifications:read] */
     @GET("settings/discord")
     suspend fun discordSettings(): Response<DiscordSettingsDto>
 
     /**
      * Save a webhook URL. The server posts a real test message to it before
      * persisting, so a 400 can be either "malformed" or "Discord refused it".
-     * [social:write]
+     * [notifications:write]
      */
     @Headers("Content-Type: application/json")
     @POST("settings/discord/webhook")
@@ -1585,12 +1584,12 @@ interface BtApi {
     /**
      * Send a test message through the saved webhook. Note the path: it is
      * `discord/test`, NOT `discord/webhook/test` (which does not exist).
-     * [social:write]
+     * [notifications:write]
      */
     @POST("settings/discord/test")
     suspend fun testDiscordWebhook(): Response<DiscordTestResponse>
 
-    /** Remove the saved webhook. `DELETE settings/discord`, not `…/webhook`. [social:write] */
+    /** Remove the saved webhook. `DELETE settings/discord`, not `…/webhook`. [notifications:write] */
     @DELETE("settings/discord")
     suspend fun deleteDiscordWebhook(): Response<DiscordSettingsDto>
 

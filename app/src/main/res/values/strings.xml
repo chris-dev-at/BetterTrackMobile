@@ -2215,6 +2215,8 @@
     <string name="bt_err_feature_disabled">This feature isn\'t available right now.</string>
     <string name="bt_err_csrf_header_required">This request couldn\'t be verified. Please sign in again.</string>
     <string name="bt_err_csrf_origin_rejected">This request came from an address we don\'t accept.</string>
+    <string name="bt_err_malformed_body">The app sent a request the server couldn\'t read. Please try again.</string>
+    <string name="bt_err_unsupported_media_type">The app sent a request in a format the server doesn\'t accept. Please update the app.</string>
 
     <!-- Authentication: credentials + account state -->
     <string name="bt_err_invalid_credentials">Wrong email, username or password.</string>
@@ -2307,6 +2309,7 @@
     <string name="bt_err_cash_tag_ref_not_found">One of those tags doesn\'t exist anymore.</string>
     <string name="bt_err_cash_rule_not_found">We couldn\'t find that rule.</string>
     <string name="bt_err_cash_rule_regex_unsupported">That pattern isn\'t a supported regular expression.</string>
+    <string name="bt_err_cash_rule_tag_duplicate">A rule can add each tag only once.</string>
     <string name="bt_err_cash_budget_not_found">We couldn\'t find that budget.</string>
     <string name="bt_err_cash_budget_exists">That tag already has a budget for this period.</string>
     <string name="bt_err_standing_order_asset_not_found">We couldn\'t find that asset for the standing order.</string>
@@ -2435,6 +2438,16 @@
     <string name="bt_err_vault_retired_server_proof_invalid">That storage proof couldn\'t be verified.</string>
     <string name="bt_err_vault_retired_server_conflict">That storage change conflicts with your retained recovery data.</string>
     <string name="bt_err_vault_retired_server_retention">The recovery window for the old server copy hasn\'t passed yet.</string>
+    <string name="bt_err_channel_deactivated">Telegram and Discord notifications are switched off on this server.</string>
+    <string name="bt_err_vault_write_id_replayed">This vault write was already used for different data. Sync again to retry with a fresh write.</string>
+    <string name="bt_err_vault_doc_kind_mismatch">This vault document is of a different kind than the write expected.</string>
+    <string name="bt_err_vault_doc_address_mismatch">This vault document doesn\'t match the address it was written to.</string>
+    <string name="bt_err_vault_portfolio_binding_mismatch">This vault document belongs to a different portfolio.</string>
+    <string name="bt_err_vault_media_reserved">This storage location is reserved and can\'t be selected here.</string>
+    <string name="bt_err_vault_drive_binding_invalid">The Google Drive link of this vault isn\'t valid. Reconnect Drive and try again.</string>
+    <string name="bt_err_vault_media_partial_set">The vault check didn\'t cover every document the server holds. Sync again and retry.</string>
+    <string name="bt_err_vault_media_capture_in_flight">Another device is changing this vault\'s storage right now. Try again once it has finished.</string>
+    <string name="bt_err_vault_retirement_pending">The old server copy of this vault is still being retired. Try again later.</string>
 
     <!-- App-local refusals (never sent by the server) -->
     <string name="bt_err_app_http_failed">The server refused that request. Please try again.</string>

@@ -82,6 +82,9 @@ object BtErrorCopy {
         "FEATURE_DISABLED" to R.string.bt_err_feature_disabled,
         "CSRF_HEADER_REQUIRED" to R.string.bt_err_csrf_header_required,
         "CSRF_ORIGIN_REJECTED" to R.string.bt_err_csrf_origin_rejected,
+        // Body-parser refusals (`http/bodyLimits.ts`): the request, not the user.
+        "MALFORMED_BODY" to R.string.bt_err_malformed_body,
+        "UNSUPPORTED_MEDIA_TYPE" to R.string.bt_err_unsupported_media_type,
 
         // ── Authentication: credentials + account state ──
         "INVALID_CREDENTIALS" to R.string.bt_err_invalid_credentials,
@@ -176,6 +179,7 @@ object BtErrorCopy {
         "CASH_TAG_REF_NOT_FOUND" to R.string.bt_err_cash_tag_ref_not_found,
         "CASH_RULE_NOT_FOUND" to R.string.bt_err_cash_rule_not_found,
         "CASH_RULE_REGEX_UNSUPPORTED" to R.string.bt_err_cash_rule_regex_unsupported,
+        "CASH_RULE_TAG_DUPLICATE" to R.string.bt_err_cash_rule_tag_duplicate,
         "CASH_BUDGET_NOT_FOUND" to R.string.bt_err_cash_budget_not_found,
         "CASH_BUDGET_EXISTS" to R.string.bt_err_cash_budget_exists,
         "STANDING_ORDER_ASSET_NOT_FOUND" to R.string.bt_err_standing_order_asset_not_found,
@@ -306,6 +310,20 @@ object BtErrorCopy {
         "VAULT_RETIRED_SERVER_PROOF_INVALID" to R.string.bt_err_vault_retired_server_proof_invalid,
         "VAULT_RETIRED_SERVER_CONFLICT" to R.string.bt_err_vault_retired_server_conflict,
         "VAULT_RETIRED_SERVER_RETENTION" to R.string.bt_err_vault_retired_server_retention,
+        // Telegram/Discord deployment kill-switch: a 404 envelope on all eight
+        // channel routes (`settingsRoutes.ts`).
+        "CHANNEL_DEACTIVATED" to R.string.bt_err_channel_deactivated,
+        // `PUT /vaults/{id}/docs/{docId}` + `PATCH /vaults/{id}/media` (flag-gated
+        // vault feature; copy is deliberately close to the contract's meaning).
+        "VAULT_WRITE_ID_REPLAYED" to R.string.bt_err_vault_write_id_replayed,
+        "VAULT_DOC_KIND_MISMATCH" to R.string.bt_err_vault_doc_kind_mismatch,
+        "VAULT_DOC_ADDRESS_MISMATCH" to R.string.bt_err_vault_doc_address_mismatch,
+        "VAULT_PORTFOLIO_BINDING_MISMATCH" to R.string.bt_err_vault_portfolio_binding_mismatch,
+        "VAULT_MEDIA_RESERVED" to R.string.bt_err_vault_media_reserved,
+        "VAULT_DRIVE_BINDING_INVALID" to R.string.bt_err_vault_drive_binding_invalid,
+        "VAULT_MEDIA_PARTIAL_SET" to R.string.bt_err_vault_media_partial_set,
+        "VAULT_MEDIA_CAPTURE_IN_FLIGHT" to R.string.bt_err_vault_media_capture_in_flight,
+        "VAULT_RETIREMENT_PENDING" to R.string.bt_err_vault_retirement_pending,
 
         // ── App-local refusals (never sent by the server) ──
         "APP_HTTP_FAILED" to R.string.bt_err_app_http_failed,

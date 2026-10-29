@@ -2102,6 +2102,8 @@
     <string name="bt_err_feature_disabled">Diese Funktion ist derzeit nicht verfügbar.</string>
     <string name="bt_err_csrf_header_required">Diese Anfrage konnte nicht verifiziert werden. Bitte melde dich erneut an.</string>
     <string name="bt_err_csrf_origin_rejected">Diese Anfrage kam von einer Adresse, die wir nicht akzeptieren.</string>
+    <string name="bt_err_malformed_body">Die App hat eine Anfrage gesendet, die der Server nicht lesen konnte. Bitte versuche es erneut.</string>
+    <string name="bt_err_unsupported_media_type">Die App hat eine Anfrage in einem Format gesendet, das der Server nicht annimmt. Bitte aktualisiere die App.</string>
 
     <!-- Anmeldung: Zugangsdaten + Kontostatus -->
     <string name="bt_err_invalid_credentials">Falsche E-Mail-Adresse, falscher Benutzername oder falsches Passwort.</string>
@@ -2194,6 +2196,7 @@
     <string name="bt_err_cash_tag_ref_not_found">Eines dieser Tags existiert nicht mehr.</string>
     <string name="bt_err_cash_rule_not_found">Diese Regel konnten wir nicht finden.</string>
     <string name="bt_err_cash_rule_regex_unsupported">Dieses Muster ist kein unterstützter regulärer Ausdruck.</string>
+    <string name="bt_err_cash_rule_tag_duplicate">Eine Regel kann jedes Tag nur einmal vergeben.</string>
     <string name="bt_err_cash_budget_not_found">Dieses Budget konnten wir nicht finden.</string>
     <string name="bt_err_cash_budget_exists">Für dieses Tag existiert in diesem Zeitraum bereits ein Budget.</string>
     <string name="bt_err_standing_order_asset_not_found">Diesen Wert für den Dauerauftrag konnten wir nicht finden.</string>
@@ -2322,6 +2325,16 @@
     <string name="bt_err_vault_retired_server_proof_invalid">Dieser Speichernachweis konnte nicht verifiziert werden.</string>
     <string name="bt_err_vault_retired_server_conflict">Diese Speicheränderung steht im Konflikt mit deinen aufbewahrten Wiederherstellungsdaten.</string>
     <string name="bt_err_vault_retired_server_retention">Der Wiederherstellungszeitraum für die alte Serverkopie ist noch nicht abgelaufen.</string>
+    <string name="bt_err_channel_deactivated">Telegram- und Discord-Benachrichtigungen sind auf diesem Server ausgeschaltet.</string>
+    <string name="bt_err_vault_write_id_replayed">Dieser Tresor-Schreibvorgang wurde bereits für andere Daten verwendet. Synchronisiere erneut, um es mit einem neuen Schreibvorgang zu versuchen.</string>
+    <string name="bt_err_vault_doc_kind_mismatch">Dieses Tresordokument ist von einer anderen Art als vom Schreibvorgang erwartet.</string>
+    <string name="bt_err_vault_doc_address_mismatch">Dieses Tresordokument passt nicht zu der Adresse, an die es geschrieben wurde.</string>
+    <string name="bt_err_vault_portfolio_binding_mismatch">Dieses Tresordokument gehört zu einem anderen Portfolio.</string>
+    <string name="bt_err_vault_media_reserved">Dieser Speicherort ist reserviert und kann hier nicht gewählt werden.</string>
+    <string name="bt_err_vault_drive_binding_invalid">Die Google-Drive-Verknüpfung dieses Tresors ist ungültig. Verbinde Drive neu und versuche es erneut.</string>
+    <string name="bt_err_vault_media_partial_set">Die Tresorprüfung hat nicht alle Dokumente abgedeckt, die der Server hält. Synchronisiere erneut und versuche es noch einmal.</string>
+    <string name="bt_err_vault_media_capture_in_flight">Ein anderes Gerät ändert gerade den Speicher dieses Tresors. Versuche es erneut, sobald es fertig ist.</string>
+    <string name="bt_err_vault_retirement_pending">Die alte Serverkopie dieses Tresors wird noch stillgelegt. Versuche es später erneut.</string>
 
     <!-- App-eigene Ablehnungen (kommen nie vom Server) -->
     <string name="bt_err_app_http_failed">Der Server hat diese Anfrage abgelehnt. Bitte versuche es erneut.</string>
