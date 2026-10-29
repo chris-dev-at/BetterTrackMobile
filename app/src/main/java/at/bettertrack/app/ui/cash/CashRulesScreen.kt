@@ -365,7 +365,7 @@ fun CashRulesScreen(onBack: () -> Unit) {
                 // Re-applying rules is idempotent, so Retry is always safe here.
                 snackbar.showError(outcome.errorMessage, onRetry = { vm.applyNow() })
 
-            tagged > 0 -> snackbar.showQuantity(R.plurals.bt_rules_apply_done, tagged)
+            tagged > 0 -> snackbar.showQuantity(R.plurals.bt_rules_apply_done, tagged, *rulesAppliedArgs(tagged).toTypedArray())
             else -> snackbar.show(R.string.bt_rules_apply_none)
         }
         vm.consumeApplyOutcome()
@@ -872,3 +872,10 @@ private fun ruleFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = BtTheme.colors.textPrimary,
     cursorColor = BtTheme.colors.gold,
 )
+
+/**
+ * The format args of `bt_rules_apply_done` ("%1$d movements tagged"): the count
+ * itself, explicitly — `showQuantity` never prepends it (one convention, see
+ * `BtSnackbarController.showQuantity`). Pinned by `QuantityToastFormatTest`.
+ */
+internal fun rulesAppliedArgs(tagged: Int): List<Any> = listOf(tagged)

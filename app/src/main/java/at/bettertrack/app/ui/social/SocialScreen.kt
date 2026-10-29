@@ -279,7 +279,7 @@ class SocialViewModel(
                         _toast.value = when (audience) {
                             ShareAudience.Private -> SocialToast.Res(R.string.bt_social_toast_now_private, listOf(item.name))
                             ShareAudience.AllFriends -> SocialToast.Res(R.string.bt_social_toast_shared_all, listOf(item.name))
-                            ShareAudience.SpecificFriends -> SocialToast.Quantity(R.plurals.bt_social_toast_shared_specific, friendIds.size, listOf(item.name, friendIds.size))
+                            ShareAudience.SpecificFriends -> sharedWithFriendsToast(item.name, friendIds.size)
                             // Name the group, not the mechanism — "shared with
                             // Family" is what the user just decided. The unnamed
                             // fallback only fires if the group vanished mid-apply.

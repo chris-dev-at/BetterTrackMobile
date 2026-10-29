@@ -55,7 +55,12 @@ data class BtSnackbarMessage(
      * that wrong every time. Null exactly when [res] is set.
      */
     @PluralsRes val pluralRes: Int? = null,
-    /** The count [pluralRes] declines on, and its first format argument. */
+    /**
+     * The count [pluralRes] declines on — it ONLY selects the plural form. Like
+     * Android's own `getQuantityString(id, quantity, vararg args)`, it is NOT
+     * implicitly a format argument: [formatArgs] is the complete positional list,
+     * count included wherever the pattern places it (`%1$d` or `%2$d`).
+     */
     val quantity: Int = 0,
     /**
      * Positional format arguments. A list rather than a single value because the
@@ -110,7 +115,16 @@ class BtSnackbarController internal constructor(
     /**
      * Counted confirmation ("3 movements tagged"). Callers pass the raw count
      * and let the resource decline it — never build the sentence themselves.
-     * [quantity] is the plural's first format argument; [formatArgs] follow it.
+     *
+     * ONE convention, the platform's: [quantity] selects the plural form and
+     * [formatArgs] is the COMPLETE positional argument list, passed verbatim —
+     * so a plural whose pattern is `%1$d …` gets `showQuantity(id, n, n)`, and
+     * `“%1$s” shared with %2$d friends` gets `showQuantity(id, n, name, n)`.
+     * (This used to PREPEND [quantity] to [formatArgs] while the Compose path
+     * passed them verbatim; a `%2$d` then received a String and crashed —
+     * `IllegalFormatConversionException`, device verify 2026-10-29.)
+     * `QuantityToastFormatTest` formats every caller's args against the EN and
+     * DE patterns.
      */
     fun showQuantity(@PluralsRes pluralRes: Int, quantity: Int, vararg formatArgs: Any) =
         emit(
@@ -196,12 +210,12 @@ fun rememberBtSnackbarState(): BtSnackbarState {
                 val body = buildString {
                     append(
                         when {
-                            // The count is the plural's first argument by
-                            // convention; anything else follows it.
+                            // The quantity selects the form; the args are
+                            // the complete list, verbatim (see showQuantity).
                             message.pluralRes != null -> context.resources.getQuantityString(
                                 message.pluralRes,
                                 message.quantity,
-                                *(listOf<Any>(message.quantity) + message.formatArgs).toTypedArray(),
+                                *message.formatArgs.toTypedArray(),
                             )
                             message.formatArgs.isNotEmpty() ->
                                 context.getString(message.res!!, *message.formatArgs.toTypedArray())

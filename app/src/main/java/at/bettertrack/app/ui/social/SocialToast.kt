@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import at.bettertrack.app.R
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.ui.components.LocalBtSnackbar
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -38,9 +39,19 @@ sealed interface SocialToast {
     /** A plain string resource with optional positional format args. */
     data class Res(@param:StringRes val id: Int, val args: List<Any> = emptyList()) : SocialToast
 
-    /** A quantity string; [count] both selects the plural and is a format arg (via [args]). */
+    /**
+     * A quantity string. [count] ONLY selects the plural form; [args] is the
+     * complete positional list, count included where the pattern wants it — the
+     * same convention as `BtSnackbarController.showQuantity` and the platform's
+     * `getQuantityString`. Build one through a named factory below, which
+     * `QuantityToastFormatTest` formats against the EN and DE patterns.
+     */
     data class Quantity(@param:PluralsRes val id: Int, val count: Int, val args: List<Any> = emptyList()) : SocialToast
 }
+
+/** "“Tech Radar” shared with 3 friends" — `%1$s` the item, `%2$d` the count. */
+internal fun sharedWithFriendsToast(itemName: String, count: Int): SocialToast.Quantity =
+    SocialToast.Quantity(R.plurals.bt_social_toast_shared_specific, count, listOf(itemName, count))
 
 /** Resolve against the current (locale-wrapped) composition resources. */
 @Composable
