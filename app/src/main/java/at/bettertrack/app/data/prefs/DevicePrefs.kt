@@ -3,12 +3,17 @@ package at.bettertrack.app.data.prefs
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import at.bettertrack.app.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Pure orientation decision (Android-free, unit-tested); mapped to an ActivityInfo constant in the Activity. */
-enum class ScreenOrientationMode { LOCKED_PORTRAIT, FOLLOW_SENSOR }
+/**
+ * Pure orientation decision (Android-free, unit-tested); mapped to an ActivityInfo
+ * constant in the Activity. [FORCED_LANDSCAPE] is reachable only through the
+ * debug override (see [BtOrientationOverride]).
+ */
+enum class ScreenOrientationMode { LOCKED_PORTRAIT, FOLLOW_SENSOR, FORCED_LANDSCAPE }
 
 /**
  * What the portfolio hero chart draws, and what its scrub reports.
@@ -112,25 +117,61 @@ fun themeModeFromName(raw: String?): BtThemeMode =
  * synchronously at Activity start (before the first frame) and observable as a
  * [StateFlow] for instant application when the user toggles it.
  */
-class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
+class DevicePrefs internal constructor(
+    private val prefs: SharedPreferences,
+    /**
+     * Phone or tablet — decides the orientation lock's DEFAULT only (see
+     * [resolveOrientationLocked]). Defaults to [BtDeviceClass.Phone] so a test
+     * that does not care gets the phone app's behaviour.
+     */
+    deviceClass: BtDeviceClass = BtDeviceClass.Phone,
+    /**
+     * Whether debug-only preferences exist at all. `BuildConfig.DEBUG` in the
+     * real store; a parameter so the release half of the rule is testable.
+     */
+    private val debugFeatures: Boolean = false,
+) {
 
     /**
      * The real one. The [SharedPreferences] primary constructor above exists so
-     * the store's own rules — currently the true-black healing — can be gated in
-     * a plain JVM test; this project has no Robolectric, and a `Context` cannot
-     * be faked without one.
+     * the store's own rules — the true-black persistence, the orientation default
+     * — can be gated in a plain JVM test; this project has no Robolectric, and a
+     * `Context` cannot be faked without one.
+     *
+     * The device class comes from the APPLICATION context's smallest width: the
+     * process-level configuration describes the display, not one activity window,
+     * so a tablet in split screen is still a tablet here. It is read once per
+     * process; a foldable that changes class mid-process keeps the class it
+     * started with until the next cold start, which only ever affects the default
+     * of a toggle the user has never touched.
      */
     constructor(context: Context) : this(
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),
+        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),
+        deviceClass = btDeviceClassFor(
+            context.applicationContext.resources.configuration.smallestScreenWidthDp,
+        ),
+        debugFeatures = BuildConfig.DEBUG,
     )
 
-    private val _orientationLocked =
-        MutableStateFlow(prefs.getBoolean(KEY_ORIENTATION_LOCKED, DEFAULT_ORIENTATION_LOCKED))
+    private val _orientationLocked = MutableStateFlow(
+        resolveOrientationLocked(
+            stored = if (prefs.contains(KEY_ORIENTATION_LOCKED)) {
+                prefs.getBoolean(KEY_ORIENTATION_LOCKED, true)
+            } else {
+                null
+            },
+            deviceClass = deviceClass,
+        ),
+    )
 
     /**
-     * True (default) = the app stays portrait-locked; false = the app follows the
-     * device sensor (e.g. a tablet can view in landscape). Applied at the activity
-     * level via `requestedOrientation` on start and immediately on toggle.
+     * True = the app stays portrait-locked; false = the app follows the device
+     * sensor (e.g. a tablet can view in landscape). Applied at the activity level
+     * via `requestedOrientation` on start and immediately on toggle.
+     *
+     * The default is per device class since T1 (2026-10-29): locked on phones,
+     * unlocked on tablets — see [defaultOrientationLocked]. A stored value is an
+     * explicit choice and always wins; reading never writes the default back.
      */
     val orientationLocked: StateFlow<Boolean> = _orientationLocked.asStateFlow()
 
@@ -140,6 +181,35 @@ class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
     fun setOrientationLocked(locked: Boolean) {
         prefs.edit { putBoolean(KEY_ORIENTATION_LOCKED, locked) }
         _orientationLocked.value = locked
+    }
+
+    // ── Debug orientation override (T1, Settings → Developer) ─────────────────
+
+    private val _orientationOverride = MutableStateFlow(
+        if (debugFeatures) {
+            orientationOverrideFromName(prefs.getString(KEY_DEBUG_ORIENTATION_OVERRIDE, null))
+        } else {
+            // Release: the key is never READ, so a value smuggled into the file
+            // by a debug build of the same signing key cannot pin a release.
+            BtOrientationOverride.System
+        },
+    )
+
+    /**
+     * DEBUG builds only: force the activity into portrait or landscape regardless
+     * of the lock and the sensor, so the landscape layout can be checked on a
+     * tablet lying flat. Always [BtOrientationOverride.System] in release.
+     */
+    val orientationOverride: StateFlow<BtOrientationOverride> = _orientationOverride.asStateFlow()
+
+    /** Synchronous read — the Activity needs the value before the first frame. */
+    fun orientationOverrideNow(): BtOrientationOverride = _orientationOverride.value
+
+    /** A no-op in release builds: there is no control, so there is nothing to persist. */
+    fun setOrientationOverride(override: BtOrientationOverride) {
+        if (!debugFeatures) return
+        prefs.edit { putString(KEY_DEBUG_ORIENTATION_OVERRIDE, override.name) }
+        _orientationOverride.value = override
     }
 
     // ── Which entry the portfolio switcher has selected (owner IA change) ────
@@ -325,7 +395,9 @@ class DevicePrefs internal constructor(private val prefs: SharedPreferences) {
     internal companion object {
         const val PREFS = "bt_device_prefs"
         const val KEY_ORIENTATION_LOCKED = "orientation_locked"
-        const val DEFAULT_ORIENTATION_LOCKED = true
+
+        /** Debug-only (see [orientationOverride]); the `debug_` prefix marks it as such. */
+        const val KEY_DEBUG_ORIENTATION_OVERRIDE = "debug_orientation_override"
         const val KEY_OVERVIEW_SELECTED = "overview_selected"
         const val DEFAULT_OVERVIEW_SELECTED = true
         const val KEY_CHART_MODE = "chart_mode"

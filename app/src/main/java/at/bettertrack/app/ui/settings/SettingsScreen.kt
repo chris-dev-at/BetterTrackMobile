@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ScreenRotation
+import androidx.compose.material.icons.outlined.TabletAndroid
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Translate
@@ -87,7 +88,9 @@ import at.bettertrack.app.data.storage.BtSurface
 import at.bettertrack.app.data.storage.shows
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.storage.labelRes
+import at.bettertrack.app.data.prefs.BtOrientationOverride
 import at.bettertrack.app.data.prefs.BtThemeMode
+import at.bettertrack.app.data.prefs.orientationOverrideFromName
 import at.bettertrack.app.data.prefs.themeModeFromName
 import at.bettertrack.app.data.prefs.ServerOrigins
 import at.bettertrack.app.data.prefs.originLabel
@@ -97,6 +100,7 @@ import at.bettertrack.app.ui.components.BtCollapsingHeader
 import at.bettertrack.app.ui.components.BtFormError
 import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtGroupRow
+import at.bettertrack.app.ui.adaptive.LocalBtWindow
 import at.bettertrack.app.ui.components.BtPickerOption
 import at.bettertrack.app.ui.components.BtPickerRow
 import at.bettertrack.app.ui.components.BtPickerSheet
@@ -899,6 +903,38 @@ fun SettingsScreen(
                     )
                     // Token refresh rail: fault injection, a manual refresh, live state.
                     DevAuthRefreshRows()
+                    // T1 large-screen foundation: force portrait or landscape, so
+                    // the landscape layout can be checked on a tablet lying flat
+                    // with the system's rotation settings left alone. Inside the
+                    // `BuildConfig.DEBUG` gate above, and `DevicePrefs` never
+                    // reads the key in release either — two locks, one control.
+                    val orientationOverride by AppGraph.devicePrefs.orientationOverride
+                        .collectAsStateWithLifecycle()
+                    BtGroupRow(
+                        icon = Icons.Outlined.ScreenRotation,
+                        title = stringResource(R.string.bt_settings_dev_orientation),
+                        subtitle = stringResource(R.string.bt_settings_dev_orientation_sub),
+                        onClick = { picker = SettingsPicker.OrientationOverride },
+                        trailing = {
+                            SettingsValue(stringResource(orientationOverrideLabelRes(orientationOverride)))
+                        },
+                    )
+                    // Read-only: the width class the shell is laying out for right
+                    // now, so a device pass can see Medium vs Expanded instead of
+                    // inferring it from the rail. The value is the enum's own name
+                    // — a technical identifier, deliberately not translated.
+                    BtGroupRow(
+                        icon = Icons.Outlined.TabletAndroid,
+                        title = stringResource(R.string.bt_settings_dev_window),
+                        subtitle = stringResource(R.string.bt_settings_dev_window_sub),
+                        trailing = {
+                            Text(
+                                text = LocalBtWindow.current.widthClass.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = bt.textSecondary,
+                            )
+                        },
+                    )
                 }
             }
 
@@ -1057,6 +1093,27 @@ fun SettingsScreen(
             )
         }
 
+        SettingsPicker.OrientationOverride -> {
+            val current by AppGraph.devicePrefs.orientationOverride.collectAsStateWithLifecycle()
+            BtChoiceSheet(
+                title = stringResource(R.string.bt_settings_dev_orientation),
+                subtitle = stringResource(R.string.bt_settings_dev_orientation_sub),
+                options = BtOrientationOverride.entries.map {
+                    BtPickerOption(value = it.name, label = stringResource(orientationOverrideLabelRes(it)))
+                },
+                selected = current.name,
+                // Device-local and synchronous, like Theme. Unlike Theme it DOES
+                // dismiss: a new orientation recreates the activity, and a sheet
+                // left open would come back over a layout the user wanted to see.
+                onPick = {
+                    AppGraph.devicePrefs.setOrientationOverride(orientationOverrideFromName(it))
+                    picker = null
+                },
+                closeLabel = stringResource(R.string.bt_action_cancel),
+                onDismiss = { picker = null },
+            )
+        }
+
         SettingsPicker.ProfileIcon -> ProfileIconSheet(
             current = profile?.profileIcon,
             ready = profile != null,
@@ -1080,7 +1137,7 @@ fun SettingsScreen(
  * see the PREFERENCES section for why the app does not offer a new-portfolio
  * visibility default at all.
  */
-private enum class SettingsPicker { Currency, ProfileIcon, Theme }
+private enum class SettingsPicker { Currency, ProfileIcon, Theme, OrientationOverride }
 
 /**
  * Theme choice → its label. Exhaustive over [BtThemeMode] on purpose: the
@@ -1091,6 +1148,13 @@ private fun themeModeLabelRes(mode: BtThemeMode): Int = when (mode) {
     BtThemeMode.System -> R.string.bt_settings_theme_system
     BtThemeMode.Light -> R.string.bt_settings_theme_light
     BtThemeMode.Dark -> R.string.bt_settings_theme_dark
+}
+
+/** Debug orientation override → its label. Exhaustive over [BtOrientationOverride]. */
+private fun orientationOverrideLabelRes(override: BtOrientationOverride): Int = when (override) {
+    BtOrientationOverride.System -> R.string.bt_settings_dev_orientation_system
+    BtOrientationOverride.Portrait -> R.string.bt_settings_dev_orientation_portrait
+    BtOrientationOverride.Landscape -> R.string.bt_settings_dev_orientation_landscape
 }
 
 // The `defaultPortfolioVisibility` wire constants and their label map went with

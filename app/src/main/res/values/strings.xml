@@ -956,6 +956,14 @@
     <string name="bt_settings_dev_auth_refresh_ok">Session renewed</string>
     <string name="bt_settings_dev_auth_refresh_failed">Not renewed, see the refresh state</string>
     <string name="bt_settings_dev_auth_state">Token refresh state</string>
+    <!-- T1 large-screen foundation: debug-only orientation override (Settings → Developer). -->
+    <string name="bt_settings_dev_orientation">Orientation override</string>
+    <string name="bt_settings_dev_orientation_sub">Force portrait or landscape to check a layout. Debug builds only.</string>
+    <string name="bt_settings_dev_orientation_system">System</string>
+    <string name="bt_settings_dev_orientation_portrait">Portrait</string>
+    <string name="bt_settings_dev_orientation_landscape">Landscape</string>
+    <string name="bt_settings_dev_window">Window class</string>
+    <string name="bt_settings_dev_window_sub">What the layout keys off: Compact = bottom bar, Medium and Expanded = rail.</string>
     <string name="bt_settings_dev_unlocked">Developer options unlocked</string>
     <!-- %1$s, not %1$d: the app snackbar carries a single STRING format argument. -->
     <string name="bt_settings_dev_hint">%1$s more taps to unlock developer options</string>

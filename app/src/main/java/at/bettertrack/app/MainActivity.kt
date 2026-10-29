@@ -22,7 +22,10 @@ import androidx.compose.runtime.getValue
 import at.bettertrack.app.data.auth.AuthRepository
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.resolveDeepLink
+import at.bettertrack.app.data.prefs.BtOrientationOverride
 import at.bettertrack.app.data.prefs.BtThemeMode
+import at.bettertrack.app.data.prefs.ScreenOrientationMode
+import at.bettertrack.app.data.prefs.orientationModeFor
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtCustomTab
@@ -43,6 +46,7 @@ import at.bettertrack.app.ui.theme.BetterTrackTheme
 import at.bettertrack.app.ui.theme.resolveDarkTheme
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -76,14 +80,20 @@ class MainActivity : FragmentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         // Screen-orientation lock (owner ask): apply the persisted preference before
-        // the first frame — ON (default) = portrait-locked; OFF = follow the sensor.
-        applyOrientation(AppGraph.devicePrefs.orientationLockedNow())
+        // the first frame — ON = portrait-locked; OFF = follow the sensor. The
+        // default is per device class since T1 (locked on phones, unlocked on
+        // tablets, see `resolveOrientationLocked`), and a debug build can force
+        // either orientation from Settings → Developer.
+        applyOrientation()
         lifecycleScope.launch {
             // `lifecycleScope` is a plain root scope: a throw inside a collector
             // reaches the process's default handler and takes the app down. None
             // of these device-preference mirrors is worth that.
-            AppGraph.devicePrefs.orientationLocked.collect { locked ->
-                guarded("applyOrientation") { applyOrientation(locked) }
+            combine(
+                AppGraph.devicePrefs.orientationLocked,
+                AppGraph.devicePrefs.orientationOverride,
+            ) { _, _ -> }.collect {
+                guarded("applyOrientation") { applyOrientation() }
             }
         }
         // System bars follow the resolved theme (B2 §1.5 B6). Applied before the
@@ -200,14 +210,28 @@ class MainActivity : FragmentActivity() {
      * before). Unlocked ⇒ FULL_USER: follow the device sensor when the user's
      * auto-rotate is on (a tablet can go landscape), while still honoring an
      * explicit rotation lock — the well-behaved Android choice.
+     *
+     * Debug builds only: the developer override (Settings → Developer) wins over
+     * both and pins PORTRAIT or LANDSCAPE outright, so the landscape layout can be
+     * verified on a tablet lying flat. A release build never reads the override —
+     * `orientationModeFor` ignores it when `debugBuild` is false, and
+     * `DevicePrefs` never loads the key in the first place.
      */
-    private fun applyOrientation(locked: Boolean) {
-        requestedOrientation = when (at.bettertrack.app.data.prefs.orientationModeFor(locked)) {
-            at.bettertrack.app.data.prefs.ScreenOrientationMode.LOCKED_PORTRAIT ->
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            at.bettertrack.app.data.prefs.ScreenOrientationMode.FOLLOW_SENSOR ->
-                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+    private fun applyOrientation() {
+        val prefs = AppGraph.devicePrefs
+        val mode = orientationModeFor(
+            locked = prefs.orientationLockedNow(),
+            override = if (BuildConfig.DEBUG) prefs.orientationOverrideNow() else BtOrientationOverride.System,
+            debugBuild = BuildConfig.DEBUG,
+        )
+        val requested = when (mode) {
+            ScreenOrientationMode.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ScreenOrientationMode.FOLLOW_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            ScreenOrientationMode.FORCED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
+        // Writing the same value again is harmless but not free on every
+        // release; the resume path below calls this on every foreground.
+        if (requestedOrientation != requested) requestedOrientation = requested
     }
 
     /**
@@ -288,6 +312,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Re-assert the requested orientation on every foreground: a Custom Tab,
+        // a system dialog or a split-screen round trip can leave the task in a
+        // different orientation than the one this app asked for, and the debug
+        // override in particular must survive the trip to verify a layout.
+        guarded("applyOrientation") { applyOrientation() }
         // Returned from the Custom Tab without a redirect ⇒ user cancelled.
         if (awaitingTabReturn) {
             awaitingTabReturn = false

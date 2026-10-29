@@ -869,6 +869,13 @@
     <string name="bt_settings_dev_auth_refresh_ok">Sitzung erneuert</string>
     <string name="bt_settings_dev_auth_refresh_failed">Nicht erneuert, siehe Erneuerungsstatus</string>
     <string name="bt_settings_dev_auth_state">Status der Token-Erneuerung</string>
+    <string name="bt_settings_dev_orientation">Ausrichtung erzwingen</string>
+    <string name="bt_settings_dev_orientation_sub">Hoch- oder Querformat erzwingen, um ein Layout zu prüfen. Nur in Debug-Builds.</string>
+    <string name="bt_settings_dev_orientation_system">System</string>
+    <string name="bt_settings_dev_orientation_portrait">Hochformat</string>
+    <string name="bt_settings_dev_orientation_landscape">Querformat</string>
+    <string name="bt_settings_dev_window">Fensterklasse</string>
+    <string name="bt_settings_dev_window_sub">Woran sich das Layout ausrichtet: Compact = untere Leiste, Medium und Expanded = Seitenleiste.</string>
     <string name="bt_settings_dev_unlocked">Entwickleroptionen freigeschaltet</string>
     <string name="bt_settings_dev_hint">Noch %1$s Mal tippen, um Entwickleroptionen freizuschalten</string>
 
