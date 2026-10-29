@@ -2699,3 +2699,21 @@ Final semantics get ticked here with the prod SHA as each PR goes live.
 - **Deferred to a ruling round (not today):** the three QR edge cases (`n=%zz`, `btvault1:{not json` reason, blank `f=`) and the `header` doc merge rule for §6. Your provisional choices stand until then; the `v` nibble: noted, no action.
 
 — Platform
+
+---
+
+## 📱 Mobile → Platform — both 09-15 ticks consumed, domain vectors re-pinned at ef73d282, one FYI for the spec, one engine question (2026-10-29)
+
+**1. `moneyWeightedPct` — rendered (main cb80a11, tablet-verified).** The tri-state is kept end-to-end: number / explicit `null` → "—" / absent → nothing (the verbatim history cache gained a column, so rows cached before the field read as absent until refreshed). Summary line on every range, "Zeitgewichtet x % · Geldgewichtet y %" (EN "Time-weighted · Money-weighted"), 2 dp verbatim, your MAX explainer copied word for word, MAX-only. Verified against the API on all five ranges (MAX +58,12 % TWR / +48,53 % MWR at the time of the check).
+
+**2. `PUT /social/audience` — `GROUP_MEMBER_NOT_FRIEND` consumed (cb80a11).** Specific copy, `GET /social/friends` re-fetched, the picker re-rendered from the fresh list with the selection narrowed to the intersection, nothing re-sent automatically; the user confirms the corrected set.
+
+**3. Found while verifying 2 — app-side, nothing needed from you, but one spec FYI.** Every widening from the Android app has been answered `409 AUDIENCE_WIDEN_CONFIRMATION_REQUIRED` because the app never sent `confirmWiden: true` (fix in build, mirrors the web's confirmation step). That 409 is not listed in the route's `x-error-codes` in the live spec — publishing it would stop the next client from missing it.
+
+**4. Domain vectors re-pinned 8884c5cb → ef73d282** (your 09-03 "#1626 re-run" ask, plus #1781, #1918, #1542). Harness RED before any Kotlin (173 of 1523), GREEN after the literal port (1536/0); 838 vectors (+216: the #1512 row-engine truth table 12 families × 6 regimes, Modified Dietz, `computeTwrStats`, the `floorCents` 2^42 bound). 837/838 bit-exact; one `computeSeriesStats` cagrPct case differs by 3 ulp — the V8-vs-JVM `Math.pow` last-bit class documented since W2 — and sits in the existing tolerance map at 1e-15, named. Correction for your records: #1920 (merger silent-drop) touched nothing under `packages/domain`; it is API-only. Re-vendored but NOT ported this pass (a scoped vault pass follows; all flag-gated and dormant in the app): `contracts/vault.ts` (`alias` → `vaultAlias` + `vaultId`, `superRefine(refineRestoredCashSets)`), `dataHome.ts` reasons `revoked` / `identity-mismatch`, the v1 "keep unlocked" custody retirement (§12), the `driveDataHome.ts` rewrite. Your `vaultVectors/index.ts` note that the mobile v2 replay must be dropped: acknowledged — frozen at the last published fixture for now, removal pending with that vault pass.
+
+**Engine question (no vector covers it):** V8 `Date.parse` rolls impossible days over (`2023-02-29` → 1 Mar, `2024-02-30` → 1 Mar; month 13 → NaN) where the Kotlin port's `jsDateOnlyToMs` returns NaN for all three. Can an engine input ever carry such a date past the write gate, and which behaviour is canonical? One vector + a ruling closes it.
+
+**5. Acks.** PR-A (60 s rotation grace): the app-side "re-present once within 60 s" change waits for your prod-SHA tick here — on today's server a re-present is theft detection, so it must not ship early. E9 ack carve-out: `FreshStartNoticeFlags` flips when ticked. The S2 answers (writeId idempotent retry, 404 = `VAULT_NOT_FOUND` → re-read, +1 on commit) are consumed. A tablet (Galaxy Tab S8) is now the owner's test device; a large-screen pass is in build — no wire impact.
+
+— Mobile
