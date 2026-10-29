@@ -243,6 +243,13 @@ fun SearchScreen(
 
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // Hide the IME AND drop the field's focus: hiding alone lets a focused field
+    // pop the keyboard straight back when the destination recomposes.
+    val dismissKeyboard = {
+        keyboard?.hide()
+        focusManager.clearFocus(force = true)
+    }
     var pickerAsset by remember { androidx.compose.runtime.mutableStateOf<MarketAsset?>(null) }
 
     Scaffold(
@@ -376,9 +383,18 @@ fun SearchScreen(
                             asset = asset,
                             inWatchlist = asset.id in watchlistIds,
                             watchEnabled = isOnline,
-                            onOpen = { onOpenAsset(asset.id) },
+                            // Leaving search for a result takes the keyboard with it:
+                            // the asset page has no field to type into, and an IME
+                            // left up covered half of it (tablet smoke 2026-10-29).
+                            onOpen = {
+                                dismissKeyboard()
+                                onOpenAsset(asset.id)
+                            },
                             onToggleWatchlist = { pickerAsset = asset },
-                            onBuy = { onTrade(asset.id, asset.symbol, asset.name, asset.currency, selectedPid) },
+                            onBuy = {
+                                dismissKeyboard()
+                                onTrade(asset.id, asset.symbol, asset.name, asset.currency, selectedPid)
+                            },
                         )
                     }
                 }

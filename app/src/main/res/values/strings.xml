@@ -1652,7 +1652,10 @@
     <!-- V5 W5 — storage wizard, vault gate, "Where your data lives" (S3/S4 plan §4) -->
     <string name="bt_storage_wizard_title">Where should your data live?</string>
     <string name="bt_storage_wizard_intro">Nothing is created until you finish. You can change this later in Settings.</string>
-    <string name="bt_storage_not_available">Not available</string>
+    <!-- Labels the list of what a storage mode LACKS (the line under it), not
+         the mode itself: "Not available" read as if the option could not be
+         picked (tablet smoke 2026-10-29). -->
+    <string name="bt_storage_not_included">Not included</string>
     <string name="bt_storage_continue">Continue</string>
     <string name="bt_storage_choose_server_title">BetterTrack account</string>
     <string name="bt_storage_choose_server_body">Your portfolios live on BetterTrack. Prices, performance, tax modes, friends, chat and alerts all work.</string>
@@ -1838,6 +1841,9 @@
     <string name="bt_intel_forward_yield">Forward yield</string>
     <string name="bt_intel_trailing_amount">Last 12 months</string>
     <string name="bt_intel_next_payout">Next payout</string>
+    <!-- Leads the block instead of "Next payout" when every announced payout is
+         already behind us (the provider kept a past one in `upcoming`). -->
+    <string name="bt_intel_last_payout">Last payout</string>
     <string name="bt_intel_dividend_history">Recent payouts</string>
     <string name="bt_intel_dividends_empty">No dividends recorded</string>
     <string name="bt_intel_ex_date">Ex-date %1$s</string>

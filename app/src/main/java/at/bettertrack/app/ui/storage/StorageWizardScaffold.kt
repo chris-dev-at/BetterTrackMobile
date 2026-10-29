@@ -255,7 +255,7 @@ fun WizardChoiceCard(
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                text = stringResource(R.string.bt_storage_not_available).uppercase(),
+                text = stringResource(R.string.bt_storage_not_included).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = bt.textMuted,
             )

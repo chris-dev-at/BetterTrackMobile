@@ -1551,7 +1551,7 @@
     <!-- V5 W5 — Speicher-Assistent, Tresor-Sperre, „Wo deine Daten liegen“ (S3/S4-Plan §4) -->
     <string name="bt_storage_wizard_title">Wo sollen deine Daten liegen?</string>
     <string name="bt_storage_wizard_intro">Bis du fertig bist, wird nichts angelegt. Du kannst das später in den Einstellungen ändern.</string>
-    <string name="bt_storage_not_available">Nicht verfügbar</string>
+    <string name="bt_storage_not_included">Nicht enthalten</string>
     <string name="bt_storage_continue">Weiter</string>
     <string name="bt_storage_choose_server_title">BetterTrack-Konto</string>
     <string name="bt_storage_choose_server_body">Deine Portfolios liegen bei BetterTrack. Kurse, Performance, Steuermodi, Freunde, Chat und Alarme funktionieren alle.</string>
@@ -1737,6 +1737,7 @@
     <string name="bt_intel_forward_yield">Erwartete Dividendenrendite</string>
     <string name="bt_intel_trailing_amount">Letzte 12 Monate</string>
     <string name="bt_intel_next_payout">Nächste Zahlung</string>
+    <string name="bt_intel_last_payout">Letzte Zahlung</string>
     <string name="bt_intel_dividend_history">Letzte Zahlungen</string>
     <string name="bt_intel_dividends_empty">Keine Dividenden erfasst</string>
     <string name="bt_intel_ex_date">Ex-Tag %1$s</string>

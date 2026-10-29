@@ -66,6 +66,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.LocalDate
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -155,13 +156,58 @@ fun intelDate(iso: String?, locale: Locale): String? =
 fun intelDividendEventTime(event: DividendEventDto): Long? =
     intelTimeMs(event.exDate) ?: intelTimeMs(event.payDate)
 
+/** The calendar day an event field falls on — the UTC day [intelDate] renders it as. */
+fun intelDay(iso: String?): LocalDate? =
+    intelTimeMs(iso)?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+
 /**
- * The single upcoming payout worth leading with — the soonest one. Undated
- * announcements sort last rather than being dropped: "announced, date to come"
- * is still news.
+ * The day an event is still UPCOMING on: the earliest of its ex/pay days that
+ * is not before [today], or null when every date it has is behind us. The
+ * web's rule (`lib/dividendDates.ts` `upcomingDividendDate`): an event that has
+ * gone ex but not yet paid is still upcoming — until the money lands.
  */
-fun intelNextDividend(response: DividendsResponse): DividendEventDto? =
-    response.upcoming.minByOrNull { intelDividendEventTime(it) ?: Long.MAX_VALUE }
+fun intelUpcomingDay(event: DividendEventDto, today: LocalDate): LocalDate? =
+    listOfNotNull(intelDay(event.exDate), intelDay(event.payDate)).filter { it >= today }.minOrNull()
+
+private fun intelUndated(event: DividendEventDto): Boolean =
+    intelDay(event.exDate) == null && intelDay(event.payDate) == null
+
+/**
+ * The single upcoming payout worth leading with — the one whose upcoming day
+ * ([intelUpcomingDay]) comes first, never one entirely in the past.
+ *
+ * The provider's `upcoming` is not a promise: AAPL's still carried the
+ * 10.08.2026 ex / 13.08.2026 pay event on 29.10.2026, and the app printed it
+ * under "Next payout" (tablet smoke). Undated announcements sort last rather
+ * than being dropped: "announced, date to come" is still news.
+ */
+fun intelNextDividend(response: DividendsResponse, today: LocalDate = LocalDate.now()): DividendEventDto? =
+    response.upcoming
+        .mapNotNull { e -> intelUpcomingDay(e, today)?.let { e to it } }
+        .minByOrNull { it.second }
+        ?.first
+        ?: response.upcoming.firstOrNull(::intelUndated)
+
+/**
+ * When NO announced payout is ahead any more: the latest of them, which the
+ * block then leads with as "Last payout" instead of dressing a past date up as
+ * the next one. Null whenever [intelNextDividend] has an answer.
+ */
+fun intelLastAnnouncedDividend(response: DividendsResponse, today: LocalDate = LocalDate.now()): DividendEventDto? {
+    if (intelNextDividend(response, today) != null) return null
+    return response.upcoming
+        .filterNot(::intelUndated)
+        .maxByOrNull { e -> listOfNotNull(intelDay(e.exDate), intelDay(e.payDate)).max() }
+}
+
+/**
+ * The ex-date worth printing on the NEXT-payout row: only one that has not
+ * passed. An event that went ex yesterday and pays next week is upcoming for
+ * its pay date alone — "Ex-date" with a day already gone, under "Next payout",
+ * is a past date under an upcoming label (the web drops it the same way).
+ */
+fun intelNextRowExDate(event: DividendEventDto, today: LocalDate): String? =
+    event.exDate?.takeIf { (intelDay(it) ?: return@takeIf true) >= today }
 
 /** Most-recent-first slice of the payout history (the wire is ascending). */
 fun intelRecentDividends(
@@ -377,15 +423,22 @@ private fun IntelDividendsBlock(response: DividendsResponse, locale: Locale) {
             }
         }
 
-        intelNextDividend(response)?.let { next ->
+        val today = remember { LocalDate.now() }
+        val next = intelNextDividend(response, today)
+        val last = if (next == null) intelLastAnnouncedDividend(response, today) else null
+        if (next != null || last != null) {
             Spacer(Modifier.height(14.dp))
             Text(
-                text = stringResource(R.string.bt_intel_next_payout),
+                text = stringResource(if (next != null) R.string.bt_intel_next_payout else R.string.bt_intel_last_payout),
                 style = MaterialTheme.typography.labelSmall,
                 color = bt.textMuted,
             )
             Spacer(Modifier.height(4.dp))
-            IntelDividendRow(next, response.currency, locale, emphasis = true)
+            if (next != null) {
+                IntelDividendRow(next.copy(exDate = intelNextRowExDate(next, today)), response.currency, locale, emphasis = true)
+            } else {
+                IntelDividendRow(last!!, response.currency, locale, emphasis = false)
+            }
         }
 
         val history = intelRecentDividends(response)

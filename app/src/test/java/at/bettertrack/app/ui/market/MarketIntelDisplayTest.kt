@@ -35,6 +35,9 @@ import org.junit.Test
  */
 class MarketIntelDisplayTest {
 
+    /** A fixed "today" before the fixtures' August dates, so the suite does not age. */
+    private val AUG_1: LocalDate = LocalDate.of(2026, 8, 1)
+
     // ── Trap 1: forwardYield is a fraction, not a percentage ────────────────
 
     @Test
@@ -145,7 +148,7 @@ class MarketIntelDisplayTest {
                 DividendEventDto(exDate = "2026-08-08T00:00:00.000Z", amount = 0.26, currency = "USD"),
             ),
         )
-        assertEquals("2026-08-08T00:00:00.000Z", intelNextDividend(response)!!.exDate)
+        assertEquals("2026-08-08T00:00:00.000Z", intelNextDividend(response, AUG_1)!!.exDate)
     }
 
     @Test
@@ -157,15 +160,63 @@ class MarketIntelDisplayTest {
                 DividendEventDto(exDate = "2026-08-08T00:00:00.000Z", amount = 0.26, currency = "USD"),
             ),
         )
-        assertEquals("2026-08-08T00:00:00.000Z", intelNextDividend(response)!!.exDate)
+        assertEquals("2026-08-08T00:00:00.000Z", intelNextDividend(response, AUG_1)!!.exDate)
 
         val undatedOnly = DividendsResponse(
             available = true,
             upcoming = listOf(DividendEventDto(amount = 0.30, currency = "USD")),
         )
         // "Announced, date to come" is still worth showing.
-        assertEquals(0.30, intelNextDividend(undatedOnly)!!.amount!!, 1e-9)
-        assertNull(intelNextDividend(DividendsResponse(available = true)))
+        assertEquals(0.30, intelNextDividend(undatedOnly, AUG_1)!!.amount!!, 1e-9)
+        assertNull(intelNextDividend(DividendsResponse(available = true), AUG_1))
+    }
+
+    /**
+     * Tablet smoke 2026-10-29: AAPL's provider payload still listed the
+     * 10.08.2026 ex / 13.08.2026 pay event under `upcoming` on 29.10.2026, and
+     * the asset page printed it as "Next payout". A past event is never next.
+     */
+    @Test
+    fun `a payout entirely in the past is not the next one`() {
+        val stale = DividendEventDto(
+            exDate = "2026-08-10T00:00:00.000Z", payDate = "2026-08-13T00:00:00.000Z",
+            amount = 0.27, currency = "USD",
+        )
+        val response = DividendsResponse(available = true, upcoming = listOf(stale))
+        val oct29 = LocalDate.of(2026, 10, 29)
+
+        assertNull(intelNextDividend(response, oct29))
+        // …it leads as the LAST payout instead, dates intact.
+        assertEquals(stale, intelLastAnnouncedDividend(response, oct29))
+        // While it was still ahead it was the next one, and no "last" competed.
+        assertEquals(stale, intelNextDividend(response, AUG_1))
+        assertNull(intelLastAnnouncedDividend(response, AUG_1))
+    }
+
+    @Test
+    fun `a past event loses to a future one regardless of array order`() {
+        val past = DividendEventDto(exDate = "2026-08-10T00:00:00.000Z", payDate = "2026-08-13T00:00:00.000Z")
+        val ahead = DividendEventDto(exDate = "2026-11-09T00:00:00.000Z", payDate = "2026-11-13T00:00:00.000Z")
+        val response = DividendsResponse(available = true, upcoming = listOf(past, ahead))
+        assertEquals(ahead, intelNextDividend(response, LocalDate.of(2026, 10, 29)))
+    }
+
+    /** Gone ex, not yet paid: still upcoming — on its pay date (the web's rule). */
+    @Test
+    fun `an event that went ex but has not paid is still next, without its past ex-date`() {
+        val exPassed = DividendEventDto(exDate = "2026-10-27T00:00:00.000Z", payDate = "2026-11-03T00:00:00.000Z")
+        val later = DividendEventDto(exDate = "2026-11-20T00:00:00.000Z", payDate = "2026-12-01T00:00:00.000Z")
+        val today = LocalDate.of(2026, 10, 29)
+        val response = DividendsResponse(available = true, upcoming = listOf(later, exPassed))
+
+        assertEquals(exPassed, intelNextDividend(response, today))
+        assertNull("a passed ex-date is not printed on the next row", intelNextRowExDate(exPassed, today))
+        assertEquals("2026-11-20T00:00:00.000Z", intelNextRowExDate(later, today))
+        // Today counts as ahead: an ex-date of today is still worth printing.
+        assertEquals(
+            "2026-10-29T00:00:00.000Z",
+            intelNextRowExDate(DividendEventDto(exDate = "2026-10-29T00:00:00.000Z"), today),
+        )
     }
 
     @Test
