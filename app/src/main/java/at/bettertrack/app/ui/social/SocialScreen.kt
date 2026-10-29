@@ -146,6 +146,12 @@ data class SocialUiState(
     /** The item's live audience (friendIds + link state); null while loading. */
     val sharingState: AudienceState? = null,
     val sharingBusy: Boolean = false,
+    /**
+     * Set when a save was refused because someone can no longer be added (#1949):
+     * the open sheet shows it and re-seeds from the refreshed friends list.
+     * Cleared when the sheet closes, reopens or a save lands.
+     */
+    val sharingRecovery: AudiencePickerRecovery? = null,
     /** A freshly-minted public link to reveal once (null = no dialog). */
     val publicLinkToShow: String? = null,
 )
@@ -220,7 +226,7 @@ class SocialViewModel(
     fun accept(req: FriendRequest): Unit = write { toastFor(repo.acceptRequest(req.id), SocialToast.Res(R.string.bt_social_toast_now_friends, listOf(req.username))) { accept(req) } }
 
     fun openSharing(item: MySharedItem) {
-        _state.value = _state.value.copy(sharingItem = item, sharingState = null)
+        _state.value = _state.value.copy(sharingItem = item, sharingState = null, sharingRecovery = null)
         viewModelScope.launch {
             val r = repo.getAudience(item.kind, item.id)
             val resolved = (r as? BtResult.Ok)?.value
@@ -240,7 +246,7 @@ class SocialViewModel(
         }
     }
 
-    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null) }
+    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null, sharingRecovery = null) }
     fun dismissLink() { _state.value = _state.value.copy(publicLinkToShow = null) }
 
     fun applyAudience(
@@ -261,6 +267,7 @@ class SocialViewModel(
                         sharingBusy = false,
                         sharingItem = null,
                         sharingState = null,
+                        sharingRecovery = null,
                         publicLinkToShow = r.value.publicUrl,
                     )
                     if (r.value.publicUrl == null) {
@@ -281,12 +288,40 @@ class SocialViewModel(
                     load()
                 }
                 is BtResult.Err -> {
+                    // #1949: someone named can no longer be added. Re-fetch the
+                    // friends, re-seed the STILL-OPEN sheet with the pick minus
+                    // whoever left, and let the user confirm. No toast with
+                    // "Try again" here — it would re-send the very set the
+                    // server just refused (atomically: nothing was written).
+                    val recovery = recoverAudienceSave(
+                        error = r.error,
+                        audience = audience,
+                        sentFriendIds = friendIds,
+                        previousFriends = _state.value.friends,
+                        social = repo,
+                    )
+                    if (recovery != null) {
+                        val st = _state.value
+                        _state.value = st.copy(
+                            sharingBusy = false,
+                            friends = recovery.friends,
+                            sharingState = st.sharingState
+                                ?.takeIf { st.sharingItem?.id == item.id }
+                                ?.copy(audience = audience, friendIds = recovery.friendIds),
+                            sharingRecovery = AudiencePickerRecovery(
+                                message = recovery.notice,
+                                refreshed = recovery.refreshed,
+                                epoch = (st.sharingRecovery?.epoch ?: 0) + 1,
+                            ),
+                        )
+                        return@launch
+                    }
                     _state.value = _state.value.copy(sharingBusy = false)
-                    // The sheet is gone but every argument survives here, so
-                    // "Try again" can re-issue exactly the audience the user
-                    // just chose instead of making them re-pick it.
+                    // Every argument survives here, so "Try again" can re-issue
+                    // exactly the audience the user just chose instead of making
+                    // them re-pick it.
                     _toast.value = SocialToast.Failure(
-                        r.error.asMessage(),
+                        audienceSaveMessage(r.error),
                         onRetry = { applyAudience(item, audience, friendIds, groupId, acknowledge) },
                     )
                 }
@@ -496,6 +531,7 @@ fun SocialScreen(
             // one with the group they just made already in the list.
             onOpenGroups = { vm.closeSharing(); onOpenGroups() },
             onDismiss = { vm.closeSharing() },
+            recovery = ui.sharingRecovery,
         )
     }
 

@@ -71,7 +71,10 @@ import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
+import at.bettertrack.app.ui.social.AudiencePickerRecovery
 import at.bettertrack.app.ui.social.AudiencePickerSheet
+import at.bettertrack.app.ui.social.audienceSaveMessage
+import at.bettertrack.app.ui.social.recoverAudienceSave
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -397,6 +400,7 @@ fun PortfolioSettingsScreen(
             },
             onOpenGroups = { vm.closeSharing(); onOpenFriendGroups() },
             onDismiss = vm::closeSharing,
+            recovery = ui.sharingRecovery,
         )
     }
 }
@@ -470,6 +474,8 @@ data class PortfolioSettingsUi(
     val sharing: AudienceState? = null,
     val friends: List<Friend> = emptyList(),
     val groups: List<FriendGroup> = emptyList(),
+    /** #1949: a refused save the open sharing sheet has recovered from (see `AudienceRecovery.kt`). */
+    val sharingRecovery: AudiencePickerRecovery? = null,
     /** The effective tax mode + its source, already reduced to one string res. */
     val taxSummary: Int? = null,
     val busy: Boolean = false,
@@ -561,6 +567,7 @@ class PortfolioSettingsViewModel(
 
     fun openSharing() {
         val known = _state.value.audience
+        _state.value = _state.value.copy(sharingRecovery = null)
         if (known != null) _state.value = _state.value.copy(sharing = known)
         viewModelScope.launch {
             // Friends and groups are only needed once the sheet is open, so they
@@ -581,7 +588,7 @@ class PortfolioSettingsViewModel(
     }
 
     fun closeSharing() {
-        _state.value = _state.value.copy(sharing = null)
+        _state.value = _state.value.copy(sharing = null, sharingRecovery = null)
     }
 
     fun applyAudience(
@@ -602,7 +609,7 @@ class PortfolioSettingsViewModel(
             )
             when (r) {
                 is BtResult.Ok -> {
-                    _state.value = _state.value.copy(busy = false, sharing = null)
+                    _state.value = _state.value.copy(busy = false, sharing = null, sharingRecovery = null)
                     // Re-read rather than assume: the server owns the resulting
                     // rung (a link can be minted or revoked as a side effect).
                     when (val a = social.getAudience(ShareableKind.Portfolio, portfolioId)) {
@@ -611,8 +618,33 @@ class PortfolioSettingsViewModel(
                     }
                 }
 
-                is BtResult.Err ->
-                    _state.value = _state.value.copy(busy = false, error = r.error.asMessage())
+                is BtResult.Err -> {
+                    // #1949: recover in the open sheet (refreshed friends, the
+                    // pick minus whoever left, the user confirms) instead of a
+                    // screen-level error the sheet's scrim would hide anyway.
+                    val recovery = recoverAudienceSave(
+                        error = r.error,
+                        audience = audience,
+                        sentFriendIds = friendIds,
+                        previousFriends = _state.value.friends,
+                        social = social,
+                    )
+                    val st = _state.value
+                    _state.value = if (recovery != null) {
+                        st.copy(
+                            busy = false,
+                            friends = recovery.friends,
+                            sharing = st.sharing?.copy(audience = audience, friendIds = recovery.friendIds),
+                            sharingRecovery = AudiencePickerRecovery(
+                                message = recovery.notice,
+                                refreshed = recovery.refreshed,
+                                epoch = (st.sharingRecovery?.epoch ?: 0) + 1,
+                            ),
+                        )
+                    } else {
+                        st.copy(busy = false, error = audienceSaveMessage(r.error))
+                    }
+                }
             }
         }
     }

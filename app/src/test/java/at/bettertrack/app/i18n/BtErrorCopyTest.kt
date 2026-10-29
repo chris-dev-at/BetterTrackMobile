@@ -147,6 +147,37 @@ class BtErrorCopyTest {
         assertNotEquals(0, BtErrorCopy.resOrGeneric(null))
     }
 
+    // ── Per-endpoint overrides (BtErrorCopy.Context) ─────────────────────────
+
+    @Test
+    fun `every context override refines a code the global catalog already covers`() {
+        BtErrorCopy.contextOverrides.forEach { (context, overrides) ->
+            overrides.forEach { (code, res) ->
+                assertTrue("$context/$code overrides an uncatalogued code", code in BtErrorCopy.codes)
+                assertNotEquals("$context/$code maps to resource id 0", 0, res)
+                assertNotEquals("$context/$code repeats the global copy", BtErrorCopy.resFor(code), res)
+                assertEquals(res, BtErrorCopy.resFor(code, context))
+            }
+        }
+    }
+
+    @Test
+    fun `the audience refusal copy exists in both languages and is not the groups sentence`() {
+        // #1949: GROUP_MEMBER_NOT_FRIEND on PUT /social/audience is about a stale
+        // friends list, not about groups.
+        val name = "bt_audience_err_recipient_unavailable"
+        val en = strings("")
+        val de = strings("-de")
+        assertTrue("$name missing in EN", name in en)
+        assertTrue("$name missing in DE", name in de)
+        assertNotEquals(en["bt_err_group_member_not_friend"], en[name])
+        assertNotEquals(de["bt_err_group_member_not_friend"], de[name])
+        assertTrue("override strings must not use the reserved bt_err_ prefix", !name.startsWith("bt_err_"))
+        val msg = BtApiError(400, "GROUP_MEMBER_NOT_FRIEND").asMessage(BtErrorCopy.Context.Audience)
+        assertNull(msg.diagnostic)
+        assertEquals(BtErrorCopy.resFor("GROUP_MEMBER_NOT_FRIEND", BtErrorCopy.Context.Audience), msg.res)
+    }
+
     @Test
     fun `app-local queue codes are catalogued`() {
         // These never come from the server, so nothing else would catch their

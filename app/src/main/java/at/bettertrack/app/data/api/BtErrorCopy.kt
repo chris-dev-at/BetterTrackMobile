@@ -352,6 +352,40 @@ object BtErrorCopy {
      */
     @StringRes
     fun resOrGeneric(code: String?): Int = resFor(code) ?: R.string.bt_err_unknown
+
+    /**
+     * Copy that depends on WHICH endpoint refused, for the rare code the platform
+     * reuses across endpoints with a different meaning for the user.
+     *
+     * `GROUP_MEMBER_NOT_FRIEND` is the case that made this necessary (#1949):
+     * `POST /social/groups/:id/members` and `PUT /social/audience/:kind/:id` answer
+     * it for the same question ("may this name be used?"), but the global
+     * sentence talks about GROUPS, which is wrong on the sharing sheet — there the
+     * user picked people for an item, and the realistic cause is a stale friends
+     * list (someone was unfriended or disabled since it was drawn). The context
+     * keeps the global map one-code-one-sentence and puts the endpoint knowledge
+     * in exactly one reviewable place. Strings here are deliberately NOT named
+     * `bt_err_*` — that prefix is reserved for the global catalog, whose
+     * orphan check would (rightly) flag them.
+     */
+    enum class Context {
+        /** `PUT /social/audience/:kind/:subjectId` — the sharing sheet's save. */
+        Audience,
+    }
+
+    private val CONTEXT_OVERRIDES: Map<Context, Map<String, Int>> = mapOf(
+        Context.Audience to mapOf(
+            "GROUP_MEMBER_NOT_FRIEND" to R.string.bt_audience_err_recipient_unavailable,
+        ),
+    )
+
+    /** Every (context, code) override — the contract `BtErrorCopyTest` asserts on. */
+    val contextOverrides: Map<Context, Map<String, Int>> get() = CONTEXT_OVERRIDES
+
+    /** [resFor] as seen from [context]: its override when it has one, else the global copy. */
+    @StringRes
+    fun resFor(code: String?, context: Context): Int? =
+        code?.let { CONTEXT_OVERRIDES[context]?.get(it) } ?: resFor(code)
 }
 
 /**
@@ -408,6 +442,16 @@ fun BtApiError.asMessage(): BtMessage {
 
 /** Convenience for the many call sites that only ever show the generic line. */
 fun BtResult.Err.asMessage(): BtMessage = error.asMessage()
+
+/**
+ * [asMessage] for an endpoint whose copy for some code differs from the global
+ * sentence — see [BtErrorCopy.Context]. Codes without an override resolve exactly
+ * as [asMessage] does.
+ */
+fun BtApiError.asMessage(context: BtErrorCopy.Context): BtMessage {
+    val override = BtErrorCopy.contextOverrides[context]?.get(code) ?: return asMessage()
+    return BtMessage(override)
+}
 
 /**
  * How a PARKED sync op's reason should be rendered.

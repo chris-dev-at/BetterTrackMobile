@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
+import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendGroup
 import at.bettertrack.app.data.repo.ShareAudience
@@ -57,6 +58,7 @@ import at.bettertrack.app.data.repo.ShareableKind
 import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
+import at.bettertrack.app.ui.components.resolve
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -104,13 +106,17 @@ fun AudiencePickerSheet(
     onApply: (audience: ShareAudience, friendIds: Set<String>, groupId: String?, acknowledge: Boolean) -> Unit,
     onOpenGroups: () -> Unit,
     onDismiss: () -> Unit,
+    recovery: AudiencePickerRecovery? = null,
 ) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selected by remember { mutableStateOf(currentAudience) }
     var ack by remember { mutableStateOf(false) }
-    var selectedFriends by remember { mutableStateOf(initialFriendIds) }
+    // Re-seeded when a refused save is recovered (#1949): the caller hands back
+    // the user's pick minus anyone the refreshed friends list no longer has, and
+    // the epoch makes that a fresh seed even when the set happens to be equal.
+    var selectedFriends by remember(initialFriendIds, recovery?.epoch) { mutableStateOf(initialFriendIds) }
     // A group that no longer exists must not survive as a stale selection — the
     // server would answer GROUP_AUDIENCE_INVALID for a foreign id.
     var selectedGroup by remember {
@@ -294,6 +300,15 @@ fun AudiencePickerSheet(
                     Spacer(Modifier.height(8.dp))
                 }
                 PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
+            }
+
+            // #1949: a save refused because someone can no longer be added. The
+            // list above is the refreshed one and the ticks are the user's pick
+            // minus whoever left it — said here, in the sheet the user is
+            // looking at, and confirmed by the user's own next tap on Apply.
+            if (recovery != null) {
+                Spacer(Modifier.height(12.dp))
+                RecoveryNotice(recovery)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -528,6 +543,63 @@ private fun AudienceOption(
  * of one subject, not a row competing for a tap, which is the distinction
  * [BtGroup]'s KDoc draws between the two containment tiers.
  */
+/**
+ * What the sheet shows after a refused save it has recovered from (#1949).
+ *
+ * @param epoch bumps on every recovery, so the picker re-seeds its ticks from
+ *   `initialFriendIds` even when the corrected set equals the previous seed.
+ * @param refreshed the friends list really was re-fetched; only then does the
+ *   notice say the list is current again.
+ */
+data class AudiencePickerRecovery(
+    val message: BtMessage,
+    val refreshed: Boolean,
+    val epoch: Int,
+)
+
+/**
+ * The recovery notice: what happened, then (when true) what changed and what to
+ * do. Tonal and calm — this is a corrected form, not an alarm; the warning glyph
+ * carries the severity in `loss`, as [PublicAcknowledgment] does.
+ */
+@Composable
+private fun RecoveryNotice(recovery: AudiencePickerRecovery) {
+    val bt = BtTheme.colors
+    Surface(
+        shape = BtShapes.group,
+        color = bt.wash(bt.loss, 0.10f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                Icons.Outlined.WarningAmber,
+                contentDescription = null,
+                tint = bt.loss,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = recovery.message.resolve(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bt.textPrimary,
+                )
+                if (recovery.refreshed) {
+                    Text(
+                        text = stringResource(R.string.bt_audience_recover_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bt.textSecondary,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun HintCard(text: String) {
     val bt = BtTheme.colors

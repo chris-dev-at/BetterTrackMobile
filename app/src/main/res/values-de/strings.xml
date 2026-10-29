@@ -1298,6 +1298,8 @@
     <string name="bt_social_public_ack_checkbox">Ich verstehe das und möchte einen öffentlichen Link</string>
     <string name="bt_social_create_public_link">Öffentlichen Link erstellen</string>
     <string name="bt_social_apply">Übernehmen</string>
+    <string name="bt_audience_err_recipient_unavailable">Eine ausgewählte Person kann nicht mehr hinzugefügt werden. Es wurde nichts geändert.</string>
+    <string name="bt_audience_recover_hint">Deine Freundesliste ist wieder aktuell, wer nicht mehr darin ist, wurde abgewählt. Prüfe die Auswahl und tippe dann auf Übernehmen.</string>
 
     <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
     <string name="bt_paranoid_title">Dieses Konto ist im Paranoid-Modus</string>
