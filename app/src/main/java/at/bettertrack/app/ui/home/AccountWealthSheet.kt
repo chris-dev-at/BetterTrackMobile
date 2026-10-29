@@ -295,7 +295,14 @@ private fun SinglePortfolioWealth(
             // portfolio hero's labelled time-/money-weighted line (+ MAX explainer)
             // verbatim. Only over a drawable curve, like the delta line above it.
             if (state is AccountSeriesState.Curve) {
-                ReturnSummaryLine(history = history, modifier = Modifier.padding(top = 2.dp))
+                ReturnSummaryLine(
+                    history = history,
+                    modifier = Modifier.padding(top = 2.dp),
+                    // Under the rail instead (below): above the canvas it moved
+                    // the rail on MAX alone.
+                    showMaxExplainer = false,
+                    holdSpaceWhileLoading = true,
+                )
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -316,6 +323,11 @@ private fun SinglePortfolioWealth(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             contentDescription = stringResource(R.string.bt_chart_range_cd),
         )
+        // #1669: the MAX explainer sits UNDER the rail so the rail never moves
+        // between ranges.
+        if (state is AccountSeriesState.Curve && returnSummaryOf(history)?.explainMax == true) {
+            ReturnSummaryExplainer(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp))
+        }
     }
 }
 
@@ -362,16 +374,6 @@ private fun MultiPortfolioWealth(
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
             )
-            // #1669: the MAX explainer is stated ONCE for all the small multiples
-            // below (each slot carries its own labelled line without it), and only
-            // when at least one slot actually shows a summary.
-            val anyMaxSummary = remember(series, scope) {
-                scope.charted.any { returnSummaryOf(series[it.id])?.explainMax == true }
-            }
-            if (anyMaxSummary) {
-                Spacer(Modifier.height(6.dp))
-                ReturnSummaryExplainer()
-            }
             Spacer(Modifier.height(12.dp))
             BtRangeSegmented(
                 options = ACCOUNT_WEALTH_RANGES,
@@ -381,6 +383,17 @@ private fun MultiPortfolioWealth(
                 modifier = Modifier.fillMaxWidth(),
                 contentDescription = stringResource(R.string.bt_chart_range_cd),
             )
+            // #1669: the MAX explainer is stated ONCE for all the small multiples
+            // below (each slot carries its own labelled line without it), only
+            // when at least one slot actually shows a summary — and UNDER the
+            // rail, so the rail never moves between ranges.
+            val anyMaxSummary = remember(series, scope) {
+                scope.charted.any { returnSummaryOf(series[it.id])?.explainMax == true }
+            }
+            if (anyMaxSummary) {
+                Spacer(Modifier.height(10.dp))
+                ReturnSummaryExplainer()
+            }
         }
         Spacer(Modifier.height(14.dp))
         LazyColumn(

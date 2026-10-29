@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
-import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.repo.Friend
 import at.bettertrack.app.data.repo.FriendGroup
 import at.bettertrack.app.data.repo.ShareAudience
@@ -59,6 +58,7 @@ import at.bettertrack.app.ui.components.BtAvatar
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.resolve
+import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 
@@ -106,7 +106,18 @@ fun AudiencePickerSheet(
     onApply: (audience: ShareAudience, friendIds: Set<String>, groupId: String?, acknowledge: Boolean) -> Unit,
     onOpenGroups: () -> Unit,
     onDismiss: () -> Unit,
-    recovery: AudiencePickerRecovery? = null,
+    /** The last save's outcome, shown in the sheet (null = nothing to say). */
+    feedback: AudienceSheetFeedback? = null,
+    /**
+     * Bumps when the caller re-seeds [initialFriendIds] after a recovery (#1949),
+     * so the ticks re-seed even when the corrected set equals the previous one.
+     * Deliberately separate from [feedback]: a confirmation step must never reset
+     * the user's ticks.
+     */
+    seedEpoch: Int = 0,
+    /** Confirm on the widening step: re-send this exact save with `confirmWiden`. */
+    onConfirmWiden: (PendingAudienceSave) -> Unit = {},
+    onCancelWiden: () -> Unit = {},
 ) {
     val bt = BtTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -116,7 +127,7 @@ fun AudiencePickerSheet(
     // Re-seeded when a refused save is recovered (#1949): the caller hands back
     // the user's pick minus anyone the refreshed friends list no longer has, and
     // the epoch makes that a fresh seed even when the set happens to be equal.
-    var selectedFriends by remember(initialFriendIds, recovery?.epoch) { mutableStateOf(initialFriendIds) }
+    var selectedFriends by remember(initialFriendIds, seedEpoch) { mutableStateOf(initialFriendIds) }
     // A group that no longer exists must not survive as a stale selection — the
     // server would answer GROUP_AUDIENCE_INVALID for a foreign id.
     var selectedGroup by remember {
@@ -302,33 +313,46 @@ fun AudiencePickerSheet(
                 PublicAcknowledgment(checked = ack, onToggle = { ack = !ack })
             }
 
-            // #1949: a save refused because someone can no longer be added. The
-            // list above is the refreshed one and the ticks are the user's pick
-            // minus whoever left it — said here, in the sheet the user is
-            // looking at, and confirmed by the user's own next tap on Apply.
-            if (recovery != null) {
+            // The last save's outcome, in the sheet the user is looking at:
+            // #1949's recovered refusal (refreshed list, narrowed ticks — the
+            // user's next Apply confirms) or any other refusal.
+            if (feedback != null && feedback !is AudienceSheetFeedback.ConfirmWiden) {
                 Spacer(Modifier.height(12.dp))
-                RecoveryNotice(recovery)
+                SaveFeedbackNotice(feedback)
             }
 
             Spacer(Modifier.height(20.dp))
 
-            val canApply = audienceApplyAllowed(
-                selected = selected,
-                acknowledged = ack,
-                hasGroup = selectedGroup != null,
-                busy = busy,
-            )
-            BtPrimaryButton(
-                text = when {
-                    mintsLink -> stringResource(R.string.bt_social_create_public_link)
-                    else -> stringResource(R.string.bt_social_apply)
-                },
-                onClick = { onApply(selected, selectedFriends, selectedGroup, ack) },
-                enabled = canApply,
-                loading = busy,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-            )
+            // The 409 widening step stands only for the selection it was asked
+            // about; edit a tick and the sheet is back to a plain Apply.
+            val widen = (feedback as? AudienceSheetFeedback.ConfirmWiden)?.confirm
+                ?.takeIf { it.pending.matches(selected, selectedFriends, selectedGroup) }
+            if (widen != null) {
+                WidenConfirmation(
+                    confirm = widen,
+                    groups = groups,
+                    busy = busy,
+                    onCancel = onCancelWiden,
+                    onConfirm = { onConfirmWiden(widen.pending) },
+                )
+            } else {
+                val canApply = audienceApplyAllowed(
+                    selected = selected,
+                    acknowledged = ack,
+                    hasGroup = selectedGroup != null,
+                    busy = busy,
+                )
+                BtPrimaryButton(
+                    text = when {
+                        mintsLink -> stringResource(R.string.bt_social_create_public_link)
+                        else -> stringResource(R.string.bt_social_apply)
+                    },
+                    onClick = { onApply(selected, selectedFriends, selectedGroup, ack) },
+                    enabled = canApply,
+                    loading = busy,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                )
+            }
         }
     }
 }
@@ -527,43 +551,19 @@ private fun AudienceOption(
 }
 
 /**
- * A gold advisory note inside the audience sheet.
- *
- * ## Tonal, not boxed
- *
- * This used to be a `gold @7%` fill wrapped in a `1dp gold @25%` ring. R2 moved
- * the app off border walls onto tonal steps ([BtGroup]) and R3 took the ring off
- * the state badge for the same reason: a tinted fill on a darker page is already
- * a boundary, and drawing a line around it is a second boundary doing the first
- * one's job.
- *
- * Losing the ring means the fill has to hold the shape by itself, so the tint
- * steps up (7% → 11%) — the *colour* is what says "advisory", and it says it
- * without an outline. The shape moves to `BtShapes.group` too: a hint is a block
- * of one subject, not a row competing for a tap, which is the distinction
- * [BtGroup]'s KDoc draws between the two containment tiers.
- */
-/**
- * What the sheet shows after a refused save it has recovered from (#1949).
- *
- * @param epoch bumps on every recovery, so the picker re-seeds its ticks from
- *   `initialFriendIds` even when the corrected set equals the previous seed.
- * @param refreshed the friends list really was re-fetched; only then does the
- *   notice say the list is current again.
- */
-data class AudiencePickerRecovery(
-    val message: BtMessage,
-    val refreshed: Boolean,
-    val epoch: Int,
-)
-
-/**
- * The recovery notice: what happened, then (when true) what changed and what to
- * do. Tonal and calm — this is a corrected form, not an alarm; the warning glyph
- * carries the severity in `loss`, as [PublicAcknowledgment] does.
+ * What the sheet says about its last save — always IN the sheet (a toast or a
+ * screen-level error would sit behind this modal's scrim, which is exactly how a
+ * 409 used to vanish on the device).
  */
 @Composable
-private fun RecoveryNotice(recovery: AudiencePickerRecovery) {
+private fun SaveFeedbackNotice(feedback: AudienceSheetFeedback) {
+    val (message, hint) = when (feedback) {
+        is AudienceSheetFeedback.Recovered ->
+            feedback.message.resolve() to
+                (if (feedback.refreshed) stringResource(R.string.bt_audience_recover_hint) else null)
+        is AudienceSheetFeedback.Failed -> feedback.message.resolveWithDiagnostic() to null
+        is AudienceSheetFeedback.ConfirmWiden -> return
+    }
     val bt = BtTheme.colors
     Surface(
         shape = BtShapes.group,
@@ -582,14 +582,10 @@ private fun RecoveryNotice(recovery: AudiencePickerRecovery) {
             )
             Spacer(Modifier.width(10.dp))
             Column {
-                Text(
-                    text = recovery.message.resolve(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textPrimary,
-                )
-                if (recovery.refreshed) {
+                Text(message, style = MaterialTheme.typography.bodySmall, color = bt.textPrimary)
+                if (hint != null) {
                     Text(
-                        text = stringResource(R.string.bt_audience_recover_hint),
+                        text = hint,
                         style = MaterialTheme.typography.bodySmall,
                         color = bt.textSecondary,
                         modifier = Modifier.padding(top = 2.dp),
@@ -600,6 +596,113 @@ private fun RecoveryNotice(recovery: AudiencePickerRecovery) {
     }
 }
 
+/**
+ * The widening confirmation step (409 `AUDIENCE_WIDEN_CONFIRMATION_REQUIRED`):
+ * names the reach on both sides, then Cancel / Confirm. Gold-washed like the
+ * other advisory cards — a deliberate decision, not an error — and it REPLACES
+ * the Apply button while it stands, so there is exactly one way forward.
+ */
+@Composable
+private fun WidenConfirmation(
+    confirm: AudienceWidenConfirm,
+    groups: List<FriendGroup>,
+    busy: Boolean,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val bt = BtTheme.colors
+    val from = audienceReachLabel(confirm.from, confirm.fromFriendCount, confirm.fromGroupId, groups)
+    val to = audienceReachLabel(
+        confirm.pending.audience,
+        confirm.pending.friendIds.size,
+        confirm.pending.groupId,
+        groups,
+    )
+    Surface(
+        shape = BtShapes.group,
+        color = bt.wash(bt.gold, 0.11f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(
+                text = stringResource(R.string.bt_audience_widen_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = bt.textPrimary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.bt_audience_widen_body, from, to),
+                style = MaterialTheme.typography.bodySmall,
+                color = bt.textSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BtSecondaryButton(
+                    text = stringResource(R.string.bt_action_cancel),
+                    onClick = onCancel,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                )
+                BtPrimaryButton(
+                    text = stringResource(R.string.bt_audience_widen_confirm),
+                    onClick = onConfirm,
+                    loading = busy,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One side of the confirmation, as a name for the reach: "Private", "2 friends",
+ * "group “Family” (3 members)", "All friends", "Public link". The count/name
+ * are only printed when actually known — never a guessed reach (§6.9).
+ */
+@Composable
+internal fun audienceReachLabel(
+    audience: ShareAudience,
+    friendCount: Int?,
+    groupId: String?,
+    groups: List<FriendGroup>,
+): String = when (audience) {
+    ShareAudience.Private -> stringResource(R.string.bt_social_audience_private)
+    ShareAudience.SpecificFriends ->
+        if (friendCount != null) {
+            pluralStringResource(R.plurals.bt_social_audience_friend_count, friendCount, friendCount)
+        } else {
+            stringResource(R.string.bt_social_audience_specific_title)
+        }
+    ShareAudience.Group -> {
+        val g = groupId?.let { id -> groups.firstOrNull { it.id == id } }
+        if (g != null) {
+            pluralStringResource(R.plurals.bt_audience_reach_group, g.memberCount, g.name, g.memberCount)
+        } else {
+            stringResource(R.string.bt_audience_reach_group_unnamed)
+        }
+    }
+    ShareAudience.AllFriends -> stringResource(R.string.bt_social_audience_all_friends)
+    ShareAudience.PublicLink -> stringResource(R.string.bt_social_audience_public_link_title)
+}
+
+/**
+ * A gold advisory note inside the audience sheet.
+ *
+ * ## Tonal, not boxed
+ *
+ * This used to be a `gold @7%` fill wrapped in a `1dp gold @25%` ring. R2 moved
+ * the app off border walls onto tonal steps ([BtGroup]) and R3 took the ring off
+ * the state badge for the same reason: a tinted fill on a darker page is already
+ * a boundary, and drawing a line around it is a second boundary doing the first
+ * one's job.
+ *
+ * Losing the ring means the fill has to hold the shape by itself, so the tint
+ * steps up (7% → 11%) — the *colour* is what says "advisory", and it says it
+ * without an outline. The shape moves to `BtShapes.group` too: a hint is a block
+ * of one subject, not a row competing for a tap, which is the distinction
+ * [BtGroup]'s KDoc draws between the two containment tiers.
+ */
 @Composable
 private fun HintCard(text: String) {
     val bt = BtTheme.colors

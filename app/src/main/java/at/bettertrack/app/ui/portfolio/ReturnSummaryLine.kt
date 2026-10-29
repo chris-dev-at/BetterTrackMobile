@@ -1,12 +1,19 @@
 package at.bettertrack.app.ui.portfolio
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -111,8 +118,21 @@ internal fun ReturnSummaryLine(
     modifier: Modifier = Modifier,
     showMaxExplainer: Boolean = true,
     style: TextStyle = BtTheme.type.numberCaption,
+    holdSpaceWhileLoading: Boolean = false,
 ) {
-    val summary = remember(history) { returnSummaryOf(history) } ?: return
+    val summary = remember(history) { returnSummaryOf(history) }
+    // Once this surface has shown a summary, a range still loading (history ==
+    // null) keeps the line's height instead of collapsing it: a server that sends
+    // the figure sends it on every range, so the gap would only be a flicker.
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(summary != null) { if (summary != null) seen = true }
+    if (summary == null) {
+        if (holdSpaceWhileLoading && seen && history == null) {
+            val h = with(LocalDensity.current) { style.lineHeight.toDp() }
+            Spacer(modifier.height(h))
+        }
+        return
+    }
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
     Column(modifier) {

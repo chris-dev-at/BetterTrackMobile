@@ -728,10 +728,21 @@ private fun OverviewContent(
                     // canvas under the finger. Same W6 guard as the delta line.
                     // Absent `moneyWeightedPct` (older server / pre-v15 cache)
                     // composes nothing, so the screen is exactly what it was.
+                    //
+                    // The MAX explainer is NOT here: above the canvas it pushed
+                    // the chart and the range chips down ~72px on MAX only, so the
+                    // chips moved under the finger when leaving MAX (device
+                    // verify 2026-10-29). It renders under the chips instead (the
+                    // "return-explainer" item), where nothing below it is a
+                    // control. The one summary line keeps its height while a new
+                    // range loads once this server has shown it, so it cannot
+                    // make the canvas jump either.
                     if (totals != null && !coverage.nothingPriced) {
                         ReturnSummaryLine(
                             history = history,
                             modifier = Modifier.padding(top = 2.dp),
+                            showMaxExplainer = false,
+                            holdSpaceWhileLoading = true,
                         )
                     }
                 } else {
@@ -764,6 +775,14 @@ private fun OverviewContent(
                 onMode = onChartMode,
                 onScrub = { scrub = it },
             )
+        }
+
+        // #1669: the MAX explainer, BELOW the range chips so switching ranges
+        // never moves the chips (it would push them ~72px on MAX alone).
+        if (totals != null && !coverage.nothingPriced && returnSummaryOf(history)?.explainMax == true) {
+            item(key = "return-explainer", contentType = "note") {
+                ReturnSummaryExplainer(inset.padding(top = 10.dp))
+            }
         }
 
         // Cash + Transactions — BELOW the graph (owner order 2026-08-08).

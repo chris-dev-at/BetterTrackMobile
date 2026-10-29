@@ -288,6 +288,11 @@ interface SocialRepository {
         acknowledgePublic: Boolean,
         /** Required by the server for [ShareAudience.Group]; ignored otherwise. */
         groupId: String? = null,
+        /**
+         * The owner confirmed a widening in the sheet (after a 409
+         * `AUDIENCE_WIDEN_CONFIRMATION_REQUIRED`). See [SetAudienceRequest.confirmWiden].
+         */
+        confirmWiden: Boolean = false,
     ): BtResult<ShareOutcome>
 
     // Per-shared-item activity-alert preference (live; delivery gated on #368).
@@ -466,6 +471,7 @@ class DefaultSocialRepository(
         friendIds: Set<String>,
         acknowledgePublic: Boolean,
         groupId: String?,
+        confirmWiden: Boolean,
     ): BtResult<ShareOutcome> {
         // Each optional field is sent ONLY on the rung that owns it. The bodies
         // are `.strict()` server-side, and sending a stale `friendIds` alongside
@@ -476,6 +482,17 @@ class DefaultSocialRepository(
             friendIds = if (audience == ShareAudience.SpecificFriends) friendIds.toList() else null,
             groupId = if (audience == ShareAudience.Group) groupId else null,
             acknowledgePublic = if (audience == ShareAudience.PublicLink) acknowledgePublic else null,
+            // The widening confirmation. On the public rung the blocking "anyone
+            // with the link" tick IS that confirmation — the web sends
+            // `confirmWiden = acknowledged` there too, and public_link is the top
+            // rung, so every move onto it is a widening the tick already named.
+            // Every other rung confirms only after the server's 409 has been
+            // answered by the owner in the sheet; never pre-emptively.
+            confirmWiden = when {
+                confirmWiden -> true
+                audience == ShareAudience.PublicLink && acknowledgePublic -> true
+                else -> null
+            },
         )
         return when (val r = apiCall(json) { api.setAudience(kind.wire, subjectId, body) }) {
             is BtResult.Ok -> BtResult.Ok(

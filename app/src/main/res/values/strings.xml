@@ -1407,6 +1407,17 @@
          for GROUP_MEMBER_NOT_FRIEND (BtErrorCopy.Context), not the global one. -->
     <string name="bt_audience_err_recipient_unavailable">Someone you selected can no longer be added. Nothing was changed.</string>
     <string name="bt_audience_recover_hint">Your friends list is up to date again and anyone who left it is unticked. Check the selection, then tap Apply.</string>
+    <!-- 409 AUDIENCE_WIDEN_CONFIRMATION_REQUIRED: a widening/replacing save needs
+         the owner's explicit confirmation (confirmWiden). Mirrors the web's
+         sharing.audienceChangeConfirm; the two reach names fill %1$s / %2$s. -->
+    <string name="bt_audience_widen_title">This widens access</string>
+    <string name="bt_audience_widen_body">Change access from %1$s to %2$s? This may let more people see this item.</string>
+    <string name="bt_audience_widen_confirm">Confirm</string>
+    <plurals name="bt_audience_reach_group">
+        <item quantity="one">group “%1$s” (%2$d member)</item>
+        <item quantity="other">group “%1$s” (%2$d members)</item>
+    </plurals>
+    <string name="bt_audience_reach_group_unnamed">Friend group</string>
 
     <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
     <string name="bt_paranoid_title">This account is in paranoid mode</string>

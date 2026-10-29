@@ -193,7 +193,11 @@ class FriendGroupAudienceTest {
         )
 
         val body = server.takeRequest().body.readUtf8()
-        assertEquals("""{"audience":"public_link","acknowledgePublic":true}""", body)
+        // The acknowledgment, and the widening confirmation it IS on this rung:
+        // the server 409s `AUDIENCE_WIDEN_CONFIRMATION_REQUIRED` for any move onto
+        // public_link without `confirmWiden: true` (the web sends
+        // `confirmWiden = acknowledged` here as well).
+        assertEquals("""{"audience":"public_link","acknowledgePublic":true,"confirmWiden":true}""", body)
         assertFalse(body.contains("groupId"))
         assertEquals("https://bettertrack.at/s/tok123", (r as BtResult.Ok).value.publicUrl)
     }

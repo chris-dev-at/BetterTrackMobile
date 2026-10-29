@@ -71,10 +71,11 @@ import at.bettertrack.app.ui.components.BtInlineError
 import at.bettertrack.app.ui.components.BtSectionHeader
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
-import at.bettertrack.app.ui.social.AudiencePickerRecovery
 import at.bettertrack.app.ui.social.AudiencePickerSheet
+import at.bettertrack.app.ui.social.AudienceSheetFeedback
+import at.bettertrack.app.ui.social.PendingAudienceSave
 import at.bettertrack.app.ui.social.audienceSaveMessage
-import at.bettertrack.app.ui.social.recoverAudienceSave
+import at.bettertrack.app.ui.social.resolveAudienceSaveFailure
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -390,7 +391,7 @@ fun PortfolioSettingsScreen(
             kind = ShareableKind.Portfolio,
             currentAudience = sharing.audience,
             friends = ui.friends,
-            initialFriendIds = sharing.friendIds,
+            initialFriendIds = ui.sharingSeedFriendIds ?: sharing.friendIds,
             groups = ui.groups,
             initialGroupId = sharing.groupId,
             linkActive = sharing.linkActive,
@@ -400,7 +401,10 @@ fun PortfolioSettingsScreen(
             },
             onOpenGroups = { vm.closeSharing(); onOpenFriendGroups() },
             onDismiss = vm::closeSharing,
-            recovery = ui.sharingRecovery,
+            feedback = ui.sharingFeedback,
+            seedEpoch = ui.sharingSeedEpoch,
+            onConfirmWiden = vm::confirmWiden,
+            onCancelWiden = vm::cancelWiden,
         )
     }
 }
@@ -474,8 +478,11 @@ data class PortfolioSettingsUi(
     val sharing: AudienceState? = null,
     val friends: List<Friend> = emptyList(),
     val groups: List<FriendGroup> = emptyList(),
-    /** #1949: a refused save the open sharing sheet has recovered from (see `AudienceRecovery.kt`). */
-    val sharingRecovery: AudiencePickerRecovery? = null,
+    /** The open sharing sheet's last-save outcome, shown IN the sheet (see `AudienceRecovery.kt`). */
+    val sharingFeedback: AudienceSheetFeedback? = null,
+    /** #1949: the re-seeded pick after a recovery (null = seed from [sharing]). */
+    val sharingSeedFriendIds: Set<String>? = null,
+    val sharingSeedEpoch: Int = 0,
     /** The effective tax mode + its source, already reduced to one string res. */
     val taxSummary: Int? = null,
     val busy: Boolean = false,
@@ -567,7 +574,7 @@ class PortfolioSettingsViewModel(
 
     fun openSharing() {
         val known = _state.value.audience
-        _state.value = _state.value.copy(sharingRecovery = null)
+        _state.value = _state.value.copy(sharingFeedback = null, sharingSeedFriendIds = null)
         if (known != null) _state.value = _state.value.copy(sharing = known)
         viewModelScope.launch {
             // Friends and groups are only needed once the sheet is open, so they
@@ -588,7 +595,7 @@ class PortfolioSettingsViewModel(
     }
 
     fun closeSharing() {
-        _state.value = _state.value.copy(sharing = null, sharingRecovery = null)
+        _state.value = _state.value.copy(sharing = null, sharingFeedback = null, sharingSeedFriendIds = null)
     }
 
     fun applyAudience(
@@ -596,6 +603,7 @@ class PortfolioSettingsViewModel(
         friendIds: Set<String>,
         groupId: String?,
         acknowledgePublic: Boolean,
+        confirmWiden: Boolean = false,
     ) {
         _state.value = _state.value.copy(busy = true)
         viewModelScope.launch {
@@ -606,10 +614,16 @@ class PortfolioSettingsViewModel(
                 friendIds = friendIds,
                 acknowledgePublic = acknowledgePublic,
                 groupId = groupId,
+                confirmWiden = confirmWiden,
             )
             when (r) {
                 is BtResult.Ok -> {
-                    _state.value = _state.value.copy(busy = false, sharing = null, sharingRecovery = null)
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        sharing = null,
+                        sharingFeedback = null,
+                        sharingSeedFriendIds = null,
+                    )
                     // Re-read rather than assume: the server owns the resulting
                     // rung (a link can be minted or revoked as a side effect).
                     when (val a = social.getAudience(ShareableKind.Portfolio, portfolioId)) {
@@ -619,34 +633,43 @@ class PortfolioSettingsViewModel(
                 }
 
                 is BtResult.Err -> {
-                    // #1949: recover in the open sheet (refreshed friends, the
-                    // pick minus whoever left, the user confirms) instead of a
-                    // screen-level error the sheet's scrim would hide anyway.
-                    val recovery = recoverAudienceSave(
+                    // Said IN the open sheet — the 409 widening step, #1949's
+                    // recovery, or the refusal itself — never as a screen-level
+                    // error behind the sheet's scrim. Nothing is re-sent here.
+                    val res = resolveAudienceSaveFailure(
                         error = r.error,
-                        audience = audience,
-                        sentFriendIds = friendIds,
+                        pending = PendingAudienceSave(audience, friendIds, groupId, acknowledgePublic),
+                        current = _state.value.sharing,
                         previousFriends = _state.value.friends,
                         social = social,
                     )
                     val st = _state.value
-                    _state.value = if (recovery != null) {
+                    _state.value = if (st.sharing == null) {
+                        // Dismissed mid-flight: no sheet left to speak in.
+                        st.copy(busy = false, friends = res.friends ?: st.friends, error = audienceSaveMessage(r.error))
+                    } else {
                         st.copy(
                             busy = false,
-                            friends = recovery.friends,
-                            sharing = st.sharing?.copy(audience = audience, friendIds = recovery.friendIds),
-                            sharingRecovery = AudiencePickerRecovery(
-                                message = recovery.notice,
-                                refreshed = recovery.refreshed,
-                                epoch = (st.sharingRecovery?.epoch ?: 0) + 1,
-                            ),
+                            friends = res.friends ?: st.friends,
+                            sharingFeedback = res.feedback,
+                            sharingSeedFriendIds = res.reseedFriendIds ?: st.sharingSeedFriendIds,
+                            sharingSeedEpoch = if (res.reseedFriendIds != null) st.sharingSeedEpoch + 1 else st.sharingSeedEpoch,
                         )
-                    } else {
-                        st.copy(busy = false, error = audienceSaveMessage(r.error))
                     }
                 }
             }
         }
+    }
+
+    /** Confirm on the sheet's widening step: re-send exactly that save, now with `confirmWiden`. */
+    fun confirmWiden(pending: PendingAudienceSave) {
+        _state.value = _state.value.copy(sharingFeedback = null)
+        applyAudience(pending.audience, pending.friendIds, pending.groupId, pending.acknowledge, confirmWiden = true)
+    }
+
+    /** Cancel on the widening step: nothing is sent. */
+    fun cancelWiden() {
+        _state.value = _state.value.copy(sharingFeedback = null)
     }
 
     fun rename(name: String, onDone: (Boolean) -> Unit) {

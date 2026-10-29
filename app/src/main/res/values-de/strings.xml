@@ -1306,6 +1306,14 @@
     <string name="bt_social_apply">Übernehmen</string>
     <string name="bt_audience_err_recipient_unavailable">Eine ausgewählte Person kann nicht mehr hinzugefügt werden. Es wurde nichts geändert.</string>
     <string name="bt_audience_recover_hint">Deine Freundesliste ist wieder aktuell, wer nicht mehr darin ist, wurde abgewählt. Prüfe die Auswahl und tippe dann auf Übernehmen.</string>
+    <string name="bt_audience_widen_title">Das erweitert den Zugriff</string>
+    <string name="bt_audience_widen_body">Zugriff von %1$s auf %2$s ändern? Dadurch könnten mehr Personen diesen Eintrag sehen.</string>
+    <string name="bt_audience_widen_confirm">Bestätigen</string>
+    <plurals name="bt_audience_reach_group">
+        <item quantity="one">Gruppe „%1$s“ (%2$d Mitglied)</item>
+        <item quantity="other">Gruppe „%1$s“ (%2$d Mitglieder)</item>
+    </plurals>
+    <string name="bt_audience_reach_group_unnamed">Freundesgruppe</string>
 
     <!-- V5 paranoid mode (403 PARANOID_MODE explainer) -->
     <string name="bt_paranoid_title">Dieses Konto ist im Paranoid-Modus</string>

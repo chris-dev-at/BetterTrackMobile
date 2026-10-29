@@ -165,7 +165,7 @@ class AudienceRecipientRefusalTest {
     @Test
     fun `a failed re-fetch still shows the notice and does not claim the list is fresh`() = runBlocking {
         val error = refusedSave()
-        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":{"code":"UNAVAILABLE"}}"""))
+        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":{"code":"UNAVAILABLE","message":"down"}}"""))
         val previous = listOf(friend("a"), friend("gone"))
 
         val recovery = recoverAudienceSave(error, ShareAudience.SpecificFriends, setOf("a", "gone"), previous, repo)!!
@@ -178,7 +178,7 @@ class AudienceRecipientRefusalTest {
 
     @Test
     fun `any other failure is not this recovery and costs no request`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(429).setBody("""{"error":{"code":"RATE_LIMITED"}}"""))
+        server.enqueue(MockResponse().setResponseCode(429).setBody("""{"error":{"code":"RATE_LIMITED","message":"slow down"}}"""))
         val r = repo.setAudience(ShareableKind.Watchlist, "w-1", ShareAudience.SpecificFriends, setOf("a"), false, null)
         val error = (r as BtResult.Err).error
 

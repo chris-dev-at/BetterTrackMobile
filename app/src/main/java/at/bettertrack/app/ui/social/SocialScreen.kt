@@ -147,11 +147,14 @@ data class SocialUiState(
     val sharingState: AudienceState? = null,
     val sharingBusy: Boolean = false,
     /**
-     * Set when a save was refused because someone can no longer be added (#1949):
-     * the open sheet shows it and re-seeds from the refreshed friends list.
-     * Cleared when the sheet closes, reopens or a save lands.
+     * What the open sheet says about its last save — the 409 widening step,
+     * #1949's recovered refusal, or any other refusal. Always rendered IN the
+     * sheet. Cleared when the sheet closes, reopens or a save lands.
      */
-    val sharingRecovery: AudiencePickerRecovery? = null,
+    val sharingFeedback: AudienceSheetFeedback? = null,
+    /** #1949: the re-seeded pick after a recovery (null = seed from [sharingState]). */
+    val sharingSeedFriendIds: Set<String>? = null,
+    val sharingSeedEpoch: Int = 0,
     /** A freshly-minted public link to reveal once (null = no dialog). */
     val publicLinkToShow: String? = null,
 )
@@ -226,7 +229,7 @@ class SocialViewModel(
     fun accept(req: FriendRequest): Unit = write { toastFor(repo.acceptRequest(req.id), SocialToast.Res(R.string.bt_social_toast_now_friends, listOf(req.username))) { accept(req) } }
 
     fun openSharing(item: MySharedItem) {
-        _state.value = _state.value.copy(sharingItem = item, sharingState = null, sharingRecovery = null)
+        _state.value = _state.value.copy(sharingItem = item, sharingState = null, sharingFeedback = null, sharingSeedFriendIds = null)
         viewModelScope.launch {
             val r = repo.getAudience(item.kind, item.id)
             val resolved = (r as? BtResult.Ok)?.value
@@ -246,7 +249,7 @@ class SocialViewModel(
         }
     }
 
-    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null, sharingRecovery = null) }
+    fun closeSharing() { _state.value = _state.value.copy(sharingItem = null, sharingState = null, sharingFeedback = null, sharingSeedFriendIds = null) }
     fun dismissLink() { _state.value = _state.value.copy(publicLinkToShow = null) }
 
     fun applyAudience(
@@ -255,19 +258,21 @@ class SocialViewModel(
         friendIds: Set<String>,
         groupId: String?,
         acknowledge: Boolean,
+        confirmWiden: Boolean = false,
     ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(sharingBusy = true)
             // The repository sends each optional field only on the rung that owns
             // it, so passing groupId unconditionally here is safe.
-            val r = repo.setAudience(item.kind, item.id, audience, friendIds, acknowledge, groupId)
+            val r = repo.setAudience(item.kind, item.id, audience, friendIds, acknowledge, groupId, confirmWiden)
             when (r) {
                 is BtResult.Ok -> {
                     _state.value = _state.value.copy(
                         sharingBusy = false,
                         sharingItem = null,
                         sharingState = null,
-                        sharingRecovery = null,
+                        sharingFeedback = null,
+                        sharingSeedFriendIds = null,
                         publicLinkToShow = r.value.publicUrl,
                     )
                     if (r.value.publicUrl == null) {
@@ -288,45 +293,48 @@ class SocialViewModel(
                     load()
                 }
                 is BtResult.Err -> {
-                    // #1949: someone named can no longer be added. Re-fetch the
-                    // friends, re-seed the STILL-OPEN sheet with the pick minus
-                    // whoever left, and let the user confirm. No toast with
-                    // "Try again" here — it would re-send the very set the
-                    // server just refused (atomically: nothing was written).
-                    val recovery = recoverAudienceSave(
+                    val pending = PendingAudienceSave(audience, friendIds, groupId, acknowledge)
+                    val res = resolveAudienceSaveFailure(
                         error = r.error,
-                        audience = audience,
-                        sentFriendIds = friendIds,
+                        pending = pending,
+                        current = _state.value.sharingState,
                         previousFriends = _state.value.friends,
                         social = repo,
                     )
-                    if (recovery != null) {
-                        val st = _state.value
-                        _state.value = st.copy(
-                            sharingBusy = false,
-                            friends = recovery.friends,
-                            sharingState = st.sharingState
-                                ?.takeIf { st.sharingItem?.id == item.id }
-                                ?.copy(audience = audience, friendIds = recovery.friendIds),
-                            sharingRecovery = AudiencePickerRecovery(
-                                message = recovery.notice,
-                                refreshed = recovery.refreshed,
-                                epoch = (st.sharingRecovery?.epoch ?: 0) + 1,
-                            ),
-                        )
+                    val st = _state.value
+                    if (st.sharingItem?.id != item.id) {
+                        // The sheet was dismissed while the save was in flight:
+                        // there is no sheet to speak in, so the toast does — and
+                        // offers no "Try again", which would re-send a refused set.
+                        _state.value = st.copy(sharingBusy = false, friends = res.friends ?: st.friends)
+                        _toast.value = SocialToast.Failure(audienceSaveMessage(r.error), onRetry = null)
                         return@launch
                     }
-                    _state.value = _state.value.copy(sharingBusy = false)
-                    // Every argument survives here, so "Try again" can re-issue
-                    // exactly the audience the user just chose instead of making
-                    // them re-pick it.
-                    _toast.value = SocialToast.Failure(
-                        audienceSaveMessage(r.error),
-                        onRetry = { applyAudience(item, audience, friendIds, groupId, acknowledge) },
+                    // Everything else is said IN the open sheet (a toast would sit
+                    // behind its scrim): the 409 widening step, #1949's recovery
+                    // (refreshed list, narrowed ticks), or the refusal itself.
+                    // Nothing is re-sent here; only the owner's Confirm/Apply does.
+                    _state.value = st.copy(
+                        sharingBusy = false,
+                        friends = res.friends ?: st.friends,
+                        sharingFeedback = res.feedback,
+                        sharingSeedFriendIds = res.reseedFriendIds ?: st.sharingSeedFriendIds,
+                        sharingSeedEpoch = if (res.reseedFriendIds != null) st.sharingSeedEpoch + 1 else st.sharingSeedEpoch,
                     )
                 }
             }
         }
+    }
+
+    /** Confirm on the sheet's widening step: re-send exactly that save, now with `confirmWiden`. */
+    fun confirmWiden(item: MySharedItem, pending: PendingAudienceSave) {
+        _state.value = _state.value.copy(sharingFeedback = null)
+        applyAudience(item, pending.audience, pending.friendIds, pending.groupId, pending.acknowledge, confirmWiden = true)
+    }
+
+    /** Cancel on the widening step: nothing is sent; the sheet stays as the user left it. */
+    fun cancelWiden() {
+        _state.value = _state.value.copy(sharingFeedback = null)
     }
 
     fun consumeToast() { _toast.value = null }
@@ -519,7 +527,7 @@ fun SocialScreen(
             kind = item.kind,
             currentAudience = audienceState.audience,
             friends = ui.friends,
-            initialFriendIds = audienceState.friendIds,
+            initialFriendIds = ui.sharingSeedFriendIds ?: audienceState.friendIds,
             groups = ui.groups,
             initialGroupId = audienceState.groupId,
             linkActive = audienceState.linkActive,
@@ -531,7 +539,10 @@ fun SocialScreen(
             // one with the group they just made already in the list.
             onOpenGroups = { vm.closeSharing(); onOpenGroups() },
             onDismiss = { vm.closeSharing() },
-            recovery = ui.sharingRecovery,
+            feedback = ui.sharingFeedback,
+            seedEpoch = ui.sharingSeedEpoch,
+            onConfirmWiden = { pending -> vm.confirmWiden(item, pending) },
+            onCancelWiden = vm::cancelWiden,
         )
     }
 

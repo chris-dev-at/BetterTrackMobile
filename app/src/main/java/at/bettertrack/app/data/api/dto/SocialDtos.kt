@@ -246,6 +246,13 @@ data class SetAudienceRequest(
     val friendIds: List<String>? = null,
     val groupId: String? = null,
     val acknowledgePublic: Boolean? = null,
+    /**
+     * `true` = the owner explicitly confirmed a WIDENING or recipient-replacing
+     * transition. Without it the server answers 409
+     * `AUDIENCE_WIDEN_CONFIRMATION_REQUIRED` (`details.currentAudience`) and
+     * writes nothing. Omitted (never `false`) when not confirmed.
+     */
+    val confirmWiden: Boolean? = null,
 )
 
 /** The raw public link, returned EXACTLY ONCE when a `public_link` audience is minted. */
