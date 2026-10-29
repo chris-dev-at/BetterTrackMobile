@@ -2105,6 +2105,8 @@
 
     <!-- Anmeldung: Zugangsdaten + Kontostatus -->
     <string name="bt_err_invalid_credentials">Falsche E-Mail-Adresse, falscher Benutzername oder falsches Passwort.</string>
+    <string name="bt_err_invalid_scope">Diese App hat keine der Berechtigungen mehr, die du ihr erteilt hast. Bitte melde dich erneut an.</string>
+    <string name="bt_err_invalid_client">Diese App-Version wird vom Server nicht erkannt. Bitte aktualisiere die App.</string>
     <string name="bt_err_account_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administration.</string>
     <string name="bt_err_user_disabled">Dieses Konto wurde gesperrt. Bitte wende dich an deine Administration.</string>
     <string name="bt_err_admin_account_kind">Die BetterTrack-App ist ausschließlich für persönliche Konten.</string>

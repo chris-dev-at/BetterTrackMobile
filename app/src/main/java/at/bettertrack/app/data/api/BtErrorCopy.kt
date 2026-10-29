@@ -85,6 +85,10 @@ object BtErrorCopy {
 
         // ── Authentication: credentials + account state ──
         "INVALID_CREDENTIALS" to R.string.bt_err_invalid_credentials,
+        // OAuth token endpoint (login exchange + refresh). INVALID_SCOPE since
+        // platform #2018 also ends the session on refresh (TokenManager).
+        "INVALID_SCOPE" to R.string.bt_err_invalid_scope,
+        "INVALID_CLIENT" to R.string.bt_err_invalid_client,
         "ACCOUNT_DISABLED" to R.string.bt_err_account_disabled,
         "USER_DISABLED" to R.string.bt_err_user_disabled,
         "ADMIN_ACCOUNT_KIND" to R.string.bt_err_admin_account_kind,

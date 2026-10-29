@@ -357,5 +357,8 @@ private fun messageFor(error: LoginError): String = stringResource(
         LoginError.ACCOUNT_DISABLED -> R.string.bt_login_error_disabled
         LoginError.ADMIN_NOT_ALLOWED -> R.string.bt_login_error_admin
         LoginError.SERVER_DENIED -> R.string.bt_login_error_denied
+        // The catalog's own sentences — one copy per code, app-wide.
+        LoginError.SCOPE_REFUSED -> R.string.bt_err_invalid_scope
+        LoginError.CLIENT_REJECTED -> R.string.bt_err_invalid_client
     },
 )

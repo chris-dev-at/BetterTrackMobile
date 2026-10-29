@@ -199,7 +199,7 @@ class AuthRepository(
                     // shows app copy keyed off LoginError), so this stays the
                     // server's raw words rather than going through BtErrorCopy.
                     _loginPhase.value = LoginPhase.Failed(
-                        if (exchanged.error.isNetwork) LoginError.NETWORK else LoginError.EXCHANGE_FAILED,
+                        loginErrorForExchange(exchanged.error),
                         exchanged.error.diagnostic,
                     )
                 }
@@ -448,44 +448,25 @@ class AuthRepository(
     }
 
     /**
-     * Find our OAuth grant and revoke it, killing the access + refresh tokens
-     * server-side.
+     * Revoke this install's OAuth grant server-side, killing its access +
+     * refresh tokens — see [revokeOwnGrantOnLogout] for the two paths.
      *
-     * This spent its whole life 403ing — `/settings/oauth-grants` was session-only
-     * on the bearer allowlist — and logging that it had. Since the 2026-08-19
-     * deploy the route answers a bearer holding `account:security`, so the
-     * revocation now actually lands: logging out really does drop this device's
-     * grant rather than only its local tokens.
-     *
-     * That is the intended shape. The grant is a standing permission and logout
-     * is the user withdrawing it; the next login re-authorizes and re-shows the
-     * consent screen, which is the truthful thing to show someone who just
-     * removed the app's access. Nothing else is affected — other devices hold
-     * their own grants, and the account, its data and its sessions are untouched.
+     * The grant is a standing permission and logout is the user withdrawing
+     * it; the next login re-authorizes and re-shows the consent screen, which
+     * is the truthful thing to show someone who just removed the app's access.
+     * Nothing else is affected — other devices hold their own grants, and the
+     * account, its data and its sessions are untouched.
      *
      * Still best-effort in every direction: a refusal, a network failure or a
      * 5xx is logged and the local wipe proceeds regardless. A logout that cannot
      * reach the server must still leave the phone with nothing on it.
-     *
-     * **Which grant** is decided by [grantToRevoke], not by `clientId`. See that
-     * function for why the old `firstOrNull { clientId == ours }` was a guess.
      */
     private suspend fun revokeGrantBestEffort() {
         try {
-            when (val grants = apiCall(json) { btApi.oauthGrants() }) {
-                is BtResult.Ok -> {
-                    val grant = grantToRevoke(grants.value.grants, clientId)
-                    if (grant == null) {
-                        Log.i(TAG, "No unambiguously-own OAuth grant to revoke; skipping.")
-                        return
-                    }
-                    val resp = btApi.revokeOAuthGrant(grant.id)
-                    Log.i(TAG, "Revoked grant ${grant.id}: HTTP ${resp.code()}")
-                }
-
-                is BtResult.Err ->
-                    Log.w(TAG, "Grant list unavailable for revocation: ${grants.error.message}")
-            }
+            val outcome = revokeOwnGrantOnLogout(btApi, json, clientId)
+            Log.i(TAG, "Logout revocation: $outcome")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Best-effort revocation failed: ${e.message}")
         }
@@ -575,4 +556,81 @@ internal fun grantToRevoke(grants: List<OAuthGrant>, clientId: String): OAuthGra
     if (grants.any { it.current != null }) return null
     val ours = grants.filter { it.clientId == clientId }
     return ours.singleOrNull()
+}
+
+/**
+ * The login screen's verdict on a failed code exchange. Two refusals get their
+ * own sentence because "try again" is wrong for both: `INVALID_SCOPE` means the
+ * app was narrowed to nothing this account consented to (retrying re-asks the
+ * same question), and `INVALID_CLIENT` means this build's client id is unknown
+ * (only an update fixes it).
+ */
+internal fun loginErrorForExchange(error: at.bettertrack.app.data.api.BtApiError): LoginError = when {
+    error.isNetwork -> LoginError.NETWORK
+    error.code.equals("INVALID_SCOPE", ignoreCase = true) -> LoginError.SCOPE_REFUSED
+    error.code.equals("INVALID_CLIENT", ignoreCase = true) -> LoginError.CLIENT_REJECTED
+    else -> LoginError.EXCHANGE_FAILED
+}
+
+/** What a logout's server-side revocation achieved — logged, and pinned by tests. */
+internal enum class LogoutRevocation {
+    /** `POST /auth/logout` revoked the caller's own grant. */
+    LOGGED_OUT,
+    /** The bearer was already refused (401): there is no grant left to revoke. */
+    ALREADY_GONE,
+    /** The fallback found our grant in the list and deleted it. */
+    FALLBACK_REVOKED,
+    /** The fallback could not tell which grant is ours, so it revoked nothing. */
+    FALLBACK_SKIPPED,
+    /** Neither path landed (offline, 5xx, refused). The local wipe still runs. */
+    FAILED,
+}
+
+/**
+ * Revoke this install's grant at logout.
+ *
+ * **Primary: `POST /auth/logout` with the bearer.** The platform revokes the
+ * grant the presented token belongs to — the one call that cannot pick the
+ * wrong row, because the server, not a list heuristic, decides whose it is.
+ * (The planned per-install token families keep this exactly right: the call
+ * still revokes "the caller's own", only at finer grain.)
+ *
+ * **Fallback: the grant list + `DELETE`** ([grantToRevoke], following the
+ * `current` marker from #1390), taken only when the primary failed for a
+ * NON-definitive reason — a transport failure, a 5xx, a refusal from a
+ * deployment that predates the bearer carve-out. A `401` is definitive: the
+ * bearer is no longer accepted, so the grant is already gone and the fallback,
+ * riding the same bearer, could only fail the same way.
+ */
+internal suspend fun revokeOwnGrantOnLogout(api: BtApi, json: Json, clientId: String): LogoutRevocation {
+    val primary = try {
+        api.logout()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+    if (primary != null) {
+        if (primary.isSuccessful) return LogoutRevocation.LOGGED_OUT
+        if (primary.code() == 401) return LogoutRevocation.ALREADY_GONE
+    }
+    return try {
+        when (val grants = apiCall(json) { api.oauthGrants() }) {
+            is BtResult.Ok -> {
+                val grant = grantToRevoke(grants.value.grants, clientId)
+                    ?: return LogoutRevocation.FALLBACK_SKIPPED
+                if (api.revokeOAuthGrant(grant.id).isSuccessful) {
+                    LogoutRevocation.FALLBACK_REVOKED
+                } else {
+                    LogoutRevocation.FAILED
+                }
+            }
+
+            is BtResult.Err -> LogoutRevocation.FAILED
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        LogoutRevocation.FAILED
+    }
 }

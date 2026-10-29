@@ -68,13 +68,19 @@ class ForcedSignOutTest {
     /**
      * `_source`: platform repo @ origin/main, `apps/api/src/services/oauth/oauthService.ts`
      * — every "your refresh token is dead" answer is `400 INVALID_GRANT`
-     * (:912-915, :916-918, :919-930, :931-933, :946-954). Nothing else on that
-     * endpoint is a statement about the session.
+     * (:1069, :1072, :1084, :1087, :1127), plus `400 INVALID_SCOPE` since
+     * platform #2018 (:1108-1111 — the zero-scope refresh retires the grant).
+     * Nothing else on that endpoint is a statement about the session.
      */
     @Test
-    fun `only 400 INVALID_GRANT may end a session`() {
+    fun `only 400 INVALID_GRANT or INVALID_SCOPE may end a session`() {
         assertTrue(refreshRefusalIsDefinitive(400, "INVALID_GRANT"))
         assertTrue("case is not part of the contract", refreshRefusalIsDefinitive(400, "invalid_grant"))
+        assertTrue("zero-scope refresh: the grant is retired (#2018)", refreshRefusalIsDefinitive(400, "INVALID_SCOPE"))
+        assertTrue(refreshRefusalIsDefinitive(400, "invalid_scope"))
+        assertEquals(setOf("INVALID_GRANT", "INVALID_SCOPE"), DEFINITIVE_REFRESH_REFUSAL_CODES)
+        // Status still matters: only the token endpoint's 400 carries the verdict.
+        assertFalse(refreshRefusalIsDefinitive(403, "INVALID_SCOPE"))
 
         // The request was wrong, not the session. The body schema is `.strict()`,
         // so one stray field or a form-encoded body lands here.
@@ -350,6 +356,37 @@ class ForcedSignOutTest {
         assertEquals(400, seen.single().httpStatus)
         assertEquals("INVALID_GRANT", seen.single().errorCode)
         assertEquals("TokenManager.doRefresh", seen.single().caller)
+    }
+
+    /**
+     * Platform #2018: a refresh whose effective scopes clamp to empty answers
+     * `400 INVALID_SCOPE` and retires the grant in the same breath. Keeping the
+     * session would replay a refresh that can never succeed again.
+     */
+    @Test
+    fun `a zero-scope refusal ends the session and names itself`() = runBlocking {
+        val store = FakeStore(tokens("A1", "R1"))
+        val tm = manager(FakeTokenApi { refused(400, "INVALID_SCOPE") }, store)
+        val seen = mutableListOf<SessionInvalidation>()
+        val collector = async(Dispatchers.Default) { tm.sessionInvalidated.collect { seen += it } }
+
+        assertNull(tm.refreshOn401("A1"))
+        waitFor { seen.isNotEmpty() }
+        collector.cancel()
+
+        assertTrue("local credentials gone", store.wiped)
+        assertEquals(SignOutReason.REFRESH_REJECTED, seen.single().reason)
+        assertEquals(400, seen.single().httpStatus)
+        assertEquals("INVALID_SCOPE", seen.single().errorCode)
+    }
+
+    /** INVALID_CLIENT is a build problem (wrong/rotated client_id), not a session verdict. */
+    @Test
+    fun `an INVALID_CLIENT refusal keeps the session`() = runBlocking {
+        val store = FakeStore(tokens("A1", "R1"))
+        val tm = manager(FakeTokenApi { refused(400, "INVALID_CLIENT") }, store)
+        tm.refreshOn401("A1")
+        assertFalse("credentials kept", store.wiped)
     }
 
     @Test

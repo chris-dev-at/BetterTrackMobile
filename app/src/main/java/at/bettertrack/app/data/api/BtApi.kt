@@ -363,6 +363,16 @@ interface BtApi {
     suspend fun revokeOAuthGrant(@Path("id") id: String): Response<Unit>
 
     /**
+     * Sign out server-side. With a bearer this revokes the CALLER'S OWN grant in
+     * one call (`authRoutes.ts` `/logout`: `req.apiKey.kind === 'oauth'` →
+     * `revokeGrant({ id: req.apiKey.id })`) — no grant list, no guessing which
+     * row is ours. Bearer policy `allow`, no scope (`bearerAuth.ts:773`).
+     * Answers `200 { ok: true }`, discarded. No body.
+     */
+    @POST("auth/logout")
+    suspend fun logout(): Response<Unit>
+
+    /**
      * The account's Google sign-in identity (§13.4 V4-P4b) — the Connections
      * screen's Google group.
      *

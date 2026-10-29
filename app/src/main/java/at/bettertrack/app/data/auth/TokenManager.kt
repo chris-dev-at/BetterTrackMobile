@@ -427,15 +427,19 @@ internal fun requestMayHaveBeenDelivered(e: Throwable): Boolean = when (e) {
  *
  * **Every** answer that actually means "your refresh token is dead" is
  * `400` with `code = "INVALID_GRANT"` — unknown token, wrong client, expired,
- * revoked grant, replayed token, suspended account, all five of them:
+ * revoked grant, replayed token, suspended account, all five of them — plus,
+ * since platform #2018, `400 INVALID_SCOPE`: the app's scopes were narrowed to
+ * nothing this user consented to, and the server RETIRES the grant before
+ * answering, so every later refresh is `INVALID_GRANT` anyway:
  *
  * ```
  * _source: platform repo, apps/api/src/services/oauth/oauthService.ts @ origin/main
- *   :912-915  badRequest('Invalid refresh token.',            'INVALID_GRANT')
- *   :916-918  badRequest('This authorization has been revoked.','INVALID_GRANT')
- *   :919-930  badRequest('Refresh token has already been used.','INVALID_GRANT')
- *   :931-933  badRequest('Refresh token has expired.',         'INVALID_GRANT')
- *   :946-954  badRequest('Refresh token has already been used.','INVALID_GRANT')
+ *   :1069  badRequest('Invalid refresh token.',             'INVALID_GRANT')
+ *   :1072  badRequest('This authorization has been revoked.','INVALID_GRANT')
+ *   :1084  badRequest('Refresh token has already been used.','INVALID_GRANT')
+ *   :1087  badRequest('Refresh token has expired.',          'INVALID_GRANT')
+ *   :1108-1111  retireEmptyScopeGrant(...) + emptyEffectiveScope() → 'INVALID_SCOPE'
+ *   :1127  badRequest('Refresh token has already been used.','INVALID_GRANT')
  * ```
  *
  * Everything else the endpoint can answer is about the REQUEST, not the session:
@@ -461,12 +465,16 @@ internal fun refreshRefusalIsDefinitive(httpStatus: Int, code: String): Boolean 
 /**
  * The 400 error codes that genuinely mean "this refresh token is dead".
  *
- * Exactly one, and deliberately so — see [refreshRefusalIsDefinitive] for the
- * per-line provenance. An unrecognised refusal keeps the session and lands in
- * the ledger, which is the failure mode we want: a visible diagnostic row
- * rather than an unexplained logout.
+ * Two, and deliberately no more — see [refreshRefusalIsDefinitive] for the
+ * per-line provenance. `INVALID_SCOPE` joined with platform #2018: a refresh
+ * whose effective scope set clamps to EMPTY is refused AND the grant is
+ * retired server-side, so keeping the session would only replay a refresh
+ * that can never succeed again (and leave the user on "reconnecting" forever).
+ * An unrecognised refusal keeps the session and lands in the ledger, which is
+ * the failure mode we want: a visible diagnostic row rather than an
+ * unexplained logout.
  */
-internal val DEFINITIVE_REFRESH_REFUSAL_CODES: Set<String> = setOf("INVALID_GRANT")
+internal val DEFINITIVE_REFRESH_REFUSAL_CODES: Set<String> = setOf("INVALID_GRANT", "INVALID_SCOPE")
 
 /**
  * Whether an at-risk refresh token must NOT be presented right now.
@@ -478,7 +486,7 @@ internal val DEFINITIVE_REFRESH_REFUSAL_CODES: Set<String> = setOf("INVALID_GRAN
  *
  * ```
  * _source: platform repo @ origin/main
- *   oauthService.ts:919-930   consumed token   → revokeGrant(...) + INVALID_GRANT
+ *   oauthService.ts:1084, :1127 consumed token → revokeGrant(...) + INVALID_GRANT
  *   oauthRepository.ts:646-700 lost the atomic consume → revoke the whole grant
  * ```
  *

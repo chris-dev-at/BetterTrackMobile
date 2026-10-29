@@ -147,6 +147,10 @@ enum class LoginError {
     ACCOUNT_DISABLED,
     ADMIN_NOT_ALLOWED,
     SERVER_DENIED,
+    /** Token exchange refused `INVALID_SCOPE`: nothing consented is still permitted (#1985/#2018). */
+    SCOPE_REFUSED,
+    /** Token exchange refused `INVALID_CLIENT`: this build's client id is unknown to the server. */
+    CLIENT_REJECTED,
 }
 
 /** The login screen's transient state (button progress + error surface). */

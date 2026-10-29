@@ -2218,6 +2218,8 @@
 
     <!-- Authentication: credentials + account state -->
     <string name="bt_err_invalid_credentials">Wrong email, username or password.</string>
+    <string name="bt_err_invalid_scope">This app no longer has any of the permissions you granted it. Please sign in again.</string>
+    <string name="bt_err_invalid_client">This version of the app isn\'t recognised by the server. Please update the app.</string>
     <string name="bt_err_account_disabled">This account has been suspended. Please contact your administrator.</string>
     <string name="bt_err_user_disabled">This account has been suspended. Please contact your administrator.</string>
     <string name="bt_err_admin_account_kind">The BetterTrack app is for personal accounts only.</string>
