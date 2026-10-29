@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -44,8 +44,11 @@ const val BT_EXPANDED_MIN_WIDTH_DP: Int = 840
  * The width class for a window [widthDp] wide.
  *
  * Pure, so the breakpoints are pinned by a JVM test rather than by a tablet. Fed
- * from `WindowSizeClass.minWidthDp`, which is already a bucket's lower bound
- * (0 / 600 / 840); a raw window width maps through the same three comparisons.
+ * from `WindowSizeClass.minWidthDp`, which is already a bucket's lower bound —
+ * 0 / 600 / 840 / 1200 / 1600 with the V2 breakpoints `currentWindowAdaptiveInfoV2`
+ * computes. Large (1200) and Extra-large (1600) fold into [BtWidthClass.Expanded]:
+ * the shell has one wide layout, and two-pane is a later pass. A raw window
+ * width maps through the same comparisons.
  */
 fun btWidthClassFor(widthDp: Int): BtWidthClass = when {
     widthDp < BT_MEDIUM_MIN_WIDTH_DP -> BtWidthClass.Compact
@@ -119,14 +122,14 @@ val LocalBtWindow = staticCompositionLocalOf { BtWindow.Compact }
 /**
  * Measure the window and provide [LocalBtWindow] to [content].
  *
- * `currentWindowAdaptiveInfo()` recomposes on every change of the window's
+ * `currentWindowAdaptiveInfoV2()` recomposes on every change of the window's
  * size (a freeform resize writes it every frame); the [remember] keyed on the
  * width CLASS means the provided value — and so the subtree under a static local
  * — only changes when a breakpoint is actually crossed.
  */
 @Composable
 fun ProvideBtWindow(content: @Composable () -> Unit) {
-    val widthClass = btWidthClassFor(currentWindowAdaptiveInfo().windowSizeClass.minWidthDp)
+    val widthClass = btWidthClassFor(currentWindowAdaptiveInfoV2().windowSizeClass.minWidthDp)
     val window = remember(widthClass) { BtWindow(widthClass) }
     CompositionLocalProvider(LocalBtWindow provides window, content = content)
 }

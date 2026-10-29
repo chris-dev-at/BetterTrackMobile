@@ -58,6 +58,14 @@ class BtWindowTest {
     }
 
     @Test
+    fun `the V2 large and extra-large buckets are expanded`() {
+        // currentWindowAdaptiveInfoV2 reports 1200 / 1600 lower bounds for L and
+        // XL windows; the shell has one wide layout, so both must land there.
+        assertEquals(BtWidthClass.Expanded, btWidthClassFor(1200))
+        assertEquals(BtWidthClass.Expanded, btWidthClassFor(1600))
+    }
+
+    @Test
     fun `compact content is uncapped, medium is 680dp, expanded is 760dp`() {
         assertNull("Compact must stay the phone layout", btContentMaxWidth(BtWidthClass.Compact))
         assertEquals(680.dp, btContentMaxWidth(BtWidthClass.Medium))
