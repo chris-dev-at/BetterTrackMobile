@@ -1093,10 +1093,11 @@ class TransactionFormViewModel(
             TxEditRoute.PATCH -> Unit
         }
 
-        // Uncovered (over-)sell (PR #429): a synced edit that raises the sold
-        // quantity past the held amount must carry the flag or the PATCH 400s
-        // OVERSELL. Only sent when the edit is actually uncovered + acknowledged.
-        val uncovered = uncoveredSell.value
+        // No uncovered-sell flags here: the PATCH contract is `.strict()` and
+        // has no such fields (a 400 VALIDATION_ERROR for any edit carrying
+        // them). An edit that over-sells answers 400 OVERSELL, which lands in
+        // `_serverError` below with the create path's copy — the web's edit
+        // keeps the same strict guard.
         val body = UpdateTransactionRequest(
             side = newSide.takeIf { it != orig.side },
             quantity = newQty.takeIf { it != orig.quantity },
@@ -1107,8 +1108,6 @@ class TransactionFormViewModel(
             // row whose note still carries a retired `[bt:…]` marker must not be
             // counted as "changed" just because the strip removed the marker.
             note = newNote.takeIf { it != displayNote(orig.note) },
-            allowUncovered = if (uncovered.active) true else null,
-            uncoveredEntryPrice = if (uncovered.active) parseUncoveredEntryPrice(_uncoveredEntryPriceText.value) else null,
         )
         if (body == UpdateTransactionRequest()) {
             // Nothing changed — nothing to send.

@@ -316,6 +316,15 @@ data class CreateTransactionsResponse(
  * transaction, online-only per §7.2). Every field optional; the contract has
  * NO `assetId` and NO cash-coupling flags — the asset and the original cash
  * movement can't be changed by an edit. The server re-validates oversell.
+ *
+ * Deliberately NO `allowUncovered` / `uncoveredEntryPrice`. The platform's
+ * `updateTransactionRequestSchema` is `.strict()` and has never accepted them
+ * (`packages/contracts/src/portfolio.ts`), so carrying them turned an edit that
+ * would otherwise have been judged on its merits into a `400 VALIDATION_ERROR`.
+ * An edit keeps the server's strict oversell guard — an over-sell answers
+ * `400 OVERSELL`, rendered inline with the create path's copy — exactly as the
+ * web's edit dialog does. Keeping the fields off this type is what makes
+ * "never send them on PATCH" a compile-time fact rather than a convention.
  */
 @Serializable
 data class UpdateTransactionRequest(
@@ -325,14 +334,6 @@ data class UpdateTransactionRequest(
     val fee: Double? = null,
     val executedAt: String? = null,
     val note: String? = null,
-    /**
-     * Uncovered (over-)sell on the EDIT endpoint (contract PR #429): re-sending
-     * an edit that raises the sold quantity past the held amount 400s `OVERSELL`
-     * unless this is `true`. Sent when the edited sell is uncovered.
-     */
-    val allowUncovered: Boolean? = null,
-    /** Optional native per-unit cost basis for the uncovered part (see create). */
-    val uncoveredEntryPrice: Double? = null,
 )
 
 @Serializable
