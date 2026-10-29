@@ -302,6 +302,9 @@ class DefaultChatRepository(
     private val observeProcessLifecycle: Boolean = true,
 ) : ChatRepository {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     override val conversations: StateFlow<List<Conversation>> = _conversations
 
@@ -341,7 +344,11 @@ class DefaultChatRepository(
 
     // ── Conversation list ─────────────────────────────────────────────────────
 
+    /** Coalesced: concurrent refreshes share one request and one Room write. */
     override suspend fun refreshConversations(): BtResult<Unit> =
+        flights.run("chat/conversations") { refreshConversationsNow() }
+
+    private suspend fun refreshConversationsNow(): BtResult<Unit> =
         when (val r = apiCall(json) { api.chatConversations() }) {
             is BtResult.Ok -> {
                 val myId = currentUserId()

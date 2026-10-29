@@ -158,6 +158,9 @@ class MarketRepository(
     private val json: Json,
     private val data: MarketDataSource,
 ) {
+
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
     // ── Watchlist (workboard) membership — cached ────────────────────────────
 
     /** Asset ids currently on the workboard watchlist (drives the star state). */
@@ -217,8 +220,11 @@ class MarketRepository(
 
     // ── Workboard watchlist mutations (§6.6, online-only) ────────────────────
 
-    /** Refresh the single workboard watchlist into Room (membership + rows). */
+    /** Refresh the single workboard watchlist into Room (membership + rows; coalesced). */
     suspend fun refreshWorkboard(): BtResult<Unit> =
+        flights.run("workboard") { refreshWorkboardNow() }
+
+    private suspend fun refreshWorkboardNow(): BtResult<Unit> =
         when (val r = apiCall(json) { api.workboard() }) {
             is BtResult.Ok -> {
                 db.watchlistDao().replaceList(

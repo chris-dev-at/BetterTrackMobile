@@ -108,6 +108,9 @@ class AlertsRepository(
     private val json: Json,
 ) {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     // ── The shell-visible triggered count (R-arc R1) ─────────────────────────
     //
     // The mandate moves the alerts signal OUT of the top bar and into two places
@@ -146,7 +149,7 @@ class AlertsRepository(
     }
 
     suspend fun list(): BtResult<List<PriceAlert>> =
-        when (val r = apiCall(json) { api.alerts() }) {
+        when (val r = flights.run("alerts") { apiCall(json) { api.alerts() } }) {
             is BtResult.Ok -> BtResult.Ok(r.value.items.mapNotNull { it.toDomainOrNull() })
             is BtResult.Err -> r
         }

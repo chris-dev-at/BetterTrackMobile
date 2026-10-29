@@ -300,6 +300,9 @@ class DefaultSocialRepository(
     private val webOrigin: String,
 ) : SocialRepository {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     // ── Reads ────────────────────────────────────────────────────────────────
 
     override suspend fun friends(): BtResult<List<Friend>> =
@@ -311,7 +314,7 @@ class DefaultSocialRepository(
         }
 
     override suspend fun requests(): BtResult<FriendRequests> =
-        when (val r = apiCall(json) { api.friendRequests() }) {
+        when (val r = flights.run("social/requests") { apiCall(json) { api.friendRequests() } }) {
             is BtResult.Ok -> BtResult.Ok(
                 FriendRequests(
                     incoming = r.value.incoming.map {

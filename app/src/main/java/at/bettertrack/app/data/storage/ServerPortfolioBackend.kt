@@ -62,10 +62,19 @@ class ServerPortfolioBackend(
     private val now: () -> Long = System::currentTimeMillis,
 ) : PortfolioBackend {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     // ── Network → Room refresh paths ─────────────────────────────────────────
 
-    /** Refresh the portfolio LIST (`GET /portfolios`, archived included). */
+    /**
+     * Refresh the portfolio LIST (`GET /portfolios`, archived included).
+     * Coalesced: concurrent refreshes share one request and one Room write.
+     */
     override suspend fun refreshPortfolios(): BtResult<Unit> =
+        flights.run("portfolios") { refreshPortfoliosNow() }
+
+    private suspend fun refreshPortfoliosNow(): BtResult<Unit> =
         when (val r = apiCall(json) { api.portfolios() }) {
             is BtResult.Ok -> {
                 val fresh = r.value.portfolios.map { p ->
@@ -147,8 +156,11 @@ class ServerPortfolioBackend(
             }
         }
 
-    /** Refresh the §6.1 graph series for one portfolio × range (stored verbatim). */
+    /** Refresh the §6.1 graph series for one portfolio × range (stored verbatim; coalesced). */
     override suspend fun refreshHistory(portfolioId: String, range: HistoryRange): BtResult<Unit> =
+        flights.run("history:$portfolioId:${range.wire}") { refreshHistoryNow(portfolioId, range) }
+
+    private suspend fun refreshHistoryNow(portfolioId: String, range: HistoryRange): BtResult<Unit> =
         when (val r = apiCall(json) { api.portfolioHistory(portfolioId, range.wire) }) {
             is BtResult.Ok -> {
                 db.portfolioHistoryDao().upsert(

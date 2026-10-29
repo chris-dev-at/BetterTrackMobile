@@ -66,6 +66,9 @@ class DefaultWatchlistRepository(
     private val json: Json,
 ) : WatchlistRepository {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     override val boards: Flow<List<WatchlistBoard>> =
         db.watchlistDao().observeAll().map { rows ->
             rows.map { WatchlistBoard(it.id, it.name, it.isDefault) }
@@ -77,7 +80,10 @@ class DefaultWatchlistRepository(
     override fun items(boardId: String): Flow<List<WatchlistItemEntity>> =
         db.watchlistDao().observeItems(boardId)
 
-    override suspend fun refresh(): BtResult<Unit> {
+    /** Coalesced: concurrent refreshes share one pass (listing + per-list fetches). */
+    override suspend fun refresh(): BtResult<Unit> = flights.run("watchlists") { refreshNow() }
+
+    private suspend fun refreshNow(): BtResult<Unit> {
         // General via MarketRepository (keeps WORKBOARD_ID + the asset-page star).
         val general = market.refreshWorkboard()
         if (general is BtResult.Err && general.error.isNetwork) return general

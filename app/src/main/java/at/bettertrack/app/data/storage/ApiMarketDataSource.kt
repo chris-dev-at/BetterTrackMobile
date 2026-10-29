@@ -37,6 +37,9 @@ class ApiMarketDataSource(
     private val json: Json,
 ) : MarketDataSource {
 
+    /** Identical in-flight GETs share one call (cold-start fan-out, 2026-10-29). */
+    private val flights = at.bettertrack.app.data.api.SingleFlight<String>()
+
     override suspend fun search(query: String): BtResult<SearchOutcome> =
         when (val r = apiCall(json) { api.search(query) }) {
             is BtResult.Ok -> BtResult.Ok(
@@ -149,7 +152,12 @@ class ApiMarketDataSource(
         range: HistoryRange,
     ): BtResult<Map<String, AssetPriceSeries>> {
         if (assetIds.none { it.isNotBlank() }) return BtResult.Ok(emptyMap())
-        return when (val r = apiCall(json) { api.portfolioHistory(portfolioId, range.wire, OVERLAY_ON) }) {
+        // Coalesced on (portfolio, range): the per-caller [assetIds] filter is
+        // applied below, to the shared answer.
+        val fetched = flights.run("history-overlay:$portfolioId:${range.wire}") {
+            apiCall(json) { api.portfolioHistory(portfolioId, range.wire, OVERLAY_ON) }
+        }
+        return when (val r = fetched) {
             is BtResult.Ok -> {
                 val overlays = r.value.assets
                     ?: return BtResult.Err(BtApiError(httpStatus = 0, code = CODE_NO_OVERLAY))
