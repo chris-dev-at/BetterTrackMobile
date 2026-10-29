@@ -2679,3 +2679,23 @@ and writes **nothing** — the subject keeps the audience it already had. This i
 **Also in the same PR, harmless but worth knowing:** naming the same friend twice in `friendIds` used to be a **500** (it hit the membership unique index). The set is now de-duplicated server-side and saves normally — if you ever worked around that, the workaround is no longer needed.
 
 **Nothing else on the wire changes.** No schema change, no new field, no contract/OpenAPI change, and the other rungs (`private`, `all_friends`, `group`, `public_link`) are untouched. `GET /social/audience/...` already stopped naming disabled friends in #1897, so the value the picker reads back is safe to re-submit as-is. — Platform
+
+## 🖥️ Platform → Mobile — your 2026-09-02 refresh-rotation P1 is in build, and the E9/S2 section gets its answers (2026-10-29)
+
+**1. Refresh rotation grace (your 🔴 2026-09-02 section) — confirmed as a defect, in build now, two PRs.** Verified on main `ef73d282`: rotation has zero grace (the refresh path in `oauthService.ts` revokes the whole grant on any consumed token; the concurrent-refresh loser revokes it too; one grant serves every device of a client+user). What lands, in order:
+- **PR-A (today, in build):** a **60 s grace window**. Re-presenting the just-consumed refresh token within 60 s, with the same client credentials and before the successor is itself used, returns the **identical** successor pair (same `access_token` / `refresh_token` / `scope`; `expires_in` recomputed from the original issue). The **concurrent loser gets that same pair with 200** — not 400, no revoke. Beyond 60 s, or once the successor was used, reuse stays theft detection (grant revoked, `INVALID_GRANT`). Nothing else on the wire changes. App side: replace the "quarantine a possibly-delivered token for 10 min" logic with "re-present it once within 60 s" — otherwise the grace never helps you.
+- **PR-B (next):** per-install **token families** — every `authorization_code` exchange starts a family; theft detection revokes only the family, not the grant; **`POST /oauth/revoke` (RFC 7009)** revokes the presented token's family; bearer `POST /auth/logout` becomes per-install. `DELETE /settings/oauth-grants/:id` keeps meaning "this app, every device". This is your ask 4 done the safe way: pruning every outstanding refresh token on a reused grant would sign out the user's other devices. Legacy multi-device grants share one family until each device signs in again.
+- `INVALID_GRANT` is already in the OpenAPI error vocabulary (#2018, live).
+Final semantics get ticked here with the prod SHA as each PR goes live.
+
+**2. Your 2026-09-02 E9/S2 section — none of it had been answered; answers now:**
+- **E9 ack route (your item 2):** confirmed. `POST /auth/fresh-start-notice/acknowledge` is session-only (the `/auth` default; explicit bearer carve-outs exist only for routes such as `/auth/first-run/complete`, none for fresh-start). A POST-only bearer carve-out under `account:security`, with its OpenAPI security entry, is scheduled today; ticked here when live.
+- **Third 412 after a lost response (S2):** already covered server-side. A byte-identical retry carrying the same `writeId` returns **204 `idempotent:true`** even if another writer advanced the doc in between; the same `writeId` with different bytes is the distinct terminal **412 `VAULT_WRITE_ID_REPLAYED`** (#1498, live). Re-send identical bytes on retry; your `writeId` check stays as the fallback.
+- **404 on Replace (S2):** the premise is off — 404 IS published on PUT (`VAULT_NOT_FOUND`): no caller-owned vault/doc of that id, not "blob missing". Recommendation, not a ruling: on 404 re-read `GET /vaults/:id` and resolve from there rather than re-creating at the local version blindly.
+- **Where +1 lives (S2):** sealing locally and bumping on commit is compatible with §6 ("local commit → encrypt affected docs (docVersion + 1)"). Confirmed.
+- **Import ack:** received.
+- **§17 wipe:** NOT run on production; it is an owner-run runbook (`wipeParanoidV1.ts` exists); no date.
+- **§19 deletion train (v1 `/api/v1/vault/*`):** pending, gated on §17; no date; it gets ticked here first, with notice.
+- **Deferred to a ruling round (not today):** the three QR edge cases (`n=%zz`, `btvault1:{not json` reason, blank `f=`) and the `header` doc merge rule for §6. Your provisional choices stand until then; the `v` nibble: noted, no action.
+
+— Platform
