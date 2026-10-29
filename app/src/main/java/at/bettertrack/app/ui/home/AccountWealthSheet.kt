@@ -62,12 +62,16 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.portfolio.DeltaLine
+import at.bettertrack.app.ui.portfolio.ReturnSummaryExplainer
+import at.bettertrack.app.ui.portfolio.ReturnSummaryLine
 import at.bettertrack.app.ui.portfolio.deltaColor
 import at.bettertrack.app.ui.portfolio.formatChartScrubDate
 import at.bettertrack.app.ui.portfolio.rangeDeltaEur
+import at.bettertrack.app.ui.portfolio.returnSummaryOf
 import at.bettertrack.app.ui.prices.NetWorthState
 import at.bettertrack.app.ui.shell.OfflineBanner
 import at.bettertrack.app.ui.theme.BtTheme
+import at.bettertrack.app.ui.theme.FONT_FEATURE_TABULAR
 import at.bettertrack.app.ui.util.rememberBtLocale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -287,6 +291,12 @@ private fun SinglePortfolioWealth(
                     RangeDeltaLine(state = state, range = range)
                 }
             }
+            // #1669: the single portfolio IS the account, so its headline gets the
+            // portfolio hero's labelled time-/money-weighted line (+ MAX explainer)
+            // verbatim. Only over a drawable curve, like the delta line above it.
+            if (state is AccountSeriesState.Curve) {
+                ReturnSummaryLine(history = history, modifier = Modifier.padding(top = 2.dp))
+            }
         }
         Spacer(Modifier.height(6.dp))
         AccountCurve(
@@ -352,6 +362,16 @@ private fun MultiPortfolioWealth(
                 style = MaterialTheme.typography.bodySmall,
                 color = bt.textMuted,
             )
+            // #1669: the MAX explainer is stated ONCE for all the small multiples
+            // below (each slot carries its own labelled line without it), and only
+            // when at least one slot actually shows a summary.
+            val anyMaxSummary = remember(series, scope) {
+                scope.charted.any { returnSummaryOf(series[it.id])?.explainMax == true }
+            }
+            if (anyMaxSummary) {
+                Spacer(Modifier.height(6.dp))
+                ReturnSummaryExplainer()
+            }
             Spacer(Modifier.height(12.dp))
             BtRangeSegmented(
                 options = ACCOUNT_WEALTH_RANGES,
@@ -373,6 +393,7 @@ private fun MultiPortfolioWealth(
                     portfolio = portfolio,
                     state = accountSeriesState(series[portfolio.id], portfolio.id in failed, settled),
                     range = range,
+                    history = series[portfolio.id],
                 )
             }
             if (scope.omitted > 0) {
@@ -407,6 +428,7 @@ private fun PortfolioSmallMultiple(
     portfolio: PortfolioEntity,
     state: AccountSeriesState,
     range: HistoryRange,
+    history: PortfolioHistory?,
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
@@ -462,6 +484,16 @@ private fun PortfolioSmallMultiple(
             color = bt.textMuted,
             modifier = Modifier.padding(horizontal = 20.dp),
         )
+        // #1669: this slot's own labelled time-/money-weighted figures, at the
+        // slot's caption size; the MAX explainer is stated once above the list.
+        if (state is AccountSeriesState.Curve) {
+            ReturnSummaryLine(
+                history = history,
+                showMaxExplainer = false,
+                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = FONT_FEATURE_TABULAR),
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
     }
 }
 

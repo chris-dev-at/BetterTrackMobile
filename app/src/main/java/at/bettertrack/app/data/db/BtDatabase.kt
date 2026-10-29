@@ -77,7 +77,7 @@ private fun SupportSQLiteDatabase.addColumnIfMissing(
         PvVaultDocCursorRow::class,
         PvVaultDocCandidateRow::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 abstract class BtDatabase : RoomDatabase() {
@@ -472,6 +472,24 @@ abstract class BtDatabase : RoomDatabase() {
         }
 
         /**
+         * v14 → v15 (#1669): the money-weighted return beside the cached history.
+         *
+         * One nullable TEXT column holding the server's `moneyWeightedPct` element
+         * verbatim (see [PortfolioHistoryEntity.moneyWeightedPctJson]). Additive and
+         * NOT back-filled on purpose: every row cached before this version came
+         * from a response this build never read the field off, so SQL NULL —
+         * "absent / not computed", which renders nothing — is the only true value
+         * for it. The next refresh of that range writes the real one.
+         *
+         * Its own step for [MIGRATION_PV_DOC_CURSORS]' reason: v14 has shipped.
+         */
+        internal val MIGRATION_HISTORY_MONEY_WEIGHTED = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("portfolio_history", "moneyWeightedPctJson", "TEXT")
+            }
+        }
+
+        /**
          * The whole chain, in one place, so [create] and the migration regression
          * suite can never disagree about what ships. Room resolves the path itself;
          * the order here is documentation.
@@ -494,6 +512,7 @@ abstract class BtDatabase : RoomDatabase() {
             MIGRATION_PARANOID_VAULTS,
             MIGRATION_PV_DOC_CURSORS,
             MIGRATION_PV_DOC_CANDIDATES,
+            MIGRATION_HISTORY_MONEY_WEIGHTED,
         )
 
         fun create(context: Context): BtDatabase =

@@ -1,5 +1,7 @@
 package at.bettertrack.app.data.api.dto
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -118,6 +120,17 @@ data class PortfolioHistoryResponse(
      * be able to tell those apart, because only the second one is an answer.
      */
     val assets: List<HistoryOverlayAssetDto>? = null,
+    /**
+     * The server's Modified Dietz money-weighted return of this window (#1669),
+     * TRI-STATE — absent / explicit `null` / number — see [MoneyWeightedPct].
+     * `performance` stays the time-weighted curve and is unaffected.
+     *
+     * Never encoded when it is the default: [MoneyWeightedPct.NotComputed] is the
+     * ABSENCE of the key and has no wire spelling.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val moneyWeightedPct: MoneyWeightedPct = MoneyWeightedPct.NotComputed,
 )
 
 /**

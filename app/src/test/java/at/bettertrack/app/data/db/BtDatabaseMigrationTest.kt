@@ -257,6 +257,58 @@ class BtDatabaseMigrationTest {
         }
     }
 
+    /** The v14→v15 step, from the committed v14 export to the committed v15 one. */
+    @Test
+    fun theCommittedV14SchemaMigratesToTheCommittedV15Schema() {
+        withMigratedDb(exportedStatements(14), fromVersion = 14) { conn ->
+            assertSchemaMatchesRoomExpectation(conn, "committed schemas/14.json")
+            assertEquals(
+                "migrating 14→15 must reproduce the committed 15.json exactly",
+                emptyList<String>(),
+                diffSchemas(schemaFrom(exportedStatements(15)), readSchema(conn), allowLaterAdditions = true),
+            )
+        }
+    }
+
+    /**
+     * #1669: the history cache gains `moneyWeightedPctJson`, and every row cached
+     * BEFORE it reads SQL NULL — "absent / not computed", which renders nothing.
+     * Back-filling anything else (a `null`, a 0) would claim the server said
+     * something it was never asked, so the test pins the NULL, not just the column.
+     */
+    @Test
+    fun theMoneyWeightedHistoryMigrationIsPurelyAdditive() {
+        val db = newDbFile()
+        openJdbc(db).use { conn ->
+            conn.applyAll(exportedStatements(14))
+            conn.exec("PRAGMA user_version = 14")
+            conn.applyAll(SAMPLE_ROWS_V7)
+            conn.exec(
+                "INSERT INTO `portfolio_history` (`portfolioId`, `range`, `baseCurrency`, `pointsJson`, " +
+                    "`performanceJson`, `syncedAtMs`) VALUES ('p1', 'MAX', 'EUR', '[]', '[]', 1)",
+            )
+            val before = conn.rowCounts(COUNTED_TABLES + "portfolio_history")
+
+            runMigrations(conn, from = 14)
+
+            assertEquals(
+                "migration 14→15 must not touch a single user row",
+                before,
+                conn.rowCounts(COUNTED_TABLES + "portfolio_history"),
+            )
+            assertEquals(
+                "a pre-v15 row is 'not computed', never 'no capital'",
+                "1",
+                conn.single("SELECT COUNT(*) AS name FROM `portfolio_history` WHERE `moneyWeightedPctJson` IS NULL"),
+            )
+            // The three cache spellings all fit the column.
+            conn.exec("UPDATE `portfolio_history` SET `moneyWeightedPctJson` = 'null'")
+            assertEquals("null", conn.single("SELECT `moneyWeightedPctJson` AS name FROM `portfolio_history`"))
+            conn.exec("UPDATE `portfolio_history` SET `moneyWeightedPctJson` = '9.5'")
+            assertEquals("9.5", conn.single("SELECT `moneyWeightedPctJson` AS name FROM `portfolio_history`"))
+        }
+    }
+
     /**
      * The kept-candidate table arrives empty, the config mirror gains its two
      * doc-id columns, and no existing row moves.

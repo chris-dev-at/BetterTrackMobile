@@ -97,6 +97,9 @@
     <string name="bt_range_word_6m">letzte sechs Monate</string>
     <string name="bt_range_word_1y">letztes Jahr</string>
     <string name="bt_range_word_max">seit Beginn</string>
+    <string name="bt_return_summary_time_weighted">Zeitgewichtet %1$s</string>
+    <string name="bt_return_summary_money_weighted">Geldgewichtet %1$s</string>
+    <string name="bt_return_summary_max_explainer">Zeitgewichtet ist die Rendite deiner Bestände, Ein- und Auszahlungen herausgerechnet; geldgewichtet ist, was dein Geld tatsächlich erwirtschaftet hat — frühe Verluste auf kleine Beträge wiegen dadurch weniger.</string>
     <string name="bt_overview_more_insights">Mehr Einblicke</string>
     <string name="bt_insights_title">Einblicke</string>
     <string name="bt_holdings_sort_cd">Bestände sortieren</string>

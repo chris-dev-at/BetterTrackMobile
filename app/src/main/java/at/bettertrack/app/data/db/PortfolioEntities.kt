@@ -190,6 +190,13 @@ data class PortfolioHistoryEntity(
     /** JSON `[{date:"yyyy-MM-dd", pct}]` — server-computed performance %. */
     val performanceJson: String,
     val syncedAtMs: Long,
+    /**
+     * v15 (#1669): the server's `moneyWeightedPct` element VERBATIM — SQL NULL =
+     * the key was absent (also every row cached before v15), the text `null` =
+     * the server's explicit "no capital", else the number literal. Decoded by
+     * `moneyWeightedFromCacheJson`; the tri-state must survive a cold start.
+     */
+    val moneyWeightedPctJson: String? = null,
 )
 
 /** One cash movement of `GET /portfolios/{id}/cash`. */

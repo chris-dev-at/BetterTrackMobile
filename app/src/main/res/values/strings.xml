@@ -137,6 +137,12 @@
     <string name="bt_range_word_6m">past six months</string>
     <string name="bt_range_word_1y">past year</string>
     <string name="bt_range_word_max">all time</string>
+    <!-- #1669 (board 2026-09-15): the window's return summary under the delta
+         line — both server figures, labelled, like the web's chart summary.
+         The explainer renders on MAX only (web copy verbatim). -->
+    <string name="bt_return_summary_time_weighted">Time-weighted %1$s</string>
+    <string name="bt_return_summary_money_weighted">Money-weighted %1$s</string>
+    <string name="bt_return_summary_max_explainer">Time-weighted is the return of your holdings with deposits and withdrawals neutralized; money-weighted is what your money actually earned, so early losses on small amounts weigh less.</string>
     <!-- Owner UI batch 2026-08-16: allocation moved off the overview into its own
          insights subpage, entered from a row beside Portfolio settings. -->
     <string name="bt_overview_more_insights">More insights</string>

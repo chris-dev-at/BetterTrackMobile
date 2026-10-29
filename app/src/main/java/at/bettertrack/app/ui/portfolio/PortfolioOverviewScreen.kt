@@ -718,6 +718,22 @@ private fun OverviewContent(
                             }
                         }
                     }
+                    // ── #1669: the window's two returns, labelled ──
+                    //
+                    // Under the reserved delta-line box, not inside it: the box
+                    // keeps the owner's one-line delta rhythm, this line names
+                    // the time- and money-weighted figures (+ the MAX explainer).
+                    // Deliberately NOT hidden while scrubbing — it describes the
+                    // window, not the touched point, and hiding it would move the
+                    // canvas under the finger. Same W6 guard as the delta line.
+                    // Absent `moneyWeightedPct` (older server / pre-v15 cache)
+                    // composes nothing, so the screen is exactly what it was.
+                    if (totals != null && !coverage.nothingPriced) {
+                        ReturnSummaryLine(
+                            history = history,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 } else {
                     BtSkeleton(Modifier.width(220.dp).height(40.dp))
                     Spacer(Modifier.height(6.dp))

@@ -1,7 +1,9 @@
 package at.bettertrack.app.data.repo
 
 import at.bettertrack.app.data.api.dto.HistoryPointDto
+import at.bettertrack.app.data.api.dto.MoneyWeightedPct
 import at.bettertrack.app.data.api.dto.PerformancePointDto
+import at.bettertrack.app.data.api.dto.moneyWeightedFromCacheJson
 import at.bettertrack.app.data.db.PortfolioHistoryEntity
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -24,8 +26,19 @@ data class PortfolioHistory(
     val points: List<HistoryPoint>,
     val performance: List<PerformancePoint>,
     val syncedAtMs: Long,
+    /**
+     * The server's money-weighted (Modified Dietz) return of this window (#1669),
+     * read verbatim off the cached row — tri-state, see [MoneyWeightedPct]. Never
+     * computed here: the vault/Drive projection does not port it and so caches
+     * [MoneyWeightedPct.NotComputed], which renders nothing.
+     */
+    val moneyWeighted: MoneyWeightedPct = MoneyWeightedPct.NotComputed,
 ) {
-    /** Server-computed performance % over the whole range (percent units). */
+    /**
+     * Server-computed TIME-WEIGHTED performance % over the whole range (percent
+     * units). MAX is anchored at 0 % before day one and NOT re-based (#1669
+     * ruling), so a long-ago drawdown can leave this negative on a rising curve.
+     */
     val rangePerformancePct: Double? get() = performance.lastOrNull()?.pct
 
     /**
@@ -121,6 +134,7 @@ fun parsePortfolioHistory(entity: PortfolioHistoryEntity, json: Json): Portfolio
             points = points,
             performance = performance,
             syncedAtMs = entity.syncedAtMs,
+            moneyWeighted = moneyWeightedFromCacheJson(entity.moneyWeightedPctJson),
         )
     } catch (_: Exception) {
         null

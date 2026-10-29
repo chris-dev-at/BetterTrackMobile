@@ -18,6 +18,7 @@ import at.bettertrack.app.data.api.dto.UpdateCustomAssetRequest
 import at.bettertrack.app.data.api.dto.UpdatePortfolioRequest
 import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.api.dto.ValuePointDto
+import at.bettertrack.app.data.api.dto.toCacheJson
 import at.bettertrack.app.data.cash.encodeTagIds
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.CashMovementEntity
@@ -164,6 +165,7 @@ class ServerPortfolioBackend(
                             r.value.performance,
                         ),
                         syncedAtMs = now(),
+                        moneyWeightedPctJson = r.value.moneyWeightedPct.toCacheJson(),
                     ),
                 )
                 touchSyncedAt()
