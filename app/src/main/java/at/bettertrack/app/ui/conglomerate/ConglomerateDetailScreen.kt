@@ -411,8 +411,8 @@ fun ConglomerateDetailScreen(
                                 b.backtest.stats?.let { st ->
                                     Spacer(Modifier.height(8.dp))
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        st.totalReturnPct?.let { StatCell(stringResource(R.string.bt_conglo_total_return), formatPercent(it, locale), if (it >= 0) bt.gain else bt.loss) }
-                                        st.cagrPct?.let { StatCell(stringResource(R.string.bt_conglo_cagr), formatPercent(it, locale), bt.textPrimary) }
+                                        st.totalReturnPct?.let { StatCell(stringResource(R.string.bt_conglo_total_return), formatPercent(it, locale), backtestReturnColor(it, bt.gain, bt.loss)) }
+                                        st.cagrPct?.let { StatCell(stringResource(R.string.bt_conglo_cagr), formatPercent(it, locale), backtestReturnColor(it, bt.gain, bt.loss)) }
                                         st.maxDrawdownPct?.let { StatCell(stringResource(R.string.bt_conglo_drawdown), formatPercent(it, locale), bt.loss) }
                                     }
                                 }
@@ -625,3 +625,11 @@ private fun ConglomerateDetailSkeleton(modifier: Modifier = Modifier) {
         BtSkeleton(modifier = Modifier.fillMaxWidth().height(232.dp), shape = BtShapes.card)
     }
 }
+
+/**
+ * The colour of a backtest RETURN figure — total return and CAGR alike: a gain
+ * reads as a gain, a loss as a loss. CAGR used to render in plain ink, so a
+ * "-15,85 %" stood black between a red total return and a red drawdown
+ * (tablet smoke 2026-10-29). Generic over the colour type so it is pure.
+ */
+internal fun <C> backtestReturnColor(pct: Double, gain: C, loss: C): C = if (pct >= 0) gain else loss

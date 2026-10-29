@@ -1,6 +1,9 @@
 package at.bettertrack.app.ui.portfolio
 
 import at.bettertrack.app.data.db.TransactionEntity
+import at.bettertrack.app.ui.format.btFormatMoneyCore
+import at.bettertrack.app.ui.format.btFormatUnitPriceCore
+import java.util.Locale
 
 /**
  * Pure display-filter logic for the transaction history (spec §6.2 —
@@ -44,3 +47,24 @@ fun distinctTxAssets(transactions: List<TransactionEntity>): List<TxAssetOption>
  * also renders per ledger row.
  */
 fun transactionNotional(quantity: Double, price: Double): Double = quantity * price
+
+/**
+ * A trade's unit price, in the asset's NATIVE currency — the rule the web's
+ * ledger applies (`MoneyText amount={price} currency={asset.currency} unitPrice`).
+ *
+ * A transaction's `price` and `fee` are native: a 6 × 265,76 AAPL buy is
+ * dollars, and the server keeps no EUR copy of them. The rows used to run
+ * every one of them through the EUR formatter, printing "6 × 265,76 €" for a
+ * USD trade (tablet smoke 2026-10-29). Unit-price precision (rule 4), so a
+ * sub-cent crypto tick keeps its digits.
+ *
+ * [currency] is null only for a queued op that predates the field: that figure
+ * renders as a bare number rather than borrowing a symbol it may not have —
+ * never a € sign on a figure nobody said was euro.
+ */
+fun formatTradePrice(price: Double, currency: String?, locale: Locale): String =
+    btFormatUnitPriceCore(price, currency.orEmpty(), locale).trimEnd()
+
+/** A trade's money figure — notional or fee — in the asset's native currency (see [formatTradePrice]). */
+fun formatTradeAmount(value: Double, currency: String?, locale: Locale): String =
+    btFormatMoneyCore(value, currency.orEmpty(), locale, showSign = false).trimEnd()

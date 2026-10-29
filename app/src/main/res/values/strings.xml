@@ -255,6 +255,11 @@
     <string name="bt_txform_add_proceeds">Add proceeds to cash</string>
     <string name="bt_txform_cash_after">Cash after: %1$s</string>
     <string name="bt_txform_cash_balance">Cash balance: %1$s</string>
+    <!-- The trade form's balance is the PRIMARY source's only (Max and pay-from-cash
+         draw on it alone, owner fix 2026-07), so it names that source: the
+         portfolio card's "Cash" is the total across every source, and two
+         unlabelled cash figures that disagree read as a bug. -->
+    <string name="bt_txform_main_cash_balance">Cash in “%1$s”: %2$s</string>
     <string name="bt_txform_cash_off_hint">Cash stays untouched</string>
     <string name="bt_txform_cash_unknown">Balance updates on next sync</string>
     <string name="bt_txform_insufficient_cash">Not enough cash — %1$s available</string>

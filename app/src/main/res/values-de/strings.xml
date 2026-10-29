@@ -206,6 +206,7 @@
     <string name="bt_txform_add_proceeds">Erlös zum Bargeld hinzufügen</string>
     <string name="bt_txform_cash_after">Bargeld danach: %1$s</string>
     <string name="bt_txform_cash_balance">Bargeldbestand: %1$s</string>
+    <string name="bt_txform_main_cash_balance">Bargeld in „%1$s“: %2$s</string>
     <string name="bt_txform_cash_off_hint">Bargeld bleibt unberührt</string>
     <string name="bt_txform_cash_unknown">Bestand aktualisiert sich bei der nächsten Synchronisierung</string>
     <string name="bt_txform_insufficient_cash">Nicht genug Bargeld — %1$s verfügbar</string>

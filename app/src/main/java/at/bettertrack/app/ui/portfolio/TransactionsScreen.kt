@@ -69,9 +69,7 @@ import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MirrorAttributionChip
-import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
-import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.resolveListSurface
 import at.bettertrack.app.ui.format.isBadgeWorthy
@@ -729,7 +727,7 @@ fun TransactionRow(
                 }
                 Spacer(Modifier.height(2.dp))
                 val amountPrice =
-                    "${formatQuantity(tx.quantity, locale)} × ${formatEur(tx.price, locale)}"
+                    "${formatQuantity(tx.quantity, locale)} × ${formatTradePrice(tx.price, tx.assetCurrency, locale)}"
                 Text(
                     text = if (showAsset) {
                         formatTxDate(tx.executedAtMs, locale) + " · " + amountPrice
@@ -769,14 +767,16 @@ fun TransactionRow(
             }
             Spacer(Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {
-                MoneyText(
-                    value = transactionNotional(tx.quantity, tx.price),
+                // Native, like the price it multiplies — never the EUR formatter.
+                Text(
+                    text = formatTradeAmount(transactionNotional(tx.quantity, tx.price), tx.assetCurrency, locale),
                     style = BtTheme.type.moneySmall,
+                    maxLines = 1,
                 )
                 if (tx.fee > 0.0) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = stringResource(R.string.bt_tx_fee, formatEur(tx.fee, locale)),
+                        text = stringResource(R.string.bt_tx_fee, formatTradeAmount(tx.fee, tx.assetCurrency, locale)),
                         style = BtTheme.type.numberCaption,
                         color = bt.textMuted,
                     )

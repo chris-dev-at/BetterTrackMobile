@@ -266,6 +266,16 @@ fun maxAffordableQuantity(cashEur: Double, price: Double, fee: Double): Double {
 fun mainCashSourceBalanceEur(sources: List<at.bettertrack.app.data.db.CashSourceEntity>): Double? =
     sources.firstOrNull { it.isMain }?.balanceEur
 
+/**
+ * The name of the source [mainCashSourceBalanceEur] reads — what the form's
+ * balance line names, so it cannot be mistaken for the portfolio's total cash
+ * (Growth Portfolio, 2026-10-29: card "Cash 4.692,61 €" = Main 3.192,61 +
+ * Savings 1.500,00, form "3.192,61 €"). Null when there is no primary source or
+ * it has no usable name; the caller then keeps the unnamed line.
+ */
+fun mainCashSourceName(sources: List<at.bettertrack.app.data.db.CashSourceEntity>): String? =
+    sources.firstOrNull { it.isMain }?.name?.trim()?.takeIf { it.isNotEmpty() }
+
 /** Tolerance (one cent) for reconciling the cached Main ledger to the live balance. */
 const val CASH_LEDGER_RECONCILE_EPS = 0.01
 
@@ -384,6 +394,26 @@ fun formatDecimalForInput(value: Double, locale: Locale, maxDecimals: Int = 8): 
     val bd = java.math.BigDecimal(value.toString())
         .setScale(maxDecimals, java.math.RoundingMode.DOWN)
         .stripTrailingZeros()
+    return localizedPlain(bd, locale)
+}
+
+/**
+ * A STORED value (quantity, price, fee) prefilled into the edit form: the
+ * device locale's decimal separator, no grouping, no trailing zeros — and
+ * EXACTLY the stored number, so merely opening an edit can never change it.
+ *
+ * The edit form used to print the dot-decimal `BigDecimal(value)` string, so a
+ * German user editing a 265.756256 USD buy saw "265.756256" (tablet smoke
+ * 2026-10-29) in a field whose every other number reads "265,76". No precision
+ * cap: the precision a price needs IS the precision it was stored with, and a
+ * cut here would turn "open, change the note, save" into a price edit (the
+ * synced PATCH sends `price` whenever the parsed field differs from the row).
+ * [parseLocalizedDecimal] of the result is the stored double, bit for bit —
+ * `Double.toString` is the shortest round-tripping decimal.
+ */
+fun formatStoredDecimalForEdit(value: Double, locale: Locale): String {
+    if (!value.isFinite()) return ""
+    val bd = java.math.BigDecimal(value.toString()).stripTrailingZeros()
     return localizedPlain(bd, locale)
 }
 

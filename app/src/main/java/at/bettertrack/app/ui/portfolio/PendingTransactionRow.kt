@@ -19,8 +19,6 @@ import at.bettertrack.app.R
 import at.bettertrack.app.ui.components.BtBadge
 import at.bettertrack.app.ui.components.BtBadgeKind
 import at.bettertrack.app.ui.components.BtCard
-import at.bettertrack.app.ui.components.MoneyText
-import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.theme.BtTheme
 import at.bettertrack.app.ui.util.rememberBtLocale
@@ -110,7 +108,7 @@ fun PendingTransactionRow(
                 }
                 Spacer(Modifier.height(2.dp))
                 val amountPrice =
-                    "${formatQuantity(row.quantity, locale)} × ${formatEur(row.price, locale)}"
+                    "${formatQuantity(row.quantity, locale)} × ${formatTradePrice(row.price, row.payload.assetCurrency, locale)}"
                 Text(
                     text = if (showAsset) {
                         formatTxDate(row.executedAtMs, locale) + " · " + amountPrice
@@ -139,9 +137,10 @@ fun PendingTransactionRow(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            MoneyText(
-                value = transactionNotional(row.quantity, row.price),
+            Text(
+                text = formatTradeAmount(transactionNotional(row.quantity, row.price), row.payload.assetCurrency, locale),
                 style = BtTheme.type.moneySmall,
+                maxLines = 1,
             )
         }
     }

@@ -613,7 +613,15 @@ private fun HoldingContent(
                         label = stringResource(R.string.bt_holding_avg_cost),
                         modifier = Modifier.weight(1f),
                     ) {
-                        MoneyText(value = holding.avgCost, style = BtTheme.type.moneyMedium)
+                        // Native, like the web (`avgCost` in `asset.currency`): the
+                        // server's average is in the asset's own currency — a USD
+                        // holding's "Ø Einstand" is dollars, not euro.
+                        Text(
+                            text = formatPrice(holding.avgCost, holding.assetCurrency, locale),
+                            style = BtTheme.type.moneyMedium,
+                            color = bt.textPrimary,
+                            maxLines = 1,
+                        )
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

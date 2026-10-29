@@ -259,6 +259,12 @@ class TransactionFormViewModel(
         .map { mainCashSourceBalanceEur(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** The name of the source [mainCashEur] is read from — the balance line names it. */
+    val mainCashSourceName: StateFlow<String?> = _portfolioId
+        .flatMapLatest { pid -> if (pid == null) flowOf(emptyList()) else repo.cashSources(pid) }
+        .map { mainCashSourceName(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /**
      * The MAIN source's cash movements as (executedAtMs, signed EUR), refreshed
      * whole on every cash sync. Feeds the point-in-time affordability check so a
@@ -532,9 +538,9 @@ class TransactionFormViewModel(
                         row.assetId, row.assetSymbol, row.assetName ?: row.assetSymbol, null,
                         currency = row.payload.assetCurrency ?: "EUR",
                     )
-                    _quantityText.value = editNumber(row.quantity)
-                    _priceText.value = editNumber(row.price)
-                    _feeText.value = if (row.fee > 0.0) editNumber(row.fee) else ""
+                    _quantityText.value = formatStoredDecimalForEdit(row.quantity, formLocale)
+                    _priceText.value = formatStoredDecimalForEdit(row.price, formLocale)
+                    _feeText.value = if (row.fee > 0.0) formatStoredDecimalForEdit(row.fee, formLocale) else ""
                     _date.value = epochMsToLocalDate(row.executedAtMs)
                     _noteText.value = row.note.orEmpty()
                     _cashCoupled.value = row.cashCoupled
@@ -559,9 +565,9 @@ class TransactionFormViewModel(
                     _portfolioId.value = tx.portfolioId
                     _isBuy.value = tx.side == "buy"
                     _asset.value = AssetPick(tx.assetId, tx.assetSymbol, tx.assetName, null, currency = tx.assetCurrency)
-                    _quantityText.value = editNumber(tx.quantity)
-                    _priceText.value = editNumber(tx.price)
-                    _feeText.value = if (tx.fee > 0.0) editNumber(tx.fee) else ""
+                    _quantityText.value = formatStoredDecimalForEdit(tx.quantity, formLocale)
+                    _priceText.value = formatStoredDecimalForEdit(tx.price, formLocale)
+                    _feeText.value = if (tx.fee > 0.0) formatStoredDecimalForEdit(tx.fee, formLocale) else ""
                     _date.value = epochMsToLocalDate(tx.executedAtMs)
                     // #417: the note is loaded through the display strip and goes
                     // back verbatim — no marker is ever re-attached on submit.
@@ -1257,11 +1263,6 @@ class TransactionFormViewModel(
         get() = isEditSynced || isEditQueued
 
     private companion object {
-        /** Plain editable number: no grouping, up to 8 decimals, dot separator. */
-        fun editNumber(value: Double): String =
-            java.math.BigDecimal(value).setScale(8, java.math.RoundingMode.HALF_UP)
-                .stripTrailingZeros().toPlainString()
-
         fun epochMsToLocalDate(ms: Long): LocalDate =
             if (ms <= 0L) {
                 LocalDate.now()
@@ -1336,6 +1337,7 @@ fun TransactionFormScreen(
     val orderTotalEur by vm.orderTotalEur.collectAsStateWithLifecycle()
     val cashAfterEur by vm.cashAfterEur.collectAsStateWithLifecycle()
     val mainCashEur by vm.mainCashEur.collectAsStateWithLifecycle()
+    val mainCashSourceName by vm.mainCashSourceName.collectAsStateWithLifecycle()
     val availableCashEur by vm.availableCashEur.collectAsStateWithLifecycle()
     val holdings by vm.holdings.collectAsStateWithLifecycle()
     val submitting by vm.submitting.collectAsStateWithLifecycle()
@@ -1603,6 +1605,7 @@ fun TransactionFormScreen(
                         enabled = inputsEnabled,
                         cashAfterEur = cashAfterEur,
                         cachedCashEur = mainCashEur,
+                        mainSourceName = mainCashSourceName,
                         availableAsOfEur = availableCashEur,
                         orderTotalEur = orderTotalEur,
                         insufficient = validation.insufficientCash,
@@ -2016,6 +2019,15 @@ private fun DateField(
     )
 }
 
+/** "Cash in “Main”: 3.192,61 €" — or the unnamed line when the source has no name. */
+@Composable
+private fun mainCashBalanceLine(sourceName: String?, balanceEur: Double, locale: Locale): String =
+    if (sourceName != null) {
+        stringResource(R.string.bt_txform_main_cash_balance, sourceName, formatEur(balanceEur, locale))
+    } else {
+        stringResource(R.string.bt_txform_cash_balance, formatEur(balanceEur, locale))
+    }
+
 @Composable
 private fun CashCouplingCard(
     isBuy: Boolean,
@@ -2023,6 +2035,7 @@ private fun CashCouplingCard(
     enabled: Boolean,
     cashAfterEur: Double?,
     cachedCashEur: Double?,
+    mainSourceName: String?,
     availableAsOfEur: Double?,
     orderTotalEur: Double?,
     insufficient: Boolean,
@@ -2045,11 +2058,10 @@ private fun CashCouplingCard(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
+                        // The balance is the PRIMARY source's alone, so the line
+                        // names it — see `bt_txform_main_cash_balance`.
                         text = when {
-                            !coupled && cachedCashEur != null -> stringResource(
-                                R.string.bt_txform_cash_balance,
-                                formatEur(cachedCashEur, locale),
-                            )
+                            !coupled && cachedCashEur != null -> mainCashBalanceLine(mainSourceName, cachedCashEur, locale)
 
                             !coupled -> stringResource(R.string.bt_txform_cash_off_hint)
 
@@ -2058,10 +2070,7 @@ private fun CashCouplingCard(
                                 formatEur(cashAfterEur, locale),
                             )
 
-                            cachedCashEur != null -> stringResource(
-                                R.string.bt_txform_cash_balance,
-                                formatEur(cachedCashEur, locale),
-                            )
+                            cachedCashEur != null -> mainCashBalanceLine(mainSourceName, cachedCashEur, locale)
 
                             else -> stringResource(R.string.bt_txform_cash_unknown)
                         },

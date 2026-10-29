@@ -60,7 +60,6 @@ import at.bettertrack.app.ui.components.BtChip
 import at.bettertrack.app.ui.components.BtEmptyState
 import at.bettertrack.app.ui.components.BtSecondaryButton
 import at.bettertrack.app.ui.components.BtStateFill
-import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.portfolio.PendingStatusBadge
@@ -395,7 +394,7 @@ private fun PendingOpCard(
                     Spacer(Modifier.height(3.dp))
                     val detail = when {
                         tx != null ->
-                            "${formatQuantity(tx.quantity, locale)} × ${formatEur(tx.price, locale)}"
+                            "${formatQuantity(tx.quantity, locale)} × ${at.bettertrack.app.ui.portfolio.formatTradePrice(tx.price, tx.payload.assetCurrency, locale)}"
 
                         cash != null -> formatEur(cash.amountEur, locale)
 
@@ -415,9 +414,12 @@ private fun PendingOpCard(
                     PendingStatusBadge(item.status)
                     if (tx != null) {
                         Spacer(Modifier.height(4.dp))
-                        MoneyText(
-                            value = transactionNotional(tx.quantity, tx.price),
+                        Text(
+                            text = at.bettertrack.app.ui.portfolio.formatTradeAmount(
+                                transactionNotional(tx.quantity, tx.price), tx.payload.assetCurrency, locale,
+                            ),
                             style = BtTheme.type.moneySmall,
+                            maxLines = 1,
                         )
                     }
                 }
