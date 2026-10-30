@@ -3,6 +3,7 @@ package at.bettertrack.app.data.auth
 import at.bettertrack.app.data.api.TokenApi
 import at.bettertrack.app.data.api.dto.TokenExchangeRequest
 import at.bettertrack.app.data.api.dto.TokenRefreshRequest
+import at.bettertrack.app.data.api.dto.TokenRevokeRequest
 import at.bettertrack.app.data.api.dto.TokenResponse
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -82,6 +83,15 @@ internal class FakeTokenApi(
     override suspend fun refresh(body: TokenRefreshRequest): Response<TokenResponse> {
         presented += body.refreshToken
         return answer(calls.incrementAndGet())
+    }
+
+    /** Every revocation body it was shown; answered by [onRevoke] (RFC 7009's 200 by default). */
+    val revoked = CopyOnWriteArrayList<TokenRevokeRequest>()
+    var onRevoke: suspend (TokenRevokeRequest) -> Response<Unit> = { Response.success(Unit) }
+
+    override suspend fun revoke(body: TokenRevokeRequest): Response<Unit> {
+        revoked += body
+        return onRevoke(body)
     }
 }
 

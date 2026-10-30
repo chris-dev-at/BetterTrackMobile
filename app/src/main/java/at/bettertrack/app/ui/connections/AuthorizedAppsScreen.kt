@@ -150,9 +150,11 @@ internal class AuthorizedAppsViewModel(
  * What is removed is only the REVOKE, and only on the row this install is
  * actually running on ([isOwnGrant]): tapping it here would kill the tokens of
  * the device in the user's hand, mid-screen, with nothing left to explain what
- * happened. The same intent has an honest expression one screen away — "Sign
- * out", which revokes this grant on its way out ([at.bettertrack.app.data.auth.AuthRepository]).
- * From any OTHER device, and from the web, the row stays fully revocable.
+ * happened — and, since PR-B, of every other device running the app too, because
+ * all installs share the grant. The per-device intent has an honest expression
+ * one screen away — "Sign out", which revokes only this install's token family
+ * on its way out ([at.bettertrack.app.data.auth.AuthRepository]). From the web
+ * the row stays fully revocable ("this app, every device").
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

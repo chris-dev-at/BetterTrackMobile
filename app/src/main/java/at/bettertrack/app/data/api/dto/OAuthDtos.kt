@@ -44,6 +44,20 @@ data class TokenRefreshRequest(
     @SerialName("client_id") val clientId: String,
 )
 
+// ── POST /api/v1/oauth/revoke — RFC 7009 (PR-B #2085) ────────────────────────
+// No auth (`security: []`), JSON, `additionalProperties: false`. Always
+// `200 {"ok":true}` — also for an unknown, foreign-client or already-dead token;
+// `400 INVALID_CLIENT` only for an unknown client or a wrong secret. Revokes the
+// presented token's whole FAMILY, i.e. this install. Public client: no secret.
+@Serializable
+data class TokenRevokeRequest(
+    /** 1..512 chars: a `btr_…` refresh or `bto_…` access token. */
+    @SerialName("token") val token: String,
+    /** `"refresh_token"` | `"access_token"` — a hint only; the server classifies by prefix. */
+    @SerialName("token_type_hint") val tokenTypeHint: String? = null,
+    @SerialName("client_id") val clientId: String,
+)
+
 // ── POST /api/v1/oauth/token — response ──────────────────────────────────────
 @Serializable
 data class TokenResponse(
@@ -176,10 +190,12 @@ data class PinStatusResponse(
 )
 
 // ── GET /api/v1/settings/oauth-grants ────────────────────────────────────────
-// Two consumers: the Authorized-apps screen, and the best-effort self-revocation
-// on logout. The list is NOT filtered first-party — the platform keeps this app's
-// own grant in it deliberately, because that row is how a user kills a lost or
-// stolen phone's access from a browser. See [OAuthGrant.firstParty].
+// One consumer: the Authorized-apps screen. (Sign-out no longer reads it: since
+// PR-B a grant is shared by every install of the app, so deleting one is "this
+// app, every device" — sign-out revokes only this install's token family via
+// `POST /oauth/revoke`.) The list is NOT filtered first-party — the platform
+// keeps this app's own grant in it deliberately, because that row is how a user
+// kills a lost or stolen phone's access from a browser. See [OAuthGrant.firstParty].
 @Serializable
 data class OAuthGrantListResponse(
     val grants: List<OAuthGrant> = emptyList(),

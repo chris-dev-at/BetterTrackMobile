@@ -178,6 +178,7 @@ import at.bettertrack.app.data.api.dto.QuoteResponse
 import at.bettertrack.app.data.api.dto.SearchResponse
 import at.bettertrack.app.data.api.dto.TokenExchangeRequest
 import at.bettertrack.app.data.api.dto.TokenRefreshRequest
+import at.bettertrack.app.data.api.dto.TokenRevokeRequest
 import at.bettertrack.app.data.api.dto.TokenResponse
 import at.bettertrack.app.data.api.dto.TransactionListResponse
 import at.bettertrack.app.data.api.dto.UpdateCustomAssetRequest
@@ -235,6 +236,16 @@ interface TokenApi {
     @Headers("Content-Type: application/json")
     @POST("oauth/token")
     suspend fun refresh(@Body body: TokenRefreshRequest): Response<TokenResponse>
+
+    /**
+     * RFC 7009 revocation (PR-B #2085): kills the presented token's whole family
+     * — this install, nothing else. Unauthenticated, so it rides this bare
+     * one-shot client and works with an expired access token. `200 {"ok":true}`
+     * for every token, live or dead; `400 INVALID_CLIENT` only for a bad client.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("oauth/revoke")
+    suspend fun revoke(@Body body: TokenRevokeRequest): Response<Unit>
 }
 
 /**
@@ -342,8 +353,7 @@ interface BtApi {
     suspend fun setPinIdleTimeout(@Body body: SetPinIdleTimeoutRequest): Response<MeResponse>
 
     /**
-     * Apps the user has authorized — the **Authorized apps** screen's whole read,
-     * and the lookup that finds our own grant for logout revocation.
+     * Apps the user has authorized — the **Authorized apps** screen's whole read.
      *
      * Bearer-callable under `account:security` (live since the 2026-08-19
      * deploy). A **403** is still meaningful and still handled: it is the
@@ -357,16 +367,26 @@ interface BtApi {
     @GET("settings/oauth-grants")
     suspend fun oauthGrants(): Response<OAuthGrantListResponse>
 
-    /** Revoke an authorized app; kills its access + refresh tokens instantly. */
+    /**
+     * Revoke an authorized app; kills its access + refresh tokens instantly.
+     *
+     * **Grant-wide**: since PR-B every install of an app shares one grant, so
+     * this signs out EVERY device running it (the user's phone AND tablet). Only
+     * the explicit Authorized-apps control may call it — never a sign-out, which
+     * revokes this install's family via [TokenApi.revoke].
+     */
     @DELETE("settings/oauth-grants/{id}")
     suspend fun revokeOAuthGrant(@Path("id") id: String): Response<Unit>
 
     /**
-     * Sign out server-side. With a bearer this revokes the CALLER'S OWN grant in
-     * one call (`authRoutes.ts` `/logout`: `req.apiKey.kind === 'oauth'` →
-     * `revokeGrant({ id: req.apiKey.id })`) — no grant list, no guessing which
-     * row is ours. Bearer policy `allow`, no scope (`bearerAuth.ts:773`).
-     * Answers `200 { ok: true }`, discarded. No body.
+     * Sign out server-side with the bearer. Since PR-B it revokes only the token
+     * family the bearer belongs to — this install (`authRoutes.ts` `/logout` →
+     * `revokeOwnFamily`; a legacy pre-family token still revokes its grant).
+     * Bearer policy `allow`, no scope. Answers `200 { ok: true }`, discarded.
+     *
+     * The SECONDARY sign-out path: [TokenApi.revoke] comes first, because it
+     * needs no live access token; this one is tried only when that call failed
+     * without a verdict (transport, timeout, 5xx).
      */
     @POST("auth/logout")
     suspend fun logout(): Response<Unit>

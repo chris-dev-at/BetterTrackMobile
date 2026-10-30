@@ -1,7 +1,6 @@
 package at.bettertrack.app.data.auth
 
 import at.bettertrack.app.data.api.TokenApi
-import at.bettertrack.app.data.api.dto.OAuthGrant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,7 +13,6 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Retrofit
@@ -131,37 +129,6 @@ class ForcedSignOutTest {
             """{"at":1700000000000,"reason":"REFRESH_REJECTED","httpStatus":400,""" +
                 """"errorCode":"INVALID_GRANT","trigger":"REFRESH","caller":"TokenManager.doRefresh"}""",
             encoded,
-        )
-    }
-
-    // ── which grant a logout may revoke ───────────────────────────────────────
-
-    @Test
-    fun `revocation follows the server's own marker`() {
-        val mine = grant(id = "a", current = true)
-        val theirs = grant(id = "b", current = false)
-        assertSame(mine, grantToRevoke(listOf(theirs, mine), CLIENT))
-    }
-
-    @Test
-    fun `the server saying none-of-these-is-yours is believed`() {
-        // Two installs of this app, and the caller is neither (a cookie caller,
-        // or a bearer whose grant is not listed). Guessing here is what used to
-        // revoke the OTHER device.
-        val grants = listOf(grant("a", current = false), grant("b", current = false))
-        assertNull(grantToRevoke(grants, CLIENT))
-    }
-
-    @Test
-    fun `without a marker only an unambiguous single grant is revoked`() {
-        assertEquals("a", grantToRevoke(listOf(grant("a", current = null)), CLIENT)?.id)
-        assertNull(
-            "two of ours and no way to tell them apart",
-            grantToRevoke(listOf(grant("a", current = null), grant("b", current = null)), CLIENT),
-        )
-        assertNull(
-            "someone else's app",
-            grantToRevoke(listOf(grant("a", current = null, clientId = "other")), CLIENT),
         )
     }
 
@@ -462,13 +429,6 @@ class ForcedSignOutTest {
         caller = "test",
     )
 
-    private fun grant(id: String, current: Boolean?, clientId: String = CLIENT) = OAuthGrant(
-        id = id,
-        clientId = clientId,
-        appName = "BetterTrackMobile",
-        current = current,
-    )
-
     /** Poll a `tryEmit`ed flow without wiring a dispatcher into the production code. */
     private suspend fun waitFor(condition: () -> Boolean) {
         repeat(200) {
@@ -476,9 +436,5 @@ class ForcedSignOutTest {
             delay(5)
         }
         assertTrue("condition never became true", condition())
-    }
-
-    private companion object {
-        const val CLIENT = TEST_CLIENT
     }
 }

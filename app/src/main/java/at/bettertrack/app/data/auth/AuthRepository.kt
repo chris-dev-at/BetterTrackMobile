@@ -5,7 +5,6 @@ import android.util.Log
 import at.bettertrack.app.data.api.BtApi
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
-import at.bettertrack.app.data.api.dto.OAuthGrant
 import at.bettertrack.app.data.db.LocalAccountData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -13,14 +12,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import retrofit2.Response
 
 /**
  * The single source of truth for authentication (spec §4). It:
  *  - resolves startup routing from the persisted session (survives process death),
  *  - runs the PKCE Authorization-Code round-trip (begin → callback → exchange),
  *  - fetches the current user and gates admin / disabled / must-change-password,
- *  - performs logout with best-effort server-side revocation + full local wipe,
+ *  - performs logout with best-effort revocation of THIS install's token family
+ *    (`POST /oauth/revoke`, PR-B) + full local wipe,
  *  - flips to logged-out whenever a refresh is rejected downstream.
  *
  * UI observes [authState] (navigation gate) and [loginPhase] (login screen).
@@ -457,6 +459,10 @@ class AuthRepository(
      * whatever the rest did.
      */
     suspend fun logout(reason: SignOutReason = SignOutReason.USER_LOGOUT) {
+        // Read the pair FIRST: everything after this may lose it (a refresh the
+        // deregistration triggers rotates it; a refused one wipes it), and the
+        // revocation needs a token of this install's family to name it.
+        val held = store.loadTokens()
         ledger.record(
             SignOutEvent(
                 at = nowMs(),
@@ -468,7 +474,9 @@ class AuthRepository(
         // Deregister the FCM device token FIRST, while the bearer is still valid
         // (bounded + fail-soft inside the hook — logout never blocks on it).
         bestEffort("deregister device token") { onBeforeLogout() }
-        revokeGrantBestEffort()
+        // The newest pair on disk if the deregistration rotated it; the one read
+        // above if something wiped it meanwhile. Either names the same family.
+        revokeInstallBestEffort(store.loadTokens() ?: held)
         // Explicit logout wipes the account-keyed Room data too: caches AND the
         // outbound sync queue, plus any scheduled sync work (§7.3). The wipe is
         // storage-mode aware (S3/S4 plan §4.4): in SERVER mode — the only mode
@@ -497,27 +505,31 @@ class AuthRepository(
     }
 
     /**
-     * Revoke this install's OAuth grant server-side, killing its access +
-     * refresh tokens — see [revokeOwnGrantOnLogout] for the two paths.
+     * Revoke THIS install's token family server-side — its access and refresh
+     * tokens, and any successor the server minted that the phone never saw —
+     * see [revokeInstallOnSignOut] for the two paths and their order.
      *
-     * The grant is a standing permission and logout is the user withdrawing
-     * it; the next login re-authorizes and re-shows the consent screen, which
-     * is the truthful thing to show someone who just removed the app's access.
-     * Nothing else is affected — other devices hold their own grants, and the
-     * account, its data and its sessions are untouched.
+     * Per install, never grant-wide: since PR-B every install of the app shares
+     * one grant, so deleting the grant would also sign out the user's tablet.
+     * Other installs, the account, its data and its web sessions are untouched.
      *
-     * Still best-effort in every direction: a refusal, a network failure or a
-     * 5xx is logged and the local wipe proceeds regardless. A logout that cannot
-     * reach the server must still leave the phone with nothing on it.
+     * Best-effort in every direction and bounded in time: a refusal, a network
+     * failure or a 5xx is logged and the local wipe proceeds regardless. A
+     * sign-out that cannot reach the server must still leave the phone with
+     * nothing on it, and must not keep the person waiting to find that out.
      */
-    private suspend fun revokeGrantBestEffort() {
+    private suspend fun revokeInstallBestEffort(held: AuthTokens?) {
         try {
-            val outcome = revokeOwnGrantOnLogout(btApi, json, clientId)
-            Log.i(TAG, "Logout revocation: $outcome")
+            val outcome = revokeInstallOnSignOut(
+                held = held,
+                revoke = { token, hint -> tokenManager.postRevoke(token, hint) },
+                bearerLogout = { btApi.logout() },
+            )
+            Log.i(TAG, "Sign-out revocation: $outcome")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Best-effort revocation failed: ${e.message}")
+            Log.w(TAG, "Best-effort revocation failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -576,38 +588,6 @@ class AuthRepository(
 }
 
 /**
- * Which OAuth grant, if any, a logout is allowed to revoke.
- *
- * The old rule was `firstOrNull { it.clientId == ourClientId }`, which is not an
- * identity check but a family-name check: every install of this app on every
- * device the user owns carries the same `clientId`, so the row it picked was
- * whichever the server happened to list first.
- *
- * The platform now answers the actual question. `GET /settings/oauth-grants`
- * returns a **required** `current: boolean`, computed server-side by comparing
- * each grant to the credential the calling request is riding
- * (`oauthService.ts:610-625`, `current: grant.id === currentGrantId`; live on
- * prod — `current` is in `OAuthGrantListResponse`'s `required` list in the
- * deployed `openapi.json`). So the grant this device holds is a fact we can read
- * rather than infer.
- *
- * When the server does not say (a `null` from an older deployment), the fallback
- * is deliberately timid: revoke only when exactly one grant carries our
- * `clientId` and the server expressed no opinion about it. Two candidates and no
- * marker means we cannot tell our own grant from another device's, and the
- * correct move is to revoke nothing — a logout that also signs out the user's
- * tablet is a worse failure than a logout that leaves a server-side grant
- * standing, which the user can still remove from the web.
- */
-internal fun grantToRevoke(grants: List<OAuthGrant>, clientId: String): OAuthGrant? {
-    grants.firstOrNull { it.current == true }?.let { return it }
-    // The server spoke and said "none of these is yours" — believe it.
-    if (grants.any { it.current != null }) return null
-    val ours = grants.filter { it.clientId == clientId }
-    return ours.singleOrNull()
-}
-
-/**
  * The login screen's verdict on a failed code exchange. Two refusals get their
  * own sentence because "try again" is wrong for both: `INVALID_SCOPE` means the
  * app was narrowed to nothing this account consented to (retrying re-asks the
@@ -621,65 +601,90 @@ internal fun loginErrorForExchange(error: at.bettertrack.app.data.api.BtApiError
     else -> LoginError.EXCHANGE_FAILED
 }
 
-/** What a logout's server-side revocation achieved — logged, and pinned by tests. */
+/** What a sign-out's server-side revocation achieved — logged, and pinned by tests. */
 internal enum class LogoutRevocation {
-    /** `POST /auth/logout` revoked the caller's own grant. */
+    /** `POST /oauth/revoke` answered 2xx: this install's family is dead (or already was). */
+    REVOKED,
+
+    /** `/oauth/revoke` failed without a verdict; bearer `POST /auth/logout` revoked the family. */
     LOGGED_OUT,
-    /** The bearer was already refused (401): there is no grant left to revoke. */
+
+    /** `/oauth/revoke` failed without a verdict and the bearer was refused (401): already gone. */
     ALREADY_GONE,
-    /** The fallback found our grant in the list and deleted it. */
-    FALLBACK_REVOKED,
-    /** The fallback could not tell which grant is ours, so it revoked nothing. */
-    FALLBACK_SKIPPED,
-    /** Neither path landed (offline, 5xx, refused). The local wipe still runs. */
+
+    /**
+     * `/oauth/revoke` refused the REQUEST (`400`: `INVALID_CLIENT`, or a body the
+     * strict schema rejects) — a build problem, not a network one, so no
+     * fallback: nothing about retrying another route makes this build's client
+     * id known. The family stays live server-side until it expires; the user can
+     * still end it from the web.
+     */
+    REFUSED,
+
+    /** No session on the phone (or it is unreadable): there is nothing to name. */
+    NOTHING_HELD,
+
+    /** Neither path landed (offline, timeout, 5xx). The local wipe still runs. */
     FAILED,
 }
 
+/** The longest a sign-out waits for each server call. Two at most: ≤ 2 × this. */
+internal const val SIGN_OUT_STEP_TIMEOUT_MS: Long = 6_000L
+
 /**
- * Revoke this install's grant at logout.
+ * Revoke this install's token family at sign-out.
  *
- * **Primary: `POST /auth/logout` with the bearer.** The platform revokes the
- * grant the presented token belongs to — the one call that cannot pick the
- * wrong row, because the server, not a list heuristic, decides whose it is.
- * (The planned per-install token families keep this exactly right: the call
- * still revokes "the caller's own", only at finer grain.)
+ * **Primary: `POST /oauth/revoke` with the stored refresh token** (RFC 7009,
+ * PR-B #2085), over the bare one-shot token client — no bearer, so it works when
+ * the access token has long expired, and no OkHttp re-send. The server revokes
+ * the presented token's whole FAMILY, i.e. this install and nothing else.
  *
- * **Fallback: the grant list + `DELETE`** ([grantToRevoke], following the
- * `current` marker from #1390), taken only when the primary failed for a
- * NON-definitive reason — a transport failure, a 5xx, a refusal from a
- * deployment that predates the bearer carve-out. A `401` is definitive: the
- * bearer is no longer accepted, so the grant is already gone and the fallback,
- * riding the same bearer, could only fail the same way.
+ * The refresh token on disk is the right one to present even when a refresh of
+ * it is pending (a lost answer, see [PendingRefresh]): the server resolves a
+ * revocable token "in ANY state (expired, consumed, revoked)"
+ * (`oauthRepository.ts` → `findTokenForRevocation`, platform main at #2085) and
+ * revokes its family, which takes the unseen successor with it. The phone never
+ * holds a token newer than the one on disk — the write-ahead record stores only
+ * a fingerprint of that same token.
+ *
+ * **Secondary: bearer `POST /auth/logout`**, which since PR-B also revokes only
+ * the caller's family — taken ONLY when `/oauth/revoke` failed without a verdict:
+ * a transport failure, a timeout, a 5xx, a 429, or any status that is not the
+ * endpoint judging this request (a 404 from a deployment without the route). A
+ * `2xx` is success and a `400` is the endpoint's verdict, so neither falls back.
+ *
+ * **Never** the grant list + `DELETE /settings/oauth-grants/{id}`: that is
+ * GRANT-WIDE since PR-B and would sign out every device running the app.
+ *
+ * Each call is bounded by [stepTimeoutMs], so a dead network costs a sign-out at
+ * most two short waits, never the token client's full call timeout.
  */
-internal suspend fun revokeOwnGrantOnLogout(api: BtApi, json: Json, clientId: String): LogoutRevocation {
-    val primary = try {
-        api.logout()
+internal suspend fun revokeInstallOnSignOut(
+    held: AuthTokens?,
+    revoke: suspend (token: String, tokenTypeHint: String) -> Response<Unit>,
+    bearerLogout: suspend () -> Response<Unit>,
+    stepTimeoutMs: Long = SIGN_OUT_STEP_TIMEOUT_MS,
+): LogoutRevocation {
+    if (held == null) return LogoutRevocation.NOTHING_HELD
+    val primary = bounded(stepTimeoutMs) { revoke(held.refreshToken, "refresh_token") }
+    if (primary != null) {
+        if (primary.isSuccessful) return LogoutRevocation.REVOKED
+        if (primary.code() == 400) return LogoutRevocation.REFUSED
+    }
+    val fallback = bounded(stepTimeoutMs) { bearerLogout() } ?: return LogoutRevocation.FAILED
+    return when {
+        fallback.isSuccessful -> LogoutRevocation.LOGGED_OUT
+        fallback.code() == 401 -> LogoutRevocation.ALREADY_GONE
+        else -> LogoutRevocation.FAILED
+    }
+}
+
+/** [call] within [timeoutMs]; `null` for a timeout or a transport failure. Cancellation propagates. */
+private suspend fun <T> bounded(timeoutMs: Long, call: suspend () -> Response<T>): Response<T>? =
+    try {
+        withTimeoutOrNull(timeoutMs) { call() }
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (_: Exception) {
         null
     }
-    if (primary != null) {
-        if (primary.isSuccessful) return LogoutRevocation.LOGGED_OUT
-        if (primary.code() == 401) return LogoutRevocation.ALREADY_GONE
-    }
-    return try {
-        when (val grants = apiCall(json) { api.oauthGrants() }) {
-            is BtResult.Ok -> {
-                val grant = grantToRevoke(grants.value.grants, clientId)
-                    ?: return LogoutRevocation.FALLBACK_SKIPPED
-                if (api.revokeOAuthGrant(grant.id).isSuccessful) {
-                    LogoutRevocation.FALLBACK_REVOKED
-                } else {
-                    LogoutRevocation.FAILED
-                }
-            }
-
-            is BtResult.Err -> LogoutRevocation.FAILED
-        }
-    } catch (e: kotlinx.coroutines.CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        LogoutRevocation.FAILED
-    }
-}

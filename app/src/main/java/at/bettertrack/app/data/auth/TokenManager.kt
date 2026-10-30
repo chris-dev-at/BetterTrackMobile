@@ -7,6 +7,7 @@ import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.dto.TokenExchangeRequest
 import at.bettertrack.app.data.api.dto.TokenRefreshRequest
+import at.bettertrack.app.data.api.dto.TokenRevokeRequest
 import at.bettertrack.app.data.api.parseApiError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -279,6 +280,15 @@ class TokenManager(
             }
             doRefresh(current.refreshToken, RefreshCaller.REACTIVE)?.accessToken
         }
+
+    /**
+     * `POST /oauth/revoke` (RFC 7009) for [token], over the bare one-shot token
+     * client: no bearer, no OkHttp re-send, no pooled connection. The caller
+     * bounds it in time and decides what the answer means — see
+     * [revokeInstallOnSignOut].
+     */
+    internal suspend fun postRevoke(token: String, tokenTypeHint: String): retrofit2.Response<Unit> =
+        tokenApi.revoke(TokenRevokeRequest(token = token, tokenTypeHint = tokenTypeHint, clientId = clientId))
 
     /** The install id, or null when it could not be produced — a sign-in never fails over it. */
     private fun instanceIdOrNull(): String? =
