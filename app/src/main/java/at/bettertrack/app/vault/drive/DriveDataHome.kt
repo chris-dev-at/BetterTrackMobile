@@ -757,7 +757,7 @@ internal class DriveResponse(val code: Int, val body: ByteArray) {
  */
 internal fun DriveResponse.hasRevokedGrant(): Boolean {
     val payload = try {
-        Json.parseToJsonElement(body.toString(Charsets.UTF_8).removePrefix("﻿")) as? JsonObject
+        Json.parseToJsonElement(body.toString(Charsets.UTF_8).removePrefix("\uFEFF")) as? JsonObject
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
