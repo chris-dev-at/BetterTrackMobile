@@ -208,6 +208,17 @@ object AppGraph {
             // app-level state that routes the portfolio surfaces to their
             // explainer instead of a generic error or a fake €0 portfolio).
             .addInterceptor(at.bettertrack.app.data.api.ParanoidModeInterceptor(json))
+            // Announcements v2 (contract §5.7.2): observe-only watcher for `403
+            // ACKNOWLEDGEMENT_REQUIRED` — any refused call raises the blocking
+            // modal with the refusal's own `details.pendingAcknowledgements`. The
+            // lambda reaches the controller at CALL time, never while wiring.
+            .addInterceptor(
+                at.bettertrack.app.data.announcements.AcknowledgementGateInterceptor(json) { pending ->
+                    if (at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled) {
+                        announcements.onGateRefusal(pending)
+                    }
+                },
+            )
             // V5 S2a: conditional GETs (If-None-Match) on the three endpoints the
             // platform ETags — a 304 replays the stored body, so repos keep
             // caching verbatim and no call site changes.
@@ -286,7 +297,55 @@ object AppGraph {
                 if (demoted != storageModeStore.modeNow()) storageModeStore.set(demoted)
             },
             ledger = signOutLedger,
+            // Announcements v2: every MeResponse carries `pendingAcknowledgements`.
+            onMeResponse = { me -> announcements.onMeResponse(me) },
         )
+    }
+
+    // ── Announcements v2 (`docs/announcements-contract.md`, board 2026-10-30) ──
+
+    val announcementRepository: at.bettertrack.app.data.announcements.AnnouncementRepository by lazy {
+        at.bettertrack.app.data.announcements.AnnouncementRepository(api = btApi, json = json)
+    }
+
+    /**
+     * The announcements pipeline — banner, Overview card and the blocking
+     * acknowledgement modal all read this one state. Started from the
+     * Application; fed by the auth seam, the 403 interceptor, the realtime
+     * socket and the process lifecycle. Behind
+     * [at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled].
+     */
+    val announcements: at.bettertrack.app.data.announcements.AnnouncementsController by lazy {
+        at.bettertrack.app.data.announcements.AnnouncementsController(
+            enabled = at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled,
+            repo = announcementRepository,
+            authState = authRepository.authState,
+            fetchMe = { authRepository.refreshUserNow() },
+            localDismiss = at.bettertrack.app.data.announcements.PrefsLocalDismissStore(appContext),
+            locale = { announcementContentLocale() },
+            scope = appScope,
+            // The socket pauses while a real obligation blocks (contract §5.6) and
+            // reconnects after the last acknowledgement.
+            onGateActiveChange = { active ->
+                if (active) chatRealtimeGateway.pauseForAcknowledgement() else chatRealtimeGateway.resumeAfterAcknowledgement()
+            },
+        )
+    }
+
+    /**
+     * The announcement content locale, `en` or `de` (contract §3.1): the in-app
+     * language when one is chosen, else the DEVICE language — read from the
+     * system resources rather than `Locale.getDefault()`, which the per-app
+     * switch only sets once an Activity has attached.
+     */
+    private fun announcementContentLocale(): String {
+        val chosen = at.bettertrack.app.data.i18n.LocaleManager.current(appContext)
+        val tag = if (chosen == at.bettertrack.app.data.i18n.AppLanguage.System) {
+            android.content.res.Resources.getSystem().configuration.locales[0]?.language
+        } else {
+            chosen.tag
+        }
+        return at.bettertrack.app.data.announcements.announcementLocaleOf(tag)
     }
 
     // ── Step 5: local database & sync engine core (spec §7) ─────────────────
@@ -573,24 +632,40 @@ object AppGraph {
             .build()
     }
 
+    /**
+     * The one realtime socket (`/ws`). Hoisted out of [chatRepository] because
+     * it is no longer chat-only: it also carries `announcement.changed` and the
+     * `ACKNOWLEDGEMENT_REQUIRED` connect error, and the announcements pipeline
+     * pauses/resumes it around the blocking modal (contract §5.6).
+     */
+    private val chatRealtimeGateway: SocketIoChatGateway by lazy {
+        SocketIoChatGateway(
+            apiOrigin = ServerOrigins.apiOrigin,
+            client = wsClient,
+            tokenProvider = { tokenManager.currentAccessToken() },
+            json = json,
+            onReconnectSleep = { ms -> kotlinx.coroutines.delay(ms) },
+            // The same socket carries `portfolio.changed` (bearer
+            // companion room behind `portfolio:read`): while it is up, a
+            // ledger change made elsewhere refreshes the cash widgets.
+            onPortfolioChanged = { pid ->
+                at.bettertrack.app.widget.BtWidgetServerSignals
+                    .onRealtimePortfolioChanged(pid, widgetRefreshTrigger)
+            },
+            onAnnouncementChanged = { id ->
+                if (at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled) announcements.onRealtimeChanged(id)
+            },
+            onAcknowledgementRequired = {
+                if (at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled) announcements.onHandshakeAckRequired()
+            },
+        )
+    }
+
     val chatRepository: ChatRepository by lazy {
         DefaultChatRepository(
             api = btApi,
             json = json,
-            gateway = SocketIoChatGateway(
-                apiOrigin = ServerOrigins.apiOrigin,
-                client = wsClient,
-                tokenProvider = { tokenManager.currentAccessToken() },
-                json = json,
-                onReconnectSleep = { ms -> kotlinx.coroutines.delay(ms) },
-                // The same socket carries `portfolio.changed` (bearer
-                // companion room behind `portfolio:read`): while it is up, a
-                // ledger change made elsewhere refreshes the cash widgets.
-                onPortfolioChanged = { pid ->
-                    at.bettertrack.app.widget.BtWidgetServerSignals
-                        .onRealtimePortfolioChanged(pid, widgetRefreshTrigger)
-                },
-            ),
+            gateway = chatRealtimeGateway,
             currentUserId = {
                 (authRepository.authState.value as? AuthState.LoggedIn)?.user?.id
                     ?: (authRepository.authState.value as? AuthState.PasswordChangeRequired)?.user?.id

@@ -95,6 +95,9 @@ class BetterTrackApplication : Application() {
         // Fire the first-of-session data load on login-success / logged-in cold
         // start so no screen sits on skeletons until a manual pull-to-refresh.
         startupStep("sessionInitializer") { AppGraph.sessionInitializer.start() }
+        // Announcements v2: launch + sign-in triggers ride the auth state from
+        // here on; the foreground hook below adds resume (contract §5.7.1).
+        startupStep("announcements") { AppGraph.announcements.start() }
 
         // Live connectivity for the offline banner + the reconnect trigger.
         startupStep("connectivityMonitor") { AppGraph.connectivityMonitor.start() }
@@ -150,6 +153,8 @@ class BetterTrackApplication : Application() {
                 startupStep("scheduleDrain(foreground)") { AppGraph.syncScheduler.scheduleDrain() }
                 // Dev update notifier (Step V): rate-limited, silent on failure.
                 startupStep("updateCheck(foreground)") { AppGraph.updateChecker.onForeground() }
+                // Announcements v2: re-read pending acknowledgements on every return.
+                startupStep("announcements(foreground)") { AppGraph.announcements.onForeground() }
             }
         })
     }

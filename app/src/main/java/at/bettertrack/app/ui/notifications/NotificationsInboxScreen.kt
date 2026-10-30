@@ -351,6 +351,12 @@ fun NotificationsInboxScreen(
                                         showActions = actionsEnabled,
                                         onClick = {
                                             scope.launch { repo.markRead(listOf(n.id)) }
+                                            // Announcements v2: an announcement row is a record, not
+                                            // the surface — re-read the pipeline so a still-open
+                                            // `once` card or `ack_required` modal shows itself.
+                                            if (n.announcementKind != null) {
+                                                at.bettertrack.app.di.AppGraph.announcements.onInboxOpened()
+                                            }
                                             resolveDeepLink(n.type, n.payload)?.let(onDeepLink)
                                         },
                                         // Only alert rows get the manager shortcut.

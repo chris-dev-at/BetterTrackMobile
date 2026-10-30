@@ -207,6 +207,7 @@ private fun GalleryContent(
             item { OfflineStateSection() }
             item { ErrorStateSection() }
             item { OfflineBannerSection() }
+            item { AnnouncementSection() }
             item { SyncDebugSection(onOpenSyncDebug) }
         }
     }
@@ -1081,6 +1082,34 @@ private fun SyncDebugSection(onOpenSyncDebug: () -> Unit) {
             text = "Open sync queue debug screen",
             onClick = onOpenSyncDebug,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * Announcements v2: the two passive surfaces, rendered from the debug-preview
+ * samples (static specimens — closing them here does nothing). The blocking
+ * modal is a window of its own; Settings → Developer previews it live.
+ */
+@Composable
+private fun AnnouncementSection() {
+    GallerySection("Announcements — notice banner + once card (v2)") {
+        val locale = at.bettertrack.app.data.announcements.announcementLocaleOf(
+            at.bettertrack.app.ui.util.rememberBtLocale().language,
+        )
+        at.bettertrack.app.ui.announcements.AnnouncementBanner(
+            item = at.bettertrack.app.data.announcements.AnnouncementPreviews.sample(
+                at.bettertrack.app.data.announcements.AnnouncementKind.NOTICE,
+                locale,
+            ),
+            onClose = {},
+        )
+        at.bettertrack.app.ui.announcements.AnnouncementOnceCard(
+            item = at.bettertrack.app.data.announcements.AnnouncementPreviews.sample(
+                at.bettertrack.app.data.announcements.AnnouncementKind.ONCE,
+                locale,
+            ),
+            onClose = {},
         )
     }
 }

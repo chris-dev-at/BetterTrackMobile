@@ -284,6 +284,17 @@ fun HomeScreen(
                 }
             }
 
+            // Announcements v2: an admin `once` card — shown until the user
+            // closes it, and closing it is the dismissal (it never returns).
+            // Directly under the figure, above what moved: it is the one thing
+            // on this screen that BetterTrack itself has to say. The slot draws
+            // nothing — no height, no gap — when there is no card.
+            item(key = "announcement-once") {
+                at.bettertrack.app.ui.announcements.AnnouncementOnceCardSlot(
+                    modifier = Modifier.padding(top = HOME_SECTION_GAP, start = 20.dp, end = 20.dp),
+                )
+            }
+
             // Movers: absent, never an empty card. With no priced day-change
             // anywhere — every Drive install, and any account before its first
             // sync — there is nothing true to put here, and a "no movers" card

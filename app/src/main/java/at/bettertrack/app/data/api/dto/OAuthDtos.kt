@@ -114,6 +114,18 @@ data class MeResponse(
      */
     val paranoidFreshStartPending: Boolean? = null,
     val createdAt: String? = null,
+    /**
+     * Announcements v2 (contract §4.6): the `ack_required` obligations this
+     * account still owes, oldest first — `[{id, severity, title, startsAt,
+     * endsAt}]`. **Tri-state**: key absent (an older server) = UNKNOWN, never
+     * "nothing owed"; `[]` = nothing owed.
+     *
+     * Kept as a raw [JsonElement] on purpose, and parsed by
+     * [at.bettertrack.app.data.announcements.pendingAcksOf]: this field rides on
+     * the SIGN-IN response, and a typed list would let one malformed entry fail
+     * the whole `MeResponse` decode — i.e. break login over an announcement.
+     */
+    val pendingAcknowledgements: JsonElement? = null,
 )
 
 // ── POST /api/v1/auth/pin/verify — verify the account's web PIN ───────────────

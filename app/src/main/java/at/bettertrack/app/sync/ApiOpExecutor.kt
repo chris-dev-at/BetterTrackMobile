@@ -319,6 +319,15 @@ class ApiOpExecutor(
             Log.d(TAG, "Idempotency in-progress for op#${op.id} (key=${op.clientId}) — will retry")
             ExecResult.RetryableNotApplied(err.code)
         }
+        // Announcements v2 (contract §5.5): the acknowledgement gate refuses BEFORE
+        // any resource check, so the write provably did not apply. It is not the
+        // op's fault and must never park it as needs-attention — back off as
+        // PENDING (same key) and drain once the person has acknowledged. The
+        // interceptor has already raised the modal from the same refusal.
+        at.bettertrack.app.data.announcements.AnnouncementCodes.ACKNOWLEDGEMENT_REQUIRED -> {
+            Log.d(TAG, "Acknowledgement gate refused op#${op.id} — will retry after the modal")
+            ExecResult.RetryableNotApplied(err.code)
+        }
         // Non-UUID key — regenerate once + retry (handled by the engine).
         BtApiError.Codes.IDEMPOTENCY_KEY_INVALID -> {
             Log.w(TAG, "Idempotency key rejected as INVALID for op#${op.id} (key=${op.clientId}) — regenerating once")

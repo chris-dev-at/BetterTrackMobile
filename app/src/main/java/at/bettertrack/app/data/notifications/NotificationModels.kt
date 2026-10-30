@@ -42,6 +42,25 @@ data class AppNotification(
     val isUnread: Boolean get() = readAtMs == null
     val isArchived: Boolean get() = archivedAtMs != null
     val kind: NotifKind get() = NotifKind.fromType(type)
+
+    /**
+     * Announcements v2 (contract §6): an `account.notice` row's payload gains
+     * `announcementKind`. Null for every other type and for rows written before
+     * the change (key absent). The row stays a RECORD — it never acknowledges.
+     */
+    val announcementKind: at.bettertrack.app.data.announcements.AnnouncementKind?
+        get() = if (kind == NotifKind.AccountNotice) announcementKindOf(payload) else null
+}
+
+/**
+ * The `announcementKind` of an `account.notice` payload: null when absent (an
+ * older server) or not a string; an unknown value reads as `notice`, the
+ * contract's rule for unknown kinds.
+ */
+fun announcementKindOf(payload: JsonElement?): at.bettertrack.app.data.announcements.AnnouncementKind? {
+    val raw = ((payload as? JsonObject)?.get("announcementKind") as? kotlinx.serialization.json.JsonPrimitive)
+        ?.takeIf { it.isString }?.contentOrNull ?: return null
+    return at.bettertrack.app.data.announcements.AnnouncementKind.fromWire(raw)
 }
 
 /**

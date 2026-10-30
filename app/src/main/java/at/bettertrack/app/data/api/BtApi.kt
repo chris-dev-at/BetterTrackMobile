@@ -1508,6 +1508,45 @@ interface BtApi {
     @DELETE("notifications")
     suspend fun deleteNotifications(@Query("scope") scope: String): Response<Unit>
 
+    // ── Announcements v2 (`docs/announcements-contract.md` §4, design PR #2081) ──
+    // Bearer `notifications:read` (GETs) / `notifications:write` (seen, dismiss,
+    // acknowledge). Read as raw JSON on purpose: production still answers the OLD
+    // five-field shape and every new field is optional, so the items are parsed
+    // field by field (`parseAnnouncementList`) and one odd item can never fail
+    // the list. `locale` is omitted when null (Retrofit drops null @Query).
+
+    /** The caller's live announcements, server-ordered `ack_required`, `once`, `notice`. */
+    @GET("notifications/announcements")
+    suspend fun announcements(@Query("locale") locale: String? = null): Response<JsonObject>
+
+    /** One announcement (ended/archived included) — the gate's full text, per locale. NEW. */
+    @GET("notifications/announcements/{id}")
+    suspend fun announcement(
+        @Path("id") id: String,
+        @Query("locale") locale: String? = null,
+    ): Response<JsonObject>
+
+    /** "Shown" receipt. No body, `200 {ok:true}`, idempotent first-write-wins. NEW. */
+    @POST("notifications/announcements/{id}/seen")
+    suspend fun announcementSeen(@Path("id") id: String): Response<Unit>
+
+    /** Close a `notice`/`once`. `409 ANNOUNCEMENT_NOT_DISMISSIBLE` for `ack_required`. */
+    @POST("notifications/announcements/{id}/dismiss")
+    suspend fun dismissAnnouncement(@Path("id") id: String): Response<Unit>
+
+    /**
+     * Acknowledge an `ack_required` with the STRICT body `{confirm, locale,
+     * contentSha256}` echoing the item on screen. `200 {acknowledgement,
+     * pendingAcknowledgements}`; idempotent first-write-wins (a retry returns
+     * the original). First-party only. NEW.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("notifications/announcements/{id}/acknowledge")
+    suspend fun acknowledgeAnnouncement(
+        @Path("id") id: String,
+        @Body body: at.bettertrack.app.data.announcements.AcknowledgeAnnouncementRequest,
+    ): Response<JsonObject>
+
     /** Upsert this install's FCM device token `{ token, platform:"android" }`. [notifications:write] */
     @Headers("Content-Type: application/json")
     @POST("notifications/devices")

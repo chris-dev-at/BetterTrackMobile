@@ -935,6 +935,30 @@ fun SettingsScreen(
                             )
                         },
                     )
+                    // Announcements v2 debug preview: injects an EN+DE sample into
+                    // the SAME pipeline the server feeds, so the banner, the
+                    // Overview card and the blocking modal can be shown without a
+                    // server that has any. Seen/dismiss/acknowledge stay local.
+                    if (at.bettertrack.app.data.announcements.AnnouncementsFlags.enabled) {
+                        val previewKinds = listOf(
+                            at.bettertrack.app.data.announcements.AnnouncementKind.NOTICE to R.string.bt_settings_dev_ann_notice,
+                            at.bettertrack.app.data.announcements.AnnouncementKind.ONCE to R.string.bt_settings_dev_ann_once,
+                            at.bettertrack.app.data.announcements.AnnouncementKind.ACK_REQUIRED to R.string.bt_settings_dev_ann_ack,
+                        )
+                        previewKinds.forEach { (kind, label) ->
+                            BtGroupRow(
+                                icon = Icons.Outlined.Code,
+                                title = stringResource(label),
+                                subtitle = stringResource(R.string.bt_settings_dev_ann_sub),
+                                onClick = { AppGraph.announcements.preview(kind) },
+                            )
+                        }
+                        BtGroupRow(
+                            icon = Icons.Outlined.Code,
+                            title = stringResource(R.string.bt_settings_dev_ann_clear),
+                            onClick = { AppGraph.announcements.clearPreviews() },
+                        )
+                    }
                 }
             }
 

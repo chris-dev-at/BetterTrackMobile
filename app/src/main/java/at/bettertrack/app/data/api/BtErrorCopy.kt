@@ -269,6 +269,15 @@ object BtErrorCopy {
         "WEBHOOK_NOT_FOUND" to R.string.bt_err_webhook_not_found,
         "WEBHOOK_LIMIT_REACHED" to R.string.bt_err_webhook_limit_reached,
 
+        // ── Announcements v2 (contract §8) ──
+        "ACKNOWLEDGEMENT_REQUIRED" to R.string.bt_err_acknowledgement_required,
+        "ANNOUNCEMENT_NOT_FOUND" to R.string.bt_err_announcement_not_found,
+        "ANNOUNCEMENT_NOT_DISMISSIBLE" to R.string.bt_err_announcement_not_dismissible,
+        "ANNOUNCEMENT_NOT_ACKNOWLEDGEABLE" to R.string.bt_err_announcement_not_acknowledgeable,
+        "ANNOUNCEMENT_NOT_PENDING" to R.string.bt_err_announcement_not_pending,
+        "ANNOUNCEMENT_CONTENT_CHANGED" to R.string.bt_err_announcement_content_changed,
+        "ANNOUNCEMENT_LOCALE_UNAVAILABLE" to R.string.bt_err_announcement_locale_unavailable,
+
         // ── In-app feedback ──
         // The open-submission cap (platform #1400): 20 open requests at once, and
         // the copy names the two ways out — wait for triage, or delete one from

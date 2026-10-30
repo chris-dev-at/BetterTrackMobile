@@ -4328,4 +4328,41 @@
          0 % bar reads as "nothing spent" rather than "nothing loaded". -->
     <string name="bt_budgets_brief_progress">%1$s / %2$s</string>
     <!-- ===== END QA fix round A ===== -->
+    <!-- ===== Announcements v2 (contract docs/announcements-contract.md, board 2026-10-30) ===== -->
+    <string name="bt_err_acknowledgement_required">An announcement needs your confirmation before you can continue.</string>
+    <string name="bt_err_announcement_not_found">This announcement is no longer available.</string>
+    <string name="bt_err_announcement_not_dismissible">This announcement can\'t be closed — it needs your confirmation.</string>
+    <string name="bt_err_announcement_not_acknowledgeable">This announcement doesn\'t need a confirmation.</string>
+    <string name="bt_err_announcement_not_pending">This announcement no longer needs your confirmation.</string>
+    <string name="bt_err_announcement_content_changed">This announcement was just updated. Please read it again before you confirm.</string>
+    <string name="bt_err_announcement_locale_unavailable">This announcement isn\'t available in that language, so it is shown in another one.</string>
+    <string name="bt_ann_gate_eyebrow">Please confirm to continue</string>
+    <string name="bt_ann_gate_checkbox">I have read this announcement and I accept it.</string>
+    <string name="bt_ann_gate_confirm">Confirm</string>
+    <string name="bt_ann_gate_sign_out">Sign out</string>
+    <string name="bt_ann_gate_alternatives">Don\'t want to accept? You can take your data with you or close your account.</string>
+    <string name="bt_ann_gate_export">Export my data</string>
+    <string name="bt_ann_gate_delete">Delete account</string>
+    <string name="bt_ann_gate_progress">Announcement %1$d of %2$d</string>
+    <string name="bt_ann_gate_load_failed">We couldn\'t load the full text of this announcement.</string>
+    <string name="bt_ann_gate_retry">Load again</string>
+    <string name="bt_ann_gate_language">Language</string>
+    <string name="bt_ann_gate_until">Your confirmation is requested until %1$s.</string>
+    <string name="bt_ann_gate_preview_note">Preview — nothing is sent. Sign out ends the preview.</string>
+    <string name="bt_ann_lang_en">English</string>
+    <string name="bt_ann_lang_de">German</string>
+    <string name="bt_ann_severity_info">Information</string>
+    <string name="bt_ann_severity_warning">Important</string>
+    <string name="bt_ann_severity_critical">Critical</string>
+    <string name="bt_ann_close_cd">Close announcement</string>
+    <string name="bt_ann_expand_cd">Show the whole announcement</string>
+    <string name="bt_ann_collapse_cd">Show less of the announcement</string>
+    <string name="bt_ann_once_got_it">Got it</string>
+    <string name="bt_ann_preview_tag">Preview</string>
+    <string name="bt_settings_dev_ann_notice">Preview announcement: notice</string>
+    <string name="bt_settings_dev_ann_once">Preview announcement: once</string>
+    <string name="bt_settings_dev_ann_ack">Preview announcement: ack_required</string>
+    <string name="bt_settings_dev_ann_sub">Injects a sample (EN + DE); nothing reaches the server</string>
+    <string name="bt_settings_dev_ann_clear">Clear announcement previews</string>
+    <!-- ===== END Announcements v2 ===== -->
 </resources>

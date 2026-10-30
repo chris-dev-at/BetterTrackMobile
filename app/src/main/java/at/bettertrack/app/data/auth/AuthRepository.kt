@@ -62,6 +62,14 @@ class AuthRepository(
      */
     private val ledger: SignOutLedger = NoopSignOutLedger,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * Every `MeResponse` this class receives, as it arrives — the announcements
+     * pipeline reads `pendingAcknowledgements` off it (contract §4.6: the field
+     * is on `/auth/me` AND on every sign-in/account response). A decoupled seam
+     * with a no-op default, like the two hooks above, so this class stays about
+     * sessions and its tests need not care.
+     */
+    private val onMeResponse: (at.bettertrack.app.data.api.dto.MeResponse) -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -226,6 +234,7 @@ class AuthRepository(
                     user.status == "disabled" -> wipeAndFail(LoginError.ACCOUNT_DISABLED)
                     else -> {
                         store.saveUser(user)
+                        reportMe(me.value)
                         // PROACTIVE paranoid routing (#39.1): the server told us the
                         // account's privacyMode, so the portfolio surfaces can show the
                         // explainer instead of firing a burst of doomed calls and
@@ -276,8 +285,22 @@ class AuthRepository(
      */
     fun refreshUser() {
         if (!tokenManager.hasTokens()) return
-        scope.launch {
-            when (val me = apiCall(json) { btApi.me() }) {
+        scope.launch { refreshUserNow() }
+    }
+
+    /**
+     * [refreshUser], awaited, answering what `/auth/me` said. The announcements
+     * pipeline calls this on launch and resume: it needs `pendingAcknowledgements`
+     * from the very response that also keeps the session user current, so the
+     * two can never be read from different answers.
+     */
+    suspend fun refreshUserNow(): BtResult<at.bettertrack.app.data.api.dto.MeResponse> {
+        if (!tokenManager.hasTokens()) {
+            return BtResult.Err(at.bettertrack.app.data.api.BtApiError(401, "UNAUTHENTICATED", "no session"))
+        }
+        val me = apiCall(json) { btApi.me() }
+        run {
+            when (me) {
                 is BtResult.Ok -> {
                     val user = me.value.toSessionUser()
                     when {
@@ -285,6 +308,7 @@ class AuthRepository(
                         user.status == "disabled" -> wipeAndFail(LoginError.ACCOUNT_DISABLED)
                         else -> {
                             store.saveUser(user)
+                            reportMe(me.value)
                             // Keeps the paranoid routing honest inside a live session:
                             // a mode flipped web-side is picked up on the next refresh
                             // without waiting for a portfolio call to be refused.
@@ -312,6 +336,18 @@ class AuthRepository(
                 is BtResult.Err -> Log.w(TAG, "refreshUser failed: ${me.error.message}")
             }
         }
+        return me
+    }
+
+    /** Hand a fresh `MeResponse` to [onMeResponse]; a failing listener never fails auth. */
+    private fun reportMe(me: at.bettertrack.app.data.api.dto.MeResponse) {
+        try {
+            onMeResponse(me)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "onMeResponse listener failed: ${e.javaClass.simpleName}")
+        }
     }
 
     // ── First-run setup (§6.12) ───────────────────────────────────────────────
@@ -335,6 +371,7 @@ class AuthRepository(
             is BtResult.Ok -> {
                 val user = r.value.toSessionUser()
                 store.saveUser(user)
+                reportMe(r.value)
                 _authState.value = if (user.mustChangePassword) {
                     AuthState.PasswordChangeRequired(user)
                 } else {
@@ -372,6 +409,7 @@ class AuthRepository(
             is BtResult.Ok -> {
                 val user = r.value.toSessionUser()
                 store.saveUser(user)
+                reportMe(r.value)
                 _authState.value = if (user.mustChangePassword) {
                     AuthState.PasswordChangeRequired(user)
                 } else {

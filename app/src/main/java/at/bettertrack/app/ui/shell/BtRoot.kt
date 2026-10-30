@@ -216,6 +216,14 @@ private fun AuthGate(
                         at.bettertrack.app.ui.paranoid.FreshStartNoticeHost(user = user)
                     }
                 }
+                // Announcements v2 (contract §5.7): the BLOCKING acknowledgement
+                // modal. Below the app lock — the person must be allowed to see
+                // the account before being asked to accept anything for it — and
+                // ABOVE the first-run wizard and the shell, because the server's
+                // own gate comes before both (`/auth/first-run/complete` is not
+                // exempt). Its own full-screen window, so nothing the shell draws
+                // can cover it. Renders nothing unless an obligation is pending.
+                at.bettertrack.app.ui.announcements.AcknowledgementGateHost()
             }
         }
     }

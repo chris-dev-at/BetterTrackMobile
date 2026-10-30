@@ -966,6 +966,11 @@ fun BtApp() {
                                 onRetry = { retryScope.launch { AppGraph.tokenManager.retryRefreshNow() } },
                             )
                         }
+                        // Announcements v2: an admin `notice` — the same slot and idiom,
+                        // but NOT exclusive with the two above: they describe this
+                        // device's connection, a notice is news from BetterTrack.
+                        // Zero height when there is none.
+                        at.bettertrack.app.ui.announcements.AnnouncementBannerSlot()
                         // The four pages. All of them, all the time.
                         BtTabPager(
                             tabs = tabOrder,

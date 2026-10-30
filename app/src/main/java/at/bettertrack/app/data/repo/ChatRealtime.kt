@@ -2,8 +2,8 @@ package at.bettertrack.app.data.repo
 
 import android.util.Log
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -60,11 +60,27 @@ class SocketIoChatGateway(
      * straight to whoever cares (the home-screen widgets). `null` = ignored.
      */
     private val onPortfolioChanged: ((portfolioId: String?) -> Unit)? = null,
+    /**
+     * `announcement.changed {announcementId}` (announcements contract §5.6) on
+     * the same socket — no content travels, it is a "refetch `/auth/me` and the
+     * list" signal. Not a chat signal, so it bypasses [ChatRealtimeGateway]'s
+     * chat contract. `null` = ignored.
+     */
+    private val onAnnouncementChanged: ((announcementId: String?) -> Unit)? = null,
+    /**
+     * The handshake was refused with `ACKNOWLEDGEMENT_REQUIRED` (§5.6): show the
+     * gate. The socket then stays down — no reconnect loop — until
+     * [resumeAfterAcknowledgement].
+     */
+    private val onAcknowledgementRequired: (() -> Unit)? = null,
 ) : ChatRealtimeGateway {
 
     private val wsUrl: String = buildWsUrl(apiOrigin)
 
     private val wanted = AtomicBoolean(false)
+
+    /** True while an acknowledgement blocks this account: no socket, no reconnect. */
+    private val ackPaused = AtomicBoolean(false)
     private val isConnected = AtomicBoolean(false)
     private val attempt = AtomicInteger(0)
 
@@ -95,7 +111,7 @@ class SocketIoChatGateway(
      * is the guarantee — so a socket that will not open is a log line.
      */
     private fun openSocket() {
-        if (!wanted.get()) return
+        if (!wanted.get() || ackPaused.get()) return
         try {
             val token = tokenProvider()
             val builder = Request.Builder().url(wsUrl)
@@ -131,9 +147,21 @@ class SocketIoChatGateway(
                 }
                 // Socket.IO CONNECT error `44{…}` → gateway won't authenticate us; fall back to polling.
                 text.startsWith("44") -> {
-                    Log.w(TAG, "sio.connect_error — no realtime for this bearer; polling covers it")
-                    isConnected.set(false)
-                    onConnectedChange?.invoke(false)
+                    val code = connectErrorCode(json, text.substring(2))
+                    if (code == CONNECT_ERROR_ACKNOWLEDGEMENT_REQUIRED) {
+                        // Announcements §5.6: raise the gate, and do NOT retry in a loop —
+                        // reconnect only after the last acknowledgement.
+                        Log.w(TAG, "sio.connect_error ACKNOWLEDGEMENT_REQUIRED — pausing realtime until acknowledged")
+                        ackPaused.set(true)
+                        isConnected.set(false)
+                        onConnectedChange?.invoke(false)
+                        safely("acknowledgement-required handler") { onAcknowledgementRequired?.invoke() }
+                        ws.close(1000, "acknowledgement required")
+                    } else {
+                        Log.w(TAG, "sio.connect_error (${code ?: "?"}) — no realtime for this bearer; polling covers it")
+                        isConnected.set(false)
+                        onConnectedChange?.invoke(false)
+                    }
                 }
                 // Socket.IO EVENT `42[…]` → parse; a `chat.message` is a refetch signal.
                 text.startsWith("42") -> handleEvent(text.substring(2))
@@ -147,36 +175,51 @@ class SocketIoChatGateway(
 
         override fun onClosed(ws: WebSocket, code: Int, reason: String) {
             Log.i(TAG, "ws closed ($code)")
+            if (isStale(ws)) return
             markDownAndMaybeReconnect()
         }
 
         override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
             Log.w(TAG, "ws failure: ${t.javaClass.simpleName} (http ${response?.code ?: -1})")
+            if (isStale(ws)) return
             markDownAndMaybeReconnect()
+        }
+
+        /**
+         * A close arriving for a socket that has already been REPLACED (a pause
+         * followed quickly by a resume) must not tear down its successor.
+         */
+        private fun isStale(ws: WebSocket): Boolean {
+            val current = webSocket
+            return current != null && current !== ws
         }
     }
 
-    private fun handleEvent(payload: String) {
+    /** Internal, not private, so the frame → handler mapping is unit-tested without a socket. */
+    internal fun handleEvent(payload: String) {
         val name: String
         val conversationId: String?
         val portfolioId: String?
+        val announcementId: String?
         try {
             val arr = json.parseToJsonElement(payload).jsonArray
             name = arr.getOrNull(0)?.jsonPrimitive?.content ?: return
-            val body = arr.getOrNull(1)?.jsonObject
+            val body = arr.getOrNull(1) as? kotlinx.serialization.json.JsonObject
             conversationId = body?.get("conversationId")?.jsonPrimitive?.content
             portfolioId = body?.get("portfolioId")?.jsonPrimitive?.content
+            announcementId = body?.get("announcementId")?.jsonPrimitive?.content
         } catch (_: Exception) {
             return
         }
         if (name == EVENT_PORTFOLIO_CHANGED) {
             Log.i(TAG, "recv portfolio.changed → widget refresh")
-            try {
-                onPortfolioChanged?.invoke(portfolioId)
-            } catch (e: Exception) {
-                // An OkHttp listener thread: nothing may escape it.
-                Log.w(TAG, "portfolio.changed handler failed: ${e.javaClass.simpleName}")
-            }
+            // An OkHttp listener thread: nothing may escape it.
+            safely("portfolio.changed handler") { onPortfolioChanged?.invoke(portfolioId) }
+            return
+        }
+        if (name == EVENT_ANNOUNCEMENT_CHANGED) {
+            Log.i(TAG, "recv announcement.changed → refetch /auth/me + announcements")
+            safely("announcement.changed handler") { onAnnouncementChanged?.invoke(announcementId) }
             return
         }
         if (name == EVENT_CHAT_MESSAGE) {
@@ -185,11 +228,42 @@ class SocketIoChatGateway(
         }
     }
 
+    /** An OkHttp listener thread: nothing a handler throws may escape it. */
+    private fun safely(what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.w(TAG, "$what failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * An acknowledgement now blocks this account (announcements §5.6: "the event
+     * makes the client close its own"): drop the socket and stop reconnecting.
+     * [wanted] is untouched, so [resumeAfterAcknowledgement] restores exactly the
+     * state the chat surfaces asked for.
+     */
+    fun pauseForAcknowledgement() {
+        if (ackPaused.getAndSet(true)) return
+        Log.i(TAG, "realtime paused: acknowledgement pending")
+        isConnected.set(false)
+        webSocket?.close(1000, "acknowledgement pending")
+        webSocket = null
+    }
+
+    /** The last acknowledgement is done: reconnect if a surface still wants the socket. */
+    fun resumeAfterAcknowledgement() {
+        if (!ackPaused.getAndSet(false)) return
+        Log.i(TAG, "realtime resumed after acknowledgement")
+        attempt.set(0)
+        if (wanted.get() && webSocket == null) openSocket()
+    }
+
     private fun markDownAndMaybeReconnect() {
         val wasConnected = isConnected.getAndSet(false)
         if (wasConnected) onConnectedChange?.invoke(false)
         webSocket = null
-        if (!wanted.get()) return
+        if (!wanted.get() || ackPaused.get()) return
         // Reconnect with capped exponential backoff on a throwaway thread (the
         // suspend sleeper lets tests drive it deterministically).
         val n = attempt.getAndIncrement()
@@ -212,6 +286,23 @@ class SocketIoChatGateway(
         private const val TAG = "BtChatWs"
         const val EVENT_CHAT_MESSAGE = "chat.message"
         const val EVENT_PORTFOLIO_CHANGED = "portfolio.changed"
+        const val EVENT_ANNOUNCEMENT_CHANGED = "announcement.changed"
+        const val CONNECT_ERROR_ACKNOWLEDGEMENT_REQUIRED = "ACKNOWLEDGEMENT_REQUIRED"
+
+        /**
+         * The code of a Socket.IO `connect_error` payload. The platform builds it
+         * as `new Error(code)` with `data = { code }` (`gateway.ts` handshakeError),
+         * which serialises to `{"message":code,"data":{"code":code}}`; `data.code`
+         * wins, `message` is the fallback. Null when neither is readable.
+         */
+        fun connectErrorCode(json: Json, payload: String): String? = try {
+            val obj = json.parseToJsonElement(payload) as? kotlinx.serialization.json.JsonObject
+            val data = obj?.get("data") as? kotlinx.serialization.json.JsonObject
+            (data?.get("code") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+                ?: (obj?.get("message") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+        } catch (_: Exception) {
+            null
+        }
 
         /** `http(s)://host[:port]` → `ws(s)://host[:port]/ws/?EIO=4&transport=websocket`. */
         fun buildWsUrl(apiOrigin: String): String {

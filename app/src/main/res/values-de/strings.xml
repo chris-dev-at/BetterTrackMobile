@@ -4091,4 +4091,41 @@
     <string name="bt_tags_builtin_name_withdrawal">Auszahlung</string>
     <string name="bt_budgets_brief_progress">%1$s / %2$s</string>
     <!-- ===== END QA fix round A ===== -->
+    <!-- ===== Announcements v2 (contract docs/announcements-contract.md, board 2026-10-30) ===== -->
+    <string name="bt_err_acknowledgement_required">Eine Mitteilung braucht deine Bestätigung, bevor du weitermachen kannst.</string>
+    <string name="bt_err_announcement_not_found">Diese Mitteilung ist nicht mehr verfügbar.</string>
+    <string name="bt_err_announcement_not_dismissible">Diese Mitteilung lässt sich nicht schließen – sie braucht deine Bestätigung.</string>
+    <string name="bt_err_announcement_not_acknowledgeable">Diese Mitteilung braucht keine Bestätigung.</string>
+    <string name="bt_err_announcement_not_pending">Diese Mitteilung braucht deine Bestätigung nicht mehr.</string>
+    <string name="bt_err_announcement_content_changed">Diese Mitteilung wurde gerade geändert. Bitte lies sie noch einmal, bevor du bestätigst.</string>
+    <string name="bt_err_announcement_locale_unavailable">Diese Mitteilung gibt es nicht in dieser Sprache, daher wird sie in einer anderen angezeigt.</string>
+    <string name="bt_ann_gate_eyebrow">Bitte bestätigen, um fortzufahren</string>
+    <string name="bt_ann_gate_checkbox">Ich habe diese Mitteilung gelesen und akzeptiere sie.</string>
+    <string name="bt_ann_gate_confirm">Bestätigen</string>
+    <string name="bt_ann_gate_sign_out">Abmelden</string>
+    <string name="bt_ann_gate_alternatives">Du möchtest nicht zustimmen? Du kannst deine Daten mitnehmen oder dein Konto löschen.</string>
+    <string name="bt_ann_gate_export">Meine Daten exportieren</string>
+    <string name="bt_ann_gate_delete">Konto löschen</string>
+    <string name="bt_ann_gate_progress">Mitteilung %1$d von %2$d</string>
+    <string name="bt_ann_gate_load_failed">Den vollständigen Text dieser Mitteilung konnten wir nicht laden.</string>
+    <string name="bt_ann_gate_retry">Erneut laden</string>
+    <string name="bt_ann_gate_language">Sprache</string>
+    <string name="bt_ann_gate_until">Deine Bestätigung wird bis %1$s erbeten.</string>
+    <string name="bt_ann_gate_preview_note">Vorschau – es wird nichts gesendet. Abmelden beendet die Vorschau.</string>
+    <string name="bt_ann_lang_en">Englisch</string>
+    <string name="bt_ann_lang_de">Deutsch</string>
+    <string name="bt_ann_severity_info">Information</string>
+    <string name="bt_ann_severity_warning">Wichtig</string>
+    <string name="bt_ann_severity_critical">Kritisch</string>
+    <string name="bt_ann_close_cd">Mitteilung schließen</string>
+    <string name="bt_ann_expand_cd">Ganze Mitteilung anzeigen</string>
+    <string name="bt_ann_collapse_cd">Weniger von der Mitteilung anzeigen</string>
+    <string name="bt_ann_once_got_it">Verstanden</string>
+    <string name="bt_ann_preview_tag">Vorschau</string>
+    <string name="bt_settings_dev_ann_notice">Mitteilungs-Vorschau: notice</string>
+    <string name="bt_settings_dev_ann_once">Mitteilungs-Vorschau: once</string>
+    <string name="bt_settings_dev_ann_ack">Mitteilungs-Vorschau: ack_required</string>
+    <string name="bt_settings_dev_ann_sub">Fügt ein Beispiel ein (EN + DE); nichts erreicht den Server</string>
+    <string name="bt_settings_dev_ann_clear">Mitteilungs-Vorschauen entfernen</string>
+    <!-- ===== END Announcements v2 ===== -->
 </resources>

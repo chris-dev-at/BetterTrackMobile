@@ -223,6 +223,22 @@ class ApiOpExecutorTest {
         assertEquals(KEY, server.takeRequest().getHeader("Idempotency-Key"))
     }
 
+    /**
+     * Announcements v2: the acknowledgement gate refuses before any resource
+     * check, so a queued write was provably NOT applied — it must back off and
+     * drain after the modal, never park as needs-attention.
+     */
+    @Test
+    fun `403 ACKNOWLEDGEMENT_REQUIRED is a retryable outcome, never a park`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(403).setBody(envelope("ACKNOWLEDGEMENT_REQUIRED", "acknowledge first")),
+        )
+
+        val result = executor.execute(op(OpType.TX_BUY, TX_PAYLOAD))
+
+        assertTrue("was $result", result is ExecResult.RetryableNotApplied)
+    }
+
     @Test
     fun `409 IDEMPOTENCY_KEY_MISMATCH is a permanent rejection`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(409).setBody(envelope("IDEMPOTENCY_KEY_MISMATCH", "mismatch")))

@@ -80,6 +80,11 @@ class SheetSnackbarVisibilityDisciplineTest {
     private val hostsAllowedOutsideTheShell = setOf(
         "at/bettertrack/app/ui/shell/AppShell.kt",
         "at/bettertrack/app/ui/firstrun/FirstRunWizard.kt",
+        // The announcements acknowledgement gate: its own full-screen Dialog
+        // WINDOW above the whole activity, so the shell's sheet layer (and the
+        // shell's host) can never draw over it or reach it. It hosts the native
+        // export/delete screens, whose outcomes need a host inside that window.
+        "at/bettertrack/app/ui/announcements/AcknowledgementGate.kt",
         // The component's own declaration and KDoc.
         "at/bettertrack/app/ui/components/BtSnackbar.kt",
     )
