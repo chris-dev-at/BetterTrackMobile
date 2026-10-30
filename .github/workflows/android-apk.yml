@@ -66,6 +66,26 @@ jobs:
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # MB-50: the unit-test suite and lint gate the APK — a red test or a lint
+      # error fails the job before anything is built or published. Deliberately
+      # its own Gradle invocation (own JVM via --no-daemon): standing rule —
+      # never bundle tests+lint with the APK/R8 tasks in one JVM.
+      - name: Unit tests + lint (githubDebug)
+        run: >
+          ./gradlew :app:testGithubDebugUnitTest :app:lintGithubDebug
+          --no-daemon --stacktrace
+
+      - name: Upload test + lint reports (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-lint-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testGithubDebugUnitTest/
+            app/build/test-results/testGithubDebugUnitTest/
+            app/build/reports/lint-results-githubDebug.*
+          if-no-files-found: ignore
+
       # Stable dev signing (owner ask 2026-07-10): decode the shared keystore
       # from the repo secret so every CI APK carries the SAME signature →
       # Android's in-place "Update" works between builds. If the secret isn't
