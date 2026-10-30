@@ -39,6 +39,17 @@ class BtApiError(
      */
     val isAuthHardFailure: Boolean get() = httpStatus == 400 || httpStatus == 401
 
+    /**
+     * `/auth/me` right after a login refused the freshly minted token itself:
+     * a 401, and nothing else. Deliberately NOT [isAuthHardFailure], which is
+     * the REFRESH call's rule — there a 400 is the token endpoint's
+     * `INVALID_GRANT` verdict; on an identity READ a 400 is body-parser, proxy
+     * or validation noise that says nothing about the session, and judging it
+     * by the refresh rule logged users out seconds after a successful login
+     * (MB-02).
+     */
+    val isIdentityRejected: Boolean get() = httpStatus == 401
+
     val isPasswordChangeRequired: Boolean get() = code == Codes.PASSWORD_CHANGE_REQUIRED
     val isInsufficientScope: Boolean get() = code == Codes.INSUFFICIENT_SCOPE
     val isAccountDisabled: Boolean

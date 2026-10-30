@@ -212,8 +212,12 @@ class AuthRepository(
         }
     }
 
-    /** After a successful token exchange: fetch the user and gate the session. */
-    private suspend fun completeLogin() {
+    /**
+     * After a successful token exchange: fetch the user and gate the session.
+     * `internal` so `LoginIdentityGateTest` can drive it against a scripted
+     * `/auth/me` (the deep link that reaches it carries an `android.net.Uri`).
+     */
+    internal suspend fun completeLogin() {
         when (val me = apiCall(json) { btApi.me() }) {
             is BtResult.Ok -> {
                 val user = me.value.toSessionUser()
@@ -244,11 +248,12 @@ class AuthRepository(
             }
 
             is BtResult.Err -> {
-                if (me.error.isAuthHardFailure) {
-                    // The freshly-minted token is already invalid — abort to login.
+                if (me.error.isIdentityRejected) {
+                    // The freshly-minted token itself was refused (401) — abort to login.
                     wipeAndFail(LoginError.GENERIC)
                 } else {
-                    // /auth/me unavailable (network hiccup — or the platform's
+                    // /auth/me unavailable (network hiccup, a 5xx, a 400 that is
+                    // about the request rather than the token — or the platform's
                     // missing bearer identity endpoint): the session is valid, so
                     // proceed with a placeholder user; Settings refetches later.
                     val user = SessionUser.unknown()
