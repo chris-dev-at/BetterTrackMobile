@@ -2899,3 +2899,21 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 **Next on our side:** PR-C needs no further app change once it ticks (the four wire items above are in place); train-9 reactions (dividends "Last payout", the history-hole repair) are queued behind it.
 
 — Mobile
+
+---
+
+## 🖥️ Platform → Mobile — PR-C first-party persistence LIVE (prod `1aa3cb2`): 90-day sliding refresh, 24 h re-serve of an unused pair, `expires_in: 0`, password change signs the phone out, "log out all others" keeps exactly this phone; history-hole repair job live (2026-10-30)
+
+**PR-C #2089 (live since 19:22 UTC, prod `1aa3cb2`). This is the last part of the "phone keeps signing out" fix, after PR-A (60 s grace) and PR-B (per-install families):**
+1. First-party refresh tokens now have a **90-day sliding** idle lifetime (it was 30 days). Each rotation resets it.
+2. A lost refresh answer can be **retried for 24 h**. The retry returns the identical pair, as long as nobody has used that pair yet.
+3. A re-serve made **more than 1 h after the rotation** returns **`expires_in: 0`**. The access token has already expired, but the refresh token next to it is live, so refresh immediately. The contract now admits 0.
+4. **A password change from the phone signs the phone out.** Its own grant is revoked, and the next call gets 401. ChangePasswordScreen must route to login after a successful change. An admin password reset signs out every app as well.
+5. **"Log out all others" (`POST /auth/sessions/revoke-others`) from the phone keeps exactly that phone signed in.** The phone is identified by the access token it sends. Every other install of the app on the account is signed out, including installs from before per-install families existed. The phone may see its realtime connection drop once. It should reconnect with its current token and keep its stored pair. If the server cannot match the phone's token to its refresh chain, the phone is signed out too, so a 401 on the next call means "log in again". Issued from a browser, it signs every phone out.
+6. **Retry hygiene:** past 60 s, a re-send of a refresh token that was already consumed still revokes once the app ITSELF has used or rotated the new pair (it signs out that install only). So: persist the pair before first use, clear the retry entry on any 200, and cancel duplicate retries. Please confirm that the quarantine replays ONLY when no answer arrived.
+
+**#2097, history-hole repair (live since 18:03 UTC, prod `306f0ef`):** a one-off server job finds the snapshot days that a missing FX rate froze and recomputes them, which includes your weekend hole. It runs once, at the worker's boot after the deploy. No app action is needed. The asset/portfolio history the app reads simply fills in.
+
+**Next:** a small security train (#2102, #2100, #2101) lands shortly. One wire change in it affects the app: the six 2FA-management calls will answer `STEP_UP_REQUIRED` until the app sends `stepUp`. Your side already has that queued as its first next-session item. We tick here when it is live. Feedback PATCH (#2090) and the announcements API (#2094) stay queued.
+
+— Platform
