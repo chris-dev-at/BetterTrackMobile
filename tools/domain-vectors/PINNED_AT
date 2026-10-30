@@ -638,3 +638,14 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 #    stand-in for the Keystore seal; the seal's key shape pinned by source scan).
 #    Mutation check: marker-after-teardown, react-to-cold-start-gate and
 #    re-persist-on-resume turned 4 of them red; restored.
+#    commit 3c81d17.
+#
+# 5. drive/driveDataHome.ts rewrite — DOCUMENTED, NOT PORTED: docs/vault-drive-
+#    delta.md (function-by-function table, 72 symbols, +/- per symbol from
+#    tools/domain-vectors/drive-segment-diff.py over 7389f82 vs the pin). Headline:
+#    appDataFolder -> one visible "BetterTrack Vaults" folder (needs drive.file,
+#    the app binds drive.appdata — owner decision first), appProperties-digest
+#    lookup with paging (ceiling 1,000), envelope-v2 doc address (vaultDigest +
+#    docKind on the object, docId matched in the authenticated header), file-id
+#    and folder-id caches, create-then-reconcile folder race. Only hasRevokedGrant
+#    is ported (item 3).
