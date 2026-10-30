@@ -355,6 +355,14 @@ class TransactionFormViewModel(
      */
     private var origSynced: TransactionEntity? = null
 
+    /**
+     * The synced trade being edited, as the held-quantity checks need it: the
+     * cached holding already contains it, so every check reads the holding
+     * through [heldQuantityForEdit] (MB-04). Null for a create and for a queued
+     * edit — neither is in the holding yet.
+     */
+    private val _editedTrade = MutableStateFlow<EditedTrade?>(null)
+
     /** Once a create was enqueued (or an op is being edited), submits bind here. */
     private var boundOpId: Long? = route.opId
 
@@ -384,8 +392,8 @@ class TransactionFormViewModel(
         // Both the CURRENT Main balance (affordability gate) and the as-of-date
         // balance (backdated-shortfall warning) — the two-way cash split (#378).
         combine(mainCashEur, availableCashEur) { cur, asof -> cur to asof },
-        holdings,
-    ) { (a, q, p, f), buy, coupled, (currentCash, asOfCash), held ->
+        combine(holdings, _editedTrade) { h, edited -> h to edited },
+    ) { (a, q, p, f), buy, coupled, (currentCash, asOfCash), (held, edited) ->
         validateTxForm(
             assetSelected = a != null,
             quantity = q,
@@ -395,7 +403,7 @@ class TransactionFormViewModel(
             cashCoupled = coupled,
             currentCashEur = currentCash,
             asOfCashEur = asOfCash,
-            heldQuantity = a?.let { pick -> held.firstOrNull { it.assetId == pick.assetId }?.quantity },
+            heldQuantity = a?.let { pick -> heldQuantityForEdit(held.firstOrNull { it.assetId == pick.assetId }?.quantity, pick.assetId, edited) },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TxFormValidation(assetMissing = true))
 
@@ -405,10 +413,10 @@ class TransactionFormViewModel(
      * "sell anyway" acknowledgment + the optional buy-in-price field.
      */
     val uncoveredSell: StateFlow<UncoveredSell> = combine(
-        _isBuy, _quantityText, _asset, holdings,
-    ) { buy, qtyText, a, held ->
+        _isBuy, _quantityText, _asset, holdings, _editedTrade,
+    ) { buy, qtyText, a, held, edited ->
         val heldQty = a?.let { pick ->
-            held.firstOrNull { it.assetId == pick.assetId }?.quantity ?: pick.heldQuantity
+            heldQuantityForEdit(held.firstOrNull { it.assetId == pick.assetId }?.quantity ?: pick.heldQuantity, pick.assetId, edited)
         }
         uncoveredSellState(isBuy = buy, quantity = parseLocalizedDecimal(qtyText), heldQuantity = heldQty)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UncoveredSell(false, 0.0, 0.0))
@@ -562,6 +570,7 @@ class TransactionFormViewModel(
                 } else {
                     mode = FormMode.EditSynced(txId, tx.portfolioId)
                     origSynced = tx
+                    _editedTrade.value = EditedTrade(tx.assetId, isBuy = tx.side == "buy", quantity = tx.quantity)
                     _portfolioId.value = tx.portfolioId
                     _isBuy.value = tx.side == "buy"
                     _asset.value = AssetPick(tx.assetId, tx.assetSymbol, tx.assetName, null, currency = tx.assetCurrency)
@@ -815,11 +824,11 @@ class TransactionFormViewModel(
     /** Whether a "Max" affordance is offerable now (known held qty / known cash). */
     val maxAvailable: StateFlow<Boolean> = combine(
         combine(_isBuy, _asset, _priceText) { buy, a, p -> Triple(buy, a, p) },
-        _cashCoupled, mainCashEur, holdings,
-    ) { (buy, a, priceText), coupled, cash, held ->
+        _cashCoupled, mainCashEur, holdings, _editedTrade,
+    ) { (buy, a, priceText), coupled, cash, held, edited ->
         when {
             a == null -> false
-            !buy -> (held.firstOrNull { it.assetId == a.assetId }?.quantity ?: 0.0) > 0.0
+            !buy -> (heldQuantityForEdit(held.firstOrNull { it.assetId == a.assetId }?.quantity, a.assetId, edited) ?: 0.0) > 0.0
             else -> coupled && cash != null && (parseLocalizedDecimal(priceText) ?: 0.0) > 0.0
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -836,7 +845,7 @@ class TransactionFormViewModel(
             val fee = parseLocalizedDecimal(_feeText.value) ?: 0.0
             _quantityText.value = formatDecimalForInput(maxAffordableQuantity(cash, price, fee), formLocale)
         } else {
-            val held = holdings.value.firstOrNull { it.assetId == a.assetId }?.quantity ?: return
+            val held = heldQuantityForEdit(holdings.value.firstOrNull { it.assetId == a.assetId }?.quantity, a.assetId, _editedTrade.value) ?: return
             _quantityText.value = formatDecimalForInput(held, formLocale)
         }
     }

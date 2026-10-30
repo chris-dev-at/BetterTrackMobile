@@ -679,4 +679,71 @@ class TransactionFormLogicTest {
         assertNull(parseUncoveredEntryPrice("-3"))
         assertNull(parseUncoveredEntryPrice("abc"))
     }
+
+    // ── MB-04: an edit is checked against the holding WITHOUT the row it edits ──
+    //
+    // The cached holding already contains the synced transaction being edited.
+    // Checking a re-saved 10-share sell against it double-counts that sell: on a
+    // now-empty holding the unchanged edit read "uncovered by 10" and demanded
+    // the "sell anyway" acknowledgment, and raising it to 12 read 12, not 2.
+
+    private val sold10 = EditedTrade(assetId = "a1", isBuy = false, quantity = 10.0)
+
+    @Test
+    fun `re-saving a 10-share sell on the now-empty holding is not uncovered`() {
+        // The holding row is gone once fully sold (null) or reads zero; both mean 0.
+        for (held in listOf(null, 0.0)) {
+            val base = heldQuantityForEdit(held, "a1", sold10)
+            val s = uncoveredSellState(isBuy = false, quantity = 10.0, heldQuantity = base)
+            assertFalse("held=$held: the edit's own sell was counted against it", s.active)
+            assertEquals(10.0, s.heldQuantity, 1e-9)
+        }
+    }
+
+    @Test
+    fun `raising that sell to 12 is uncovered by the 2 extra shares only`() {
+        val s = uncoveredSellState(isBuy = false, quantity = 12.0, heldQuantity = heldQuantityForEdit(0.0, "a1", sold10))
+        assertTrue(s.active)
+        assertEquals(2.0, s.uncoveredQuantity, 1e-9)
+    }
+
+    @Test
+    fun `the oversell warning reads the same edit-adjusted holding`() {
+        fun oversell(qty: Double) = validateTxForm(
+            assetSelected = true, quantity = qty, price = 10.0, fee = 0.0, isBuy = false,
+            cashCoupled = false, currentCashEur = null, asOfCashEur = null,
+            heldQuantity = heldQuantityForEdit(0.0, "a1", sold10),
+        ).oversellWarning
+        assertFalse(oversell(10.0))
+        assertTrue(oversell(12.0))
+    }
+
+    @Test
+    fun `a new sell (nothing being edited) still uses the plain holding`() {
+        // Negative space: the adjustment applies to an edit and to nothing else.
+        assertEquals(0.0, heldQuantityForEdit(0.0, "a1", original = null))
+        assertNull(heldQuantityForEdit(null, "a1", original = null))
+        val s = uncoveredSellState(isBuy = false, quantity = 10.0, heldQuantity = heldQuantityForEdit(0.0, "a1", null))
+        assertTrue(s.active)
+        assertEquals(10.0, s.uncoveredQuantity, 1e-9)
+    }
+
+    @Test
+    fun `a trade of another asset never adjusts this asset's holding`() {
+        assertEquals(5.0, heldQuantityForEdit(5.0, "other", sold10))
+    }
+
+    @Test
+    fun `a buy edit is unaffected while it stays a buy, and flipped to a sell it loses its own shares`() {
+        val bought10 = EditedTrade(assetId = "a1", isBuy = true, quantity = 10.0)
+        // Still a buy: never an uncovered sell, whatever the holding says.
+        assertFalse(uncoveredSellState(isBuy = true, quantity = 10.0, heldQuantity = heldQuantityForEdit(10.0, "a1", bought10)).active)
+        // The PATCH can change the side. The 10 held shares ARE this buy, so a
+        // sell of 10 in its place sells shares the portfolio never had.
+        val flipped = uncoveredSellState(isBuy = false, quantity = 10.0, heldQuantity = heldQuantityForEdit(10.0, "a1", bought10))
+        assertTrue(flipped.active)
+        assertEquals(10.0, flipped.uncoveredQuantity, 1e-9)
+        // With 4 more shares held from elsewhere, those 4 still cover.
+        assertEquals(4.0, heldQuantityForEdit(14.0, "a1", bought10)!!, 1e-9)
+    }
 }

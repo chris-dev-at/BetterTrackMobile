@@ -229,6 +229,34 @@ fun uncoveredSellState(
 }
 
 /**
+ * The synced transaction an edit is replacing, as far as the held quantity is
+ * concerned: which asset, which side, how many units.
+ */
+data class EditedTrade(val assetId: String, val isBuy: Boolean, val quantity: Double)
+
+/**
+ * The held quantity an edit of a SYNCED transaction is checked against: the
+ * cached holding WITHOUT the trade being edited (MB-04).
+ *
+ * The cached holding already contains that trade, so checking the edit against
+ * it counts the trade twice. Re-saving a 10-share sell on a now-empty holding
+ * read "uncovered by 10" and demanded "sell anyway"; raising it to 12 read 12
+ * instead of 2. So the original sell's quantity is added back — and an original
+ * buy's taken out, because the PATCH may flip the side and the shares that buy
+ * brought in are not there to sell once it is a sell.
+ *
+ * [original] is null for a new transaction and for a QUEUED edit (that op never
+ * reached the holding), and a trade of another asset leaves [held] alone: both
+ * return [held] unchanged. A null [held] — the asset is not (or no longer) held
+ * — counts as zero once there is something to add back.
+ */
+fun heldQuantityForEdit(held: Double?, assetId: String, original: EditedTrade?): Double? {
+    if (original == null || original.assetId != assetId) return held
+    val ownEffect = if (original.isBuy) original.quantity else -original.quantity
+    return ((held ?: 0.0) - ownEffect).coerceAtLeast(0.0)
+}
+
+/**
  * Whether an uncovered sell may be submitted: only once the user ticked the
  * acknowledgment. Every non-uncovered write is unaffected (returns true).
  */
