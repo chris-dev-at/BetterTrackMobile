@@ -91,6 +91,11 @@ class TokenManager(
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     /** Where every refresh attempt is written down (diagnostics, survives sign-out). */
     private val journal: RefreshJournal = NoopRefreshJournal,
+    /**
+     * This install's `instance_id` for the code exchange ([InstallIdentity]);
+     * `null` omits the field. Never sent on a refresh.
+     */
+    private val instanceId: () -> String? = { null },
 ) {
     private val refreshMutex = Mutex()
 
@@ -145,8 +150,22 @@ class TokenManager(
      */
     fun sessionPresence(): TokenRead = store.readTokens()
 
-    /** Exchange an authorization code (+ our PKCE verifier) for tokens. */
+    /**
+     * Exchange an authorization code (+ our PKCE verifier) for tokens, carrying
+     * this install's `instance_id` so the server retires the install's previous
+     * token family instead of starting a parallel one.
+     */
     suspend fun exchange(code: String, codeVerifier: String): BtResult<AuthTokens> {
+        val install = instanceIdOrNull()
+        // Presence, length and a short fingerprint only — never the id itself.
+        Log.i(
+            TAG,
+            if (install != null) {
+                "Code exchange carries instance_id (len=${install.length}, fp=${instanceIdFingerprint(install)})."
+            } else {
+                "Code exchange without instance_id."
+            },
+        )
         val result = apiCall(json) {
             tokenApi.exchange(
                 TokenExchangeRequest(
@@ -154,6 +173,7 @@ class TokenManager(
                     redirectUri = redirectUri,
                     clientId = clientId,
                     codeVerifier = codeVerifier,
+                    instanceId = install,
                 ),
             )
         }
@@ -258,6 +278,15 @@ class TokenManager(
                 return null
             }
             doRefresh(current.refreshToken, RefreshCaller.REACTIVE)?.accessToken
+        }
+
+    /** The install id, or null when it could not be produced — a sign-in never fails over it. */
+    private fun instanceIdOrNull(): String? =
+        try {
+            instanceId()?.takeIf { INSTANCE_ID_PATTERN.matches(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "instance_id unavailable (${e.javaClass.simpleName}); exchanging without it.")
+            null
         }
 
     /** Local wipe of tokens + any in-flight PKCE (does not touch cached user). */

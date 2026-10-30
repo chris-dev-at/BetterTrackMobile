@@ -1,13 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Auto Backup rules for Android 11 and lower (android:fullBackupContent).
+   Android 12+ reads data_extraction_rules.xml instead; keep the two in step.
    See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
     <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+       This install's OAuth instance_id (data/auth/InstallIdentity.kt). It names
+       the INSTALL: restored onto another device, that device's first sign-in
+       would retire this device's token family (platform PR-B). A restore or a
+       reinstall must make a new one.
+    -->
+    <exclude domain="sharedpref" path="bt_install_identity.xml" />
 </full-backup-content>

@@ -195,7 +195,17 @@ object AppGraph {
             clientId = OAuthConfig.clientId,
             redirectUri = OAuthConfig.redirectUri,
             journal = refreshJournal,
+            instanceId = { installIdentity.instanceId() },
         )
+    }
+
+    /**
+     * This install's stable `instance_id` (PR-B token families) — its own
+     * app-private file, outside the token store, excluded from backup and
+     * device transfer. See [at.bettertrack.app.data.auth.InstallIdentity].
+     */
+    private val installIdentity: at.bettertrack.app.data.auth.InstallIdentity by lazy {
+        at.bettertrack.app.data.auth.InstallIdentity.forContext(appContext)
     }
 
     // ── Authenticated API client ────────────────────────────────────────────────

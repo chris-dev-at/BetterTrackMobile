@@ -1,19 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup and device-transfer rules for Android 12+ (android:dataExtractionRules).
+   Android 11 and lower read backup_rules.xml instead; keep the two in step.
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
 -->
 <data-extraction-rules>
-    <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
-    </cloud-backup>
     <!--
-    <device-transfer>
-        <include .../>
-        <exclude .../>
-    </device-transfer>
+       bt_install_identity.xml holds this install's OAuth instance_id
+       (data/auth/InstallIdentity.kt). Copied to another device - by a cloud
+       restore OR a phone-to-phone transfer - it would make that device's first
+       sign-in retire THIS device's token family (platform PR-B). Excluded from
+       both, so every install mints its own.
     -->
+    <cloud-backup>
+        <exclude domain="sharedpref" path="bt_install_identity.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="bt_install_identity.xml" />
+    </device-transfer>
 </data-extraction-rules>

@@ -23,8 +23,20 @@ data class TokenExchangeRequest(
     @SerialName("redirect_uri") val redirectUri: String,
     @SerialName("client_id") val clientId: String,
     @SerialName("code_verifier") val codeVerifier: String,
+    /**
+     * This install's stable id (PR-B #2085, `^[A-Za-z0-9._~-]{16,64}$`): a
+     * re-login with the same id retires the install's previous token family.
+     * See [at.bettertrack.app.data.auth.InstallIdentity]. `null` is omitted
+     * from the body (`explicitNulls = false`).
+     */
+    @SerialName("instance_id") val instanceId: String? = null,
 )
 
+/**
+ * The refresh body. Deliberately has NO `instance_id`: the server's
+ * `refresh_token` schema is strict (`additionalProperties: false`), so the key
+ * on a refresh is `400 VALIDATION_ERROR`. `InstanceIdWireTest` pins its absence.
+ */
 @Serializable
 data class TokenRefreshRequest(
     @SerialName("grant_type") val grantType: String = "refresh_token",
