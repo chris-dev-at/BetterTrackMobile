@@ -83,6 +83,7 @@ import at.bettertrack.app.ui.components.BtListSurface
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberParkReason
 import at.bettertrack.app.ui.components.resolveListSurface
@@ -297,6 +298,10 @@ fun CustomAssetDetailScreen(
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
     val asset by vm.asset.collectAsStateWithLifecycle()
+    // A custom asset's value points are in ITS currency (set at create,
+    // immutable) — not EUR. Every figure on this page and the update sheet's
+    // unit read it from here (MB-09).
+    val valueCurrency = asset?.currency?.takeIf { it.isNotBlank() } ?: "EUR"
     val points by vm.points.collectAsStateWithLifecycle()
     val pending by vm.pending.collectAsStateWithLifecycle()
     val isOnline by vm.isOnline.collectAsStateWithLifecycle()
@@ -400,7 +405,7 @@ fun CustomAssetDetailScreen(
                         val current = latestValue(points)
                         when {
                             current != null ->
-                                MoneyText(value = current, style = BtTheme.type.moneyLarge)
+                                MoneyText(value = current, style = BtTheme.type.moneyLarge, currencyCode = valueCurrency)
 
                             awaitingFirstLoad ->
                                 BtSkeleton(Modifier.width(160.dp).height(34.dp))
@@ -516,7 +521,7 @@ fun CustomAssetDetailScreen(
                                         )
                                     }
                                 }
-                                MoneyText(value = p.value, style = BtTheme.type.moneySmall)
+                                MoneyText(value = p.value, style = BtTheme.type.moneySmall, currencyCode = valueCurrency)
                             }
                         }
                     }
@@ -564,7 +569,7 @@ fun CustomAssetDetailScreen(
                                 color = bt.textPrimary,
                                 modifier = Modifier.weight(1f),
                             )
-                            MoneyText(value = p.value, style = BtTheme.type.moneySmall)
+                            MoneyText(value = p.value, style = BtTheme.type.moneySmall, currencyCode = valueCurrency)
                             IconButton(onClick = { deletePointDate = p.date }, enabled = isOnline) {
                                 Icon(
                                     Icons.Outlined.DeleteOutline,
@@ -582,6 +587,7 @@ fun CustomAssetDetailScreen(
 
     if (updateOpen) {
         UpdateValueSheet(
+            valueCurrency = valueCurrency,
             busy = busy,
             error = error,
             locale = locale,
@@ -660,6 +666,7 @@ fun CustomAssetDetailScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UpdateValueSheet(
+    valueCurrency: String,
     busy: Boolean,
     error: BtMessage?,
     locale: Locale,
@@ -708,7 +715,7 @@ private fun UpdateValueSheet(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Done,
                 ),
-                suffix = { Text("€", color = bt.textMuted) },
+                suffix = { Text(currencySymbol(valueCurrency, locale), color = bt.textMuted) },
                 textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
                 modifier = Modifier.fillMaxWidth(),
                 colors = dialogFieldColors(),

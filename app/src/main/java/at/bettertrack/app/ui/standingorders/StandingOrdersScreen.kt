@@ -82,6 +82,7 @@ import at.bettertrack.app.data.standingorders.StandingOrderProblem
 import at.bettertrack.app.data.standingorders.StandingOrderRepository
 import at.bettertrack.app.data.standingorders.StandingOrderStatus
 import at.bettertrack.app.data.standingorders.buildStandingOrderPatch
+import at.bettertrack.app.data.standingorders.standingOrderAmountCurrency
 import at.bettertrack.app.data.standingorders.validateStandingOrder
 import at.bettertrack.app.di.AppGraph
 import at.bettertrack.app.ui.components.BtActionSheet
@@ -101,6 +102,7 @@ import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.BtStateFill
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.customassets.dialogFieldColors
 import at.bettertrack.app.ui.format.btFormatNamedDay
 import at.bettertrack.app.ui.portfolio.PortfolioOverviewViewModel
@@ -1557,6 +1559,8 @@ private fun AmountField(
     isError: Boolean,
 ) {
     val cash = kind != StandingOrderKind.BuyAsset
+    val unit = standingOrderAmountCurrency(kind)
+    val locale = rememberBtLocale()
     OutlinedTextField(
         value = value,
         onValueChange = onValue,
@@ -1570,11 +1574,7 @@ private fun AmountField(
         singleLine = true,
         enabled = enabled,
         isError = isError,
-        suffix = if (cash) {
-            { Text("€", color = BtTheme.colors.textMuted) }
-        } else {
-            null
-        },
+        suffix = unit?.let { code -> { Text(currencySymbol(code, locale), color = BtTheme.colors.textMuted) } },
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Decimal,
             imeAction = ImeAction.Next,

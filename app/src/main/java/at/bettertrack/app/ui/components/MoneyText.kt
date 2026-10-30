@@ -28,9 +28,10 @@ enum class MoneyColorMode {
 }
 
 /**
- * EUR money text (spec §3.4/§6.13): locale-aware EUR formatting (de-AT style in
- * German), optional gain/loss coloring, and tabular figures via the money text
- * styles so digit columns always align.
+ * Money text (spec §3.4/§6.13): locale-aware formatting (de-AT style in German),
+ * optional gain/loss coloring, and tabular figures via the money text styles so
+ * digit columns always align. EUR unless [currencyCode] names the amount's own
+ * currency (a custom asset's value points are in the asset's currency).
  */
 @Composable
 fun MoneyText(
@@ -41,6 +42,7 @@ fun MoneyText(
     showSign: Boolean = false,
     color: Color = Color.Unspecified,
     textAlign: TextAlign? = null,
+    currencyCode: String = "EUR",
 ) {
     val bt = BtTheme.colors
     val locale = rememberBtLocale()
@@ -52,7 +54,7 @@ fun MoneyText(
         else -> Color.Unspecified
     }
     Text(
-        text = formatEur(value, locale, showSign),
+        text = btFormatMoneyCore(value, currencyCode, locale, showSign),
         modifier = modifier,
         style = style,
         color = resolvedColor,

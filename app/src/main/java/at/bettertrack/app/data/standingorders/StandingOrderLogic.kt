@@ -38,6 +38,17 @@ enum class StandingOrderKind(val wire: String) {
     }
 }
 
+/**
+ * The currency an order's `amount` is in, for the amount field's unit: the cash
+ * kinds are a EUR magnitude (contract: `currency` is "EUR for cash"), while
+ * `buy-asset` is a share QUANTITY and has none — null, so a USD asset's "buy 3"
+ * is never shown as "3 $" (MB-09).
+ */
+fun standingOrderAmountCurrency(kind: StandingOrderKind): String? = when (kind) {
+    StandingOrderKind.BuyAsset -> null
+    StandingOrderKind.CashAdd, StandingOrderKind.CashDeduct -> "EUR"
+}
+
 /** How often it fires. `Monthly` fires on `anchorDay`, clamped to month-end. */
 enum class StandingOrderCadence(val wire: String) {
     Daily(StandingOrderCadences.DAILY),

@@ -76,6 +76,7 @@ import at.bettertrack.app.ui.components.BtRangeSegmented
 import at.bettertrack.app.ui.components.BtScrollFill
 import at.bettertrack.app.ui.components.BtSkeleton
 import at.bettertrack.app.ui.components.MoneyText
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.formatPercent
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
@@ -445,7 +446,8 @@ fun ConglomerateDetailScreen(
                             onValueChange = { budgetText = sanitizeDecimalInput(it, maxDecimals = 2) },
                             label = { Text(stringResource(R.string.bt_conglo_budget_label)) },
                             singleLine = true,
-                            suffix = { Text("€", color = bt.textMuted) },
+                            // The allocator takes `budgetEur`.
+                            suffix = { Text(currencySymbol("EUR", locale), color = bt.textMuted) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                             textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
                             modifier = Modifier.fillMaxWidth(),

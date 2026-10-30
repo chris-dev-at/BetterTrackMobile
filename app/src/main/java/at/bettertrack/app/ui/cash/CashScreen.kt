@@ -130,6 +130,7 @@ import at.bettertrack.app.ui.components.MirrorAttributionChip
 import at.bettertrack.app.ui.components.MoneyColorMode
 import at.bettertrack.app.ui.components.MoneyText
 import at.bettertrack.app.ui.components.SourceBadge
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.components.formatEur
 import at.bettertrack.app.ui.components.rememberBtCollapsingHeaderBehavior
 import at.bettertrack.app.ui.components.rememberBtHaptics
@@ -2728,7 +2729,8 @@ private fun SheetNumberField(
             keyboardType = KeyboardType.Decimal,
             imeAction = ImeAction.Done,
         ),
-        suffix = { Text("€", color = BtTheme.colors.textMuted) },
+        // Cash amounts are EUR on the wire (`amountEur`).
+        suffix = { Text(currencySymbol("EUR", rememberBtLocale()), color = BtTheme.colors.textMuted) },
         textStyle = BtTheme.type.moneySmall.copy(fontSize = 17.sp),
         modifier = Modifier.fillMaxWidth(),
         colors = sheetFieldColors(),

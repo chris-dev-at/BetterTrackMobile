@@ -315,4 +315,20 @@ class StandingOrderLogicTest {
         // An unknown status degrades to Active rather than hiding the order.
         assertEquals(StandingOrderStatus.Active, StandingOrderStatus.fromWire("hibernating"))
     }
+
+    // ── MB-09: the amount field's unit is the contract's, per kind ───────────
+
+    @Test
+    fun `a buy-asset amount is a share count and carries no currency, whatever the asset's`() {
+        // A USD asset's "buy 3" is three shares, not "3 $": the contract's
+        // `currency` (the asset's native one) prices the BUY, it does not
+        // denominate the amount.
+        assertNull(standingOrderAmountCurrency(StandingOrderKind.BuyAsset))
+    }
+
+    @Test
+    fun `the cash kinds are EUR magnitudes`() {
+        assertEquals("EUR", standingOrderAmountCurrency(StandingOrderKind.CashAdd))
+        assertEquals("EUR", standingOrderAmountCurrency(StandingOrderKind.CashDeduct))
+    }
 }
