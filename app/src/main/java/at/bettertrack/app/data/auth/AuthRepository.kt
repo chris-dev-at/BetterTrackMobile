@@ -85,9 +85,33 @@ class AuthRepository(
     private val _loginPhase = MutableStateFlow<LoginPhase>(LoginPhase.Idle)
     val loginPhase: StateFlow<LoginPhase> = _loginPhase.asStateFlow()
 
+    private val _loginNotice = MutableStateFlow<LoginNotice?>(null)
+
+    /**
+     * Why the login screen is showing, when that deserves a sentence (e.g.
+     * "Your password changed — sign in again."). Follows the newest sign-out
+     * row, so it survives the process dying between the sign-out and the
+     * person reading it; cleared by the next sign-in.
+     */
+    val loginNotice: StateFlow<LoginNotice?> = _loginNotice.asStateFlow()
+
+    /**
+     * Set while — and after — a DELIBERATE sign-out ends the session, until the
+     * next sign-in. A refresh refusal that lands in that window (a request that
+     * was in flight; with PR-C, a password change has already killed every
+     * grant) is the consequence of the sign-out, not a second, forced one: it is
+     * folded into it instead of writing a REFRESH_REJECTED row over the reason
+     * the person actually signed out for.
+     */
+    @Volatile
+    private var deliberateSignOut: SignOutReason? = null
+
     init {
         val presence = tokenManager.sessionPresence()
         _authState.value = resolveInitialState(presence)
+        if (_authState.value is AuthState.LoggedOut) {
+            _loginNotice.value = loginNoticeFor(ledger.recent().firstOrNull())
+        }
         // Confirm local-data ownership for a restored session (no-op when same user).
         (authState.value as? AuthState.LoggedIn)?.let { s ->
             scope.launch { localAccountData.onSessionEstablished(s.user.id) }
@@ -132,7 +156,7 @@ class AuthRepository(
                 // nothing was deleted. It only LOOKS like one, which is exactly
                 // why it has to be written down.
                 Log.w(TAG, "Session storage unreadable at startup (${presence.cause}); showing login.")
-                ledger.record(
+                recordSignOut(
                     SignOutEvent(
                         at = nowMs(),
                         reason = SignOutReason.SECURE_STORE_UNAVAILABLE.name,
@@ -234,6 +258,9 @@ class AuthRepository(
      * `/auth/me` (the deep link that reaches it carries an `android.net.Uri`).
      */
     internal suspend fun completeLogin() {
+        // A new session: whatever the last sign-out was, it is over.
+        deliberateSignOut = null
+        _loginNotice.value = null
         when (val me = apiCall(json) { btApi.me(acceptLanguage()) }) {
             is BtResult.Ok -> {
                 val user = me.value.toSessionUser()
@@ -459,11 +486,12 @@ class AuthRepository(
      * whatever the rest did.
      */
     suspend fun logout(reason: SignOutReason = SignOutReason.USER_LOGOUT) {
+        deliberateSignOut = reason
         // Read the pair FIRST: everything after this may lose it (a refresh the
         // deregistration triggers rotates it; a refused one wipes it), and the
         // revocation needs a token of this install's family to name it.
         val held = store.loadTokens()
-        ledger.record(
+        recordSignOut(
             SignOutEvent(
                 at = nowMs(),
                 reason = reason.name,
@@ -491,6 +519,53 @@ class AuthRepository(
         // leaving, so demoting first would run the full EVERYTHING wipe under a
         // mode that still holds a vault — and destroy it.
         bestEffort("post-logout storage demotion") { onAfterLogout() }
+    }
+
+    /** Fire-and-forget [signOutAfterPasswordChange] for the Change-password screen. */
+    fun requestSignOutAfterPasswordChange() {
+        scope.launch { signOutAfterPasswordChange() }
+    }
+
+    /**
+     * End the session on purpose after the password was changed from this phone.
+     *
+     * Platform PR-C makes a password change revoke EVERY grant, this phone's
+     * included; before PR-C the phone kept its bearer. Deciding it here makes the
+     * app behave the same on both servers: revoke this install's family
+     * ([revokeInstallOnSignOut] — a no-op `200` once PR-C has already done it),
+     * drop the tokens, and land on the login screen with a [LoginNotice] that
+     * says why, under its own ledger reason [SignOutReason.PASSWORD_CHANGED]
+     * rather than as an unexplained forced sign-out.
+     *
+     * A SESSION end, not a logout: the person is about to sign straight back in
+     * as the same user, so — like an expired session — the account's Room data
+     * and outbound queue stay (the owner gate wipes them if a different account
+     * signs in), the storage mode is not demoted, and the push token is not
+     * deregistered (the bearer may already be dead, and the next sign-in
+     * re-registers it).
+     */
+    suspend fun signOutAfterPasswordChange() {
+        val reason = SignOutReason.PASSWORD_CHANGED
+        deliberateSignOut = reason
+        val held = store.loadTokens()
+        recordSignOut(
+            SignOutEvent(
+                at = nowMs(),
+                reason = reason.name,
+                trigger = SignOutTrigger.USER.name,
+                caller = "AuthRepository.signOutAfterPasswordChange",
+            ),
+        )
+        revokeInstallBestEffort(held)
+        store.wipeAll()
+        _authState.value = AuthState.LoggedOut
+        _loginPhase.value = LoginPhase.Idle
+    }
+
+    /** Write a sign-out row and let the login screen's notice follow it. */
+    private fun recordSignOut(event: SignOutEvent) {
+        ledger.record(event)
+        _loginNotice.value = loginNoticeFor(event)
     }
 
     /** One logout step whose failure must not stop the ones after it. */
@@ -534,7 +609,7 @@ class AuthRepository(
     }
 
     private fun wipeAndFail(error: LoginError) {
-        ledger.record(
+        recordSignOut(
             SignOutEvent(
                 at = nowMs(),
                 reason = SignOutReason.ACCOUNT_GATE.name,
@@ -551,7 +626,19 @@ class AuthRepository(
     }
 
     private fun forceLoggedOut(invalidation: SessionInvalidation) {
-        ledger.record(
+        deliberateSignOut?.let { reason ->
+            // The refusal of a session that is being — or has been — ended on
+            // purpose. Its tokens are gone either way; the row that explains the
+            // login screen is the deliberate one.
+            Log.i(
+                TAG,
+                "Refresh refusal (HTTP ${invalidation.httpStatus} ${invalidation.errorCode}) during a " +
+                    "deliberate sign-out ($reason); folded into it.",
+            )
+            store.wipeAll()
+            return
+        }
+        recordSignOut(
             SignOutEvent(
                 at = nowMs(),
                 reason = invalidation.reason.name,

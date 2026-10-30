@@ -88,6 +88,15 @@ enum class SignOutReason {
     /** A storage-mode transition that leaves the BetterTrack account. */
     STORAGE_MODE_SWITCH,
 
+    /**
+     * The password was changed from this phone, and the app ended its own
+     * session on purpose: revoked this install's token family and signed out,
+     * so the person signs in again with the new password. Deliberate, not a
+     * forced sign-out — with platform PR-C a password change revokes every
+     * grant anyway, and the app now behaves the same before and after it.
+     */
+    PASSWORD_CHANGED,
+
     /** `/auth/me` said admin or disabled — the app refuses those accounts. */
     ACCOUNT_GATE,
 

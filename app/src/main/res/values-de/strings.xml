@@ -22,6 +22,7 @@
     <string name="bt_login_error_disabled">Dieses Konto wurde deaktiviert. Wende dich an den BetterTrack-Support.</string>
     <string name="bt_login_error_admin">Die BetterTrack-App ist nur für persönliche Konten.</string>
     <string name="bt_login_error_denied">Anmeldung abgebrochen. Bitte versuch es noch einmal.</string>
+    <string name="bt_login_notice_password_changed">Dein Passwort wurde geändert — melde dich neu an.</string>
 
     <!-- Erzwungene Passwortänderung (§4 / §6.13) -->
     <string name="bt_pwchange_title">Passwortänderung erforderlich</string>
@@ -3999,6 +4000,7 @@
     <string name="bt_diag_reason_forgot_pin">Abgemeldet nach \"PIN vergessen\"</string>
     <string name="bt_diag_reason_account_deleted">Konto gelöscht</string>
     <string name="bt_diag_reason_storage_switch">Speicherort wurde gewechselt</string>
+    <string name="bt_diag_reason_password_changed">Dein Passwort wurde geändert</string>
     <string name="bt_diag_reason_account_gate">Dieses Konto darf die App nicht nutzen</string>
     <string name="bt_diag_reason_refresh_rejected">Der Server hat die Sitzung dieses Geräts beendet</string>
     <string name="bt_diag_reason_refresh_lost">Sitzung nach abgebrochener Verbindung verloren</string>

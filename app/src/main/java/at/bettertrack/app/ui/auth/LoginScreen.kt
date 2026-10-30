@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.auth.LoginError
+import at.bettertrack.app.data.auth.LoginNotice
 import at.bettertrack.app.data.auth.LoginPhase
 import at.bettertrack.app.ui.components.BtBrandmark
 import at.bettertrack.app.ui.components.BtPrimaryButton
@@ -85,6 +86,8 @@ import at.bettertrack.app.ui.theme.BtTheme
  * substance — you have to be able to pick a server BEFORE you sign in to one,
  * because Settings lives behind the login.
  *
+ * @param notice a calm sentence about why the person is here (e.g. their
+ *   password changed), shown in the error line's place while nothing failed.
  * @param serverHost when non-null, shows that bottom "Server: <host>" line.
  *   Passed only where the setting exists (the `github` flavor).
  * @param onOpenServer opens the Server screen, from the **sheet's** Server row.
@@ -112,6 +115,7 @@ internal fun LoginScreen(
     serverHost: String? = null,
     onOpenServer: (() -> Unit)? = null,
     preLogin: PreLoginNav = rememberPreLoginNav(),
+    notice: LoginNotice? = null,
 ) {
     val bt = BtTheme.colors
     val inProgress = phase is LoginPhase.InProgress
@@ -214,12 +218,15 @@ internal fun LoginScreen(
                 // Human-readable error surface (never a raw string). A fixed
                 // min-height reserves the line so the button doesn't jump when an
                 // error appears.
+                // The same line carries a notice (why you are here) when nothing
+                // failed — in the secondary ink, because it is not an error.
                 val errorText = (phase as? LoginPhase.Failed)?.let { messageFor(it.error) }
+                val noticeText = notice?.takeIf { errorText == null && !inProgress }?.let { noticeFor(it) }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = errorText.orEmpty(),
+                    text = errorText ?: noticeText.orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = bt.loss,
+                    color = if (errorText != null) bt.loss else bt.textSecondary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -346,6 +353,13 @@ internal fun LoginScreen(
  * two must not drift.
  */
 private val CHROME_HEIGHT = 48.dp
+
+@Composable
+private fun noticeFor(notice: LoginNotice): String = stringResource(
+    when (notice) {
+        LoginNotice.PASSWORD_CHANGED -> R.string.bt_login_notice_password_changed
+    },
+)
 
 @Composable
 private fun messageFor(error: LoginError): String = stringResource(

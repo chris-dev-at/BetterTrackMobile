@@ -54,8 +54,15 @@ import kotlinx.coroutines.launch
  * Settings → Account → Change password (spec §6.12). Voluntary change: current +
  * new + confirm, an inline strength hint, and the refusal surfaced inline in the
  * app's own words (`POST /auth/change-password`; a wrong current password → 401,
- * which `BtErrorCopy` answers in the user's language). On success the session
- * cookie rotates server-side; the app keeps its bearer.
+ * which `BtErrorCopy` answers in the user's language).
+ *
+ * On success the app ends its own session on purpose
+ * ([at.bettertrack.app.data.auth.AuthRepository.signOutAfterPasswordChange]):
+ * this install's token family is revoked and the login screen says "Your
+ * password changed — sign in again." Platform PR-C revokes every grant on a
+ * password change, this phone's included; ending it here makes the app behave
+ * the same before and after that ships, instead of keeping a bearer that is
+ * about to die and then meeting a forced sign-out nobody explains.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,7 +178,12 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                     submitting = true
                     scope.launch {
                         when (val r = repo.changePassword(current, newPw)) {
-                            is BtResult.Ok -> { done = true; submitting = false; onBack() }
+                            // The screen stays busy until the sign-out swaps
+                            // the whole shell for the login screen.
+                            is BtResult.Ok -> {
+                                done = true
+                                AppGraph.authRepository.requestSignOutAfterPasswordChange()
+                            }
                             is BtResult.Err -> { serverError = r.error.asMessage(); submitting = false }
                         }
                     }

@@ -51,6 +51,7 @@
     <string name="bt_login_error_disabled">This account has been disabled. Contact BetterTrack support.</string>
     <string name="bt_login_error_admin">The BetterTrack app is for personal accounts only.</string>
     <string name="bt_login_error_denied">Sign-in was cancelled. Please try again.</string>
+    <string name="bt_login_notice_password_changed">Your password changed — sign in again.</string>
 
     <!-- Forced password change (spec §4 / §6.13) -->
     <string name="bt_pwchange_title">Password change required</string>
@@ -4225,6 +4226,7 @@
     <string name="bt_diag_reason_forgot_pin">Signed out after \"Forgot PIN\"</string>
     <string name="bt_diag_reason_account_deleted">Account deleted</string>
     <string name="bt_diag_reason_storage_switch">Storage was switched</string>
+    <string name="bt_diag_reason_password_changed">Your password changed</string>
     <string name="bt_diag_reason_account_gate">This account may not use the app</string>
     <string name="bt_diag_reason_refresh_rejected">The server ended this device\'s session</string>
     <string name="bt_diag_reason_refresh_lost">Session lost after a broken connection</string>

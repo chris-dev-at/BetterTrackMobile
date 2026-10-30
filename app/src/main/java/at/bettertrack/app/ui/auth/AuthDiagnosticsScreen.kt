@@ -184,6 +184,7 @@ private fun reasonLabelRes(reason: String): Int = when (reason) {
     SignOutReason.APP_LOCK_FORGOT_PIN.name -> R.string.bt_diag_reason_forgot_pin
     SignOutReason.ACCOUNT_DELETED.name -> R.string.bt_diag_reason_account_deleted
     SignOutReason.STORAGE_MODE_SWITCH.name -> R.string.bt_diag_reason_storage_switch
+    SignOutReason.PASSWORD_CHANGED.name -> R.string.bt_diag_reason_password_changed
     SignOutReason.ACCOUNT_GATE.name -> R.string.bt_diag_reason_account_gate
     SignOutReason.REFRESH_REJECTED.name -> R.string.bt_diag_reason_refresh_rejected
     SignOutReason.REFRESH_REJECTED_AFTER_LOST_RESPONSE.name -> R.string.bt_diag_reason_refresh_lost
@@ -199,7 +200,9 @@ private fun iconFor(reason: String): ImageVector = when (reason) {
     SignOutReason.STORAGE_MODE_SWITCH.name,
     -> Icons.AutoMirrored.Outlined.Logout
 
-    SignOutReason.APP_LOCK_FORGOT_PIN.name -> Icons.Outlined.Lock
+    SignOutReason.APP_LOCK_FORGOT_PIN.name,
+    SignOutReason.PASSWORD_CHANGED.name,
+    -> Icons.Outlined.Lock
 
     SignOutReason.REFRESH_REJECTED.name,
     SignOutReason.REFRESH_REJECTED_AFTER_LOST_RESPONSE.name,

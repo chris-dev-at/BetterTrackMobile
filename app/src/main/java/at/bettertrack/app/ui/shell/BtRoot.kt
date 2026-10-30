@@ -112,6 +112,7 @@ private fun AuthGate(
 
         AuthState.LoggedOut -> {
             val phase by auth.loginPhase.collectAsStateWithLifecycle()
+            val notice by auth.loginNotice.collectAsStateWithLifecycle()
             // The Server screen has to be reachable while LOGGED OUT — you point
             // the app at a backend BEFORE you can sign in to one, and Settings
             // lives behind the login.
@@ -156,6 +157,7 @@ private fun AuthGate(
                         null
                     },
                     preLogin = preLogin,
+                    notice = notice,
                 )
             }
         }

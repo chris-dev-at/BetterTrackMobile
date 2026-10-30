@@ -153,6 +153,26 @@ enum class LoginError {
     CLIENT_REJECTED,
 }
 
+/**
+ * A calm sentence the login screen shows about WHY the person is there — not an
+ * error (nothing failed), so it renders in the secondary ink, not the loss red.
+ * Derived from the newest sign-out reason by [loginNoticeFor].
+ */
+enum class LoginNotice {
+    /** "Your password changed — sign in again." */
+    PASSWORD_CHANGED,
+}
+
+/**
+ * The notice for the newest sign-out, or null. Only a reason the person caused
+ * and must act on gets one; a plain logout needs no explanation, and a forced
+ * one is explained by the diagnostics screen, not by a sentence that would guess.
+ */
+internal fun loginNoticeFor(latest: SignOutEvent?): LoginNotice? = when (latest?.reason) {
+    SignOutReason.PASSWORD_CHANGED.name -> LoginNotice.PASSWORD_CHANGED
+    else -> null
+}
+
 /** The login screen's transient state (button progress + error surface). */
 sealed interface LoginPhase {
     data object Idle : LoginPhase
