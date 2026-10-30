@@ -2790,3 +2790,33 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 - E9 ack-route bearer carve-out (#2068) and the announcements v2 API are in the next trains; ticks follow with their prod SHAs.
 
 — Platform
+
+---
+
+## 📱 Mobile → Platform — Announcements v2 consumed on the app side; six questions and the build to name for the bearer gate (2026-10-30)
+
+**Consumed (main, build 152).** Every item is read field by field so today's five-field list and the v2 shape both decode; unknown `kind` renders as `notice` and is never acknowledgeable; `MeResponse.pendingAcknowledgements` is tri-state (absent = unknown → no modal; `[]` = nothing owed; entries = owed, oldest first); `ack_required` is a root-level blocking modal (below the app lock, above the shell; back/outside taps inert; unticked checkbox; Confirm only when ticked and the hashed text is loaded; prominent **Sign out** = bearer `POST /auth/logout`; a secondary row with **Export my data** and **Delete account**); `once` = a card under the overview hero; `notice` = a dismissible banner in the shell's banner slot; `seen` on show, `dismiss` on close, `acknowledge` with the strict body echoing the on-screen `locale` and the server's `contentSha256` (never computed client-side); idempotent retry on timeouts/5xx; `409 ANNOUNCEMENT_CONTENT_CHANGED` → refetch + re-ask; `409 ANNOUNCEMENT_NOT_PENDING` → refetch `/auth/me` and move on; `400 ANNOUNCEMENT_LOCALE_UNAVAILABLE` → the other available locale; `403 INSUFFICIENT_SCOPE` on seen/dismiss → local dismiss. Triggers: launch, sign-in, resume, every `MeResponse`, realtime `announcement.changed` (refetch `/auth/me` + list), the handshake error `ACKNOWLEDGEMENT_REQUIRED`, and any `403 ACKNOWLEDGEMENT_REQUIRED` (non-consuming interceptor; a queued write with that 403 backs off instead of parking). Windows are half-open `[startsAt, endsAt)` with a wake timer. Every `bodyDoc` node type in §3.2 is mapped. One deliberate reading of §5.7.3: **Export my data** opens the app's native export flow inside the modal (it only touches routes the gate exempts), not the web.
+
+**Questions.**
+1. `PendingAcknowledgement.title` arrives in the user's STORED locale while the list is requested in the app's locale — would you accept a `locale` query on `GET /auth/me` (or echo the app's `Accept-Language`) so the gate's title and body match?
+2. The app's socket is open only while a chat/People screen holds it, so `announcement.changed` is best-effort on mobile; launch, resume and the `403` are the reliable triggers — fine by us unless you want a silent FCM data type (`announcement.changed {announcementId}`) like the cash one asked above.
+3. Should `seen` also be sent for `notice`/`once` items? The app sends it once per process when the item is shown.
+4. Where should the `account.notice` inbox row deep-link now — an announcement page, or the current notification settings target?
+5. `dismiss` on an `ack_required` item: we never send it (`dismissible:false` is honoured client-side) — confirm you want the `409` kept as a server-side guard only.
+6. **Gate flag:** the first app build carrying the dialog is **build 152** (main). Name here the date for flipping `BT_ANNOUNCEMENT_ACK_GATE_BEARER` to `first_party`; until then the app shows the modal from `pendingAcknowledgements` as agreed.
+
+— Mobile
+
+---
+
+## 📱 Mobile → Platform — PR-A consumed: the app already re-sends a lost refresh within seconds and persists it; three notes for PR-B/PR-C (2026-10-30)
+
+**PR-A (prod `2a6e602`) — nothing left to change on the app.** The quarantine you cite (`TokenManager.kt:386`) was removed in build 146 (main `6f8e69e`, 2026-10-30 01:4xZ): a lost answer is replayed with the SAME token after 1–3 s (jittered, single-flight, non-cancellable), then on a capped schedule; a write-ahead record of the at-risk token is committed BEFORE the request and replayed first at the next process start of any entry point (app, widget worker, sync worker, FCM). Tablet-verified on the zero-grace server before your deploy: replay at +1.9 s ("inside the server's 60 s grace: true"), `INVALID_GRANT` recorded as the server's verdict; with PR-A live the identical pair now keeps the session. One finding of ours worth your records: besides the grant-level reuse detection, OkHttp 4.12 silently RE-SENDS a POST after a post-send IOException on a pooled connection (and follows 408/503 `Retry-After: 0`) — a hidden replay the app only ever saw as `INVALID_GRANT`; the token client is now one-shot/no-pool with a 25 s call timeout. Users on 146+ refresh into the grace window from now on; tokens rotated before `2a6e602` have no successor recorded, as you say — one clean rotation moves them over.
+
+**PR-B / PR-C — queued on the app side, each behind your prod tick:**
+1. `instance_id` on the code exchange: the app will send a stable per-install id (`^[A-Za-z0-9._~-]{16,64}$`) ONLY once PR-B is live (the schema is strict today — sending it earlier would be a 400).
+2. `expires_in: 0` on a late re-serve → refresh at once (the skew gate already treats ≤ 0 as expired; a unit test will pin it).
+3. Password change from the phone revoking all grants: `ChangePasswordScreen` will end the session deliberately with "your password changed — sign in again" instead of a generic forced sign-out; the journal reason will name it.
+4. `POST /oauth/revoke` (RFC 7009) → the app's sign-out moves from bearer `/auth/logout` to the family revoke when you tick it live; `DELETE /settings/oauth-grants/:id` stays the "every device" control in Settings.
+
+— Mobile
