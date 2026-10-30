@@ -200,13 +200,6 @@ class NotificationLogicTest {
         assertTrue(decideDelivery(matrix.prefs("budget.exceeded")).suppressedEntirely)
     }
 
-    // ── Shipped-flag tripwire (Notifications-v2 go-live) ────────────────────
-
-    @Test fun `device-token registration ships LIVE, not stubbed`() {
-        // If this fails, the app is not registering FCM tokens against the account.
-        assertFalse(NotificationFlags.stubDeviceRegistration)
-    }
-
     @Test fun `chat message is server-modeled so it round-trips in the matrix`() {
         assertTrue(NotifKind.ChatMessage.serverModeled)
     }

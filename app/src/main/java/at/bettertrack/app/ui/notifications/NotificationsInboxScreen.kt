@@ -88,7 +88,6 @@ import at.bettertrack.app.data.notifications.AppNotification
 import at.bettertrack.app.data.notifications.NotifDeepLink
 import at.bettertrack.app.data.notifications.NotifKind
 import at.bettertrack.app.data.notifications.NotifView
-import at.bettertrack.app.data.notifications.NotificationFlags
 import at.bettertrack.app.data.notifications.resolveDeepLink
 import at.bettertrack.app.data.push.BtMessagingService
 import at.bettertrack.app.di.AppGraph
@@ -132,10 +131,9 @@ private enum class BulkConfirm { DeleteArchived, DeleteAll }
  * not a sync error. The app stays server-driven: against a pre-v4 deployment (read ≠
  * archive) the same actions still behave sanely.
  *
- * Behind [NotificationFlags.archiveDeleteEnabled]: the Active|Archived|All filter,
- * per-item archive/unarchive/delete, and bulk delete-all-archived / delete-all (both
- * behind destructive confirm dialogs). When the flag is off the screen is the
- * pre-#437 flat inbox.
+ * Notifications-v3 (#437): the Active|Archived|All filter, per-item
+ * archive/unarchive/delete, and bulk delete-all-archived / delete-all (both behind
+ * destructive confirm dialogs).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,7 +145,6 @@ fun NotificationsInboxScreen(
     val context = LocalContext.current
     val repo = AppGraph.notificationRepository
     val scope = rememberCoroutineScope()
-    val actionsEnabled = NotificationFlags.archiveDeleteEnabled
 
     val notifications by repo.items.collectAsStateWithLifecycle()
     val unread by repo.unreadCount.collectAsStateWithLifecycle()
@@ -302,9 +299,7 @@ fun NotificationsInboxScreen(
             // scrolling area: it is what the list IS, not something in it, and a
             // user who has read their way down Archived must be able to get back
             // to Active without scrolling to the top to find the control.
-            if (actionsEnabled) {
-                InboxFilter(selected = selectedView, onSelect = { selectedView = it })
-            }
+            InboxFilter(selected = selectedView, onSelect = { selectedView = it })
             Box(Modifier.fillMaxSize()) {
                 when (phase) {
                     InboxPhase.Loading -> InboxSkeleton()
@@ -330,7 +325,7 @@ fun NotificationsInboxScreen(
                     ) {
                         if (notifications.isEmpty()) {
                             BtStateFill {
-                                EmptyForView(selectedView, actionsEnabled, Modifier)
+                                EmptyForView(selectedView, Modifier)
                             }
                         } else {
                             LazyColumn(
@@ -348,7 +343,6 @@ fun NotificationsInboxScreen(
                                 items(notifications, key = { it.id }) { n ->
                                     NotificationRow(
                                         notification = n,
-                                        showActions = actionsEnabled,
                                         onClick = {
                                             scope.launch { repo.markRead(listOf(n.id)) }
                                             // Announcements v2: an announcement row is a record, not
@@ -386,21 +380,19 @@ fun NotificationsInboxScreen(
                                 // sweep at all on Active (whose rows are still
                                 // work), delete-archived under Archived,
                                 // delete-everything under All.
-                                if (actionsEnabled) {
-                                    val bulk = when (selectedView) {
-                                        NotifView.Active -> null
-                                        NotifView.Archived ->
-                                            BulkConfirm.DeleteArchived.takeIf { archivedCount > 0 }
-                                        NotifView.All ->
-                                            BulkConfirm.DeleteAll.takeIf { totalCount > 0 }
-                                    }
-                                    if (bulk != null) {
-                                        item(key = "bulk-danger") {
-                                            InboxDangerRow(
-                                                which = bulk,
-                                                onClick = { bulkConfirm = bulk },
-                                            )
-                                        }
+                                val bulk = when (selectedView) {
+                                    NotifView.Active -> null
+                                    NotifView.Archived ->
+                                        BulkConfirm.DeleteArchived.takeIf { archivedCount > 0 }
+                                    NotifView.All ->
+                                        BulkConfirm.DeleteAll.takeIf { totalCount > 0 }
+                                }
+                                if (bulk != null) {
+                                    item(key = "bulk-danger") {
+                                        InboxDangerRow(
+                                            which = bulk,
+                                            onClick = { bulkConfirm = bulk },
+                                        )
                                     }
                                 }
 
@@ -576,8 +568,8 @@ private fun FilterSegment(label: String, selected: Boolean, modifier: Modifier, 
 }
 
 @Composable
-private fun EmptyForView(view: NotifView, actionsEnabled: Boolean, modifier: Modifier) {
-    val archived = actionsEnabled && view == NotifView.Archived
+private fun EmptyForView(view: NotifView, modifier: Modifier) {
+    val archived = view == NotifView.Archived
     BtEmptyState(
         modifier = modifier,
         icon = if (archived) Icons.Outlined.Archive else Icons.Outlined.NotificationsNone,
@@ -625,7 +617,6 @@ private fun EnablePushPrompt(onEnable: () -> Unit) {
 @Composable
 private fun NotificationRow(
     notification: AppNotification,
-    showActions: Boolean,
     onClick: () -> Unit,
     /** Non-null on an alert row only — the "Manage alerts" quick-entry (S6 P1-10). */
     onAlerts: (() -> Unit)?,
@@ -678,21 +669,19 @@ private fun NotificationRow(
                         Spacer(Modifier.width(8.dp))
                         BtUnreadDot()
                     }
-                    if (showActions) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier.size(width = 22.dp, height = 20.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            RowOverflow(
-                                notification = notification,
-                                title = rowTitle,
-                                onAlerts = onAlerts,
-                                onArchive = onArchive,
-                                onUnarchive = onUnarchive,
-                                onDelete = onDelete,
-                            )
-                        }
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier.size(width = 22.dp, height = 20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RowOverflow(
+                            notification = notification,
+                            title = rowTitle,
+                            onAlerts = onAlerts,
+                            onArchive = onArchive,
+                            onUnarchive = onUnarchive,
+                            onDelete = onDelete,
+                        )
                     }
                 }
                 Spacer(Modifier.size(3.dp))
@@ -701,7 +690,7 @@ private fun NotificationRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = bt.textSecondary,
                 )
-                if (showActions && notification.isArchived) {
+                if (notification.isArchived) {
                     Spacer(Modifier.size(4.dp))
                     Text(
                         stringResource(R.string.bt_notif_archived_label),

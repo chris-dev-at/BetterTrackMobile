@@ -7,25 +7,23 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.DeregisterDeviceRequest
 import at.bettertrack.app.data.api.dto.RegisterDeviceRequest
-import at.bettertrack.app.data.notifications.NotificationFlags
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
-/** What to do with an obtained FCM token, given session + flag state. */
+/** What to do with an obtained FCM token, given the session state. */
 enum class RegistrationAction { Register, DeferUntilLogin, Skip }
 
 /**
  * Pure gating for device-token registration (unit-tested): nothing to do without
- * a token or while the feature is stubbed; a token obtained while **logged out**
+ * a token; a token obtained while **logged out**
  * is DEFERRED and re-tried on the next login; only a logged-in session registers
  * now. Keeps the side-effecting manager below a thin executor of this decision.
  */
-fun registrationAction(hasToken: Boolean, loggedIn: Boolean, stubbed: Boolean): RegistrationAction =
+fun registrationAction(hasToken: Boolean, loggedIn: Boolean): RegistrationAction =
     when {
-        stubbed -> RegistrationAction.Skip
         !hasToken -> RegistrationAction.Skip
         !loggedIn -> RegistrationAction.DeferUntilLogin
         else -> RegistrationAction.Register
@@ -96,10 +94,9 @@ class PushTokenManager(
     /**
      * Logout is underway — best-effort DELETE the token BEFORE credentials are
      * wiped. Bounded by [DEREGISTER_TIMEOUT_MS] and fully fail-soft: logout must
-     * never block or fail on it. A no-op when there's nothing registered/stubbed.
+     * never block or fail on it. A no-op when there's nothing registered.
      */
     suspend fun deregisterCurrentToken() {
-        if (NotificationFlags.stubDeviceRegistration) return
         val token = cachedToken ?: return
         withTimeoutOrNull(DEREGISTER_TIMEOUT_MS) {
             runCatching {
@@ -114,9 +111,9 @@ class PushTokenManager(
     private fun register(token: String) {
         if (token.isBlank()) return
         cachedToken = token
-        when (registrationAction(hasToken = true, loggedIn = isLoggedIn(), stubbed = NotificationFlags.stubDeviceRegistration)) {
-            RegistrationAction.Skip ->
-                Log.i(TAG, "Device-token registration stubbed — skipped (length=${token.length}).")
+        when (registrationAction(hasToken = true, loggedIn = isLoggedIn())) {
+            // Unreachable here (hasToken = true); kept so the `when` stays exhaustive.
+            RegistrationAction.Skip -> Unit
             RegistrationAction.DeferUntilLogin ->
                 Log.i(TAG, "Logged out — deferring device registration to next login (length=${token.length}).")
             RegistrationAction.Register -> scope.launch {

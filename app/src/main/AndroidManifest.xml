@@ -187,7 +187,7 @@
         <!--
           Step 16 (§6.11): Firebase Cloud Messaging entry point. onMessageReceived
           posts to a channel + the in-app inbox; onNewToken hands the token to the
-          (stubbed) device-token register. Real end-to-end push delivery is
+          device-token register. Real end-to-end push delivery is
           platform-gated (server FCM sender + device-token endpoint).
         -->
         <service

@@ -20,7 +20,7 @@ import java.util.UUID
 
 /**
  * FCM entry point (Step 16, §6.11). `onNewToken` hands the rotated token to the
- * (stubbed) register path; `onMessageReceived` funnels a data push through the
+ * register path; `onMessageReceived` funnels a data push through the
  * SAME [postIncoming] pipeline the debug "simulate" action uses — so the whole
  * delivery path (mute/push gating → inbox insert → system notification with a
  * deep-link tap) is device-verifiable without the platform's push sender.

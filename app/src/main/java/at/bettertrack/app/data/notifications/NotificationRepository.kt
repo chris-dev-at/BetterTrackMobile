@@ -18,38 +18,6 @@ import kotlinx.serialization.json.Json
 import retrofit2.Response
 import java.time.Instant
 
-/** Notifications feature flags (tripwire-tested: see NotificationLogicTest). */
-object NotificationFlags {
-    /**
-     * Device-token register/refresh/delete against `POST|DELETE /notifications/devices`.
-     * LIVE on Notifications-v2 (platform PR #427) → `false`. Kept as an explicit
-     * kill-switch: flip back to `true` to disable all device-token traffic without
-     * ripping out the wiring. (Real FCM *sends* are still dark until the owner
-     * installs the Firebase key server-side — platform #421 — but token
-     * registration itself is live and verifiable.)
-     */
-    const val stubDeviceRegistration: Boolean = false
-
-    /**
-     * Notification ARCHIVE + DELETE UX (Notifications-v3, platform #437).
-     *
-     * When `true`: the inbox shows the Active|Archived|All filter, per-item
-     * archive/unarchive/delete + bulk archive-all-read / delete-all-archived /
-     * delete-all, and `GET /notifications` is called with `view=`. The bell badge
-     * is unread-ACTIVE only.
-     *
-     * When `false`: the app behaves EXACTLY as before #437 — a single flat inbox,
-     * mark-read only, no `view=` param, no archive/delete affordances. This keeps
-     * the UI truthful while the platform ships #437 (never fake archive/delete
-     * locally — a refresh would resurrect the rows). Kept as a kill-switch.
-     *
-     * ON since 2026-07-11: platform PR #440 live on prod (`fb09efd`), as-shipped
-     * semantics in PLATFORM_ASKS.md update #13 — no deviations from the built
-     * shape except the bulk path (`archive-all-read`), already reconciled.
-     */
-    const val archiveDeleteEnabled: Boolean = true
-}
-
 /** Which backend is currently feeding the inbox. */
 enum class NotifSource { Unknown, Live }
 
@@ -186,10 +154,7 @@ class DefaultNotificationRepository(
 
     override suspend fun refresh(view: NotifView): BtResult<Unit> {
         lastView = view
-        // Only send `view=` once #437 is enabled; otherwise behave exactly as the
-        // pre-v3 client (server default = active, archived rows simply absent).
-        val viewParam = if (NotificationFlags.archiveDeleteEnabled) view.wire else null
-        return when (val r = apiCall(json) { api.notifications(view = viewParam) }) {
+        return when (val r = apiCall(json) { api.notifications(view = view.wire) }) {
             is BtResult.Ok -> {
                 _source.value = NotifSource.Live
                 val mapped = r.value.items.map(::mapItem).sortedByDescending { it.createdAtMs }
