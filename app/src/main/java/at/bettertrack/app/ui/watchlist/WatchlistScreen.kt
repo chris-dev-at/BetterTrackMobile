@@ -426,10 +426,8 @@ fun WatchlistPanel(
                     onClick = { vm.selectBoard(board.id) },
                 )
             }
-            if (true) { // named watchlists are LIVE (V3-P5)
-                IconButton(onClick = { createOpen = true }) {
-                    Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.bt_watchlist_new), tint = bt.goldInk)
-                }
+            IconButton(onClick = { createOpen = true }) {
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.bt_watchlist_new), tint = bt.goldInk)
             }
         }
 
