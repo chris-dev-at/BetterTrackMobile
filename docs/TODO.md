@@ -652,3 +652,6 @@ Context: owner on ~30 h holiday, both sides autonomous. **Prod is OFFLINE delibe
 > 6. **Page sheets**: holding detail, transactions, transaction form (submit bar above the taskbar, keyboard up/down), asset page, settings, about, conglomerate detail — centred 640dp surface, full height, rounded top corners, scrim both sides with the pages visible (not black) behind it; tap a gutter → top sheet closes; grabber pull-down, back-swipe between two stacked sheets, predictive back all still work.
 > 7. **Bottom sheets**: portfolio switcher, a Settings picker (Theme), an action sheet — capped at 640dp AND the last row/close button clears the taskbar. If any does not, note which: M3's default content insets are in place, so the fix would be device-specific (e.g. `tappableElement`) in a shared wrapper.
 > 8. **Phone regression (Compact)**: bottom bar, full-width pages and full-width sheets exactly as before; occlusion still culls under a settled sheet (no perf regression on sheet drags).
+
+### 2026-10-30 — maintainer program, bug batch 1 (MB-01, -02, -03, -04, -07, -08, -09)
+> Seven owner-visible bugs from `docs/MAINTENANCE_BACKLOG.md` fixed, one commit each, each guarded by a test proven red before the fix; rows (what, why, guard, commit) in `docs/MAINTENANCE_LEDGER.md`. MB-05 investigated by reading only (candidates in the ledger). DEVICE VERIFICATION PENDING.
