@@ -52,6 +52,17 @@ interface GoogleAuthProvider {
      * method.
      */
     suspend fun markExpired() = Unit
+
+    /**
+     * Told by [DriveDataHome] when Drive answered 400/401 with an explicit
+     * `invalid_grant` / `invalid_token` envelope — the grant itself is gone, not
+     * just this token, so re-minting silently cannot help.
+     *
+     * Mirrors `markRevoked` on the web token client (`tokens: Pick<…,
+     * 'getAccessToken' | 'markExpired' | 'markRevoked'>`, driveDataHome.ts:128
+     * @ef73d282). No-op default, like [markExpired].
+     */
+    suspend fun markRevoked() = Unit
 }
 
 /**

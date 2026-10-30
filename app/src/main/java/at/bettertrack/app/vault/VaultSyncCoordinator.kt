@@ -540,6 +540,9 @@ class VaultSyncCoordinator(
         DataHomeFailureCode.CONSENT_REQUIRED, DataHomeFailureCode.TOKEN_EXPIRED,
         DataHomeFailureCode.GESTURE_REQUIRED, DataHomeFailureCode.PERMISSION_DENIED,
         DataHomeFailureCode.SCOPE_MISSING,
+        // dataHome.ts @ef73d282: a revoked grant and a different Google account
+        // are both fixed by one act — signing in again (as the right account).
+        DataHomeFailureCode.REVOKED, DataHomeFailureCode.IDENTITY_MISMATCH,
         -> VaultSyncStatus.SIGN_IN_REQUIRED
 
         DataHomeFailureCode.QUOTA_EXCEEDED -> VaultSyncStatus.QUOTA_FULL

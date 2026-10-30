@@ -45,6 +45,16 @@ class FakeDriveServer(private val expectedFileName: String) {
     /** Set to make every subsequent request answer 401. */
     var tokenExpired: Boolean = false
 
+    /**
+     * Set to make every subsequent request answer this status with [revokedBody]
+     * — the upstream case is 400 `{"error":"invalid_grant","error_description":
+     * "authorization revoked"}` (driveDataHome.test.ts:1240-1253 @ef73d282).
+     */
+    var revokedGrantStatus: Int? = null
+
+    /** The body [revokedGrantStatus] answers with. */
+    var revokedBody: String = """{"error":"invalid_grant","error_description":"authorization revoked"}"""
+
     /** Set to make `files.list` answer a body that is not a file list at all. */
     var malformedListing: Boolean = false
 
@@ -122,6 +132,7 @@ class FakeDriveServer(private val expectedFileName: String) {
         requestLog += "${request.method} ${request.path?.substringBefore('?')}"
 
         if (tokenExpired) return MockResponse().setResponseCode(401).setBody("""{"error":{"code":401}}""")
+        revokedGrantStatus?.let { return MockResponse().setResponseCode(it).setBody(revokedBody) }
         if (quotaExceeded) return quotaResponse()
 
         val path = request.requestUrl?.encodedPath.orEmpty()

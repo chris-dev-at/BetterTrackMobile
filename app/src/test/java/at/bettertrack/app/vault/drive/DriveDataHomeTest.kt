@@ -122,6 +122,55 @@ class DriveDataHomeTest {
     }
 
     /**
+     * driveDataHome.test.ts:1240-1253 @ef73d282: a 400 `invalid_grant` body is
+     * `revoked`, and the token source is told exactly once (`markRevoked`), not
+     * `markExpired` — re-minting cannot bring a revoked grant back.
+     */
+    @Test
+    fun reportsARevokedGrantAndTellsTheProviderOnce() = runBlocking {
+        drive.revokedGrantStatus = 400
+
+        val result = home().read()
+        val transport = result as? DataHomeTransport ?: throw AssertionError("got $result")
+        assertEquals(DataHomeFailureCode.REVOKED, transport.failure.code)
+        assertEquals(400, transport.failure.httpStatus)
+        assertEquals(1, auth.revokedCalls)
+        assertFalse("a revocation is not an expiry", auth.markedExpired)
+    }
+
+    /** Same envelope on a 401 — `response.status === 400 || response.status === 401`. */
+    @Test
+    fun reportsARevokedGrantOnA401Too() = runBlocking {
+        drive.revokedGrantStatus = 401
+
+        val transport = home().read() as DataHomeTransport
+        assertEquals(DataHomeFailureCode.REVOKED, transport.failure.code)
+        assertEquals(401, transport.failure.httpStatus)
+        assertEquals(1, auth.revokedCalls)
+    }
+
+    /**
+     * Negative space. Drive's own ambiguous 401 ("Invalid Credentials") must stay
+     * an EXPIRY (silent re-mint), and an `invalid_grant` body on any status but
+     * 400/401 is not consulted at all (403 stays permission-denied).
+     */
+    @Test
+    fun keepsTheAmbiguous401AnExpiryAndIgnoresTheBodyOnOtherStatuses() = runBlocking {
+        drive.revokedGrantStatus = 401
+        drive.revokedBody = """{"error":{"code":401,"message":"Invalid Credentials","status":"UNAUTHENTICATED"}}"""
+        val expired = home().read() as DataHomeTransport
+        assertEquals(DataHomeFailureCode.TOKEN_EXPIRED, expired.failure.code)
+        assertTrue(auth.markedExpired)
+        assertEquals(0, auth.revokedCalls)
+
+        drive.revokedGrantStatus = 403
+        drive.revokedBody = """{"error":"invalid_grant"}"""
+        val denied = home().read() as DataHomeTransport
+        assertEquals(DataHomeFailureCode.PERMISSION_DENIED, denied.failure.code)
+        assertEquals(0, auth.revokedCalls)
+    }
+
+    /**
      * `null` from the provider means "the user must sign in" — a first-class,
      * expected answer. Plan §2.6: never a silent stall.
      */

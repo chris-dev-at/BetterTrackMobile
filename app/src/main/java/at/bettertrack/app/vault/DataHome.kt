@@ -63,7 +63,7 @@ data class DataHomeInfo(
 )
 
 /**
- * `DataHomeTransportFailure.code` (dataHome.ts:19-25), plus one app-side member.
+ * `DataHomeTransportFailure.code` (dataHome.ts:21-29 @ef73d282), plus the app-side members.
  *
  * [QUOTA_EXCEEDED] does **not** exist in the reference, which folds a Drive 403
  * into `permission-denied`. The app needs the two apart because they are
@@ -78,6 +78,24 @@ enum class DataHomeFailureCode(val wire: String) {
     CONSENT_REQUIRED("consent-required"),
     TOKEN_EXPIRED("token-expired"),
     GESTURE_REQUIRED("gesture-required"),
+
+    /**
+     * `revoked` (dataHome.ts:26 @ef73d282): Drive answered 400/401 with an
+     * explicit `invalid_grant` / `invalid_token` envelope (`hasRevokedGrant`,
+     * drive/driveDataHome.ts:1239). The provider was told
+     * ([at.bettertrack.app.vault.drive.GoogleAuthProvider.markRevoked]); only a
+     * fresh sign-in recovers.
+     */
+    REVOKED("revoked"),
+
+    /**
+     * `identity-mismatch` (dataHome.ts:27 @ef73d282): the web's Drive identity
+     * verification found a different Google account than the one the vault is
+     * bound to. The app's Drive port predates that verification (vault pass
+     * 2026-10-30 item 5), so nothing produces it yet; carried so the reason
+     * vocabulary and its status projection match the reference.
+     */
+    IDENTITY_MISMATCH("identity-mismatch"),
     PERMISSION_DENIED("permission-denied"),
 
     /** App-side extension — see the enum doc. Drive `storageQuotaExceeded`. */

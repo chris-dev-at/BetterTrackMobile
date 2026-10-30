@@ -568,3 +568,34 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 #    stays opaque; bounded patterns CASH_RULE_PATTERN_MAX = 200 /
 #    EXPENSE_RULE_PATTERN_MAX = 200 live in the unported row schemas; import-row
 #    sub-schemas: data opaque.
+#    commit a0a62f8.
+#
+# 3. dataHome.ts reasons — PORTED. `DataHomeFailureCode.REVOKED("revoked")` and
+#    `IDENTITY_MISMATCH("identity-mismatch")` sit after GESTURE_REQUIRED
+#    (dataHome.ts:26-27 order). `hasRevokedGrant` (drive/driveDataHome.ts:
+#    1239-1253) is `DriveResponse.hasRevokedGrant()`; `driveFetch` checks it on
+#    a 400/401 BEFORE the 401 branch (driveDataHome.ts:1193-1203) ->
+#    `auth.markRevoked()` + REVOKED with the response's status; the ambiguous
+#    plain 401 ("Invalid Credentials") stays TOKEN_EXPIRED. New seam
+#    `GoogleAuthProvider.markRevoked()` (no-op default, like markExpired).
+#    `VaultSyncCoordinator.statusFor`: both new reasons -> SIGN_IN_REQUIRED.
+#    No UI maps DataHomeFailureCode (the chip renders VaultSyncStatus), so no
+#    new copy. IDENTITY_MISMATCH has no producer yet: the identity verification
+#    lives in the rewritten Drive file (item 5).
+#    Exactness guard: `tools/domain-vectors/generate-drive-revoked-grant.mjs`
+#    slices `hasRevokedGrant` out of the vendored file and RUNS it on 27
+#    hand-chosen bodies; the answers (12 revoked) land in
+#    app/src/test/resources/vault-vectors/drive-revoked-grant.fixture.json
+#    (`_source` carries the function-text and file sha256) and
+#    `DriveRevokedGrantVectorTest` replays them. The cases pin the JS semantics
+#    the port reproduces: BOM dropped by response.json(), null/array/string
+#    payloads, `?? ''` on JSON null, template stringification of arrays and
+#    objects, and `/iu` = Unicode SIMPLE case folding (Kelvin sign folds to k;
+#    dotless i / dotted I do not fold to i — Java's UNICODE_CASE would say they
+#    do, so the port folds A-Z + U+212A itself). Tests beside
+#    `reportsAnExpiredTokenAndTellsTheProvider`: 400 revoked (the upstream case,
+#    driveDataHome.test.ts:1240-1253 — markRevoked exactly once, not
+#    markExpired), 401 revoked, negative space (ambiguous 401 -> expired, 403
+#    body ignored -> permission-denied); coordinator: both reasons ->
+#    SIGN_IN_REQUIRED. Red first: 4 red (vector replay, both revoked reads, the
+#    coordinator case), negative space green before and after.

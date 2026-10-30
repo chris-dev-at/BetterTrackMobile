@@ -25,6 +25,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
@@ -556,6 +558,19 @@ class DriveDataHome(
             )
         }
 
+        // `hasRevokedGrant` before the 401 branch, as driveDataHome.ts:1193-1203
+        // orders it: an explicit invalid_grant/invalid_token envelope on a 400 or
+        // 401 is a revoked grant, which no silent re-mint can recover.
+        if ((response.code == 400 || response.code == 401) && response.hasRevokedGrant()) {
+            auth.markRevoked()
+            return Fetched.Failure(
+                DataHomeTransportFailure(
+                    "The Google Drive connection was revoked. Sign in again to sync.",
+                    code = DataHomeFailureCode.REVOKED,
+                    httpStatus = response.code,
+                )
+            )
+        }
         if (response.code == 401) {
             auth.markExpired()
             return Fetched.Failure(
@@ -715,6 +730,80 @@ internal class DriveResponse(val code: Int, val body: ByteArray) {
         val errors = error["errors"] as? JsonArray
         val inErrors = errors?.any { (it as? JsonObject)?.get("reason")?.let(::stringOrNull) == reason } == true
         return inErrors || stringOrNull(error["status"]) == reason || stringOrNull(error["reason"]) == reason
+    }
+}
+
+/**
+ * `hasRevokedGrant` (drive/driveDataHome.ts:1239-1253 @ef73d282), line for line.
+ *
+ * Only an explicit `invalid_grant` / `invalid_token` envelope is proof of
+ * revocation. Drive answers BOTH an expired and a revoked token with a plain
+ * 401 `UNAUTHENTICATED` / "Invalid Credentials", which cannot tell them apart,
+ * so that shape falls through to `markExpired()` and a silent re-mint — reading
+ * it as revocation would strand a recoverable session behind a sign-in prompt.
+ *
+ * The JS semantics it depends on, reproduced exactly (guard:
+ * `DriveRevokedGrantVectorTest`, whose expectations the platform function itself
+ * computed — tools/domain-vectors/generate-drive-revoked-grant.mjs):
+ *  - `response.json()` decodes UTF-8 dropping a leading BOM, then `JSON.parse`;
+ *    any throw (incl. reading `.error` of a `null` payload) → `false`.
+ *  - `typeof payload.error === 'string'` picks `${error} ${error_description ?? ''}`,
+ *    anything else `${error?.status ?? ''} ${error?.message ?? ''}` — only an
+ *    OBJECT `error` has properties; template literals stringify via [jsTemplate].
+ *  - `/invalid[_ -]?(grant|token)/iu`: with the `u` flag, case-insensitivity is
+ *    Unicode SIMPLE case folding — the only code points folding onto the
+ *    pattern's letters are ASCII A-Z and U+212A KELVIN SIGN (→ `k`); `ı`/`İ` do
+ *    NOT fold to `i` (Java's UNICODE_CASE would say they do), hence [foldForRevokedGrant].
+ */
+internal fun DriveResponse.hasRevokedGrant(): Boolean {
+    val payload = try {
+        Json.parseToJsonElement(body.toString(Charsets.UTF_8).removePrefix("﻿")) as? JsonObject
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    } ?: return false
+    val error = payload["error"]
+    val detail = if (error is JsonPrimitive && error.isString) {
+        "${error.content} ${jsTemplate(payload["error_description"].orUndefinedIfNull())}"
+    } else {
+        val errorObject = error as? JsonObject
+        "${jsTemplate(errorObject?.get("status").orUndefinedIfNull())} " +
+            jsTemplate(errorObject?.get("message").orUndefinedIfNull())
+    }
+    return REVOKED_GRANT.containsMatchIn(foldForRevokedGrant(detail))
+}
+
+/** `x ?? ''` before a template: JSON `null` and an absent member both become `''`. */
+private fun JsonElement?.orUndefinedIfNull(): JsonElement? = if (this is JsonNull) null else this
+
+/**
+ * A JSON value as a JS template literal renders it: strings verbatim, booleans
+ * as `true`/`false`, arrays via `Array.prototype.join(',')` (null members
+ * empty), objects as `[object Object]`, absent as `''` (after `??`). Numbers
+ * keep their JSON text — JS would canonicalize it (`7.0` → `7`), but number text
+ * holds no letter run the pattern could use and is always delimited by a space
+ * or comma, so the answer cannot differ.
+ */
+private fun jsTemplate(element: JsonElement?): String = when (element) {
+    null, is JsonNull -> ""
+    is JsonPrimitive -> element.content
+    is JsonArray -> element.joinToString(",") { if (it is JsonNull) "" else jsTemplate(it) }
+    is JsonObject -> "[object Object]"
+}
+
+private val REVOKED_GRANT = Regex("invalid[_ -]?(grant|token)")
+
+/** JS `/iu` canonicalization restricted to what can meet the pattern — see [hasRevokedGrant]. */
+private fun foldForRevokedGrant(text: String): String = buildString(text.length) {
+    for (c in text) {
+        append(
+            when (c) {
+                in 'A'..'Z' -> c + ('a' - 'A')
+                'K' -> 'k'
+                else -> c
+            }
+        )
     }
 }
 

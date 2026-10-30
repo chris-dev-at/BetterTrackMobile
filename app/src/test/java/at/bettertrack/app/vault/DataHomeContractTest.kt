@@ -242,6 +242,14 @@ class FixedTokenAuthProvider(private val token: String?) : GoogleAuthProvider {
     override suspend fun markExpired() {
         markedExpired = true
     }
+
+    /** How often [markRevoked] was called — the web test asserts exactly once. */
+    var revokedCalls: Int = 0
+        private set
+
+    override suspend fun markRevoked() {
+        revokedCalls += 1
+    }
 }
 
 /** Isolated so the local-only extensions are not asserted against Drive. */

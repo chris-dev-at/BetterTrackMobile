@@ -1,0 +1,142 @@
+{
+  "_source": "tools/domain-vectors/vendor/web-vault/drive/driveDataHome.ts hasRevokedGrant (function text sha256 0d1753b55f998dc76929f035c019d7a3aee2e17ff4a2510dd6ea0bff7598ed51, file sha256 0816e9d59715cbf7cbd49d12f7f10ec11f482cc29269f3f6937a3e403254d4bc)",
+  "_generator": "tools/domain-vectors/generate-drive-revoked-grant.mjs",
+  "_note": "revoked = the platform function run on new Response(body); inputs hand-chosen, outputs computed.",
+  "cases": [
+    {
+      "name": "upstream test: 400 invalid_grant string error",
+      "body": "{\"error\":\"invalid_grant\",\"error_description\":\"authorization revoked\"}",
+      "revoked": true
+    },
+    {
+      "name": "Drive ambiguous 401 Invalid Credentials",
+      "body": "{\"error\":{\"code\":401,\"message\":\"Invalid Credentials\",\"status\":\"UNAUTHENTICATED\"}}",
+      "revoked": false
+    },
+    {
+      "name": "FakeDriveServer expired body",
+      "body": "{\"error\":{\"code\":401}}",
+      "revoked": false
+    },
+    {
+      "name": "empty body",
+      "body": "",
+      "revoked": false
+    },
+    {
+      "name": "not JSON at all",
+      "body": "invalid_grant",
+      "revoked": false
+    },
+    {
+      "name": "JSON null",
+      "body": "null",
+      "revoked": false
+    },
+    {
+      "name": "JSON string top level",
+      "body": "\"invalid_grant\"",
+      "revoked": false
+    },
+    {
+      "name": "JSON array top level",
+      "body": "[{\"error\":\"invalid_grant\"}]",
+      "revoked": false
+    },
+    {
+      "name": "upper-case string error",
+      "body": "{\"error\":\"INVALID_GRANT\"}",
+      "revoked": true
+    },
+    {
+      "name": "description carries it",
+      "body": "{\"error\":\"invalid_request\",\"error_description\":\"Invalid token format\"}",
+      "revoked": true
+    },
+    {
+      "name": "object error message",
+      "body": "{\"error\":{\"message\":\"Invalid token\"}}",
+      "revoked": true
+    },
+    {
+      "name": "object error status",
+      "body": "{\"error\":{\"status\":\"INVALID_GRANT\"}}",
+      "revoked": true
+    },
+    {
+      "name": "hyphen separator",
+      "body": "{\"error\":\"invalid-token\"}",
+      "revoked": true
+    },
+    {
+      "name": "no separator",
+      "body": "{\"error\":\"invalidgrant\"}",
+      "revoked": true
+    },
+    {
+      "name": "double underscore",
+      "body": "{\"error\":\"invalid__grant\"}",
+      "revoked": false
+    },
+    {
+      "name": "dotless i (no simple case folding to i)",
+      "body": "{\"error\":\"ınvalid_grant\"}",
+      "revoked": false
+    },
+    {
+      "name": "dotted capital I (no simple case folding to i)",
+      "body": "{\"error\":\"İnvalid_grant\"}",
+      "revoked": false
+    },
+    {
+      "name": "Kelvin sign folds to k",
+      "body": "{\"error\":\"invalid_toKen\"}",
+      "revoked": true
+    },
+    {
+      "name": "null error, description would match",
+      "body": "{\"error\":null,\"error_description\":\"invalid_grant\"}",
+      "revoked": false
+    },
+    {
+      "name": "array error",
+      "body": "{\"error\":[\"invalid_grant\"]}",
+      "revoked": false
+    },
+    {
+      "name": "object error, array message",
+      "body": "{\"error\":{\"message\":[\"invalid_grant\"]}}",
+      "revoked": true
+    },
+    {
+      "name": "object error, nested object message",
+      "body": "{\"error\":{\"message\":{\"text\":\"invalid_grant\"}}}",
+      "revoked": false
+    },
+    {
+      "name": "string error, null description",
+      "body": "{\"error\":\"x\",\"error_description\":null}",
+      "revoked": false
+    },
+    {
+      "name": "string error, numeric description",
+      "body": "{\"error\":\"invalid_grant\",\"error_description\":7}",
+      "revoked": true
+    },
+    {
+      "name": "boolean error",
+      "body": "{\"error\":true,\"error_description\":\"invalid_grant\"}",
+      "revoked": false
+    },
+    {
+      "name": "leading BOM",
+      "body": "﻿{\"error\":\"invalid_grant\"}",
+      "revoked": true
+    },
+    {
+      "name": "leading whitespace",
+      "body": "  \n{\"error\":\"invalid_grant\"}",
+      "revoked": true
+    }
+  ]
+}

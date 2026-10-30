@@ -151,6 +151,21 @@ class VaultSyncCoordinatorTest {
         assertEquals(VaultSyncStatus.SIGN_IN_REQUIRED, coordinator(pushScope()).pushNow().status)
     }
 
+    /**
+     * `revoked` and `identity-mismatch` (dataHome.ts @ef73d282) are both fixed by
+     * one act — signing in again (with the right account) — so they project to
+     * the same chip as an expired token.
+     */
+    @Test
+    fun reportsSignInRequiredForARevokedGrantAndAnIdentityMismatch() = runTest {
+        setUp().create("a passphrase")
+        seedVault()
+        for (code in listOf(DataHomeFailureCode.REVOKED, DataHomeFailureCode.IDENTITY_MISMATCH)) {
+            remote.failWith = DataHomeTransportFailure("Sign in again to sync.", code = code)
+            assertEquals("$code", VaultSyncStatus.SIGN_IN_REQUIRED, coordinator(pushScope()).pushNow().status)
+        }
+    }
+
     @Test
     fun reportsOfflineWithoutLosingAnything() = runTest {
         setUp().create("a passphrase")
