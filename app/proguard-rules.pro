@@ -46,6 +46,17 @@
 # the user's only unsynced copy of a Drive-mode edit, so a worker that cannot be
 # instantiated means data that never leaves the device.
 -keep class at.bettertrack.app.vault.VaultSyncWorker { <init>(...); }
+# The per-portfolio vault push and the widget refresh are workers too, and were
+# missing here. Same rule; the first release APK replaces debug installs whose
+# WorkManager rows name these classes un-obfuscated, so the names must survive.
+-keep class at.bettertrack.app.vault.pv.sync.PvVaultSyncWorker { <init>(...); }
+-keep class at.bettertrack.app.widget.BtWidgetRefreshWorker { <init>(...); }
+
+# ── Glance widget action callbacks ───────────────────────────────────────────
+# actionRunCallback<T>() stores the callback's class NAME in the PendingIntent the
+# launcher holds, and Glance re-instantiates it reflectively when the button is
+# tapped. A renamed callback is a dead widget button until the widget re-renders.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }
 
 # ── Optional transitive deps we never ship (OkHttp/BouncyCastle probes) ───────
 # These are compile-time optional in OkHttp; without them R8 emits missing-class

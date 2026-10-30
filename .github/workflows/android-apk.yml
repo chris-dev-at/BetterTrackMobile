@@ -88,24 +88,27 @@ jobs:
 
       # Stable dev signing (owner ask 2026-07-10): decode the shared keystore
       # from the repo secret so every CI APK carries the SAME signature →
-      # Android's in-place "Update" works between builds. If the secret isn't
-      # set, fall back silently to the old per-run debug key.
-      - name: Set up stable dev signing (if configured)
+      # Android's in-place "Update" works between builds.
+      # REQUIRED since the published APK is the release build (R-09): there is
+      # no throwaway-key fallback any more. A release signed with any other key
+      # would be refused as an update by every installed copy, so a missing
+      # secret fails the job here, before anything is built or published.
+      - name: Set up stable dev signing (required)
         env:
           KS_B64: ${{ secrets.BT_SIGNING_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.BT_SIGNING_PASS }}
         run: |
-          if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/bt-dev-signing.keystore"
-            {
-              echo "BT_KEYSTORE=$RUNNER_TEMP/bt-dev-signing.keystore"
-              echo "BT_KEYSTORE_ALIAS=btdev"
-              echo "BT_KEYSTORE_PASS=$KS_PASS"
-            } >> "$GITHUB_ENV"
-            echo "Stable dev signing configured."
-          else
-            echo "BT_SIGNING_KEYSTORE_B64 secret not set — building with the runner's throwaway debug key (updates will need uninstall)."
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error::Stable signing secrets (BT_SIGNING_KEYSTORE_B64 / BT_SIGNING_PASS) are not configured — refusing to build a release APK with any other key."
+            exit 1
           fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/bt-dev-signing.keystore"
+          {
+            echo "BT_KEYSTORE=$RUNNER_TEMP/bt-dev-signing.keystore"
+            echo "BT_KEYSTORE_ALIAS=btdev"
+            echo "BT_KEYSTORE_PASS=$KS_PASS"
+          } >> "$GITHUB_ENV"
+          echo "Stable dev signing configured."
 
       # Inject a CI-aware version (Step V): versionCode = monotonically-increasing
       # run_number, versionName = 0.<run_number>. Local AS builds keep 1/"dev".
@@ -116,11 +119,82 @@ jobs:
           -PbtVersionName=0.${{ github.run_number }}
           --no-daemon --stacktrace
 
-      - name: Rename APK and write version.json
+      # R-09: the APK the in-app updater installs is the NON-debuggable R8
+      # release build (github flavor: self-update stays on, signed with the
+      # stable key above). Its own Gradle invocation, as with the gate. R8 needs
+      # far more heap than gradle.properties' 3g (it OOM'd there) — the hosted
+      # runner has 16 GB.
+      - name: Build release APK (R8)
+        run: >
+          ./gradlew :app:assembleGithubRelease
+          -PbtVersionCode=${{ github.run_number }}
+          -PbtVersionName=0.${{ github.run_number }}
+          "-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8"
+          --no-daemon --stacktrace
+
+      # Nothing is published unless the release APK is provably (a) not
+      # debuggable and (b) signed with exactly the key every installed copy
+      # carries. The debug APK is the positive control for (a) — if the probe
+      # cannot see ITS debuggable flag, the probe is broken, not the release.
+      # (b) is pinned to the stable key's PUBLIC certificate digest (it is in
+      # every APK we ship) rather than only compared with the debug APK: two
+      # APKs that both fell back to the same throwaway key would also match.
+      - name: Verify release APK (not debuggable, stable signature)
+        env:
+          EXPECTED_CERT_SHA256: b5388b40de9ba197ff1eeaac4daed46dc78dfb4c44f98cdaca7cd7379a568802
+        run: |
+          set -euo pipefail
+          REL=app/build/outputs/apk/github/release/app-github-release.apk
+          DBG=app/build/outputs/apk/github/debug/app-github-debug.apk
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
+          echo "build-tools: $(basename "$BT")"
+
+          debuggable() {
+            local badging xml
+            badging="$("$BT/aapt2" dump badging "$1")"
+            xml="$("$BT/aapt2" dump xmltree --file AndroidManifest.xml "$1")"
+            if grep -q '^application-debuggable' <<<"$badging" \
+               || grep -Eq 'android:debuggable\(0x0101000f\)=(true|0xffffffff)' <<<"$xml"; then
+              echo true
+            else
+              echo false
+            fi
+          }
+          cert() {
+            # One distinct signer digest, or fail. Only the digest is printed.
+            "$BT/apksigner" verify --print-certs "$1" \
+              | grep -E 'certificate SHA-256 digest:' | awk '{print $NF}' | sort -u
+          }
+
+          REL_DEBUGGABLE="$(debuggable "$REL")"
+          DBG_DEBUGGABLE="$(debuggable "$DBG")"
+          REL_CERT="$(cert "$REL")"
+          DBG_CERT="$(cert "$DBG")"
+          REL_CODE="$("$BT/aapt2" dump badging "$REL" | sed -nE "s/^package: .*versionCode='([0-9]+)'.*/\1/p")"
+          echo "release debuggable=$REL_DEBUGGABLE  (control: debug debuggable=$DBG_DEBUGGABLE)"
+          echo "release cert sha256=$REL_CERT"
+          echo "debug   cert sha256=$DBG_CERT"
+          echo "release versionCode=$REL_CODE"
+
+          fail=0
+          [ "$DBG_DEBUGGABLE" = "true" ] || { echo "::error::Probe control failed: the debug APK does not read as debuggable."; fail=1; }
+          [ "$REL_DEBUGGABLE" = "false" ] || { echo "::error::The release APK is debuggable."; fail=1; }
+          [ "$(grep -c . <<<"$REL_CERT" || true)" -eq 1 ] || { echo "::error::The release APK must carry exactly one signer."; fail=1; }
+          [ "$REL_CERT" = "$EXPECTED_CERT_SHA256" ] || { echo "::error::The release APK is not signed with the stable key."; fail=1; }
+          [ "$REL_CERT" = "$DBG_CERT" ] || { echo "::error::Release and debug APK signatures differ."; fail=1; }
+          [ "$REL_CODE" = "${{ github.run_number }}" ] || { echo "::error::Release versionCode is not the run number."; fail=1; }
+          exit $fail
+
+      - name: Rename APKs and write version.json
         run: |
           mkdir -p dist
-          APK_NAME="BetterTrackApp-debug-${{ github.run_number }}.apk"
-          cp app/build/outputs/apk/github/debug/app-github-debug.apk "dist/$APK_NAME"
+          # The in-app updater installs exactly the asset version.json names —
+          # that is the RELEASE APK. The debug APK rides along for diagnostics
+          # only; nothing in the app ever picks it.
+          APK_NAME="BetterTrackApp-${{ github.run_number }}.apk"
+          DEBUG_APK_NAME="BetterTrackApp-debug-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/github/release/app-github-release.apk "dist/$APK_NAME"
+          cp app/build/outputs/apk/github/debug/app-github-debug.apk "dist/$DEBUG_APK_NAME"
           # Tiny manifest the app parses to detect a newer build (dev notifier).
           cat > dist/version.json <<EOF
           {"versionCode": ${{ github.run_number }}, "versionName": "0.${{ github.run_number }}", "apk": "$APK_NAME"}
@@ -131,18 +205,25 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BetterTrackApp-debug-${{ github.run_number }}
-          path: dist/BetterTrackApp-debug-${{ github.run_number }}.apk
+          name: BetterTrackApp-${{ github.run_number }}
+          path: |
+            dist/BetterTrackApp-${{ github.run_number }}.apk
+            dist/BetterTrackApp-debug-${{ github.run_number }}.apk
           if-no-files-found: error
 
       # Rolling prerelease on tag `latest-debug`. Delete-and-recreate guarantees
-      # exactly ONE apk asset (named per run number) is current at any time.
+      # exactly ONE build (named per run number) is current at any time.
+      # The tag keeps its historical name although it now carries the RELEASE
+      # build: installed apps (0.144 onward) hard-code
+      # releases/download/latest-debug/version.json — renaming the tag would
+      # strand every one of them on its current version.
       - name: Publish rolling prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          APK="dist/BetterTrackApp-${{ github.run_number }}.apk"
+          DEBUG_APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
           SHORT_SHA="${GITHUB_SHA::7}"
           DATE="$(date -u +'%Y-%m-%d %H:%M UTC')"
 
@@ -158,7 +239,9 @@ jobs:
           printf '%s\n' "$WHATSNEW" > dist/whatsnew.md
 
           NOTES="$(printf '%s\n' \
-            "Rolling debug build produced by CI (run #${{ github.run_number }} · version 0.${{ github.run_number }})." \
+            "Rolling build produced by CI (run #${{ github.run_number }} · version 0.${{ github.run_number }})." \
+            "" \
+            "**$(basename "$APK")** is the non-debuggable release build — the one the in-app updater installs. **$(basename "$DEBUG_APK")** is attached for diagnostics only; the updater never picks it." \
             "" \
             "Commit: ${SHORT_SHA}" \
             "Built:  ${DATE}" \
@@ -166,7 +249,7 @@ jobs:
             "## What's new in 0.${{ github.run_number }}" \
             "$WHATSNEW" \
             "" \
-            "Full per-version history: see the v0.* releases below. Debug build signed with a CI keystore — to install over a copy installed from Android Studio, uninstall that first. Points at production BetterTrack.")"
+            "Full per-version history: see the v0.* releases below. Both APKs are signed with the same stable key, so either installs over a previous CI build in place. Points at production BetterTrack.")"
 
           # Remove the previous release + its tag so no stale assets accumulate.
           gh release delete latest-debug --yes --cleanup-tag || true
@@ -175,9 +258,9 @@ jobs:
           # absorb the brief tag-deletion propagation window.
           ok=false
           for i in 1 2 3 4 5; do
-            if gh release create latest-debug "$APK" "dist/version.json" \
+            if gh release create latest-debug "$APK" "$DEBUG_APK" "dist/version.json" \
                  --prerelease \
-                 --title "BetterTrack App — latest debug build" \
+                 --title "BetterTrack App — latest build (release APK)" \
                  --notes "$NOTES" \
                  --target "$GITHUB_SHA"; then
               ok=true
@@ -190,7 +273,7 @@ jobs:
             echo "Failed to publish rolling prerelease after 5 attempts." >&2
             exit 1
           fi
-          echo "Published latest-debug with asset: $(basename "$APK")"
+          echo "Published latest-debug with assets: $(basename "$APK") (updater), $(basename "$DEBUG_APK") (diagnostics)"
 
       # Permanent per-version release (owner ask 2026-07-10): every shipped
       # version keeps its APK + a real "features this version brought" text,
@@ -204,12 +287,13 @@ jobs:
           set -euo pipefail
           VER="0.${{ github.run_number }}"
           TAG="v${VER}"
-          APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
+          APK="dist/BetterTrackApp-${{ github.run_number }}.apk"
+          DEBUG_APK="dist/BetterTrackApp-debug-${{ github.run_number }}.apk"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; skipping."
             exit 0
           fi
-          gh release create "$TAG" "$APK" \
+          gh release create "$TAG" "$APK" "$DEBUG_APK" \
             --prerelease \
             --title "BetterTrack App ${VER}" \
             --notes-file dist/whatsnew.md \
