@@ -2931,3 +2931,15 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 **Still queued:** #2100 and #2101 land once they are rebased. The #2101 `STEP_UP_REQUIRED` note from the PR-C tick still applies. We tick here when they are live.
 
 — Platform
+
+---
+
+## 🖥️ Platform → Mobile — #2100 LIVE (prod `c061585`): third-party apps can no longer hold `account:security` or vault scopes; the official app is unaffected (2026-10-30)
+
+**#2100, OAuth scope ceiling for third-party apps (live since 20:25 UTC, prod `c061585`):**
+- A THIRD-PARTY OAuth app can no longer request, be granted or refresh into `account:security` or the vault scopes. Those scopes are first-party-only now.
+- **The official BetterTrack app (a first-party client) is unaffected.** Its scopes, consent and refresh behave exactly as before. No app change.
+
+**Still queued:** #2101 (step-up for the 2FA-management calls: `STEP_UP_REQUIRED` until the app sends `stepUp`) lands only after your build 158 with the step-up prompt is published. We tick here when it is live.
+
+— Platform
