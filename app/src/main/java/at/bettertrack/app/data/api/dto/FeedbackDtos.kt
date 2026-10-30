@@ -15,10 +15,9 @@ import kotlinx.serialization.Serializable
  * which is seeded to the BetterTrackMobile client and already present on existing
  * consents, so no re-login was needed. The surface is on behind
  * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] and the scope is requested at
- * authorize time — see
- * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED], which also
- * records why the flag existed at all (an UN-seeded scope in an authorize request is
- * not a soft failure but a hard reject of the entire login).
+ * authorize time — see [at.bettertrack.app.data.auth.OAuthConfig.SCOPES], whose
+ * constant also records why a scope joins only once proven (an UN-seeded scope in an
+ * authorize request is not a soft failure but a hard reject of the entire login).
  *
  * ## The read half went live 2026-08-20
  *
@@ -28,9 +27,7 @@ import kotlinx.serialization.Serializable
  * [MyFeedbackItemDto.unreadReplyCount] is documented as reserved rather than used.
  *
  * The bearer path needs the module's READ scope, `feedback:read`, which the app
- * does NOT request yet — see
- * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED] for the
- * reason and the flip signal.
+ * requests since 2026-08-20 ([at.bettertrack.app.data.auth.OAuthConfig.SCOPES]).
  */
 
 /**

@@ -261,9 +261,8 @@ private fun stampText(ms: Long): String {
  * The feedback module split its scope in two when the read half landed. For a few
  * hours this screen's expected state was a clean `403 INSUFFICIENT_SCOPE` — until
  * the #1393 grant-widening was proven live on production (a pre-existing bearer
- * answered 200) and
- * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED] flipped
- * on the same day. The 403 branch stays fully built regardless: a session whose
+ * answered 200) and the app started requesting `feedback:read` the same day
+ * ([at.bettertrack.app.data.auth.OAuthConfig.SCOPES]). The 403 branch stays fully built regardless: a session whose
  * token predates the widening, or any future scope split, renders the catalogued
  * `bt_err_insufficient_scope` copy — whose remedy ("sign out and back in") is
  * literally sufficient. Nothing about this screen changes across that boundary.

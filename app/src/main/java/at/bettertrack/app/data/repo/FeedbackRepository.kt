@@ -23,20 +23,20 @@ import kotlinx.serialization.json.Json
  * `openapi.json` lists the route with `security: [sessionCookie, apiKeyBearer]`,
  * and the `MODULE_POLICIES` row exists, so the `403 API_KEY_FORBIDDEN` this app
  * measured on 2026-08-17 is gone. `feedback:write` is in the scope catalog and in
- * the BetterTrackMobile client's scope ceiling (which the openapi enumerates as 20
- * scopes, `feedback:write` among them); the platform's seed unions rather than
+ * the BetterTrackMobile client's scope ceiling (which the openapi enumerated as 20
+ * scopes then, 21 since `feedback:read` joined); the platform's seed unions rather than
  * narrows and an additive migration widened the consents that already exist — so
  * **no re-login and no re-authorize is required** for a session that predates the
- * deploy. [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] is on
- * too, so every future authorize asks for the scope as well.
+ * deploy. Every authorize asks for the scope as well
+ * ([at.bettertrack.app.data.auth.OAuthConfig.SCOPES]).
  *
  * HISTORY: this surface shipped dark from 2026-08-17. The scope was not seeded
  * yet, and requesting an un-seeded scope at authorize time does not merely drop
  * that scope — it **hard-rejects the entire login** ("This app's authorization
  * request is invalid"), which is how the alerts scopes broke sign-in once already
- * ([at.bettertrack.app.data.auth.OAuthConfig.ALERTS_SCOPES_ENABLED] carries that
- * history). If the platform ever retracts the seed, the same lever applies: both
- * flags back to `false`, rebuild, re-verify.
+ * (the scope constant behind [at.bettertrack.app.data.auth.OAuthConfig.SCOPES]
+ * carries that history). If the platform ever retracts the seed, the same lever
+ * applies: drop the scope from that constant, rebuild, re-verify.
  *
  * ## v2's READ half is live since 2026-08-20
  *
@@ -46,9 +46,8 @@ import kotlinx.serialization.json.Json
  * `unreadReplyCount` is carried but never drawn.
  *
  * The module now has a read/write scope split — `read: feedback:read`,
- * `write: feedback:write` — and the app requests both halves; see
- * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED] for the
- * evidence trail that flipped the read half on 2026-08-20. A token minted before
+ * `write: feedback:write` — and the app requests both halves (the read half since
+ * 2026-08-20, once a bearer from a pre-existing consent answered 200 on production). A token minted before
  * the platform's grant-widening can still answer `403 INSUFFICIENT_SCOPE`, and the
  * submissions screen renders the catalogued sign-out/in copy for exactly that.
  */

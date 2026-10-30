@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * A tripwire on the direct-provider adapter staying OFF (S3/S4 plan §6 risk 6).
  *
- * The same shape as the `OAuthConfig.ALERTS_SCOPES_ENABLED` guard: a flag whose
+ * The same shape as the old OAuth alerts-scope guard: a flag whose
  * value is a decision someone else has to make gets a test asserting the current
  * answer, so flipping it is a deliberate act with a failing test attached rather
  * than a one-character diff nobody reviews.

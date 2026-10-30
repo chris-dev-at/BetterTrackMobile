@@ -1991,8 +1991,8 @@ interface BtApi {
      * 5 submissions per user per hour (429).
      *
      * LIVE on production since 2026-08-18. Session-cookie AND bearer reachable; the
-     * bearer path needs `feedback:write`, which the app now requests — see
-     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED] — and which
+     * bearer path needs `feedback:write`, which the app requests — see
+     * [at.bettertrack.app.data.auth.OAuthConfig.SCOPES] — and which
      * existing consents were widened to carry, so a token minted before the deploy
      * works too. The composer is live behind
      * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
@@ -2021,11 +2021,10 @@ interface BtApi {
      *
      * Session-cookie AND bearer reachable. The module split its scope in two when
      * this landed — `read: feedback:read`, `write: feedback:write` — and the
-     * app does **not** request `feedback:read` yet, so on today's tokens this call
-     * answers `403 INSUFFICIENT_SCOPE`. That is a known, designed-for state, not a
-     * bug: the submissions screen renders the catalogued sign-out/in copy for it.
-     * See [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED]
-     * for why the scope is held out and what flips it.
+     * app requests `feedback:read` since 2026-08-20
+     * ([at.bettertrack.app.data.auth.OAuthConfig.SCOPES]). A token minted before
+     * that still answers `403 INSUFFICIENT_SCOPE`; that is a designed-for state,
+     * not a bug: the submissions screen renders the catalogued sign-out/in copy.
      *
      * No pagination parameter exists on this route, so there is no page loop to
      * write; the server returns the caller's whole (small) history in one body.
