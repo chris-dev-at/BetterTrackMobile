@@ -41,6 +41,13 @@ import retrofit2.Response
 class AccountRepository(
     private val api: BtApi,
     private val json: Json,
+    /**
+     * The `Accept-Language` for `GET /auth/me` — the same value
+     * [at.bettertrack.app.data.auth.AuthRepository] sends (in-app language, else
+     * device language; `null` omits the header). Every `/auth/me` read carries
+     * it, so the server never localises the same body two ways (#2094).
+     */
+    private val acceptLanguage: () -> String? = { null },
 ) {
 
     // ── Change password ──────────────────────────────────────────────────────
@@ -344,7 +351,7 @@ class AccountRepository(
      * so this screen reads `me` instead of making two calls.
      */
     suspend fun accountPinState(): BtResult<AccountPinState> =
-        when (val r = apiCall(json) { api.me() }) {
+        when (val r = apiCall(json) { api.me(acceptLanguage()) }) {
             is BtResult.Ok -> BtResult.Ok(
                 AccountPinState(
                     pinSet = r.value.pinEnabled,

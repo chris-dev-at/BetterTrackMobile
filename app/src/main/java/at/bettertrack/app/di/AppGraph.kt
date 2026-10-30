@@ -282,6 +282,18 @@ object AppGraph {
         )
     }
 
+    /**
+     * The `Accept-Language` every `/auth/me` read sends — `/auth/me` localises
+     * announcement titles from it (#2094): the in-app language, else the
+     * device's own (not the JVM default, which LocaleManager.wrap rewrites).
+     */
+    private val acceptLanguageNow: () -> String? = {
+        at.bettertrack.app.data.i18n.acceptLanguageFor(
+            at.bettertrack.app.data.i18n.LocaleManager.current(appContext),
+            android.content.res.Resources.getSystem().configuration.locales[0],
+        )
+    }
+
     val authRepository: AuthRepository by lazy {
         AuthRepository(
             tokenManager = tokenManager,
@@ -292,15 +304,7 @@ object AppGraph {
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
-            // `/auth/me` localises announcement titles from Accept-Language (#2094):
-            // the in-app language, else the device's own (not the JVM default,
-            // which LocaleManager.wrap rewrites).
-            acceptLanguage = {
-                at.bettertrack.app.data.i18n.acceptLanguageFor(
-                    at.bettertrack.app.data.i18n.LocaleManager.current(appContext),
-                    android.content.res.Resources.getSystem().configuration.locales[0],
-                )
-            },
+            acceptLanguage = acceptLanguageNow,
             // Register the FCM device token on login; deregister before logout wipe.
             // The everSignedIn flag is the §4.3 grandfathering signal that
             // outlives both the token store and the Room wipe.
@@ -780,7 +784,7 @@ object AppGraph {
      * active sessions, language mirror, delete account). Bearer + `account:security`.
      */
     val accountRepository: at.bettertrack.app.data.account.AccountRepository by lazy {
-        at.bettertrack.app.data.account.AccountRepository(api = btApi, json = json)
+        at.bettertrack.app.data.account.AccountRepository(api = btApi, json = json, acceptLanguage = acceptLanguageNow)
     }
 
     /**

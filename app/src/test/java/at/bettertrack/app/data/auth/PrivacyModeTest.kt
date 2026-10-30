@@ -112,7 +112,7 @@ class PrivacyModeTest {
     fun `privacyMode parses off the real auth me body and survives into the session`() {
         // Captured verbatim from the dev backend (demo account) on 2026-08-04.
         val body = """
-            {"id":"019f249e-1e11-7a1e-8a3f-ac355ca5d306","email":"demo@bettertrack.local",
+            {"id":"019f249e-1e11-7a1e-8a3f-ac355ca5d306","email":"demo@example.com",
              "username":"demo","role":"user","status":"active","mustChangePassword":false,
              "pinEnabled":false,"pinLockIdleMinutes":null,"baseCurrency":"EUR","locale":"en",
              "profileIcon":"planet","discreetMode":false,"privacyMode":"normal",
