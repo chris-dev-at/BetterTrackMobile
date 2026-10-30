@@ -599,3 +599,42 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 #    body ignored -> permission-denied); coordinator: both reasons ->
 #    SIGN_IN_REQUIRED. Red first: 4 red (vector replay, both revoked reads, the
 #    coordinator case), negative space green before and after.
+#    commit c9bd299.
+#
+# 4. §12 custody alignment — IMPLEMENTED, flag stays OFF (design, not a TS port;
+#    reference apps/web/src/user/vault/keystore/{sessionPersistence,deviceLock,
+#    core}.ts @ef73d282). (a) v1 `VaultKeyCustody` never persisted the unwrapped
+#    VK: conformant, nothing to erase (unchanged ruling). (b) pv endpoint custody:
+#    new vault/pv/custody/PvSessionPersistence.kt — `PvSessionPersistence`
+#    {persist(accountId, K_dev, expiresAt) / read(accountId, now) / clear},
+#    `NoPvSessionPersistence` (the constructor default: memory-only, as before),
+#    `MemoryPvSessionPersistence` (web memory impl incl. expiry delete),
+#    `PvDeviceLockMarker` {remember/forget/read -> LOCKED|CLEAR|UNREADABLE} with
+#    prefs (commit()) + memory impls, `PvLockReason` {EXPLICIT, SIGN_OUT,
+#    ACCOUNT_SWITCH, APP_LOCK_IDLE, TTL(not user-intended)}, `PvResumeOutcome`;
+#    PvKeystoreSessionPersistence.kt — the record {version, accountId, sealed =
+#    iv12‖AES-256-GCM(K_dev), createdAt, expiresAt} in the ONE pv endpoint prefs
+#    file (`pv_session.<accountId>`), sealed by `AndroidKeystoreSessionCipher`
+#    (AndroidKeyStore AES-256-GCM, non-extractable, Keystore-chosen IV, no
+#    user-auth binding). PvDeviceCustody: `bindAccount` (a CHANGE = the previous
+#    account's ACCOUNT_SWITCH lock), `lock(reason)` = marker FIRST -> zero K_dev ->
+#    clear record, `adoptPasswordSession` (setup/unlock/change: fresh absolute
+#    TTL, the marker's ONLY clearing edge, then persist), `resumeSession()`
+#    (marker LOCKED/UNREADABLE refuse -> lockout -> endpoint password material ->
+#    record (expired dropped) -> wrap check -> generation/account/marker/no-session
+#    re-check, then install with the RECORD's expiresAt, never re-persisted),
+#    `expireIfPastTtl()` on the hot reads (stateFor/entropyFor/storeEntropy),
+#    `bindToAppLock` unchanged as the one timer but reacting to the idle EDGE only
+#    (the cold-start PIN gate starts `locked = true` and is not a lock).
+#    Divergences, deliberate: read() also returns expiresAt (an Android process
+#    can outlive a tab by days, so the in-memory session ends at the record's
+#    instant — TTL lazily, no timer); the record's AAD binds version + accountId +
+#    createdAt + expiresAt (the recorded design said accountId; binding the
+#    instants stops a prefs edit extending the TTL); a createdAt later than now
+#    (wall clock moved back) refuses the record; no hot-path marker read (one
+#    process, no sibling tabs). Not wired anywhere new: AppGraph untouched,
+#    `PvDeviceCustody.create` builds the Android impls behind the OFF flag.
+#    Tests: PvSessionCustodyTest 19 + PvKeystoreSessionPersistenceTest 9 (JVM AES
+#    stand-in for the Keystore seal; the seal's key shape pinned by source scan).
+#    Mutation check: marker-after-teardown, react-to-cold-start-gate and
+#    re-persist-on-resume turned 4 of them red; restored.

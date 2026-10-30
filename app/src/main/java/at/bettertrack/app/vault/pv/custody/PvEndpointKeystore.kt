@@ -166,7 +166,8 @@ class PvEndpointKeystore(private val prefs: SharedPreferences) {
 
         fun create(context: Context): PvEndpointKeystore = PvEndpointKeystore(openPrefs(context))
 
-        private fun openPrefs(context: Context): SharedPreferences = try {
+        /** The ONE pv endpoint prefs file; [PvDeviceCustody.create] also keeps the §12 marker and session record here. */
+        internal fun openPrefs(context: Context): SharedPreferences = try {
             createEncryptedPrefs(context)
         } catch (cause: Exception) {
             // A corrupted keyset means every payload here was already unreadable.

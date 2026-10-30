@@ -61,22 +61,37 @@ import kotlinx.coroutines.withContext
  * weaken-the-parameters problem — and confining it here is what stops a dozen
  * call sites from each getting that wrong.
  *
- * ## "Never cached across sessions"
+ * ## The session belongs to the DEVICE, for seven days at most
  *
- * `K_dev` is a `@Volatile ByteArray?` and nothing else. It is never written to
- * the keystore, never to a log, never into a bundle. A **session** ends at
- * exactly three events, and no fourth is invented here:
+ * §12 as amended by the owner on 2026-09-03 (web: `keystore/sessionPersistence.ts`
+ * + `deviceLock.ts` @ef73d282; vault pass 2026-10-30 item 4). `K_dev` lives in a
+ * `@Volatile ByteArray?`, and — only when a [sessionPersistence] is wired and an
+ * account is bound ([bindAccount]) — a successful PASSWORD unlock also persists
+ * it, sealed under a non-extractable Android Keystore key
+ * ([PvKeystoreSessionPersistence]), so process death no longer ends the session.
+ * Never a log, never a bundle, never plaintext on disk. A session ends at
+ * exactly five edges ([PvLockReason]) and no sixth is invented here:
  *
- *  1. process death — the field dies with the process;
- *  2. [lock] — the explicit "Lock vaults" action;
- *  3. the app's EXISTING PIN idle-lock timer, via [bindToAppLock].
+ *  1. [lock] `EXPLICIT` — the "Lock vaults" action (and the keystore reset);
+ *  2. `SIGN_OUT` and 3. `ACCOUNT_SWITCH` ([bindAccount] to another account);
+ *  4. `APP_LOCK_IDLE` — the app's EXISTING PIN idle-lock timer, via [bindToAppLock];
+ *  5. `TTL` — seven days ABSOLUTE from the unlock that created the session
+ *     ([PV_SESSION_PERSISTENCE_TTL_MS]); a resumed session never re-persists, so
+ *     resuming never restarts the clock.
+ *
+ * Every user-intended lock (1-4) writes the per-account device-locked MARKER
+ * ([PvDeviceLockMarker]) FIRST, then ends the session, then deletes the record:
+ * even if the delete fails, the marker keeps the record inert. The marker is
+ * cleared ONLY by a successful password unlock. [resumeSession] refuses while
+ * it is set or unreadable, drops an expired record, and installs a candidate
+ * only after the same local wrap check [unlock] runs.
  *
  * §12 forbids a second timeout setting ("one timer, one mental model"), which is
  * why [bindToAppLock] takes the app lock's own `locked` flow instead of owning a
- * clock: it is the wiring `AppGraph.linkVaultLockToAppLock` already uses for the
- * v1 vault, pointed at this keystore. There is deliberately **no** "keep
- * unlocked on this device" option — the sanctioned convenience path is plain
- * custody, chosen per phrase and warned for.
+ * clock, and why the TTL is enforced lazily ([expireIfPastTtl]) on the hot reads
+ * rather than by a timer of its own. There is
+ * still no "keep unlocked" option — the TTL is the bound, and plain custody
+ * stays the per-phrase, warned-for convenience path.
  *
  * ## A wrong password never touches vault data
  *
@@ -93,6 +108,11 @@ class PvDeviceCustody(
     private val randomBytes: RandomBytes = secureRandomBytes,
     private val argon2: Argon2Derive = bouncyCastleArgon2id,
     private val clock: PvElapsedClock = PvElapsedClock { SystemClock.elapsedRealtime() },
+    private val sessionPersistence: PvSessionPersistence = NoPvSessionPersistence,
+    private val deviceLockMarker: PvDeviceLockMarker = MemoryPvDeviceLockMarker(),
+    /** Wall clock for the absolute TTL — it must survive a reboot, unlike [clock]. */
+    private val wallClock: () -> Long = System::currentTimeMillis,
+    private val sessionTtlMs: Long = PV_SESSION_PERSISTENCE_TTL_MS,
 ) {
 
     private val _unlocked = MutableStateFlow(false)
@@ -103,6 +123,25 @@ class PvDeviceCustody(
     /** Volatile only — see the class KDoc. Zeroed by [lock]. */
     @Volatile
     private var deviceKey: ByteArray? = null
+
+    /** The account the session belongs to; null = nobody bound, nothing persists. */
+    @Volatile
+    private var accountId: String? = null
+
+    /** Wall-clock instant the live session ends at (the TTL edge); 0 while locked. */
+    @Volatile
+    private var sessionExpiresAt: Long = 0L
+
+    /** Bumped by every session change; a resume installs only if it is unchanged. */
+    @Volatile
+    private var sessionGeneration: Long = 0L
+
+    private val sessionMonitor = Any()
+
+    /** The edge that ended the last session, for diagnostics and tests; null before any. */
+    @Volatile
+    var lastLockReason: PvLockReason? = null
+        private set
 
     /** True once this endpoint has a device password at all. */
     val hasDevicePassword: Boolean get() = keystore.hasDevicePassword
@@ -118,12 +157,37 @@ class PvDeviceCustody(
      * and whose [nextAction] it must offer inline.
      */
     fun stateFor(vaultId: String): PvCustodyState {
+        expireIfPastTtl()
         val entry = keystore.entry(vaultId) ?: return PvCustodyState.Absent(vaultId)
         return when (entry.custody) {
             PvCustodyMode.WRAPPED -> PvCustodyState.Wrapped(vaultId, sessionUnlocked = _unlocked.value)
             PvCustodyMode.PLAIN -> PvCustodyState.Plain(vaultId)
         }
     }
+
+    // ── The account boundary ────────────────────────────────────────────────
+
+    /**
+     * Bind (or release) the account this endpoint session belongs to
+     * (`bindAccount`, keystore/core.ts). The first bind is not a change. A CHANGE
+     * of account is a revocation — the live session was proven by the previous
+     * account's password — so it is the `ACCOUNT_SWITCH` lock for the previous
+     * account: its marker first, then its record goes, or signing back in would
+     * reopen without a password. Sign-out is [lock] `SIGN_OUT` followed by
+     * `bindAccount(null)`.
+     */
+    fun bindAccount(accountId: String?) {
+        val next = accountId?.trim()?.takeIf { it.isNotEmpty() }
+        synchronized(sessionMonitor) {
+            val previous = this.accountId
+            if (previous == next) return
+            if (previous != null) lock(PvLockReason.ACCOUNT_SWITCH)
+            this.accountId = next
+        }
+    }
+
+    /** The account currently bound, for surfaces that must not guess it. */
+    fun boundAccountId(): String? = accountId
 
     // ── The device password ─────────────────────────────────────────────────
 
@@ -146,7 +210,7 @@ class PvDeviceCustody(
             var adopted = false
             try {
                 keystore.putDevicePasswordMaterial(salt = salt, check = sealWrapCheck(key))
-                adoptSessionKey(key)
+                adoptPasswordSession(key)
                 adopted = true
             } finally {
                 if (!adopted) zeroBytes(key)
@@ -195,7 +259,7 @@ class PvDeviceCustody(
 
             keystore.putDevicePasswordMaterial(salt = newSalt, check = sealWrapCheck(sealingKey))
             resealed.forEach(keystore::putEntry)
-            adoptSessionKey(sealingKey)
+            adoptPasswordSession(sealingKey)
             nextKey = null
             true
         } catch (cause: VaultCryptoError) {
@@ -227,7 +291,7 @@ class PvDeviceCustody(
                 try {
                     if (wrapCheckPasses(key)) {
                         keystore.resetBackoff()
-                        adoptSessionKey(key)
+                        adoptPasswordSession(key)
                         adopted = true
                         PvUnlockResult.Success
                     } else {
@@ -256,22 +320,127 @@ class PvDeviceCustody(
         return remaining.coerceAtLeast(0L)
     }
 
-    /** Drops `K_dev`. The entries stay; they simply cannot be opened. */
-    fun lock() {
-        deviceKey?.let { zeroBytes(it) }
-        deviceKey = null
-        _unlocked.value = false
+    /**
+     * Ends the session (`lockDevice`, keystore/core.ts). The entries stay; they
+     * simply cannot be opened.
+     *
+     * ORDER IS THE GUARANTEE: for a user-intended [reason] the marker is written
+     * FIRST, before anything that could throw, then `K_dev` is zeroed, then the
+     * persisted record is deleted. A record whose delete is slow or fails is
+     * inert behind the marker until the next password. [PvLockReason.TTL] is not
+     * user-intended: no marker, the record goes.
+     */
+    fun lock(reason: PvLockReason = PvLockReason.EXPLICIT) {
+        synchronized(sessionMonitor) {
+            val account = accountId
+            if (account != null && reason.userIntended) {
+                // A marker that cannot be written must not leave a session standing.
+                try {
+                    deviceLockMarker.remember(account)
+                } catch (_: RuntimeException) {
+                    // Fail closed: the session still ends below.
+                }
+            }
+            endSession()
+            lastLockReason = reason
+            if (account != null) {
+                try {
+                    sessionPersistence.clear(account)
+                } catch (_: RuntimeException) {
+                    // The marker keeps an undeletable record inert.
+                }
+            }
+        }
     }
 
     /**
      * The existing app-lock idle timer, reused (§12: one timer, one mental
      * model). Mirrors `AppGraph.linkVaultLockToAppLock` for this keystore.
      *
+     * Only a TRANSITION to locked is the PIN idle lock: `AppLockController.locked`
+     * starts `true` on every cold start with a configured PIN, and that gate is
+     * not a lock of a session (there is none yet) — reacting to it would write
+     * the marker on every launch and make the persisted session unreachable for
+     * every PIN user. An emission of `true` while a session IS live still locks.
+     *
      * Takes the flow rather than the controller so the binding is testable
      * without Android, and so this class can never grow a timeout of its own.
      */
     fun bindToAppLock(appLocked: Flow<Boolean>, scope: CoroutineScope): Job = scope.launch {
-        appLocked.collect { locked -> if (locked) lock() }
+        var seenAny = false
+        appLocked.collect { locked ->
+            if (locked && (seenAny || deviceKey != null)) lock(PvLockReason.APP_LOCK_IDLE)
+            seenAny = true
+        }
+    }
+
+    /**
+     * The TTL edge, checked lazily: ends a live session whose absolute end has
+     * passed. Called on every hot read ([stateFor], [entropyFor], [storeEntropy])
+     * — the reads a session exists to serve — so the seven days need no timer.
+     *
+     * @return true when it ended a session.
+     */
+    fun expireIfPastTtl(): Boolean {
+        if (deviceKey == null) return false
+        val expiresAt = sessionExpiresAt
+        if (expiresAt <= 0L || wallClock() < expiresAt) return false
+        lock(PvLockReason.TTL)
+        return true
+    }
+
+    /**
+     * Re-install the device's persisted session after process death — the
+     * Android "reload" (`runSessionResume`, keystore/core.ts, minus the sibling-
+     * tab grant, which has no Android counterpart).
+     *
+     * Speculative and silent: every refusal is an outcome, never a throw, and
+     * leaves the surface asking for the password, which it would have done
+     * anyway. The order is the web's: the marker (LOCKED and UNREADABLE both
+     * refuse), the lockout window, the endpoint's password material, the record
+     * (an expired one is dropped by [PvSessionPersistence.read]), the wrap check
+     * — the authoritative binding, a key not derived from THIS endpoint's
+     * password cannot pass it — and once more, with nothing in between, the
+     * generation, the account, the marker and "no session already standing"
+     * immediately before the install. A resumed session keeps the record's
+     * `expiresAt` and is NOT re-persisted (the TTL is absolute).
+     */
+    fun resumeSession(): PvResumeOutcome {
+        if (deviceKey != null) return PvResumeOutcome.ALREADY_UNLOCKED
+        val account = accountId ?: return PvResumeOutcome.NO_ACCOUNT
+        val generation = sessionGeneration
+        when (deviceLockMarker.read(account)) {
+            PvDeviceLockState.LOCKED -> return PvResumeOutcome.DEVICE_LOCKED
+            PvDeviceLockState.UNREADABLE -> return PvResumeOutcome.MARKER_UNREADABLE
+            PvDeviceLockState.CLEAR -> Unit
+        }
+        if (currentLockoutRemaining() > 0) return PvResumeOutcome.LOCKED_OUT
+        if (!keystore.hasDevicePassword) {
+            // A reset endpoint: whatever is persisted can never open anything.
+            sessionPersistence.clear(account)
+            return PvResumeOutcome.NO_KEYSTORE
+        }
+        val candidate = sessionPersistence.read(account, wallClock())
+            ?: return PvResumeOutcome.NOTHING_PERSISTED
+        var installed = false
+        try {
+            if (!wrapCheckPasses(candidate.deviceKey)) {
+                sessionPersistence.clear(account)
+                return PvResumeOutcome.WRAP_CHECK_FAILED
+            }
+            synchronized(sessionMonitor) {
+                if (sessionGeneration != generation || accountId != account || deviceKey != null ||
+                    deviceLockMarker.read(account) != PvDeviceLockState.CLEAR
+                ) {
+                    return PvResumeOutcome.SUPERSEDED
+                }
+                adoptSessionKey(candidate.deviceKey, expiresAt = candidate.expiresAt)
+                installed = true
+            }
+            return PvResumeOutcome.RESUMED
+        } finally {
+            if (!installed) zeroBytes(candidate.deviceKey)
+        }
     }
 
     // ── Entries ─────────────────────────────────────────────────────────────
@@ -288,6 +457,7 @@ class PvDeviceCustody(
      */
     fun storeEntropy(vaultId: String, entropy: ByteArray, custody: PvCustodyMode): Boolean {
         if (entropy.size != PV_ENTROPY_BYTES) return false
+        expireIfPastTtl()
         return when (custody) {
             PvCustodyMode.PLAIN -> {
                 keystore.putEntry(PvKeystoreEntry(vaultId, PvCustodyMode.PLAIN, bytesToBase64(entropy)))
@@ -337,6 +507,7 @@ class PvDeviceCustody(
      * between calls, so a session that ended really is a read that fails.
      */
     fun entropyFor(vaultId: String): ByteArray? {
+        expireIfPastTtl()
         val entry = keystore.entry(vaultId) ?: return null
         return try {
             when (entry.custody) {
@@ -374,16 +545,45 @@ class PvDeviceCustody(
      * the confirm sheet says out loud.
      */
     fun resetKeystore() {
-        lock()
+        // The most deliberate lock there is (web `reset()` → `lockDevice()`):
+        // the marker is set, the record goes, and the next password clears it.
+        lock(PvLockReason.EXPLICIT)
         keystore.reset()
     }
 
     // ── Internals ───────────────────────────────────────────────────────────
 
-    private fun adoptSessionKey(key: ByteArray) {
+    private fun adoptSessionKey(key: ByteArray, expiresAt: Long) {
+        synchronized(sessionMonitor) {
+            deviceKey?.let { zeroBytes(it) }
+            deviceKey = key
+            sessionExpiresAt = expiresAt
+            sessionGeneration += 1
+            _unlocked.value = true
+        }
+    }
+
+    /**
+     * A session the user just PROVED with the password (setup, unlock, change):
+     * installed with a fresh absolute TTL, the marker's ONLY clearing edge
+     * (`forgetEndpointDeviceLocked`), then persisted (`rememberSession`) — when an
+     * account is bound. Persistence failures are swallowed by the implementation;
+     * the session stands in memory regardless.
+     */
+    private fun adoptPasswordSession(key: ByteArray) {
+        val expiresAt = wallClock() + sessionTtlMs
+        adoptSessionKey(key, expiresAt)
+        val account = accountId ?: return
+        deviceLockMarker.forget(account)
+        sessionPersistence.persist(account, key, expiresAt)
+    }
+
+    private fun endSession() {
         deviceKey?.let { zeroBytes(it) }
-        deviceKey = key
-        _unlocked.value = true
+        deviceKey = null
+        sessionExpiresAt = 0L
+        sessionGeneration += 1
+        _unlocked.value = false
     }
 
     private fun recordFailure(): PvUnlockResult.Wrong {
@@ -476,7 +676,19 @@ class PvDeviceCustody(
          */
         private val WRAP_CHECK_MARKER: ByteArray = utf8("bettertrack-pv-device-check-v1")
 
-        fun create(context: Context): PvDeviceCustody = PvDeviceCustody(PvEndpointKeystore.create(context))
+        /**
+         * The production wiring: the keystore, the device-locked marker and the
+         * Keystore-sealed session record all in the ONE pv endpoint prefs file.
+         * Reached only through `AppGraph.startParanoidVaults` (flag OFF).
+         */
+        fun create(context: Context): PvDeviceCustody {
+            val prefs = PvEndpointKeystore.openPrefs(context)
+            return PvDeviceCustody(
+                keystore = PvEndpointKeystore(prefs),
+                sessionPersistence = PvKeystoreSessionPersistence(prefs, AndroidKeystoreSessionCipher()),
+                deviceLockMarker = PrefsPvDeviceLockMarker(prefs),
+            )
+        }
     }
 }
 
