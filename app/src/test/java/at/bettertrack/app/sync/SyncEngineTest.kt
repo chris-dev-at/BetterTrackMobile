@@ -237,6 +237,8 @@ class SyncEngineTest {
         val refresher: FakeRefresher = FakeRefresher(),
         var loggedIn: Boolean = true,
         var nowMs: Long = 1_000_000L,
+        val widgets: at.bettertrack.app.widget.RecordingWidgetRefreshTrigger =
+            at.bettertrack.app.widget.RecordingWidgetRefreshTrigger(),
     ) {
         val engine = SyncEngine(
             store = store,
@@ -245,6 +247,7 @@ class SyncEngineTest {
             hasSession = { loggedIn },
             ownerKey = { "user-1" },
             now = { nowMs },
+            widgetRefresh = widgets,
         )
 
         fun enqueueTx(portfolio: String = "p1"): SyncOp = runBlocking {
@@ -872,5 +875,109 @@ class SyncEngineTest {
         val done = h.store.byClient(op.clientId)!!
         assertEquals(OpStatus.DONE, done.status)
         assertEquals(op.clientId, done.clientId)     // SAME idempotency key end to end
+    }
+
+    // ── Home-screen widgets follow landed ops (owner order 2026-10-29) ───────
+
+    @Test
+    fun `every landed cash op and trade tells the cash widgets, once per portfolio, AFTER the refetch`() =
+        runBlocking {
+            val refresher = FakeRefresher()
+            val refetchesSeenByTrigger = mutableListOf<Int>()
+            val widgets = at.bettertrack.app.widget.RecordingWidgetRefreshTrigger { refetchesSeenByTrigger += refresher.calls.size }
+            val h = Harness(refresher = refresher, widgets = widgets)
+            val cashTypes = listOf(
+                OpType.CASH_DEPOSIT, OpType.CASH_WITHDRAW, OpType.CASH_FEE, OpType.CASH_TRANSFER,
+                OpType.TX_BUY, OpType.TX_SELL, OpType.TX_REBOOK,
+            )
+            cashTypes.forEach { h.engine.enqueue(it, "p1", "{}") }
+            h.engine.enqueue(OpType.CASH_DEPOSIT, "p2", "{}")
+
+            assertEquals(DrainResult.Drained(cashTypes.size + 1), h.engine.drain())
+
+            assertEquals(
+                listOf("p1", "p2"),
+                widgets.cash.map { it.portfolioId },
+            )
+            assertTrue(widgets.cash.all { it.reason == at.bettertrack.app.widget.BtWidgetRefreshReason.QUEUE_DRAIN })
+            assertTrue("no investments call for cash ops", widgets.investments.isEmpty())
+            // Fired after afterDrain had run, so Room held server truth.
+            assertTrue("was $refetchesSeenByTrigger", refetchesSeenByTrigger.all { it == 1 })
+        }
+
+    @Test
+    fun `a value point is an investment change - the cash widgets are not refreshed`() = runBlocking {
+        val h = Harness()
+        h.engine.enqueue(OpType.CUSTOM_ASSET_VALUE_POINT, "p1", "{}")
+
+        h.engine.drain()
+
+        assertTrue(h.widgets.cash.isEmpty())
+        assertEquals(1, h.widgets.investments.size)
+    }
+
+    @Test
+    fun `a rejected op tells nobody`() = runBlocking {
+        val h = Harness()
+        h.executor.execScript = { ExecResult.Rejected("INSUFFICIENT_CASH") }
+        h.engine.enqueue(OpType.CASH_WITHDRAW, "p1", "{}")
+
+        h.engine.drain()
+
+        assertTrue(h.widgets.calls.isEmpty())
+    }
+
+    @Test
+    fun `a queued cash op that lands LATER refreshes the widgets when it lands`() = runBlocking {
+        val h = Harness()
+        var online = false
+        h.executor.execScript = { if (online) ExecResult.Success(null) else ExecResult.Ambiguous(reachable = false) }
+        h.engine.enqueue(OpType.CASH_DEPOSIT, "p1", "{}")
+
+        assertEquals(DrainResult.Offline, h.engine.drain())
+        assertTrue("nothing landed yet", h.widgets.calls.isEmpty())
+
+        online = true // WiFi back: the reconnect drain replays the same key
+        assertEquals(DrainResult.Drained(1), h.engine.drain())
+        assertEquals(listOf("p1"), h.widgets.cash.map { it.portfolioId })
+    }
+
+    @Test
+    fun `a refetch that throws does not swallow the widget refresh - the server already holds the write`() {
+        val refresher = object : PostSyncRefresher {
+            override suspend fun afterDrain(portfolioIds: Set<String>) = error("offline mid-refetch")
+        }
+        val widgets = at.bettertrack.app.widget.RecordingWidgetRefreshTrigger()
+        val store = FakeOpStore()
+        val engine = SyncEngine(
+            store = store,
+            executor = FakeExecutor(),
+            refresher = refresher,
+            hasSession = { true },
+            ownerKey = { "user-1" },
+            widgetRefresh = widgets,
+        )
+        runBlocking { engine.enqueue(OpType.CASH_TRANSFER, "p1", "{}") }
+
+        val thrown = runCatching { runBlocking { engine.drain() } }.exceptionOrNull()
+
+        assertNotNull("the refetch failure still propagates as before", thrown)
+        assertEquals(listOf("p1"), widgets.cash.map { it.portfolioId })
+    }
+
+    @Test
+    fun `every op type is classified - cash ops and trades move the cash widgets, value points do not`() {
+        val expected = mapOf(
+            OpType.TX_BUY to true,
+            OpType.TX_SELL to true,
+            OpType.TX_REBOOK to true,
+            OpType.CASH_DEPOSIT to true,
+            OpType.CASH_WITHDRAW to true,
+            OpType.CASH_FEE to true,
+            OpType.CASH_TRANSFER to true,
+            OpType.CUSTOM_ASSET_VALUE_POINT to false,
+        )
+        assertEquals("a new OpType needs a widget decision here", OpType.entries.toSet(), expected.keys)
+        OpType.entries.forEach { assertEquals(it.name, expected.getValue(it), it.touchesCashWidgets) }
     }
 }

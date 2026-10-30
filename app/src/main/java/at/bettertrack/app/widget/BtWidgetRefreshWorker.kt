@@ -37,6 +37,9 @@ class BtWidgetRefreshWorker(
 
     override suspend fun doWork(): Result {
         val warm = inputData.getBoolean(INPUT_WARM, true)
+        // The cash trigger's targeted pass ([BtWidgetCashScheduler]) narrows
+        // both halves to the cash kinds; every other request decodes to ALL.
+        val targets = BtWidgetRefreshTargets.from(inputData)
         // No widget on any home screen ⇒ nothing to spend a network round trip
         // on. The periodic job is cancelled when the last one is removed, so
         // this is the belt to that braces (a restore can leave work scheduled
@@ -47,14 +50,14 @@ class BtWidgetRefreshWorker(
         }
         if (warm) {
             try {
-                BtWidgetRepository.warm(applicationContext)
+                BtWidgetRepository.warm(applicationContext, targets = targets)
             } catch (e: Exception) {
                 // Forcing the graph can fail outright in a fresh process; the
                 // repaint below still shows whatever Room already had.
                 Log.w(TAG, "Widget warm-up failed; repainting from cache.", e)
             }
         }
-        BtWidgets.updateAll(applicationContext)
+        BtWidgets.updateAll(applicationContext, targets.kinds)
         return Result.success()
     }
 
@@ -137,6 +140,7 @@ class BtWidgetScheduler(private val appContext: Context) {
     fun cancelAll() {
         workManager.cancelUniqueWork(PERIODIC_WORK_NAME)
         workManager.cancelUniqueWork(ONE_TIME_WORK_NAME)
+        workManager.cancelUniqueWork(BtWidgetCashScheduler.CASH_WORK_NAME)
     }
 
     companion object {

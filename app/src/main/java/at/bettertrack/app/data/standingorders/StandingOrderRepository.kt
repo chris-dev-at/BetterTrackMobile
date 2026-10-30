@@ -6,6 +6,8 @@ import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.apiCall
 import at.bettertrack.app.data.api.dto.StandingOrderDto
 import at.bettertrack.app.data.api.unitApiCall
+import at.bettertrack.app.widget.BtWidgetRefreshReason
+import at.bettertrack.app.widget.WidgetRefreshTrigger
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import retrofit2.Response
@@ -34,7 +36,21 @@ import retrofit2.Response
 class StandingOrderRepository(
     private val api: BtApi,
     private val json: Json,
+    /**
+     * Every successful order WRITE tells the cash widgets: the server books a
+     * due order on its own schedule, and a create/resume can land a movement in
+     * the same request window. One debounced pass is cheaper than reasoning
+     * about which edit books today. See [WidgetRefreshTrigger].
+     */
+    private val widgetRefresh: WidgetRefreshTrigger = WidgetRefreshTrigger.NONE,
 ) {
+
+    private fun <T> BtResult<T>.cashMovedOnOk(portfolioId: String? = null): BtResult<T> = also {
+        if (it is BtResult.Ok) widgetRefresh.cashChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+    }
+
+    private fun BtResult<StandingOrderDto>.orderMovedOnOk(): BtResult<StandingOrderDto> =
+        cashMovedOnOk((this as? BtResult.Ok)?.value?.portfolioId?.takeIf { it.isNotBlank() })
 
     /** The caller's orders, optionally narrowed to one portfolio. */
     suspend fun list(portfolioId: String? = null): BtResult<List<StandingOrderDto>> =
@@ -55,7 +71,7 @@ class StandingOrderRepository(
      * into a `.strict()` 400 by accident. See [toCreateRequest].
      */
     suspend fun create(draft: StandingOrderDraft): BtResult<StandingOrderDto> =
-        apiCall(json) { api.createStandingOrder(draft.toCreateRequest()) }
+        apiCall(json) { api.createStandingOrder(draft.toCreateRequest()) }.orderMovedOnOk()
 
     /**
      * Edit amount / label / end date — the only three mutable fields.
@@ -81,19 +97,19 @@ class StandingOrderRepository(
             endDate = endDate,
             clearEndDate = clearEndDate,
         ) ?: return get(id)
-        return apiCall(json) { api.updateStandingOrder(id, patch) }
+        return apiCall(json) { api.updateStandingOrder(id, patch) }.orderMovedOnOk()
     }
 
     /** Stop firing. History is kept; resuming never back-fills the paused periods. */
     suspend fun pause(id: String): BtResult<StandingOrderDto> =
-        apiCall(json) { api.pauseStandingOrder(id) }
+        apiCall(json) { api.pauseStandingOrder(id) }.orderMovedOnOk()
 
     /** Resume from the current period onward. */
     suspend fun resume(id: String): BtResult<StandingOrderDto> =
-        apiCall(json) { api.resumeStandingOrder(id) }
+        apiCall(json) { api.resumeStandingOrder(id) }.orderMovedOnOk()
 
     /** Delete (204) — the order's run history cascades server-side. */
-    suspend fun delete(id: String): BtResult<Unit> = unitCall { api.deleteStandingOrder(id) }
+    suspend fun delete(id: String): BtResult<Unit> = unitCall { api.deleteStandingOrder(id) }.cashMovedOnOk()
 
     /** A 204 endpoint; [apiCall] insists on a non-null body, so use the bodyless twin. */
     private suspend fun unitCall(call: suspend () -> Response<Unit>): BtResult<Unit> =

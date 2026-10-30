@@ -367,7 +367,36 @@ object AppGraph {
     }
 
     val portfolioRepository: PortfolioRepository by lazy {
-        PortfolioRepository(db = database, json = json, backend = portfolioBackend)
+        PortfolioRepository(
+            db = database,
+            json = json,
+            backend = portfolioBackend,
+            widgetRefresh = widgetRefreshTrigger,
+        )
+    }
+
+    /**
+     * The home-screen widgets' "data just changed" hook (owner order
+     * 2026-10-29: cash widgets must be accurate right after a cash action).
+     * Handed to every repository that writes cash and to the sync engine; see
+     * [at.bettertrack.app.widget.WidgetRefreshTrigger] for the contract and
+     * [at.bettertrack.app.widget.DebouncedWidgetRefreshTrigger] for the timing.
+     */
+    val widgetRefreshTrigger: at.bettertrack.app.widget.WidgetRefreshTrigger by lazy {
+        at.bettertrack.app.widget.DebouncedWidgetRefreshTrigger(
+            scope = appScope,
+            now = System::currentTimeMillis,
+            isForeground = { at.bettertrack.app.widget.btAppInForeground() },
+            cashWidgetsPlaced = { at.bettertrack.app.widget.btWidgetCashKindsPlaced(appContext) },
+            repaintCash = {
+                at.bettertrack.app.widget.BtWidgets.updateAll(
+                    appContext,
+                    at.bettertrack.app.widget.BT_WIDGET_CASH_KINDS,
+                )
+            },
+            enqueueCashPass = { ids -> at.bettertrack.app.widget.BtWidgetCashScheduler(appContext).enqueue(ids) },
+            log = { msg -> android.util.Log.i("BtWidgetTrigger", msg) },
+        )
     }
 
     /**
@@ -382,12 +411,13 @@ object AppGraph {
             tagDao = database.cashTagDao(),
             cashDao = database.cashDao(),
             json = json,
+            widgetRefresh = widgetRefreshTrigger,
         )
     }
 
     /** V5 standing orders — network-only (nothing about an order is renderable stale). */
     val standingOrderRepository: StandingOrderRepository by lazy {
-        StandingOrderRepository(api = btApi, json = json)
+        StandingOrderRepository(api = btApi, json = json, widgetRefresh = widgetRefreshTrigger)
     }
 
     /**
@@ -553,6 +583,13 @@ object AppGraph {
                 tokenProvider = { tokenManager.currentAccessToken() },
                 json = json,
                 onReconnectSleep = { ms -> kotlinx.coroutines.delay(ms) },
+                // The same socket carries `portfolio.changed` (bearer
+                // companion room behind `portfolio:read`): while it is up, a
+                // ledger change made elsewhere refreshes the cash widgets.
+                onPortfolioChanged = { pid ->
+                    at.bettertrack.app.widget.BtWidgetServerSignals
+                        .onRealtimePortfolioChanged(pid, widgetRefreshTrigger)
+                },
             ),
             currentUserId = {
                 (authRepository.authState.value as? AuthState.LoggedIn)?.user?.id
@@ -758,6 +795,7 @@ object AppGraph {
             hasSession = { storageMode().isDriveOnly || tokenManager.hasTokens() },
             ownerKey = { accountDataManager.currentOwnerKey() },
             storageMode = storageMode,
+            widgetRefresh = widgetRefreshTrigger,
         )
     }
 

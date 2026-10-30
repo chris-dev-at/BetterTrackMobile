@@ -229,10 +229,22 @@ object BtWidgetRepository {
      * pass only spends requests on data some widget will draw (the chart
      * widgets' history, the cash widgets' trends). The always-cheap warms run
      * unconditionally as before.
+     *
+     * [targets] is the cash trigger's narrowing ([BtWidgetRefreshTargets.isCashPass]):
+     * then only what the cash kinds draw is fetched — never a quote — see
+     * [warmCashKinds]. The default is the full pass every other caller makes.
      */
-    suspend fun warm(context: Context, nowMs: Long = System.currentTimeMillis()) {
+    suspend fun warm(
+        context: Context,
+        nowMs: Long = System.currentTimeMillis(),
+        targets: BtWidgetRefreshTargets = BtWidgetRefreshTargets.ALL,
+    ) {
         if (!hasSession()) return
         if (!AppGraph.connectivityMonitor.isOnline.value) return
+        if (targets.isCashPass) {
+            warmCashKinds(context, targets.portfolioIds, nowMs)
+            return
+        }
         warmTotals()
         warmQuotes(context, nowMs)
         warmBudget(nowMs)
@@ -240,6 +252,64 @@ object BtWidgetRepository {
         warmTrends(context, nowMs)
         warmAssetHistory(context, nowMs)
         warmCash(context)
+    }
+
+    /**
+     * The targeted pass after a cash write ([WidgetRefreshTrigger.cashChanged]):
+     * the four cash kinds' data and nothing else. No quotes, no history, no asset
+     * series — the investment widgets keep their 45-minute cadence, and a deposit
+     * is not a reason to spend the quote fan-out.
+     *
+     *  * totals of the portfolios that moved (net-worth hero = holdings + cash);
+     *  * budgets (only when a Budget widget is placed — the picker has its own
+     *    warm, [warmBudgetsForPicker]);
+     *  * the monthly-flow window ([warmTrends] gates itself on placement);
+     *  * the wallets' ledgers ([warmCash] gates itself on placement).
+     *
+     * For a write made in the app the totals and the ledger were already
+     * refetched by the write itself; doing them again here is the "network pass
+     * follows for consistency" half, and it is what makes a server signal (an
+     * edit on the web) land at all.
+     */
+    private suspend fun warmCashKinds(context: Context, portfolioIds: Set<String>, nowMs: Long) {
+        warmChangedTotals(context, portfolioIds)
+        try {
+            if (BtWidgets.placed(context, BtBudgetWidgetReceiver::class.java)) warmBudget(nowMs)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Budget warm-up failed; the widget keeps its last figures.", e)
+        }
+        warmTrends(context, nowMs)
+        warmCash(context)
+    }
+
+    /**
+     * Re-pull the totals of the portfolios a cash change touched, for the
+     * net-worth card. [warmTotals] only fills portfolios that have NEVER synced,
+     * which is right for the periodic pass and wrong here: these rows are synced,
+     * just no longer true. Unknown portfolio (a tag edit, a push without an id)
+     * ⇒ the governing one, the same rule every widget resolves "follow" with.
+     */
+    private suspend fun warmChangedTotals(context: Context, portfolioIds: Set<String>) {
+        try {
+            if (!BtWidgets.placed(context, BtNetWorthWidgetReceiver::class.java)) return
+            val repo = AppGraph.portfolioRepository
+            val ids = portfolioIds.ifEmpty { setOfNotNull(repo.defaultSelection()?.id) }
+            ids.take(BT_WIDGET_CASH_WARM_LIMIT).forEach { pid ->
+                try {
+                    repo.refreshPortfolioDetail(pid)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Totals refresh failed for $pid; the hero keeps its last figure.", e)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Totals refresh failed; the hero keeps its last figure.", e)
+        }
     }
 
     /**

@@ -37,6 +37,18 @@ class BtMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
+        // A "your cash changed elsewhere" signal refreshes the cash widgets. A
+        // silent one (`cash.changed`, `portfolio.changed`) is not a
+        // notification and stops here; `budget.exceeded` is both.
+        val widgetSignal = try {
+            at.bettertrack.app.widget.BtWidgetServerSignals.parsePush(data)
+        } catch (e: Exception) {
+            null
+        }
+        if (widgetSignal != null) {
+            at.bettertrack.app.widget.BtWidgetServerSignals.onPush(widgetSignal) { AppGraph.widgetRefreshTrigger }
+            if (widgetSignal.silent) return
+        }
         val notif = message.notification
         val type = data["type"] ?: "system"
         val title = data["title"] ?: notif?.title ?: "BetterTrack"

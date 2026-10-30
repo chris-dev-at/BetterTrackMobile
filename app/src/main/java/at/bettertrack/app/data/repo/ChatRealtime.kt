@@ -54,6 +54,12 @@ class SocketIoChatGateway(
     private val tokenProvider: () -> String?,
     private val json: Json,
     private val onReconnectSleep: suspend (Long) -> Unit,
+    /**
+     * `portfolio.changed {portfolioId}` on the same socket — not a chat signal,
+     * so it bypasses [ChatRealtimeGateway]'s payload-free chat contract and goes
+     * straight to whoever cares (the home-screen widgets). `null` = ignored.
+     */
+    private val onPortfolioChanged: ((portfolioId: String?) -> Unit)? = null,
 ) : ChatRealtimeGateway {
 
     private val wsUrl: String = buildWsUrl(apiOrigin)
@@ -153,11 +159,24 @@ class SocketIoChatGateway(
     private fun handleEvent(payload: String) {
         val name: String
         val conversationId: String?
+        val portfolioId: String?
         try {
             val arr = json.parseToJsonElement(payload).jsonArray
             name = arr.getOrNull(0)?.jsonPrimitive?.content ?: return
-            conversationId = arr.getOrNull(1)?.jsonObject?.get("conversationId")?.jsonPrimitive?.content
+            val body = arr.getOrNull(1)?.jsonObject
+            conversationId = body?.get("conversationId")?.jsonPrimitive?.content
+            portfolioId = body?.get("portfolioId")?.jsonPrimitive?.content
         } catch (_: Exception) {
+            return
+        }
+        if (name == EVENT_PORTFOLIO_CHANGED) {
+            Log.i(TAG, "recv portfolio.changed → widget refresh")
+            try {
+                onPortfolioChanged?.invoke(portfolioId)
+            } catch (e: Exception) {
+                // An OkHttp listener thread: nothing may escape it.
+                Log.w(TAG, "portfolio.changed handler failed: ${e.javaClass.simpleName}")
+            }
             return
         }
         if (name == EVENT_CHAT_MESSAGE) {
@@ -192,6 +211,7 @@ class SocketIoChatGateway(
     companion object {
         private const val TAG = "BtChatWs"
         const val EVENT_CHAT_MESSAGE = "chat.message"
+        const val EVENT_PORTFOLIO_CHANGED = "portfolio.changed"
 
         /** `http(s)://host[:port]` → `ws(s)://host[:port]/ws/?EIO=4&transport=websocket`. */
         fun buildWsUrl(apiOrigin: String): String {

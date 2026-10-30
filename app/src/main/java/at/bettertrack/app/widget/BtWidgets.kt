@@ -53,24 +53,21 @@ object BtWidgets {
      * Repaint every placed widget from Room. No network — this is what the sync
      * hooks call the instant the app's own data lands, so the home screen stops
      * disagreeing with the app the user just closed.
+     *
+     * [kinds] narrows the repaint (the cash trigger passes
+     * [BT_WIDGET_CASH_KINDS], so a deposit never redraws a quote card); `null`
+     * is every kind, in [BtWidgetKind] order.
      */
-    suspend fun updateAll(context: Context) {
+    suspend fun updateAll(context: Context, kinds: Set<BtWidgetKind>? = null) {
         try {
             // The common case is a user with no widgets at all, and this runs on
             // every sync drain — so ask the cheap question first rather than
             // building a Glance manager per widget kind to discover there is
             // nothing to draw.
             if (!anyPlaced(context)) return
-            BtNetWorthWidget().updateAll(context)
-            BtWatchlistWidget().updateAll(context)
-            BtPortfolioWidget().updateAll(context)
-            BtAssetWidget().updateAll(context)
-            BtMoversWidget().updateAll(context)
-            BtBudgetWidget().updateAll(context)
-            BtSpendingWidget().updateAll(context)
-            BtAllocationWidget().updateAll(context)
-            BtQuickLinksWidget().updateAll(context)
-            BtCashWalletWidget().updateAll(context)
+            BtWidgetKind.entries
+                .filter { kinds == null || it in kinds }
+                .forEach { it.newWidget().updateAll(context) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -88,19 +85,12 @@ object BtWidgets {
     internal fun placed(context: Context, receiver: Class<*>): Boolean =
         placedCount(context, receiver) > 0
 
-    /** Every widget receiver, so "is any widget placed" has one list to check. */
-    private val RECEIVERS: List<Class<*>> = listOf(
-        BtNetWorthWidgetReceiver::class.java,
-        BtWatchlistWidgetReceiver::class.java,
-        BtPortfolioWidgetReceiver::class.java,
-        BtAssetWidgetReceiver::class.java,
-        BtMoversWidgetReceiver::class.java,
-        BtBudgetWidgetReceiver::class.java,
-        BtSpendingWidgetReceiver::class.java,
-        BtAllocationWidgetReceiver::class.java,
-        BtQuickActionsWidgetReceiver::class.java,
-        BtCashWalletWidgetReceiver::class.java,
-    )
+    /**
+     * Every widget receiver, so "is any widget placed" has one list to check —
+     * derived from [BtWidgetKind] so the repaint list and the placed check
+     * cannot drift apart.
+     */
+    private val RECEIVERS: List<Class<*>> by lazy { BtWidgetKind.entries.map { it.receiverClass } }
 
     private fun placedCount(context: Context, receiver: Class<*>): Int = try {
         AppWidgetManager.getInstance(context)

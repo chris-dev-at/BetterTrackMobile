@@ -22,6 +22,8 @@ import at.bettertrack.app.data.api.unitApiCall
 import at.bettertrack.app.data.db.CashDao
 import at.bettertrack.app.data.db.CashTagDao
 import at.bettertrack.app.data.db.CashTagEntity
+import at.bettertrack.app.widget.BtWidgetRefreshReason
+import at.bettertrack.app.widget.WidgetRefreshTrigger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.Json
 import retrofit2.Response
@@ -65,7 +67,19 @@ class CashClassificationRepository(
     private val tagDao: CashTagDao,
     private val cashDao: CashDao,
     private val json: Json,
+    /**
+     * Every successful classification WRITE moves what the Budget and
+     * Monthly-flow widgets draw (a tag's name/tint on the donut, a movement's
+     * tag on a budget's progress, a budget's target), so each one tells the
+     * cash widgets — here, not in the view models. See [WidgetRefreshTrigger].
+     */
+    private val widgetRefresh: WidgetRefreshTrigger = WidgetRefreshTrigger.NONE,
 ) {
+
+    /** A classification write landed: refresh the cash widgets. */
+    private fun <T> BtResult<T>.cashMovedOnOk(portfolioId: String? = null): BtResult<T> = also {
+        if (it is BtResult.Ok) widgetRefresh.cashChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+    }
 
     // ── Tags ────────────────────────────────────────────────────────────────
 
@@ -100,7 +114,7 @@ class CashClassificationRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
     /**
      * Rename and/or re-tint. Both optional (the server needs at least one);
@@ -122,7 +136,7 @@ class CashClassificationRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
     /**
      * Delete a user tag (204). An app-owned tag answers **409
@@ -130,7 +144,7 @@ class CashClassificationRepository(
      * and offer a rename instead of reporting a failure.
      */
     suspend fun deleteTag(id: String): BtResult<Unit> =
-        unitCall { api.deleteCashTag(id) }.also { if (it is BtResult.Ok) refreshTags() }
+        unitCall { api.deleteCashTag(id) }.also { if (it is BtResult.Ok) refreshTags() }.cashMovedOnOk()
 
     // ── Per-movement tagging ────────────────────────────────────────────────
 
@@ -161,7 +175,7 @@ class CashClassificationRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
     // ── Budgets ─────────────────────────────────────────────────────────────
 
@@ -193,7 +207,7 @@ class CashClassificationRepository(
         ) {
             is BtResult.Ok -> BtResult.Ok(r.value.budget)
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     /** Retarget a budget's amount. Portfolio, tag and period are fixed at creation. */
     suspend fun updateBudgetAmount(id: String, amount: Double): BtResult<CashBudgetDto> =
@@ -201,10 +215,12 @@ class CashClassificationRepository(
             val r = apiCall(json) { api.updateCashBudget(id, UpdateCashBudgetRequest(amount = amount)) }
         ) {
             is BtResult.Ok -> BtResult.Ok(r.value.budget)
+                .cashMovedOnOk(r.value.budget.portfolioId.takeIf { it.isNotBlank() })
             is BtResult.Err -> r
         }
 
-    suspend fun deleteBudget(id: String): BtResult<Unit> = unitCall { api.deleteCashBudget(id) }
+    suspend fun deleteBudget(id: String): BtResult<Unit> =
+        unitCall { api.deleteCashBudget(id) }.cashMovedOnOk()
 
     // ── Auto-tagging rules ──────────────────────────────────────────────────
 
@@ -234,7 +250,7 @@ class CashClassificationRepository(
         ) {
             is BtResult.Ok -> BtResult.Ok(r.value.rule)
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
     /** Every field optional; a non-null [tagIds] REPLACES the rule's set. */
     suspend fun updateRule(
@@ -255,9 +271,10 @@ class CashClassificationRepository(
         ) {
             is BtResult.Ok -> BtResult.Ok(r.value.rule)
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
-    suspend fun deleteRule(id: String): BtResult<Unit> = unitCall { api.deleteCashRule(id) }
+    suspend fun deleteRule(id: String): BtResult<Unit> =
+        unitCall { api.deleteCashRule(id) }.cashMovedOnOk()
 
     /**
      * Run every enabled rule over the existing movements; returns how many
@@ -269,7 +286,7 @@ class CashClassificationRepository(
         when (val r = apiCall(json) { api.applyCashRules() }) {
             is BtResult.Ok -> BtResult.Ok(r.value.movementsTagged)
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk()
 
     /**
      * What the rules WOULD tag [note] as — for the live hint under an entry

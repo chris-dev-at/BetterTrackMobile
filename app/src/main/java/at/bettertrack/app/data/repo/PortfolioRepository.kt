@@ -14,6 +14,8 @@ import at.bettertrack.app.data.db.PortfolioEntity
 import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.data.storage.PortfolioBackend
 import at.bettertrack.app.sync.PostSyncRefresher
+import at.bettertrack.app.widget.BtWidgetRefreshReason
+import at.bettertrack.app.widget.WidgetRefreshTrigger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -46,7 +48,25 @@ class PortfolioRepository(
     private val db: BtDatabase,
     private val json: Json,
     private val backend: PortfolioBackend,
+    /**
+     * Told after every successful write that moves a cash-widget figure (see
+     * [WidgetRefreshTrigger]). Called HERE rather than in the view models so a
+     * new screen reusing these methods cannot forget it; the queued writes are
+     * covered by [at.bettertrack.app.sync.SyncEngine] the same way.
+     * `PortfolioRepositoryWidgetRefreshTest` pins which method calls what.
+     */
+    private val widgetRefresh: WidgetRefreshTrigger = WidgetRefreshTrigger.NONE,
 ) : PostSyncRefresher {
+
+    /** A write moved this portfolio's cash (or its net worth): refresh the cash widgets. */
+    private fun <T> BtResult<T>.cashMovedOnOk(portfolioId: String): BtResult<T> = also {
+        if (it is BtResult.Ok) widgetRefresh.cashChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+    }
+
+    /** A write moved only investment figures (45-minute cadence; see the trigger). */
+    private fun <T> BtResult<T>.investmentsMovedOnOk(portfolioId: String? = null): BtResult<T> = also {
+        if (it is BtResult.Ok) widgetRefresh.investmentsChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+    }
 
     // ── Room-first reads ─────────────────────────────────────────────────────
 
@@ -302,7 +322,7 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     /**
      * DELETE one hand-typed cash movement. The backend repaints the row and its
@@ -325,26 +345,26 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     // ── Cash-source management (Step 9, §6.3 — online-only per §7.2) ────────
 
     suspend fun createCashSource(portfolioId: String, name: String, type: String): BtResult<Unit> =
-        backend.createCashSource(portfolioId, name, type)
+        backend.createCashSource(portfolioId, name, type).cashMovedOnOk(portfolioId)
 
     suspend fun updateCashSource(
         portfolioId: String,
         sourceId: String,
         name: String?,
         type: String?,
-    ): BtResult<Unit> = backend.updateCashSource(portfolioId, sourceId, name, type)
+    ): BtResult<Unit> = backend.updateCashSource(portfolioId, sourceId, name, type).cashMovedOnOk(portfolioId)
 
     /** Archive a source — the SERVER rejects Main and non-zero balances. */
     suspend fun archiveCashSource(portfolioId: String, sourceId: String): BtResult<Unit> =
-        backend.archiveCashSource(portfolioId, sourceId)
+        backend.archiveCashSource(portfolioId, sourceId).cashMovedOnOk(portfolioId)
 
     suspend fun restoreCashSource(portfolioId: String, sourceId: String): BtResult<Unit> =
-        backend.restoreCashSource(portfolioId, sourceId)
+        backend.restoreCashSource(portfolioId, sourceId).cashMovedOnOk(portfolioId)
 
     fun cashSources(portfolioId: String): Flow<List<CashSourceEntity>> =
         db.cashDao().observeSources(portfolioId)
@@ -381,7 +401,14 @@ class PortfolioRepository(
     ): BtResult<String> =
         when (val r = backend.createCustomAsset(name, category, smoothing, initial)) {
             is BtResult.Ok -> {
-                if (initial != null && portfolioId != null) afterDrain(setOf(portfolioId))
+                if (initial != null && portfolioId != null) {
+                    afterDrain(setOf(portfolioId))
+                    // An initial purchase is a trade: net worth (and, when
+                    // paid from cash, a wallet) moved.
+                    widgetRefresh.cashChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+                } else {
+                    widgetRefresh.investmentsChanged(BtWidgetRefreshReason.REPOSITORY_WRITE, portfolioId)
+                }
                 r
             }
 
@@ -393,9 +420,10 @@ class PortfolioRepository(
         name: String?,
         category: String?,
         smoothing: Boolean?,
-    ): BtResult<Unit> = backend.updateCustomAsset(id, name, category, smoothing)
+    ): BtResult<Unit> = backend.updateCustomAsset(id, name, category, smoothing).investmentsMovedOnOk()
 
-    suspend fun deleteCustomAsset(id: String): BtResult<Unit> = backend.deleteCustomAsset(id)
+    suspend fun deleteCustomAsset(id: String): BtResult<Unit> =
+        backend.deleteCustomAsset(id).investmentsMovedOnOk()
 
     /**
      * Edit/delete value points (online-only full-replace, §7.2 — offline ADD
@@ -410,7 +438,7 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.investmentsMovedOnOk()
 
     /** Refresh detail of the selected portfolio so custom holding values update. */
     private suspend fun refreshPortfoliosDetailForCustom() {
@@ -448,7 +476,7 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     /**
      * DELETE a synced transaction; refreshes the scope after.
@@ -467,7 +495,7 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     // ── Switcher management (§6.1 — create/rename/archive/restore) ──────────
     // Online-only by spec (§7.2); the UI disables them offline with a clear state.
@@ -484,13 +512,18 @@ class PortfolioRepository(
         }
 
     suspend fun renamePortfolio(portfolioId: String, name: String): BtResult<Unit> =
-        backend.renamePortfolio(portfolioId, name)
+        backend.renamePortfolio(portfolioId, name).investmentsMovedOnOk(portfolioId)
 
+    /**
+     * Archive / restore / delete change WHICH portfolios count, so the
+     * net-worth hero's cash (and any wallet card on that portfolio) moves:
+     * treated as a cash change.
+     */
     suspend fun archivePortfolio(portfolioId: String): BtResult<Unit> =
-        backend.archivePortfolio(portfolioId)
+        backend.archivePortfolio(portfolioId).cashMovedOnOk(portfolioId)
 
     suspend fun restorePortfolio(portfolioId: String): BtResult<Unit> =
-        backend.restorePortfolio(portfolioId)
+        backend.restorePortfolio(portfolioId).cashMovedOnOk(portfolioId)
 
     /**
      * Hard-delete a portfolio (platform #412, online-only §7.2). On success →
@@ -513,7 +546,7 @@ class PortfolioRepository(
             }
 
             is BtResult.Err -> r
-        }
+        }.cashMovedOnOk(portfolioId)
 
     /** Drop every cached row that belonged to a hard-deleted portfolio (no orphans). */
     private suspend fun purgePortfolioCache(portfolioId: String) {

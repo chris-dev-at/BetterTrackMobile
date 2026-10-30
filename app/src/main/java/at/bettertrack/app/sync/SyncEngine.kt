@@ -4,6 +4,8 @@ import at.bettertrack.app.data.api.BtApiError
 import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.storage.StorageMode
 import at.bettertrack.app.data.storage.backendTag
+import at.bettertrack.app.widget.BtWidgetRefreshReason
+import at.bettertrack.app.widget.WidgetRefreshTrigger
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -79,6 +81,12 @@ class SyncEngine(
      * Injected (default [ATTEMPT_TIMEOUT_MS]) so tests drive it under virtual time.
      */
     private val attemptTimeoutMs: Long = ATTEMPT_TIMEOUT_MS,
+    /**
+     * Told about every landed op AFTER the post-drain refetch, so the home-screen
+     * widgets follow a queued write — in-app drain, background drain, or an
+     * offline op that lands hours later — without any screen having to ask.
+     */
+    private val widgetRefresh: WidgetRefreshTrigger = WidgetRefreshTrigger.NONE,
 ) {
     private val drainMutex = Mutex()
 
@@ -137,6 +145,10 @@ class SyncEngine(
 
         var completed = 0
         val affected = mutableSetOf<String>()
+        // Which landed ops move the cash widgets (by portfolio; `null` = an op
+        // with no portfolio) and whether anything else landed.
+        val cashMoved = linkedSetOf<String?>()
+        var investmentsMoved = false
 
         val result: DrainResult = run loop@{
             while (true) {
@@ -189,6 +201,7 @@ class SyncEngine(
                     is ExecResult.Success -> {
                         store.markDone(op.id, e.serverResultJson, now())
                         op.portfolioId?.let(affected::add)
+                        if (op.type.touchesCashWidgets) cashMoved += op.portfolioId else investmentsMoved = true
                         completed++
                     }
 
@@ -245,7 +258,15 @@ class SyncEngine(
         }
 
         // Refetch-and-reconcile: server truth replaces local projections (§7.3).
-        if (affected.isNotEmpty()) refresher.afterDrain(affected)
+        // The widgets hear about it AFTER, so a fast-path repaint reads the
+        // refetched rows — and in a `finally`, because a refetch that failed
+        // does not undo the write the server already holds.
+        try {
+            if (affected.isNotEmpty()) refresher.afterDrain(affected)
+        } finally {
+            cashMoved.forEach { widgetRefresh.cashChanged(BtWidgetRefreshReason.QUEUE_DRAIN, it) }
+            if (investmentsMoved) widgetRefresh.investmentsChanged(BtWidgetRefreshReason.QUEUE_DRAIN)
+        }
         store.pruneDone(KEEP_DONE_ROWS)
         result
     }
