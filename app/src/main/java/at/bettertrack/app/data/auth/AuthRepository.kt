@@ -46,6 +46,12 @@ class AuthRepository(
     /** Run at the start of an explicit logout, before any local wipe (bearer valid). */
     private val onBeforeLogout: suspend () -> Unit = {},
     /**
+     * The `Accept-Language` for `GET /auth/me` — in-app language, else device
+     * language ([at.bettertrack.app.data.i18n.acceptLanguageFor]); `null` omits
+     * the header. The server localises announcement titles from it (#2094).
+     */
+    private val acceptLanguage: () -> String? = { null },
+    /**
      * Run after an explicit logout has completed (S3/S4 plan §4.4 row 2).
      *
      * Logging out of a BetterTrack account in BOTH mode must not leave the
@@ -226,7 +232,7 @@ class AuthRepository(
      * `/auth/me` (the deep link that reaches it carries an `android.net.Uri`).
      */
     internal suspend fun completeLogin() {
-        when (val me = apiCall(json) { btApi.me() }) {
+        when (val me = apiCall(json) { btApi.me(acceptLanguage()) }) {
             is BtResult.Ok -> {
                 val user = me.value.toSessionUser()
                 when {
@@ -298,7 +304,7 @@ class AuthRepository(
         if (!tokenManager.hasTokens()) {
             return BtResult.Err(at.bettertrack.app.data.api.BtApiError(401, "UNAUTHENTICATED", "no session"))
         }
-        val me = apiCall(json) { btApi.me() }
+        val me = apiCall(json) { btApi.me(acceptLanguage()) }
         run {
             when (me) {
                 is BtResult.Ok -> {

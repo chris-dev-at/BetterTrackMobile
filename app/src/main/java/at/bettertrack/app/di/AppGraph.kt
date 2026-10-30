@@ -282,6 +282,15 @@ object AppGraph {
             clientId = OAuthConfig.clientId,
             scope = appScope,
             localAccountData = accountDataManager,
+            // `/auth/me` localises announcement titles from Accept-Language (#2094):
+            // the in-app language, else the device's own (not the JVM default,
+            // which LocaleManager.wrap rewrites).
+            acceptLanguage = {
+                at.bettertrack.app.data.i18n.acceptLanguageFor(
+                    at.bettertrack.app.data.i18n.LocaleManager.current(appContext),
+                    android.content.res.Resources.getSystem().configuration.locales[0],
+                )
+            },
             // Register the FCM device token on login; deregister before logout wipe.
             // The everSignedIn flag is the §4.3 grandfathering signal that
             // outlives both the token store and the Room wipe.

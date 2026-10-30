@@ -243,9 +243,14 @@ interface TokenApi {
  * Later milestones add their endpoints to this same client.
  */
 interface BtApi {
-    /** The signed-in user — username/email for display, role/status gating. */
+    /**
+     * The signed-in user — username/email for display, role/status gating.
+     *
+     * [acceptLanguage] localises `pendingAcknowledgements[].title` server-side
+     * (platform ruling, PR #2094); `null` omits the header.
+     */
     @GET("auth/me")
-    suspend fun me(): Response<MeResponse>
+    suspend fun me(@Header("Accept-Language") acceptLanguage: String? = null): Response<MeResponse>
 
     /**
      * Mark first-run setup as finished or dismissed (§6.12).
