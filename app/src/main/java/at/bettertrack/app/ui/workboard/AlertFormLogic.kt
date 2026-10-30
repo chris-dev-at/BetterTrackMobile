@@ -1,9 +1,9 @@
 package at.bettertrack.app.ui.workboard
 
 import at.bettertrack.app.data.repo.AlertKind
+import at.bettertrack.app.ui.components.currencySymbol
 import at.bettertrack.app.ui.market.formatPrice
 import at.bettertrack.app.ui.portfolio.parseLocalizedDecimal
-import java.util.Currency
 import java.util.Locale
 
 /**
@@ -30,13 +30,15 @@ fun alertThresholdValid(kind: AlertKind, threshold: Double?): Boolean {
     return true
 }
 
-/** "$" for USD, "€" for EUR, … falls back to the raw code. */
-fun currencySymbol(code: String, locale: Locale = Locale.getDefault()): String =
-    try {
-        Currency.getInstance(code).getSymbol(locale)
-    } catch (_: Exception) {
-        code
-    }
+/**
+ * The threshold field's leading unit: "%" for the percent kinds, else the
+ * asset's currency symbol — the app's ONE symbol resolver (`btMoneySymbol`, via
+ * the components alias), not a copy of it. This file used to carry its own
+ * `Currency.getSymbol` without the format package's case folding, so the same
+ * code could print differently here than on every other screen (MB-08).
+ */
+fun alertThresholdPrefix(kind: AlertKind, currency: String, locale: Locale = Locale.getDefault()): String =
+    if (kind.isPercent) "%" else currencySymbol(currency, locale)
 
 /** Locale decimal separator; whole numbers stay whole ("5"), else 2 decimals. */
 fun formatAlertNumber(v: Double, locale: Locale = Locale.getDefault()): String {

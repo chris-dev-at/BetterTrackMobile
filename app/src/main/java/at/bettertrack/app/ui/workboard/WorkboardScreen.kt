@@ -1044,11 +1044,7 @@ private fun AlertCreateSheet(
                     },
                     prefix = {
                         Text(
-                            text = if (kind.isPercent) {
-                                "%"
-                            } else {
-                                currencySymbol(pickedAsset.currency, locale)
-                            },
+                            text = alertThresholdPrefix(kind, pickedAsset.currency, locale),
                             color = bt.textMuted,
                         )
                     },
@@ -1165,11 +1161,7 @@ private fun AlertEditSheet(
                 },
                 prefix = {
                     Text(
-                        text = if (alert.kind.isPercent) {
-                            "%"
-                        } else {
-                            currencySymbol(alert.asset.currency, locale)
-                        },
+                        text = alertThresholdPrefix(alert.kind, alert.asset.currency, locale),
                         color = bt.textMuted,
                     )
                 },
