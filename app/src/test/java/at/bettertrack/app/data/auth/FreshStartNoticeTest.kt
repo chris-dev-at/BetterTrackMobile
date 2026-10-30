@@ -167,18 +167,17 @@ class FreshStartNoticeTest {
     }
 
     /**
-     * The flag is the outer gate, and it is OFF in this build: the deployed
-     * `openapi.json` declares
-     * `POST /api/v1/auth/fresh-start-notice/acknowledge` as `sessionCookie`-only,
-     * so this app's bearer cannot spend the notice yet. Pinned as a test so the
-     * day it flips, it flips deliberately.
+     * The flag is the outer gate, and it is ON since E9 went live (prod
+     * c4f4ae2): the acknowledge route accepts this app's bearer. The rule
+     * itself still gates on it — off means never due.
      */
     @Test
-    fun `the surface is flagged off until the ack route accepts a bearer`() {
-        assertFalse(FreshStartNoticeFlags.enabled)
+    fun `the flag is the outer gate`() {
+        assertTrue(FreshStartNoticeFlags.enabled)
         assertFalse(
-            freshStartNoticeDue(signedIn = true, pending = true, shownThisSession = false),
+            freshStartNoticeDue(signedIn = true, pending = true, shownThisSession = false, enabled = false),
         )
+        assertTrue(freshStartNoticeDue(signedIn = true, pending = true, shownThisSession = false))
     }
 
     // ── The in-memory marker ────────────────────────────────────────────────

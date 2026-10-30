@@ -226,6 +226,9 @@ Conventions: **Behaviour** = none / internal / user-visible. **Effort** S ≤ 1 
   - Not flags in this sense and out of scope here: `BtWidgetServerSignals.ENABLED` (branch-only, see the table), `PV_E3_PINNED` (Fable-only, `vault/`).
   - The removed set is pinned by `RemovedFlagsDisciplineTest` (source scan of `app/src/main` + `app/src/test`, code and comments); the names above are deliberately not in it.
 
+### MB-29 · Flags that stay — **rank 52**
+- `ParanoidVaultsFlags.enabled` and the three `BuildConfig` switches. *(updated 2026-10-30)* `FreshStartNoticeFlags.enabled` is no longer platform-blocked: E9 is live on prod `c4f4ae2` — `POST /api/v1/auth/fresh-start-notice/acknowledge` accepts the app's bearer with `account:security` (no body, no CSRF header; `403 INSUFFICIENT_SCOPE` without the scope) — so the flag is `true` and the notice spends itself through the route; it stays a flag only until the next audit removes it with the other shipped-feature flags (MB-28).
+
 ## 5. Docs and KDocs that lie
 
 ### MB-30 · `data/auth/OAuthConfig.kt` contradicts its own constants — **rank 7**

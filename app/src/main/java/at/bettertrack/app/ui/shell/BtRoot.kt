@@ -211,8 +211,8 @@ private fun AuthGate(
                         // only worth saying to someone who is signed in, past the
                         // app lock and actually looking at their app. It is not
                         // a gate of its own; the shell is fully usable behind it,
-                        // and the notice is a sheet over it. No-op while
-                        // `FreshStartNoticeFlags.enabled` is false.
+                        // and the notice is a sheet over it. Gated by
+                        // `FreshStartNoticeFlags.enabled` (on since E9 went live).
                         at.bettertrack.app.ui.paranoid.FreshStartNoticeHost(user = user)
                     }
                 }

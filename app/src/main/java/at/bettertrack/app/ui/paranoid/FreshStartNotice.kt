@@ -99,9 +99,8 @@ internal const val WEB_PARANOID_VAULTS_PATH = "/control/privacy"
 @Composable
 internal fun FreshStartNoticeHost(user: SessionUser) {
     // The outer gate. While the flag is off nothing below runs — no state, no
-    // effect, no composition — so the build is behaviourally identical to one
-    // without the feature. See [FreshStartNoticeFlags.enabled] for why it is off
-    // (the acknowledge route refuses this app's bearer today).
+    // effect, no composition. On since E9 went live (the acknowledge route
+    // accepts this app's bearer); see [FreshStartNoticeFlags.enabled].
     if (!FreshStartNoticeFlags.enabled) return
 
     val auth = AppGraph.authRepository

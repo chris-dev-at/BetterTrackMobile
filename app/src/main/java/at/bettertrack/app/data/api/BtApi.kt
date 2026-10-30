@@ -277,17 +277,11 @@ interface BtApi {
      * /account/fresh-start-ack`, which does not exist on the deployment. The
      * openapi wins, per the standing rule.
      *
-     * ## Not callable yet — see [at.bettertrack.app.data.auth.FreshStartNoticeFlags]
-     * The deployed spec declares this route `security: [{ sessionCookie: [] }]`
-     * ONLY, while every sibling the app already calls (`/auth/me`,
-     * `/auth/first-run/complete`, `/auth/pin/…`) declares `sessionCookie` **and**
-     * `apiKeyBearer`. That list is generated from the real middleware policy, so
-     * it is a statement about enforcement, not about documentation: the route is
-     * absent from the `/auth/…` bearer carve-outs and falls through to the
-     * module's `session-only` default, i.e. a bearer is refused. The method is
-     * declared so the wiring is complete and tested; the surface that would call
-     * it stays behind the flag until the platform widens the allowlist the same
-     * one line it widened for `/auth/first-run/complete`.
+     * ## Bearer-reachable since E9 went live (prod `c4f4ae2`, 2026-10-30)
+     * Accepts this app's bearer with `account:security` — no body, no CSRF
+     * header — and answers `403 INSUFFICIENT_SCOPE` without the scope (the app
+     * requests it). Until then the route was session-cookie-only and the
+     * surface waited behind [at.bettertrack.app.data.auth.FreshStartNoticeFlags].
      */
     @POST("auth/fresh-start-notice/acknowledge")
     suspend fun acknowledgeFreshStartNotice(): Response<MeResponse>

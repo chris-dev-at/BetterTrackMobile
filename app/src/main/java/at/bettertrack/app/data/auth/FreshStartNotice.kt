@@ -19,33 +19,25 @@ package at.bettertrack.app.data.auth
 object FreshStartNoticeFlags {
 
     /**
-     * Whether the notice surface is reachable. **`false` — blocked on the
-     * platform, not on this app.**
+     * Whether the notice surface is reachable. **`true` since 2026-10-30 — E9 is
+     * live on prod `c4f4ae2`.**
      *
-     * The deployed `openapi.json` declares
-     * `POST /api/v1/auth/fresh-start-notice/acknowledge` with
-     * `security: [{ "sessionCookie": [] }]` and nothing else, while every
-     * sibling this app already calls — `/auth/me`, `/auth/first-run/complete`,
-     * `/auth/pin/…` — declares `sessionCookie` **and** `apiKeyBearer`. That list
-     * is generated from the real bearer middleware policy rather than written by
-     * hand, so it describes enforcement: the route is not in the `/auth/…` bearer
-     * carve-outs and falls through to the group's `session-only` default. A
-     * bearer — a personal key or this app's delegated OAuth access token, which
-     * travel the same rail — is refused.
-     *
-     * Showing a notice whose only primary action can only fail would be worse
-     * than not showing it, and no local dismissal may stand in for the server's
-     * receipt (see [freshStartNoticeDue]). So the whole surface waits here. When
-     * the platform widens the allowlist — one line, exactly the one it already
-     * added for `/auth/first-run/complete` — this becomes `true` and nothing
-     * else has to change.
+     * Until then the deployed `openapi.json` declared
+     * `POST /api/v1/auth/fresh-start-notice/acknowledge` session-cookie-only, so
+     * this app's bearer could not spend the notice and the whole surface waited
+     * here (showing a notice whose only primary action can only fail would be
+     * worse than not showing it). The route now accepts the bearer with
+     * `account:security` — no body, no CSRF header — and answers `403
+     * INSUFFICIENT_SCOPE` without that scope; the sheet renders that like any
+     * other failure (error + retry), and nothing local ever stands in for the
+     * server's receipt (see [freshStartNoticeDue]).
      *
      * A `val` and not a `const val` on purpose, matching
      * [at.bettertrack.app.vault.pv.ParanoidVaultsFlags]: a compile-time constant
      * turns every gated block into dead code the compiler complains about, and
      * those complaints push the next author to delete the guard.
      */
-    val enabled: Boolean = false
+    val enabled: Boolean = true
 }
 
 /**
