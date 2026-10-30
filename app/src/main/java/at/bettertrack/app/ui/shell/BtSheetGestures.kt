@@ -1,5 +1,6 @@
 package at.bettertrack.app.ui.shell
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -9,8 +10,131 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-// Pure sheet-gesture rules (owner corrections 2026-08-08). No Compose state here
-// beyond the refresh-hint signal, so every rule is JVM-testable.
+// Pure sheet-gesture rules (owner corrections 2026-08-08, retuned 2026-08-09 and
+// 2026-10-29). No Compose state here beyond the refresh-hint signal, so every
+// rule is JVM-testable.
+
+/**
+ * The vertical drag model, in one place. Every number here is a finger distance
+ * or a speed; [sheetDragModel] resolves them against one measured sheet.
+ *
+ * ## The geometry (2026-10-29)
+ *
+ * The one-level point stays a FRACTION of the sheet, because that is the point
+ * the owner tuned on both the phone and the tablet and asked to keep. Everything
+ * above it is DP: the band that buys "close everything" is the same thumb distance
+ * on a 882dp phone sheet and on the 1173dp tablet sheet. A fraction-of-height band
+ * made the tall tablet window charge a third more finger for the same decision.
+ *
+ * ```
+ *  finger  0 ── backOne ──(+RESIST_ONSET)── onset ──(resisted)── closeAll ──>
+ *  release      SETTLE  |  BACK_ONE (depth >= 2)                  |  CLOSE_ALL
+ *  depth 1      SETTLE  |  SETTLE unless a CLOSE_FLING flick      |  closes
+ * ```
+ */
+internal object BtSheetDragTuning {
+
+    /**
+     * The one-level trigger, and the dead zone under it, as a fraction of the
+     * sheet's height. Below it a swipe-down means nothing whatever its velocity
+     * (owner 2026-08-08: overscroll jiggles must never navigate, 0.12); past it a
+     * nested release goes back ONE page. Owner 2026-10-29: keep it where it is, it
+     * may fire "just very very little" earlier, so 0.12 -> 0.115 (4%: phone
+     * 106 -> 102dp, tablet 141 -> 135dp).
+     */
+    const val BACK_ONE_FRACTION = 0.115f
+
+    /**
+     * The full-close threshold, as finger distance PAST the one-level point.
+     * Owner 2026-10-29: "the harder pull needs far too much effort", cut it to
+     * roughly half. It was 0.43 sheet-heights from the top (phone 379dp, tablet
+     * 504dp); one-level + 96dp is phone 198dp (52%) and tablet 231dp (46%). The
+     * 96dp is also the safety band: a back-one release can land anywhere in it,
+     * and no back-one drag that stops short of it can close the stack.
+     */
+    val CLOSE_ALL_BAND: Dp = 96.dp
+
+    /**
+     * Where the resistance begins, as finger distance past the one-level point.
+     * Owner 2026-08-09 put it "1/4 below the top" (0.25); the 2026-10-29
+     * half-distance close-all lands before a quarter, so the onset now rides
+     * inside the band: 40dp of free travel to release a back-one in, then 56dp of
+     * resisted stretch that ends exactly at the close-all point.
+     */
+    val RESIST_ONSET: Dp = 40.dp
+
+    /**
+     * How much of the finger's movement the sheet keeps inside the resisted
+     * stretch. 1f would be no resistance; 0f a wall. Owner 2026-08-09 ("make the
+     * resistance less, because closing literally requires to swipe the entire
+     * screen"): 0.40 -> 0.50. Owner 2026-10-29 keeps the STIFFNESS (it is the
+     * felt step between the two stages) and halves the effort by shortening the
+     * stretch: the resistance now costs 28dp of finger, was 0.09 sheet-heights
+     * (phone 79dp, tablet 106dp).
+     */
+    const val RESISTANCE = 0.50f
+
+    /**
+     * A flick this fast back UP cancels from anywhere, and a rightward back-swipe
+     * flick this fast commits (shipped 2026-08-08 model; the back-swipe shape is
+     * binding and unchanged). Depth >= 2 has NO downward velocity rule: distance
+     * alone decides back-one vs close-all, so the detent haptic and the gold pill
+     * are an honest promise and a fast back-one flick can never close the stack.
+     */
+    val FLING_VELOCITY: Dp = 420.dp
+
+    /**
+     * A depth-1 sheet closes on a downward flick this fast, once it is past the
+     * dead zone. Depth 1's close IS the close-everything pull, so the owner's
+     * 2026-10-29 halving applies to it too: 420 -> 210dp/s.
+     */
+    val CLOSE_FLING_VELOCITY: Dp = 210.dp
+
+    /** What an unmeasured sheet (first frame, height 0) is resolved against. */
+    val UNMEASURED_SHEET: Dp = 880.dp
+
+    /** No threshold may ask for more finger than this share of the sheet. */
+    const val PULL_CEILING = 0.90f
+}
+
+/**
+ * The drag model resolved for ONE sheet: [BtSheetDragTuning] in fractions of that
+ * sheet's height (the unit `travel` lives in) and speeds in px/s.
+ *
+ * @property backOne one-level trigger and dead zone, sheet travel (= finger).
+ * @property resistOnset where the resistance begins, sheet travel (= finger).
+ * @property closeAll the close-all boundary in SHEET travel, depth >= 2.
+ * @property closeAllPull the same boundary in FINGER travel; depth 1's close.
+ */
+@Immutable
+internal data class SheetDragModel(
+    val backOne: Float,
+    val resistOnset: Float,
+    val closeAll: Float,
+    val closeAllPull: Float,
+    val resistance: Float,
+    val flingPx: Float,
+    val closeFlingPx: Float,
+)
+
+/** Resolve [BtSheetDragTuning] for a sheet [heightPx] tall at [pxPerDp]. */
+internal fun sheetDragModel(heightPx: Float, pxPerDp: Float): SheetDragModel {
+    val t = BtSheetDragTuning
+    val d = if (pxPerDp > 0f) pxPerDp else 1f
+    val h = if (heightPx > 0f) heightPx else t.UNMEASURED_SHEET.value * d
+    val closeAllPull = (t.BACK_ONE_FRACTION + t.CLOSE_ALL_BAND.value * d / h)
+        .coerceAtMost(t.PULL_CEILING)
+    val onset = (t.BACK_ONE_FRACTION + t.RESIST_ONSET.value * d / h).coerceAtMost(closeAllPull)
+    return SheetDragModel(
+        backOne = t.BACK_ONE_FRACTION,
+        resistOnset = onset,
+        closeAll = onset + (closeAllPull - onset) * t.RESISTANCE,
+        closeAllPull = closeAllPull,
+        resistance = t.RESISTANCE,
+        flingPx = t.FLING_VELOCITY.value * d,
+        closeFlingPx = t.CLOSE_FLING_VELOCITY.value * d,
+    )
+}
 
 /** Which band of the swipe-down the sheet is sitting in, for the grabber. */
 internal enum class SheetStage { IDLE, BACK, CLOSE_ALL }
@@ -18,9 +142,9 @@ internal enum class SheetStage { IDLE, BACK, CLOSE_ALL }
 /**
  * What letting go of a swipe-down means.
  *
- * Owner's model, as retuned 2026-08-09: the travel meets its resistance a QUARTER
- * of the way down the sheet. Release at or before it = back ONE page; push
- * through the band and release = the ENTIRE stack closes.
+ * Owner's model, as retuned 2026-10-29: a little pull goes back ONE page; push
+ * through the resistance just after it and the ENTIRE stack closes, with about
+ * half the finger the 2026-08-09 model asked for. See [BtSheetDragTuning].
  */
 internal enum class SheetRelease {
     /** Inside the dead zone, or a flick back up — nothing happened. */
@@ -42,28 +166,29 @@ internal enum class SheetRelease {
 internal fun sheetRelease(
     travel: Float,
     velocityY: Float,
-    velocityThresholdPx: Float,
     stacked: Boolean,
+    model: SheetDragModel,
 ): SheetRelease {
-    if (travel < SHEET_DEAD_ZONE) return SheetRelease.SETTLE
+    if (travel < model.backOne) return SheetRelease.SETTLE
     // A flick back UP is a change of mind, from anywhere.
-    if (velocityY <= -velocityThresholdPx) return SheetRelease.SETTLE
+    if (velocityY <= -model.flingPx) return SheetRelease.SETTLE
     if (stacked) {
-        return if (travel >= SHEET_NOTCH_END) SheetRelease.CLOSE_ALL else SheetRelease.BACK_ONE
+        return if (travel >= model.closeAll) SheetRelease.CLOSE_ALL else SheetRelease.BACK_ONE
     }
-    // Depth 1: unchanged full pull-down-to-close, distance OR flick.
-    if (travel >= SHEET_CLOSE_FRACTION || velocityY >= velocityThresholdPx) {
+    // Depth 1: closing IS closing everything, so it takes the same finger as the
+    // nested close-all (depth 1 is linear: travel == finger), or a flick.
+    if (travel >= model.closeAllPull || velocityY >= model.closeFlingPx) {
         return SheetRelease.BACK_ONE
     }
     return SheetRelease.SETTLE
 }
 
 /** [SheetStage] for a travel value — the visual half of [sheetRelease]. */
-internal fun sheetStageOf(travel: Float, stacked: Boolean): SheetStage = when {
-    travel < SHEET_DEAD_ZONE -> SheetStage.IDLE
-    stacked && travel >= SHEET_NOTCH_END -> SheetStage.CLOSE_ALL
+internal fun sheetStageOf(travel: Float, stacked: Boolean, model: SheetDragModel): SheetStage = when {
+    travel < model.backOne -> SheetStage.IDLE
+    stacked && travel >= model.closeAll -> SheetStage.CLOSE_ALL
     stacked -> SheetStage.BACK
-    travel >= SHEET_CLOSE_FRACTION -> SheetStage.BACK
+    travel >= model.closeAllPull -> SheetStage.BACK
     else -> SheetStage.IDLE
 }
 /**
@@ -77,46 +202,49 @@ internal fun sheetStageOf(travel: Float, stacked: Boolean): SheetStage = when {
  *
  * Depth 1 has no second stage, so it has nothing to announce.
  */
-internal fun sheetNotchCrossed(previous: Float, next: Float, stacked: Boolean): Boolean =
-    stacked && previous < SHEET_NOTCH_END && next >= SHEET_NOTCH_END
+internal fun sheetNotchCrossed(
+    previous: Float,
+    next: Float,
+    stacked: Boolean,
+    model: SheetDragModel,
+): Boolean = stacked && previous < model.closeAll && next >= model.closeAll
 
 /**
  * Where a drag of [dy] px puts the sheet, as a fraction of its own height.
  *
  * Depth 1 tracks the finger exactly — there is no two-stage decision to feel, so
- * a detent there would be resistance that means nothing. At depth >= 2 the notch
- * band stiffens the drag between [SHEET_NOTCH_START] and [SHEET_NOTCH_END]; the
- * mapping carries the FINGER's accumulated distance ([sheetPullFor]) rather than
- * the sheet's position, so dragging back up unwinds the same resistance.
+ * a detent there would be resistance that means nothing. At depth >= 2 the
+ * resisted stretch stiffens the drag between [SheetDragModel.resistOnset] and
+ * [SheetDragModel.closeAll]; the mapping carries the FINGER's accumulated
+ * distance ([sheetPullFor]) rather than the sheet's position, so dragging back up
+ * unwinds the same resistance.
  */
-internal fun sheetDragTravel(current: Float, dy: Float, heightPx: Float, stacked: Boolean): Float {
+internal fun sheetDragTravel(
+    current: Float,
+    dy: Float,
+    heightPx: Float,
+    stacked: Boolean,
+    model: SheetDragModel,
+): Float {
     if (heightPx <= 0f) return current
     if (!stacked) return (current + dy / heightPx).coerceIn(0f, 1f)
-    val pulled = sheetPullFor(current) + dy / heightPx
-    return sheetTravelFor(pulled.coerceAtLeast(0f))
+    val pulled = sheetPullFor(current, model) + dy / heightPx
+    return sheetTravelFor(pulled.coerceAtLeast(0f), model)
 }
 
 /** Finger distance (as a fraction of sheet height) -> travel. */
-internal fun sheetTravelFor(pull: Float): Float {
-    val notchPull = (SHEET_NOTCH_END - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
-    return when {
-        pull <= SHEET_NOTCH_START -> pull
-        pull <= SHEET_NOTCH_START + notchPull ->
-            SHEET_NOTCH_START + (pull - SHEET_NOTCH_START) * SHEET_NOTCH_RESISTANCE
-        else -> SHEET_NOTCH_END + (pull - SHEET_NOTCH_START - notchPull)
-    }.coerceIn(0f, 1f)
-}
+internal fun sheetTravelFor(pull: Float, model: SheetDragModel): Float = when {
+    pull <= model.resistOnset -> pull
+    pull <= model.closeAllPull -> model.resistOnset + (pull - model.resistOnset) * model.resistance
+    else -> model.closeAll + (pull - model.closeAllPull)
+}.coerceIn(0f, 1f)
 
 /** The exact inverse of [sheetTravelFor]. */
-internal fun sheetPullFor(travel: Float): Float {
-    val notchPull = (SHEET_NOTCH_END - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
-    return when {
-        travel <= SHEET_NOTCH_START -> travel
-        travel <= SHEET_NOTCH_END ->
-            SHEET_NOTCH_START + (travel - SHEET_NOTCH_START) / SHEET_NOTCH_RESISTANCE
-        else -> SHEET_NOTCH_START + notchPull + (travel - SHEET_NOTCH_END)
-    }.coerceAtLeast(0f)
-}
+internal fun sheetPullFor(travel: Float, model: SheetDragModel): Float = when {
+    travel <= model.resistOnset -> travel
+    travel <= model.closeAll -> model.resistOnset + (travel - model.resistOnset) / model.resistance
+    else -> model.closeAllPull + (travel - model.closeAll)
+}.coerceAtLeast(0f)
 /**
  * What the depth axis must be DRAWN at on the frame a depth change lands — or
  * null when nothing is pending and the live value is the truth.
@@ -245,60 +373,13 @@ internal fun sheetBackSwipeCommits(
 }
 // ── Tunables ────────────────────────────────────────────────────────────────
 
-/**
- * The dead zone. Below this the swipe-down means nothing at all, whatever its
- * velocity — the fix for overscroll jiggles navigating (owner, 2026-08-08).
- */
-internal const val SHEET_DEAD_ZONE = 0.12f
-
-/**
- * Where the resistance begins. Depth >= 2 only.
- *
- * **One quarter down (owner, 2026-08-09: "move the resistance point to 1/4 below
- * the top and not at half way").** It sat at 0.36, which the owner read as
- * halfway — and from the finger's side he was right: 0.36 of the sheet is 0.36 of
- * a *full-screen* surface, so the wall arrived ~800px into the stroke, well past
- * the middle of any comfortable thumb arc. A quarter is a quarter of the sheet AND
- * roughly a quarter of the reachable stroke, which is the only reading of "1/4"
- * that holds in both frames.
- */
-internal const val SHEET_NOTCH_START = 0.25f
-
-/** Past here releasing closes the whole stack. The band keeps its 0.09 width. */
-internal const val SHEET_NOTCH_END = 0.34f
-
-/**
- * How much of the finger's movement the sheet keeps while crossing the notch.
- * 1f would be no notch; 0f a wall. Crossing costs
- * `(END - START) / RESISTANCE` of sheet height in finger travel, so this is a
- * budget as much as a feeling — see the reachability guard in BtSheetDragTest.
- *
- * **Softened (owner, 2026-08-09: "make the resistance less, because closing
- * literally requires to swipe the entire screen").** The sheet now keeps HALF the
- * finger's movement while crossing, up from 40%. The stiffening is still plainly
- * there — the thumb moves twice as far as the sheet does — but it is a detent to
- * push through rather than a wall to fight.
- *
- * Resistance is a budget as much as a feeling, and the budget is what the owner
- * was actually complaining about. Crossing now costs `(0.34 - 0.25) / 0.50 = 0.18`
- * sheet-heights, so reaching close-all takes `0.25 + 0.18 = 0.43` of the sheet in
- * finger travel. On the test phone that is **~961px of a 2316px screen — 41%,
- * down from 1255px / 54%** — one unhurried thumb stroke that ends mid-screen
- * instead of at the bottom bezel. See the reachability guard in BtSheetDragTest.
- */
-internal const val SHEET_NOTCH_RESISTANCE = 0.50f
-
-/** Depth-1 pull-down-to-close commit point. Unchanged from the shipped model. */
-internal const val SHEET_CLOSE_FRACTION = 0.50f
+// The vertical drag model lives in [BtSheetDragTuning], at the top of this file.
 
 /** How far across the screen a rightward back-swipe must travel to commit. */
 internal const val SHEET_BACK_SWIPE_FRACTION = 0.30f
 
-/** The horizontal counterpart of [SHEET_DEAD_ZONE]. */
+/** The horizontal counterpart of [BtSheetDragTuning.BACK_ONE_FRACTION]. */
 internal const val SHEET_BACK_SWIPE_DEAD_ZONE = 0.04f
-
-/** A flick this fast commits whatever distance it covered. */
-internal val SHEET_DISMISS_VELOCITY: Dp = 420.dp
 
 /**
  * How far the parent plane sits to the left while covered, as a fraction of the

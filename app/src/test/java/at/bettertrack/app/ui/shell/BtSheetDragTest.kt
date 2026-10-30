@@ -8,89 +8,93 @@ import org.junit.Test
 /** How far a finger moves the sheet, and what the grabber says about it. */
 class BtSheetDragTest {
 
-    private val height = 2000f
-    private val flick = 420f
+    // The reference phone sheet (2316px at 2.625). Since the owner's 2026-10-29
+    // order the band is dp, so the drag is tested against a real sheet height
+    // rather than a round 2000px one.
+    private val height = SheetDragDevices.PHONE_SHEET_PX
+    private val model = SheetDragDevices.phone
+    private val flick = model.flingPx
 
     // ── Depth 1: linear, no phantom detent ──────────────────────────────────
 
     @Test
     fun `a depth-1 sheet tracks the finger exactly, all the way down`() {
         var travel = 0f
-        repeat(4) { travel = sheetDragTravel(travel, 250f, height, stacked = false) }
+        repeat(4) { travel = sheetDragTravel(travel, height / 8f, height, stacked = false, model) }
         assertEquals(0.5f, travel, 1e-4f)
         // A detent at depth 1 would be resistance that means nothing: there is no
         // second stage to protect, because closing IS closing everything.
-        assertEquals(0.75f, sheetDragTravel(0.5f, 500f, height, stacked = false), 1e-4f)
+        assertEquals(0.75f, sheetDragTravel(0.5f, height / 4f, height, stacked = false, model), 1e-4f)
     }
 
     // ── Depth >= 2: three bands, one notch ──────────────────────────────────
 
     @Test
     fun `below the notch the sheet tracks the finger exactly`() {
-        // Both steps have to land short of SHEET_NOTCH_START, or this stops
-        // testing the linear band and starts testing the notch by accident.
-        assertEquals(0.1f, sheetDragTravel(0f, 200f, height, stacked = true), 1e-4f)
-        assertEquals(0.2f, sheetDragTravel(0.1f, 200f, height, stacked = true), 1e-4f)
-        assertTrue("the band under test must be below the notch", 0.2f < SHEET_NOTCH_START)
+        // Both steps have to land short of the resistance onset, or this stops
+        // testing the linear band and starts testing the notch by accident. The
+        // onset moved up with the order of 2026-10-29 (0.160 of the phone sheet,
+        // was 0.25), so the steps are 150px instead of 200px of 2000.
+        assertEquals(150f / height, sheetDragTravel(0f, 150f, height, stacked = true, model), 1e-4f)
+        assertEquals(300f / height, sheetDragTravel(150f / height, 150f, height, stacked = true, model), 1e-4f)
+        assertTrue("the band under test must be below the notch", 300f / height < model.resistOnset)
     }
 
     @Test
     fun `the notch stiffens the drag`() {
-        val below = sheetDragTravel(SHEET_NOTCH_START - 0.2f, 100f, height, true) -
-            (SHEET_NOTCH_START - 0.2f)
-        val inside = sheetDragTravel(SHEET_NOTCH_START + 0.01f, 100f, height, true) -
-            (SHEET_NOTCH_START + 0.01f)
+        val start = model.resistOnset / 2f
+        val below = sheetDragTravel(start, 50f, height, true, model) - start
+        val inBand = model.resistOnset + 0.005f
+        val inside = sheetDragTravel(inBand, 50f, height, true, model) - inBand
         assertTrue("the notch must cost more finger", inside < below)
-        assertEquals(below * SHEET_NOTCH_RESISTANCE, inside, 1e-3f)
+        assertEquals(below * BtSheetDragTuning.RESISTANCE, inside, 1e-3f)
     }
 
     @Test
     fun `past the notch the sheet tracks the finger again`() {
-        val step = sheetDragTravel(SHEET_NOTCH_END + 0.05f, 200f, height, true) -
-            (SHEET_NOTCH_END + 0.05f)
+        val step = sheetDragTravel(model.closeAll + 0.05f, 200f, height, true, model) -
+            (model.closeAll + 0.05f)
         assertEquals(200f / height, step, 1e-3f)
     }
 
     @Test
     fun `the notch is crossable and the sheet still reaches the bottom`() {
         var travel = 0f
-        repeat(40) { travel = sheetDragTravel(travel, 200f, height, stacked = true) }
+        repeat(40) { travel = sheetDragTravel(travel, 200f, height, stacked = true, model) }
         assertEquals("a long pull must still bottom out", 1f, travel, 1e-4f)
     }
 
     @Test
     fun `the drag retraces itself on the way back up`() {
-        val down = sheetDragTravel(0f, 1600f, height, stacked = true)
-        assertTrue("must be inside or past the notch", down > SHEET_NOTCH_START)
-        assertEquals(0f, sheetDragTravel(down, -1600f, height, stacked = true), 1e-3f)
+        val down = sheetDragTravel(0f, 1600f, height, stacked = true, model)
+        assertTrue("must be inside or past the notch", down > model.resistOnset)
+        assertEquals(0f, sheetDragTravel(down, -1600f, height, stacked = true, model), 1e-3f)
     }
 
     @Test
     fun `travel and pull are exact inverses`() {
-        val insideBand = (SHEET_NOTCH_START + SHEET_NOTCH_END) / 2f
-        listOf(0f, 0.2f, SHEET_NOTCH_START, insideBand, SHEET_NOTCH_END, 0.9f, 1f).forEach { t ->
-            assertEquals(t, sheetTravelFor(sheetPullFor(t)), 1e-4f)
+        val insideBand = (model.resistOnset + model.closeAll) / 2f
+        listOf(0f, 0.1f, model.resistOnset, insideBand, model.closeAll, 0.9f, 1f).forEach { t ->
+            assertEquals(t, sheetTravelFor(sheetPullFor(t, model), model), 1e-4f)
         }
     }
 
     @Test
     fun `the close-all zone stays reachable by a real thumb`() {
-        // Resistance is a budget, not a feeling: crossing the band costs
-        // (END - START) / RESISTANCE of sheet height in FINGER travel, and an
-        // earlier build put stage two beyond any thumb by getting this wrong.
+        // Resistance is a budget, not a feeling: crossing the band costs finger
+        // travel, and an earlier build put stage two beyond any thumb by getting
+        // this wrong.
         //
-        // Re-cut to the owner's 2026-08-09 complaint — "closing literally requires
-        // to swipe the entire screen". The ceiling is the number he was feeling,
-        // not an abstract one: 0.25/0.34 at resistance 0.50 costs
-        // 0.25 + 0.09/0.50 = 0.43 sheet-heights, ~961px of the test phone's
-        // ~2228px sheet, or 41% of its 2316px screen. The shipped 0.56 was 1255px
-        // and 54%, which is where "the entire screen" came from.
-        val fingerToCloseAll = sheetPullFor(SHEET_NOTCH_END)
+        // Re-cut to the owner's 2026-10-29 order — "the harder pull needs far too
+        // much effort", roughly HALF. The 2026-08-09 model cost 0.43 sheet-heights
+        // (~996px of the 2316px phone sheet); now it is one-level + 96dp, 0.224 of
+        // the sheet (~518px). Was bracketed 0.35..0.50; now about half of 0.43.
+        val fingerToCloseAll = sheetPullFor(model.closeAll, model)
         assertTrue(
             "reaching close-all costs $fingerToCloseAll sheet-heights of finger",
-            fingerToCloseAll <= 0.50f,
+            fingerToCloseAll <= 0.43f * 0.60f,
         )
-        assertTrue("...but it must stay a deliberate pull", fingerToCloseAll >= 0.35f)
+        assertTrue("...but it must stay a deliberate pull", fingerToCloseAll >= 0.43f * 0.40f)
     }
 
     @Test
@@ -100,30 +104,33 @@ class BtSheetDragTest {
         // becomes an accident waiting to happen; above 2.5x the finger is doing
         // more than twice the sheet's work for a fifth of its height, which is the
         // "resistance" he asked to have taken out.
-        val band = SHEET_NOTCH_END - SHEET_NOTCH_START
-        val fingerAcross = sheetPullFor(SHEET_NOTCH_END) - sheetPullFor(SHEET_NOTCH_START)
+        val band = model.closeAll - model.resistOnset
+        val fingerAcross = sheetPullFor(model.closeAll, model) - sheetPullFor(model.resistOnset, model)
         assertTrue("band $band costs only $fingerAcross of finger", fingerAcross >= band * 1.5f)
         assertTrue("band $band costs a punishing $fingerAcross", fingerAcross <= band * 2.5f)
     }
 
     @Test
-    fun `the resistance starts a quarter of the way down`() {
-        // The owner's words were "1/4 below the top", and the dead zone has to
-        // still fit underneath it or the BACK_ONE stage has nowhere to live.
-        assertEquals(0.25f, SHEET_NOTCH_START, 0.03f)
-        assertTrue("BACK_ONE needs room below the notch", SHEET_DEAD_ZONE < SHEET_NOTCH_START)
+    fun `the resistance starts after the one-level point and before close-all`() {
+        // Was "a quarter of the way down" (owner 2026-08-09: "1/4 below the top").
+        // The order of 2026-10-29 puts close-all itself before a quarter, so the
+        // onset now sits 40dp into the 96dp band: the dead zone still fits under
+        // it, and BACK_ONE still has free travel to live in before it.
+        assertTrue("BACK_ONE needs room below the notch", model.backOne < model.resistOnset)
+        assertTrue("the notch must end at close-all", model.resistOnset < model.closeAll)
+        assertTrue("close-all now comes before a quarter", model.closeAllPull < 0.25f)
     }
 
     @Test
     fun `a sheet cannot be pulled up past its rest position`() {
-        assertEquals(0f, sheetDragTravel(0f, -500f, height, stacked = true), 1e-4f)
-        assertEquals(0f, sheetDragTravel(0.1f, -500f, height, stacked = false), 1e-4f)
+        assertEquals(0f, sheetDragTravel(0f, -500f, height, stacked = true, model), 1e-4f)
+        assertEquals(0f, sheetDragTravel(0.1f, -500f, height, stacked = false, model), 1e-4f)
     }
 
     @Test
     fun `an unmeasured sheet does not move`() {
-        assertEquals(0.3f, sheetDragTravel(0.3f, 500f, 0f, stacked = true), 1e-4f)
-        assertEquals(0.3f, sheetDragTravel(0.3f, 500f, 0f, stacked = false), 1e-4f)
+        assertEquals(0.3f, sheetDragTravel(0.3f, 500f, 0f, stacked = true, model), 1e-4f)
+        assertEquals(0.3f, sheetDragTravel(0.3f, 500f, 0f, stacked = false, model), 1e-4f)
     }
 
     // ── The visible half of the rule ────────────────────────────────────────
@@ -132,15 +139,18 @@ class BtSheetDragTest {
     fun `the grabber reports the stage the release rule would take`() {
         // The pill is the only always-visible chrome, so it is where the rule is
         // drawn. It must never disagree with what letting go would actually do.
-        val points = listOf(0f, 0.05f, SHEET_DEAD_ZONE, 0.3f, 0.5f, SHEET_NOTCH_START, SHEET_NOTCH_END, 0.9f, 1f)
+        val points = listOf(
+            0f, 0.05f, model.backOne, model.resistOnset, model.closeAll, model.closeAllPull,
+            0.3f, 0.5f, 0.9f, 1f,
+        )
         listOf(true, false).forEach { stacked ->
             points.forEach { t ->
-                val expected = when (sheetRelease(t, 0f, flick, stacked)) {
+                val expected = when (sheetRelease(t, 0f, stacked, model)) {
                     SheetRelease.SETTLE -> SheetStage.IDLE
                     SheetRelease.BACK_ONE -> SheetStage.BACK
                     SheetRelease.CLOSE_ALL -> SheetStage.CLOSE_ALL
                 }
-                assertEquals("travel=$t stacked=$stacked", expected, sheetStageOf(t, stacked))
+                assertEquals("travel=$t stacked=$stacked", expected, sheetStageOf(t, stacked, model))
             }
         }
     }
@@ -149,8 +159,8 @@ class BtSheetDragTest {
 
     @Test
     fun `the detent fires on the crossing into close-all`() {
-        assertTrue(sheetNotchCrossed(SHEET_NOTCH_END - 0.01f, SHEET_NOTCH_END, stacked = true))
-        assertTrue(sheetNotchCrossed(0f, 1f, stacked = true))
+        assertTrue(sheetNotchCrossed(model.closeAll - 0.01f, model.closeAll, stacked = true, model))
+        assertTrue(sheetNotchCrossed(0f, 1f, stacked = true, model))
     }
 
     @Test
@@ -159,28 +169,28 @@ class BtSheetDragTest {
         // whole specification: a finger resting past the boundary still produces
         // a stream of move events, and answering each of them would turn a detent
         // into a buzz.
-        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, SHEET_NOTCH_END, stacked = true))
-        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, 0.9f, stacked = true))
-        assertFalse(sheetNotchCrossed(0.9f, 1f, stacked = true))
+        assertFalse(sheetNotchCrossed(model.closeAll, model.closeAll, stacked = true, model))
+        assertFalse(sheetNotchCrossed(model.closeAll, 0.9f, stacked = true, model))
+        assertFalse(sheetNotchCrossed(0.9f, 1f, stacked = true, model))
     }
 
     @Test
     fun `retreating below the notch and crossing again fires again`() {
         // Not a re-arm hack: going back is the user changing their mind, and
         // coming forward again is them making the decision a second time.
-        assertFalse(sheetNotchCrossed(0.9f, 0.2f, stacked = true))
-        assertTrue(sheetNotchCrossed(0.2f, 0.9f, stacked = true))
+        assertFalse(sheetNotchCrossed(0.9f, 0.1f, stacked = true, model))
+        assertTrue(sheetNotchCrossed(0.1f, 0.9f, stacked = true, model))
     }
 
     @Test
     fun `pulling back up across the notch is silent`() {
-        assertFalse(sheetNotchCrossed(SHEET_NOTCH_END, SHEET_NOTCH_END - 0.01f, stacked = true))
+        assertFalse(sheetNotchCrossed(model.closeAll, model.closeAll - 0.01f, stacked = true, model))
     }
 
     @Test
     fun `a depth-1 sheet has no detent, because it has no second stage`() {
         listOf(0f to 0.9f, 0.2f to 1f).forEach { (from, to) ->
-            assertFalse("$from -> $to", sheetNotchCrossed(from, to, stacked = false))
+            assertFalse("$from -> $to", sheetNotchCrossed(from, to, stacked = false, model))
         }
     }
 
@@ -194,18 +204,18 @@ class BtSheetDragTest {
         var buzzed = false
         while (travel <= 1f) {
             val next = travel + step
-            if (sheetNotchCrossed(travel, next, stacked = true)) {
+            if (sheetNotchCrossed(travel, next, stacked = true, model)) {
                 assertFalse("the detent must fire only once", buzzed)
                 buzzed = true
                 assertEquals(
                     "the detent must land on the CLOSE_ALL boundary",
                     SheetRelease.CLOSE_ALL,
-                    sheetRelease(next, 0f, flick, true),
+                    sheetRelease(next, 0f, true, model),
                 )
                 assertEquals(
                     "...and the frame before it must still be BACK_ONE",
                     SheetRelease.BACK_ONE,
-                    sheetRelease(travel, 0f, flick, true),
+                    sheetRelease(travel, 0f, true, model),
                 )
             }
             travel = next

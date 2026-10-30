@@ -150,7 +150,11 @@ internal fun BtSheetStack(
     var heightPx by remember { mutableFloatStateOf(0f) }
     var widthPx by remember { mutableFloatStateOf(0f) }
     var leaving by remember { mutableStateOf(false) }
-    val flingVelocityPx = with(density) { SHEET_DISMISS_VELOCITY.toPx() }
+    val flingVelocityPx = with(density) { BtSheetDragTuning.FLING_VELOCITY.toPx() }
+    // The vertical drag model for THIS sheet's measured height: the one-level
+    // point is a share of it, the close-all band is dp. See [BtSheetDragTuning].
+    val dragModel = remember(heightPx, density) { sheetDragModel(heightPx, density.density) }
+    val dragModelNow by rememberUpdatedState(dragModel)
 
     // What this layer hides while it is settled — its own top edge, from the same
     // two terms the Surface below is positioned by, plus the corner radius. A
@@ -297,10 +301,10 @@ internal fun BtSheetStack(
                 0f
             } else {
                 val from = travel.value
-                val next = sheetDragTravel(from, dy, h, stackedNow)
+                val next = sheetDragTravel(from, dy, h, stackedNow, dragModelNow)
                 // Synchronous: the finger's value lands on the finger's frame.
                 travel.snap(next)
-                if (sheetNotchCrossed(from, next, stackedNow)) hapticsNow.detent()
+                if (sheetNotchCrossed(from, next, stackedNow, dragModelNow)) hapticsNow.detent()
                 (next - from) * h
             }
         }
@@ -336,7 +340,7 @@ internal fun BtSheetStack(
             private fun drag(dy: Float): Float = pullBy(dy)
 
             fun release(velocityY: Float) {
-                when (sheetRelease(travel.value, velocityY, flingVelocityPx, stackedNow)) {
+                when (sheetRelease(travel.value, velocityY, stackedNow, dragModelNow)) {
                     SheetRelease.SETTLE -> settle()
                     SheetRelease.BACK_ONE -> backOne()
                     SheetRelease.CLOSE_ALL -> closeAll()
@@ -411,6 +415,7 @@ internal fun BtSheetStack(
                 BtSheetGrabber(
                     travel = travel,
                     stacked = stacked,
+                    model = dragModel,
                     onDrag = { dy -> if (!leaving) pullBy(dy) },
                     onRelease = { v -> pull.release(v) },
                 )
@@ -518,6 +523,7 @@ private fun BtSheetPlanes(
 private fun BtSheetGrabber(
     travel: BtSheetMotion,
     stacked: Boolean,
+    model: SheetDragModel,
     onDrag: (Float) -> Unit,
     onRelease: (Float) -> Unit,
 ) {
@@ -540,8 +546,8 @@ private fun BtSheetGrabber(
         // second into at most two recompositions for the whole gesture. The
         // shipped build read travel directly here and recomposed this strip —
         // retargeting the animateDpAsState below — on every single frame.
-        val current by remember(travel, stacked) {
-            derivedStateOf { sheetStageOf(travel.value, stacked) }
+        val current by remember(travel, stacked, model) {
+            derivedStateOf { sheetStageOf(travel.value, stacked, model) }
         }
         val width by animateDpAsState(
             targetValue = when (current) {

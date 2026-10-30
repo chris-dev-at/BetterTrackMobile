@@ -98,8 +98,9 @@ class BtHaptics(
      * **The one exception to the four-meanings rule above, added on the owner's
      * explicit instruction (2026-08-09): "make a vibration haptic once you go
      * past it".** It has exactly one call site — the sheet's notch, where pulling
-     * past [at.bettertrack.app.ui.shell.SHEET_NOTCH_END] changes a release from
-     * "back one page" into "close the entire stack".
+     * past the close-all point (one-level trigger +
+     * [at.bettertrack.app.ui.shell.BtSheetDragTuning.CLOSE_ALL_BAND]) changes a
+     * release from "back one page" into "close the entire stack".
      *
      * It earns its place by the same test the other four pass: it answers a
      * question the user is actually asking, and one they cannot answer any other
