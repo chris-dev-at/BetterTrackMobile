@@ -1142,6 +1142,7 @@
     <string name="bt_chat_unavailable_body">Dieser Chat ist nicht verfügbar. Möglicherweise kannst du dieser Person nicht mehr schreiben.</string>
     <string name="bt_chat_say_hi">Schreib @%1$s</string>
     <string name="bt_chat_empty_hint">Sag hallo — mit der Büroklammer teilst du einen Wert oder ein Portfolio.</string>
+    <string name="bt_chat_row_no_messages">Noch keine Nachrichten</string>
     <string name="bt_chat_chip_view">Ansehen</string>
     <string name="bt_chat_chip_not_shared">Nicht mit dir geteilt</string>
     <string name="bt_chat_share_item_cd">Element teilen</string>

@@ -209,14 +209,83 @@ class ChatWiringTest {
         assertFalse(c.lastFromMe)
     }
 
+    // ── MB-01: an empty thread has no time, and sorts last ───────────────────────
+    //
+    // It used to be stamped `System.currentTimeMillis()` on every refresh, so a
+    // freshly opened thread with no message sat on top of the list reading
+    // "jetzt" over an empty preview. An unparsable stamp went the same way.
+
+    private fun emptyThread(id: String) =
+        ChatConversationDto(id, SocialUserDto("u-$id", "anna"), unreadCount = 0, lastMessage = null, lastMessageAt = null)
+
+    private fun datedThread(id: String, at: String, body: String = "hi") = ChatConversationDto(
+        id,
+        SocialUserDto("u-$id", "ben"),
+        unreadCount = 0,
+        lastMessage = ChatMessagePreviewDto(senderId = "u-$id", body = body, chipKind = null, createdAt = at),
+        lastMessageAt = at,
+    )
+
     @Test
-    fun conversation_empty_thread_has_recent_timestamp() {
-        val dto = ChatConversationDto("c1", SocialUserDto("u1", "anna"), unreadCount = 0, lastMessage = null, lastMessageAt = null)
-        val c = dto.toDomain("me")
+    fun conversation_empty_thread_has_no_time_rather_than_now() {
+        val c = emptyThread("c1").toDomain("me")
         assertEquals("", c.lastPreview)
         assertNull(c.lastChipKind)
         assertFalse(c.lastFromMe)
-        assertTrue(c.lastAtMs > 0L) // sorts as "just now" rather than epoch 0
+        assertNull("an empty thread was stamped with a time it never had", c.lastAtMs)
+    }
+
+    @Test
+    fun conversation_unparsable_stamp_is_no_time_not_now() {
+        val c = datedThread("c1", at = "not-a-date", body = "hey").toDomain("me")
+        assertNull("an unparsable stamp became a time", c.lastAtMs)
+        // The message itself is still there — only its time is unknown.
+        assertEquals("hey", c.lastPreview)
+    }
+
+    @Test
+    fun conversation_valid_stamp_keeps_its_own_instant() {
+        val at = "2026-07-09T20:00:00.000Z"
+        val c = datedThread("c1", at = at).toDomain("me")
+        assertEquals(java.time.Instant.parse(at).toEpochMilli(), c.lastAtMs)
+    }
+
+    @Test
+    fun empty_threads_sort_after_every_dated_thread_in_server_order() {
+        val list = listOf(
+            emptyThread("empty-a"),
+            datedThread("old", at = "2019-01-01T00:00:00.000Z"),
+            emptyThread("empty-b"),
+            datedThread("new", at = "2026-07-09T20:00:00.000Z"),
+        ).map { it.toDomain("me") }
+        // Dated threads newest first, however old the oldest; the message-less
+        // ones after them, keeping the order the server returned them in.
+        assertEquals(listOf("new", "old", "empty-a", "empty-b"), sortConversations(list).map { it.id })
+    }
+
+    @Test
+    fun only_a_thread_with_nothing_in_it_reads_as_having_no_messages() {
+        assertTrue(emptyThread("c1").toDomain("me").hasNoMessages)
+        // Negative space — each of these HAS a message and must keep its preview:
+        // an unreadable stamp with a body,
+        assertFalse(datedThread("c2", at = "not-a-date", body = "hey").toDomain("me").hasNoMessages)
+        // a chip-only message (no body text) whose stamp is unreadable,
+        val chipOnly = ChatConversationDto(
+            "c3", SocialUserDto("u3", "cleo"), unreadCount = 0,
+            lastMessage = ChatMessagePreviewDto(senderId = "u3", body = null, chipKind = "asset", createdAt = "x"),
+            lastMessageAt = "x",
+        )
+        assertFalse(chipOnly.toDomain("me").hasNoMessages)
+        // and a dated message whose body is empty.
+        assertFalse(datedThread("c4", at = "2026-07-09T20:00:00.000Z", body = "").toDomain("me").hasNoMessages)
+    }
+
+    @Test
+    fun the_message_clock_still_reads_0_for_an_unparsable_stamp_while_the_thread_clock_reads_null() {
+        assertNull(isoToEpochMsOrNull("not-a-date"))
+        assertNull(isoToEpochMsOrNull(null))
+        assertEquals(0L, isoToEpochMs("not-a-date"))
+        assertEquals(isoToEpochMs("2026-07-09T20:00:00.000Z"), isoToEpochMsOrNull("2026-07-09T20:00:00.000Z"))
     }
 
     // ── iso parsing ──────────────────────────────────────────────────────────────

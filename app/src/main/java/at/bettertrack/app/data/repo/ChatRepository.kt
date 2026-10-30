@@ -121,7 +121,13 @@ data class Conversation(
      * [lastFromMe] and [lastChipKind]; see `chatPreviewText`.
      */
     val lastPreview: String,
-    val lastAtMs: Long,
+    /**
+     * When the last message was sent, or null when the thread has none yet (or
+     * its stamp is unreadable). Never a stand-in "now": an empty thread used to
+     * be re-stamped with the wall clock on every refresh, so it sorted on top
+     * and read "jetzt" over an empty preview (MB-01).
+     */
+    val lastAtMs: Long?,
     val unread: Int,
     /** Whether the last message was the caller's own — the row prefixes "Du: ". */
     val lastFromMe: Boolean = false,
@@ -140,7 +146,14 @@ data class Conversation(
      * [friendUsername] reports.
      */
     val friendProfileIcon: String? = null,
-)
+) {
+    /**
+     * True for a thread nobody has written in yet: no time, no text, no chip.
+     * All three, because a message whose stamp is unreadable still HAS a
+     * message, and a chip-only one has no body text.
+     */
+    val hasNoMessages: Boolean get() = lastAtMs == null && lastPreview.isEmpty() && lastChipKind == null
+}
 
 /** Whether the caller may still post to a thread (drives the composer). */
 enum class ThreadAvailability {
@@ -171,19 +184,26 @@ data class ThreadState(
 
 // ── Pure helpers (unit-tested; Context/Android-free) ─────────────────────────
 
-/** Tolerant ISO-8601 → epoch-ms (server sends `…Z` datetimes). 0 on failure. */
-internal fun isoToEpochMs(iso: String?): Long {
-    if (iso.isNullOrBlank()) return 0L
+/** Tolerant ISO-8601 → epoch-ms (server sends `…Z` datetimes); null when absent or unparsable. */
+internal fun isoToEpochMsOrNull(iso: String?): Long? {
+    if (iso.isNullOrBlank()) return null
     return try {
         Instant.parse(iso).toEpochMilli()
     } catch (_: Exception) {
         try {
             OffsetDateTime.parse(iso).toInstant().toEpochMilli()
         } catch (_: Exception) {
-            0L
+            null
         }
     }
 }
+
+/**
+ * [isoToEpochMsOrNull] with 0 on failure — for a MESSAGE's `sentAtMs`, which
+ * orders a thread oldest→newest and must be a number. A conversation's time
+ * must not use this: there 0 (or a stand-in "now") is a time it never had.
+ */
+internal fun isoToEpochMs(iso: String?): Long = isoToEpochMsOrNull(iso) ?: 0L
 
 /** Map a server-resolved chip to the UI model. Not-viewable ⇒ title/subtitle null. */
 internal fun ChatChipDto.toDomain(): ShareChip {
@@ -210,8 +230,9 @@ internal fun ChatMessageDto.toDomain(myUserId: String?): ChatMessage = ChatMessa
 
 internal fun ChatConversationDto.toDomain(myUserId: String?): Conversation {
     val last = lastMessage
-    // A freshly-opened, empty thread (null lastMessageAt) sorts as "just now".
-    val at = lastMessageAt?.let { isoToEpochMs(it) }?.takeIf { it > 0L } ?: System.currentTimeMillis()
+    // A freshly-opened, empty thread (null lastMessageAt) has no time — and an
+    // unparsable stamp is unknown, not "now" (MB-01). sortConversations puts both last.
+    val at = isoToEpochMsOrNull(lastMessageAt)
     // `user` is null when the other participant deleted their account (#362):
     // history stays readable, anonymized; the empty id makes the thread read-only.
     return Conversation(
@@ -244,9 +265,12 @@ internal fun mergeMessages(existing: List<ChatMessage>, incoming: List<ChatMessa
 /** Total unread = sum of per-conversation unread (kept locally consistent with mark-read). */
 internal fun conversationsToTotalUnread(list: List<Conversation>): Int = list.sumOf { it.unread }
 
-/** Sort conversations newest-active first. */
+/**
+ * Sort conversations newest-active first; threads without a (readable) time go
+ * after every dated one, in the order they came in (the sort is stable).
+ */
 internal fun sortConversations(list: List<Conversation>): List<Conversation> =
-    list.sortedByDescending { it.lastAtMs }
+    list.sortedWith(compareBy(nullsLast(reverseOrder())) { it.lastAtMs })
 
 // ── Repository contract ──────────────────────────────────────────────────────
 

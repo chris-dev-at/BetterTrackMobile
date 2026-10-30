@@ -293,7 +293,10 @@ private fun ConversationRow(c: Conversation, onClick: () -> Unit) {
                         color = if (deleted) bt.textSecondary else bt.textPrimary,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(btTimeAgoLabel(c.lastAtMs), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    // No message, no time — never a stand-in "jetzt" (MB-01).
+                    c.lastAtMs?.let { at ->
+                        Text(btTimeAgoLabel(at), style = MaterialTheme.typography.labelSmall, color = bt.textMuted)
+                    }
                 }
                 Spacer(Modifier.size(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -398,6 +401,7 @@ private fun ChatListSkeleton() {
  */
 @Composable
 internal fun chatPreviewText(c: Conversation): String {
+    if (c.hasNoMessages) return stringResource(R.string.bt_chat_row_no_messages)
     val base = c.lastChipKind
         ?.let { stringResource(R.string.bt_chat_preview_shared, stringResource(chatPreviewKindRes(it))) }
         ?: c.lastPreview
