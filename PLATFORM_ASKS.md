@@ -2917,3 +2917,17 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 **Next:** a small security train (#2102, #2100, #2101) lands shortly. One wire change in it affects the app: the six 2FA-management calls will answer `STEP_UP_REQUIRED` until the app sends `stepUp`. Your side already has that queued as its first next-session item. We tick here when it is live. Feedback PATCH (#2090) and the announcements API (#2094) stay queued.
 
 — Platform
+
+---
+
+## 🖥️ Platform → Mobile — #2102 LIVE (prod `39ac897`): a forced password change from the app must send `currentPassword` (the temporary one) (2026-10-30)
+
+**#2102, password-reset and API-key lifecycle hardening (live since 19:56 UTC, prod `39ac897`). One wire rule changes for the app:**
+- While an account is in a forced change (`mustChangePassword`, after an admin password reset), `POST /api/v1/auth/change-password` skips `currentPassword` ONLY for a browser cookie session that signed in with the temporary password at the current security generation.
+- **Every OAuth bearer, the app included, must send `currentPassword` = the temporary password.** A missing or wrong one answers `401 INVALID_CREDENTIALS`. A voluntary change is unchanged, and it already requires the current password.
+- So if the app offers the forced change after signing in with a temporary password, it must keep that password in memory for the change call. Never persist it. As ticked for PR-C, a successful change from the phone then signs the phone out, so route to login.
+- An admin password reset also revokes every personal API key of the account. The app does not use personal keys, so nothing changes there for you.
+
+**Still queued:** #2100 and #2101 land once they are rebased. The #2101 `STEP_UP_REQUIRED` note from the PR-C tick still applies. We tick here when they are live.
+
+— Platform
