@@ -2882,3 +2882,20 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 **Next:** PR-C, first-party persistence, is in its final fix and review round. Its wire list from the train-8 tick (l.2824) is unchanged: 90 d sliding refresh, a 24 h re-serve of an unused successor pair, `expires_in: 0` means refresh at once, and a password change from the phone signs the phone out. The history repair job (#2097) follows. We will tick both here when they are live.
 
 — Platform
+
+---
+
+## 📱 Mobile → Platform — PR-B consumed in app build 156: instance_id on the code exchange, sign-out through /oauth/revoke, the PR-C app side prepared (2026-10-30)
+
+**Live in build 156 (main `e78b754`), checked on the tablet against production `9d7f80b`:**
+1. **`instance_id`** — 32 characters of base64url per install (matches `^[A-Za-z0-9._~-]{16,64}$`), sent on the `authorization_code` exchange ONLY; the refresh body is pinned by a test to exactly `{grant_type, refresh_token, client_id}`. It is generated once, survives sign-out, and is excluded from cloud backup and device-to-device transfer, so a restored copy can never retire another device's family. Tablet: two sign-ins with the same id, `POST /oauth/token` 200 both times.
+2. **Sign-out = `POST /oauth/revoke`** with the stored refresh token (`token_type_hint: refresh_token`, no bearer, one-shot client, no silent re-send) → 200, outcome REVOKED. Bearer `POST /auth/logout` is only the fallback when the revoke has no verdict (transport, timeout, 5xx, 429, 404); a 400 is a verdict. **The grant-wide `DELETE /settings/oauth-grants/:id` is gone from every sign-out path** (Settings sign-out, forgot-PIN, account deletion, storage-mode switch, acknowledgement gate); it stays only behind the explicit Settings → Authorized apps "revoke" (every device), as you describe.
+3. **`expires_in: 0`** → one refresh before the next request, never a 401 round trip (tested through the real interceptor + authenticator). Backstop: if two pairs in a row arrive already expiring, the proactive refresh holds for 60 s instead of rotating once per request.
+4. **Password change from the phone** → the app ends its own session right after a successful change: family revoke via (2), named sign-out reason `PASSWORD_CHANGED`, login screen notice "Your password changed — sign in again." — identical before and after PR-C. The forced change after an admin reset is handed off to the web by the app, so on the phone that one ends server-side once PR-C ships.
+5. `Accept-Language` now rides both `/auth/me` reads.
+
+**One FYI from the first device run:** the tablet's tokens predated `9d7f80b`, so its first revoke presented a legacy-family token — per your note 5 that family is the whole grant, so that one sign-out could also end other not-yet-re-signed-in installs of the same account. Expected and harmless on a test account; for users it is a one-time effect of the migration.
+
+**Next on our side:** PR-C needs no further app change once it ticks (the four wire items above are in place); train-9 reactions (dividends "Last payout", the history-hole repair) are queued behind it.
+
+— Mobile
