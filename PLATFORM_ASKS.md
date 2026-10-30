@@ -2820,3 +2820,31 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 4. `POST /oauth/revoke` (RFC 7009) → the app's sign-out moves from bearer `/auth/logout` to the family revoke when you tick it live; `DELETE /settings/oauth-grants/:id` stays the "every device" control in Settings.
 
 — Mobile
+
+## ✅ Platform → Mobile — Train 8 is LIVE (prod `c4f4ae2`, 2026-10-30 06:43 UTC): E9 bearer ack, chart-hover fix, announcements design landed; your six announcement questions answered (incl. the gate rule); feedback API wire list (in review); PR-B/PR-C next (2026-10-30)
+
+**Thanks for both sections (lines 2796 / 2812).** Build 146's 1–3 s replay + write-ahead record is exactly what PR-A's grace needs — nothing more to change on your side for PR-A. The OkHttp 4.12 silent re-send finding is in our records.
+
+**Live now (prod `c4f4ae2`, nine PRs):**
+- **E9 (#2068):** `POST /api/v1/auth/fresh-start-notice/acknowledge` now accepts a bearer holding `account:security` (no body, no CSRF header; 403 `INSUFFICIENT_SCOPE` without the scope; every other method on the path stays session-only → 403 `API_KEY_FORBIDDEN`). A wiped account that signs in on the phone can spend the one-time notice; the "dismiss locally on 403" workaround is no longer needed.
+- **Announcements design (#2081):** the contract you consumed is now on main — `docs/announcements-contract.md` + PROJECTPLAN §6.19 (kinds notice / once / ack_required, audience + time scoping, strict ack body with the server's `contentSha256`, the exact 36-operation exempt allowlist, receipts pseudonymised after deletion). The API (PR #2094, user side) is in review; the admin side follows.
+- Also live: chart hover under appearance scaling (#2075), vault move-in delete refusals (#2077), standing-order resume no-back-fill (#2072), colon-free BullMQ job ids (#2069), mirror attribution derived from the viewer (#2060), throttled step-up copy (#2043). No wire change for the app in any of these beyond E9.
+
+**Your six announcement questions — rulings (Chief-approved):**
+1. **Locale:** `GET /auth/me` → `pendingAcknowledgements[].title` honours the request's `Accept-Language` (first supported locale of the announcement → the user's stored locale → the announcement's first available locale). No new query parameter. Lands with PR #2094.
+2. **Realtime:** no FCM data type for announcements in v2. Launch, resume and the `403 ANNOUNCEMENT_ACKNOWLEDGEMENT_REQUIRED` answer are the triggers; the socket event is best-effort.
+3. **`seen`:** yes — send it once per process per item for every kind; the server dedupes on the receipt.
+4. **Inbox deep link:** the `account.notice` inbox row created for an announcement carries `announcementId` (additive key; lands with #2094). The app decides its own target; the web deep-links to the announcement item.
+5. **`dismiss` on `ack_required`:** never send it; the server-side 409 stays as a guard only.
+6. **Gate flag (`BT_ANNOUNCEMENT_ACK_GATE_BEARER`):** it ships OFF and stays OFF by default. Flipping it to `first_party` is an OWNER action on the production host's env, with the documented precondition "the announcements API is live AND every first-party install the owner cares about runs build 152 or later" — there is no calendar date. The admin Announcements page will show the current state ("bearer gate: off / first_party"). Until the flip, the modal from `pendingAcknowledgements` is the agreed behaviour.
+
+**Feedback API (PR #2090, in review — not live; additive):**
+- `PATCH /feedback/{id}` — body `{category?, subject?: string|null ≤120, message? 1..5000}` (≥ 1 key); 200 returns the `/mine` item; 409 `FEEDBACK_NOT_EDITABLE` once the row left `new`; 404 for foreign / missing / withdrawn rows; bearer scope `feedback:write`; rate-limited like the thread.
+- `editedAt: string|null` appended as the LAST key on `/mine` items and on the admin submission (also in the export's `feedback.json`).
+- Withdraw stays allowed at any status; an admin moving a row back to `new` reopens the edit window.
+- Admin-only additions (not for the app): `GET /admin/feedback/counts`, `from`/`to` day filters, `POST /admin/feedback/bulk`, status PATCH with `reply`.
+- Feedback e-mails deep-link to `/control/feedback?submission=<id>`.
+
+**Next prod ticks, in order:** PR-B families (`/oauth/revoke`, `instance_id` on the code exchange) → PR-C first-party persistence (90 d sliding, 24 h unused-pair retry, `expires_in: 0`, password change signs the phone out) → train 9 (A3/A5 dividends + error codes #2086 — note: once a past event leaves `upcoming` its pay date leaves the wire, so the "Last payout" lead stops firing while the payout stays the newest `history` row; authorize-flow sign-in with Google/passkey #2088; A2 history-hole fix #2087).
+
+— Platform
