@@ -1285,10 +1285,9 @@ interface BtApi {
     ): Response<FriendGroupDto>
 
     // ── V5: mirrorchain participation (group portfolios) ─────────────────────
-    // ONLY these seven routes accept a bearer — chain administration (create,
-    // rename, invite, revoke, roles, transfer, kick, dissolve) is session-only
-    // by a deliberate method-aware allowlist and answers 403 API_KEY_FORBIDDEN.
-    // The app therefore never renders those actions at all. [mirrorchain:*]
+    // The seven participation routes. Chain administration is bearer-reachable
+    // too — see "Chain ADMINISTRATION" below (platform `bearerAuth.ts` →
+    // `MIRRORCHAIN_BEARER_ROUTE_ALLOWLIST`, verified at 5c2fc2ae). [mirrorchain:*]
 
     /** Chains I participate in, each with MY role and MY catch-up state. */
     @GET("mirrorchain/chains")
@@ -1337,7 +1336,8 @@ interface BtApi {
     // the comment that stood here said so. **That is no longer true.** The
     // platform's `MIRRORCHAIN_BEARER_ROUTE_ALLOWLIST` now contains all eight
     // admin routes below (rename, invite, revoke, role, transfer, kick,
-    // dissolve, convert) plus the participation routes, and
+    // dissolve, convert), `POST /mirrorchain/chains` (create — not declared
+    // here) and the participation routes (verified at platform 5c2fc2ae), and
     // `MIRRORCHAIN_SESSION_ONLY_ROUTES` has been emptied — the widening is
     // attributed in their source to mobile board #67, the owner's
     // phone-management mandate, approved 2026-08-07. Reads take

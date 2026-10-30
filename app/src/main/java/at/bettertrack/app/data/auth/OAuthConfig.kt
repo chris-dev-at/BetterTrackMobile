@@ -95,7 +95,7 @@ object OAuthConfig {
      * `/portfolios/{id}/cash/…` ride the portfolio scopes as before) and
      * mirrorchain:read/mirrorchain:write (group-portfolio participation: chains,
      * members, activity, invites read; invite accept/decline + chain leave
-     * write — chain ADMINISTRATION stays session-only this sprint) and
+     * write; chain ADMINISTRATION is bearer-reachable too since board #67) and
      * vault:sync (the paranoid vault over bearer — `GET`/`PUT /vault`,
      * `GET /vault/media`, `GET /vault/history[/{version}]`; a single combined
      * scope with no read/write split, and `PATCH /vault/media` plus every
