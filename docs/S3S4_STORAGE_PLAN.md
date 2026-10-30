@@ -1,6 +1,6 @@
 # S3 + S4 — Storage-backend abstraction, first-run wizard, and Drive-autonomous mode
 
-**Architecture plan (2026-08-04, coordinator-commissioned).** Platform reference read at `origin/main` @ `439d0d5d`. Builder work packages W1–W6 at the bottom; every claim cites a path.
+**Architecture plan (2026-08-04, coordinator-commissioned).** Platform reference read at `origin/main` @ `439d0d5d` (2026-08-04; the live vector pin is `tools/domain-vectors/PINNED_AT`). Builder work packages W1–W6 at the bottom; every claim cites a path.
 
 ---
 
@@ -234,7 +234,9 @@ Drive's approximated CAS: hold observed `(vaultVersion, formatVersion, headRevis
 
 ## 3. The domain-engine port
 
-### 3.1 Inventory of `packages/domain` (at `origin/main` @ `439d0d5d`)
+> **Pin superseded (2026-10-30):** the commit the port is pinned to lives in ONE place — `tools/domain-vectors/PINNED_AT` (re-pinned several times since this plan; never copy the SHA into prose). The inventory below is the 2026-08-04 reading.
+
+### 3.1 Inventory of `packages/domain` (as read at `origin/main` @ `439d0d5d`, 2026-08-04)
 
 | Module | Lines | Exported surface (abbrev.) |
 |---|---:|---|
@@ -277,7 +279,7 @@ Ship Drive mode with `taxMode = 'none'` and a designed "Tax modes aren't availab
 
 **The monorepo stays untouched.**
 
-1. **Vendor a pinned snapshot** into `tools/domain-vectors/` — `packages/domain/src/**` + the two web fixtures, `PINNED_AT` = `439d0d5d`. Generator input, not shipped code; re-copy + diff detects drift.
+1. **Vendor a pinned snapshot** into `tools/domain-vectors/` — `packages/domain/src/**` + the two web fixtures, commit recorded in `PINNED_AT` (the single source of truth). Generator input, not shipped code; re-copy + diff detects drift.
 2. **Generate machine-readable vectors** (vitest/tsx script) → `app/src/test/resources/domain-vectors/<module>.json`: `{fn, case, input, output, throws}`; FX rate tables emitted alongside inputs for a deterministic Kotlin fake.
 3. **Replay in JUnit** — one data-driven runner per module, `assertEquals(expected, actual, 0.0)` — exact. Any legitimate non-exact case gets an explicit commented tolerance + board note.
 4. **Hand-port** the non-pure-data cases: `vi.fn()` FX-coalescing assertions (call counts/args), error paths, `dailySnapshotSeries` interaction tests — Kotlin tests with a counting fake.
@@ -364,7 +366,7 @@ if (storageMode == UNSET &&
 **Done when:** mode hard-wired SERVER; all unit tests green + `StorageModeGateTest` + `LogoutWipeRuleTest`; on-device smoke vs dev backend shows zero behavioural difference; debug-menu row prints active mode + backend.
 
 ### W2 — Domain port A: holdings + seriesStats + settingsScope + vector harness
-Vendor `tools/domain-vectors/` pinned @ `439d0d5d`; vector generator + JUnit replay runner; port the three modules literally into `at.bettertrack.app.domain`; hand-port converter-interaction + error cases.
+Vendor `tools/domain-vectors/` pinned at the commit in `PINNED_AT`; vector generator + JUnit replay runner; port the three modules literally into `at.bettertrack.app.domain`; hand-port converter-interaction + error cases.
 **Done when:** every generated vector replays with **exact** `Double` equality; `serverTwrParity.fixture.json` passes through Kotlin TWR; port is pure Kotlin (JVM-testable, zero Android deps); ~112 replayed + hand-ported cases green.
 
 ### W3 — Domain port B: cashLedger + vault crypto/format
@@ -399,4 +401,4 @@ Wizard + friction ladder + recovery kit; grandfathering verified on a real APK u
 8. **Google Cloud setup is an owner action:** OAuth client for `at.bettertrack.app` with release+debug SHA-1s in project `bettertrackapp-c6996`; Play Data-Safety update (Drive access, on-device encryption). Gates W4's device test.
 9. **Room is single-account by construction** (`AccountDataManager.resolveOwnerAction`) — Drive adds a Google-account identity axis. Owner key = `drive:<googleAccountIdHash>` in DRIVE, `<btUserId>` in SERVER, BT id wins in BOTH. Unit-test alongside `OwnerGateTest`.
 10. **Doctrine amendment** — "server is the only calculator" reworded per the owner mandate (see §3.5); §7.1 comments updated as touched.
-11. **Snapshot drift** — `packages/domain` pinned @ `439d0d5d`; ask the platform chief to ping the board on any `packages/domain` change; regenerating vectors is one command, so drift = failing tests, not wrong money.
+11. **Snapshot drift** — `packages/domain` pinned at the commit in `tools/domain-vectors/PINNED_AT`; ask the platform chief to ping the board on any `packages/domain` change; regenerating vectors is one command, so drift = failing tests, not wrong money.
