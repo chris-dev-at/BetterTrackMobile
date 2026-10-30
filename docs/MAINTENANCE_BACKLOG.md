@@ -207,18 +207,24 @@ Conventions: **Behaviour** = none / internal / user-visible. **Effort** S ≤ 1 
 | `BtWidgetServerSignals.ENABLED` (`feat/cash-widget-refresh` 04a6ad6, `widget/BtWidgetCashRefresh.kt:185`) | `true` | **WIRE OR DROP before merge** — on the branch nothing reads `BtWidgetServerSignals.ENABLED` (grep: 0); `parsePush`/`onPush` run regardless | the const |
 | `PV_E3_PINNED` (`vault/pv/keys/PvVaultKeyDerivation.kt:101`) | `true` | **Fable-only** — main never reads it (0 refs); 3 tests use it as a skip guard; the "val not const" KDoc argument is about compiler warnings in guarded branches, and there are none | move into the test as a constant |
 
-### MB-26 · Remove the three OAuth scope flags — **rank 8**
+### MB-26 · Remove the three OAuth scope flags — **rank 8** — ✅ DONE 2026-10-30 (8ac7cec)
 - **Evidence**: all three `true` for 2–3 months (table). The repo already set the precedent: the V5 scope gate was removed on 2026-08-12 and the scopes folded into the constant (`data/auth/OAuthConfig.kt:164-170`: *"the same lever … applies: drop the offending scopes from this constant, rebuild, re-login"*). Keeping three toggles plus `requestedScopes(alertsScopesEnabled, feedbackScopeEnabled, feedbackReadScopeEnabled)` for scopes that are part of the client ceiling is the inconsistency.
 - **Do**: fold `ALERTS_SCOPES`, `FEEDBACK_SCOPE`, `FEEDBACK_READ_SCOPE` into `BASE_SCOPES`; `requestedScopes()` stays a pure function for `OAuthScopeTest`, which pins the exact 21-scope string. **Behaviour**: none (same wire string). **Effort**: S. **Test**: `OAuthScopeTest` — the string equals the 21 scopes, each exactly once.
 
-### MB-27 · Remove the two notification kill-switches — **rank 10**
+### MB-27 · Remove the two notification kill-switches — **rank 10** — ✅ DONE 2026-10-30 (a200475)
 - **Evidence**: `data/notifications/NotificationRepository.kt:22-50`; both unchanged since 2026-07-11 (3.5 months). **Do**: delete + the `stubbed` parameter path in `PushTokenManager`; keep `registrationAction()` pure. **Effort**: S. **Test**: `NotificationLogicTest`/`PushRegistrationLogicTest` lose the flag matrix rows.
 
-### MB-28 · Remove the five shipped-feature flags — **rank 11**
+### MB-28 · Remove the five shipped-feature flags — **rank 11** — ✅ DONE 2026-10-30 (85b08be)
 - **Evidence/Do**: table rows for `ChatFlags`, `FeedbackFlags.enabled`, `betterTrackPinLock`, `DeleteAccountFeature.armed`, `LIGHT_MODE_PUBLIC`. **Effort**: S each. **Behaviour**: none.
 
-### MB-29 · Flags that stay — **rank 52**
+### MB-29 · Flags that stay — **rank 52** — ✅ RECORDED 2026-10-30
 - `ParanoidVaultsFlags.enabled`, `FreshStartNoticeFlags.enabled` (verified blocked on the platform today), the three `BuildConfig` switches. Record the `FreshStartNotice` check so the next audit does not redo it: the allowlist is `bearerAuth.ts:785-805`.
+- **Verdict, re-checked 2026-10-30 during the MB-26/27/28 removal — do not redo:**
+  - `ParanoidVaultsFlags.enabled` (`false`) **STAYS** — the paranoid-vaults program gate (32 files / 46 refs); it goes dead only when that arc ships, and `vault/` is owned by its own builder.
+  - `FreshStartNoticeFlags.enabled` (`false`) **STAYS** — still platform-blocked: the bearer allowlist (`bearerAuth.ts`, `oauthGrantRouteAcceptsBearer`) admits only `POST /auth/first-run/complete` and `POST /auth/google/link/start`; the fresh-start acknowledgement route is session `requireAuth` with no bearer carve-out. The carve-out is platform **#2068, in the next train**; flip (and then remove) the flag once that ships and is verified with a bearer.
+  - `BuildConfig.SERVER_SETTING_ENABLED` / `SELF_UPDATE_ENABLED` **STAY** — flavour-differentiated (github `true` / play `false`; self-update is Play policy). `BuildConfig.DIRECT_PROVIDER_PRICES` (`false`) **STAYS** — the owner's decision, tripwired by `DirectProviderFlagTest`.
+  - Not flags in this sense and out of scope here: `BtWidgetServerSignals.ENABLED` (branch-only, see the table), `PV_E3_PINNED` (Fable-only, `vault/`).
+  - The removed set is pinned by `RemovedFlagsDisciplineTest` (source scan of `app/src/main` + `app/src/test`, code and comments); the names above are deliberately not in it.
 
 ## 5. Docs and KDocs that lie
 
