@@ -2631,6 +2631,16 @@
     <string name="bt_tax_settings_reports_sub">Druckfertiges PDF für dein aktives Portfolio, in der BetterTrack-Web-App</string>
     <string name="bt_tax_settings_disclaimer">Schätzwerte nur für deine persönliche Übersicht — keine Steuerberatung, keine Gewähr für Richtigkeit, kein Dokument für die Steuererklärung.</string>
     <string name="bt_2fa_recovery_download">Codes herunterladen</string>
+    <!-- Two-factor step-up (platform #2101) -->
+    <string name="bt_2fa_stepup_title">Bestätige, dass du es bist</string>
+    <string name="bt_2fa_stepup_message">Gib dein Kontopasswort ein, um die Zwei-Faktor-Einstellungen zu ändern.</string>
+    <string name="bt_2fa_stepup_password">Passwort</string>
+    <string name="bt_2fa_stepup_wrong">Das Passwort ist nicht korrekt. Versuch es noch einmal.</string>
+    <string name="bt_2fa_stepup_password_required">Bei dieser Anmeldung wurde kürzlich ein zweiter Faktor eingerichtet. Bitte bestätige mit deinem Passwort.</string>
+    <string name="bt_2fa_stepup_no_password_hint">Noch kein Passwort, weil du dich mit Google anmeldest? Verwalte die Zwei-Faktor-Einstellungen vorerst im Web.</string>
+    <string name="bt_2fa_stepup_confirm">Bestätigen</string>
+    <string name="bt_2fa_stepup_web">Verwalte die Zwei-Faktor-Einstellungen vorerst im Web.</string>
+    <string name="bt_2fa_stepup_web_link">Zwei-Faktor-Einstellungen im Web öffnen</string>
     <!-- ==== /STREAM-TAX (DE) ==== -->
     <string name="bt_sheet_grabber_cd">Zum Schließen nach unten ziehen</string>
 

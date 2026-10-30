@@ -65,15 +65,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
+import at.bettertrack.app.data.account.StepUpOutcome
 import at.bettertrack.app.data.account.TwoFactorEnrollment
 import at.bettertrack.app.data.account.TwoFactorState
+import at.bettertrack.app.data.account.withStepUp
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
 import at.bettertrack.app.di.AppGraph
+import at.bettertrack.app.ui.components.BtGroup
 import at.bettertrack.app.ui.components.BtPrimaryButton
 import at.bettertrack.app.ui.components.BtQrCode
 import at.bettertrack.app.ui.components.BtTextField
+import at.bettertrack.app.ui.components.BtWebLinkRow
 import at.bettertrack.app.ui.components.resolveWithDiagnostic
 import at.bettertrack.app.ui.theme.BtShapes
 import at.bettertrack.app.ui.theme.BtTheme
@@ -116,6 +120,24 @@ fun TwoFactorScreen(onBack: () -> Unit) {
     // Disable-TOTP dialog.
     var showDisable by remember { mutableStateOf(false) }
     var disableCode by remember { mutableStateOf("") }
+
+    // Platform #2101 step-up: the password prompt, and the "use the web" notice
+    // shown when the step-up cannot be satisfied in the app.
+    val stepUpPrompt = remember { StepUpPromptController() }
+    var stepUpOnWeb by remember { mutableStateOf(false) }
+
+    /**
+     * Runs one factor mutation under [withStepUp]. `null` = the user cancelled
+     * the prompt or the web notice took over — either way no error banner.
+     */
+    suspend fun <T> stepUp(call: suspend (stepUpPassword: String?) -> BtResult<T>): BtResult<T>? {
+        stepUpOnWeb = false
+        return when (val outcome = withStepUp(stepUpPrompt, call)) {
+            is StepUpOutcome.Done -> outcome.result
+            StepUpOutcome.Cancelled -> null
+            StepUpOutcome.Unavailable -> { stepUpOnWeb = true; null }
+        }
+    }
 
     suspend fun reload() {
         when (val r = repo.twoFactorStatus()) {
@@ -198,6 +220,17 @@ fun TwoFactorScreen(onBack: () -> Unit) {
 
             actionError?.let { Text(it.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss) }
 
+            if (stepUpOnWeb) {
+                Text(stringResource(R.string.bt_2fa_stepup_web), style = MaterialTheme.typography.bodySmall, color = bt.textSecondary)
+                BtGroup {
+                    BtWebLinkRow(
+                        icon = Icons.Outlined.Shield,
+                        title = stringResource(R.string.bt_2fa_stepup_web_link),
+                        path = TWO_FACTOR_WEB_PATH,
+                    )
+                }
+            }
+
             // ── Authenticator app (TOTP) ─────────────────────────────────────
             MethodCard(
                 icon = Icons.Outlined.QrCode2,
@@ -217,9 +250,10 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                     } else {
                         busy = true
                         scope.launch {
-                            when (val r = repo.twoFactorEnroll()) {
+                            when (val r = stepUp { repo.twoFactorEnroll(it) }) {
                                 is BtResult.Ok -> { enrollment = r.value; totpCode = "" }
                                 is BtResult.Err -> actionError = r.error.asMessage()
+                                null -> {}
                             }
                             busy = false
                             reload()
@@ -239,13 +273,15 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                         busy = true
                         actionError = null
                         scope.launch {
-                            when (val r = repo.twoFactorConfirm(totpCode)) {
+                            val code = totpCode
+                            when (val r = stepUp { repo.twoFactorConfirm(code, it) }) {
                                 is BtResult.Ok -> {
                                     enrollment = null
                                     r.value?.let { recoveryCodes = it }
                                     reload()
                                 }
                                 is BtResult.Err -> actionError = r.error.asMessage()
+                                null -> {}
                             }
                             busy = false
                         }
@@ -267,8 +303,8 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                     if (s.emailEnabled) {
                         busy = true
                         scope.launch {
-                            when (val r = repo.twoFactorEmailDisable()) {
-                                is BtResult.Ok -> {}
+                            when (val r = stepUp { repo.twoFactorEmailDisable(it) }) {
+                                is BtResult.Ok, null -> {}
                                 is BtResult.Err -> actionError = r.error.asMessage()
                             }
                             busy = false; reload()
@@ -276,9 +312,10 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                     } else {
                         busy = true
                         scope.launch {
-                            when (val r = repo.twoFactorEmailEnroll()) {
+                            when (val r = stepUp { repo.twoFactorEmailEnroll(it) }) {
                                 is BtResult.Ok -> { emailSetup = true; emailCode = "" }
                                 is BtResult.Err -> actionError = r.error.asMessage()
+                                null -> {}
                             }
                             busy = false
                         }
@@ -302,9 +339,11 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                             onClick = {
                                 busy = true
                                 scope.launch {
-                                    when (val r = repo.twoFactorEmailConfirm(emailCode)) {
+                                    val code = emailCode
+                                    when (val r = stepUp { repo.twoFactorEmailConfirm(code, it) }) {
                                         is BtResult.Ok -> { emailSetup = false; r.value?.let { recoveryCodes = it }; reload() }
                                         is BtResult.Err -> actionError = r.error.asMessage()
+                                        null -> {}
                                     }
                                     busy = false
                                 }
@@ -333,9 +372,10 @@ fun TwoFactorScreen(onBack: () -> Unit) {
                     onAction = {
                         busy = true; actionError = null
                         scope.launch {
-                            when (val r = repo.regenerateRecoveryCodes()) {
+                            when (val r = stepUp { repo.regenerateRecoveryCodes(it) }) {
                                 is BtResult.Ok -> { recoveryCodes = r.value; reload() }
                                 is BtResult.Err -> actionError = r.error.asMessage()
+                                null -> {}
                             }
                             busy = false
                         }
@@ -344,6 +384,9 @@ fun TwoFactorScreen(onBack: () -> Unit) {
             }
         }
     }
+
+    // Step-up password prompt (platform #2101).
+    StepUpPasswordDialog(stepUpPrompt)
 
     // Recovery-codes reveal (shown once).
     recoveryCodes?.let { codes ->

@@ -63,6 +63,28 @@ data class TwoFactorMethodEnabledResponse(
     val recoveryCodes: List<String>? = null,
 )
 
+// ── Two-factor step-up (platform #2101, R-05) ─────────────────────────────────
+// After #2101 the six USER-side factor mutations (TOTP enroll/confirm, e-mail
+// enroll/confirm/disable, recovery-code regeneration) carry `stepUp` in the body.
+// The server's schemas are strict, so the app sends it ONLY on the one retry that
+// follows a `400 STEP_UP_REQUIRED` — never up front (a server without #2101
+// rejects the unknown member). The app offers the password only; the contract's
+// `code` / `recoveryCode` members are deliberately not modelled.
+
+/** `stepUp: { password }`. [toString] is redacted so the secret never reaches a log. */
+@Serializable
+class TwoFactorStepUpCredential(val password: String) {
+    override fun toString(): String = "TwoFactorStepUpCredential(password=***)"
+}
+
+/** `POST /auth/2fa/enroll`, `/2fa/email/enroll`, `/2fa/email/disable`, `/2fa/recovery-codes` — the step-up alone. */
+@Serializable
+class TwoFactorStepUpRequest(val stepUp: TwoFactorStepUpCredential)
+
+/** `POST /auth/2fa/confirm` and `/2fa/email/confirm` — the new factor's code plus the step-up. */
+@Serializable
+class TwoFactorStepUpConfirmRequest(val code: String, val stepUp: TwoFactorStepUpCredential)
+
 // ── POST /auth/2fa/disable ───────────────────────────────────────────────────
 // A valid factor authorizes it: a 6-digit TOTP code or one unused recovery code.
 @Serializable

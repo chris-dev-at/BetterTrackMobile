@@ -2800,6 +2800,16 @@
     <!-- Recovery codes → save to a file the user picks (SAF), beside "Copy codes".
          Label verbatim from the web's settings.security.twoFactor.recoveryCodes.download. -->
     <string name="bt_2fa_recovery_download">Download codes</string>
+    <!-- Two-factor step-up (platform #2101) -->
+    <string name="bt_2fa_stepup_title">Confirm it\'s you</string>
+    <string name="bt_2fa_stepup_message">Enter your account password to change two-factor settings.</string>
+    <string name="bt_2fa_stepup_password">Password</string>
+    <string name="bt_2fa_stepup_wrong">That password is not correct. Try again.</string>
+    <string name="bt_2fa_stepup_password_required">This sign-in recently set up a second factor, so please confirm with your password.</string>
+    <string name="bt_2fa_stepup_no_password_hint">No password yet because you sign in with Google? Manage two-factor settings on the web for now.</string>
+    <string name="bt_2fa_stepup_confirm">Confirm</string>
+    <string name="bt_2fa_stepup_web">Manage two-factor settings on the web for now.</string>
+    <string name="bt_2fa_stepup_web_link">Open two-factor settings on the web</string>
     <!-- ==== /STREAM-TAX (EN) ==== -->
     <string name="bt_sheet_grabber_cd">Drag down to close</string>
 

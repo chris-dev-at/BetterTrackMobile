@@ -55,6 +55,8 @@ import at.bettertrack.app.data.api.dto.TwoFactorEnrollResponse
 import at.bettertrack.app.data.api.dto.TwoFactorMethodEnabledResponse
 import at.bettertrack.app.data.api.dto.TwoFactorRecoveryCodesResponse
 import at.bettertrack.app.data.api.dto.TwoFactorStatusResponse
+import at.bettertrack.app.data.api.dto.TwoFactorStepUpConfirmRequest
+import at.bettertrack.app.data.api.dto.TwoFactorStepUpRequest
 import at.bettertrack.app.data.api.dto.UpdateAccountSettingsRequest
 import at.bettertrack.app.data.api.dto.ChatConversationListResponse
 import at.bettertrack.app.data.api.dto.ChatThreadResponse
@@ -1743,6 +1745,42 @@ interface BtApi {
     /** Regenerate the recovery codes (voids the old set); requires a method on. [account:security] */
     @POST("auth/2fa/recovery-codes")
     suspend fun twoFactorRegenerateRecoveryCodes(): Response<TwoFactorRecoveryCodesResponse>
+
+    // ── Step-up retries (platform #2101) ─────────────────────────────────────
+    // The SAME six mutations, re-sent exactly once with `stepUp: { password }`
+    // after the bare call answered `400 STEP_UP_REQUIRED` (see
+    // [at.bettertrack.app.data.account.withStepUp]). Never called first: today's
+    // strict schemas reject the unknown member.
+    //
+    // `X-Bt-No-Reauth` is load-bearing on every one, for the reason [pinVerify]
+    // carries it: a `401` here (INVALID_CREDENTIALS, TWO_FACTOR_INVALID_CODE,
+    // STEP_UP_PASSWORD_REQUIRED, …) is a verdict on the PASSWORD, not on the
+    // bearer. A refresh+retry would rotate a healthy token pair and silently
+    // re-submit the wrong password against the server's step-up throttle.
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/enroll")
+    suspend fun twoFactorEnrollStepUp(@Body body: TwoFactorStepUpRequest): Response<TwoFactorEnrollResponse>
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/confirm")
+    suspend fun twoFactorConfirmStepUp(@Body body: TwoFactorStepUpConfirmRequest): Response<TwoFactorMethodEnabledResponse>
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/email/enroll")
+    suspend fun twoFactorEmailEnrollStepUp(@Body body: TwoFactorStepUpRequest): Response<Unit>
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/email/confirm")
+    suspend fun twoFactorEmailConfirmStepUp(@Body body: TwoFactorStepUpConfirmRequest): Response<TwoFactorMethodEnabledResponse>
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/email/disable")
+    suspend fun twoFactorEmailDisableStepUp(@Body body: TwoFactorStepUpRequest): Response<Unit>
+
+    @Headers("Content-Type: application/json", "X-Bt-No-Reauth: 1")
+    @POST("auth/2fa/recovery-codes")
+    suspend fun twoFactorRegenerateRecoveryCodesStepUp(@Body body: TwoFactorStepUpRequest): Response<TwoFactorRecoveryCodesResponse>
 
     /** The account's active web/cookie sessions (browser + other logins). [account:security] */
     @GET("auth/sessions")

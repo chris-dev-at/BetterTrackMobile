@@ -20,6 +20,9 @@ import at.bettertrack.app.data.api.dto.PasskeyRenameRequest
 import at.bettertrack.app.data.api.dto.ProfileSettingsResponse
 import at.bettertrack.app.data.api.dto.TwoFactorCodeRequest
 import at.bettertrack.app.data.api.dto.TwoFactorDisableRequest
+import at.bettertrack.app.data.api.dto.TwoFactorStepUpConfirmRequest
+import at.bettertrack.app.data.api.dto.TwoFactorStepUpCredential
+import at.bettertrack.app.data.api.dto.TwoFactorStepUpRequest
 import at.bettertrack.app.data.api.dto.UpdateAccountSettingsRequest
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -69,15 +72,31 @@ class AccountRepository(
             is BtResult.Err -> r
         }
 
-    suspend fun twoFactorEnroll(): BtResult<TwoFactorEnrollment> =
-        when (val r = apiCall(json) { api.twoFactorEnroll() }) {
+    // The six factor MUTATIONS below take an optional [stepUpPassword] (platform
+    // #2101). `null` — the first try, always — sends the call exactly as before,
+    // with NO `stepUp` member; a value is only ever passed by [withStepUp] on the
+    // single retry after `400 STEP_UP_REQUIRED`, and travels on the
+    // `X-Bt-No-Reauth` variants so a wrong password is never read as a dead bearer.
+
+    suspend fun twoFactorEnroll(stepUpPassword: String? = null): BtResult<TwoFactorEnrollment> =
+        when (
+            val r = apiCall(json) {
+                if (stepUpPassword == null) api.twoFactorEnroll()
+                else api.twoFactorEnrollStepUp(stepUpBody(stepUpPassword))
+            }
+        ) {
             is BtResult.Ok -> BtResult.Ok(TwoFactorEnrollment(r.value.otpauthUri, r.value.secret))
             is BtResult.Err -> r
         }
 
     /** Confirm TOTP; returns the one-time recovery codes when this is the first method (else null). */
-    suspend fun twoFactorConfirm(code: String): BtResult<List<String>?> =
-        when (val r = apiCall(json) { api.twoFactorConfirm(TwoFactorCodeRequest(code.trim())) }) {
+    suspend fun twoFactorConfirm(code: String, stepUpPassword: String? = null): BtResult<List<String>?> =
+        when (
+            val r = apiCall(json) {
+                if (stepUpPassword == null) api.twoFactorConfirm(TwoFactorCodeRequest(code.trim()))
+                else api.twoFactorConfirmStepUp(stepUpConfirmBody(code, stepUpPassword))
+            }
+        ) {
             is BtResult.Ok -> BtResult.Ok(r.value.recoveryCodes)
             is BtResult.Err -> r
         }
@@ -85,23 +104,45 @@ class AccountRepository(
     suspend fun twoFactorDisable(code: String): BtResult<Unit> =
         emptyCall { api.twoFactorDisable(TwoFactorDisableRequest(code.trim())) }
 
-    suspend fun twoFactorEmailEnroll(): BtResult<Unit> =
-        emptyCall { api.twoFactorEmailEnroll() }
+    suspend fun twoFactorEmailEnroll(stepUpPassword: String? = null): BtResult<Unit> =
+        emptyCall {
+            if (stepUpPassword == null) api.twoFactorEmailEnroll()
+            else api.twoFactorEmailEnrollStepUp(stepUpBody(stepUpPassword))
+        }
 
-    suspend fun twoFactorEmailConfirm(code: String): BtResult<List<String>?> =
-        when (val r = apiCall(json) { api.twoFactorEmailConfirm(TwoFactorCodeRequest(code.trim())) }) {
+    suspend fun twoFactorEmailConfirm(code: String, stepUpPassword: String? = null): BtResult<List<String>?> =
+        when (
+            val r = apiCall(json) {
+                if (stepUpPassword == null) api.twoFactorEmailConfirm(TwoFactorCodeRequest(code.trim()))
+                else api.twoFactorEmailConfirmStepUp(stepUpConfirmBody(code, stepUpPassword))
+            }
+        ) {
             is BtResult.Ok -> BtResult.Ok(r.value.recoveryCodes)
             is BtResult.Err -> r
         }
 
-    suspend fun twoFactorEmailDisable(): BtResult<Unit> =
-        emptyCall { api.twoFactorEmailDisable() }
+    suspend fun twoFactorEmailDisable(stepUpPassword: String? = null): BtResult<Unit> =
+        emptyCall {
+            if (stepUpPassword == null) api.twoFactorEmailDisable()
+            else api.twoFactorEmailDisableStepUp(stepUpBody(stepUpPassword))
+        }
 
-    suspend fun regenerateRecoveryCodes(): BtResult<List<String>> =
-        when (val r = apiCall(json) { api.twoFactorRegenerateRecoveryCodes() }) {
+    suspend fun regenerateRecoveryCodes(stepUpPassword: String? = null): BtResult<List<String>> =
+        when (
+            val r = apiCall(json) {
+                if (stepUpPassword == null) api.twoFactorRegenerateRecoveryCodes()
+                else api.twoFactorRegenerateRecoveryCodesStepUp(stepUpBody(stepUpPassword))
+            }
+        ) {
             is BtResult.Ok -> BtResult.Ok(r.value.recoveryCodes)
             is BtResult.Err -> r
         }
+
+    /** The password goes verbatim: the server compares it byte for byte, so it is never trimmed. */
+    private fun stepUpBody(password: String) = TwoFactorStepUpRequest(TwoFactorStepUpCredential(password))
+
+    private fun stepUpConfirmBody(code: String, password: String) =
+        TwoFactorStepUpConfirmRequest(code.trim(), TwoFactorStepUpCredential(password))
 
     // ── Active sessions ──────────────────────────────────────────────────────
     suspend fun sessions(): BtResult<List<AccountSession>> =

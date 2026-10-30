@@ -62,6 +62,20 @@ class BtApiError(
      */
     val isLastActivePortfolio: Boolean get() = code == Codes.LAST_ACTIVE_PORTFOLIO
 
+    /**
+     * Platform #2101: a factor mutation sent without a step-up credential —
+     * `400 STEP_UP_REQUIRED`. The ONE answer that opens the password prompt;
+     * any other 400 (e.g. VALIDATION_ERROR) keeps today's error handling.
+     */
+    val isStepUpRequired: Boolean get() = httpStatus == 400 && code == Codes.STEP_UP_REQUIRED
+
+    /** The step-up credential was wrong: an in-prompt "wrong password", never a session verdict. */
+    val isStepUpRejected: Boolean
+        get() = httpStatus == 401 && (code == Codes.INVALID_CREDENTIALS || code == Codes.TWO_FACTOR_INVALID_CODE)
+
+    /** A factor-only step-up refused for a credential that just issued factor material: use the password. */
+    val isStepUpPasswordRequired: Boolean get() = httpStatus == 401 && code == Codes.STEP_UP_PASSWORD_REQUIRED
+
     object Codes {
         const val NETWORK = "NETWORK_ERROR"
         const val UNKNOWN = "UNKNOWN"
@@ -71,6 +85,13 @@ class BtApiError(
         const val ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
         const val USER_DISABLED = "USER_DISABLED"
         const val LAST_ACTIVE_PORTFOLIO = "LAST_ACTIVE_PORTFOLIO"
+
+        // ── Two-factor step-up (platform #2101) ──
+        const val STEP_UP_REQUIRED = "STEP_UP_REQUIRED"
+        const val STEP_UP_PASSWORD_REQUIRED = "STEP_UP_PASSWORD_REQUIRED"
+        const val INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
+        const val TWO_FACTOR_INVALID_CODE = "TWO_FACTOR_INVALID_CODE"
+        const val TWO_FACTOR_NOT_ENABLED = "TWO_FACTOR_NOT_ENABLED"
 
         // ── Idempotency keys on portfolio mutations (platform #432, PLATFORM_ASKS #9) ──
         /** 409 — a same-key mutation is still in progress server-side (transient → retry). */
