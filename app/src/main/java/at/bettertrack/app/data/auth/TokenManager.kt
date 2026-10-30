@@ -65,7 +65,9 @@ import kotlin.random.Random
  *  - **prompt replay**: the SAME token is presented again 1-3 s later (jittered,
  *    inside the call, still under the mutex), then on an exponential schedule.
  *
- * Against the platform's rotation rules (`oauthService.ts` refresh path):
+ * Against the platform's rotation rules (`oauthService.ts` →
+ * `exchangeRefreshToken`, which calls `oauthRepository.ts` →
+ * `rotateRefreshToken`):
  *  - today (zero grace) a replayed consumed token is answered `400 INVALID_GRANT`
  *    (and the grant revoked) — exactly what the old 10-minute delayed replay got,
  *    so this is never worse than before, and the ledger row names the network
@@ -590,8 +592,9 @@ class TokenManager(
          * to the 401 path at once.
          *
          * Access-token TTL is 3600 s (`OAUTH_ACCESS_TOKEN_TTL_SECONDS`,
-         * `packages/contracts/src/oauth.ts:29-34`), so this is 8 % of the life
-         * of the token and does not measurably raise the rotation rate.
+         * `packages/contracts/src/oauth.ts`, verified at platform 5c2fc2ae), so
+         * this is 8 % of the life of the token and does not measurably raise the
+         * rotation rate.
          */
         const val REFRESH_SKEW_MS = 300_000L
     }
@@ -642,14 +645,17 @@ data class SessionInvalidation(
  * answering, so every later refresh is `INVALID_GRANT` anyway:
  *
  * ```
- * _source: platform repo, apps/api/src/services/oauth/oauthService.ts @ origin/main
- *   :1069  badRequest('Invalid refresh token.',             'INVALID_GRANT')
- *   :1072  badRequest('This authorization has been revoked.','INVALID_GRANT')
- *   :1084  badRequest('Refresh token has already been used.','INVALID_GRANT')
- *   :1087  badRequest('Refresh token has expired.',          'INVALID_GRANT')
- *   :1108-1111  retireEmptyScopeGrant(...) + emptyEffectiveScope() → 'INVALID_SCOPE'
- *   :1127  badRequest('Refresh token has already been used.','INVALID_GRANT')
+ * _source: platform repo, apps/api/src/services/oauth/oauthService.ts,
+ *  function exchangeRefreshToken(), verified at platform commit 5c2fc2ae
+ *  (2026-10-30), in this order:
+ *   badRequest('Invalid refresh token.',             'INVALID_GRANT')
+ *   badRequest('This authorization has been revoked.','INVALID_GRANT')
+ *   badRequest('Refresh token has already been used.','INVALID_GRANT')
+ *   badRequest('Refresh token has expired.',          'INVALID_GRANT')
+ *   retireEmptyScopeGrant(...) + emptyEffectiveScope() → 'INVALID_SCOPE'
+ *   badRequest('Refresh token has already been used.','INVALID_GRANT')  // rotation === 'replayed'
  * ```
+ * (Grep the message strings to find them — line numbers drift with every batch.)
  *
  * Everything else the endpoint can answer is about the REQUEST, not the session:
  *  - `400 VALIDATION_ERROR` — the body schema is `.strict()`, so one stray field
@@ -662,8 +668,8 @@ data class SessionInvalidation(
  * And a **401 is never a token verdict here**: the token endpoint is
  * unauthenticated, so the only thing that produces one is the bearer middleware
  * mounted above `/api/v1` rejecting an `Authorization` header that should never
- * have been attached to a refresh (`bearerAuth.ts:371-413`, `401
- * API_KEY_INVALID`). That is a client bug to fix, not a session to destroy —
+ * have been attached to a refresh (`bearerAuth.ts` → `loadBearerAuth`, `401
+ * API_KEY_INVALID`, verified at platform 5c2fc2ae). That is a client bug to fix, not a session to destroy —
  * this app's refresh rides a deliberately bare OkHttp client with no auth
  * interceptor (`AppGraph.tokenClient`), and `ForcedSignOutTest` pins that no
  * `Authorization` header goes out on the wire.
