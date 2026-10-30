@@ -115,6 +115,17 @@ class TokenManager(
     private var pendingLoaded = false
 
     /**
+     * Consecutive renewals whose pair ARRIVED already inside the skew window —
+     * PR-C's late re-serve answers `expires_in: 0` — and when the last one did.
+     * Feeds the backstop in [refreshWanted]; in memory on purpose.
+     */
+    @Volatile
+    private var expiringArrivals = 0
+
+    @Volatile
+    private var lastArrivalAtMs = 0L
+
+    /**
      * `replay = 1` is load-bearing. `AuthRepository` subscribes from a coroutine
      * launched in its `init`, so there is a window at cold start where nothing is
      * collecting yet — and a refresh rejected inside that window used to be
@@ -180,7 +191,9 @@ class TokenManager(
         }
         return when (result) {
             is BtResult.Ok -> {
-                val tokens = result.value.toAuthTokens()
+                // The same clock the expiry is later judged by (`refreshWanted`).
+                val tokens = result.value.toAuthTokens(nowMs())
+                noteArrival(tokens)
                 store.saveTokens(tokens)
                 // A new session: nothing of the old one's renewal state applies.
                 store.clearPendingRefresh()
@@ -220,8 +233,36 @@ class TokenManager(
         }
     }
 
-    private fun refreshWanted(tokens: AuthTokens): Boolean =
-        pendingFor(tokens.refreshToken) != null || tokens.isExpiringWithin(REFRESH_SKEW_MS, nowMs())
+    /**
+     * A pending replay always runs. Otherwise: refresh when the access token is
+     * inside the skew window — which includes a pair that arrived with
+     * `expires_in: 0` (PR-C's late re-serve: refresh at once, before the request,
+     * instead of sending a dead token and paying a 401 round trip).
+     *
+     * One backstop: if the server answers a SECOND renewal in a row with an
+     * already-expiring pair, refreshing ahead of every request would rotate once
+     * per API call (a burst queued on the mutex would rotate N times in a row).
+     * So after [EXPIRING_ARRIVAL_STREAK_CAP] such arrivals the proactive gate
+     * holds for [EXPIRING_ARRIVAL_HOLD_MS] since the last one; requests go out
+     * with the pair the server just issued, and a real 401 still refreshes
+     * through [refreshOn401] (once per request — [at.bettertrack.app.data.api.TokenAuthenticator]).
+     */
+    private fun refreshWanted(tokens: AuthTokens): Boolean {
+        if (pendingFor(tokens.refreshToken) != null) return true
+        val now = nowMs()
+        if (!tokens.isExpiringWithin(REFRESH_SKEW_MS, now)) return false
+        return !expiringArrivalHolds(expiringArrivals, lastArrivalAtMs, now)
+    }
+
+    /** Count a pair that arrived already inside the skew window; a normal one resets the streak. */
+    private fun noteArrival(tokens: AuthTokens) {
+        val now = nowMs()
+        expiringArrivals = if (tokens.isExpiringWithin(REFRESH_SKEW_MS, now)) expiringArrivals + 1 else 0
+        lastArrivalAtMs = now
+        if (expiringArrivals > 0) {
+            Log.i(TAG, "Token pair arrived already expiring (streak $expiringArrivals); refreshing ahead of the next request.")
+        }
+    }
 
     /**
      * Replay a refresh a previous process left unanswered — called once at every
@@ -399,6 +440,7 @@ class TokenManager(
     }
 
     private fun onRotated(tokens: AuthTokens, sending: PendingRefresh, caller: RefreshCaller): AuthTokens {
+        noteArrival(tokens)
         // Persisted SYNCHRONOUSLY before any caller is allowed to proceed: the
         // pair we were just handed is the only live one, and a caller that raced
         // ahead of the write could re-present the dead token. One retry absorbs a
@@ -650,6 +692,21 @@ class TokenManager(
  * flips: a `200` to a replay is [RefreshVerdict.ROTATED] like any other.
  */
 internal const val SERVER_ROTATION_GRACE_MS: Long = 60_000L
+
+/**
+ * How many renewals in a row may arrive already expiring before the proactive
+ * gate stops refreshing ahead of every request. One is PR-C's documented late
+ * re-serve (`expires_in: 0` → refresh at once); two in a row is not a shape the
+ * server documents, and is what would otherwise rotate once per API call.
+ */
+internal const val EXPIRING_ARRIVAL_STREAK_CAP: Int = 2
+
+/** How long the proactive gate holds after [EXPIRING_ARRIVAL_STREAK_CAP] such arrivals. */
+internal const val EXPIRING_ARRIVAL_HOLD_MS: Long = 60_000L
+
+/** The backstop rule, pure: hold while the streak is at the cap and the last arrival is recent. */
+internal fun expiringArrivalHolds(streak: Int, lastArrivalAtMs: Long, nowMs: Long): Boolean =
+    streak >= EXPIRING_ARRIVAL_STREAK_CAP && nowMs - lastArrivalAtMs < EXPIRING_ARRIVAL_HOLD_MS
 
 /** The refresh rail's state, for the developer panel. Carries no token and no fingerprint. */
 data class RefreshStatus(
