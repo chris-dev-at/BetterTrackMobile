@@ -34,8 +34,9 @@ object OAuthConfig {
      *
      * The platform seeded the scope and ticked it live on production: it is in the
      * scope catalog and in the BetterTrackMobile client's scope ceiling — the live
-     * `openapi.json` enumerates that ceiling as exactly the 20 scopes this file
-     * requests, `feedback:write` included — and the seed unions rather than
+     * `openapi.json` enumerated that ceiling as 20 scopes, `feedback:write`
+     * included (21 since `feedback:read` joined on 2026-08-20, all of which this
+     * file requests) — and the seed unions rather than
      * narrows, re-running on every deploy. An additive migration widened the
      * consents that already existed, so no user has to re-authorize; this flag
      * exists so tokens minted from here on keep carrying the scope.
@@ -102,10 +103,9 @@ object OAuthConfig {
      * requested on EVERY backend, production included — see [V5_SCOPES].
      * feedback:write (`POST /feedback`, the in-app composer) is appended when
      * [FEEDBACK_SCOPE_ENABLED], which is on since the platform's 2026-08-19
-     * go-live tick — bringing the requested set to the client's full 20.
-     * feedback:read (`GET /feedback/mine`) is the twenty-first the platform now
-     * publishes and is deliberately NOT requested yet — see
-     * [FEEDBACK_READ_SCOPE_ENABLED], which is the one-line flip once #1393 lands.
+     * go-live tick. feedback:read (`GET /feedback/mine`) is appended when
+     * [FEEDBACK_READ_SCOPE_ENABLED], which is on since 2026-08-20 — so the
+     * shipped request is 21 scopes, the client's full ceiling (`OAuthScopeTest`).
      */
     val SCOPES: String = requestedScopes(
         alertsScopesEnabled = ALERTS_SCOPES_ENABLED,
@@ -151,8 +151,9 @@ private const val ALERTS_SCOPES = "alerts:read alerts:write"
  *
  * Grew from four to FIVE on 2026-08-04 when the platform's `vault:sync` landed
  * (PR #1049, seeded by migration `0081` — board tick "S5 UNBLOCKED"), for a
- * requested set of 14 + 5 = 19 — the full ceiling the platform grants the
- * BetterTrackMobile client.
+ * requested set of 14 + 5 = 19 at the time. The two feedback scopes later
+ * brought it to 21 (2026-08-19/20), the full ceiling the platform grants the
+ * BetterTrackMobile client today.
  *
  * HISTORY: from 2026-08-04 these five rode a **per-backend** gate
  * (`v5ScopesAllowedFor`, board #42.1) that held PRODUCTION to the proven 14,
@@ -175,22 +176,22 @@ private const val V5_SCOPES =
 /**
  * In-app feedback (`POST /feedback`, platform #1315). Appended when
  * [OAuthConfig.FEEDBACK_SCOPE_ENABLED], which has been `true` since 2026-08-19 —
- * the platform's seed is live on production and this scope is the twentieth and
- * last entry of the client's ceiling. `OAuthScopeTest` pins that the shipped scope
- * string contains it exactly once and that the set is exactly those 20.
+ * the platform's seed is live on production. `OAuthScopeTest` pins that the
+ * shipped scope string contains it exactly once and that the set is exactly the
+ * client's 21-scope ceiling.
  *
  * The module split its scope in two on 2026-08-20 when the read half went live —
  * `read: feedback:read`, `write: feedback:write`. This constant is the write half
- * only; the read half is [FEEDBACK_READ_SCOPE], held out for now.
+ * only; the read half is [FEEDBACK_READ_SCOPE], requested since 2026-08-20 too.
  */
 private const val FEEDBACK_SCOPE = "feedback:write"
 
 /**
  * In-app feedback, READ half (`GET /feedback/mine`, platform #1338). Appended when
- * [OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED], which is `false` today: the scope is
- * published in the client's ceiling but not yet granted on consents that already
- * exist, and #1393 (in final review) is the fix. See that flag for why requesting
- * it early is a whole-login hard-reject rather than a soft miss.
+ * [OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED], which is `true` since 2026-08-20:
+ * #1393's grant-widening was proven on production (a bearer from a pre-existing
+ * consent answered `GET /feedback/mine` 200). See that flag for why requesting a
+ * scope before it is granted is a whole-login hard-reject rather than a soft miss.
  *
  * A separate constant from [FEEDBACK_SCOPE] and not a two-scope pair like
  * [ALERTS_SCOPES], because the two halves move on different days: the write half
@@ -220,9 +221,8 @@ internal fun requestedScopes(
     // request should never arrive by forgetting an argument, and the default is
     // also the safe lever if the platform ever retracts the seed.
     if (feedbackScopeEnabled) append(' ').append(FEEDBACK_SCOPE)
-    // NOT requested today. Same defaulted-false discipline, and here it is load
-    // bearing rather than precautionary: the grant on existing consents is the
-    // thing that is missing, so an accidental append breaks sign-in for the very
-    // users who already have a token.
+    // Requested on every login since 2026-08-20 (the shipped call site passes
+    // [OAuthConfig.FEEDBACK_READ_SCOPE_ENABLED] = true). Same defaulted-false
+    // discipline as above: a widening scope never arrives by a forgotten argument.
     if (feedbackReadScopeEnabled) append(' ').append(FEEDBACK_READ_SCOPE)
 }
