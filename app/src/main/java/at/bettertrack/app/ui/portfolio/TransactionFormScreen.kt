@@ -85,7 +85,6 @@ import at.bettertrack.app.data.api.BtErrorCopy
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
-import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.db.BtDatabase
 import at.bettertrack.app.data.db.HoldingEntity
 import at.bettertrack.app.data.db.SyncOpEntity
@@ -1113,18 +1112,16 @@ class TransactionFormViewModel(
         // them). An edit that over-sells answers 400 OVERSELL, which lands in
         // `_serverError` below with the create path's copy — the web's edit
         // keeps the same strict guard.
-        val body = UpdateTransactionRequest(
-            side = newSide.takeIf { it != orig.side },
-            quantity = newQty.takeIf { it != orig.quantity },
-            price = newPrice.takeIf { it != orig.price },
-            fee = newFee.takeIf { it != orig.fee },
+        val body = syncedEditPatch(
+            orig = orig,
+            side = newSide,
+            quantity = newQty,
+            price = newPrice,
+            fee = newFee,
             executedAt = if (dateChanged) executedAtIso(_date.value) else null,
-            // Compared against the DISPLAY form of the stored note: a historical
-            // row whose note still carries a retired `[bt:…]` marker must not be
-            // counted as "changed" just because the strip removed the marker.
-            note = newNote.takeIf { it != displayNote(orig.note) },
+            note = newNote,
         )
-        if (body == UpdateTransactionRequest()) {
+        if (body == null) {
             // Nothing changed — nothing to send.
             _events.value = TxFormEvent.Close
             return

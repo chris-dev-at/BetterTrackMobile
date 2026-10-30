@@ -325,6 +325,11 @@ data class CreateTransactionsResponse(
  * `400 OVERSELL`, rendered inline with the create path's copy — exactly as the
  * web's edit dialog does. Keeping the fields off this type is what makes
  * "never send them on PATCH" a compile-time fact rather than a convention.
+ *
+ * `baseSeq` is the contract's stale-edit guard for a row in a synced (group)
+ * copy: the row's `mirror.version`, refused with `409 MIRROR_CONFLICT` when it
+ * no longer matches. Null — and so absent from the wire — on every other row.
+ * Built by `syncedEditPatch`.
  */
 @Serializable
 data class UpdateTransactionRequest(
@@ -334,6 +339,7 @@ data class UpdateTransactionRequest(
     val fee: Double? = null,
     val executedAt: String? = null,
     val note: String? = null,
+    val baseSeq: Int? = null,
 )
 
 @Serializable

@@ -1,6 +1,8 @@
 package at.bettertrack.app.ui.portfolio
 
+import at.bettertrack.app.data.api.dto.UpdateTransactionRequest
 import at.bettertrack.app.data.db.SyncOpEntity
+import at.bettertrack.app.data.db.TransactionEntity
 import at.bettertrack.app.sync.OpStatus
 import at.bettertrack.app.sync.OpType
 import at.bettertrack.app.sync.TxOpPayload
@@ -226,6 +228,46 @@ fun uncoveredSellState(
     if (isBuy || quantity == null || quantity <= 0.0) return UncoveredSell(false, 0.0, held)
     val over = quantity - held
     return if (over > UNCOVERED_QTY_EPS) UncoveredSell(true, over, held) else UncoveredSell(false, 0.0, held)
+}
+
+/**
+ * The delta-only PATCH body for an edit of the synced transaction [orig], or
+ * null when nothing changed (there is nothing to send).
+ *
+ * Unchanged fields are omitted: the platform rejects economic changes on
+ * cash-coupled transactions, so re-sending an unchanged (or merely re-stamped)
+ * field must never happen. [executedAt] is the new timestamp, or null when the
+ * date was not changed; [note] is the submitted note ([submittedNote]),
+ * compared against the DISPLAY form of the stored one — a historical row whose
+ * note still carries a retired `[bt:…]` marker must not count as "changed" just
+ * because the strip removed the marker.
+ *
+ * A row of a synced (group) copy also carries `baseSeq` = its `mirror.version`
+ * (MB-03): the server refuses an edit made against a stale copy with
+ * `409 MIRROR_CONFLICT` instead of silently overwriting what landed in between.
+ * The web sends it (`patch.baseSeq = transaction.mirror.version`), and so does
+ * the app's cash edit. It is added only AFTER the nothing-changed check —
+ * `baseSeq` alone is not an edit.
+ */
+fun syncedEditPatch(
+    orig: TransactionEntity,
+    side: String,
+    quantity: Double,
+    price: Double,
+    fee: Double,
+    executedAt: String?,
+    note: String?,
+): UpdateTransactionRequest? {
+    val body = UpdateTransactionRequest(
+        side = side.takeIf { it != orig.side },
+        quantity = quantity.takeIf { it != orig.quantity },
+        price = price.takeIf { it != orig.price },
+        fee = fee.takeIf { it != orig.fee },
+        executedAt = executedAt,
+        note = note.takeIf { it != displayNote(orig.note) },
+    )
+    if (body == UpdateTransactionRequest()) return null
+    return body.copy(baseSeq = orig.mirror?.mirrorVersion)
 }
 
 /**
