@@ -33,6 +33,13 @@ const val CASH_RULE_PATTERN_MAX = 200
 /** How many tags one movement or one rule may carry (`CASH_TAGS_PER_ITEM_MAX`). */
 const val CASH_TAGS_PER_ITEM_MAX = 20
 
+/**
+ * How many tags one account may hold (`CASH_TAGS_PER_USER_MAX`,
+ * packages/contracts/src/cash.ts:126 @ef73d282). The HTTP path caps it on
+ * create; a vault restore restates it (`refineRestoredCashSets`, VaultContracts.kt).
+ */
+const val CASH_TAGS_PER_USER_MAX = 1000
+
 /** Trailing-month window `GET /cash/trends` will serve (`CASH_TREND_MONTHS_MAX`). */
 const val CASH_TREND_MONTHS_MAX = 24
 

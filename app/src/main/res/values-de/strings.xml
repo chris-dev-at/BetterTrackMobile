@@ -2340,6 +2340,7 @@
     <string name="bt_err_paranoid_transition_conflict">Ein anderes Gerät ändert gerade den Paranoid-Modus. Bitte versuche es in Kürze erneut.</string>
     <string name="bt_err_paranoid_normal_data_changed">Deine Daten haben sich während der Vorbereitung geändert. Bitte starte erneut.</string>
     <string name="bt_err_paranoid_rehydration_invalid">Diese Wiederherstellungsdatei konnte nicht validiert werden.</string>
+    <string name="bt_err_paranoid_legacy_wiped">Der kontoweite Paranoid-Modus wurde für dieses Konto beendet und lässt sich nicht erneut einschalten. Du kannst stattdessen ein Portfolio mit einem eigenen Tresor schützen.</string>
     <string name="bt_err_vault_not_found">Es wurden keine Tresordaten gefunden.</string>
     <string name="bt_err_vault_paranoid_mode_required">Das ist nur verfügbar, solange der Paranoid-Modus aktiv ist.</string>
     <string name="bt_err_vault_precondition_required">Diesem Tresor-Schreibvorgang fehlt seine Sicherheitsprüfung.</string>

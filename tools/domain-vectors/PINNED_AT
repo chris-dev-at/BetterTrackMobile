@@ -25,6 +25,8 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 #   apps/web/src/user/vault/mirrorProvenance.test.ts            -> vendor/web-vault/
 #   apps/web/src/user/vault/vault.test.ts                       -> vendor/web-vault/
 #   packages/contracts/src/vault.ts                             -> vendor/web-vault/contracts-vault.ts
+#   packages/contracts/src/vault.test.ts                        -> vendor/web-vault/contracts-vault.test.ts
+#     (vault pass 2026-10-30 item 2; sha256 f237da1f966d0e23b1914a24e6314e5c8cd6e19adadea700c57ac0f44bd41da9)
 #
 # W4 — data-home reference (vendored 2026-08-04 by W4, first listed here at the
 #      ef73d282 re-pin; the Drive file RELOCATED upstream at that re-pin)
@@ -530,3 +532,39 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 #    is the OLD-file port. Next: function-by-function delta table from
 #    `git diff 7389f82 HEAD -- tools/domain-vectors/vendor/web-vault/`
 #    (776 changed lines on the moved file) into docs/.
+#
+# ── VAULT PASS 2026-10-30, CONTINUED (items 2–5, Opus; branch vault/scoped-pass-2) ──
+#
+# 2. contracts-vault.ts deltas — PORTED (refinement + error copy), the rest
+#    recorded. `refineRestoredCashSets` (vault.ts:1908-1977) is now
+#    `refineRestoredCashSets(entities)` in VaultContracts.kt, line for line: one
+#    walk, LIVE rows only (`deletedAt == null`), cashTag count >
+#    CASH_TAGS_PER_USER_MAX (1000, cash.ts:126) -> too_big; cashRuleTag pair
+#    `ruleId\u0000tagId` seen -> custom params.code CASH_RULE_TAG_DUPLICATE
+#    BEFORE the per-rule count > CASH_TAGS_PER_ITEM_MAX (20, cash.ts:101) ->
+#    too_big; path ["entities"], verbatim messages, first offender wins (one
+#    issue, walk stops). The flat order is `strictRestoreEntityOrder(document)`
+#    = `toStrictRestoreDocument`'s loop (paranoidDisable.ts:54-71: ENTITY_KINDS
+#    order x row order, ownerless customAsset rows skipped; the providerId/
+#    providerRef restatement is payload work and not reproduced). Per-row strict
+#    schemas stay unported, so a LIVE link whose ids are not strings throws
+#    document-invalid (the strict row parse refuses that document upstream).
+#    CASH_TAGS_PER_USER_MAX added beside CASH_TAGS_PER_ITEM_MAX in
+#    data/api/dto/CashClassificationDtos.kt (one source for both).
+#    Tests: vault.test.ts @ef73d282 lines 464-809 (the file is 809 lines; the
+#    brief's "830" overshoots) vendored WHOLE as vendor/web-vault/contracts-
+#    vault.test.ts; `VaultRestoredCashSetsTest` mirrors its 15 `it`s (fan-out 6,
+#    tag set 5, pair 4) + 2 walk cases + the document-invalid case + the
+#    constants pin = 19. Red first with the refinement stubbed to emptyList():
+#    11 red (the 9 mirrored refusals, the walk's first-offender case, the
+#    document-invalid case), the acceptances green.
+#    `legacyWiped: 'PARANOID_LEGACY_WIPED'` -> BtErrorCopy + EN/DE
+#    `bt_err_paranoid_legacy_wiped` (calm copy, no web copy exists); guard
+#    `BtErrorCopyTest."every paranoid transition code of the vendored contract
+#    is catalogued"` READS PARANOID_TRANSITION_ERROR_CODES out of the vendored
+#    contracts-vault.ts (red first on PARANOID_LEGACY_WIPED alone).
+#    Recorded, no surface: portfolioRow `vaultAlias` (NEW) beside `vaultId` and
+#    the vestigial `alias`, all `.default(null)` — the app reads none, `data`
+#    stays opaque; bounded patterns CASH_RULE_PATTERN_MAX = 200 /
+#    EXPENSE_RULE_PATTERN_MAX = 200 live in the unported row schemas; import-row
+#    sub-schemas: data opaque.

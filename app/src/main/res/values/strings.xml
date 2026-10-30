@@ -2466,6 +2466,7 @@
     <string name="bt_err_paranoid_transition_conflict">Another device is changing paranoid mode right now. Please try again shortly.</string>
     <string name="bt_err_paranoid_normal_data_changed">Your data changed while this was being prepared. Please start again.</string>
     <string name="bt_err_paranoid_rehydration_invalid">That restore file couldn\'t be validated.</string>
+    <string name="bt_err_paranoid_legacy_wiped">Account-wide paranoid mode was retired for this account, so it can\'t be switched on again. You can protect a portfolio with its own vault instead.</string>
     <string name="bt_err_vault_not_found">No vault data was found.</string>
     <string name="bt_err_vault_paranoid_mode_required">This is only available while paranoid mode is on.</string>
     <string name="bt_err_vault_precondition_required">This vault write is missing its safety check.</string>

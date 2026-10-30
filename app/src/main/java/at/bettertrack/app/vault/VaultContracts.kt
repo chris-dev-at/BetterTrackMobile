@@ -1,5 +1,7 @@
 package at.bettertrack.app.vault
 
+import at.bettertrack.app.data.api.dto.CASH_TAGS_PER_ITEM_MAX
+import at.bettertrack.app.data.api.dto.CASH_TAGS_PER_USER_MAX
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -57,7 +59,7 @@ object VaultContract {
     const val VERSION_MAX: Int = 2_147_483_647
 
     /**
-     * `VAULT_ENTITY_KINDS` (vault.ts:566-593), in declaration order.
+     * `VAULT_ENTITY_KINDS` (vault.ts:903-931 @ef73d282), in declaration order.
      *
      * `entities` is `z.record(vaultEntityKindSchema, …)`, so a kind outside this
      * set makes the whole document invalid — the app fails closed exactly where
@@ -726,6 +728,150 @@ class VaultDocument(
             clientSecurity = null,
         )
     }
+}
+
+// ---------------------------------------------------------------------------
+// The strict restore document's cash-set refinement (#1954, #1963)
+// ---------------------------------------------------------------------------
+
+/**
+ * One member of `vaultStrictDocumentV1Schema.entities` — the FLAT restore array
+ * whose rows carry their own `kind` (`VaultStrictEntity`, vault.ts). The app
+ * keeps rows per kind ([VaultDocument.entities]) and does not port the per-row
+ * strict schemas (`VAULT_ENTITY_ROW_SCHEMAS`), so the kind travels beside the
+ * opaque row here.
+ */
+data class VaultStrictEntity(val kind: String, val entity: VaultEntity)
+
+/**
+ * One zod issue exactly as `refineRestoredCashSets` adds it: [code] is the
+ * `ZodIssueCode` (`"too_big"` or `"custom"`), [path] is always `["entities"]`,
+ * [maximum] is set on `too_big` only (`type: 'array'`, `inclusive: true`), and
+ * [paramsCode] is `params.code` on the `custom` duplicate-link issue only.
+ */
+data class VaultStrictIssue(
+    val code: String,
+    val path: List<String>,
+    val message: String,
+    val maximum: Int? = null,
+    val paramsCode: String? = null,
+)
+
+/**
+ * The flat order `toStrictRestoreDocument` (apps/web/src/user/vault/
+ * paranoidDisable.ts:54-71 @ef73d282) pushes rows in: every kind of
+ * [VaultContract.ENTITY_KINDS] in declaration order, each kind's rows in
+ * document order. A `customAsset` row with no `ownerId` (`row.data.ownerId ==
+ * null`, i.e. absent or null) is not pushed — a market snapshot, not an owned
+ * asset. The `providerId`/`providerRef` restatement on the rows that DO cross
+ * is the payload's business, not the walk's, and is not reproduced: this list
+ * feeds [refineRestoredCashSets], which reads only `cashTag` and `cashRuleTag`.
+ */
+fun strictRestoreEntityOrder(document: VaultDocument): List<VaultStrictEntity> {
+    val entities = ArrayList<VaultStrictEntity>()
+    for (kind in VaultContract.ENTITY_KINDS) {
+        for (row in document.entities[kind].orEmpty()) {
+            if (kind != "customAsset") {
+                entities += VaultStrictEntity(kind, row)
+                continue
+            }
+            val ownerId = row.data["ownerId"]
+            if (ownerId == null || ownerId is JsonNull) continue
+            entities += VaultStrictEntity(kind, row)
+        }
+    }
+    return entities
+}
+
+/**
+ * `refineRestoredCashSets` (packages/contracts/src/vault.ts:1908-1977 @ef73d282),
+ * the `.superRefine` on `vaultStrictDocumentV1Schema` — line for line.
+ *
+ * Three facts about a restored cash lane that no row schema can see, checked in
+ * ONE walk: the account's live tag count ([CASH_TAGS_PER_USER_MAX]), a rule's
+ * live tag fan-out ([CASH_TAGS_PER_ITEM_MAX]) and that a live `(ruleId, tagId)`
+ * link appears once (`cash_rule_tags_rule_tag_unique`). LIVE ROWS ONLY
+ * (`deletedAt == null`) for all three — counting tombstones would refuse
+ * documents the service accepts and lock the paranoid EXIT. The pair check runs
+ * BEFORE the fan-out count, so a rule pushed past the cap BY duplicates is named
+ * as a duplicate. FIRST OFFENDER WINS: at most one issue, then the walk stops.
+ *
+ * Returns the issues the refinement adds — empty means the document passes it.
+ * The app has no restore/disable client path today (S2/pv flag OFF), so this is
+ * a pure validator; a caller in `toStrictRestoreDocument`'s position turns a
+ * non-empty answer into `document-invalid`, as the web does.
+ *
+ * `entity.data.ruleId` / `.tagId` are typed uuids upstream because the
+ * `cashRuleTag` row schema parsed them first; that row schema is not ported, so
+ * a LIVE link whose ids are not strings throws `document-invalid` here — the
+ * outcome the strict row parse gives that document (it never reaches the
+ * refinement upstream).
+ */
+fun refineRestoredCashSets(entities: List<VaultStrictEntity>): List<VaultStrictIssue> {
+    val perRule = HashMap<String, Int>()
+    val seenLinks = HashSet<String>()
+    var liveTags = 0
+    for ((kind, entity) in entities) {
+        // LIVE ROWS ONLY — see the KDoc; tombstones stay in the document (§4's
+        // merge rules key off them), they just do not count.
+        if (entity.deletedAt != null) continue
+
+        if (kind == "cashTag") {
+            liveTags += 1
+            if (liveTags > CASH_TAGS_PER_USER_MAX) {
+                return listOf(
+                    VaultStrictIssue(
+                        code = "too_big",
+                        path = listOf("entities"),
+                        message = "An account may hold at most $CASH_TAGS_PER_USER_MAX cash tags.",
+                        maximum = CASH_TAGS_PER_USER_MAX,
+                    )
+                )
+            }
+            continue
+        }
+
+        if (kind != "cashRuleTag") continue
+
+        val ruleId = linkId(entity, "ruleId")
+        val tagId = linkId(entity, "tagId")
+        // The pair BEFORE the count. `\u0000` cannot occur in a uuid, so the
+        // joined key is unambiguous.
+        val pair = "$ruleId\u0000$tagId"
+        if (pair in seenLinks) {
+            return listOf(
+                VaultStrictIssue(
+                    code = "custom",
+                    path = listOf("entities"),
+                    message = "A cash rule may link a tag only once.",
+                    paramsCode = "CASH_RULE_TAG_DUPLICATE",
+                )
+            )
+        }
+        seenLinks += pair
+
+        val count = (perRule[ruleId] ?: 0) + 1
+        if (count > CASH_TAGS_PER_ITEM_MAX) {
+            return listOf(
+                VaultStrictIssue(
+                    code = "too_big",
+                    path = listOf("entities"),
+                    message = "A cash rule may carry at most $CASH_TAGS_PER_ITEM_MAX tags.",
+                    maximum = CASH_TAGS_PER_ITEM_MAX,
+                )
+            )
+        }
+        perRule[ruleId] = count
+    }
+    return emptyList()
+}
+
+private fun linkId(entity: VaultEntity, field: String): String {
+    val value = entity.data[field] as? JsonPrimitive
+    if (value == null || !value.isString) {
+        documentInvalid("Vault cashRuleTag '$field' must be a string.")
+    }
+    return value.content
 }
 
 /** `exactHeaderShape` support (envelope.ts:199-208) — exposed for the envelope codec. */

@@ -178,6 +178,28 @@ class BtErrorCopyTest {
         assertEquals(BtErrorCopy.resFor("GROUP_MEMBER_NOT_FRIEND", BtErrorCopy.Context.Audience), msg.res)
     }
 
+    /**
+     * Every `PARANOID_TRANSITION_ERROR_CODES` value of the vendored contract
+     * (`tools/domain-vectors/vendor/web-vault/contracts-vault.ts` = packages/
+     * contracts/src/vault.ts @ef73d282) has app copy. Read from the vendored
+     * source, not retyped, so a re-pin that adds a code turns this red. The pin
+     * added `legacyWiped: 'PARANOID_LEGACY_WIPED'` (409, paranoidTransitionService),
+     * which was the one red case before the vault pass of 2026-10-30.
+     */
+    @Test
+    fun `every paranoid transition code of the vendored contract is catalogued`() {
+        val rel = "tools/domain-vectors/vendor/web-vault/contracts-vault.ts"
+        val file = listOf(File(rel), File("../$rel")).firstOrNull { it.isFile }
+            ?: error("$rel not found")
+        val block = Regex("""export const PARANOID_TRANSITION_ERROR_CODES = \{(.*?)\} as const;""", RegexOption.DOT_MATCHES_ALL)
+            .find(file.readText())?.groupValues?.get(1)
+            ?: error("PARANOID_TRANSITION_ERROR_CODES not found in $rel")
+        val codes = Regex("""^\s*\w+: '([A-Z_]+)',""", RegexOption.MULTILINE).findAll(block).map { it.groupValues[1] }.toList()
+        assertTrue("the table parsed: $codes", codes.size >= 9 && "PARANOID_LEGACY_WIPED" in codes)
+        val missing = codes.filter { it !in BtErrorCopy.codes }
+        assertTrue("paranoid transition codes with no app copy: $missing", missing.isEmpty())
+    }
+
     @Test
     fun `app-local queue codes are catalogued`() {
         // These never come from the server, so nothing else would catch their

@@ -306,6 +306,10 @@ object BtErrorCopy {
         "PARANOID_TRANSITION_CONFLICT" to R.string.bt_err_paranoid_transition_conflict,
         "PARANOID_NORMAL_DATA_CHANGED" to R.string.bt_err_paranoid_normal_data_changed,
         "PARANOID_REHYDRATION_INVALID" to R.string.bt_err_paranoid_rehydration_invalid,
+        // 409 `legacyWiped` (contracts vault.ts PARANOID_TRANSITION_ERROR_CODES
+        // @ef73d282): the account already went through the E9 backup + wipe and
+        // may not re-enter account-level paranoid mode. No web copy exists.
+        "PARANOID_LEGACY_WIPED" to R.string.bt_err_paranoid_legacy_wiped,
         "VAULT_NOT_FOUND" to R.string.bt_err_vault_not_found,
         "VAULT_PARANOID_MODE_REQUIRED" to R.string.bt_err_vault_paranoid_mode_required,
         "VAULT_PRECONDITION_REQUIRED" to R.string.bt_err_vault_precondition_required,
