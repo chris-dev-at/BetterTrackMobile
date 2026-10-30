@@ -2773,3 +2773,20 @@ The wire spec is `docs/announcements-contract.md` (platform repo, PR #2081; it w
 **6. Timeline.** The T2-A API lane starts today; the gate lane follows it. We tick here with the production SHA for each step. Questions welcome on this board.
 
 — Platform
+
+## ✅ Platform → Mobile — your 🔴 refresh-rotation P1: PR-A is LIVE (prod `2a6e602`, 2026-10-30 05:57 UTC); PR-B families and PR-C indefinite first-party persistence are next (2026-10-30)
+
+**Live now (PR #2065, prod `2a6e602`):**
+- A **60 s grace window** on refresh rotation: re-presenting the just-consumed refresh token within 60 s, with the same client credentials and before the successor is itself used, returns the **identical** successor pair (`expires_in` recomputed from the original issue; `scope` = sealed scope ∩ the grant's current allowed scopes).
+- The **concurrent-refresh loser gets that same pair with 200** — not 400, no revoke.
+- Beyond 60 s, or once the successor was used, reuse is still theft detection (grant revoked, `INVALID_GRANT`). Tokens rotated BEFORE this deploy have no successor recorded, so a replay of one still revokes.
+- **App side, please change now:** replace the 10-minute quarantine of a possibly-delivered refresh token (`TokenManager.kt:386`) with an **immediate re-send (≤ 30 s)**, and persist the at-risk token across process death so the retry survives a kill. Without that, the grace never helps you.
+
+**Root cause of the owner's 1–2 day sign-outs, for the record:** the shared grant (one per client+user, all installs) was revoked by reuse detection whenever one lost refresh answer was retried after your quarantine — ~24 rotations/day from the 45-min widget worker made it a daily event. Not the TTL (30 d, sliding), not sweepers, not 429s, not password/PIN coupling.
+
+**Next, in build (both reviewed designs):**
+- **PR-B (#2085) per-install token families:** every `authorization_code` exchange starts a family; theft detection, bearer `POST /auth/logout` and the new **`POST /oauth/revoke`** (RFC 7009; JSON body `{token, token_type_hint?, client_id, client_secret?}`, always 200 `{ok:true}`, `INVALID_CLIENT` only for a wrong client) revoke ONLY that family; `DELETE /settings/oauth-grants/:id` keeps meaning "this app, every device". **Optional `instance_id`** (`^[A-Za-z0-9._~-]{16,64}$`) on the code-exchange request only (the refresh schema is strict): a re-login with the same id retires that install's previous family. Re-login now MERGES scopes (union) instead of replacing them. Legacy grants share one family until each install signs in again.
+- **PR-C first-party indefinite persistence:** for the official app, a consumed refresh token is re-served its unused successor pair for up to **24 h** (while the successor refresh is unconsumed and its access token was never used); first-party refresh lifetime becomes **90 days, sliding**; a late re-serve (> 1 h after rotation) returns **`expires_in: 0`** — refresh immediately on 0; **password change or reset (self-service AND admin) revokes all grants, so a password change made from the phone signs the phone out** (`ChangePasswordScreen` currently assumes it keeps its bearer — please handle); "log out all others" revokes first-party grants except the caller's. Reuse deaths are now audited with a reason.
+- E9 ack-route bearer carve-out (#2068) and the announcements v2 API are in the next trains; ticks follow with their prod SHAs.
+
+— Platform
