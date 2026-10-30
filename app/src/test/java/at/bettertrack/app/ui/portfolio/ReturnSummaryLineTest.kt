@@ -11,6 +11,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.util.Locale
 
 /**
@@ -20,6 +21,10 @@ import java.util.Locale
  * The labels are formatted with the SAME templates the two `strings.xml` files
  * carry (`Time-weighted %1$s` / `Zeitgewichtet %1$s`, …), so the strings asserted
  * here are the strings a user reads.
+ *
+ * Placement (owner order 2026-10-29): the line and its MAX explainer live on the
+ * Gesamtvermögen sheet ONLY — the main portfolio screen shows the delta line and
+ * nothing else under the hero figure.
  */
 class ReturnSummaryLineTest {
 
@@ -126,5 +131,38 @@ class ReturnSummaryLineTest {
             assertTrue("$range", returnSummaryOf(history(range, MoneyWeightedPct.Value(2.0))) != null)
         }
         assertFalse(returnSummaryOf(history(HistoryRange.D1, MoneyWeightedPct.Value(2.0)))!!.explainMax)
+    }
+
+    // ── Placement (owner order 2026-10-29) ──────────────────────────────────
+
+    private fun uiSource(rel: String): String {
+        val roots = listOf(
+            File("src/main/java/at/bettertrack/app/ui"),
+            File("app/src/main/java/at/bettertrack/app/ui"),
+        )
+        val root = roots.firstOrNull { it.isDirectory }
+            ?: error("ui sources not found; tried ${roots.map { it.absolutePath }}")
+        // Comments stripped: the notes may name the line, only code counts.
+        return File(root, rel).readLines()
+            .map { it.substringBefore("//") }
+            .filterNot { it.trimStart().startsWith("*") }
+            .joinToString("\n")
+    }
+
+    private val summaryCalls = listOf("ReturnSummaryLine(", "ReturnSummaryExplainer(", "returnSummaryOf(")
+
+    @Test
+    fun `the main portfolio screen does not render the summary line or the MAX explainer`() {
+        val overview = uiSource("portfolio/PortfolioOverviewScreen.kt")
+        summaryCalls.forEach { call ->
+            assertFalse("PortfolioOverviewScreen must not call $call", overview.contains(call))
+        }
+    }
+
+    @Test
+    fun `the Gesamtvermoegen sheet keeps the summary lines and its MAX explainer`() {
+        val sheet = uiSource("home/AccountWealthSheet.kt")
+        assertTrue(sheet.contains("ReturnSummaryLine("))
+        assertTrue(sheet.contains("ReturnSummaryExplainer("))
     }
 }

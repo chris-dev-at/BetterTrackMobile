@@ -44,6 +44,11 @@ import java.util.Locale
  *  · money-weighted = `moneyWeightedPct`, the server's Modified Dietz return of
  *    the same window.
  *
+ * Where it renders (owner order 2026-10-29): the Gesamtvermögen sheet ONLY
+ * (`ui/home/AccountWealthSheet.kt` — the single-portfolio headline, each small
+ * multiple, one MAX explainer per sheet). The main portfolio screen does not show
+ * it; its delta area is the delta line alone (pinned by `ReturnSummaryLineTest`).
+ *
  * Its own quiet line UNDER the delta line rather than a rewrite of it: the delta
  * line's shape is an owner ruling (device QA 2026-09-01 #14) and keeps its one-line
  * rhythm and its verdict colour; this line labels the two return definitions and
