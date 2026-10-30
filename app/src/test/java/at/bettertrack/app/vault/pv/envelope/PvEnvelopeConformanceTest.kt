@@ -588,16 +588,20 @@ class PvEnvelopeConformanceTest {
     // =======================================================================
 
     /**
-     * The shipped v2 arc's partition vector (`v2.fixture.json` → `v2Partition`)
-     * replayed against [PvDocBuckets], because the pv buckets DERIVE from that
-     * partition. Its `coveredKinds` list is the contract's kind list in contract
+     * The retired v2 arc's partition vector, replayed against [PvDocBuckets]
+     * because the pv placement IS the E0 re-derivation of that partition minus
+     * the recorded delta. The platform retired the v2 vault SURFACE (#1392), not
+     * this partition truth, so when MB-17 dropped `v2.fixture.json` (2026-10-30)
+     * the `v2Partition` object moved VERBATIM into the pv-owned
+     * `pv-partition.fixture.json` (its `_source` carries the retired file's
+     * sha256). Its `coveredKinds` list is the contract's kind list in contract
      * order, and its `commonKinds` list is the v2 placement — which the pv
      * location must reproduce exactly, minus the recorded E0 delta.
      */
     @Test
     fun `v2Partition replays against the pv doc-bucket location`() {
-        val stream = javaClass.getResourceAsStream("/vault-vectors/v2.fixture.json")
-            ?: error("vault-vectors/v2.fixture.json missing from test resources")
+        val stream = javaClass.getResourceAsStream("/vault-vectors/pv-partition.fixture.json")
+            ?: error("vault-vectors/pv-partition.fixture.json missing from test resources")
         val v2Partition = Json.parseToJsonElement(stream.bufferedReader().use { it.readText() })
             .jsonObject["v2Partition"]!!.jsonObject
 

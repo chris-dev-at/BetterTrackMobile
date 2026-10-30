@@ -384,7 +384,7 @@ fun decryptVaultDocument(envelope: ByteArray, vaultKey: ByteArray): DecryptedVau
 /**
  * `aesGcmEncrypt` (crypto.ts:277-296) — output is `ciphertext ‖ tag`, tag 128-bit.
  *
- * `internal` rather than `private` so the Vaults v2 layer (`vault.v2`) reuses
+ * `internal` rather than `private` so the paranoid layer (`vault.pv`, formerly the Vaults v2 layer) reuses
  * this exact implementation instead of standing up a second one. That mirrors
  * the platform, which widened the same two functions from module-private to
  * exported for the same reason and says so in `crypto.ts`'s own KDoc.

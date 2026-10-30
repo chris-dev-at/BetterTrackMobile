@@ -2,7 +2,7 @@ package at.bettertrack.app.ui.vault.create
 
 import at.bettertrack.app.vault.pv.custody.PV_MNEMONIC_WORDS
 import at.bettertrack.app.vault.pv.custody.PvCustodyMode
-import at.bettertrack.app.vault.v2.normalizeVaultPassphrase
+import at.bettertrack.app.vault.bip39.normalizeVaultPassphrase
 import java.security.SecureRandom
 
 /**
@@ -211,7 +211,7 @@ fun pvNewCreateState(picker: PvVerifyIndexPicker = PvSecureVerifyIndexPicker): P
  * Does [typed] match the word the ceremony asked for?
  *
  * Case- and whitespace-forgiving, through the SAME normalisation the §13 QR and
- * the manual-entry path use (`vault/v2`'s `normalizeVaultPassphrase`: NFKD,
+ * the manual-entry path use (`vault/bip39`'s `normalizeVaultPassphrase`: NFKD,
  * lower-case, trimmed, single-spaced). Anything else would mean a word typed
  * into this field and the same word typed into the recovery field being
  * different strings, which is exactly the class of inconsistency that makes a

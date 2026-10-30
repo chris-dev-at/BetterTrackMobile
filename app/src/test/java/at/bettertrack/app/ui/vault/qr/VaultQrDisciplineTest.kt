@@ -195,19 +195,27 @@ class VaultQrDisciplineTest {
         )
     }
 
-    // ── the retired v2 QR is untouched ──────────────────────────────────────
+    // ── the retired v2 QR is gone, and stays gone ───────────────────────────
 
     @Test
-    fun `the v2 QR file is left alone and still owns the colliding prefix`() {
-        // Board ask #83 is with the platform. Until it answers, both files use
-        // `btvault1:` and the pv parser discriminates by body shape — which only
-        // works while the v2 body stays JSON.
-        val v2 = repoFile("src/main/java/at/bettertrack/app/vault/v2/VaultQr.kt").readText()
-        assertTrue("v2 no longer serializes a JSON body", v2.contains("jsJsonStringify"))
-        val contract = repoFile("src/main/java/at/bettertrack/app/vault/v2/VaultV2Contract.kt").readText()
-        assertTrue(
-            "the prefix collision this parser works around has changed shape",
-            contract.contains("""QR_PREFIX: String = "btvault1:""""),
+    fun `the v2 QR file is gone and the pv parser is the one owner of the prefix`() {
+        // Board ask #83 asked the platform about the `btvault1:` collision
+        // between the v2 handoff and the §13 payload. The platform answered it by
+        // retiring the v2 surface outright (#1392), and MB-17 (2026-10-30) dropped
+        // the app's mirror. The body-shape discrimination in the pv parser is
+        // now defensive only; a resurrected `vault/v2/` would re-open the ask.
+        val root = repoFile("src/main/java/at/bettertrack/app/vault")
+        assertTrue("vault/v2/ came back", !root.resolve("v2").exists())
+        val owners = root.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" && it.readText().contains("\"btvault1:\"") }
+            .map { it.relativeTo(root).path }
+            .toList()
+        // The pv rail spells it twice on purpose — the contract constant and
+        // the parser that consumes it — and nothing outside `pv/` may.
+        assertEquals(
+            "only the pv rail may spell the QR prefix",
+            listOf("pv/VaultQrPayload.kt", "pv/envelope/PvEnvelopeContract.kt"),
+            owners.sorted(),
         )
     }
 

@@ -1,20 +1,21 @@
-package at.bettertrack.app.vault.v2
+package at.bettertrack.app.vault.bip39
 
 /**
- * The BIP-39 English wordlist — the 2048-word vocabulary a v2 vault passphrase
- * is drawn from (`docs/VAULTS_V2_DESIGN.md` §1/§2, platform `v2/words.ts`).
+ * The BIP-39 English wordlist — the 2048-word vocabulary a paranoid vault's
+ * 12-word seed phrase is drawn from (`paranoid-design.md` §4; platform
+ * `apps/web/src/user/vault/bip39/mnemonic.ts`, which imports
+ * `@scure/bip39/wordlists/english.js`).
  *
- * Literal transcription of `@scure/bip39`'s `wordlists/english.js`, which is
- * what the platform imports. Pinned by the sha256 of the newline-joined list,
+ * Literal transcription of that `english.js`. Pinned by the sha256 of the
+ * newline-joined list,
  * `2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda` — the
- * canonical BIP-39 English digest — asserted in `VaultV2ConformanceTest`.
+ * canonical BIP-39 English digest — asserted in `Bip39EnglishTest`.
  *
- * The list is NOT used as a BIP-39 seed. The phrase is fed to Argon2id as a
- * UTF-8 passphrase exactly like the v1 typed passphrase was: no PBKDF2 seed
- * derivation, no derivation path, no wallet-compatibility claim. It is here
- * because it is a stable, audited, cross-platform vocabulary with a built-in
- * checksum, which turns most manual-entry typos into a local error instead of a
- * "wrong passphrase" round trip.
+ * Lived in `vault/v2/` while the Vaults v2 arc minted phrases from it; that arc
+ * was retired upstream (#1392) and the app's mirror dropped with MB-17
+ * (2026-10-30). The list itself outlived it: the per-portfolio rail mints
+ * (`PvMnemonicIssuance`), checks (`PvMnemonicEntropy`) and derives
+ * (`PvBip39Seed`) from this ONE copy, so it moved rather than went.
  *
  * Held as one space-separated string rather than a resource file so it cannot
  * go missing from a packaged APK; split once, lazily.

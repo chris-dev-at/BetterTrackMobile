@@ -17,7 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * vaults.ts`, contracts pin `14f27679`).
  *
  * This is a literal Kotlin translation of the platform's E0 codec, derived by
- * adaptation from this app's shipped v2 blob codec (`vault/v2/VaultBlobCrypto.kt`)
+ * adaptation from this app's former v2 blob codec (`vault/v2/VaultBlobCrypto.kt`, removed with MB-17 on 2026-10-30; history at `677b225`)
  * because the spec keeps that codec's shape verbatim:
  *
  * ```

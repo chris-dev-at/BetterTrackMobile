@@ -4,10 +4,10 @@ import at.bettertrack.app.vault.VaultCryptoError
 import at.bettertrack.app.vault.pv.custody.PV_ENTROPY_BYTES
 import at.bettertrack.app.vault.pv.custody.PV_MNEMONIC_WORDS
 import at.bettertrack.app.vault.pv.custody.pvPhraseToEntropy
-import at.bettertrack.app.vault.v2.BIP39_ENGLISH
-import at.bettertrack.app.vault.v2.VaultPassphraseCheck
-import at.bettertrack.app.vault.v2.checkVaultPassphrase
-import at.bettertrack.app.vault.v2.normalizeVaultPassphrase
+import at.bettertrack.app.vault.bip39.BIP39_ENGLISH
+import at.bettertrack.app.vault.bip39.VaultPassphraseCheck
+import at.bettertrack.app.vault.bip39.checkVaultPassphrase
+import at.bettertrack.app.vault.bip39.normalizeVaultPassphrase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows

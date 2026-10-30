@@ -3,7 +3,7 @@ package at.bettertrack.app.vault.pv.keys
 import at.bettertrack.app.vault.VaultCryptoError
 import at.bettertrack.app.vault.pv.custody.PV_ENTROPY_BYTES
 import at.bettertrack.app.vault.pv.custody.pvPhraseToEntropy
-import at.bettertrack.app.vault.v2.normalizeVaultPassphrase
+import at.bettertrack.app.vault.bip39.normalizeVaultPassphrase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -150,7 +150,7 @@ class PvBip39VectorTest {
     @Test
     fun `the published sentences are already in the app's canonical form`() {
         // The seed is derived from the phrase the user's other device produced,
-        // and `vault/v2`'s normalisation (NFKD, lower-case, single-spaced) is
+        // and `vault/bip39`'s normalisation (NFKD, lower-case, single-spaced) is
         // what every entry path applies. If it changed a canonical BIP-39
         // sentence, manual entry and the §13 scan would derive a different seed
         // from the same correct words.

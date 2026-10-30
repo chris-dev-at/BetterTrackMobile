@@ -23,8 +23,8 @@ import java.security.SecureRandom
  * So this file calls [pvEntropyToWords] rather than reimplementing it, and the
  * custody file stays where it is: the conversion belongs next to the store that
  * needs it on every read, and issuance is the occasional caller. (The wordlist
- * itself is `vault/v2`'s [at.bettertrack.app.vault.v2.BIP39_ENGLISH], pinned by
- * sha256 in `VaultV2ConformanceTest` — one list for mint, manual entry and the
+ * itself is `vault/bip39`'s [at.bettertrack.app.vault.bip39.BIP39_ENGLISH], pinned by
+ * sha256 in `Bip39EnglishTest` — one list for mint, manual entry and the
  * §13 QR scan.)
  *
  * ## Where the randomness comes from

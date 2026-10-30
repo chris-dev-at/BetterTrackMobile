@@ -288,7 +288,7 @@ class VaultQrPayloadTest {
 
     @Test
     fun `the v2 code on the same prefix is named as an old version`() {
-        // The retired vault.v2 handoff shares `btvault1:` (board ask #83). Its
+        // The retired vault.v2 handoff shared `btvault1:` (board ask #83; the file is gone since MB-17). Its
         // body is JSON, which is how the two are told apart until the platform
         // answers.
         val v2 = """btvault1:{"qr":1,"vaultId":"$vaultId","name":"Depot","w":"AAAABBBBCCCC"}"""

@@ -1,9 +1,9 @@
 package at.bettertrack.app.vault.pv.custody
 
 import at.bettertrack.app.vault.VaultCryptoError
-import at.bettertrack.app.vault.v2.BIP39_ENGLISH
-import at.bettertrack.app.vault.v2.VaultPassphraseCheck
-import at.bettertrack.app.vault.v2.checkVaultPassphrase
+import at.bettertrack.app.vault.bip39.BIP39_ENGLISH
+import at.bettertrack.app.vault.bip39.VaultPassphraseCheck
+import at.bettertrack.app.vault.bip39.checkVaultPassphrase
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -36,7 +36,7 @@ class PvMnemonicEntropyTest {
 
     @Test
     fun `a rendered phrase passes the shared BIP39 checksum`() {
-        // The checksum is what `vault/v2` validates on manual entry and on a
+        // The checksum is what `vault/bip39` validates on manual entry and on a
         // scan. If this file's bit packing disagreed with that validator by one
         // bit, a phrase this app itself minted would be rejected on re-entry.
         val entropy = ByteArray(PV_ENTROPY_BYTES) { (it * 31 + 11).toByte() }

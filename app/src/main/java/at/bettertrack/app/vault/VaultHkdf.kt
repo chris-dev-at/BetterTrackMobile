@@ -1,28 +1,31 @@
-package at.bettertrack.app.vault.v2
+package at.bettertrack.app.vault
 
-import at.bettertrack.app.vault.VaultCryptoError
-import at.bettertrack.app.vault.VaultCryptoErrorCode
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator
 import org.bouncycastle.crypto.params.HKDFParameters
 
 /**
- * HKDF-SHA256 (RFC 5869) — the r3 derivation primitive
- * (`docs/VAULTS_V2_DESIGN.md`, platform `apps/web/src/user/vault/hkdf.ts`).
+ * HKDF-SHA256 (RFC 5869) — literal port of the platform's
+ * `apps/web/src/user/vault/hkdf.ts` (vendored at
+ * `tools/domain-vectors/vendor/web-vault/hkdf.ts`).
  *
- * Three consumers, all specified in r3:
- *  - §18 migration content key: `HKDF(VK, "btv2-migration-v1", 32)`
- *  - §18 migration doc IVs / writer identity: `HKDF(K_c, "btv2-migration-iv" ‖ docId, 12)` …
- *  - §21 header-MAC key: `HKDF(K_c, "btv2-header-mac-v1", 32)`
+ * Lived in `vault/v2/` while the Vaults v2 arc was the consumer; the platform
+ * retired that arc (#1392, owner ruling 2026-08-19) and kept `hkdf.ts` in place
+ * — "a correct standalone RFC 5869 implementation", marked CURRENTLY UNUSED IN
+ * PRODUCTION on the web. The app's mirror moved out of `v2/` with the MB-17
+ * cleanup (2026-10-30) and is NOT unused here: the per-portfolio paranoid rail
+ * derives `K_wrap` and the key fingerprint through it
+ * (`vault/pv/keys/PvVaultKeyDerivation.kt`, `paranoid-design.md` §4), exactly
+ * as the web's `keys/keyCore.ts` calls the same `hkdfSha256`.
  *
  * The salt defaults to EMPTY, which RFC 5869 defines as a zeroed hash-length
- * salt — that is what every r3 derivation specifies. Domain separation rides
- * entirely on the `info` strings, never on the salt.
+ * salt — that is what every BetterTrack derivation specifies. Domain separation
+ * rides entirely on the `info` strings, never on the salt.
  *
  * The web side runs this through WebCrypto's `deriveBits`; here it is Bouncy
  * Castle's lightweight `HKDFBytesGenerator`, already on the main classpath for
- * Argon2id. Both implement RFC 5869 exactly, and the conformance vectors are
- * what proves the two agree.
+ * Argon2id. Both implement RFC 5869 exactly, and `PvHkdfVectorTest` (RFC 5869
+ * A.1–A.3) is what proves the two agree.
  */
 
 /**
@@ -76,8 +79,10 @@ internal fun hkdfSha256(
  * Force 16 bytes into RFC 4122 shape (version 4, variant 10) and format them
  * (`hkdf.ts` `uuidFromBytes`).
  *
- * Used by the §18 migration derivations, where "uuid" fields must be
- * deterministic yet still satisfy every uuid-shaped validator in the stack.
+ * Kept because the platform keeps it: its only consumer was the retired v2
+ * migration (§18), so nothing in the app calls it today. Deleting working
+ * vault crypto as a side effect of removing a feature is the thing `hkdf.ts`'s
+ * own header refuses to do, and the mirror follows.
  */
 internal fun uuidFromBytes(bytes: ByteArray): String {
     if (bytes.size != 16) {

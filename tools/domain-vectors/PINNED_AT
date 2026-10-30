@@ -49,10 +49,10 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 # The published fixtures are ALSO copied byte-identically into the app's test
 # resources, because they are replayed directly rather than reshaped:
 #   app/src/test/resources/vault-vectors/vectors.fixture.json  (= v1.fixture.json)
-#   app/src/test/resources/vault-vectors/v2.fixture.json       (FROZEN: the last
-#     published v2 oracle, 8884c5cb; no upstream source exists any more — see
-#     the ef73d282 re-pin section)
 #   app/src/test/resources/vault-vectors/clientMoney.fixture.json
+#   [REMOVED 2026-10-30 (MB-17, vault pass below): app/src/test/resources/
+#    vault-vectors/v2.fixture.json — the frozen last v2 oracle; last copy at
+#    this repo's 677b225]
 #
 # NOT from the monorepo — a third-party npm package, vendored for the same
 # reason (a literal port needs its source pinned):
@@ -435,3 +435,98 @@ previous= 8884c5cb3aa643e8ce6a175973c4518e7191898a (2026-08-10)
 # Every date-shaped input that reaches dateToMs/isoDayToMs through the vectors
 # is a real calendar day, so nothing here is red — but a platform suite that
 # ever feeds a Feb-30 would go red on this side. Flagged for a follow-up.
+
+# ── VAULT PASS 2026-10-30 (pin unchanged: ef73d282) — the scoped port of the ──
+# ── deltas the 8884c5cb → ef73d282 re-pin vendored but did not port          ──
+#
+# Stopped by the coordinator's watchdog after item 1 (budget); items 2–5 are
+# handed on with their exact next step. Nothing in packages/domain moved, so
+# the 838-vector replay is the guard throughout (DomainVectorTest /
+# TaxVectorTest / CashLedgerVectorTest unchanged).
+#
+# 1. MB-17 — the frozen v2 port DROPPED (done, this pass). Following
+#    `vaultVectors/index.ts` ("The mobile repo must drop its matching v2
+#    replay"). Deleted: app/.../vault/v2/{VaultBlobCrypto, VaultHeaderCrypto,
+#    VaultHeaderMac, VaultMigrationCrypto, VaultQr, VaultRecoveryKitV2,
+#    VaultUpgrade, VaultV2Contract}.kt (1,980 lines), test/.../vault/v2/
+#    VaultV2ConformanceTest.kt (687), resources/vault-vectors/v2.fixture.json.
+#    The live pv rail consumed three v2 files, which MOVED rather than went,
+#    each to the location its LIVE upstream counterpart occupies:
+#      vault/v2/VaultHkdf.kt      -> vault/VaultHkdf.kt         (hkdf.ts, kept upstream)
+#      vault/v2/Bip39English.kt   -> vault/bip39/Bip39English.kt (bip39/mnemonic.ts' wordlist)
+#      vault/v2/VaultWords.kt     -> vault/bip39/Bip39Mnemonic.kt (normalizeMnemonic +
+#                                    the three checks; v2-only requireVaultPassphrase /
+#                                    requireLegacyPassphrase dropped)
+#    `PvDocBuckets` no longer DERIVES from `VaultV2Contract`'s partition: it is
+#    now the literal transcription of `VAULT_ENTITY_DOC_BUCKETS`
+#    (packages/contracts/src/vaults.ts) in declaration order, with the two
+#    kind sets derived from the record exactly as upstream's `bucketKinds` does.
+#    Guard: the board-pinned E0 `docBuckets` family (pv-envelope.fixture.json)
+#    replays every kind. The `v2Partition` family did NOT go with the v2 fixture
+#    (coordinator ruling: the platform retired the v2 SURFACE, not the partition
+#    truth the pv buckets re-derive from) — its object moved VERBATIM, byte-
+#    identical member text, into the pv-owned
+#      app/src/test/resources/vault-vectors/pv-partition.fixture.json
+#    whose `_source` names the retired file and its sha256
+#    (5b6e447bd7455fe8c1c1c9325ed4e19946739462864da1804b547bf6ab6e0509), and
+#    `PvEnvelopeConformanceTest.v2Partition replays…` points at it unchanged
+#    (26 covered kinds, exact cover, pv common = v2 common − the E0 delta). The
+#    wordlist digest pin moved verbatim to `Bip39EnglishTest`;
+#    RFC 5869 A.1 was already covered by `PvHkdfVectorTest`. Import-line-only
+#    edits in vault/pv/* (PvMnemonicEntropy, VaultQrPayload, PvVaultKeyDerivation,
+#    PvDocBuckets) and ui/vault/create/PvCreateFlowState — the delta landed there
+#    by necessity. `VaultQrDisciplineTest` now asserts vault/v2 is GONE and
+#    `pv/VaultQrPayload.kt` is the one owner of `"btvault1:"`.
+#
+# 2. contracts-vault.ts deltas — NOT STARTED. Findings for the next builder:
+#    - portfolioRow: NOT a rename. At ef73d282 `vaultId` (already present at
+#      8884c5cb), `alias` (kept, VESTIGIAL) and `vaultAlias` (NEW, the E0
+#      locked-stub label) all exist, all `.default(null)`. The app's vault
+#      projection/capture (data/storage/*) reads none of them (grep "alias":
+#      only the Room column `portfolios.vaultAlias`), and `VaultContracts.kt`
+#      keeps `data` opaque, so absent==null already holds. Port surface: none;
+#      record only.
+#    - bounded `pattern` (CASH_RULE_PATTERN_MAX = 200, EXPENSE_RULE_PATTERN_MAX
+#      = 200 at the pin) lives in the per-row schemas (`VAULT_ENTITY_ROW_SCHEMAS`)
+#      the app does not port. No surface; record the constants.
+#    - `.superRefine(refineRestoredCashSets)` on `vaultStrictDocumentV1Schema`:
+#      THE item to port. Constants at the pin (packages/contracts/src/cash.ts):
+#      CASH_TAGS_PER_ITEM_MAX = 20, CASH_TAGS_PER_USER_MAX = 1000. The TS walks
+#      the strict document's FLAT entity array, which `toStrictRestoreDocument`
+#      (paranoidDisable.ts) builds by iterating VAULT_ENTITY_KINDS in order and
+#      each kind's rows in document order — so the Kotlin mirror walks
+#      `VaultContract.ENTITY_KINDS` × `document.entities[kind]`, live rows only
+#      (`deletedAt == null`), one issue, first offender wins; pair check
+#      (`ruleId\u0000tagId`) BEFORE the per-rule count. Tests: the three suites
+#      in packages/contracts/src/vault.test.ts @ef73d282 lines 464–830 (NOT
+#      vendored yet — vendor it as vendor/web-vault/contracts-vault.test.ts).
+#      The app has no restore/disable client path today, so the function lands
+#      as a pure validator in VaultContracts.kt.
+#    - error code `legacyWiped: 'PARANOID_LEGACY_WIPED'` (409 from
+#      paranoidTransitionService; no web copy exists) -> BtErrorCopy.kt map +
+#      EN/DE strings beside bt_err_paranoid_rehydration_invalid.
+#    - import-row sub-schemas: data opaque, no surface.
+#
+# 3. dataHome.ts reasons `revoked` / `identity-mismatch` — NOT STARTED.
+#    Insert both in DataHomeFailureCode after GESTURE_REQUIRED (reference
+#    order). `revoked` is produced by driveDataHome.ts `driveFetch` on a 400/401
+#    whose JSON body matches /invalid[_ -]?(grant|token)/i (`hasRevokedGrant`),
+#    with `tokens.markRevoked()` -> add `GoogleAuthProvider.markRevoked()` (no-op
+#    default) and a FakeDriveServer flag; test beside
+#    `reportsAnExpiredTokenAndTellsTheProvider`. `identity-mismatch` comes from
+#    the web's Drive identity verification (driveConnectionRegistry.ts), which
+#    the app's OLD-file port lacks (item 5) — add the member + the coordinator
+#    mapping (`VaultSyncCoordinator.statusFor`: both -> SIGN_IN_REQUIRED) only.
+#
+# 4. §12 custody alignment — NOT STARTED (design settled, see docs/TODO.md
+#    2026-10-30). Finding: the v1 `VaultKeyCustody` never persisted the
+#    unwrapped VK (wrapped VK at rest, VK memory-only), so the web's #1640
+#    retirement of `bettertrack-vault-custody` has NO mobile counterpart to
+#    erase — rule: conformant, record only. The amendment applies to the pv
+#    endpoint custody (`vault/pv/custody/PvDeviceCustody`), whose session is
+#    memory-only today (ends at process death).
+#
+# 5. drive/driveDataHome.ts rewrite — NOT STARTED; `vault/drive/DriveDataHome.kt`
+#    is the OLD-file port. Next: function-by-function delta table from
+#    `git diff 7389f82 HEAD -- tools/domain-vectors/vendor/web-vault/`
+#    (776 changed lines on the moved file) into docs/.

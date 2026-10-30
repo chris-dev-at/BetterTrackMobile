@@ -138,7 +138,7 @@ class PvVaultKeyDerivationTest {
             ?: error("pvDerivationSalt() is gone — the one place the §4 salt is stated")
         assertTrue(
             "pvDerivationSalt() must return the shared empty-salt primitive " +
-                "(vault/v2/VaultHkdf.kt), not a second spelling of 'empty': $body",
+                "(vault/VaultHkdf.kt), not a second spelling of 'empty': $body",
             body.contains("VAULT_HKDF_EMPTY_SALT"),
         )
         assertFalse(

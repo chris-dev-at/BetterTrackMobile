@@ -1,8 +1,8 @@
 package at.bettertrack.app.vault.pv
 
-import at.bettertrack.app.vault.v2.VaultPassphraseCheck
-import at.bettertrack.app.vault.v2.checkVaultPassphrase
-import at.bettertrack.app.vault.v2.normalizeVaultPassphrase
+import at.bettertrack.app.vault.bip39.VaultPassphraseCheck
+import at.bettertrack.app.vault.bip39.checkVaultPassphrase
+import at.bettertrack.app.vault.bip39.normalizeVaultPassphrase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
@@ -92,7 +92,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * 1. the `btvault1:` prefix,
  * 2. both required keys (`m`, `v`) present,
- * 3. the BIP-39 checksum of `m` (via `vault.v2`'s audited
+ * 3. the BIP-39 checksum of `m` (via `vault.bip39`'s audited
  *    [checkVaultPassphrase] — the wordlist is digest-pinned there and is not
  *    duplicated here),
  * 4. the UUID shape of `v`.
@@ -108,13 +108,15 @@ import kotlinx.serialization.json.JsonObject
  *
  * ## Collision with the retired v2 QR
  *
- * `at.bettertrack.app.vault.v2.VaultQr` uses the SAME `btvault1:` prefix for a
- * completely different, code-wrapped JSON body. Board ask #83 is making the
- * platform discriminate the two properly; until that is answered this parser
- * tells them apart by body shape — a body that parses as JSON is a v2 code and
- * is rejected as [VaultQrRejection.LEGACY_CODE] ("this code is from an older
- * version"), never mistaken for a malformed v1 payload and never best-effort
- * parsed. The v2 file is deliberately left untouched.
+ * The retired Vaults v2 handoff (`vault/v2/VaultQr.kt` until MB-17, 2026-10-30;
+ * upstream `v2/qr.ts` until #1392) used the SAME `btvault1:` prefix for a
+ * completely different, code-wrapped JSON body. Board ask #83 asked the platform
+ * to discriminate the two; the platform retired v2 instead, and this parser is
+ * now the prefix's only owner (`VaultQrDisciplineTest` holds that). The
+ * body-shape rule stays as a defensive edge for a code printed by an old build:
+ * a body that parses as JSON is rejected as [VaultQrRejection.LEGACY_CODE]
+ * ("this code is from an older version"), never mistaken for a malformed v1
+ * payload and never best-effort parsed.
  *
  * ## Threat-model note on the reasons
  *

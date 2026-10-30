@@ -177,7 +177,7 @@ class PvCreateDisciplineTest {
         val state = createSources().first { it.first == "PvCreateFlowState.kt" }.second
         assertTrue(
             "the one-word check must normalise exactly like manual entry and the scan",
-            code(state).contains("import at.bettertrack.app.vault.v2.normalizeVaultPassphrase"),
+            code(state).contains("import at.bettertrack.app.vault.bip39.normalizeVaultPassphrase"),
         )
     }
 

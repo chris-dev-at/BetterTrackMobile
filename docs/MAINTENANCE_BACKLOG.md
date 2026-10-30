@@ -65,7 +65,7 @@ Conventions: **Behaviour** = none / internal / user-visible. **Effort** S ≤ 1 
 | 53 | MB-05 | Back from the debug gallery lands on Märkte — mechanism not pinned (debug builds) | M |
 | 54 | MB-13 | ~100 declarations used only in their own file → `private`/`internal` | M |
 | 55 | MB-58 | Domain hand-ported tests are honest; `TOLERANCES` grew 1→4, each needs its ULP note | S |
-| 56 | MB-17 | `vault/v2` frozen port: ~1,000 of 2,529 lines consumed only by its own conformance test | — |
+| 56 | MB-17 | `vault/v2` frozen port: ~1,000 of 2,529 lines consumed only by its own conformance test | ✅ DONE 2026-10-30 (vault pass; ledger) |
 | 57 | MB-36 | `generate.ts` (4,892): split along its own `// ===` sections | M |
 | 58 | MB-59 | Test-precision baseline (0 tautologies found) — record, do not act | — |
 | 59 | MB-60 | 98 `assertNotNull(` — sweep for ones not followed by a value assertion | S |
@@ -151,7 +151,7 @@ Conventions: **Behaviour** = none / internal / user-visible. **Effort** S ≤ 1 
 ### MB-16 · "RETIRED" narratives in code — **rank 40**
 - **Evidence**: `ui/shell/AppShell.kt:206-230` (25 lines on a Portfolio-tab dot removed 2026-08-09); similar "HISTORY:" blocks in `OAuthConfig.kt:22-27`, `:43-50`, `:157-170`, `BtApi.kt:1313-1322`. **Do**: one line + a TODO.md ledger date each. **Effort**: S.
 
-### MB-17 · `vault/v2` frozen port — **Fable-only cleanup, conformance vectors as guard** — **rank 56**
+### MB-17 · `vault/v2` frozen port — **Fable-only cleanup, conformance vectors as guard** — **rank 56** — ✅ DONE 2026-10-30 (coordinator ruled "follow the platform"; the three consumed files moved to `vault/VaultHkdf.kt`, `vault/bip39/`, and `PvDocBuckets` became the literal `VAULT_ENTITY_DOC_BUCKETS` mirror — see the ledger row and `tools/domain-vectors/PINNED_AT`)
 - **Evidence**: 2,529 lines / 11 files kept green against retired upstream bytes (TODO 2026-10-29 "PENDING COORDINATOR DECISION"). By file-name reference: `VaultV2Contract` (10 refs), `VaultHkdf` (3), `VaultBlobCrypto` (2), `VaultQr` (2), `VaultHeaderMac` (1) are consumed by `vault/pv/**` and `ui/vault/**`; `VaultHeaderCrypto` (313 lines), `VaultMigrationCrypto` (181), `VaultRecoveryKitV2` (132), `VaultUpgrade` (244), `VaultWords` (168) are consumed only by `VaultV2ConformanceTest` (687 lines). **Do**: nothing until the coordinator rules; if "follow the platform", ~1,040 lines + the test + `v2.fixture.json` go, the five consumed files stay (rename out of `v2`).
 
 ### MB-18 · 2,168 lines of debug-only UI compiled into release — **rank 27**

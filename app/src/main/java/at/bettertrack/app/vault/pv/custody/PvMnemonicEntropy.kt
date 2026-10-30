@@ -2,9 +2,9 @@ package at.bettertrack.app.vault.pv.custody
 
 import at.bettertrack.app.vault.VaultCryptoError
 import at.bettertrack.app.vault.VaultCryptoErrorCode
-import at.bettertrack.app.vault.v2.BIP39_ENGLISH
-import at.bettertrack.app.vault.v2.VaultPassphraseCheck
-import at.bettertrack.app.vault.v2.checkVaultPassphrase
+import at.bettertrack.app.vault.bip39.BIP39_ENGLISH
+import at.bettertrack.app.vault.bip39.VaultPassphraseCheck
+import at.bettertrack.app.vault.bip39.checkVaultPassphrase
 import java.security.MessageDigest
 
 /**
@@ -23,9 +23,9 @@ import java.security.MessageDigest
  * ## Why the wordlist is imported, never copied
  *
  * [BIP39_ENGLISH] is the transcription of `@scure/bip39`'s English list that
- * `vault/v2` already pins by sha256
+ * `vault/bip39` already pins by sha256
  * (`2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`,
- * asserted in `VaultV2ConformanceTest`). A second copy in this package would be
+ * asserted in `Bip39EnglishTest`). A second copy in this package would be
  * a second thing to keep in step with a digest, and the first divergence would
  * present itself as "the words from my other device are wrong".
  *

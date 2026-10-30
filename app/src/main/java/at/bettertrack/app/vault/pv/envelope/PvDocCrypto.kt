@@ -24,7 +24,7 @@ import java.security.MessageDigest
  * ciphertext = AES-256-GCM(K_c, iv12, rawDeflate(utf8(JSON(doc))), aad = headerBytes)
  * ```
  *
- * Adapted from `vault/v2/VaultBlobCrypto.kt`, whose shape the spec keeps
+ * Adapted from the former `vault/v2/VaultBlobCrypto.kt` (removed with MB-17, 2026-10-30; history at `677b225`), whose shape the spec keeps
  * verbatim. Two rules carry the security of the whole format:
  *
  * - **The AAD is the header, whole.** Not a digest of it, not a subset — the

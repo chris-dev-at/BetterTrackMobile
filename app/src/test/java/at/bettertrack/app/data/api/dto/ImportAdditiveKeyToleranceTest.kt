@@ -27,7 +27,7 @@ import java.io.File
  * [at.bettertrack.app.data.api.BtApi], and no DTO in this package models a
  * preview, a batch or a row. The import wizard is a web surface; the app links
  * to it. `importBatch` / `importRow` do appear in the app, but as VAULT document
- * buckets (`vault/v2/VaultV2Contract.kt`) — client-side entity type names in
+ * buckets (`vault/pv/docs/PvDocBuckets.kt`) — client-side entity type names in
  * encrypted blobs, not HTTP payloads, and nothing the platform's REST schemas
  * touch.
  *

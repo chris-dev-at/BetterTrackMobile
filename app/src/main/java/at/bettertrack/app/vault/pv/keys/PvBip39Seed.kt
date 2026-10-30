@@ -72,7 +72,7 @@ internal const val PV_BIP39_SALT_PREFIX: String = "mnemonic"
  * PBKDF2-HMAC-SHA512(NFKD(mnemonic), NFKD("mnemonic" ‖ passphrase), 2048) → 64 bytes.
  *
  * @param mnemonic the phrase. Production passes the canonical form
- *   `vault/v2`'s `normalizeVaultPassphrase` produces (NFKD, lower-case,
+ *   `vault/bip39`'s `normalizeVaultPassphrase` produces (NFKD, lower-case,
  *   single-spaced); the NFKD below is applied again anyway because BIP-39
  *   specifies it on this input, and a normalisation that is only correct when
  *   the caller remembered it is not a normalisation.

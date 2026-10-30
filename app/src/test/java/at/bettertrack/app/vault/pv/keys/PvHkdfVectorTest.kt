@@ -1,7 +1,7 @@
 package at.bettertrack.app.vault.pv.keys
 
-import at.bettertrack.app.vault.v2.VAULT_HKDF_EMPTY_SALT
-import at.bettertrack.app.vault.v2.hkdfSha256
+import at.bettertrack.app.vault.VAULT_HKDF_EMPTY_SALT
+import at.bettertrack.app.vault.hkdfSha256
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -42,8 +42,8 @@ import org.junit.Test
  * (`vault-vectors/pv-derivation.e3.fixture.json`), which landed on 2026-08-23
  * and set [PV_E3_PINNED].
  *
- * The primitive is shared with the shipped v2 rail (`vault/v2/VaultHkdf.kt`), so
- * this covers that rail too; `VaultV2ConformanceTest` pins A.1 inline as well,
+ * The primitive is the app's one HKDF (`vault/VaultHkdf.kt`, moved out of the
+ * retired `vault/v2/` with MB-17 on 2026-10-30), so this is its ONLY vector pin;
  * which is a deliberate duplicate — the v2 suite must stay standalone.
  */
 class PvHkdfVectorTest {

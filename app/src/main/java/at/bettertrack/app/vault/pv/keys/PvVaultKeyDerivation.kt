@@ -5,8 +5,8 @@ import at.bettertrack.app.vault.VaultCryptoErrorCode
 import at.bettertrack.app.vault.pv.envelope.PvVaultContract
 import at.bettertrack.app.vault.pv.envelope.pvBase64UrlEncode
 import at.bettertrack.app.vault.utf8
-import at.bettertrack.app.vault.v2.VAULT_HKDF_EMPTY_SALT
-import at.bettertrack.app.vault.v2.hkdfSha256
+import at.bettertrack.app.vault.VAULT_HKDF_EMPTY_SALT
+import at.bettertrack.app.vault.hkdfSha256
 
 /**
  * **The §4 derivation chain above the BIP-39 seed.**
@@ -33,7 +33,7 @@ import at.bettertrack.app.vault.v2.hkdfSha256
  * wrote, and the symptom would reach a user as their correct phrase being
  * refused — with no escrow and no reset (§16) behind it. So the convention is
  * named once, in [pvDerivationSalt], and it is the SAME constant the shipped v2
- * rail already derives with ([VAULT_HKDF_EMPTY_SALT], `vault/v2/VaultHkdf.kt`)
+ * rail already derives with ([VAULT_HKDF_EMPTY_SALT], `vault/VaultHkdf.kt`)
  * rather than a second empty array typed here. One primitive, one convention.
  *
  * The rest of the chain was already pinned by the deployed E0 contract and is

@@ -184,6 +184,7 @@ conformance oracle, so the app replays it directly instead of recording one.
 | `web-vault/{rekey,recovery}.ts` | `Vault{Rekey,Recovery}.kt` | `VaultConformanceTest` |
 | `web-vault/{merge,mirrorProvenance}.ts` | `VaultMerge.kt`, `MirrorProvenance.kt` | `VaultMergeTest`, `MirrorProvenanceTest` |
 | `web-vault/contracts-vault.ts` | `VaultContracts.kt` | all of the above |
+| `web-vault/hkdf.ts` | `VaultHkdf.kt` (moved out of the retired `vault/v2/` with MB-17, 2026-10-30) | `PvHkdfVectorTest` (RFC 5869 A.1–A.3) |
 | `fflate/index.ts` (v0.8.3) | `RawDeflate.kt` | `RawDeflateTest` |
 
 The oracles live in `app/src/test/resources/vault-vectors/`:
