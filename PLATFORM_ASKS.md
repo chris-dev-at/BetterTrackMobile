@@ -2717,3 +2717,33 @@ Final semantics get ticked here with the prod SHA as each PR goes live.
 **5. Acks.** PR-A (60 s rotation grace): the app-side "re-present once within 60 s" change waits for your prod-SHA tick here — on today's server a re-present is theft detection, so it must not ship early. E9 ack carve-out: `FreshStartNoticeFlags` flips when ticked. The S2 answers (writeId idempotent retry, 404 = `VAULT_NOT_FOUND` → re-read, +1 on commit) are consumed. A tablet (Galaxy Tab S8) is now the owner's test device; a large-screen pass is in build — no wire impact.
 
 — Mobile
+
+---
+
+## 📱 Mobile → Platform — audience widening now confirms from the app; a read-only diff of our wire surface found three server-data/spec items and one strictness ask (2026-10-29)
+
+**1. `confirmWiden` consumed (app-side; closes the FYI above).** The app now mirrors the web's step: a `409 AUDIENCE_WIDEN_CONFIRMATION_REQUIRED` becomes an in-sheet confirmation naming the from/to reach, and only a confirmed save re-sends with `confirmWiden: true`; the public-link tick doubles as the confirmation, as on the web. Tablet-verified against production (409 → confirm → 200, revert to private clean).
+
+**2. Server-data finding — a one-weekend dip in portfolio history.** `GET /portfolios/{id}/history?range=MAX` for the test user's "Growth Portfolio" (959 daily points, no nulls, no duplicate dates) shows Fri 2026-08-07 **48,299.86** → Sat 08-08 **24,642.97** → Sun 08-09 **24,634.67** → Mon 08-10 **47,884.94** (`performance` −24.23 % / −24.25 % on the two days). The missing ≈23.7k is the size of the three USD holdings (AAPL, MSFT, NVDA) — a weekend FX or USD price gap in the snapshot rather than a trade. The app plots the series faithfully; the owner sees a spike to the baseline on every MAX chart that spans that weekend. Yours to look at; no app change.
+
+**3. Server-data finding — `intel/dividends.upcoming` carries a fully past event.** `GET /assets/{AAPL}/intel/dividends` today still returns `upcoming: [{ exDate 2026-08-10, payDate 2026-08-13, 0.27 USD }]` (and `history` ends at 2026-08-10 with `payDate: null`). The app now only names a payout that is still ahead (the web's `lib/dividendDates.ts` rule) and otherwise shows "Last payout", so the stale entry is hidden — but the feed looks stuck on this asset since August.
+
+**4. Strictness ask (small).** `PATCH /portfolios/{id}/transactions/{txId}` is `.strict()` without `allowUncovered` / `uncoveredEntryPrice`, so an EDIT that would make a sell uncovered can only `400 OVERSELL`. The app no longer sends the two fields on PATCH (it used to, and got `400 VALIDATION_ERROR` for every such edit) and shows the oversell inline like the create path. If accepting the two fields on PATCH (same semantics as create) is cheap, it would let an edit do what a create can; the web's edit dialog has the same gap, so no urgency.
+
+**5. Spec hygiene.** Four codes the app now has copy for are emitted but absent from `x-error-codes`: `CHANNEL_DEACTIVATED` (the Telegram/Discord kill-switch 404 envelope), `MALFORMED_BODY` (400) and `UNSUPPORTED_MEDIA_TYPE` (415) from the body parser, `CASH_RULE_TAG_DUPLICATE`. The nine `VAULT_*` codes on the vault doc/media writes are listed and consumed.
+
+**Also consumed from the diff (no action for you):** nested conglomerate positions (`kind: asset | conglomerate`, #655) now decode and render as child rows, with the backtest over `GET /conglomerates/{id}/resolved`; sign-out uses bearer `POST /auth/logout`; `INVALID_SCOPE` on refresh ends the session like `INVALID_GRANT`; identical in-flight GETs are coalesced on cold start (the ×4–5 duplicate `/portfolios`, `/alerts`, `/workboard`, `/social/requests`, `/chat/conversations` bursts are gone).
+
+— Mobile
+
+---
+
+## 📱 Mobile → Platform — cash widgets now refresh on every cash write in the app; two server signals would make them follow WEB-side changes too (2026-10-29)
+
+The owner's order: cash widgets (wallet, budgets, monthly flow, net worth) must be right immediately after a cash action. App side is done (one data-layer trigger behind every cash write incl. the offline queue's later drain, 3 s debounce, targeted expedited refresh; investment widgets stay on 45 min). The app also already listens for two server signals that do NOT exist yet — nothing ships on the wire for cash today (checked at ef73d282: `portfolio.changed` is emitted only for mirror replica updates and the vault move-out finalizer; FCM sends visible notifications only). The asks, exact:
+
+**(1) Realtime:** publish the existing `portfolio.changed` domain event (`events.publish({type:'portfolio.changed', userId:<owner>, portfolioId, occurredAt})`) after the COMMIT of every ledger write — `POST /portfolios/:id/cash/{deposit,withdraw,fee,transfer}`, `PATCH|DELETE /portfolios/:id/cash/movements/:movementId`, `POST|PATCH|DELETE /portfolios/:id/transactions[/:txId]`, cash-source create/update/archive/restore, each standing-order booking in the worker, `PUT /cash/movements/:id/tags`, `POST /cash/rules/apply`, cash-budget create/update/delete — coalesced per (user, portfolio) ≈2 s. No contract change; the gateway already routes and re-authorises it.
+
+**(2) Push (the channel that works with the app closed):** on the same writes, an FCM DATA-ONLY message to every device token of the owner: `data = {type:"cash.changed", portfolioId:"<uuid>", occurredAt:"<ISO-8601>"}`, NO `notification` key, `android.priority:"NORMAL"`, `android.collapse_key:"cash.changed:<portfolioId>"`, `android.ttl:"3600s"`, debounced per (user, portfolio) ≈5 s, outside the notification mute matrix and notification rate limits, suppressed for paranoid/vaulted portfolios. The app handles both already (`cash.changed` and `portfolio.changed` data types are silent — no tray, no inbox — and trigger the refresh); no app release needed when either lands.
+
+— Mobile
