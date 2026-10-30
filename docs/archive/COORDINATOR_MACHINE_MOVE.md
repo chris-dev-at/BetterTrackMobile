@@ -1,3 +1,5 @@
+> **Archived 2026-10-30 (MB-37):** a one-off 2026-08-13 bootstrap prompt for moving the coordinator to another machine; nothing references it — current state lives in `docs/TODO.md`, `PLATFORM_ASKS.md` and `OPUS_COORDINATOR_HANDOFF.md`.
+
 # BetterTrack Coordinator — Machine-Move Handoff / Bootstrap Prompt
 
 > Paste this into a fresh Claude Code session (Opus) started inside the cloned
