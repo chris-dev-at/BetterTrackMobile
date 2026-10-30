@@ -12,10 +12,9 @@ import java.io.File
  * ## The rule
  *
  * A feedback entry row is rendered only when
- * [at.bettertrack.app.data.repo.feedbackEntryVisible] says so — which is the
- * capability flag **and** whether this install has a BetterTrack account
- * ([at.bettertrack.app.data.storage.BtSurface.ACCOUNT_SETTINGS]). Never
- * `FeedbackFlags.enabled` on its own.
+ * [at.bettertrack.app.data.repo.feedbackEntryVisible] says so — whether this
+ * install has a BetterTrack account
+ * ([at.bettertrack.app.data.storage.BtSurface.ACCOUNT_SETTINGS]).
  *
  * ## Why the account half matters, and why a source scan guards it
  *
@@ -23,16 +22,15 @@ import java.io.File
  * Drive-autonomous install has no BetterTrack account and therefore no token, so a
  * row there opens a composer whose Send button is permanently disabled behind its
  * signed-in check — "a row that opens a form that can only fail", the exact outcome
- * the capability flag was created to prevent. The flag alone does not encode it:
- * `FeedbackFlags.enabled` is a global `true`, and the ABOUT group it sits in is not
- * gated on the account the way the account, notification and log-out sections are.
+ * the old global capability flag (removed 2026-10-30, MB-28) never encoded: the
+ * ABOUT group the row sits in is not gated on the account the way the account,
+ * notification and log-out sections are.
  *
  * [at.bettertrack.app.data.repo.FeedbackTest] pins the helper's *behaviour*. This
  * file pins that the two call sites actually go through it — a behavioural test
  * cannot see a third door being added next month with a bare flag check, and the
  * project has no Compose UI suite that could. The regression would be invisible in
- * review, because the bare check is what the code looked like for two days and is
- * what a copy-paste of the old row still says.
+ * review.
  */
 class FeedbackEntryDisciplineTest {
 
@@ -106,19 +104,5 @@ class FeedbackEntryDisciplineTest {
                 code.contains("feedbackEntryVisible(storageMode)"),
             )
         }
-    }
-
-    @Test
-    fun `no UI source reads the raw capability flag`() {
-        // The flag is half of the rule. Reading it directly anywhere in ui/** is
-        // how a third entry point would silently reintroduce the dead Drive row.
-        val offenders = uiSources()
-            .filter { (_, code) -> code.contains("FeedbackFlags.enabled") }
-            .map { it.first }
-        assertEquals(
-            "ui sources must gate on feedbackEntryVisible(mode), never FeedbackFlags.enabled",
-            emptyList<String>(),
-            offenders,
-        )
     }
 }

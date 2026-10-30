@@ -13,8 +13,8 @@ import kotlinx.serialization.Serializable
  * a session cookie and a bearer token (`security: [sessionCookie, apiKeyBearer]` in
  * the live `openapi.json`); the bearer path carries the `feedback:write` scope,
  * which is seeded to the BetterTrackMobile client and already present on existing
- * consents, so no re-login was needed. The surface is on behind
- * [at.bettertrack.app.data.repo.FeedbackFlags.enabled] and the scope is requested at
+ * consents, so no re-login was needed. The surface is on for every account-backed
+ * install ([at.bettertrack.app.data.repo.feedbackEntryVisible]) and the scope is requested at
  * authorize time — see [at.bettertrack.app.data.auth.OAuthConfig.SCOPES], whose
  * constant also records why a scope joins only once proven (an UN-seeded scope in an
  * authorize request is not a soft failure but a hard reject of the entire login).

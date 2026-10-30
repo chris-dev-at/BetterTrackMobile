@@ -351,7 +351,6 @@ object BtErrorCopy {
         "DIRECT_PROVIDER_DISABLED" to R.string.bt_err_direct_provider_disabled,
         "NO_EXCHANGE_RATE" to R.string.bt_err_no_exchange_rate,
         "VAULT_DERIVATION_FAILED" to R.string.bt_err_vault_derivation_failed,
-        "DELETE_DISABLED" to R.string.bt_err_delete_disabled,
         "APP_UNKNOWN_ALERT_KIND" to R.string.bt_err_app_unknown_alert_kind,
     )
 

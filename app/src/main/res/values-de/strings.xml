@@ -1068,7 +1068,6 @@
     <string name="bt_del_mismatch">Das stimmt nicht mit deinem Benutzernamen überein.</string>
     <string name="bt_del_password">Dein Passwort</string>
     <string name="bt_del_reauth_note">Gib dein Passwort ein, um zu bestätigen, dass du es bist.</string>
-    <string name="bt_del_disabled_note">Das Löschen des Kontos ist in diesem Build aus Sicherheitsgründen deaktiviert. In der Release-App löscht dies dein Konto endgültig.</string>
     <string name="bt_del_button">Mein Konto endgültig löschen</string>
     <string name="bt_del_final_title">Dein Konto löschen?</string>
     <string name="bt_del_final_message">Damit werden dein Konto und alle seine Daten endgültig gelöscht. Das lässt sich nicht rückgängig machen.</string>
@@ -2382,7 +2381,6 @@
     <string name="bt_err_direct_provider_disabled">Direkte Kursabfragen sind in dieser Version nicht aktiviert.</string>
     <string name="bt_err_no_exchange_rate">Auf diesem Gerät gibt es keinen %1$s-Wechselkurs, daher lässt sich dieses Portfolio noch nicht bewerten.</string>
     <string name="bt_err_vault_derivation_failed">Die Kennzahlen dieses Portfolios konnten auf diesem Gerät nicht berechnet werden.</string>
-    <string name="bt_err_delete_disabled">Die Kontolöschung ist in dieser Version deaktiviert.</string>
     <string name="bt_err_app_unknown_alert_kind">Dieser Alarm nutzt einen Typ, den deine App-Version noch nicht kennt. Aktualisiere BetterTrack, um ihn zu sehen.</string>
 
     <!-- ══ R-arc R2 ══ APPEND-ONLY BLOCK, gleiche Regel wie beim R1-Block. -->

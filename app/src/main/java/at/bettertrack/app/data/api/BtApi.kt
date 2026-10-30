@@ -1967,9 +1967,7 @@ interface BtApi {
     /**
      * Hard-delete the account (#362, spec §6.12; a Play publishing requirement).
      * Irreversible: typed username confirmation + re-auth (password, or a TOTP /
-     * recovery code for 2FA accounts). DELETE with a body needs @HTTP. The app
-     * gates the actual call behind [at.bettertrack.app.data.account.DeleteAccountFeature]
-     * so it can never fire against the live production account during testing.
+     * recovery code for 2FA accounts). DELETE with a body needs @HTTP.
      * [account:security]
      */
     @Headers("Content-Type: application/json")
@@ -1994,8 +1992,8 @@ interface BtApi {
      * bearer path needs `feedback:write`, which the app requests — see
      * [at.bettertrack.app.data.auth.OAuthConfig.SCOPES] — and which
      * existing consents were widened to carry, so a token minted before the deploy
-     * works too. The composer is live behind
-     * [at.bettertrack.app.data.repo.FeedbackFlags.enabled].
+     * works too. The composer is live for every account-backed install
+     * ([at.bettertrack.app.data.repo.feedbackEntryVisible]).
      *
      * The rate limit's error CODE is not documented: the live `openapi.json` declares
      * only 201/400/401 plus the generic error envelope for this route, so a 429's

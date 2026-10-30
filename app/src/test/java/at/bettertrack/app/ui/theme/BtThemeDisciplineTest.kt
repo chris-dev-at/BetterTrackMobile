@@ -197,53 +197,14 @@ class BtThemeDisciplineTest {
         ).forEach { assertTrue("guard false-positive: $it", !wash.containsMatchIn(it)) }
     }
 
-    // ── The rollout gate ────────────────────────────────────────────────────
+    // ── Theme resolution ────────────────────────────────────────────────────
 
     @Test
-    fun `light mode is public`() {
-        // The tripwire, kept and inverted rather than deleted. It was `false`
-        // through B2-A so that the flip could not drift in as a side effect of
-        // another edit; B2-B made it deliberately, together with the component
-        // sweep and the Settings → Appearance picker, and this line moved in the
-        // same commit. It still earns its keep in the new position: it is what
-        // fails if someone quietly turns the feature back off.
-        assertEquals(true, BtThemeFeatures.LIGHT_MODE_PUBLIC)
-    }
-
-    @Test
-    fun `while the gate is closed every mode resolves to dark`() {
-        listOf(true, false).forEach { systemInDark ->
-            at.bettertrack.app.data.prefs.BtThemeMode.entries.forEach { mode ->
-                assertTrue(
-                    "mode=$mode systemInDark=$systemInDark leaked light mode",
-                    resolveDarkTheme(mode, systemInDark, lightAllowed = false),
-                )
-            }
-        }
-    }
-
-    @Test
-    fun `once the gate opens the choice is honoured and System follows the device`() {
-        assertEquals(true, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.Dark, false, true))
-        assertEquals(false, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.Light, true, true))
-        assertEquals(true, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.System, true, true))
-        assertEquals(false, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.System, false, true))
-    }
-
-    @Test
-    fun `only the gallery may opt into light mode`() {
-        // `allowLight = true` is the escape hatch that makes the 32-shot component
-        // matrix possible before light is public. Exactly one call site may pass it.
-        val offenders = sourcesOutsideTheme()
-            .flatMap { (rel, file) ->
-                codeLines(file).filter { (_, line) -> line.contains("allowLight") }
-                    .map { (ln, _) -> "$rel:$ln" }
-            }
-            .filterNot { it.startsWith("gallery" + File.separator + "GalleryScreen.kt") }
-        assertTrue(
-            "allowLight = true is the debug gallery's escape hatch only:\n" + offenders.joinToString("\n"),
-            offenders.isEmpty(),
-        )
+    fun `the choice is honoured and System follows the device`() {
+        assertEquals(true, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.Dark, false))
+        assertEquals(false, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.Light, true))
+        assertEquals(true, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.System, true))
+        assertEquals(false, resolveDarkTheme(at.bettertrack.app.data.prefs.BtThemeMode.System, false))
     }
 
     // ── The sanctioned wash/edge forms ──────────────────────────────────────

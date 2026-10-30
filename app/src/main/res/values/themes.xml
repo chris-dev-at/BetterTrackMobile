@@ -8,7 +8,7 @@
       values below only matter for the frames before Compose draws.
 
       B2-A pinned the window and splash to a dark @color/bt_window_bg in BOTH
-      configurations, because while `BtThemeFeatures.LIGHT_MODE_PUBLIC` was false
+      configurations, because while the light-mode rollout gate was closed
       the app rendered dark on every system and a light-system phone would
       otherwise have flashed white. B2-B opened that gate, so the window pin is
       gone and windowBackground follows the real @color/bt_bg token again —

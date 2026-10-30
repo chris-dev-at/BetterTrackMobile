@@ -102,8 +102,7 @@ data class RevokeSessionsResponse(val revoked: Int = 0)
 // ── DELETE /account (#362 — LIVE on prod, verified 2026-07-10) ────────────────
 // Hard, irreversible deletion. Typed username confirmation + re-auth (password, or
 // a fresh TOTP / recovery code for 2FA accounts). At least one re-auth field is
-// required (server refine). The app builds the full flow but gates the destructive
-// submit behind DeleteAccountFeature.armed (OFF while pointed at the real account).
+// required (server refine).
 @Serializable
 data class DeleteAccountRequest(
     val confirmUsername: String,

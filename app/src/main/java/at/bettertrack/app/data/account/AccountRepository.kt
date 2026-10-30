@@ -37,10 +37,6 @@ import retrofit2.Response
  * the authenticated [BtApi] (OAuth bearer + `account:security` scope). Bodies map
  * to the shared [BtResult]/[BtApiError] currency so screens surface the server's
  * own message inline (e.g. "Current password is incorrect.").
- *
- * SAFETY: [deleteAccount] is double-gated by [DeleteAccountFeature.armed] — with
- * the flag OFF it never touches the network, so the destructive call is impossible
- * to fire against the live production account.
  */
 class AccountRepository(
     private val api: BtApi,
@@ -284,18 +280,18 @@ class AccountRepository(
             is BtResult.Err -> r
         }
 
-    // ── Delete account (irreversible — double-gated) ─────────────────────────
+    // ── Delete account (irreversible) ────────────────────────────────────────
     /**
-     * Hard-delete the account. Refused BEFORE any network call unless
-     * [DeleteAccountFeature.armed] is true, so it cannot fire against the live
-     * production account. When armed, re-auths with the typed username + password.
+     * Hard-delete the account (`DELETE /account`, #362; Play mandates a working
+     * in-app deletion path). Re-auths with the typed username + password: the real
+     * safety is the deletion screen — the username typed EXACTLY, the password
+     * re-verified by the server (a wrong one is a rate-limited 401), and a final
+     * blocking confirm. On success the token is dead → full local wipe.
+     *
+     * SAFE live probe on a real account: the correct username with a deliberately
+     * WRONG password → 401 inline, account intact. Never submit the real password.
      */
     suspend fun deleteAccount(confirmUsername: String, password: String): BtResult<Unit> {
-        if (!DeleteAccountFeature.armed) {
-            return BtResult.Err(
-                BtApiError(httpStatus = -2, code = "DELETE_DISABLED"),
-            )
-        }
         return emptyCall {
             api.deleteAccount(
                 DeleteAccountRequest(confirmUsername = confirmUsername.trim(), password = password),

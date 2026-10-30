@@ -1158,7 +1158,6 @@
     <string name="bt_del_mismatch">That doesn\'t match your username.</string>
     <string name="bt_del_password">Your password</string>
     <string name="bt_del_reauth_note">Enter your password to confirm it\'s you.</string>
-    <string name="bt_del_disabled_note">Account deletion is disabled in this build for safety. In the release app this permanently deletes your account.</string>
     <string name="bt_del_button">Delete my account permanently</string>
     <string name="bt_del_final_title">Delete your account?</string>
     <string name="bt_del_final_message">This permanently deletes your account and all its data. This can\'t be undone.</string>
@@ -2508,7 +2507,6 @@
     <string name="bt_err_direct_provider_disabled">Direct price lookups aren\'t switched on in this build.</string>
     <string name="bt_err_no_exchange_rate">This device has no %1$s exchange rate, so this portfolio can\'t be valued yet.</string>
     <string name="bt_err_vault_derivation_failed">This portfolio\'s figures couldn\'t be calculated on this device.</string>
-    <string name="bt_err_delete_disabled">Account deletion is switched off in this build.</string>
     <string name="bt_err_app_unknown_alert_kind">This alert uses a type your app version doesn\'t know yet. Update BetterTrack to see it.</string>
 
     <!-- ══ R-arc R2 ══ APPEND-ONLY BLOCK, same rule as the R1 block above. -->

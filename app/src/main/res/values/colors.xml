@@ -20,7 +20,7 @@
       The splash canvas — and the one colour here that does NOT flip.
 
       B2-A's `bt_window_bg` pinned BOTH the window and the splash to the dark
-      page colour, because until `BtThemeFeatures.LIGHT_MODE_PUBLIC` opened, the
+      page colour, because until the light-mode rollout gate opened, the
       app rendered dark on every system and a light-system phone would have
       flashed white before Compose drew. B2-B opened that gate, so the WINDOW
       background now follows the real `bt_bg` token per configuration and that

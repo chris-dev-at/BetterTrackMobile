@@ -126,13 +126,4 @@ class AccountPinMappingTest {
         }
         assertTrue("Expected decoding the tiny verify body as MeResponse to throw", threw)
     }
-
-    // ── Feature gate ──────────────────────────────────────────────────────────
-    @Test
-    fun `bettertrack pin option is live now the platform grants bearer access`() {
-        // Platform #361 (2026-07-08) gave the mobile OAuth bearer access to
-        // GET /auth/pin/status + POST /auth/pin/verify, so the option is offered
-        // (gated on the account actually having a web PIN via pinSet).
-        assertTrue(AppLockFeatures.betterTrackPinLock)
-    }
 }

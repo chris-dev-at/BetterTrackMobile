@@ -109,16 +109,11 @@ import java.util.Locale
  *
  * ## The theme toggle
  *
- * This screen is the **only** place the light colour table is reachable while
- * `BtThemeFeatures.LIGHT_MODE_PUBLIC` is false (B2 §1.6). That is deliberate and
- * it is the reason the toggle ships in package B2-A rather than with the
- * Settings → Appearance picker: the 16 sections below are the entire shared
- * component system in one scroll, so 16 × 2 screenshots catch component-level
- * light-mode defects *before* any real screen is migrated.
- *
- * It re-wraps its own subtree in [BetterTrackTheme] with `allowLight = true`,
- * so nothing outside this composable can observe the light table, and closing
- * the gallery returns to the app's own theme with no state to unwind.
+ * The 16 sections below are the entire shared component system in one scroll,
+ * so 16 × 2 screenshots catch component-level light-mode defects in one pass
+ * (B2 §1.6). It re-wraps its own subtree in [BetterTrackTheme] with the toggled
+ * mode, so closing the gallery returns to the app's own theme with no state to
+ * unwind.
  */
 @Composable
 fun GalleryScreen(
@@ -129,7 +124,6 @@ fun GalleryScreen(
     var light by remember { mutableStateOf(false) }
     BetterTrackTheme(
         mode = if (light) BtThemeMode.Light else BtThemeMode.Dark,
-        allowLight = true,
     ) {
         GalleryContent(
             light = light,

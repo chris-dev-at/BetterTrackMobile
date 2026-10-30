@@ -38,7 +38,7 @@ const val BETTERTRACK_PIN_LENGTH = 4
  *
  *  - [DEVICE]      — a fresh 4–6 digit PIN the user invents just for this app.
  *  - [BETTERTRACK] — the user's existing 4-digit BetterTrack account (web) PIN.
- *    With the [AppLockFeatures.betterTrackPinLock] switch on, it is entered once,
+ *    It is entered once,
  *    **verified live** against `POST /auth/pin/verify` (see [AccountPinService]),
  *    and only on a match stored LOCALLY (Keystore-hashed) exactly like a device
  *    PIN — the PIN itself is never persisted. The option is offered only when the
@@ -139,23 +139,6 @@ fun pinGateAccessFor(httpStatus: Int): PinGateAccess = when (httpStatus) {
     403 -> PinGateAccess.Forbidden
     0 -> PinGateAccess.Offline
     else -> PinGateAccess.Error
-}
-
-/** Build-time feature switches for the app lock. */
-object AppLockFeatures {
-    /**
-     * Whether the "use my BetterTrack account PIN" unlock option is OFFERED.
-     *
-     * `true` since platform change #361 (2026-07-08) granted the BetterTrackMobile
-     * OAuth bearer access to the PIN endpoints — both `GET /auth/pin/status` and
-     * `POST /auth/pin/verify` now advertise `apiKeyBearer`. The setup chooser
-     * offers a fresh device PIN or the user's existing web PIN; the web-PIN card
-     * appears only when `GET /auth/pin/status` reports `pinSet == true`, and the
-     * entered PIN is verified live against `POST /auth/pin/verify` before the lock
-     * activates (only a local Keystore hash is ever stored — never the PIN). See
-     * [at.bettertrack.app.data.applock.AccountPinService] and docs/TODO.md (17c).
-     */
-    val betterTrackPinLock: Boolean = true
 }
 
 /** True when [pin] is a well-formed candidate PIN (4–6 ASCII digits). */

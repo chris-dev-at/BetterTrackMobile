@@ -296,12 +296,6 @@ class DevicePrefs internal constructor(
      * preference, it says nothing about the account, and it must survive logout
      * (the login screen itself has to render in the chosen theme). Stored by
      * enum NAME so reordering the enum can never reinterpret a saved value.
-     *
-     * **Note:** a stored value of [BtThemeMode.System] or [BtThemeMode.Light]
-     * does not yet make the app render light — `BtThemeFeatures.LIGHT_MODE_PUBLIC`
-     * still gates that, because the shared components have not been swept for
-     * light mode yet (B2-B). Until that flips, this preference is written by
-     * nothing but the debug gallery.
      */
     val themeMode: StateFlow<BtThemeMode> = _themeMode.asStateFlow()
 

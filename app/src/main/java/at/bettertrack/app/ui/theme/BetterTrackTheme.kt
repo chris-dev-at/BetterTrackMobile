@@ -26,49 +26,17 @@ object BtTheme {
 }
 
 /**
- * Build-time gates for the theme rollout.
+ * Resolve a [BtThemeMode] against the system setting: `System` follows the
+ * device, `Light` and `Dark` override it. (The light-mode rollout gate
+ * in front of it, open since B2-B on 2026-08-07, was removed 2026-10-30, MB-28.)
  *
- * The migration order (§1.6) is deliberate: light mode becomes user-reachable
- * only **after** every shared component has been verified in it, so that no
- * intermediate build can ship a broken light screen. Package B2-A landed the
- * token tables, the plumbing and the guard tests behind this gate; package
- * B2-B did the component sweep and **opened it** (§1.6 step 6) together with
- * the Settings → Appearance picker that exposes the choice.
- *
- * ## What opening it turned on
- *
- * `true` since B2-B. Every mode now resolves honestly — `System` follows the
- * device, `Light` and `Dark` override it — in the real app, not just in the
- * debug gallery. Three things had to be true first, and all three are:
- *
- *  - the shared components carry the tone-vs-hairline rule through one
- *    `groupBorder` token rather than per-screen `isLight` branches;
- *  - `gold` no longer reaches the screen as TEXT anywhere (it is 1.78:1 on
- *    white) — `goldInk` does, including in the wordmark;
- *  - the window/splash background is no longer pinned to the dark page colour,
- *    so a light-system phone no longer flashes near-black before Compose draws.
- *
- * The flag survives the flip rather than being deleted: it is the one switch
- * that turns the whole feature off if the light table ever needs pulling, and
- * `resolveDarkTheme` takes it as a parameter so the behaviour stays unit-
- * testable in both positions.
- */
-object BtThemeFeatures {
-    const val LIGHT_MODE_PUBLIC = true
-}
-
-/**
- * Resolve a [BtThemeMode] against the system setting and the rollout gate.
- *
- * Pure except for its [systemInDark] input, so the gate is unit-testable.
+ * Pure except for its [systemInDark] input, so it is unit-testable.
  * Returns true when the DARK table should be used.
  */
 fun resolveDarkTheme(
     mode: BtThemeMode,
     systemInDark: Boolean,
-    lightAllowed: Boolean = BtThemeFeatures.LIGHT_MODE_PUBLIC,
 ): Boolean {
-    if (!lightAllowed) return true
     return when (mode) {
         BtThemeMode.System -> systemInDark
         BtThemeMode.Dark -> true
@@ -131,22 +99,17 @@ fun materialSchemeFrom(bt: BtColors, dark: Boolean): ColorScheme {
 }
 
 /**
- * @param mode the user's choice; resolved against the system setting and the
- *   [BtThemeFeatures.LIGHT_MODE_PUBLIC] rollout gate.
+ * @param mode the user's choice; resolved against the system setting.
  * @param trueBlack AMOLED override, honoured only when the resolved mode is dark.
- * @param allowLight escape hatch for the debug component gallery, which must be
- *   able to render the light table before it is public. Never pass true from
- *   production UI.
  */
 @Composable
 fun BetterTrackTheme(
     mode: BtThemeMode = BtThemeMode.System,
     trueBlack: Boolean = false,
-    allowLight: Boolean = BtThemeFeatures.LIGHT_MODE_PUBLIC,
     content: @Composable () -> Unit,
 ) {
     val systemInDark = isSystemInDarkTheme()
-    val dark = resolveDarkTheme(mode, systemInDark, allowLight)
+    val dark = resolveDarkTheme(mode, systemInDark)
     val colors = remember(dark, trueBlack) {
         when {
             !dark -> BtLightColors

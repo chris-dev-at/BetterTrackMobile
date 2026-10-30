@@ -125,9 +125,7 @@ class AppLockController(private val store: AppLockStore) {
      * A `source == BETTERTRACK` PIN is verified against the account BEFORE this
      * call (the setup screen POSTs `/auth/pin/verify` and only reaches here on a
      * 200 — see AppLockSetupScreen.verifyBetterTrackAndActivate). This method stays
-     * a plain local write; it never sees the network. NOTE: today the BETTERTRACK
-     * path is unreachable (AppLockFeatures.betterTrackPinLock is off — the mobile
-     * bearer is 403-forbidden on that endpoint), so every live call is a DEVICE PIN.
+     * a plain local write; it never sees the network.
      */
     fun setupPin(pin: String, source: PinSource = PinSource.Default) {
         val salt = AppLockCrypto.newSalt()

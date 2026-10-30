@@ -53,11 +53,6 @@ class AccountRepositoryDeleteTest {
     fun tearDown() = server.shutdown()
 
     @Test
-    fun `feature ships armed so the deletion path is live`() {
-        assertTrue(DeleteAccountFeature.armed)
-    }
-
-    @Test
     fun `success maps to Ok and sends confirmUsername plus password on DELETE account`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
 

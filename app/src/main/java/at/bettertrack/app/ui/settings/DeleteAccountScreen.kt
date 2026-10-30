@@ -48,7 +48,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import at.bettertrack.app.R
-import at.bettertrack.app.data.account.DeleteAccountFeature
 import at.bettertrack.app.data.api.BtMessage
 import at.bettertrack.app.data.api.BtResult
 import at.bettertrack.app.data.api.asMessage
@@ -65,11 +64,6 @@ import kotlinx.coroutines.launch
  * Settings → Account → Delete account (spec §6.12; Play requires in-app deletion).
  * Full type-to-confirm flow wired to the LIVE `DELETE /account` (#362): type the
  * username exactly, re-auth with the password, then a final blocking confirm.
- *
- * SAFETY: the destructive submit is hard-gated by [DeleteAccountFeature.armed],
- * which ships OFF while this debug build points at the real production account —
- * the button is disabled with an honest explanation and the network call is refused
- * in the repository too, so it can never delete the owner's account during testing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,10 +82,6 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
     var showFinalConfirm by remember { mutableStateOf(false) }
 
     val nameMatches = username.isNotEmpty() && typed.trim() == username
-    val armed = DeleteAccountFeature.armed
-    // The submit ENABLES on valid input so the type-to-confirm gating is real and
-    // verifiable; the destructive network call itself is refused in the repository
-    // when disarmed (armed=false), so it can never fire against the live account.
     val canProceed = nameMatches && password.isNotEmpty() && online && !submitting
 
     Scaffold(
@@ -166,17 +156,8 @@ fun DeleteAccountScreen(onBack: () -> Unit) {
             serverError?.let { Text(it.resolveWithDiagnostic(), style = MaterialTheme.typography.bodySmall, color = bt.loss) }
             if (!online) Text(stringResource(R.string.bt_requires_connection_inline), style = MaterialTheme.typography.bodySmall, color = bt.textMuted)
 
-            // Honest disabled note when the destructive call is safety-gated off.
-            if (!armed) {
-                Text(
-                    stringResource(R.string.bt_del_disabled_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = bt.textMuted,
-                )
-            }
-
             Spacer(Modifier.height(4.dp))
-            // Destructive button (red). Disabled unless armed + confirmed.
+            // Destructive button (red). Disabled until the input is confirmed.
             Button(
                 onClick = { if (canProceed) showFinalConfirm = true },
                 enabled = canProceed,

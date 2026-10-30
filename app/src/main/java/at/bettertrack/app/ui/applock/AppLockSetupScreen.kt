@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import at.bettertrack.app.R
 import at.bettertrack.app.data.applock.AccountPinStatus
-import at.bettertrack.app.data.applock.AppLockFeatures
 import at.bettertrack.app.data.applock.BtPinVerifyOutcome
 import at.bettertrack.app.data.applock.PIN_MAX_LENGTH
 import at.bettertrack.app.data.applock.PIN_MIN_LENGTH
@@ -71,14 +70,12 @@ private enum class SetupPhase { Loading, Choose, VerifyCurrent, Enter, Confirm }
 /**
  * The set-up / change-PIN flow (spec §5), reached from Settings → Security.
  *  - **change = false** creates a first PIN (enabling the lock).
- *    - When [AppLockFeatures.betterTrackPinLock] is ON it opens on a **source
- *      choice**: a fresh *device* PIN (4–6 digits, invented here) or the user's
+ *    - It opens on a **source choice**: a fresh *device* PIN (4–6 digits, invented here) or the user's
  *      existing *BetterTrack account* PIN (exactly 4 digits, **verified live**
  *      against `POST /auth/pin/verify` before the lock activates; on success only
  *      a local Keystore hash is stored, never the PIN). The account-PIN card is
- *      offered only when `GET /auth/pin/status` reports the account has a web PIN.
- *    - When it is OFF the chooser is skipped entirely: setup goes straight to a
- *      **device PIN** (the only supported source). See [AppLockFeatures].
+ *      offered only when `GET /auth/pin/status` reports the account has a web PIN;
+ *      without one, setup goes straight to a **device PIN**.
  *  - **change = true** first verifies the current PIN, then takes a new one.
  * A device PIN is entered then re-entered to confirm (mismatch bounces back); a
  * BetterTrack PIN is entered once and the server is the confirmation. After a
@@ -99,27 +96,17 @@ fun AppLockSetupScreen(
     val reducedMotion = rememberReducedMotion()
     val scope = rememberCoroutineScope()
 
-    // The BetterTrack-PIN option is gated behind a feature switch (now ON — the
-    // platform grants the mobile bearer access to the PIN endpoints).
-    val betterTrackEnabled = AppLockFeatures.betterTrackPinLock
-
     val storedLength = remember { controller.config.value.pinLength.coerceIn(PIN_MIN_LENGTH, PIN_MAX_LENGTH) }
-    // Changing preserves the existing source (only meaningful when the option is
-    // enabled); a fresh set-up starts as a device PIN unless the chooser changes it.
+    // Changing preserves the existing source; a fresh set-up starts as a device
+    // PIN unless the chooser changes it.
     var pinSource by remember {
-        mutableStateOf(if (change && betterTrackEnabled) controller.config.value.pinSource else PinSource.DEVICE)
+        mutableStateOf(if (change) controller.config.value.pinSource else PinSource.DEVICE)
     }
-    // Fresh set-up with the option enabled opens in a brief Loading phase while
-    // GET /auth/pin/status resolves; that result then routes to the chooser (a
-    // usable web PIN) or straight to a device PIN. Option OFF => device PIN only.
+    // A fresh set-up opens in a brief Loading phase while GET /auth/pin/status
+    // resolves; that result then routes to the chooser (a usable web PIN) or
+    // straight to a device PIN.
     var phase by remember {
-        mutableStateOf(
-            when {
-                change -> SetupPhase.VerifyCurrent
-                betterTrackEnabled -> SetupPhase.Loading
-                else -> SetupPhase.Enter
-            },
-        )
+        mutableStateOf(if (change) SetupPhase.VerifyCurrent else SetupPhase.Loading)
     }
     var entered by remember { mutableStateOf("") }
     var firstPin by remember { mutableStateOf("") }
@@ -160,12 +147,12 @@ fun AppLockSetupScreen(
 
     // Resolve GET /auth/pin/status BEFORE choosing a path (owner's rule), so we
     // never flash the chooser then jump, nor flash the web-PIN option then hide
-    // it. Runs once for a fresh set-up while the option is enabled:
+    // it. Runs once for a fresh set-up:
     //   pinSet == true                    -> stay on the CHOOSER (user picks).
     //   pinSet == false / 403 / offline / -> no usable web PIN: go straight to a
     //   any error                            DEVICE PIN (the intended default).
-    LaunchedEffect(betterTrackEnabled, change) {
-        if (betterTrackEnabled && !change && phase == SetupPhase.Loading) {
+    LaunchedEffect(change) {
+        if (!change && phase == SetupPhase.Loading) {
             val status = pinService.fetchPinStatus()
             accountStatus = status
             phase = if (shouldOfferBetterTrackPin(status)) {
@@ -278,7 +265,7 @@ fun AppLockSetupScreen(
     // straight to a device PIN with no chooser, so back there simply exits.
     val onNavBack: () -> Unit = {
         val chooserExists = accountStatus?.let { shouldOfferBetterTrackPin(it) } ?: false
-        if (!change && betterTrackEnabled && chooserExists &&
+        if (!change && chooserExists &&
             (phase == SetupPhase.Enter || phase == SetupPhase.Confirm)
         ) {
             phase = SetupPhase.Choose

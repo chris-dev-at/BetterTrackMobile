@@ -42,24 +42,12 @@ class FeedbackTest {
     // ── The two gates: the capability flag and the account condition ────────────
 
     @Test
-    fun `the feedback surface is ON now the platform has seeded the scope`() {
-        // Flipped 2026-08-19 on the platform's go-live tick: `POST /feedback` is on
-        // production, accepts bearer, and `feedback:write` is seeded to the
-        // BetterTrackMobile client (existing consents widened, so no re-login).
-        // If the platform ever retracts the seed, this and
-        // OAuthConfig.FEEDBACK_SCOPE_ENABLED go back to false together.
-        assertTrue(FeedbackFlags.enabled)
-    }
-
-    @Test
     fun `a Drive-autonomous install never shows a feedback entry`() {
         // THE regression guard. `POST /feedback` is a SERVER route authenticated by
         // a bearer token; a Drive-only install has no BetterTrack account and no
         // token, so the row would open a composer whose Send is permanently
         // disabled behind its signed-in check — the exact "a row that opens a form
-        // that can only fail" outcome the flag was created to prevent. The flag
-        // alone does not encode this, which is why the rows call
-        // `feedbackEntryVisible` and not `FeedbackFlags.enabled`.
+        // that can only fail" outcome.
         assertFalse(feedbackEntryVisible(StorageMode.DRIVE))
     }
 
@@ -74,14 +62,10 @@ class FeedbackTest {
     }
 
     @Test
-    fun `the entry gate is exactly the flag AND the account surface`() {
-        // Pins the composition rather than the current values: whichever way the
-        // flag is set, the gate must never be looser than `ACCOUNT_SETTINGS`.
+    fun `the entry gate is exactly the account surface`() {
+        // Pins the composition: the gate must never be looser than `ACCOUNT_SETTINGS`.
         StorageMode.entries.forEach { mode ->
-            assertEquals(
-                FeedbackFlags.enabled && mode.shows(BtSurface.ACCOUNT_SETTINGS),
-                feedbackEntryVisible(mode),
-            )
+            assertEquals(mode.shows(BtSurface.ACCOUNT_SETTINGS), feedbackEntryVisible(mode))
         }
     }
 

@@ -51,39 +51,17 @@ import kotlinx.serialization.json.Json
  * the platform's grant-widening can still answer `403 INSUFFICIENT_SCOPE`, and the
  * submissions screen renders the catalogued sign-out/in copy for exactly that.
  */
-object FeedbackFlags {
-    /**
-     * Whether the feedback composer exists in the UI at all. **ON since
-     * 2026-08-19** (platform GO-LIVE tick for #1315, deployed 2026-08-18T09:38Z).
-     *
-     * This is one of two independent switches and it is the narrower one: it gates
-     * the two entry rows (Settings → About group, and the bottom of the About
-     * screen's link group). The other,
-     * [at.bettertrack.app.data.auth.OAuthConfig.FEEDBACK_SCOPE_ENABLED], decides
-     * whether `feedback:write` rides along in the authorize request — i.e. whether
-     * tokens minted from here on carry the capability at all. Turning this one on
-     * alone would work today (existing consents were widened server-side) and then
-     * silently lose the capability at the next re-login, so the two move together.
-     *
-     * This flag is NOT the account check. A Drive-autonomous install has no
-     * BetterTrack account and no bearer token to send, so the entry rows are gated
-     * on [feedbackEntryVisible], which is this flag AND
-     * [at.bettertrack.app.data.storage.BtSurface.ACCOUNT_SETTINGS].
-     */
-    const val enabled: Boolean = true
-}
-
 /**
  * Whether either feedback entry row may be rendered in [mode].
  *
- * Two conditions, one place. [FeedbackFlags.enabled] is the capability switch, and
- * `ACCOUNT_SETTINGS` is the honest question underneath it: `POST /feedback` is a
+ * One condition, one place: `ACCOUNT_SETTINGS`. `POST /feedback` is a
  * *server* route authenticated by a bearer token, and a Drive-autonomous install
  * has neither — no BetterTrack account, no token, nothing for the endpoint to
  * attribute the report to. Showing the row there would open a composer whose Send
  * button is permanently disabled behind its signed-in check, which is precisely
- * the "a row that opens a form that can only fail" outcome the flag was created to
- * prevent.
+ * the "a row that opens a form that can only fail" outcome. (The global capability
+ * switch that once sat in front of it, `true` since 2026-08-19, was folded
+ * away on 2026-10-30, MB-28.)
  *
  * Kept here rather than duplicated at the two call sites for the reason
  * [at.bettertrack.app.data.storage.surfaceAvailability] states for the whole
@@ -91,7 +69,7 @@ object FeedbackFlags {
  * is invisible until a Drive user finds the dead row.
  */
 fun feedbackEntryVisible(mode: StorageMode): Boolean =
-    FeedbackFlags.enabled && mode.shows(BtSurface.ACCOUNT_SETTINGS)
+    mode.shows(BtSurface.ACCOUNT_SETTINGS)
 
 /**
  * The five wire categories. The wire values are ASCII and never translated.

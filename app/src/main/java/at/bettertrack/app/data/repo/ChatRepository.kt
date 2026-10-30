@@ -44,12 +44,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * over `/ws` with a foreground polling fallback. No groups/reactions/read-receipts.
  */
 
-/** Feature flag — chat shipped (#349 + #386), so it is live in debug and release. */
-object ChatFlags {
-    /** Chat is fully wired to the platform; the surface is always available now. */
-    val enabled: Boolean = true
-}
-
 // ── Domain models (decoupled from the wire DTOs; the UI binds to these) ──────
 
 enum class ShareChipKind(val wire: String) {
